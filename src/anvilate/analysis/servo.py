@@ -57,6 +57,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -133,6 +135,11 @@ def motor_acceleration_torque(
     j_motor = _inertia_kgm2(motor_inertia, "motor_inertia")
     j_load = _inertia_kgm2(load_inertia, "load_inertia")
     i = _check_ratio(gear_ratio)
+    if not isinstance(load_angular_acceleration, Quantity):
+        raise ValueError(
+            f"load_angular_acceleration must be a 1 / [time]**2 quantity; "
+            f"got {load_angular_acceleration!r}"
+        )
     if not load_angular_acceleration.has_dimension("1 / [time]**2"):
         raise ValueError(
             "load_angular_acceleration must be an angular acceleration quantity; "
@@ -180,6 +187,10 @@ def rms_torque_over_cycle(
     rating. Lengthening a dwell lowers it; a motor can pass every instant and
     still fail the cycle. Returns the RMS torque in N·m.
     """
+    if not isinstance(torques, Sequence):
+        raise ValueError(f"torques must be a sequence, not a single value; got {torques!r}")
+    if not isinstance(durations, Sequence):
+        raise ValueError(f"durations must be a sequence, not a single value; got {durations!r}")
     if len(torques) != len(durations) or not torques:
         raise ValueError(
             "torques and durations must be non-empty sequences of the same length; "

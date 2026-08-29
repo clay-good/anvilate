@@ -93,6 +93,10 @@ def nds_load_duration_factor(duration: LoadDuration) -> float:
     enforces NDS Table 4.3.1 instead, refusing a factor its property does not take; use it
     where the reference value is a record rather than a bare number.
     """
+    if duration not in _LOAD_DURATION_FACTORS:
+        raise ValueError(
+            f"duration must be one of {sorted(_LOAD_DURATION_FACTORS)}; got {duration!r}"
+        )
     return _LOAD_DURATION_FACTORS[duration]
 
 
@@ -110,6 +114,8 @@ def nds_adjusted_design_value(
     factor must be positive. Returns the adjusted value in the reference value's
     kind (a stress in psi or MPa, a modulus, …).
     """
+    if not isinstance(reference_value, Quantity):
+        raise ValueError(f"reference_value must be a [pressure] quantity; got {reference_value!r}")
     if not reference_value.has_dimension("[pressure]"):
         raise ValueError(
             f"reference_value must be a [pressure] quantity (a design stress); got "
@@ -145,6 +151,8 @@ def nds_bending_scorecard(
             detail="not evaluated — no NDS reference design value supplied",
             reference="NDS",
         )
+    if not isinstance(bending_stress, Quantity):
+        raise ValueError(f"bending_stress must be a [pressure] quantity; got {bending_stress!r}")
     if not bending_stress.has_dimension("[pressure]"):
         raise ValueError(
             f"bending_stress must be a [pressure] quantity; got {bending_stress.dimensionality}"
@@ -172,6 +180,8 @@ def nds_shear_stress(
     the grain reaches F'_v before the bending stress reaches F'_b. Returns the shear stress in the
     force/area kind (a stress in psi or MPa).
     """
+    if not isinstance(shear_force, Quantity):
+        raise ValueError(f"shear_force must be a [force] quantity; got {shear_force!r}")
     if not shear_force.has_dimension("[force]"):
         raise ValueError(
             f"shear_force must be a [force] quantity; got {shear_force.dimensionality}"
@@ -207,6 +217,8 @@ def nds_shear_scorecard(
             detail="not evaluated — no NDS reference shear value supplied",
             reference="NDS",
         )
+    if not isinstance(shear_stress, Quantity):
+        raise ValueError(f"shear_stress must be a [pressure] quantity; got {shear_stress!r}")
     if not shear_stress.has_dimension("[pressure]"):
         raise ValueError(
             f"shear_stress must be a [pressure] quantity; got {shear_stress.dimensionality}"
@@ -240,6 +252,8 @@ def nds_bearing_area_factor(
     bearing — so a support *at* a member end must pass its own end distance to be screened
     correctly. Returns the dimensionless factor.
     """
+    if not isinstance(bearing_length, Quantity):
+        raise ValueError(f"bearing_length must be a [length] quantity; got {bearing_length!r}")
     if not bearing_length.has_dimension("[length]"):
         raise ValueError(
             f"bearing_length must be a [length] quantity; got {bearing_length.dimensionality}"
@@ -248,6 +262,8 @@ def nds_bearing_area_factor(
     if lb <= 0:
         raise ValueError("bearing_length must be positive")
     if end_distance is not None:
+        if not isinstance(end_distance, Quantity):
+            raise ValueError(f"end_distance must be a [length] quantity; got {end_distance!r}")
         if not end_distance.has_dimension("[length]"):
             raise ValueError(
                 f"end_distance must be a [length] quantity; got {end_distance.dimensionality}"
@@ -280,6 +296,8 @@ def nds_bearing_stress(
     a few hundred psi perpendicular — so a member that passes bending and shear can still crush at
     its support. Returns the bearing stress in the force/area kind (a stress in psi or MPa).
     """
+    if not isinstance(bearing_force, Quantity):
+        raise ValueError(f"bearing_force must be a [force] quantity; got {bearing_force!r}")
     if not bearing_force.has_dimension("[force]"):
         raise ValueError(
             f"bearing_force must be a [force] quantity; got {bearing_force.dimensionality}"
@@ -317,6 +335,8 @@ def nds_bearing_scorecard(
             detail="not evaluated — no NDS reference bearing value supplied",
             reference="NDS",
         )
+    if not isinstance(bearing_stress, Quantity):
+        raise ValueError(f"bearing_stress must be a [pressure] quantity; got {bearing_stress!r}")
     if not bearing_stress.has_dimension("[pressure]"):
         raise ValueError(
             f"bearing_stress must be a [pressure] quantity; got {bearing_stress.dimensionality}"
@@ -351,6 +371,8 @@ def nds_euler_buckling_stress(
     formula would give: a column that slender is outside the standard, and the number is
     not a design value.
     """
+    if not isinstance(min_modulus, Quantity):
+        raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
     if not min_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
@@ -407,6 +429,8 @@ def nds_beam_slenderness_ratio(
         (depth, "depth"),
         (breadth, "breadth"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
         if not value.has_dimension("[length]"):
             raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
         require_finite(value, name=name)
@@ -438,6 +462,8 @@ def nds_bending_buckling_stress(*, min_modulus: Quantity, slenderness_ratio: flo
     chain, which the caller supplies — and ``slenderness_ratio`` is R_B from
     :func:`nds_beam_slenderness_ratio`. Returns F_bE as a stress.
     """
+    if not isinstance(min_modulus, Quantity):
+        raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
     if not min_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
@@ -485,6 +511,8 @@ def nds_beam_stability_factor(
         (buckling_stress, "buckling_stress"),
         (reference_bending_value, "reference_bending_value"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
         require_finite(value, name=name)
@@ -528,6 +556,10 @@ def nds_compression_scorecard(
             detail="not evaluated — no NDS reference compression value supplied",
             reference="NDS",
         )
+    if not isinstance(compression_stress, Quantity):
+        raise ValueError(
+            f"compression_stress must be a [pressure] quantity; got {compression_stress!r}"
+        )
     if not compression_stress.has_dimension("[pressure]"):
         raise ValueError(
             f"compression_stress must be a [pressure] quantity; got "
@@ -562,8 +594,16 @@ def nds_column_stability_factor(
     penalty); a slender one drives it toward zero. Multiply F*_c by C_P for the
     adjusted compression value F'_c. ``c`` must lie in (0, 1]. Returns C_P in (0, 1].
     """
+    if not isinstance(euler_buckling_stress, Quantity):
+        raise ValueError(
+            f"euler_buckling_stress must be a [pressure] quantity; got {euler_buckling_stress!r}"
+        )
     if not euler_buckling_stress.has_dimension("[pressure]"):
         raise ValueError("euler_buckling_stress must be a [pressure] quantity")
+    if not isinstance(reference_compression, Quantity):
+        raise ValueError(
+            f"reference_compression must be a [pressure] quantity; got {reference_compression!r}"
+        )
     if not reference_compression.has_dimension("[pressure]"):
         raise ValueError("reference_compression must be a [pressure] quantity")
     if not 0 < c <= 1:
@@ -607,6 +647,8 @@ def nds_combined_bending_compression(
         (adjusted_bending, "adjusted_bending"),
         (euler_buckling_stress, "euler_buckling_stress"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
     fc = abs(compression_stress.to("MPa").magnitude)

@@ -119,6 +119,8 @@ _POSITIVE_DEFINITE = frozenset({"length", "second_moment", "extreme_fibre", "ela
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -808,6 +810,11 @@ def aisc_round_hss_flexural_strength(
     _require(thickness, "[length]", "thickness")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not isinstance(plastic_section_modulus, Quantity):
+        raise ValueError(
+            f"plastic_section_modulus must be a [length]**3 quantity; "
+            f"got {plastic_section_modulus!r}"
+        )
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
     # Through the module's own `_require`, which checks finiteness. Written as a raw
@@ -883,6 +890,11 @@ def aisc_rectangular_hss_flexural_strength(
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not isinstance(plastic_section_modulus, Quantity):
+        raise ValueError(
+            f"plastic_section_modulus must be a [length]**3 quantity; "
+            f"got {plastic_section_modulus!r}"
+        )
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
     # Through the module's own `_require`, which checks finiteness. Written as a raw
@@ -1007,6 +1019,8 @@ def aisc_tension_field_shear_strength(
     is not permitted for end panels or when the flanges are too small to anchor it (§G2.2(b));
     check those limits before relying on this. Returns V_n in kN.
     """
+    if not isinstance(web_area, Quantity):
+        raise ValueError(f"web_area must be a [length]**2 quantity; got {web_area!r}")
     if not web_area.has_dimension("[length]**2"):
         raise ValueError("web_area must be a [length]**2 quantity")
     _require(web_depth, "[length]", "web_depth")
@@ -1128,6 +1142,11 @@ def aisc_minor_axis_flexural_strength(
     _require(flange_thickness, "[length]", "flange_thickness")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not isinstance(plastic_section_modulus, Quantity):
+        raise ValueError(
+            f"plastic_section_modulus must be a [length]**3 quantity; "
+            f"got {plastic_section_modulus!r}"
+        )
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
     # Through the module's own `_require`, which checks finiteness. Written as a raw
@@ -1182,6 +1201,8 @@ def aisc_round_hss_shear_strength(
     ``elastic_modulus`` E. A stocky wall yields (F_cr clamps to 0.6·F_y); a thin, long
     tube buckles below yield. Returns V_n in kN.
     """
+    if not isinstance(gross_area, Quantity):
+        raise ValueError(f"gross_area must be a [length]**2 quantity; got {gross_area!r}")
     if not gross_area.has_dimension("[length]**2"):
         raise ValueError("gross_area must be a [length]**2 quantity")
     _require(diameter, "[length]", "diameter")
@@ -1325,8 +1346,12 @@ def two_span_continuous_middle_moment(
     """
     _require(span_1, "[length]", "span_1")
     _require(span_2, "[length]", "span_2")
+    if not isinstance(udl_1, Quantity):
+        raise ValueError(f"udl_1 must be a [force] / [length] quantity; got {udl_1!r}")
     if not udl_1.has_dimension("[force] / [length]"):
         raise ValueError(f"udl_1 must be a force-per-length quantity; got {udl_1.dimensionality}")
+    if not isinstance(udl_2, Quantity):
+        raise ValueError(f"udl_2 must be a [force] / [length] quantity; got {udl_2!r}")
     if not udl_2.has_dimension("[force] / [length]"):
         raise ValueError(f"udl_2 must be a force-per-length quantity; got {udl_2.dimensionality}")
     l1 = span_1.to("m").magnitude
@@ -1391,10 +1416,18 @@ def shear_flow(
     N/mm.
     """
     _require(shear_force, "[force]", "shear_force")
+    if not isinstance(first_moment_of_area, Quantity):
+        raise ValueError(
+            f"first_moment_of_area must be a [length]**3 quantity; got {first_moment_of_area!r}"
+        )
     if not first_moment_of_area.has_dimension("[length]**3"):
         raise ValueError(
             f"first_moment_of_area must be a [length]**3 quantity; got "
             f"{first_moment_of_area.dimensionality} ({first_moment_of_area})"
+        )
+    if not isinstance(second_moment_of_area, Quantity):
+        raise ValueError(
+            f"second_moment_of_area must be a [length]**4 quantity; got {second_moment_of_area!r}"
         )
     if not second_moment_of_area.has_dimension("[length]**4"):
         raise ValueError(
@@ -1422,6 +1455,8 @@ def fastener_spacing_for_shear_flow(
     mm.
     """
     _require(fastener_capacity, "[force]", "fastener_capacity")
+    if not isinstance(shear_flow, Quantity):
+        raise ValueError(f"shear_flow must be a [force] / [length] quantity; got {shear_flow!r}")
     if not shear_flow.has_dimension("[force] / [length]"):
         raise ValueError(
             f"shear_flow must be a [force]/[length] quantity; got "

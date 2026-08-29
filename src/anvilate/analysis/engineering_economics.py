@@ -140,6 +140,8 @@ def net_present_value(*, cash_flows: Sequence[float], rate: float) -> float:
     decimal): NPV = Σ CFₜ/(1+i)^t over t = 0…n. A positive NPV means the project earns more than the
     discount rate — the standard accept/reject test. Returns the NPV as a plain float.
     """
+    if not isinstance(cash_flows, Sequence):
+        raise ValueError(f"cash_flows must be a sequence, not a single value; got {cash_flows!r}")
     if len(cash_flows) == 0:
         raise ValueError("cash_flows must contain at least one period")
     if rate <= -1.0:

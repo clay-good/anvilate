@@ -515,6 +515,8 @@ def characteristic_symbol(
 
 
 def _mm_height(height: Quantity) -> float:
+    if not isinstance(height, Quantity):
+        raise ValueError(f"height must be a [length] quantity; got {height!r}")
     if not height.has_dimension("[length]"):
         raise ValueError(f"the character height must be a [length] quantity; got {height}")
     h = height.to("mm").magnitude

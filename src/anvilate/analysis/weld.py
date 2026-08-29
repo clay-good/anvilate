@@ -35,6 +35,8 @@ _WELD_METAL_SHEAR_FRACTION = 0.6
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -274,14 +276,14 @@ def eccentric_weld_group_peak_stress(
     centroids: list[tuple[float, float]] = []
     endpoints: list[tuple[float, float]] = []
     for i, seg in enumerate(segments):
-        if len(seg) != 2:
+        if not isinstance(seg, Sequence) or len(seg) != 2:
             raise ValueError(f"segments[{i}] must be an ((x1, y1), (x2, y2)) pair; got {seg!r}")
         (p1, p2) = seg
         # The outer pair being right does not make the points right. A one-element endpoint
         # reached the indexing below and raised IndexError, which a caller catching
         # ValueError does not catch — a malformed weld map crashed the run instead of being
         # refused with the segment named.
-        if len(p1) != 2 or len(p2) != 2:
+        if not all(isinstance(p, Sequence) and len(p) == 2 for p in (p1, p2)):
             raise ValueError(f"segments[{i}] endpoints must each be an (x, y) pair; got {seg!r}")
         _require(p1[0], "[length]", f"segments[{i}] start x")
         _require(p1[1], "[length]", f"segments[{i}] start y")

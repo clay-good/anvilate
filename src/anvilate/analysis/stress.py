@@ -46,6 +46,8 @@ __all__ = [
 
 
 def _require_stress(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
     if not value.has_dimension("[pressure]"):
         raise ValueError(
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
@@ -137,9 +139,17 @@ def elliptical_hole_stress_concentration(
     ellipse stretched across the load, and *below* 3 (down toward 1) for one
     elongated along it — a hole aligned with the load concentrates less, not more.
     """
+    if not isinstance(semi_axis_across_load, Quantity):
+        raise ValueError(
+            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load!r}"
+        )
     if not semi_axis_across_load.has_dimension("[length]"):
         raise ValueError(
             f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load}"
+        )
+    if not isinstance(semi_axis_along_load, Quantity):
+        raise ValueError(
+            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load!r}"
         )
     if not semi_axis_along_load.has_dimension("[length]"):
         raise ValueError(

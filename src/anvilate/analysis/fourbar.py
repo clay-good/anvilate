@@ -50,6 +50,8 @@ def _lengths_mm(
     }
     out: dict[str, float] = {}
     for name, value in named.items():
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
         if not value.has_dimension("[length]"):
             raise ValueError(
                 f"{name} link must be a [length] quantity; got {value.dimensionality} ({value})"

@@ -119,6 +119,10 @@ class PipeDimensions(BaseModel):
             )
         left = self.wall_thickness.quantity.to("mm").magnitude * (1.0 - mill_tolerance_fraction)
         if corrosion_allowance is not None:
+            if not isinstance(corrosion_allowance, Quantity):
+                raise ValueError(
+                    f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance!r}"
+                )
             if not corrosion_allowance.has_dimension("[length]"):
                 raise ValueError(
                     f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance}"

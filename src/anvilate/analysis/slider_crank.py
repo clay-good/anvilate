@@ -47,6 +47,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -107,6 +109,8 @@ def slider_crank_velocity(
     slider moves away from top dead centre).
     """
     r, length = _geometry(crank_radius, rod_length)
+    if not isinstance(crank_speed, Quantity):
+        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
     if not crank_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
@@ -138,6 +142,8 @@ def slider_crank_acceleration(
     Returns the acceleration in m/s².
     """
     r, length = _geometry(crank_radius, rod_length)
+    if not isinstance(crank_speed, Quantity):
+        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
     if not crank_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "

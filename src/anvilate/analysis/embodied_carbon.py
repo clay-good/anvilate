@@ -32,6 +32,7 @@ cradle-to-gate boundary and the requirement that a scope be declared with any re
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from math import isfinite
 
@@ -198,6 +199,8 @@ def material_loss_mass(*, finished_mass: Quantity, yield_fraction: float) -> Qua
     earns is a boundary decision (module D) this screen does not make. Counting the loss
     at full factor is the conservative reading, and it is the one to state.
     """
+    if not isinstance(finished_mass, Quantity):
+        raise ValueError(f"finished_mass must be a [mass] quantity; got {finished_mass!r}")
     if not finished_mass.has_dimension("[mass]"):
         raise ValueError(f"finished_mass must be a [mass] quantity; got {finished_mass}")
     if not isfinite(finished_mass.magnitude) or finished_mass.magnitude <= 0:
@@ -221,6 +224,8 @@ def carbon_contribution(
     zero, and an estimate that silently drops it reports a total lower than the design's
     — the most flattering possible error, in the one direction nobody checks.
     """
+    if not isinstance(mass, Quantity):
+        raise ValueError(f"mass must be a [mass] quantity; got {mass!r}")
     if not mass.has_dimension("[mass]"):
         raise ValueError(f"mass must be a [mass] quantity; got {mass}")
     if not isfinite(mass.magnitude) or mass.magnitude < 0:
@@ -255,6 +260,10 @@ def embodied_carbon_estimate(
     is an estimate that was never made, and :func:`embodied_carbon_scorecard` reports
     that as ``NOT_EVALUATED``.
     """
+    if not isinstance(contributions, Sequence):
+        raise ValueError(
+            f"contributions must be a sequence, not a single value; got {contributions!r}"
+        )
     items = tuple(contributions)
     if not items:
         raise ValueError(
@@ -305,6 +314,8 @@ def embodied_carbon_scorecard(
     to judge it against. That is the honest state for a first pass, and it still puts the
     number in front of the reader.
     """
+    if estimate is not None and not isinstance(estimate, EmbodiedCarbonEstimate):
+        raise ValueError(f"estimate must be an EmbodiedCarbonEstimate; got {estimate!r}")
     if estimate is None:
         detail = "not evaluated"
         detail += (
@@ -336,6 +347,8 @@ def embodied_carbon_scorecard(
             detail=f"no carbon budget supplied, so there is no verdict to give. {detail}",
             reference=_CLAUSE_EN15978,
         )
+    if not isinstance(budget, Quantity):
+        raise ValueError(f"budget must be a [mass] quantity; got {budget!r}")
     if not budget.has_dimension("[mass]"):
         raise ValueError(f"budget must be a [mass] quantity of CO2e; got {budget}")
     allowed = budget.to("kg").magnitude

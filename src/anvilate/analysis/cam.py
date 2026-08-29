@@ -54,6 +54,8 @@ _PROFILES = ("shm", "cycloidal", "parabolic", "poly345")
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -109,6 +111,8 @@ def cam_follower_motion(
     if profile not in _PROFILES:
         raise ValueError(f"profile must be one of {list(_PROFILES)}; got {profile!r}")
     _require(rise, "[length]", "rise")
+    if not isinstance(cam_speed, Quantity):
+        raise ValueError(f"cam_speed must be a [frequency] quantity; got {cam_speed!r}")
     if not cam_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"cam_speed must be a rotational-speed ([frequency]) quantity; got "

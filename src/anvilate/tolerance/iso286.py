@@ -91,6 +91,8 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
     not encoded (only IT5–IT16 are). Raises :class:`ValueError` for a malformed
     grade string.
     """
+    if not isinstance(nominal, Quantity):
+        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"standard tolerance needs a length; got {nominal.dimensionality} ({nominal})"

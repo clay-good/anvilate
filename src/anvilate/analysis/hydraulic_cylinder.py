@@ -43,6 +43,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -116,6 +118,8 @@ def cylinder_extend_speed(*, flow_rate: Quantity, bore_diameter: Quantity) -> Qu
     The rod extends as fast as the pump fills the full bore area: ``flow_rate`` Q over
     (π/4)·``bore_diameter``². Both must be positive. Returns the speed in mm/s.
     """
+    if not isinstance(flow_rate, Quantity):
+        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
     if not flow_rate.has_dimension("[length]**3 / [time]"):
         raise ValueError(
             f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
@@ -136,6 +140,8 @@ def cylinder_retract_speed(
     *faster* than it extends: Q over the annulus (π/4)·(D² − d²) for ``bore_diameter`` D
     and ``rod_diameter`` d (smaller than the bore). Returns the speed in mm/s.
     """
+    if not isinstance(flow_rate, Quantity):
+        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
     if not flow_rate.has_dimension("[length]**3 / [time]"):
         raise ValueError(
             f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
@@ -184,6 +190,8 @@ def cylinder_regen_extend_speed(
     the cost of the reduced :func:`cylinder_regen_extend_force`. ``bore_diameter`` D is required
     only to check the rod fits (d < D). Returns the speed in mm/s.
     """
+    if not isinstance(flow_rate, Quantity):
+        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
     if not flow_rate.has_dimension("[length]**3 / [time]"):
         raise ValueError(
             f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
@@ -211,6 +219,8 @@ def cylinder_rodside_intensified_pressure(
     All inputs must be positive and d < D. Returns the intensified pressure in the supply's
     pressure units.
     """
+    if not isinstance(supply_pressure, Quantity):
+        raise ValueError(f"supply_pressure must be a [pressure] quantity; got {supply_pressure!r}")
     if not supply_pressure.has_dimension("[pressure]"):
         raise ValueError(
             f"supply_pressure must be a [pressure] quantity; got {supply_pressure.dimensionality}"

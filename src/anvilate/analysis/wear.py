@@ -35,6 +35,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -153,6 +155,10 @@ def sliding_contact_pv(*, contact_pressure: Quantity, sliding_velocity: Quantity
     Returns the PV factor in MPa·m/s.
     """
     _require(contact_pressure, "[pressure]", "contact_pressure")
+    if not isinstance(sliding_velocity, Quantity):
+        raise ValueError(
+            f"sliding_velocity must be a [length] / [time] quantity; got {sliding_velocity!r}"
+        )
     if not sliding_velocity.has_dimension("[length] / [time]"):
         raise ValueError(
             f"sliding_velocity must be a velocity quantity; got {sliding_velocity.dimensionality}"

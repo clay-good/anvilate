@@ -191,7 +191,7 @@ job backs — which would excuse a skip forever — fails the build instead.
 
 ## Finding the guards nothing has ever run
 
-A line-trace of the suite says **around 56% of the roughly 4,300 `raise` sites in the imported modules
+A line-trace of the suite says **around 52% of the roughly 4,800 `raise` sites in the imported modules
 never execute**. Most are dimension and positivity checks whose absence a reader would
 notice. The subset worth hunting is the one whose *condition carries a domain constant* —
 a Poisson's ratio that cannot reach 0.5, an angle range a formula's geometry requires, a
@@ -241,6 +241,66 @@ says so.
 One defect fell out of it: `eccentric_weld_group_peak_stress` checked that each segment was
 a pair and then indexed each *point* without checking, so a malformed endpoint raised
 `IndexError` — which a caller catching `ValueError` does not catch.
+
+## The refusal a bare number gets
+
+The library's whole premise is that it takes dimensioned quantities. So the single most
+likely way to call it wrong is to pass a number — and until 2026-08-29, **1,524 of about
+1,740 public analysis functions answered that with**
+
+```text
+AttributeError: 'float' object has no attribute 'has_dimension'
+```
+
+That is the guard calling a method on the thing it was checking. It names no parameter, no
+expected dimension, and no library; it reads as an internal slip, which is what it was. The
+function two lines down had a perfectly good sentence ready — `moment must be a
+[force]*[length] quantity` — and no input could ever reach it.
+
+**The instrument is three lines and needs no fixtures.** For every public function, bind
+every required parameter to `1.0` and call it:
+
+```python
+kwargs = {p.name: 1.0 for p in signature.parameters.values()
+          if p.default is inspect.Parameter.empty}
+```
+
+Returning is fine — a dimensionless correlation legitimately takes plain floats. Raising is
+fine. What the sweep looks for is *which class*, and the answer partitioned into four
+families, each one a different guard written a different way:
+
+| Family | Count | What it looked like |
+| --- | --- | --- |
+| The dimension guard | 1,524 | `AttributeError: no attribute 'has_dimension'` |
+| A sequence parameter given a scalar | 26 | `TypeError: object of type 'float' has no len()` |
+| A model parameter given a scalar | 15 | `AttributeError: no attribute 'safety_factor'` |
+| A table lookup on a caller's key | 1 | `KeyError: 1.0` |
+
+Two of those families were already known one layer down: `eccentric_weld_group_peak_stress`
+was fixed in an earlier sweep for raising `IndexError` on a malformed endpoint, for exactly
+this reason. What that fix could not see is that the same mistake was library-wide.
+
+**Two things worth copying from the repair.** 212 of the guards were *textually identical*,
+which is what made a mechanical pass safe — and measuring that before editing is what turned
+"212 files" from a scary number into a boring one. And the pass has to know whose name to
+put in the message: an early version wrote `{name}` inside scorecard functions, where `name`
+is the *check's* name and not the parameter's, so `aluminum_compression_scorecard` refused
+a bad stress in the name of the scorecard entry. The gate caught it, because it requires the
+refusal to name a parameter the caller actually passed.
+
+Three refusals that named the wrong thing fell out of the same requirement, all of them
+predating the sweep: `_bend_geometry` hardcoded `"inner_radius"` and two of its callers spell
+that parameter `initial_bend_radius`; a bimetal layer check said `alpha` where the parameter
+is `alpha_1` or `alpha_2`; and `fiber_mode_count` refused in terms of `V`, the symbol its
+formula uses, rather than `v_number`, the argument.
+
+### Where it stands
+
+`tests/test_contract.py::test_every_public_analysis_function_refuses_a_bare_number_by_name`
+runs the sweep over the whole public surface on every CI run: 1,628 functions refuse, 113
+return a result, and none raises anything but a `ValueError` naming a parameter. The gate
+has a floor on how many functions it probes, because the third way a gate like this goes
+wrong is covering nothing and saying so in green.
 
 ## The bound a parameter's own name fixes
 

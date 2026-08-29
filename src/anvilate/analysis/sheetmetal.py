@@ -32,6 +32,7 @@ standard press-brake and blanking-force practice.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import pi, radians, tan
 
 from ..units import Quantity, require_finite
@@ -57,6 +58,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -68,14 +71,21 @@ def _require(value: Quantity, expected: str, name: str) -> None:
     require_finite(value, name=name)
 
 
-def _bend_geometry(inner_radius: Quantity, thickness: Quantity) -> tuple[float, float]:
-    """Validate and return (R, t) in mm for a sheet-metal bend, both positive."""
-    _require(inner_radius, "[length]", "inner_radius")
+def _bend_geometry(
+    inner_radius: Quantity, thickness: Quantity, name: str = "inner_radius"
+) -> tuple[float, float]:
+    """Validate and return (R, t) in mm for a sheet-metal bend, both positive.
+
+    ``name`` is the caller's name for the radius. Two callers spell it
+    ``initial_bend_radius``, and a refusal in the name of a parameter the function does not
+    have sends the reader looking for an argument they never passed.
+    """
+    _require(inner_radius, "[length]", name)
     _require(thickness, "[length]", "thickness")
     r = inner_radius.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if r < 0 or t <= 0:
-        raise ValueError("inner_radius must be non-negative and thickness positive")
+        raise ValueError(f"{name} must be non-negative and thickness positive")
     return r, t
 
 
@@ -173,6 +183,10 @@ def flat_pattern_length(
     (Dimensioning the flanges to the outside mould lines instead gives the same
     result as Σ(outside flanges) − n_bends·:func:`bend_deduction`.)
     """
+    if not isinstance(flange_lengths, Sequence):
+        raise ValueError(
+            f"flange_lengths must be a sequence, not a single value; got {flange_lengths!r}"
+        )
     if len(flange_lengths) < 2:
         raise ValueError("flat_pattern_length needs at least two flanges (one bend)")
     total = 0.0
@@ -395,7 +409,7 @@ def springback_factor(
     :func:`sprung_bend_radius`). K_s is 1 for no springback and falls toward 0 as recovery grows.
     Returns the dimensionless springback factor.
     """
-    r, t = _bend_geometry(initial_bend_radius, thickness)
+    r, t = _bend_geometry(initial_bend_radius, thickness, "initial_bend_radius")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if r <= 0:
@@ -454,7 +468,7 @@ def sprung_bend_angle(
     Returns the sprung included angle in degrees.
     """
     theta_i = _check_bend_angle(initial_bend_angle)
-    r_i, t = _bend_geometry(initial_bend_radius, thickness)
+    r_i, t = _bend_geometry(initial_bend_radius, thickness, "initial_bend_radius")
     _require(sprung_bend_radius, "[length]", "sprung_bend_radius")
     r_f = sprung_bend_radius.to("mm").magnitude
     if r_i <= 0:

@@ -157,6 +157,11 @@ def series_system_reliability(*, component_reliabilities: Sequence[float]) -> fl
     it, which is why long unredundant chains are fragile. Each reliability must be in [0, 1].
     Returns the system reliability (0 to 1) as a plain float.
     """
+    if not isinstance(component_reliabilities, Sequence):
+        raise ValueError(
+            f"component_reliabilities must be a sequence, not a single value; "
+            f"got {component_reliabilities!r}"
+        )
     if len(component_reliabilities) == 0:
         raise ValueError("component_reliabilities must contain at least one component")
     product = 1.0
@@ -177,6 +182,11 @@ def parallel_system_reliability(*, component_reliabilities: Sequence[float]) -> 
     it — the basis of fault-tolerant design. Each reliability must be in [0, 1]. Returns the system
     reliability (0 to 1) as a plain float.
     """
+    if not isinstance(component_reliabilities, Sequence):
+        raise ValueError(
+            f"component_reliabilities must be a sequence, not a single value; "
+            f"got {component_reliabilities!r}"
+        )
     if len(component_reliabilities) == 0:
         raise ValueError("component_reliabilities must contain at least one component")
     failure_product = 1.0
@@ -202,10 +212,10 @@ def k_out_of_n_reliability(
     """
     if not 0.0 <= component_reliability <= 1.0:
         raise ValueError(f"component_reliability must be in [0, 1]; got {component_reliability}")
-    if total_units < 1:
-        raise ValueError("total_units must be a positive integer")
-    if required_units < 1:
-        raise ValueError("required_units must be a positive integer")
+    if not isinstance(total_units, int) or total_units < 1:
+        raise ValueError(f"total_units must be a positive integer; got {total_units!r}")
+    if not isinstance(required_units, int) or required_units < 1:
+        raise ValueError(f"required_units must be a positive integer; got {required_units!r}")
     if required_units > total_units:
         raise ValueError("required_units must not exceed total_units")
     r = component_reliability
@@ -253,6 +263,10 @@ def series_system_mtbf(*, failure_rates: Sequence[Quantity]) -> Quantity:
     ``failure_rates`` is a rate (1/time) and must be non-negative, with at least one positive.
     Returns the MTBF as a time.
     """
+    if not isinstance(failure_rates, Sequence):
+        raise ValueError(
+            f"failure_rates must be a sequence, not a single value; got {failure_rates!r}"
+        )
     if len(failure_rates) == 0:
         raise ValueError("failure_rates must contain at least one component")
     total_rate = 0.0
@@ -268,6 +282,8 @@ def series_system_mtbf(*, failure_rates: Sequence[Quantity]) -> Quantity:
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

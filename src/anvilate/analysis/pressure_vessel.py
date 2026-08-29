@@ -81,6 +81,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -1023,6 +1025,8 @@ def asme_b313_branch_reinforcement_scorecard(
     ``reinforcement`` of ``None`` is ``NOT_EVALUATED`` — a branch whose run pressure
     design thickness was never computed has not been screened, and ``missing`` says so.
     """
+    if reinforcement is not None and not isinstance(reinforcement, BranchReinforcement):
+        raise ValueError(f"reinforcement must be a BranchReinforcement; got {reinforcement!r}")
     if reinforcement is None:
         detail = "not evaluated"
         detail += (
@@ -1157,6 +1161,8 @@ def asme_b313_displacement_stress(
     _require(in_plane_moment, "[force] * [length]", "in_plane_moment")
     _require(out_of_plane_moment, "[force] * [length]", "out_of_plane_moment")
     _require(torsional_moment, "[force] * [length]", "torsional_moment")
+    if not isinstance(section_modulus, Quantity):
+        raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}")
     if not section_modulus.has_dimension("[length]**3"):
         raise ValueError("section_modulus must be a [length]**3 quantity")
     mi = in_plane_moment.to("N*mm").magnitude
@@ -1640,6 +1646,10 @@ class AllowableStress(RevalidatedModel):
         far *hotter* than the service is safe but is not the number the code wants, so
         it fails too and the caller is told to read the right row.
         """
+        if not isinstance(design_temperature, Quantity):
+            raise ValueError(
+                f"design_temperature must be a [temperature] quantity; got {design_temperature!r}"
+            )
         if not design_temperature.has_dimension("[temperature]"):
             raise ValueError(
                 f"design_temperature must be a [temperature] quantity; got {design_temperature}"
@@ -1652,6 +1662,8 @@ class AllowableStress(RevalidatedModel):
             # in the same unit as the temperatures — the obvious thing to do — that
             # silently widened the band twelvefold and disarmed the check.
             unit = str(tolerance.unit)
+            if not isinstance(tolerance, Quantity):
+                raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance!r}")
             if not tolerance.has_dimension("[temperature]"):
                 raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance}")
             if "degree_Celsius" in unit or "degree_Fahrenheit" in unit or "deg" in unit.lower():
@@ -1704,6 +1716,8 @@ def asme_b313_pressure_scorecard(
     A wall entirely consumed by its allowances is ``NOT_EVALUATED`` too: there is no
     pressure-carrying wall left to rate, which is not the same as a rating of zero.
     """
+    if allowable is not None and not isinstance(allowable, AllowableStress):
+        raise ValueError(f"allowable must be an AllowableStress; got {allowable!r}")
     if allowable is None:
         return ScorecardEntry(
             name=name,
@@ -2049,6 +2063,8 @@ def asme_ug37_reinforcement_scorecard(
     ``reinforcement`` of ``None`` is ``NOT_EVALUATED``: an opening whose required shell
     thickness was never computed has not been screened, and ``missing`` says so.
     """
+    if reinforcement is not None and not isinstance(reinforcement, NozzleReinforcement):
+        raise ValueError(f"reinforcement must be a NozzleReinforcement; got {reinforcement!r}")
     if reinforcement is None:
         detail = "not evaluated"
         if missing.strip():
@@ -2537,6 +2553,8 @@ def asme_appendix_2_flange_stress_scorecard(
     hub-credited flange: this module cannot screen one, and ``missing`` should say so
     rather than leaving a reader to read the blank as a pass.
     """
+    if stress is not None and not isinstance(stress, LooseRingFlangeStress):
+        raise ValueError(f"stress must be a LooseRingFlangeStress; got {stress!r}")
     if stress is None:
         detail = "not evaluated"
         if missing.strip():

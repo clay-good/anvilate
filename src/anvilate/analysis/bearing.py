@@ -77,13 +77,20 @@ def bearing_cubic_mean_load(
     ``life_exponent`` p is 3 for ball bearings (the default) and 10/3 for roller bearings — use
     :data:`ROLLER_BEARING_LIFE_EXPONENT`. Returns the equivalent load as a force.
     """
+    if not isinstance(duty_cycle, Sequence):
+        raise ValueError(f"duty_cycle must be a sequence, not a single value; got {duty_cycle!r}")
     if len(duty_cycle) == 0:
         raise ValueError("duty_cycle must contain at least one block")
     if life_exponent <= 0:
         raise ValueError(f"life_exponent must be positive; got {life_exponent}")
     total_fraction = 0.0
     accumulated = 0.0
-    for fraction, load in duty_cycle:
+    for index, block in enumerate(duty_cycle):
+        if not isinstance(block, Sequence) or len(block) != 2:
+            raise ValueError(
+                f"duty_cycle[{index}] must be a (time fraction, load) pair; got {block!r}"
+            )
+        fraction, load = block
         _require(load, "[force]", "duty_cycle load")
         newtons = load.to("N").magnitude
         if fraction < 0:
@@ -98,6 +105,8 @@ def bearing_cubic_mean_load(
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

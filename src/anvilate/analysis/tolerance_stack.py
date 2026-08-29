@@ -42,6 +42,8 @@ def worst_case_tolerance_stack(tolerances: Sequence[Quantity]) -> Quantity:
     linearly with the number of parts and quickly demands tolerances tighter (and costlier) than a
     statistical view would. Pass at least one tolerance. Returns the worst-case stack in mm.
     """
+    if not isinstance(tolerances, Sequence):
+        raise ValueError(f"tolerances must be a sequence, not a single value; got {tolerances!r}")
     values = _tolerances_in_mm(tolerances)
     return Quantity(magnitude=sum(abs(t) for t in values), unit="mm")
 
@@ -58,6 +60,8 @@ def rss_tolerance_stack(tolerances: Sequence[Quantity]) -> Quantity:
     normal; it describes one standard deviation of the assembly, so pair it with a
     process-capability margin. Pass at least one tolerance. Returns the RSS stack in mm.
     """
+    if not isinstance(tolerances, Sequence):
+        raise ValueError(f"tolerances must be a sequence, not a single value; got {tolerances!r}")
     values = _tolerances_in_mm(tolerances)
     return Quantity(magnitude=sum(t * t for t in values) ** 0.5, unit="mm")
 
@@ -73,6 +77,8 @@ def _tolerances_in_mm(tolerances: Sequence[Quantity]) -> list[float]:
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

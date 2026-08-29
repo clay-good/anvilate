@@ -150,7 +150,8 @@ def fiber_mode_count(*, v_number: float) -> float:
     # returned 0.125 — a fraction of a mode — and 2.89 at the cutoff itself.
     if v_number <= _SINGLE_MODE_CUTOFF_V:
         raise ValueError(
-            f"V = {v_number:.4g} is at or below the {_SINGLE_MODE_CUTOFF_V} single-mode "
+            f"v_number V = {v_number:.4g} is at or below the {_SINGLE_MODE_CUTOFF_V} "
+            f"single-mode "
             f"cutoff, where the fiber carries exactly one mode. M = V²/2 is an asymptotic "
             f"estimate for V well above cutoff and returns {v_number**2 / 2.0:.4g} here"
         )
@@ -181,6 +182,8 @@ def fiber_single_mode_cutoff_wavelength(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

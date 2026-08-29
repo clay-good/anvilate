@@ -47,8 +47,12 @@ class CompactnessClass(StrEnum):
 
 
 def _slenderness_root(elastic_modulus: Quantity, yield_strength: Quantity) -> float:
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+    if not isinstance(yield_strength, Quantity):
+        raise ValueError(f"yield_strength must be a [pressure] quantity; got {yield_strength!r}")
     if not yield_strength.has_dimension("[pressure]"):
         raise ValueError(f"yield_strength must be a [pressure] quantity; got {yield_strength}")
     e = elastic_modulus.to("MPa").magnitude

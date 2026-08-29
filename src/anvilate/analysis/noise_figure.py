@@ -62,6 +62,13 @@ def cascade_noise_factor(
     dominates — the reason a low-noise amplifier goes first. Returns the total noise factor as a
     float. Requires one gain per noise factor and at least one stage.
     """
+    if not isinstance(stage_noise_factors, Sequence):
+        raise ValueError(
+            f"stage_noise_factors must be a sequence, not a single value; "
+            f"got {stage_noise_factors!r}"
+        )
+    if not isinstance(stage_gains, Sequence):
+        raise ValueError(f"stage_gains must be a sequence, not a single value; got {stage_gains!r}")
     if len(stage_noise_factors) == 0:
         raise ValueError("stage_noise_factors must not be empty")
     if len(stage_gains) != len(stage_noise_factors):
@@ -103,6 +110,8 @@ def equivalent_noise_temperature(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

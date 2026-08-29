@@ -83,6 +83,11 @@ def expanded_uncertainty(
     reported as its value ± U. The coverage factor must be positive. Returns the expanded
     uncertainty in the units of ``combined_standard_uncertainty``.
     """
+    if not isinstance(combined_standard_uncertainty, Quantity):
+        raise ValueError(
+            f"combined_standard_uncertainty must be a quantity; "
+            f"got {combined_standard_uncertainty!r}"
+        )
     uc = combined_standard_uncertainty.to(combined_standard_uncertainty.unit).magnitude
     if uc < 0:
         raise ValueError("combined_standard_uncertainty must be non-negative")

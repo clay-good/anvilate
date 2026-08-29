@@ -71,6 +71,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -548,6 +550,8 @@ def newman_raju_surface_flaw_sif(
     published solution uses different coefficients entirely, so a number produced here
     would be wrong rather than approximate.
     """
+    if not isinstance(flaw, SurfaceFlaw):
+        raise ValueError(f"flaw must be a SurfaceFlaw; got {flaw!r}")
     outside = flaw.outside_validity()
     if outside:
         raise ValueError(
@@ -885,6 +889,8 @@ def fad_scorecard(
     ``NOT_EVALUATED``. The correlation scatters by enough that a pass built on it is not
     a pass — it is a reason to commission a toughness test.
     """
+    if assessment is not None and not isinstance(assessment, FADAssessment):
+        raise ValueError(f"assessment must be a FADAssessment; got {assessment!r}")
     if assessment is None:
         detail = "not evaluated"
         if missing.strip():

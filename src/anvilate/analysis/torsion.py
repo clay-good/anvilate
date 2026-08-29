@@ -62,6 +62,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -702,12 +704,16 @@ def open_section_torsion_constant(
     perhaps 10% higher than this (use the section table's J when you have it). Returns J in
     mm⁴.
     """
+    if not isinstance(rectangles, Sequence):
+        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
     if not rectangles:
         raise ValueError("rectangles must be a non-empty sequence")
     total = 0.0
     for i, rect in enumerate(rectangles):
-        if len(rect) != 2:
-            raise ValueError(f"rectangles[{i}] must be a (long_dimension, thickness) pair")
+        if not isinstance(rect, Sequence) or len(rect) != 2:
+            raise ValueError(
+                f"rectangles[{i}] must be a (long_dimension, thickness) pair; got {rect!r}"
+            )
         b, t = _thin_open_strip_dims(rect[0], rect[1])
         total += b * t**3 / 3.0
     return Quantity(magnitude=total, unit="mm**4")

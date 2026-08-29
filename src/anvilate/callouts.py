@@ -544,6 +544,10 @@ def marin_surface_factor(finish: SurfaceFinish, *, ultimate_strength: Quantity) 
     :func:`~anvilate.analysis.fatigue.marin_endurance_limit` as its ``surface_factor``.
     Screening only — see :data:`MARIN_SURFACE_CITATION`.
     """
+    if not isinstance(ultimate_strength, Quantity):
+        raise ValueError(
+            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}"
+        )
     if not ultimate_strength.has_dimension("[pressure]"):
         raise ValueError(
             f"ultimate_strength must be a [pressure] quantity; got "
@@ -610,6 +614,8 @@ def plated_inner_dimension(nominal: Quantity, coating: Coating) -> tuple[Quantit
 
 
 def _plated(nominal: Quantity, coating: Coating, *, sign: float) -> tuple[Quantity, Quantity]:
+    if not isinstance(nominal, Quantity):
+        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
     if not nominal.has_dimension("[length]"):
         raise ValueError(
             f"the nominal dimension must be a [length] quantity; got "

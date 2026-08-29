@@ -92,6 +92,8 @@ def weir_loading_rate(*, flow_rate: Quantity, weir_length: Quantity) -> Quantity
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

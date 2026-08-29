@@ -1667,3 +1667,71 @@ def test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install():
         f"the conftest allow-list is {sorted(allowed)} and the scheduled jobs install "
         f"{sorted(scheduled)}; an allowed import no job installs excuses a skip forever"
     )
+
+
+# --- The refusal a bare number gets ----------------------------------------------------
+#
+# The library's whole premise is that it takes dimensioned quantities, so the single most
+# likely way to call it wrong is to pass a number. Measured on 2026-08-29, 1,524 of about
+# 1,740 public analysis functions answered that with
+# `AttributeError: 'float' object has no attribute 'has_dimension'` — the guard calling a
+# method on the thing it was checking. That names no parameter, no expected dimension, and
+# no library; it reads as an internal slip, which is exactly what it was.
+
+
+def _probe_kwargs(signature):
+    """Every required parameter bound to a bare ``1.0``, or ``None`` if there are none."""
+    kwargs = {}
+    for parameter in signature.parameters.values():
+        if parameter.default is not inspect.Parameter.empty:
+            continue
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+            continue
+        kwargs[parameter.name] = 1.0
+    return kwargs or None
+
+
+def test_every_public_analysis_function_refuses_a_bare_number_by_name():
+    """A refusal that names nothing is the failure this gate exists to catch.
+
+    Every required parameter is bound to ``1.0`` and the call made. Returning is allowed —
+    a dimensionless correlation legitimately takes plain floats. Raising is allowed. What
+    is not allowed is raising something that names neither the parameter nor what was
+    wanted: an `AttributeError` off a guard, a `KeyError` off a table lookup, a `TypeError`
+    off `len()` or an unpack.
+
+    Two halves, because either alone is satisfiable by accident. The class must be
+    `ValueError` — the class every other refusal in the package uses, and the one a caller
+    is told to catch — **and** the message must name one of the parameters, so that a bare
+    `raise ValueError("bad input")` does not pass. The floor on the number probed is here
+    for the third way a gate like this goes quiet: covering nothing and saying so in green.
+    """
+    probed, failures = [], []
+    for name in sorted(analysis_pkg.__all__):
+        function = getattr(analysis_pkg, name, None)
+        if not inspect.isfunction(function):
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):  # pragma: no cover - every signature resolves today
+            continue
+        kwargs = _probe_kwargs(signature)
+        if kwargs is None:
+            continue
+        probed.append(name)
+        try:
+            function(**kwargs)
+        except ValueError as refusal:
+            if not any(parameter in str(refusal) for parameter in kwargs):
+                failures.append(f"{name}: refusal names no parameter: {refusal}")
+        except Exception as slip:  # noqa: BLE001 - the class is the thing under test
+            failures.append(f"{name}: {type(slip).__name__}: {slip}")
+
+    assert len(probed) > 1500, (
+        f"only {len(probed)} public analysis functions were probed; this gate covers the "
+        "surface or it covers nothing"
+    )
+    assert not failures, (
+        f"{len(failures)} public function(s) answer a bare number with something other "
+        "than a ValueError naming the parameter:\n  " + "\n  ".join(sorted(failures)[:25])
+    )

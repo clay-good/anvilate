@@ -36,6 +36,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -56,6 +58,8 @@ def _crank_radius_mm(crank_radius: Quantity) -> float:
 
 
 def _speed_rad_s(crank_speed: Quantity) -> float:
+    if not isinstance(crank_speed, Quantity):
+        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
     if not crank_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "

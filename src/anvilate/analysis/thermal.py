@@ -120,6 +120,8 @@ _STANDARD_GRAVITY = 9.80665  # m/s², for the buoyancy-driven Rayleigh number
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -148,12 +150,21 @@ def confined_liquid_thermal_pressure(
     temperature difference, in K or delta_degC). Assumes a perfectly rigid container; real pipe
     compliance relieves some of it. Returns the pressure rise in MPa.
     """
+    if not isinstance(volumetric_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"volumetric_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {volumetric_expansion_coefficient!r}"
+        )
     if not volumetric_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "volumetric_expansion_coefficient must have units of 1/temperature; got "
             f"{volumetric_expansion_coefficient.dimensionality}"
         )
     _require(bulk_modulus, "[pressure]", "bulk_modulus")
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
             f"temperature_change must be a temperature difference; got "
@@ -180,14 +191,25 @@ def constrained_thermal_stress(
     K or delta_degC). Returns the magnitude of the thermal stress in MPa — the
     stress a member develops when it is prevented from expanding or contracting.
     """
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
             f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
         )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
@@ -221,14 +243,25 @@ def thermal_shock_stress(
     severe limit of an infinitely fast quench. Returns the magnitude of the surface
     stress in MPa.
     """
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
             f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
         )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
@@ -264,9 +297,16 @@ def thermal_shock_temperature_limit(
     difference in kelvin.
     """
     _require(fracture_strength, "[pressure]", "fracture_strength")
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
@@ -306,14 +346,25 @@ def triaxial_constrained_thermal_stress(
     ratio ``poisson`` ν (0 ≤ ν < 0.5) describe the body. Returns the magnitude of the
     hydrostatic stress in MPa.
     """
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
             f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
         )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
@@ -353,14 +404,26 @@ def through_wall_gradient_thermal_stress(
     stress; this is the restrained-against-bending case. Returns the magnitude of the
     surface stress in MPa.
     """
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
             f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not isinstance(temperature_difference, Quantity):
+        raise ValueError(
+            f"temperature_difference must be a [temperature] quantity; "
+            f"got {temperature_difference!r}"
         )
     if not temperature_difference.has_dimension("[temperature]"):
         raise ValueError(
@@ -390,12 +453,23 @@ def free_thermal_expansion(
     member develops the stress of the strain it was denied). ``length`` must
     be positive; ``temperature_change`` is a difference (K or delta_degC).
     """
+    if not isinstance(length, Quantity):
+        raise ValueError(f"length must be a [length] quantity; got {length!r}")
     if not length.has_dimension("[length]"):
         raise ValueError(f"length must be a [length] quantity; got {length.dimensionality}")
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
+        )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
             f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
         )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
@@ -463,20 +537,37 @@ def shrink_fit_assembly_temperature(
     the oven setpoint, and mind the material's tempering limit. Interference
     must be positive, the clearance non-negative.
     """
+    if not isinstance(interface_diameter, Quantity):
+        raise ValueError(
+            f"interface_diameter must be a [length] quantity; got {interface_diameter!r}"
+        )
     if not interface_diameter.has_dimension("[length]"):
         raise ValueError(
             f"interface_diameter must be a [length] quantity; got "
             f"{interface_diameter.dimensionality}"
+        )
+    if not isinstance(diametral_interference, Quantity):
+        raise ValueError(
+            f"diametral_interference must be a [length] quantity; got {diametral_interference!r}"
         )
     if not diametral_interference.has_dimension("[length]"):
         raise ValueError(
             f"diametral_interference must be a [length] quantity; got "
             f"{diametral_interference.dimensionality}"
         )
+    if not isinstance(assembly_clearance, Quantity):
+        raise ValueError(
+            f"assembly_clearance must be a [length] quantity; got {assembly_clearance!r}"
+        )
     if not assembly_clearance.has_dimension("[length]"):
         raise ValueError(
             f"assembly_clearance must be a [length] quantity; got "
             f"{assembly_clearance.dimensionality}"
+        )
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
@@ -587,6 +678,11 @@ def thermal_buckling_temperature_rise(
         raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
     if end_condition_factor <= 0:
         raise ValueError(f"end_condition_factor must be positive; got {end_condition_factor}")
+    if not isinstance(thermal_expansion_coefficient, Quantity):
+        raise ValueError(
+            f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
+            f"got {thermal_expansion_coefficient!r}"
+        )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
         raise ValueError(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
@@ -606,6 +702,8 @@ def _bimetal_layer_check(
     alpha: Quantity, elastic_modulus: Quantity, thickness: Quantity, layer: int
 ) -> tuple[float, float, float]:
     """Validate one bimetal layer -> (alpha 1/K, E MPa, t mm), all positive."""
+    if not isinstance(alpha, Quantity):
+        raise ValueError(f"alpha_{layer} must be a 1 / [temperature] quantity; got {alpha!r}")
     if not alpha.has_dimension("1 / [temperature]"):
         raise ValueError(
             f"alpha_{layer} must have units of 1/temperature; got {alpha.dimensionality}"
@@ -650,6 +748,10 @@ def bimetallic_strip_curvature(
     """
     a1, e1, t1 = _bimetal_layer_check(alpha_1, elastic_modulus_1, thickness_1, 1)
     a2, e2, t2 = _bimetal_layer_check(alpha_2, elastic_modulus_2, thickness_2, 2)
+    if not isinstance(temperature_change, Quantity):
+        raise ValueError(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        )
     if not temperature_change.has_dimension("[temperature]"):
         raise ValueError(
             f"temperature_change must be a temperature difference; got "
@@ -2541,6 +2643,11 @@ def semi_infinite_solid_temperature_rise(
     _require(surface_step_change, "[temperature]", "surface_step_change")
     _require(depth, "[length]", "depth")
     _require(time, "[time]", "time")
+    if not isinstance(thermal_diffusivity, Quantity):
+        raise ValueError(
+            f"thermal_diffusivity must be a [length]**2 / [time] quantity; "
+            f"got {thermal_diffusivity!r}"
+        )
     if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
         raise ValueError(
             f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
@@ -2577,10 +2684,20 @@ def semi_infinite_solid_surface_flux(
     """
     _require(surface_step_change, "[temperature]", "surface_step_change")
     _require(time, "[time]", "time")
+    if not isinstance(thermal_conductivity, Quantity):
+        raise ValueError(
+            f"thermal_conductivity must be a [power] / [length] / [temperature] quantity; "
+            f"got {thermal_conductivity!r}"
+        )
     if not thermal_conductivity.has_dimension("[power] / [length] / [temperature]"):
         raise ValueError(
             f"thermal_conductivity must be a [power]/[length]/[temperature] quantity; got "
             f"{thermal_conductivity.dimensionality}"
+        )
+    if not isinstance(thermal_diffusivity, Quantity):
+        raise ValueError(
+            f"thermal_diffusivity must be a [length]**2 / [time] quantity; "
+            f"got {thermal_diffusivity!r}"
         )
     if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
         raise ValueError(

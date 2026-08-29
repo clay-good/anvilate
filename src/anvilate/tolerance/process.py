@@ -108,6 +108,8 @@ def tolerance_is_achievable(process: str, demanded_width: Quantity) -> Achievabi
     :class:`ToleranceRangeError`. The tolerance is achievable when its band is at
     least the process's finest achievable band.
     """
+    if not isinstance(demanded_width, Quantity):
+        raise ValueError(f"demanded_width must be a [length] quantity; got {demanded_width!r}")
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "
@@ -136,6 +138,8 @@ def processes_that_can_hold(demanded_width: Quantity) -> list[str]:
     is the flag. ``demanded_width`` must be a length, else
     :class:`ToleranceRangeError`.
     """
+    if not isinstance(demanded_width, Quantity):
+        raise ValueError(f"demanded_width must be a [length] quantity; got {demanded_width!r}")
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "

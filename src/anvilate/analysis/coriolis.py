@@ -46,6 +46,8 @@ def coriolis_acceleration(*, angular_velocity: Quantity, velocity: Quantity) -> 
     the motion, so it turns the path without changing speed. Returns the acceleration in
     m/s**2.
     """
+    if not isinstance(angular_velocity, Quantity):
+        raise ValueError(f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}")
     if not angular_velocity.has_dimension("1/[time]"):
         raise ValueError(
             f"angular_velocity must be a 1/[time] quantity; got "
@@ -69,6 +71,8 @@ def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quanti
     largest at the poles, and it sets the inertial-oscillation period and the strength of
     geostrophic balance in weather and ocean flow. Returns the Coriolis parameter in 1/s.
     """
+    if not isinstance(angular_velocity, Quantity):
+        raise ValueError(f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}")
     if not angular_velocity.has_dimension("1/[time]"):
         raise ValueError(
             f"angular_velocity must be a 1/[time] quantity; got "
@@ -115,6 +119,10 @@ def rossby_number(
     (a bathtub vortex). Returns the Rossby number as a plain float.
     """
     _check(velocity, "[length]/[time]", "velocity")
+    if not isinstance(coriolis_parameter, Quantity):
+        raise ValueError(
+            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}"
+        )
     if not coriolis_parameter.has_dimension("1/[time]"):
         raise ValueError(
             f"coriolis_parameter must be a 1/[time] quantity; got "
@@ -145,6 +153,10 @@ def ekman_number(
     the Ekman number as a plain float.
     """
     _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
+    if not isinstance(coriolis_parameter, Quantity):
+        raise ValueError(
+            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}"
+        )
     if not coriolis_parameter.has_dimension("1/[time]"):
         raise ValueError(
             f"coriolis_parameter must be a 1/[time] quantity; got "
@@ -164,6 +176,8 @@ def ekman_number(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

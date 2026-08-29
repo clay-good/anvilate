@@ -164,8 +164,17 @@ def siegert_dry_flue_gas_loss(
     for oil, 0.74 for coal). Subtract the result from 100% with :func:`combustion_efficiency`.
     Returns the dry flue-gas loss as a percentage.
     """
+    if not isinstance(flue_temperature, Quantity):
+        raise ValueError(
+            f"flue_temperature must be a [temperature] quantity; got {flue_temperature!r}"
+        )
     if not flue_temperature.has_dimension("[temperature]"):
         raise ValueError("flue_temperature must be a [temperature] quantity")
+    if not isinstance(combustion_air_temperature, Quantity):
+        raise ValueError(
+            f"combustion_air_temperature must be a [temperature] quantity; "
+            f"got {combustion_air_temperature!r}"
+        )
     if not combustion_air_temperature.has_dimension("[temperature]"):
         raise ValueError("combustion_air_temperature must be a [temperature] quantity")
     t_flue = flue_temperature.to("degC").magnitude
@@ -213,6 +222,11 @@ def wobbe_index(*, higher_heating_value: Quantity, gas_specific_gravity: float) 
     appliances run safely on gas from any source (pipeline, LNG, biogas). Returns the Wobbe index in
     the same volumetric-energy units as the heating value.
     """
+    if not isinstance(higher_heating_value, Quantity):
+        raise ValueError(
+            f"higher_heating_value must be a [energy]/[volume] quantity; "
+            f"got {higher_heating_value!r}"
+        )
     if not higher_heating_value.has_dimension("[energy]/[volume]"):
         raise ValueError(
             "higher_heating_value must be a volumetric energy density (energy per volume); got "
@@ -242,6 +256,10 @@ def lower_heating_value(
     ``higher_heating_value`` and ``latent_heat`` are per-unit-mass energies. Returns the LHV in the
     same mass-specific units.
     """
+    if not isinstance(higher_heating_value, Quantity):
+        raise ValueError(
+            f"higher_heating_value must be a [energy]/[mass] quantity; got {higher_heating_value!r}"
+        )
     if not higher_heating_value.has_dimension("[energy]/[mass]"):
         raise ValueError(
             "higher_heating_value must be a mass-specific energy (energy per mass); got "
@@ -252,6 +270,8 @@ def lower_heating_value(
     if latent_heat is None:
         h_fg = _WATER_LATENT_HEAT_MJ_PER_KG
     else:
+        if not isinstance(latent_heat, Quantity):
+            raise ValueError(f"latent_heat must be a [energy]/[mass] quantity; got {latent_heat!r}")
         if not latent_heat.has_dimension("[energy]/[mass]"):
             raise ValueError(
                 "latent_heat must be a mass-specific energy (energy per mass); got "
@@ -293,15 +313,28 @@ def adiabatic_flame_temperature(
     roughly 2000 K, so measured temperatures run several hundred kelvin below this. Temperatures
     must be absolute. Returns the adiabatic flame temperature in K.
     """
+    if not isinstance(lower_heating_value, Quantity):
+        raise ValueError(
+            f"lower_heating_value must be a [energy]/[mass] quantity; got {lower_heating_value!r}"
+        )
     if not lower_heating_value.has_dimension("[energy]/[mass]"):
         raise ValueError(
             "lower_heating_value must be a mass-specific energy (energy per mass); got "
             f"{lower_heating_value.dimensionality} ({lower_heating_value})"
         )
+    if not isinstance(product_specific_heat, Quantity):
+        raise ValueError(
+            f"product_specific_heat must be a [energy]/([mass]*[temperature]) quantity; "
+            f"got {product_specific_heat!r}"
+        )
     if not product_specific_heat.has_dimension("[energy]/([mass]*[temperature])"):
         raise ValueError(
             "product_specific_heat must be a specific heat (energy per mass per temperature); got "
             f"{product_specific_heat.dimensionality} ({product_specific_heat})"
+        )
+    if not isinstance(inlet_temperature, Quantity):
+        raise ValueError(
+            f"inlet_temperature must be a [temperature] quantity; got {inlet_temperature!r}"
         )
     if not inlet_temperature.has_dimension("[temperature]"):
         raise ValueError(

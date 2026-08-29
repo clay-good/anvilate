@@ -41,6 +41,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -64,6 +66,8 @@ def _petroff_torque_nm(
     _require(journal_radius, "[length]", "journal_radius")
     _require(bearing_length, "[length]", "bearing_length")
     _require(radial_clearance, "[length]", "radial_clearance")
+    if not isinstance(speed, Quantity):
+        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
     if not speed.has_dimension("[frequency]"):
         raise ValueError(
             f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
@@ -172,6 +176,8 @@ def sommerfeld_number(
     _require(radial_clearance, "[length]", "radial_clearance")
     _require(viscosity, "[pressure] * [time]", "viscosity")
     _require(unit_load, "[pressure]", "unit_load")
+    if not isinstance(speed, Quantity):
+        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
     if not speed.has_dimension("[frequency]"):
         raise ValueError(
             f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
@@ -279,6 +285,8 @@ def petroff_friction_coefficient(
     _require(radial_clearance, "[length]", "radial_clearance")
     _require(viscosity, "[pressure] * [time]", "viscosity")
     _require(unit_load, "[pressure]", "unit_load")
+    if not isinstance(speed, Quantity):
+        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
     if not speed.has_dimension("[frequency]"):
         raise ValueError(
             f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"

@@ -24,6 +24,7 @@ returned in hertz.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
@@ -107,6 +108,8 @@ _LAMBDA_SQ_FIXED_PINNED = 15.4182057170
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -657,6 +660,10 @@ def isolator_natural_frequency_for_transmissibility(
     A smaller TR (better isolation) demands a lower f_n (a softer mount). TR must be in
     (0, 1); f_n always comes out below f/√2, the onset of isolation. Returns f_n in hertz.
     """
+    if not isinstance(forcing_frequency, Quantity):
+        raise ValueError(
+            f"forcing_frequency must be a [frequency] quantity; got {forcing_frequency!r}"
+        )
     if not forcing_frequency.has_dimension("[frequency]"):
         raise ValueError(
             f"forcing_frequency must be a [frequency] quantity; got "
@@ -691,6 +698,8 @@ def isolator_static_deflection_for_transmissibility(
     natural_frequency = isolator_natural_frequency_for_transmissibility(
         forcing_frequency=forcing_frequency, transmissibility=transmissibility
     )
+    if not isinstance(gravity, Quantity):
+        raise ValueError(f"gravity must be a [acceleration] quantity; got {gravity!r}")
     if not gravity.has_dimension("[acceleration]"):
         raise ValueError(
             f"gravity must be an [acceleration] quantity; got {gravity.dimensionality} ({gravity})"
@@ -1186,6 +1195,11 @@ def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Q
     frequencies`` is the non-empty list of the fᵢ, each a positive frequency.
     Returns the combined frequency in hertz; it always falls below the lowest fᵢ.
     """
+    if not isinstance(individual_frequencies, Sequence):
+        raise ValueError(
+            f"individual_frequencies must be a sequence, not a single value; "
+            f"got {individual_frequencies!r}"
+        )
     if not individual_frequencies:
         raise ValueError("individual_frequencies must be a non-empty list")
     inverse_squares = 0.0

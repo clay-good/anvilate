@@ -701,6 +701,10 @@ def from_pycufsm(
     for mode, _factor, half_wavelength in modes:
         if mode == "global" or half_wavelength is None:
             continue
+        if not isinstance(half_wavelength, Quantity):
+            raise ValueError(
+                f"half_wavelength must be a [length] quantity; got {half_wavelength!r}"
+            )
         if not half_wavelength.has_dimension("[length]"):
             raise ValueError(f"the {mode} half-wavelength must be a length; got {half_wavelength}")
         require_finite(half_wavelength, name=f"{mode} half-wavelength")

@@ -62,12 +62,20 @@ def aisi_plate_slenderness(
     coefficient (4.0 stiffened, 0.43 unstiffened). At λ ≤ 0.673 the element is fully
     effective; above it, it sheds load. Returns the dimensionless λ.
     """
+    if not isinstance(flat_width, Quantity):
+        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
     if not flat_width.has_dimension("[length]"):
         raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+    if not isinstance(thickness, Quantity):
+        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
     if not thickness.has_dimension("[length]"):
         raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+    if not isinstance(stress, Quantity):
+        raise ValueError(f"stress must be a [pressure] quantity; got {stress!r}")
     if not stress.has_dimension("[pressure]"):
         raise ValueError(f"stress must be a [pressure] quantity; got {stress}")
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     w = flat_width.to("mm").magnitude
@@ -327,6 +335,8 @@ def dsm_compression_strength(
     with their provenance. Returns a :class:`DSMStrength` naming the governing mode, since
     local, distortional and global failures call for different repairs.
     """
+    if not isinstance(yield_load, Quantity):
+        raise ValueError(f"yield_load must be a [force] quantity; got {yield_load!r}")
     if not yield_load.has_dimension("[force]"):
         raise ValueError(f"yield_load must be a [force] quantity; got {yield_load}")
     for value, name in (
@@ -391,6 +401,10 @@ def dsm_flexural_strength(
     ``yield_moment`` M_y = S_f·F_y on the gross section, and ``elastic_buckling`` carries
     M_crl, M_crd and M_cre. Returns a :class:`DSMStrength` naming the governing mode.
     """
+    if not isinstance(yield_moment, Quantity):
+        raise ValueError(
+            f"yield_moment must be a [force] * [length] quantity; got {yield_moment!r}"
+        )
     if not yield_moment.has_dimension("[force] * [length]"):
         raise ValueError(f"yield_moment must be a moment quantity; got {yield_moment}")
     for value, name in (
@@ -466,6 +480,8 @@ def dsm_scorecard(
     either, so it is surfaced in the detail and the entry is downgraded to
     ``NOT_EVALUATED`` when it would otherwise have passed.
     """
+    if strength is not None and not isinstance(strength, DSMStrength):
+        raise ValueError(f"strength must be a DSMStrength; got {strength!r}")
     if strength is None:
         return ScorecardEntry(
             name=name,

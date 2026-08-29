@@ -85,6 +85,8 @@ def youngs_modulus_from_bulk_shear(*, bulk_modulus: Quantity, shear_modulus: Qua
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

@@ -83,6 +83,8 @@ _ENDURANCE_CAP_MPA = 700.0  # ~100 ksi (steels with S_u above ~1400 MPa)
 
 
 def _require_stress(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
     if not value.has_dimension("[pressure]"):
         raise ValueError(
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
@@ -97,6 +99,8 @@ def _require_stress(value: Quantity, name: str) -> float:
 
 
 def _require_length(value: Quantity, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(
             f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
@@ -153,6 +157,10 @@ def neuber_notch_sensitivity(*, notch_radius: Quantity, neuber_constant: Quantit
     Returns the dimensionless q in [0, 1].
     """
     _require_length(notch_radius, "notch_radius")
+    if not isinstance(neuber_constant, Quantity):
+        raise ValueError(
+            f"neuber_constant must be a [length]**0.5 quantity; got {neuber_constant!r}"
+        )
     if not neuber_constant.has_dimension("[length]**0.5"):
         raise ValueError(
             f"neuber_constant must be a [length]**0.5 quantity (√a); got "
@@ -201,6 +209,10 @@ def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
     positive stress; the result feeds :func:`goodman_safety_factor` and its
     siblings. Returns the estimate in MPa.
     """
+    if not isinstance(ultimate_strength, Quantity):
+        raise ValueError(
+            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}"
+        )
     if not ultimate_strength.has_dimension("[pressure]"):
         raise ValueError(
             f"ultimate_strength must be a [pressure] quantity; got "
@@ -612,6 +624,14 @@ def miner_cumulative_damage(
     non-empty length; ``applied_cycles`` must be non-negative and
     ``cycles_to_failure`` positive. Returns the dimensionless damage D.
     """
+    if not isinstance(applied_cycles, Sequence):
+        raise ValueError(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        )
+    if not isinstance(cycles_to_failure, Sequence):
+        raise ValueError(
+            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}"
+        )
     _validate_spectrum(applied_cycles, cycles_to_failure)
     return sum(n / big_n for n, big_n in zip(applied_cycles, cycles_to_failure, strict=True))
 
@@ -631,6 +651,14 @@ def miner_spectrum_repeats_to_failure(
     has zero applied cycles). Same arguments and validation as
     :func:`miner_cumulative_damage`.
     """
+    if not isinstance(applied_cycles, Sequence):
+        raise ValueError(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        )
+    if not isinstance(cycles_to_failure, Sequence):
+        raise ValueError(
+            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}"
+        )
     damage = miner_cumulative_damage(
         applied_cycles=applied_cycles, cycles_to_failure=cycles_to_failure
     )
@@ -872,6 +900,7 @@ def weld_size_effect_factor(
     (k_s = 1). Multiply the detail category by k_s before building the S-N curve.
     Returns the dimensionless factor.
     """
+    _require_length(thickness, "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:
         raise ValueError(f"thickness must be positive; got {thickness}")
@@ -1058,6 +1087,14 @@ def weld_fatigue_scorecard(
     trusted to the formula. Omitted, the limit is not applied and the entry says nothing
     about it either way.
     """
+    if not isinstance(applied_cycles, Sequence):
+        raise ValueError(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        )
+    if not isinstance(stress_ranges, Sequence):
+        raise ValueError(
+            f"stress_ranges must be a sequence, not a single value; got {stress_ranges!r}"
+        )
     if len(applied_cycles) != len(stress_ranges):
         raise ValueError(
             f"applied_cycles ({len(applied_cycles)}) and stress_ranges "

@@ -125,6 +125,8 @@ class Slot(BaseModel):
 
 
 def _mm(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     return value.to("mm").magnitude
@@ -305,6 +307,8 @@ def plate_mass(
     t = _mm(thickness, "thickness")
     if w <= 0 or h <= 0 or t <= 0:
         raise ValueError("plate width, height, and thickness must be positive")
+    if not isinstance(density, Quantity):
+        raise ValueError(f"density must be a [mass] / [length]**3 quantity; got {density!r}")
     if not density.has_dimension("[mass] / [length]**3"):
         raise ValueError(f"density must be a mass/volume quantity; got {density.dimensionality}")
     r = _corner_radius_mm(corner_radius, w, h)

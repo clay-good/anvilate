@@ -39,6 +39,8 @@ __all__ = [
 
 
 def _positive_mm(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(
             f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
@@ -62,6 +64,8 @@ def gasket_seating_load(
     """
     g = _positive_mm(gasket_mean_diameter, "gasket_mean_diameter")
     b = _positive_mm(effective_seating_width, "effective_seating_width")
+    if not isinstance(seating_stress, Quantity):
+        raise ValueError(f"seating_stress must be a [pressure] quantity; got {seating_stress!r}")
     if not seating_stress.has_dimension("[pressure]"):
         raise ValueError(
             f"seating_stress must be a [pressure] quantity; got {seating_stress.dimensionality}"
@@ -91,6 +95,8 @@ def gasket_operating_load(
     b = _positive_mm(effective_seating_width, "effective_seating_width")
     if gasket_factor <= 0:
         raise ValueError(f"gasket_factor must be positive; got {gasket_factor}")
+    if not isinstance(pressure, Quantity):
+        raise ValueError(f"pressure must be a [pressure] quantity; got {pressure!r}")
     if not pressure.has_dimension("[pressure]"):
         raise ValueError(
             f"pressure must be a [pressure] quantity; got {pressure.dimensionality} ({pressure})"

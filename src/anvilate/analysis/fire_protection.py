@@ -39,6 +39,8 @@ def sprinkler_discharge(*, k_factor: Quantity, pressure: Quantity) -> Quantity:
     head governs a system's demand. ``k_factor`` must carry the flow-over-root-pressure dimension
     and ``pressure`` be a positive pressure. Returns the discharge in gallons per minute.
     """
+    if not isinstance(k_factor, Quantity):
+        raise ValueError(f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}")
     if not k_factor.has_dimension(_K_DIMENSION):
         raise ValueError(
             f"k_factor must be a {_K_DIMENSION} quantity; got "
@@ -64,6 +66,8 @@ def sprinkler_pressure_for_flow(*, k_factor: Quantity, flow_rate: Quantity) -> Q
     pushing more water out of a fixed orifice costs pressure quickly. Returns the required pressure
     in psi.
     """
+    if not isinstance(k_factor, Quantity):
+        raise ValueError(f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}")
     if not k_factor.has_dimension(_K_DIMENSION):
         raise ValueError(
             f"k_factor must be a {_K_DIMENSION} quantity; got "
@@ -110,6 +114,8 @@ def hydrant_flow_test(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

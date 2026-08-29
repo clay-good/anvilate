@@ -61,6 +61,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -301,6 +303,8 @@ def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quan
     compression. Returns the energy in joules; both quantities are
     dimension-checked and ``deflection`` must be non-negative.
     """
+    if not isinstance(spring_rate, Quantity):
+        raise ValueError(f"spring_rate must be a [force] / [length] quantity; got {spring_rate!r}")
     if not spring_rate.has_dimension("[force] / [length]"):
         raise ValueError(
             f"spring_rate must be a [force]/[length] quantity; got "
@@ -319,6 +323,8 @@ def _rates_in_n_per_mm(spring_rates: Sequence[Quantity]) -> list[float]:
         raise ValueError("at least one spring rate is required")
     values = []
     for rate in spring_rates:
+        if not isinstance(rate, Quantity):
+            raise ValueError(f"rate must be a [force] / [length] quantity; got {rate!r}")
         if not rate.has_dimension("[force] / [length]"):
             raise ValueError(
                 f"each spring rate must be a [force]/[length] quantity; got "
@@ -339,6 +345,10 @@ def springs_in_series(spring_rates: Sequence[Quantity]) -> Quantity:
     reciprocal sum of the individual ``spring_rates``. Each must be a positive
     force-per-length; pass at least one. Returns the combined rate in N/mm.
     """
+    if not isinstance(spring_rates, Sequence):
+        raise ValueError(
+            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}"
+        )
     rates = _rates_in_n_per_mm(spring_rates)
     combined = 1.0 / sum(1.0 / k for k in rates)
     return Quantity(magnitude=combined, unit="N/mm")
@@ -353,6 +363,10 @@ def springs_in_parallel(spring_rates: Sequence[Quantity]) -> Quantity:
     a set of parallel supports add stiffness). Each must be a positive
     force-per-length; pass at least one. Returns the combined rate in N/mm.
     """
+    if not isinstance(spring_rates, Sequence):
+        raise ValueError(
+            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}"
+        )
     rates = _rates_in_n_per_mm(spring_rates)
     return Quantity(magnitude=sum(rates), unit="N/mm")
 

@@ -44,6 +44,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -151,6 +153,14 @@ def creep_life_fraction_damage(
     pair block-for-block and must be the same non-empty length; the times must be
     non-negative and the rupture lives positive. Returns the dimensionless damage D.
     """
+    if not isinstance(service_times, Sequence):
+        raise ValueError(
+            f"service_times must be a sequence, not a single value; got {service_times!r}"
+        )
+    if not isinstance(rupture_lives, Sequence):
+        raise ValueError(
+            f"rupture_lives must be a sequence, not a single value; got {rupture_lives!r}"
+        )
     if len(service_times) != len(rupture_lives):
         raise ValueError("service_times and rupture_lives must have the same length")
     if not service_times:

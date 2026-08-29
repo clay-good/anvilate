@@ -190,6 +190,8 @@ def _check_lead_sheaves(lead_sheaves: int) -> int:
 
 
 def _require_force(load: Quantity) -> None:
+    if not isinstance(load, Quantity):
+        raise ValueError(f"load must be a [force] quantity; got {load!r}")
     if not load.has_dimension("[force]"):
         raise ValueError(f"load must be a [force] quantity; got {load.dimensionality} ({load})")
     if load.to("N").magnitude <= 0:

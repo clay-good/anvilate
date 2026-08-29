@@ -104,6 +104,8 @@ def rolling_force(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -132,6 +134,8 @@ def rolling_power(
     """
     _check(rolling_force, "[force]", "rolling_force")
     _check(contact_length, "[length]", "contact_length")
+    if not isinstance(roll_speed, Quantity):
+        raise ValueError(f"roll_speed must be a [frequency] quantity; got {roll_speed!r}")
     if not roll_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"roll_speed must be a [frequency] quantity; got {roll_speed.dimensionality} "

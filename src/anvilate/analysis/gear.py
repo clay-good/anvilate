@@ -91,6 +91,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -297,6 +299,10 @@ def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity)
     :func:`barth_velocity_factor`.
     """
     _require(pitch_diameter, "[length]", "pitch_diameter")
+    if not isinstance(rotational_speed, Quantity):
+        raise ValueError(
+            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}"
+        )
     if not rotational_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"rotational_speed must be a [frequency] quantity; got "
@@ -324,6 +330,10 @@ def barth_velocity_factor(*, pitch_line_velocity: Quantity, quality: str = "cut"
     Multiply the transmitted load by K_v before the :func:`lewis_bending_stress`
     screen. Returns the dimensionless K_v (≥ 1).
     """
+    if not isinstance(pitch_line_velocity, Quantity):
+        raise ValueError(
+            f"pitch_line_velocity must be a [velocity] quantity; got {pitch_line_velocity!r}"
+        )
     if not pitch_line_velocity.has_dimension("[velocity]"):
         raise ValueError(
             f"pitch_line_velocity must be a [velocity] quantity; got "
@@ -1068,6 +1078,14 @@ def gear_train_value(
     multiply the input speed by it to get the output speed, and divide an ideal
     (loss-free) torque by |e| to get the output torque.
     """
+    if not isinstance(driver_teeth, Sequence):
+        raise ValueError(
+            f"driver_teeth must be a sequence, not a single value; got {driver_teeth!r}"
+        )
+    if not isinstance(driven_teeth, Sequence):
+        raise ValueError(
+            f"driven_teeth must be a sequence, not a single value; got {driven_teeth!r}"
+        )
     if len(driver_teeth) == 0 or len(driver_teeth) != len(driven_teeth):
         raise ValueError(
             f"driver_teeth and driven_teeth must be non-empty and equal length "
@@ -1098,6 +1116,10 @@ def gear_train_efficiency(*, mesh_efficiencies: Sequence[float]) -> float:
     by the result to get the real one. The sequence must be non-empty. Returns the
     dimensionless overall efficiency.
     """
+    if not isinstance(mesh_efficiencies, Sequence):
+        raise ValueError(
+            f"mesh_efficiencies must be a sequence, not a single value; got {mesh_efficiencies!r}"
+        )
     effs = list(mesh_efficiencies)
     if len(effs) == 0:
         raise ValueError("mesh_efficiencies must contain at least one mesh")
@@ -1182,6 +1204,8 @@ def planetary_can_assemble(*, sun_teeth: int, ring_teeth: int, planet_count: int
 
 
 def _check_speed(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [frequency] quantity; got {value!r}")
     if not value.has_dimension("[frequency]"):
         raise ValueError(
             f"{name} must be a rotational-speed ([frequency]) quantity; got "

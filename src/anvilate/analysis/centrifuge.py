@@ -86,6 +86,8 @@ def centrifugal_sedimentation_velocity(
     _check(density_fluid, "[mass]/[length]**3", "density_fluid")
     _check(viscosity, "[pressure]*[time]", "viscosity")
     _check(radius, "[length]", "radius")
+    if not isinstance(rotational_speed, Quantity):
+        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
     if not rotational_speed.has_dimension("1/[time]"):
         raise ValueError(
             f"rotational_speed must be a 1/[time] quantity; got "
@@ -147,6 +149,8 @@ def centrifuge_settling_time(
     _check(viscosity, "[pressure]*[time]", "viscosity")
     _check(inner_radius, "[length]", "inner_radius")
     _check(outer_radius, "[length]", "outer_radius")
+    if not isinstance(rotational_speed, Quantity):
+        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
     if not rotational_speed.has_dimension("1/[time]"):
         raise ValueError(
             f"rotational_speed must be a 1/[time] quantity; got "
@@ -181,6 +185,8 @@ def centrifuge_settling_time(
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

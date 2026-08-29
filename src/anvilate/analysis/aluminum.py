@@ -62,6 +62,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -351,10 +353,16 @@ def aluminum_buckling_constants(
 
     Returns a :class:`BucklingConstants` with B and D in MPa.
     """
+    if not isinstance(compressive_yield, Quantity):
+        raise ValueError(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        )
     if not compressive_yield.has_dimension("[pressure]"):
         raise ValueError(
             f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
         )
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     if temper_group is not TemperGroup.ARTIFICIALLY_AGED:
@@ -408,10 +416,16 @@ def aluminum_member_buckling_stress(
     """
     if slenderness <= 0:
         raise ValueError(f"slenderness must be positive; got {slenderness}")
+    if not isinstance(compressive_yield, Quantity):
+        raise ValueError(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        )
     if not compressive_yield.has_dimension("[pressure]"):
         raise ValueError(
             f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
         )
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     fcy = compressive_yield.to("MPa").magnitude
@@ -464,14 +478,24 @@ def aluminum_local_buckling_stress(
 
     ``constants`` comes from :func:`aluminum_buckling_constants` for the same alloy.
     """
+    if not isinstance(flat_width, Quantity):
+        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
     if not flat_width.has_dimension("[length]"):
         raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+    if not isinstance(thickness, Quantity):
+        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
     if not thickness.has_dimension("[length]"):
         raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+    if not isinstance(compressive_yield, Quantity):
+        raise ValueError(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        )
     if not compressive_yield.has_dimension("[pressure]"):
         raise ValueError(
             f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
         )
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     b = flat_width.to("mm").magnitude
@@ -517,10 +541,16 @@ def aluminum_elastic_local_buckling_stress(
     Notice F_cy does not appear. Elastic buckling is a stiffness event, not a strength
     one — a stronger temper does not delay it at all.
     """
+    if not isinstance(flat_width, Quantity):
+        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
     if not flat_width.has_dimension("[length]"):
         raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+    if not isinstance(thickness, Quantity):
+        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
     if not thickness.has_dimension("[length]"):
         raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     b = flat_width.to("mm").magnitude
@@ -559,10 +589,20 @@ def aluminum_lateral_torsional_moment(
     caller's section properties; ``slenderness`` is L_b/r_ye with r_ye the effective
     radius of gyration from §F.4.2.
     """
+    if not isinstance(plastic_moment, Quantity):
+        raise ValueError(
+            f"plastic_moment must be a [force] * [length] quantity; got {plastic_moment!r}"
+        )
     if not plastic_moment.has_dimension("[force] * [length]"):
         raise ValueError(f"plastic_moment must be a moment quantity; got {plastic_moment}")
+    if not isinstance(section_modulus, Quantity):
+        raise ValueError(
+            f"section_modulus must be a [length] ** 3 quantity; got {section_modulus!r}"
+        )
     if not section_modulus.has_dimension("[length] ** 3"):
         raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus}")
+    if not isinstance(elastic_modulus, Quantity):
+        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
     if slenderness <= 0:
@@ -732,6 +772,10 @@ def aluminum_compression_strength(
     lie: a temper this module does not have the buckling table for, and a member declared
     welded whose weld-affected properties were not supplied.
     """
+    if not isinstance(properties, AlloyProperties):
+        raise ValueError(f"properties must be an AlloyProperties; got {properties!r}")
+    if not isinstance(edge_support, EdgeSupport):
+        raise ValueError(f"edge_support must be an EdgeSupport; got {edge_support!r}")
     # `min(states, ...)` picks the governing limit state, and min() DROPS a NaN candidate
     # rather than propagating it: a non-finite kL/r poisoned only the member-buckling state
     # and the function reported yielding as governing -- turning a FAIL at 147.5 MPa into a
@@ -840,6 +884,8 @@ def aluminum_compression_scorecard(
             detail=detail,
             reference=_CLAUSE_ADM,
         )
+    if not isinstance(demand_stress, Quantity):
+        raise ValueError(f"demand_stress must be a [pressure] quantity; got {demand_stress!r}")
     if not demand_stress.has_dimension("[pressure]"):
         raise ValueError(f"demand_stress must be a [pressure] quantity; got {demand_stress}")
     demand = abs(demand_stress.to("MPa").magnitude)

@@ -65,6 +65,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -266,6 +268,11 @@ def composite_curved_beam_stress(
     ri_overall = 0.0
     ro_overall = 0.0
     for index, strip in enumerate(strips):
+        if not isinstance(strip, Sequence) or len(strip) != 3:
+            raise ValueError(
+                f"strips[{index}] must be a (width, inner radius, outer radius) triple; "
+                f"got {strip!r}"
+            )
         width, inner_radius, outer_radius = strip
         _require(width, "[length]", f"strips[{index}] width")
         ri, ro = _check_radii(inner_radius, outer_radius)

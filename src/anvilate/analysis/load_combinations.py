@@ -37,7 +37,7 @@ def _effects(
 ) -> tuple[float, float, float, float, float]:
     """Resolve the five load effects to magnitudes in the dead load's units."""
     if not isinstance(dead, Quantity):
-        raise TypeError("dead must be a Quantity load effect")
+        raise ValueError("dead must be a Quantity load effect")
     unit = dead.unit
     d = require_finite(dead, name="dead")
     if d < 0:

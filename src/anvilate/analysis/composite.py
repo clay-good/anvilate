@@ -45,6 +45,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -210,10 +212,14 @@ def composite_longitudinal_cte(
     """
     _require(fiber_modulus, "[pressure]", "fiber_modulus")
     _require(matrix_modulus, "[pressure]", "matrix_modulus")
+    if not isinstance(fiber_cte, Quantity):
+        raise ValueError(f"fiber_cte must be a 1 / [temperature] quantity; got {fiber_cte!r}")
     if not fiber_cte.has_dimension("1 / [temperature]"):
         raise ValueError(
             f"fiber_cte must have units of 1/temperature; got {fiber_cte.dimensionality}"
         )
+    if not isinstance(matrix_cte, Quantity):
+        raise ValueError(f"matrix_cte must be a 1 / [temperature] quantity; got {matrix_cte!r}")
     if not matrix_cte.has_dimension("1 / [temperature]"):
         raise ValueError(
             f"matrix_cte must have units of 1/temperature; got {matrix_cte.dimensionality}"

@@ -202,6 +202,8 @@ def bth1_allowable_stresses(
         (yield_strength, "yield_strength"),
         (ultimate_strength, "ultimate_strength"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{name} must be a [pressure] quantity; got {value}")
         if value.magnitude <= 0:
@@ -244,6 +246,8 @@ def bth1_member_scorecard(
     cannot be checked.
     """
     for value, label in ((stress, "stress"), (allowable, "allowable")):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
     applied = abs(stress.to("MPa").magnitude)
@@ -283,6 +287,8 @@ def bth1_fatigue_scorecard(
     count — from :mod:`~anvilate.analysis.fatigue` or the applicable detail table — and
     is the caller's, like every other allowable here.
     """
+    if not isinstance(service_class, ServiceClass):
+        raise ValueError(f"service_class must be a ServiceClass; got {service_class!r}")
     if not service_class.fatigue_required:
         low, high = service_class.cycle_range
         return ScorecardEntry(
@@ -312,6 +318,8 @@ def bth1_fatigue_scorecard(
         (stress_range, "stress_range"),
         (allowable_stress_range, "allowable_stress_range"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
     applied = abs(stress_range.to("MPa").magnitude)
@@ -429,6 +437,10 @@ class LifterDevice(BaseModel):
 
 def bth1_allowable_for(allowables: BTH1Allowables, limit_state: BTH1LimitState) -> Quantity:
     """The one of the five ASME BTH-1 allowables that ``limit_state`` names."""
+    if not isinstance(allowables, BTH1Allowables):
+        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
+    if not isinstance(limit_state, BTH1LimitState):
+        raise ValueError(f"limit_state must be a BTH1LimitState; got {limit_state!r}")
     return {
         BTH1LimitState.TENSION_GROSS: allowables.tension_gross,
         BTH1LimitState.TENSION_NET: allowables.tension_net,
@@ -457,6 +469,10 @@ def bth1_pin_plate_scorecard(
 
     Returns the two entries in that order.
     """
+    if not isinstance(plate, LifterPinPlate):
+        raise ValueError(f"plate must be a LifterPinPlate; got {plate!r}")
+    if not isinstance(allowables, BTH1Allowables):
+        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
     width = plate.width.to("mm").magnitude
     hole = plate.hole_diameter.to("mm").magnitude
     thickness = plate.thickness.to("mm").magnitude
@@ -525,6 +541,10 @@ def screen_lifter_device(
     Returns the entries; wrap them in a :class:`~anvilate.scorecard.Scorecard` to roll
     them up.
     """
+    if not isinstance(device, LifterDevice):
+        raise ValueError(f"device must be a LifterDevice; got {device!r}")
+    if not isinstance(allowables, BTH1Allowables):
+        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
     if allowables.category is not device.category:
         raise ValueError(
             f"the allowables were built for Category {allowables.category.value} but "

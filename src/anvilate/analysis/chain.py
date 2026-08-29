@@ -41,6 +41,8 @@ __all__ = [
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -157,6 +159,10 @@ def chain_speed(
     """
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     _require(chain_pitch, "[length]", "chain_pitch")
+    if not isinstance(rotational_speed, Quantity):
+        raise ValueError(
+            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}"
+        )
     if not rotational_speed.has_dimension("[frequency]"):
         raise ValueError(
             f"rotational_speed must be a rotational-speed ([frequency]) quantity; got "

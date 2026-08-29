@@ -51,6 +51,8 @@ __all__ = [
 
 
 def _require_force(value: Quantity, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [force] quantity; got {value!r}")
     if not value.has_dimension("[force]"):
         raise ValueError(f"{name} must be a [force] quantity; got {value.dimensionality} ({value})")
 
@@ -121,6 +123,10 @@ def belt_max_transmissible_force(
 
 
 def _linear_density_kg_per_m(linear_density: Quantity) -> float:
+    if not isinstance(linear_density, Quantity):
+        raise ValueError(
+            f"linear_density must be a [mass] / [length] quantity; got {linear_density!r}"
+        )
     if not linear_density.has_dimension("[mass] / [length]"):
         raise ValueError(
             f"linear_density must be a [mass]/[length] quantity; "
@@ -133,6 +139,8 @@ def _linear_density_kg_per_m(linear_density: Quantity) -> float:
 
 
 def _speed_m_per_s(belt_speed: Quantity) -> float:
+    if not isinstance(belt_speed, Quantity):
+        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
     if not belt_speed.has_dimension("[velocity]"):
         raise ValueError(
             f"belt_speed must be a [velocity] quantity; "
@@ -233,6 +241,8 @@ def _pulley_geometry(
         (small_pulley_diameter, "small_pulley_diameter"),
         (center_distance, "center_distance"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
         if not value.has_dimension("[length]"):
             raise ValueError(
                 f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
@@ -363,6 +373,8 @@ def belt_transmitted_power(
     """
     _require_force(tight_tension, "tight_tension")
     _require_force(slack_tension, "slack_tension")
+    if not isinstance(belt_speed, Quantity):
+        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
     if not belt_speed.has_dimension("[velocity]"):
         raise ValueError(
             f"belt_speed must be a [velocity] quantity; got "
@@ -402,8 +414,12 @@ def belt_tight_tension_for_power(
     belt slips. Centrifugal tension is neglected (a low-speed / first-cut selection). P and v
     must be positive; μ and θ as in :func:`capstan_tension_ratio`. Returns T₁ in N.
     """
+    if not isinstance(power, Quantity):
+        raise ValueError(f"power must be a [power] quantity; got {power!r}")
     if not power.has_dimension("[power]"):
         raise ValueError(f"power must be a [power] quantity; got {power.dimensionality} ({power})")
+    if not isinstance(belt_speed, Quantity):
+        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
     if not belt_speed.has_dimension("[velocity]"):
         raise ValueError(
             f"belt_speed must be a [velocity] quantity; got {belt_speed.dimensionality}"

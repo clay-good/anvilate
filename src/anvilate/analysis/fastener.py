@@ -88,6 +88,8 @@ NUT_FACTOR_AS_RECEIVED = 0.2
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -331,8 +333,14 @@ def aisc_tension_member_design_strength(
     net-section flow, to compare against the factored tension demand. Returns the design
     strength in kN.
     """
+    if not isinstance(gross_area, Quantity):
+        raise ValueError(f"gross_area must be a [length]**2 quantity; got {gross_area!r}")
     if not gross_area.has_dimension("[length]**2"):
         raise ValueError("gross_area must be a [length]**2 quantity")
+    if not isinstance(effective_net_area, Quantity):
+        raise ValueError(
+            f"effective_net_area must be a [length]**2 quantity; got {effective_net_area!r}"
+        )
     if not effective_net_area.has_dimension("[length]**2"):
         raise ValueError("effective_net_area must be a [length]**2 quantity")
     _require(yield_strength, "[pressure]", "yield_strength")
@@ -463,7 +471,7 @@ def net_width_staggered_holes(
         raise ValueError(f"hole_count must be a positive integer; got {hole_count}")
     stagger = 0.0
     for i, pair in enumerate(stagger_pitch_gauge):
-        if len(pair) != 2:
+        if not isinstance(pair, Sequence) or len(pair) != 2:
             raise ValueError(f"stagger_pitch_gauge[{i}] must be an (s, g) pair; got {pair!r}")
         s_q, g_q = pair
         _require(s_q, "[length]", f"stagger_pitch_gauge[{i}].s")
@@ -719,6 +727,10 @@ def bolt_proof_load(*, tensile_stress_area: Quantity, proof_strength: Quantity) 
     and it is the reference every preload target is a fraction of. A_t must be an area
     and S_p a stress, both positive. Returns the proof load in newtons.
     """
+    if not isinstance(tensile_stress_area, Quantity):
+        raise ValueError(
+            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}"
+        )
     if not tensile_stress_area.has_dimension("[length]**2"):
         raise ValueError(
             f"tensile_stress_area must be a [length]**2 quantity; got "
@@ -970,6 +982,10 @@ def preloaded_bolt_cyclic_stress(
     _require(min_external_load, "[force]", "min_external_load")
     _require(max_external_load, "[force]", "max_external_load")
     _check_factor(stiffness_factor)
+    if not isinstance(tensile_stress_area, Quantity):
+        raise ValueError(
+            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}"
+        )
     if not tensile_stress_area.has_dimension("[length]**2"):
         raise ValueError(
             f"tensile_stress_area must be a [length]**2 quantity; got "
@@ -1027,7 +1043,7 @@ def eccentric_shear_group_peak_force(
     xs = []
     ys = []
     for i, pair in enumerate(positions):
-        if len(pair) != 2:
+        if not isinstance(pair, Sequence) or len(pair) != 2:
             raise ValueError(f"positions[{i}] must be an (x, y) pair; got {pair!r}")
         x_q, y_q = pair
         _require(x_q, "[length]", f"positions[{i}].x")

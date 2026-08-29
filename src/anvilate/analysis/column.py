@@ -70,6 +70,8 @@ class ColumnEnd(StrEnum):
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
@@ -274,8 +276,17 @@ def aisc_effective_radius_of_gyration(
     r_ts sits a little above the flange's own radius of gyration; it is what turns the
     section geometry into the L_r brace-spacing limit. Returns r_ts in mm.
     """
+    if not isinstance(minor_second_moment, Quantity):
+        raise ValueError(
+            f"minor_second_moment must be a [length]**4 quantity; got {minor_second_moment!r}"
+        )
     if not minor_second_moment.has_dimension("[length]**4"):
         raise ValueError("minor_second_moment must be a [length]**4 quantity")
+    if not isinstance(elastic_section_modulus, Quantity):
+        raise ValueError(
+            f"elastic_section_modulus must be a [length]**3 quantity; "
+            f"got {elastic_section_modulus!r}"
+        )
     if not elastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
     _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
@@ -364,8 +375,17 @@ def aisc_elastic_ltb_stress(
     """
     _require(unbraced_length, "[length]", "unbraced_length")
     _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
+    if not isinstance(torsion_constant, Quantity):
+        raise ValueError(
+            f"torsion_constant must be a [length]**4 quantity; got {torsion_constant!r}"
+        )
     if not torsion_constant.has_dimension("[length]**4"):
         raise ValueError("torsion_constant must be a [length]**4 quantity")
+    if not isinstance(elastic_section_modulus, Quantity):
+        raise ValueError(
+            f"elastic_section_modulus must be a [length]**3 quantity; "
+            f"got {elastic_section_modulus!r}"
+        )
     if not elastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
     _require(flange_centroid_distance, "[length]", "flange_centroid_distance")

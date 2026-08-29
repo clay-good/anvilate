@@ -35,6 +35,8 @@ __all__ = [
 
 
 def _positive_mm(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(
             f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"

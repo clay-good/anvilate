@@ -64,6 +64,8 @@ def sound_level_sum(*, levels: Sequence[float]) -> float:
     total — which is why quieting the single loudest machine is what actually lowers a plant's
     noise. Returns the combined level in dB.
     """
+    if not isinstance(levels, Sequence):
+        raise ValueError(f"levels must be a sequence, not a single value; got {levels!r}")
     if not levels:
         raise ValueError("levels must contain at least one sound level")
     total = sum(10.0 ** (level / 10.0) for level in levels)
@@ -119,6 +121,13 @@ def composite_transmission_loss(
     area as a Quantity and its transmission loss in dB. Returns the composite TL in dB as a plain
     float.
     """
+    if not isinstance(areas, Sequence):
+        raise ValueError(f"areas must be a sequence, not a single value; got {areas!r}")
+    if not isinstance(transmission_losses, Sequence):
+        raise ValueError(
+            f"transmission_losses must be a sequence, not a single value; "
+            f"got {transmission_losses!r}"
+        )
     if len(areas) != len(transmission_losses):
         raise ValueError(
             f"areas and transmission_losses must be the same length; got {len(areas)} and "
@@ -661,6 +670,8 @@ def acoustic_transmission_coefficient(*, impedance_1: Quantity, impedance_2: Qua
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

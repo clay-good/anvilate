@@ -538,6 +538,8 @@ def en1993_detail_category_curve(detail_category: Quantity) -> FatigueCurve:
     :func:`~anvilate.analysis.fatigue.weld_detail_allowable_stress_range` computes them
     from the standard directly, and the two are compared in the test suite.
     """
+    if not isinstance(detail_category, Quantity):
+        raise ValueError(f"detail_category must be a [pressure] quantity; got {detail_category!r}")
     if not detail_category.has_dimension("[pressure]"):
         raise ValueError(f"detail_category must be a stress; got {detail_category}")
     reference = detail_category.to("MPa").magnitude

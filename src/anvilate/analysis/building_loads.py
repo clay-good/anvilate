@@ -551,7 +551,7 @@ def seismic_load_effect(
     :func:`~anvilate.analysis.asce7_lrfd_factored_load`. Returns E in the horizontal effect's units.
     """
     if not isinstance(horizontal_effect, Quantity):
-        raise TypeError("horizontal_effect must be a Quantity load effect")
+        raise ValueError("horizontal_effect must be a Quantity load effect")
     if not dead_load_effect.has_dimension(horizontal_effect.dimensionality):
         raise ValueError(
             "dead_load_effect must share the horizontal effect's dimensionality "
@@ -719,6 +719,8 @@ def rain_load(*, static_head: Quantity, hydraulic_head: Quantity) -> Quantity:
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

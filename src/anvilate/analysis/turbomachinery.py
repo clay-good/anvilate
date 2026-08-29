@@ -43,6 +43,8 @@ def blade_tip_speed(*, diameter: Quantity, rotational_speed: Quantity) -> Quanti
     with U squared, so it is capped by the rotor material's stress limit. Returns the speed in m/s.
     """
     _check(diameter, "[length]", "diameter")
+    if not isinstance(rotational_speed, Quantity):
+        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
     if not rotational_speed.has_dimension("1/[time]"):
         raise ValueError(
             f"rotational_speed must be a 1/[time] quantity; got "
@@ -197,6 +199,8 @@ def stanitz_slip_factor(*, blade_count: int) -> float:
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

@@ -409,6 +409,8 @@ def position_stack_contribution(
                 f"condition, and this frame is {frame.material_condition.value}; adding "
                 f"one would be tolerance the drawing did not grant"
             )
+        if not isinstance(bonus, Quantity):
+            raise ValueError(f"bonus must be a [length] quantity; got {bonus!r}")
         if not bonus.has_dimension("[length]"):
             raise ValueError(f"bonus must be a [length] quantity; got {bonus}")
         if bonus.magnitude < 0:

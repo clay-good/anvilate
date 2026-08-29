@@ -96,6 +96,8 @@ def parallel_resistance(*, resistances: Sequence[Quantity]) -> Quantity:
     is always smaller than the smallest branch, since each added path gives the current another way
     through. Returns the equivalent resistance in ohm.
     """
+    if not isinstance(resistances, Sequence):
+        raise ValueError(f"resistances must be a sequence, not a single value; got {resistances!r}")
     if len(resistances) == 0:
         raise ValueError("resistances must contain at least one resistor")
     conductance_sum = 0.0
@@ -109,6 +111,8 @@ def parallel_resistance(*, resistances: Sequence[Quantity]) -> Quantity:
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"

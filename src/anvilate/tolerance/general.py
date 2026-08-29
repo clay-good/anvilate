@@ -154,6 +154,8 @@ def general_tolerance(
     dimension is below the table's minimum (needs an explicit tolerance), beyond
     its maximum, or if the class is undefined for the matched range.
     """
+    if not isinstance(nominal, Quantity):
+        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"general tolerance needs a length; got {nominal.dimensionality} ({nominal})"
@@ -256,6 +258,8 @@ def general_angular_tolerance(
     and the table's first range is open at the bottom, so it would otherwise
     resolve to the tightest class instead of being refused.
     """
+    if not isinstance(shorter_leg, Quantity):
+        raise ValueError(f"shorter_leg must be a [length] quantity; got {shorter_leg!r}")
     if not shorter_leg.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"angular tolerance is keyed by the shorter leg length; "

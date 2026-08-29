@@ -47,10 +47,14 @@ def bending_stress(*, moment: Quantity, section_modulus: Quantity) -> Quantity:
     volume (length³); ``Z`` must be positive. Returns the extreme-fibre bending
     stress in MPa.
     """
+    if not isinstance(moment, Quantity):
+        raise ValueError(f"moment must be a [force] * [length] quantity; got {moment!r}")
     if not moment.has_dimension("[force] * [length]"):
         raise ValueError(
             f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
         )
+    if not isinstance(section_modulus, Quantity):
+        raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}")
     if not section_modulus.has_dimension("[length]**3"):
         raise ValueError(
             f"section_modulus must be a [length]**3 quantity; got "
@@ -68,6 +72,8 @@ def _mm(magnitude: float) -> Quantity:
 
 
 def _require_length(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     require_finite(value, name=name)
@@ -96,10 +102,18 @@ def required_section_modulus(
     and stress are dimension-checked and ``n`` / ``allowable_stress`` must be
     positive.
     """
+    if not isinstance(bending_moment, Quantity):
+        raise ValueError(
+            f"bending_moment must be a [force] * [length] quantity; got {bending_moment!r}"
+        )
     if not bending_moment.has_dimension("[force] * [length]"):
         raise ValueError(
             f"bending_moment must be a [force]*[length] quantity; got "
             f"{bending_moment.dimensionality} ({bending_moment})"
+        )
+    if not isinstance(allowable_stress, Quantity):
+        raise ValueError(
+            f"allowable_stress must be a [pressure] quantity; got {allowable_stress!r}"
         )
     if not allowable_stress.has_dimension("[pressure]"):
         raise ValueError(
@@ -352,6 +366,8 @@ def composite_beam_bending_stresses(
     :class:`CompositeBeamStresses` with the neutral axis, transformed I, and both fibre
     stresses.
     """
+    if not isinstance(moment, Quantity):
+        raise ValueError(f"moment must be a [force] * [length] quantity; got {moment!r}")
     if not moment.has_dimension("[force] * [length]"):
         raise ValueError(
             f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
@@ -362,9 +378,13 @@ def composite_beam_bending_stresses(
         (top_width, "top_width"),
         (top_height, "top_height"),
     ):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
         if not value.has_dimension("[length]"):
             raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     for value, name in ((bottom_modulus, "bottom_modulus"), (top_modulus, "top_modulus")):
+        if not isinstance(value, Quantity):
+            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
         if not value.has_dimension("[pressure]"):
             raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
     m = moment.to("N*mm").magnitude
@@ -434,6 +454,11 @@ def warping_constant_doubly_symmetric(
     lateral-torsional buckling resistance and its response to non-uniform torsion — a deep,
     wide-flange section warps far more stiffly than a shallow one. Returns C_w as a length⁶ value.
     """
+    if not isinstance(weak_axis_moment_of_inertia, Quantity):
+        raise ValueError(
+            f"weak_axis_moment_of_inertia must be a [length]**4 quantity; "
+            f"got {weak_axis_moment_of_inertia!r}"
+        )
     if not weak_axis_moment_of_inertia.has_dimension("[length]**4"):
         raise ValueError(
             f"weak_axis_moment_of_inertia must be a [length]**4 quantity; got "
@@ -494,12 +519,16 @@ def compound_section_properties(
     buckling checks need, for sections the standard-shape builders do not cover. Returns a
     :class:`CompoundSection`.
     """
+    if not isinstance(rectangles, Sequence):
+        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
     if not rectangles:
         raise ValueError("rectangles must be a non-empty sequence")
     parts = []
     for i, rect in enumerate(rectangles):
-        if len(rect) != 3:
-            raise ValueError(f"rectangles[{i}] must be a (width, height, centroid) triple")
+        if not isinstance(rect, Sequence) or len(rect) != 3:
+            raise ValueError(
+                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}"
+            )
         width, height, centroid = rect
         b = _require_length(width, f"rectangles[{i}].width")
         h = _require_length(height, f"rectangles[{i}].height")
@@ -537,12 +566,16 @@ def compound_plastic_section_modulus(
     cover-plated beam. For a doubly-symmetric section the PNA is the centroid; for an
     unsymmetric one it shifts to equalize the areas. Returns Z in mm³ (multiply by F_y for M_p).
     """
+    if not isinstance(rectangles, Sequence):
+        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
     if not rectangles:
         raise ValueError("rectangles must be a non-empty sequence")
     parts = []
     for i, rect in enumerate(rectangles):
-        if len(rect) != 3:
-            raise ValueError(f"rectangles[{i}] must be a (width, height, centroid) triple")
+        if not isinstance(rect, Sequence) or len(rect) != 3:
+            raise ValueError(
+                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}"
+            )
         b = _require_length(rect[0], f"rectangles[{i}].width")
         h = _require_length(rect[1], f"rectangles[{i}].height")
         y = _require_length(rect[2], f"rectangles[{i}].centroid")
