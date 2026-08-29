@@ -131,7 +131,10 @@ def test_the_unbuilt_list_is_the_specs_own_minimum_minus_what_is_backed():
     works is as misleading as a missing one.
     """
     required = {"build", "check", "export", "diff"}
-    assert set(_UNBUILT) == required - {"check", "export"}
+    # `diff`'s spec-change half is backed too — its requirement says "two builds of a part
+    # (or a spec change)", and the parenthesis is what a merge gate reads. Only `build` has
+    # no half that a spec file alone can answer.
+    assert set(_UNBUILT) == required - {"check", "export", "diff"}
 
 
 def test_a_missing_file_and_an_invalid_document_are_both_bad_requests(tmp_path):
@@ -657,3 +660,138 @@ def test_an_envelope_attesting_no_toolchain_says_so(tmp_path):
     path.write_text(json_module.dumps(Attestation.unsigned(bare).to_envelope()), encoding="utf-8")
     _code, out, _err = _run("verify", str(path))
     assert "toolchain   none attested" in out
+
+
+# --- diff, for the half a spec change alone can answer -------------------------------------
+
+
+@pytest.fixture
+def spec_pair(tmp_path):
+    before = tmp_path / "before.yaml"
+    after = tmp_path / "after.yaml"
+    before.write_text(_SPEC, encoding="utf-8")
+    after.write_text(
+        _SPEC.replace("A mezzanine deck plate.", "A mezzanine deck plate, revised."),
+        encoding="utf-8",
+    )
+    return before, after
+
+
+def test_diff_reports_the_spec_change_and_the_verdicts(spec_pair):
+    before, after = spec_pair
+    code, out, err = _run("diff", str(before), str(after))
+    assert "-description: A mezzanine deck plate." in out
+    assert "+description: A mezzanine deck plate, revised." in out
+    assert "no verdict changed" in out
+    assert code == EXIT_OK and err == ""
+
+
+def test_all_three_sections_render_even_when_empty(spec_pair):
+    """The vanishing-heading rule. A diff with no spec change and one nobody diffed must
+    not read the same, and the geometry half is *named* rather than omitted — a reader who
+    sees no mass delta should be told there is none to be had."""
+    before, _after = spec_pair
+    _code, out, _err = _run("diff", str(before), str(before))
+    for heading in ("SPEC", "CHECKS", "GEOMETRY"):
+        assert heading in out
+    assert "no change" in out
+    assert "no verdict changed" in out
+    assert "need two built parts" in out
+
+
+def test_a_check_that_regressed_fails_the_run_and_is_named(spec_pair, monkeypatch):
+    """`headless-automation`'s scenario: a commit changes a shared pattern and a downstream
+    part's validation now fails, and CI fails on that part."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        status = CheckStatus.FAIL if "revised" in spec.description else CheckStatus.PASS
+        return Scorecard(
+            entries=(ScorecardEntry(name="bending", status=status, detail="the moment"),)
+        )
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    before, after = spec_pair
+    code, out, err = _run("diff", str(before), str(after))
+    assert code == EXIT_FAILED
+    assert "! bending: pass → fail" in out
+    assert "bending: pass → fail" in err
+
+
+def test_a_check_that_was_already_failing_is_not_a_regression(spec_pair, monkeypatch):
+    """A part that was failing and still fails has not got worse, and a diff that failed the
+    build for it would fail every build until somebody fixed an unrelated part."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    monkeypatch.setattr(
+        screening,
+        "screen_spec",
+        lambda spec: Scorecard(
+            entries=(ScorecardEntry(name="bending", status=CheckStatus.FAIL, detail="still"),)
+        ),
+    )
+    before, after = spec_pair
+    code, out, err = _run("diff", str(before), str(after))
+    assert code == EXIT_OK, "an unchanged failure is not a regression"
+    assert err == ""
+    assert "no verdict changed" in out
+
+
+def test_an_improvement_is_reported_and_does_not_fail_the_run(spec_pair, monkeypatch):
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        status = CheckStatus.PASS if "revised" in spec.description else CheckStatus.FAIL
+        return Scorecard(entries=(ScorecardEntry(name="bending", status=status, detail="d"),))
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    before, after = spec_pair
+    code, out, err = _run("diff", str(before), str(after))
+    assert code == EXIT_OK and err == ""
+    assert "! bending: fail → pass" in out
+
+
+def test_a_check_present_in_only_one_card_is_added_or_removed_not_regressed(spec_pair, monkeypatch):
+    """A different set of checks is not a worse set. Reported as added and removed rather
+    than silently counted as either."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        name = "shear" if "revised" in spec.description else "bending"
+        return Scorecard(entries=(ScorecardEntry(name=name, status=CheckStatus.FAIL, detail="d"),))
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    before, after = spec_pair
+    code, out, _err = _run("diff", str(before), str(after))
+    assert "+ shear: added (fail)" in out
+    assert "- bending: removed (was fail)" in out
+    assert code == EXIT_OK, "a different set of checks is not a regression"
+
+
+def test_a_regression_to_not_evaluated_still_fails_the_run(spec_pair, monkeypatch):
+    """No-silent-green in the diff: a check that used to run and now cannot has got worse."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        status = CheckStatus.NOT_EVALUATED if "revised" in spec.description else CheckStatus.PASS
+        return Scorecard(entries=(ScorecardEntry(name="bending", status=status, detail="d"),))
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    before, after = spec_pair
+    code, _out, err = _run("diff", str(before), str(after))
+    assert code == EXIT_NOT_EVALUATED
+    assert "pass → not_evaluated" in err
+
+
+def test_diff_is_no_longer_on_the_unbuilt_list():
+    """The list is the four the requirement names minus what is backed, and `diff`'s spec
+    half is backed now. Only its geometry half is not, and that is named in the output."""
+    from anvilate.cli import _DIFF_NEEDS_GEOMETRY
+
+    assert set(_UNBUILT) == {"build"}
+    assert "geometry-generation" in _DIFF_NEEDS_GEOMETRY

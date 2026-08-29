@@ -1,8 +1,8 @@
 # `anvilate` on the command line
 
-Two of the four commands `headless-automation` names are backed, and a fifth that
-`evidence-attestation` names is backed too. The other two are refused by name, with what
-each is waiting on.
+Three of the four commands `headless-automation` names are backed, and a fifth that
+`evidence-attestation` names is backed too. The one that is not is refused by name, with
+what it is waiting on.
 
 ```bash
 anvilate check part.yaml
@@ -159,17 +159,57 @@ Only local symmetric keys are supported: `LocalHmacSigner` is what this package 
 Keyless and asymmetric verification are unimplemented, and the command says `not_checked`
 rather than pretending otherwise.
 
-## The two that are refused
+## `anvilate diff`
 
-`build` and `diff` need a built part, and the geometry kernel is not in this package. Each
-is a named subcommand that exits 4 and says what it is waiting on:
+```bash
+anvilate diff before.yaml after.yaml
+```
+
+```text
+deck_plate → deck_plate
+
+SPEC
+  -description: A mezzanine deck plate.
+  +description: A mezzanine deck plate, revised.
+
+CHECKS
+  ! bending: pass → fail
+      the moment exceeds the section
+  (2 unchanged)
+
+GEOMETRY
+  not compared: mass, volume and centre-of-gravity deltas need two built parts. See openspec/specs/geometry-generation.
+```
+
+The requirement asks `diff` to compare "two builds of a part **(or a spec change)**", and
+the parenthesis is the whole of what is possible without a geometry kernel — and the half a
+merge gate reads, since the scenario is a commit that changes a shared pattern and makes a
+downstream part fail.
+
+**The exit code is about what got worse, not about the new card.** A part that was already
+failing and still fails has not regressed, and a diff that failed the build for it would
+fail every build until somebody fixed an unrelated part. So the code is the worst *new*
+status among checks that moved for the worse, and 0 when none did — with a regression to
+`not_evaluated` counting, because a check that used to run and now cannot has got worse.
+
+A check present in only one card is reported as added or removed. A different set of checks
+is not a worse set, and calling it either would be a guess.
+
+**The geometry half is named rather than omitted**, for the same reason the unbuilt command
+is named rather than left unknown: a reader who sees no mass delta should be told there is
+none to be had, not left wondering whether the mass was equal.
+
+## The one that is refused
+
+`build` needs a built part, and the geometry kernel is not in this package. It is a named
+subcommand that exits 4 and says what it is waiting on:
 
 ```text
 anvilate build: build runs the part's generating program, which needs a geometry kernel
 this package does not ship. See openspec/specs/geometry-generation.
 ```
 
-The alternative — leaving them out — makes the shell report `unknown command: build`, which
+The alternative — leaving it out — makes the shell report `unknown command: build`, which
 tells a script author they typed it wrong. They did not; the operation is specified and
 unbuilt, and that is a different thing to be told. It is the same rule the
 [MCP surface](mcp-tool-contracts.md) follows for the operations it cannot serve.

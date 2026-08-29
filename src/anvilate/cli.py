@@ -96,11 +96,13 @@ _UNBUILT = {
         "build runs the part's generating program, which needs a geometry kernel this "
         "package does not ship. See openspec/specs/geometry-generation."
     ),
-    "diff": (
-        "diff compares two builds and reports mass, dimension and verdict deltas; two "
-        "builds is what it does not have. See openspec/specs/geometry-generation."
-    ),
 }
+
+# The half of `diff` that needs a built part, named where the output would have shown it.
+_DIFF_NEEDS_GEOMETRY = (
+    "mass, volume and centre-of-gravity deltas need two built parts. "
+    "See openspec/specs/geometry-generation."
+)
 
 # The artifacts `export` knows about, and which of them a spec file alone can produce. The
 # two that cannot each say what they are waiting on, in the same words `_UNBUILT` uses,
@@ -206,6 +208,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the report"
     )
 
+    diff = commands.add_parser(
+        "diff", help="compare two spec documents and the verdicts they screen to"
+    )
+    diff.add_argument("before", type=Path, help="the spec as it was")
+    diff.add_argument("after", type=Path, help="the spec as it is")
+
     export = commands.add_parser("export", help="write a downstream artifact from a screened spec")
     export.add_argument("spec", type=Path, help="a Design Spec document, YAML or JSON")
     export.add_argument(
@@ -241,7 +249,104 @@ def run(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
         return _export(args, out=out, err=err)
     if args.command == "verify":
         return _verify(args, out=out, err=err)
+    if args.command == "diff":
+        return _diff(args, out=out, err=err)
     return _check(args, out=out, err=err)
+
+
+def _diff(args: argparse.Namespace, *, out, err) -> int:
+    """``diff``, for the half of it a spec change alone can answer.
+
+    `headless-automation` asks `diff` to "compare two builds of a part **(or a spec
+    change)** and report mass/volume/CG deltas, changed-dimension summary, and
+    validation-verdict changes". The parenthesis is the whole of what is possible without a
+    geometry kernel, and it is the half a merge gate actually reads: the scenario is a
+    commit that changes a shared pattern and makes a downstream part fail.
+
+    **The exit code is about what got worse, not about the new card.** A part that was
+    already failing and still fails has not regressed, and a diff that failed the build for
+    it would fail every build until somebody fixed an unrelated part. So the code is the
+    worst *new* status among checks that moved for the worse, and zero when none did.
+
+    The geometry half is named in the output rather than omitted, for the same reason the
+    unbuilt commands are named rather than left unknown: a reader who sees no mass delta
+    should be told there is none to be had, not left to wonder whether the mass was equal.
+    """
+    from .screening import screen_spec
+
+    cards, names = [], []
+    for path in (args.before, args.after):
+        spec = _load(path, err=err, command="diff")
+        if isinstance(spec, int):
+            return spec
+        cards.append(screen_spec(spec))
+        names.append(spec)
+
+    before_card, after_card = cards
+    before_spec, after_spec = names
+    print(_render_diff(before_spec, after_spec, before_card, after_card), file=out)
+
+    regressions = _regressions(before_card, after_card)
+    for name, was, now in regressions:
+        print(f"anvilate diff: {name}: {was.value} → {now.value}", file=err)
+    if not regressions:
+        return EXIT_OK
+    return max((EXIT_CODES[now] for _n, _w, now in regressions), key=_EXIT_SEVERITY.index)
+
+
+def _regressions(before: Scorecard, after: Scorecard):
+    """Checks whose status moved for the worse, by name.
+
+    A check present in only one card is not a regression *or* an improvement — it is a
+    different set of checks — and it is reported in the rendering as added or removed
+    rather than silently counted as either.
+    """
+    was = {entry.name: entry.status for entry in before.entries}
+    return [
+        (entry.name, was[entry.name], entry.status)
+        for entry in after.entries
+        if entry.name in was
+        and _BLOCKING_ORDER.index(entry.status) > _BLOCKING_ORDER.index(was[entry.name])
+    ]
+
+
+def _render_diff(before_spec, after_spec, before: Scorecard, after: Scorecard) -> str:
+    """The three sections, each present even when it has nothing in it."""
+    import difflib
+
+    from .spec import dump_spec_yaml
+
+    lines = [f"{before_spec.name} → {after_spec.name}", "", "SPEC"]
+    changed = [
+        line
+        for line in difflib.unified_diff(
+            dump_spec_yaml(before_spec).splitlines(),
+            dump_spec_yaml(after_spec).splitlines(),
+            lineterm="",
+            n=0,
+        )
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+    lines.extend(f"  {line}" for line in changed or ("no change",))
+
+    lines.extend(["", "CHECKS"])
+    was = {entry.name: entry for entry in before.entries}
+    now = {entry.name: entry for entry in after.entries}
+    moved = []
+    for name in sorted(set(was) | set(now)):
+        if name not in now:
+            moved.append(f"  - {name}: removed (was {was[name].status.value})")
+        elif name not in was:
+            moved.append(f"  + {name}: added ({now[name].status.value})")
+        elif was[name].status is not now[name].status:
+            moved.append(f"  ! {name}: {was[name].status.value} → {now[name].status.value}")
+            moved.append(f"      {now[name].detail}")
+    lines.extend(moved or ["  no verdict changed"])
+    unchanged = sum(1 for name in set(was) & set(now) if was[name].status is now[name].status)
+    lines.append(f"  ({unchanged} unchanged)")
+
+    lines.extend(["", "GEOMETRY", f"  not compared: {_DIFF_NEEDS_GEOMETRY}"])
+    return "\n".join(lines)
 
 
 def _verify(args: argparse.Namespace, *, out, err) -> int:
