@@ -304,6 +304,19 @@ either side: rising everywhere below the ratio, touching zero at it, turning ove
 That reads as an argument rather than as a magic number, and it also catches a change to the
 curve the constant describes, which asserting √2 never would.
 
+### Where it stands
+
+Every constant on the 54 was mutated at HEAD. **One was unpinned** —
+`BELLEVILLE_PLATEAU_RATIO`, fixed above. The other nine are pinned through a caller and
+need nothing: `BALL_BEARING_LIFE_EXPONENT`, `BEARING_WEIBULL_SLOPE`,
+`NUT_FACTOR_AS_RECEIVED`, `DEFAULT_POISSON_RATIO`, `UNIFORM_WEAR`, `RELEASED_DIRECTORY`,
+`DCC_NAMESPACE`, `SI_NAMESPACE`, and the three `*_CITATION` strings, which are rendered into
+documents that tests read.
+
+The remaining 44 are result types — `HertzContact`, `ThinWallStress`, `BeamBendingResult`
+and their kin. They are exercised by every test of the function that returns them; being
+named is not the same as being reached, and this sweep can only see the first.
+
 ## Finding a docs page whose numbers nothing checks
 
 The existing ratchet asks whether a page's *filename* appears in a test. That is a
