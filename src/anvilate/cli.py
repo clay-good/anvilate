@@ -76,6 +76,17 @@ EXIT_CODES: dict[CheckStatus, int] = {
     CheckStatus.NOT_EVALUATED: EXIT_NOT_EVALUATED,
 }
 
+#: Statuses and exit codes worst-last, so a run over many specs reports the worst one it
+#: found. Written as orders rather than compared with `>`: the exit codes are labels, and
+#: "2 is worse than 1" is a fact about this list, not about the integers.
+_BLOCKING_ORDER = [
+    CheckStatus.PASS,
+    CheckStatus.OVER_MARGIN,
+    CheckStatus.NOT_EVALUATED,
+    CheckStatus.FAIL,
+]
+_EXIT_SEVERITY = [EXIT_OK, EXIT_NOT_EVALUATED, EXIT_FAILED]
+
 # What each unbuilt command is waiting on. Named individually because "not implemented" is
 # not an answer a script author can act on, and because the three are waiting on the same
 # thing for three different reasons.
@@ -160,7 +171,12 @@ def _build_parser() -> argparse.ArgumentParser:
     check = commands.add_parser(
         "check", help="compile a spec document and screen it, printing the scorecard"
     )
-    check.add_argument("spec", type=Path, help="a Design Spec document, YAML or JSON")
+    check.add_argument(
+        "spec",
+        type=Path,
+        nargs="+",
+        help="Design Spec documents, or directories to search for them",
+    )
     check.add_argument(
         "--format",
         choices=("text", "json"),
@@ -253,18 +269,101 @@ def _load(path: Path, *, err, command: str):
 
 
 def _check(args: argparse.Namespace, *, out, err) -> int:
+    """``check``, over one spec or every spec under a directory.
+
+    `headless-automation` asks for "regenerating and revalidating **all specs in a
+    repository** on push", so a directory is a valid argument and the exit code is the worst
+    verdict across everything found — one failing part fails the run, which is what a merge
+    gate needs.
+    """
     from .screening import screen_spec
 
-    spec = _load(args.spec, err=err, command="check")
-    if isinstance(spec, int):
-        return spec
+    paths = _resolve(args.spec, err=err)
+    if isinstance(paths, int):
+        return paths
 
-    card = screen_spec(spec)
+    results = []
+    for path in paths:
+        spec = _load(path, err=err, command="check")
+        if isinstance(spec, int):
+            return spec
+        results.append((path, spec, screen_spec(spec)))
+
     if args.format == "json":
-        print(json.dumps(card.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
+        # A list whatever the count. A shape that changes with the number of arguments is a
+        # shape every caller has to branch on, and the branch is wrong the first time a
+        # directory happens to hold one spec.
+        payload = {
+            "specs": [
+                {
+                    "path": str(path),
+                    "name": spec.name,
+                    "scorecard": card.model_dump(mode="json"),
+                }
+                for path, spec, card in results
+            ]
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
-        print(_render(spec.name, card), file=out)
-    return EXIT_CODES[card.status]
+        for index, (_path, spec, card) in enumerate(results):
+            if index:
+                print("", file=out)
+            print(_render(spec.name, card), file=out)
+        if len(results) > 1:
+            worst = max((card.status for _p, _s, card in results), key=_BLOCKING_ORDER.index)
+            print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
+
+    # Every blocking check on stderr, which is what the requirement asks for and what a CI
+    # log actually shows. A check that could not run is listed too, labelled as such: it
+    # blocks exactly as hard and calling it a failure would be a different claim.
+    for path, _spec, card in results:
+        for entry in card.entries:
+            if entry.status in (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED):
+                print(
+                    f"anvilate check: {path}: {entry.status.value}: {entry.name} — {entry.detail}",
+                    file=err,
+                )
+    return max(
+        (EXIT_CODES[card.status] for _p, _s, card in results),
+        key=_EXIT_SEVERITY.index,
+    )
+
+
+def _resolve(paths: list[Path], *, err) -> list[Path] | int:
+    """The spec documents behind the arguments, in a stable order.
+
+    A directory is searched; a file named on the command line is taken at its word. The
+    difference matters: a document *found* by searching that carries no ``anvilate_spec`` key
+    is some other YAML file and is skipped — reported, never silently — while one the caller
+    *named* is an error, because they said it was a spec and it is not.
+    """
+    import yaml
+
+    found: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            candidates = sorted(
+                candidate
+                for pattern in ("*.yaml", "*.yml", "*.json")
+                for candidate in path.rglob(pattern)
+            )
+            for candidate in candidates:
+                try:
+                    document = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+                except (OSError, yaml.YAMLError):
+                    document = None
+                if isinstance(document, dict) and "anvilate_spec" in document:
+                    found.append(candidate)
+                else:
+                    print(f"anvilate check: {candidate}: not a Design Spec, skipped", file=err)
+            continue
+        found.append(path)
+    if not found:
+        print(
+            "anvilate check: no Design Spec found in " + ", ".join(str(p) for p in paths), file=err
+        )
+        return EXIT_BAD_REQUEST
+    return found
 
 
 def _render(name: str, card: Scorecard) -> str:

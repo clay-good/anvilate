@@ -67,7 +67,8 @@ def test_check_screens_a_spec_and_reports_the_card(spec_file):
     # The reason travels with the verdict — the whole point of a not-evaluated tier.
     assert "declares no structural element type" in out
     assert code == EXIT_NOT_EVALUATED
-    assert err == ""
+    # stderr carries the blocking checks — see the stderr tests below.
+    assert "not_evaluated: T1 analytical" in err
 
 
 def test_a_card_that_could_not_be_evaluated_does_not_exit_zero(spec_file):
@@ -97,8 +98,14 @@ def test_every_scorecard_status_has_an_exit_code_and_only_pass_is_zero():
 
 def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     code, out, _err = _run("check", "--format", "json", str(spec_file))
-    card = json.loads(out)
-    assert [entry["status"] for entry in card["entries"]] == ["not_evaluated"]
+    payload = json.loads(out)
+    # A list whatever the count. A shape that changes with the number of arguments is a
+    # shape every caller has to branch on, and the branch is wrong the first time a
+    # directory happens to hold exactly one spec.
+    assert list(payload) == ["specs"] and len(payload["specs"]) == 1
+    entry = payload["specs"][0]
+    assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
+    assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated"]
     assert code == EXIT_NOT_EVALUATED
 
 
@@ -335,3 +342,103 @@ def test_the_three_places_the_version_is_written_agree():
         f"the installed distribution is {version('anvilate')}, the module says "
         f"{anvilate.__version__} — reinstall, or the two have genuinely drifted"
     )
+
+
+# --- many specs, and the checks a CI log has to show --------------------------------------
+
+
+@pytest.fixture
+def spec_tree(tmp_path):
+    """A directory holding two specs and one YAML file that is not one."""
+    tree = tmp_path / "parts"
+    (tree / "nested").mkdir(parents=True)
+    (tree / "deck.yaml").write_text(_SPEC, encoding="utf-8")
+    (tree / "nested" / "beam.yaml").write_text(
+        _SPEC.replace("deck_plate", "beam_a"), encoding="utf-8"
+    )
+    (tree / "ci-config.yaml").write_text("not: a spec\n", encoding="utf-8")
+    return tree
+
+
+def test_check_screens_every_spec_under_a_directory(spec_tree):
+    """`headless-automation` asks for revalidating *all specs in a repository* on push."""
+    code, out, err = _run("check", str(spec_tree))
+    assert "deck_plate:" in out and "beam_a:" in out
+    assert "2 specs: NOT_EVALUATED" in out
+    assert code == EXIT_NOT_EVALUATED
+    # Found by searching, carries no `anvilate_spec`: skipped, and *said* to be skipped.
+    assert "ci-config.yaml: not a Design Spec, skipped" in err
+
+
+def test_a_file_named_on_the_command_line_is_taken_at_its_word(spec_tree):
+    """The difference from the directory case, and it matters: a document found by
+    searching that is not a spec is some other YAML file, while one the caller named is an
+    error, because they said it was a spec and it is not."""
+    code, out, err = _run("check", str(spec_tree / "ci-config.yaml"))
+    assert code == EXIT_BAD_REQUEST
+    assert out == "" and "skipped" not in err
+    assert err.strip(), "the refusal says nothing"
+
+
+def test_an_empty_directory_is_a_bad_request_rather_than_a_pass(tmp_path):
+    """The silent-green shape this most invites: nothing found, nothing failed, exit 0."""
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    code, out, err = _run("check", str(empty))
+    assert code == EXIT_BAD_REQUEST, "an empty search must not read as everything passing"
+    assert out == "" and "no Design Spec found" in err
+
+
+def test_the_run_reports_the_worst_verdict_it_found(spec_tree, monkeypatch):
+    """One failing part fails the run, which is what a merge gate needs."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    real = screening.screen_spec
+
+    def _fail_the_beam(spec):
+        if spec.name == "beam_a":
+            return Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name="bending", status=CheckStatus.FAIL, detail="over the limit"
+                    ),
+                )
+            )
+        return real(spec)
+
+    monkeypatch.setattr(screening, "screen_spec", _fail_the_beam)
+    code, out, err = _run("check", str(spec_tree))
+    assert code == EXIT_FAILED, "a failing part must outrank a not-evaluated one"
+    assert "2 specs: FAIL" in out
+    assert "fail: bending — over the limit" in err
+
+
+def test_every_blocking_check_is_listed_on_stderr(spec_file):
+    """`headless-automation`: "the process exits non-zero with the failing checks listed on
+    stderr". A check that could not run is listed too and labelled as such — it blocks
+    exactly as hard, and calling it a failure would be a different claim.
+    """
+    _code, out, err = _run("check", str(spec_file))
+    assert "not_evaluated: T1 analytical" in err
+    assert "fail:" not in err
+    assert str(spec_file) in err, "a CI log needs to know which spec"
+    # The card still goes to stdout; stderr is the summary a log shows, not a replacement.
+    assert "deck_plate: NOT_EVALUATED" in out
+
+
+def test_a_passing_card_writes_nothing_to_stderr(spec_file, monkeypatch):
+    """The other half. A stderr line for every check would make the requirement useless."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    monkeypatch.setattr(
+        screening,
+        "screen_spec",
+        lambda spec: Scorecard(
+            entries=(ScorecardEntry(name="bending", status=CheckStatus.PASS, detail="clear"),)
+        ),
+    )
+    code, out, err = _run("check", str(spec_file))
+    assert (code, err) == (EXIT_OK, "")
+    assert "PASS" in out

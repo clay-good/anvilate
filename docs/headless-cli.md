@@ -5,6 +5,8 @@ what each is waiting on.
 
 ```bash
 anvilate check part.yaml
+anvilate check parts/            # every spec under a directory, recursively
+anvilate check a.yaml b.yaml
 ```
 
 ```text
@@ -13,8 +15,31 @@ deck_plate: NOT_EVALUATED
                  the Design Spec declares no structural element type, so no discipline-pack screen can be selected from it; build the pack's element and screen that
 ```
 
-`--format json` prints the whole scorecard instead — every entry, every status, every
-detail — for a script that wants more than the verdict.
+**A directory is searched; a file you name is taken at your word.** The difference
+matters. A document *found* by searching that carries no `anvilate_spec` key is some other
+YAML file — a CI config, a lockfile — and is skipped, with a line saying so rather than
+silently. One you *named* is an error: you said it was a spec and it is not. An empty
+search is a bad request rather than a pass, because "nothing found, nothing failed, exit 0"
+is the silent green this command exists to avoid.
+
+Over many specs the exit code is the worst verdict found, so one failing part fails the
+run — what a merge gate needs.
+
+**Every blocking check goes to stderr**, with the spec it came from, which is what a CI log
+shows:
+
+```text
+anvilate check: parts/deck.yaml: not_evaluated: T1 analytical — the Design Spec declares no structural element type...
+```
+
+A check that could not run is listed too and labelled as such. It blocks exactly as hard,
+and calling it a failure would be a different claim. A passing card writes nothing to
+stderr at all.
+
+`--format json` prints `{"specs": [...]}` — one object per spec with its path, its name and
+its whole scorecard. A list whatever the count, because a shape that changes with the number
+of arguments is a shape every caller has to branch on, and the branch is wrong the first time
+a directory happens to hold exactly one spec.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
