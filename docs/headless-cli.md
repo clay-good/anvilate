@@ -16,6 +16,12 @@ deck_plate: NOT_EVALUATED
 `--format json` prints the whole scorecard instead — every entry, every status, every
 detail — for a script that wants more than the verdict.
 
+`anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
+asking a tool its version is asking what it is running, and a module constant answers what
+somebody last typed — the same defect as a hand-written bill of materials, one file over.
+The two are kept equal by a gate over all three places the version is written:
+`pyproject.toml`, the module constant, and the installed distribution.
+
 ## The exit code is the interface
 
 A CI job reads the code, not the text, so the code follows the scorecard's own rule rather

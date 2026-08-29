@@ -126,6 +126,21 @@ class _Parser(argparse.ArgumentParser):
         self.exit(EXIT_BAD_REQUEST, f"{self.prog}: error: {message}\n")
 
 
+def _installed_version() -> str:
+    """The version of the installed distribution, or a marker saying it is not installed.
+
+    Never `anvilate.__version__`. A script asking a tool its version is asking what it is
+    running, and a module constant answers what somebody last typed — the same defect as a
+    hand-written bill of materials, one file over.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("anvilate")
+    except PackageNotFoundError:  # pragma: no cover - a source tree with nothing installed
+        return "0+not-installed"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = _Parser(
         prog="anvilate",
@@ -136,6 +151,10 @@ def _build_parser() -> argparse.ArgumentParser:
     # own type, so "check: the following arguments are required: spec" lands on the same code
     # as a top-level usage error. Passing it explicitly changed nothing and killed no
     # mutation, which is how that was established rather than assumed.
+    # Read from the installed metadata, not from `anvilate.__version__`: a script asking a
+    # tool its version is asking what is installed, and the two are the same only because a
+    # gate says so.
+    parser.add_argument("--version", action="version", version=f"anvilate {_installed_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
 
     check = commands.add_parser(

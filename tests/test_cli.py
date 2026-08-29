@@ -270,3 +270,68 @@ def test_export_reports_a_bad_spec_the_same_way_check_does(tmp_path):
     assert check_code == export_code == EXIT_BAD_REQUEST
     assert check_err.startswith("anvilate check: ") and export_err.startswith("anvilate export: ")
     assert check_err.split(": ", 1)[1] == export_err.split(": ", 1)[1]
+
+
+def test_version_reports_what_is_installed_not_a_module_constant():
+    """A script asking a tool its version is asking what it is running.
+
+    `anvilate.__version__` answers what somebody last typed — the same defect as a
+    hand-written bill of materials, one file over — so this reads the installed metadata,
+    and the gate below is what keeps the two from ever disagreeing.
+    """
+    from importlib.metadata import version
+
+    with pytest.raises(SystemExit) as exit_info:
+        _run("--version")
+    assert exit_info.value.code == EXIT_OK
+    completed = subprocess.run(
+        [sys.executable, "-m", "anvilate.cli", "--version"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO,
+        env={"PYTHONPATH": str(_REPO / "src"), "PATH": "/usr/bin:/bin"},
+        timeout=180,
+        check=False,
+    )
+    assert completed.stdout.strip() == f"anvilate {version('anvilate')}"
+
+
+def test_version_ignores_the_module_constant_when_the_two_disagree(monkeypatch):
+    """The gate below keeps the two equal, which makes reading either one give the same
+    answer today — so swapping the source killed no mutation. The distinction only shows
+    where it matters: a version bumped in the source tree and not reinstalled. Then a script
+    asking what it is running must be told what it is running.
+    """
+    from importlib.metadata import version
+
+    import anvilate
+    from anvilate.cli import _installed_version
+
+    monkeypatch.setattr(anvilate, "__version__", "9.9.9-typed-by-hand")
+    assert _installed_version() == version("anvilate")
+    assert _installed_version() != "9.9.9-typed-by-hand"
+
+
+def test_the_three_places_the_version_is_written_agree():
+    """`pyproject.toml`, `anvilate.__version__`, and the installed distribution.
+
+    Nothing joined them. A bump to `pyproject.toml` alone would leave the agent skill
+    declaring one version, the CLI reporting a second, and the attestation's application
+    entry a third — three literals restating the same fact, none of which can be wrong out
+    loud.
+    """
+    import re
+    from importlib.metadata import version
+
+    import anvilate
+
+    pyproject = (_REPO / "pyproject.toml").read_text(encoding="utf-8")
+    declared = re.search(r'(?m)^version = "([^"]+)"', pyproject)
+    assert declared is not None, "pyproject declares no version"
+    assert declared.group(1) == anvilate.__version__, (
+        f"pyproject says {declared.group(1)}, anvilate.__version__ says {anvilate.__version__}"
+    )
+    assert version("anvilate") == anvilate.__version__, (
+        f"the installed distribution is {version('anvilate')}, the module says "
+        f"{anvilate.__version__} — reinstall, or the two have genuinely drifted"
+    )
