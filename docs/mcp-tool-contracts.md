@@ -177,9 +177,12 @@ Everything else ends in a refusal, and the kinds are worth separating:
   descended, so a structurally wrong spec passes here and is caught by the operation. A
   handler that reported "valid" after checking three keys would be claiming the schema had
   been applied — which is what the first draft did, letting a `view` of `"sideways"` and a
-  `width_px` of 1 through a surface whose own schema names four views and a floor of 64. A
-  test now fails when a tool schema declares a constraint the check does not know, so the
-  claim above cannot outrun the code.
+  `width_px` of 1 through a surface whose own schema names four views and a floor of 64.
+  Array elements are held to their `items` schema, which the surface uses in exactly one
+  place: `run_validation.tiers` names three tiers because the fourth is task-dispatched.
+  Until that was enforced, `T3_fea` was accepted on the synchronous tool, and a misspelled
+  tier reached the spec parser and came back as `spec.acceptance.tiers.0` — sending a client
+  to look at its *document* for a problem in a different argument.
 - **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
   waited on, by its declared cost rather than by name.
 - **`-32000`, stateless.** One of the four above.
@@ -215,11 +218,21 @@ drifted from the published document would cross it untouched. That half runs in 
 produced the result and would agree by construction — and validates a real result of every
 dispatched tool whole.
 
-Writing the gate found a hole it was not looking for. `export_artifact` publishes a
-`pattern` on its sha256 digest that the constraint checker did not know, so `"deadbeef"`
-would have passed as a 64-hex digest. `pattern` is enforced now, with `re.search` rather
-than `re.fullmatch`, because JSON Schema's `pattern` is an unanchored match and the one
-pattern in the surface anchors itself.
+Writing the gate found a hole it was not looking for, and then the hole turned out to be
+the *gate's own shape*. `export_artifact` publishes a `pattern` on its sha256 digest that
+the constraint checker did not know, so `"deadbeef"` would have passed as a 64-hex digest.
+The check that was supposed to catch that — "every constraint the published schemas declare
+is one the check knows" — was a comparison between two **sets of keyword names**, and
+adding `"pattern"` to the known set satisfied it while nothing enforced a pattern. `items`
+had been sitting in that set unenforced the whole time for the same reason.
+
+So the coverage gate is now a table of probes rather than a set of names: each keyword
+carries a schema, a value that schema accepts, and every value it must refuse, and a
+keyword with no probe fails. Two more mutations died on the way in — an element check that
+skipped the element's *type* passes if the probe's element also declares an enum, because
+the enum catches the wrong value first. `pattern` is enforced with `re.search` rather than
+`re.fullmatch`, because JSON Schema's `pattern` is an unanchored match and the one pattern
+in the surface anchors itself.
 
 ### A backing symbol that resolves is not a handler that calls it
 

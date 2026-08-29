@@ -694,22 +694,31 @@ def _object_issues(
         if name not in properties:
             issues.append(f"{label} takes no {noun} {name!r}")
     for name, value in document.items():
-        declared = properties.get(name, {}).get("type")
-        if declared is None:
-            continue
-        expected = _JSON_TYPES.get(declared)
-        if expected is None:
-            continue
-        if declared in ("number", "integer") and isinstance(value, bool):
-            # `isinstance(True, int)` is True in Python and a boolean is not a number in
-            # JSON, so the generic check below would accept `width_px: true` as a pixel
-            # count. Both numeric type names need the exception, not just "number".
-            issues.append(f"{label}.{name} must be a JSON {declared}; got a boolean")
-        elif not isinstance(value, expected):
-            issues.append(f"{label}.{name} must be a JSON {declared}; got {type(value).__name__}")
-        else:
-            issues.extend(_value_issues(f"{label}.{name}", value, properties[name]))
+        if name in properties:
+            issues.extend(_typed_issues(f"{label}.{name}", value, properties[name]))
     return issues
+
+
+def _typed_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str]:
+    """One value against one schema: its declared ``type`` first, then its constraints.
+
+    Split out from :func:`_object_issues` when ``items`` was implemented, because an array
+    element is held to a type the same way a property is and the check was written in one
+    place only. A schema with no ``type`` constrains nothing here — that is a ``$ref``,
+    which is resolved by the operation rather than by this function.
+    """
+    declared = schema.get("type")
+    expected = _JSON_TYPES.get(declared) if declared is not None else None
+    if expected is None:
+        return []
+    if declared in ("number", "integer") and isinstance(value, bool):
+        # `isinstance(True, int)` is True in Python and a boolean is not a number in
+        # JSON, so the generic check below would accept `width_px: true` as a pixel
+        # count. Both numeric type names need the exception, not just "number".
+        return [f"{label} must be a JSON {declared}; got a boolean"]
+    if not isinstance(value, expected):
+        return [f"{label} must be a JSON {declared}; got {type(value).__name__}"]
+    return _value_issues(label, value, schema)
 
 
 def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str]:
@@ -739,6 +748,10 @@ def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
         floor = schema.get("minItems")
         if floor is not None and len(value) < floor:
             issues.append(f"{label} must list at least {floor} item(s); got {len(value)}")
+        element = schema.get("items")
+        if element is not None:
+            for index, item in enumerate(value):
+                issues.extend(_typed_issues(f"{label}[{index}]", item, element))
         return issues
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return issues

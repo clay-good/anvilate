@@ -680,36 +680,87 @@ def test_an_exclusive_bound_is_exclusive():
     )
 
 
-def test_every_constraint_the_published_schemas_declare_is_one_the_check_knows():
-    """A gate on the gate: the argument check handles ``type``, ``enum`` and the four
-    numeric bounds. If a future tool schema declares something else — a ``pattern``, a
-    ``minLength`` — this fails rather than letting the constraint go unenforced while the
-    docstring says everything top-level is checked.
+# Every keyword the published schemas use, paired with a value it accepts and every value
+# it must refuse. Naming a keyword in a set is not evidence anything enforces it — `pattern` and
+# `items` both sat in the old known-set unenforced, and the mutation that deleted each
+# check killed no test. A keyword with no probe here fails the gate below.
+_CONSTRAINT_PROBES: dict[str, tuple[dict, object, tuple]] = {
+    "type": ({"type": "string"}, "text", (7, True, [])),
+    "enum": ({"type": "string", "enum": ["iso", "front"]}, "iso", ("sideways",)),
+    "minimum": ({"type": "integer", "minimum": 64}, 64, (63,)),
+    "maximum": ({"type": "integer", "maximum": 4096}, 4096, (4097,)),
+    "exclusiveMinimum": ({"type": "number", "exclusiveMinimum": 0}, 1e-9, (0,)),
+    "exclusiveMaximum": ({"type": "number", "exclusiveMaximum": 1}, 0.5, (1,)),
+    "minLength": ({"type": "string", "minLength": 1}, "x", ("",)),
+    "minItems": ({"type": "array", "minItems": 1}, ["x"], ([],)),
+    "pattern": ({"type": "string", "pattern": "^[0-9a-f]{64}$"}, "a" * 64, ("deadbeef",)),
+    # The element's *type*, with no enum on it. A first draft gave the element an enum and
+    # refused `[7]`, which the enum catches on its own — so swapping the element check for
+    # a constraints-only one, the mutation that lets `tiers: [7]` through, killed no test.
+    # The enum-inside-items half is held against the published schema below instead.
+    "items": ({"type": "array", "items": {"type": "string"}}, ["a"], ([7], [None])),
+}
+
+# Keywords that constrain nothing this check could enforce, each with the reason. `$ref` is
+# the deliberate boundary the docstrings describe: resolving it is the operation's job.
+_NOT_CONSTRAINTS = {"description", "$ref"}
+
+
+def _declared_keywords(schema, seen: set[str]) -> set[str]:
+    """Every keyword used anywhere in a schema document, nested schemas included."""
+    if isinstance(schema, dict):
+        for key, value in schema.items():
+            if key in ("properties",):
+                for nested in value.values():
+                    _declared_keywords(nested, seen)
+                continue
+            seen.add(key)
+            if key == "items":
+                _declared_keywords(value, seen)
+    return seen
+
+
+@pytest.mark.parametrize(("keyword", "probe"), sorted(_CONSTRAINT_PROBES.items()))
+def test_each_constraint_the_check_claims_to_know_is_one_it_enforces(keyword, probe):
+    """The half a set of keyword names cannot give you: proof each one says no.
+
+    Twice now a keyword has been added to the known-set while nothing enforced it, and both
+    times the coverage test went on passing. So every keyword is probed with a value its
+    schema accepts and one it forbids, and the refusal has to name the label.
     """
-    known = {
-        "type",
-        "description",
-        "enum",
-        "minimum",
-        "maximum",
-        "exclusiveMinimum",
-        "exclusiveMaximum",
-        "$ref",
-        "items",
-        "minLength",
-        "minItems",
-    }
+    from anvilate.mcp import _typed_issues
+
+    schema, accepted, refusals = probe
+    assert _typed_issues("probe", accepted, schema) == [], keyword
+    for refused in refusals:
+        complaints = _typed_issues("probe", refused, schema)
+        assert complaints and all("probe" in complaint for complaint in complaints), (
+            f"{keyword} accepted {refused!r}, which its own schema forbids"
+        )
+
+
+def test_every_constraint_the_published_schemas_declare_is_one_the_check_knows():
+    """Both directions of the surface, at every depth.
+
+    The first version walked only a schema's top-level ``properties`` — which is where every
+    constraint in today's catalog happens to sit, so it agreed with the catalog it was
+    written against and would have gone on reporting clean the moment one moved inside an
+    ``items``.
+    """
+    known = (
+        set(_CONSTRAINT_PROBES) | _NOT_CONSTRAINTS | {"$schema", "required", "additionalProperties"}
+    )
     seen: set[str] = set()
     for tool in tool_catalog():
-        for schema in tool.input_schema.get("properties", {}).values():
-            seen.update(schema)
+        for schema in (tool.input_schema, tool.output_schema):
+            _declared_keywords(schema, seen)
     unhandled = sorted(seen - known)
     assert not unhandled, (
-        f"tool input schemas declare {unhandled}, which _argument_issues does not check. "
-        "Either check it or narrow the docstring's claim"
+        f"the tool schemas declare {unhandled}, which the argument and result checks do not "
+        "enforce. Either enforce it or narrow the docstrings' claim"
     )
-    assert "enum" in seen and "minimum" in seen, (
-        "the gate is comparing against an empty set if no schema declares a constraint"
+    assert {"enum", "pattern", "items"} <= seen, (
+        "the gate is comparing against a set with nothing interesting in it"
     )
 
 
@@ -843,46 +894,15 @@ def test_a_dispatched_tool_calls_the_symbol_it_names(
         _call(tool_name, {arguments: _spec_document()})
 
 
-def test_output_schemas_declare_no_constraint_the_result_gate_ignores():
-    """The input-side coverage gate, pointed at the output schemas.
-
-    Written and it immediately found one: `export_artifact` publishes a `pattern` on its
-    sha256 digest that `_value_issues` did not know, so a handler returning "deadbeef" as a
-    64-hex digest would have passed a check whose docstring says the constraints are
-    enforced.
-    """
-    known = {
-        "type",
-        "description",
-        "enum",
-        "minimum",
-        "maximum",
-        "exclusiveMinimum",
-        "exclusiveMaximum",
-        "$ref",
-        "items",
-        "minLength",
-        "minItems",
-        "pattern",
-    }
-    seen: set[str] = set()
-    for tool in tool_catalog():
-        for schema in tool.output_schema.get("properties", {}).values():
-            seen.update(schema)
-    unhandled = sorted(seen - known)
-    assert not unhandled, (
-        f"tool output schemas declare {unhandled}, which result_issues does not check"
-    )
-    assert "pattern" in seen, "the gate is comparing against a set with nothing in it"
-
-
-def test_the_result_gate_enforces_the_digest_pattern_it_claims_to_know():
+def test_the_result_gate_enforces_the_digest_pattern_on_the_real_schema():
     """The keyword-coverage test above is a claim about a *set*, and that is not enough.
 
     Adding `"pattern"` to the known set satisfied it while `_value_issues` still ignored
-    every pattern — the mutation that deleted the check killed nothing. `export_artifact`
-    is not dispatched, so its schema is exercised directly: a digest of the wrong length,
-    the wrong alphabet, or the right shape buried in a longer string.
+    every pattern — the mutation that deleted the check killed nothing. The probe table now
+    holds each keyword to a synthetic schema; this holds `pattern` to the *published* one,
+    since a probe agreeing with itself is not evidence the catalog's own digest is checked.
+    `export_artifact` is not dispatched, so its schema is exercised directly: a digest of
+    the wrong length, the wrong alphabet, or the right shape buried in a longer string.
     """
     from anvilate.mcp import result_issues
 
@@ -892,3 +912,24 @@ def test_the_result_gate_enforces_the_digest_pattern_it_claims_to_know():
     for bad in ("deadbeef", "A" * 64, "g" * 64, f"sha256:{good}"):
         issues = result_issues(tool, {"format": "dxf", "path": "part.dxf", "sha256": bad})
         assert any("must match" in issue for issue in issues), (bad, issues)
+
+
+def test_the_tiers_argument_is_held_to_the_enum_its_own_schema_declares():
+    """`run_validation.tiers` is the one place the surface puts a constraint inside `items`.
+
+    Until the element check existed a bad tier reached the spec parser, which reported it as
+    `spec.acceptance.tiers.0` — sending a client to look at its *document* for a problem in
+    a different argument. And `T3_fea` was accepted outright: the schema names three tiers
+    because the fourth is task-dispatched, which is the split the whole module is built on.
+    """
+    document = _spec_document()
+    for tiers, expected in (
+        (["not_a_tier"], "run_validation.tiers[0] must be one of"),
+        (["T3_fea"], "run_validation.tiers[0] must be one of"),
+        ([7], "run_validation.tiers[0] must be a JSON string"),
+    ):
+        error = _call("run_validation", {"spec": document, "tiers": tiers})["error"]
+        assert error["code"] == -32602
+        assert expected in error["message"], error["message"]
+    accepted = _call("run_validation", {"spec": document, "tiers": ["T1_analytical"]})
+    assert "error" not in accepted
