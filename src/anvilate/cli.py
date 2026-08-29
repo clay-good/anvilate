@@ -681,11 +681,29 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
 
 
 def _render(name: str, card: Scorecard) -> str:
+    """The card as a person reads it, with the governing check named at the end.
+
+    **The governing check is the line a reviewer reads first and the card did not carry
+    it.** `Scorecard.governing()` has always known which check is closest to (or furthest
+    past) its limit — blocking status first, then utilization — and the calculation report
+    prints it. The shell printed the entries in the order they were produced and left the
+    reader to rank them.
+
+    It is printed even when there is none, and the reason matters: `governing()` returns
+    None when nothing blocks *and* no check carries a safety factor, which is an ordinary
+    card of passing deflection checks rather than an error. A missing line and a card with
+    nothing to govern must not look the same.
+    """
     lines = [f"{name}: {card.status.value.upper()}"]
     for entry in card.entries:
         lines.append(f"  {entry.status.value:<14} {entry.name}")
         if entry.detail:
             lines.append(f"                 {entry.detail}")
+    governing = card.governing()
+    if governing is None:
+        lines.append("  governing:     none — nothing blocks and no check carries a margin")
+    else:
+        lines.append(f"  governing:     {governing.name} ({governing.status.value})")
     return "\n".join(lines)
 
 

@@ -14,7 +14,15 @@ anvilate check a.yaml b.yaml
 deck_plate: NOT_EVALUATED
   not_evaluated  T1 analytical
                  the Design Spec declares no structural element type, so no discipline-pack screen can be selected from it; build the pack's element and screen that
+  governing:     T1 analytical (not_evaluated)
 ```
+
+**The governing check is named last because it is what a reviewer reads first.** It is the
+check closest to — or furthest past — its limit, and blocking status outranks utilization,
+so a check that could not run governs over one at 99% and the card says which. A card with
+nothing to govern says *that*: `governing()` is None when nothing blocks and no check
+carries a margin, which is an ordinary card of passing deflection checks rather than an
+error, and a missing line and a card with nothing to govern must not look the same.
 
 **A directory is searched; a file you name is taken at your word.** The difference
 matters. A document *found* by searching that carries no `anvilate_spec` key is some other

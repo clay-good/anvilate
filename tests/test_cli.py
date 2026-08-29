@@ -926,3 +926,59 @@ def test_diff_help_says_its_zero_is_not_the_same_zero():
 def test_the_unbuilt_command_still_says_what_it_waits_on_in_help():
     text = _help()
     assert "geometry kernel" in text
+
+
+def test_the_card_names_the_governing_check(spec_file):
+    """The line a reviewer reads first, and the card did not carry it.
+
+    `Scorecard.governing()` has always known which check is closest to (or furthest past)
+    its limit — blocking status first, then utilization — and the calculation report prints
+    it. The shell printed the entries in the order they were produced and left the reader
+    to rank them.
+    """
+    _code, out, _err = _run("check", str(spec_file))
+    assert "governing:" in out
+    assert "T1 analytical (not_evaluated)" in out
+
+
+def test_the_governing_line_is_the_scorecards_own_answer(spec_file, monkeypatch):
+    """Not the first entry, and not the worst-looking one: whatever `governing()` returns.
+
+    Blocking status outranks utilization, so a not-evaluated check governs over a passing
+    one at 99% — asserted here through the shell, because a rendering that picked the first
+    failing entry would agree with the library on most cards and differ on exactly the ones
+    the ordering exists for.
+    """
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    tight = ScorecardEntry.from_safety_factor("tight", computed=1.0001, required=1.0)
+    blocked = ScorecardEntry(
+        name="unrunnable", status=CheckStatus.NOT_EVALUATED, detail="no element type"
+    )
+    card = Scorecard(entries=(tight, blocked))
+    monkeypatch.setattr(screening, "screen_spec", lambda spec: card)
+
+    _code, out, _err = _run("check", str(spec_file))
+    assert card.governing() is not None and card.governing().name == "unrunnable"
+    assert "governing:     unrunnable (not_evaluated)" in out
+    assert "governing:     tight" not in out
+
+
+def test_a_card_with_nothing_to_govern_says_so(spec_file, monkeypatch):
+    """`governing()` is None when nothing blocks and no check carries a safety factor — an
+    ordinary card of passing deflection checks, not an error. A missing line and a card with
+    nothing to govern must not look the same."""
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    passing = Scorecard(
+        entries=(ScorecardEntry(name="deflection", status=CheckStatus.PASS, detail="clear"),)
+    )
+    assert passing.governing() is None
+    monkeypatch.setattr(screening, "screen_spec", lambda spec: passing)
+
+    code, out, _err = _run("check", str(spec_file))
+    assert code == EXIT_OK
+    assert "governing:     none" in out
+    assert "nothing blocks" in out
