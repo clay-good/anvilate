@@ -203,6 +203,16 @@ question is answered rather than open):
 - **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
   US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
   force over SI area against a US stress, inside one equals sign.
+- **Section moduli and line loads follow it as well** (mm³ / in³, N/mm / kip/in), found
+  the same way: an SI report printed `σ = M / Z = 169477.24 N·mm / 3.00 in³` and
+  `M = wL²/8 = 100.00 lbf/ft · (3048.00 mm)² / 8`, every other factor converted and these
+  two not. What holds all six families now is a gate that asserts the units *compose* —
+  moment ÷ section modulus is exactly the stress unit, line load × length² is exactly the
+  moment unit, each conversion factor exactly 1 — so choosing a spelling that does not
+  compose fails rather than making every report unverifiable by its reader. Writing that
+  gate corrected its own author: kN/m was going to be the example of a spelling out by a
+  thousand, and 1 kN/m *is* 1 N/mm, so both compose and the choice between them is
+  legibility. kN/mm is the one that really does not, and the gate catches it.
 - **Compound units read force-first** (`kip·in`, `N·m`) rather than the registry's
   alphabetical order. The reordering never changes, drops, or invents a factor: a
   label it cannot place — anything with a division, or two factors of the same kind —

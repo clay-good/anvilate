@@ -290,3 +290,91 @@ def test_compound_unit_labels_read_force_first():
     # The unpretty (machine-readable) label is untouched — spec cards echo it verbatim,
     # and the reordering is a document-rendering concern, not a data one.
     assert render(Quantity.parse("1500 N*m"), unit="kip*in", pretty=False) == "13.28 in * kip"
+
+
+# --- the system units have to compose -----------------------------------------------------
+
+
+@pytest.mark.parametrize("system", list(UnitSystem))
+def test_the_system_units_compose(system):
+    """A report's units are chosen so a substituted line checks by hand, not for familiarity.
+
+    That is why `moment_unit` is N·mm rather than N·m and `distributed_load_unit` is N/mm
+    rather than kN/m: σ = M/Z only reads right when the moment's length unit matches the
+    section modulus's, and M = wL²/8 only reads right when the line load's does too. Stated
+    as an assertion rather than a docstring, so "fixing" N/mm to the more familiar kN/m
+    fails here instead of quietly making every SI report unverifiable by its reader.
+
+    Each conversion factor must be exactly 1: a factor of 1000 is precisely the defect.
+    """
+    from anvilate.units.registry import UREG
+
+    length = UREG.Unit(system.length_unit)
+    checks = {
+        "moment / section modulus = stress": (
+            UREG.Unit(system.moment_unit) / UREG.Unit(system.section_modulus_unit),
+            UREG.Unit(system.stress_unit),
+        ),
+        "line load x length^2 = moment": (
+            UREG.Unit(system.distributed_load_unit) * length**2,
+            UREG.Unit(system.moment_unit),
+        ),
+        "length^2 = area": (length**2, UREG.Unit(system.area_unit)),
+        "length^4 = second moment": (length**4, UREG.Unit(system.second_moment_unit)),
+        "length^3 = section modulus": (length**3, UREG.Unit(system.section_modulus_unit)),
+    }
+    wrong = {}
+    for label, (composed, expected) in checks.items():
+        factor = (1 * composed).to(expected).magnitude
+        if factor != pytest.approx(1.0, rel=1e-12):
+            wrong[label] = factor
+    # `force_unit x length_unit = moment_unit` is deliberately NOT on this list: SI force is
+    # kN and the moment is N·mm, so that product carries a factor of 1000. kN is what a
+    # structural document writes a reaction in, and the substituted line spells the factors
+    # out, so the reader is not asked to compose those two in their head.
+    assert not wrong, (
+        f"{system.value} report units do not compose: {wrong}. A reader following a "
+        "substituted line has to multiply by these factors to check it"
+    )
+
+
+def test_the_composition_gate_catches_a_spelling_that_does_not_compose():
+    """The adversary, and the correction it forced.
+
+    The first version of this asserted that kN/m — the spelling somebody will reach for —
+    is out by a factor of 1000. It is not: 1 kN/m *is* 1 N/mm, so either spelling composes
+    exactly and the choice between them is legibility, not arithmetic. kN/mm is the one
+    that really does not compose, and it is what the gate has to catch.
+    """
+    from anvilate.units.registry import UREG
+
+    for spelling, factor in (("N/mm", 1.0), ("kN/m", 1.0), ("kN/mm", 1000.0), ("lbf/ft", None)):
+        if factor is None:
+            continue
+        composed = (1 * UREG.Unit(spelling) * UREG.Unit("mm") ** 2).to(UREG.Unit("N*mm"))
+        assert composed.magnitude == pytest.approx(factor), spelling
+
+
+def test_every_dimension_the_units_requirement_names_is_converted_by_system():
+    """`units-and-quantities` names the families the layer must support, and the rendering
+    scenario says a value entered in one system is *displayed* in the project's.
+
+    A dimension with no system mapping is not an error — it renders in whatever unit it
+    arrived in, which is how a section modulus in in³ ended up beside a moment in N·mm in an
+    SI report. So each named family is entered in the other system's unit and required to
+    come back in this one's.
+    """
+    from anvilate.units import Quantity, render
+
+    entered_us = {
+        "force": ("50 kip", "kN"),
+        "stress": ("36 ksi", "MPa"),
+        "moment": ("2 kip*in", "N"),
+        "distributed load": ("100 lbf/ft", "N / mm"),
+        "second moment of area": ("5 in**4", "mm ** 4"),
+        "section modulus": ("3 in**3", "mm ** 3"),
+        "length": ("12 in", "mm"),
+    }
+    for family, (entered, expected_unit) in entered_us.items():
+        shown = render(Quantity.parse(entered), system=UnitSystem.SI)
+        assert shown.endswith(expected_unit), f"{family}: {entered} rendered SI as {shown}"

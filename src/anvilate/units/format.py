@@ -173,6 +173,11 @@ def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
         # Areas were the remaining hole: a US-system line printed "1.5 · 6.0 kN /
         # 5000.00 mm²" against a result in ksi — SI force over SI area, US stress.
         ("[length] ** 2", system.area_unit),
+        # And two more, found the same way: an SI report printing
+        # "σ = M / Z = 169477.24 N·mm / 3.00 in³" and "M = wL²/8 = 100.00 lbf/ft ·
+        # (3048.00 mm)² / 8". Every other factor had been converted and these had not.
+        ("[length] ** 3", system.section_modulus_unit),
+        ("[force] / [length]", system.distributed_load_unit),
     ]
     for token, unit in mapping:
         if dim == UREG.get_dimensionality(token):

@@ -68,6 +68,39 @@ class UnitSystem(StrEnum):
         return "mm**4" if self is UnitSystem.SI else "in**4"
 
     @property
+    def section_modulus_unit(self) -> str:
+        """The conventional unit for a section modulus — or any volume — mm³ or in³.
+
+        Unmapped until this line came out of an SI-system report:
+        ``σ = M / Z = 169477.24 N·mm / 3.00 in³ = 3.45 MPa``. The moment had been converted
+        and the section modulus had not, so a substituted line a reviewer is meant to check
+        by hand mixed two systems inside one equals sign — the same defect the audits behind
+        :attr:`area_unit` and :attr:`second_moment_unit` each found one dimension over.
+
+        A volume shares this dimensionality and takes the same unit, which is right for
+        both, so there is nothing to disambiguate the way a moment has to be told from an
+        energy.
+        """
+        return "mm**3" if self is UnitSystem.SI else "in**3"
+
+    @property
+    def distributed_load_unit(self) -> str:
+        """The conventional unit for a line load, N/mm or kip/in.
+
+        The unit has to *compose*: ``w·L²/8`` with w here and L in :attr:`length_unit` must
+        land in :attr:`moment_unit`, which divides by :attr:`section_modulus_unit` to give
+        :attr:`stress_unit`. ``test_the_system_units_compose`` asserts that chain rather
+        than describing it.
+
+        **N/mm and the more familiar kN/m are the same unit** — 1 kN/m is 1 N/mm — so both
+        compose and the choice between them is legibility rather than arithmetic. N/mm is
+        spelled with the millimetre every other factor on the line is spelled with, which is
+        the only thing separating them. (kN/mm is the spelling that genuinely does not
+        compose, and the gate catches it.)
+        """
+        return "N/mm" if self is UnitSystem.SI else "kip/in"
+
+    @property
     def sheet_standard(self) -> str:
         """Default drawing-sheet series for this system."""
         return "ISO" if self is UnitSystem.SI else "ANSI"
