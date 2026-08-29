@@ -18,7 +18,7 @@ below the gross. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from ..units import Quantity, require_finite
+from ..units import Quantity, decimals_distinguishing, require_finite
 
 __all__ = [
     "masonry_allowable_axial_stress",
@@ -119,10 +119,15 @@ def masonry_column_axial_capacity(
         # the most: 0.6*f_y for Grade 60 steel is 248 MPa, and passing it instead of the
         # code-capped 165 MPa reports 21% more column than TMS 402 allows.
         if fs > _STEEL_ALLOWABLE_CAP_MPA:
+            # The overstatement at a precision that keeps it off 1.00x: an F_s a hair above
+            # the cap read "overstates the column by 1.00x", which says there is nothing to
+            # overstate, inside the sentence refusing it.
+            overstatement = fs / _STEEL_ALLOWABLE_CAP_MPA
+            places = decimals_distinguishing(overstatement, 1.0)
             raise ValueError(
                 f"steel_allowable_stress is {steel_allowable_stress}, above the TMS 402 cap of "
                 f"{_STEEL_ALLOWABLE_CAP_MPA:g} MPa on F_s. The capacity is linear in F_s, so the "
-                f"uncapped value overstates the column by {fs / _STEEL_ALLOWABLE_CAP_MPA:.2f}x on "
+                f"uncapped value overstates the column by {overstatement:.{places}f}x on "
                 f"its steel term; pass min(0.6*f_y, {_STEEL_ALLOWABLE_CAP_MPA:g} MPa)"
             )
         steel_term = 0.65 * ast * fs

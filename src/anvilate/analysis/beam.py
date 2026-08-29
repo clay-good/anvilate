@@ -18,7 +18,7 @@ from math import degrees, pi, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity, require_finite
+from ..units import Quantity, decimals_distinguishing, require_finite
 
 __all__ = [
     "BeamBendingResult",
@@ -831,8 +831,13 @@ def aisc_round_hss_flexural_strength(
     dt = d / t
     limit = 0.45 * e / fy
     if dt > limit:
+        # Both sides at a precision that keeps them apart. At one place a D/t of 90.04
+        # against a limit of 90.0 read "90.0 exceeds the limit 90.0" — a refusal whose own
+        # numbers say there is nothing to refuse.
+        places = decimals_distinguishing(dt, limit, minimum=1)
         raise ValueError(
-            f"D/t = {dt:.1f} exceeds the §F8 applicability limit 0.45E/F_y = {limit:.1f}"
+            f"D/t = {dt:.{places}f} exceeds the §F8 applicability limit "
+            f"0.45E/F_y = {limit:.{places}f}"
         )
     lambda_p = 0.07 * e / fy
     lambda_r = 0.31 * e / fy

@@ -2343,3 +2343,47 @@ def test_the_over_margin_detail_never_reports_an_excess_of_zero():
         assert factor > upper, f"{entry.detail!r} shows a factor that does not exceed the band"
         # The three numbers on the page agree with each other, not merely with the truth.
         assert factor - upper == pytest.approx(excess, abs=10 ** -len(shown.group(4).split(".")[1]))
+
+
+def test_a_refusal_never_prints_two_numbers_that_render_the_same():
+    """The family the over-margin detail belongs to: a message asserting an inequality
+    between two figures it prints at fixed precision.
+
+    At one decimal place the round-HSS guard read `D/t = 200.0 exceeds the §F8
+    applicability limit 0.45E/F_y = 200.0` — a refusal whose own numbers say there is
+    nothing to refuse — for any yield strength putting the limit on a rounding boundary.
+    The masonry cap read `overstates the column by 1.00x` in the sentence refusing it.
+    """
+    import re
+
+    from anvilate.analysis.beam import aisc_round_hss_flexural_strength
+    from anvilate.analysis.masonry import masonry_column_axial_capacity
+    from anvilate.units import Quantity
+
+    # 0.45E/F_y lands exactly on 200.0 here, so a D/t a hair above it is the collision.
+    limit = 0.45 * 200000.0 / 450.0
+    with pytest.raises(ValueError) as refusal:
+        aisc_round_hss_flexural_strength(
+            diameter=Quantity(magnitude=100.0, unit="mm"),
+            thickness=Quantity(magnitude=100.0 / (limit * 1.0001), unit="mm"),
+            yield_strength=Quantity.parse("450 MPa"),
+            elastic_modulus=Quantity.parse("200 GPa"),
+            plastic_section_modulus=Quantity.parse("1.2e5 mm**3"),
+            elastic_section_modulus=Quantity.parse("1e5 mm**3"),
+        )
+    shown = re.search(r"D/t = ([\d.]+) exceeds .*= ([\d.]+)", str(refusal.value))
+    assert shown is not None, refusal.value
+    assert float(shown.group(1)) > float(shown.group(2)), str(refusal.value)
+    assert shown.group(1) != shown.group(2)
+
+    with pytest.raises(ValueError) as capped:
+        masonry_column_axial_capacity(
+            masonry_strength=Quantity.parse("10 MPa"),
+            net_area=Quantity.parse("50000 mm**2"),
+            steel_area=Quantity.parse("600 mm**2"),
+            steel_allowable_stress=Quantity.parse("165.1 MPa"),
+            slenderness_ratio=20.0,
+        )
+    overstatement = re.search(r"overstates the column by ([\d.]+)x", str(capped.value))
+    assert overstatement is not None, capped.value
+    assert float(overstatement.group(1)) > 1.0, str(capped.value)
