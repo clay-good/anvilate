@@ -138,6 +138,7 @@ def test_no_exported_symbol_shadows_its_own_module():
     # ``m.photon_momentum`` raises AttributeError. The manifest and __all__ gates above cannot
     # see this, because both sides of the comparison agree -- only the attribute type differs.
     modules = set(_module_names())
+    assert len(modules) > 200, f"the module sweep found only {len(modules)}"
     shadowed = sorted(modules & set(analysis_pkg.__all__))
     assert not shadowed, (
         "exported symbols that collide with an analysis module name, making "
@@ -1486,11 +1487,14 @@ def test_no_shipped_module_carries_an_invalid_escape_sequence():
     import warnings
 
     offenders: list[str] = []
+    parsed = 0
     for module in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        parsed += 1
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             ast.parse(module.read_text())
         offenders += [f"{module.name}: {w.message}" for w in caught]
+    assert parsed > 200, f"the sweep parsed only {parsed} modules; the root has moved"
     assert not offenders, f"modules parse with warnings: {offenders}"
 
 

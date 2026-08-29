@@ -198,6 +198,10 @@ def test_no_rendering_in_this_module_uses_the_language_of_certification():
     ):
         renderings.append(dossier.summary())
         renderings.extend(item.headline for item in dossier.items)
+    # A sweep over nothing finds no offenders. Three dossiers, each contributing a summary
+    # and one headline per item, so the count is knowable and every string has content.
+    assert len(renderings) >= 3 * (1 + len(card.entries) - 1), renderings
+    assert all(text.strip() for text in renderings), "a rendering came back blank"
     offenders = [
         (phrase, text)
         for text in renderings

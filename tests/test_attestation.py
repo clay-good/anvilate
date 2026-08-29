@@ -561,10 +561,15 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
     source = Path(__file__).resolve().parent.parent / "src" / "anvilate"
     offenders = []
     pattern = _NONDETERMINISM
+    scanned = 0
     for path in sorted(source.rglob("*.py")):
+        scanned += 1
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             if pattern.search(line):
                 offenders.append(f"{path.relative_to(source)}:{number}: {line.strip()}")
+    # A wrong root reads no files and reports no offenders, which is the shape this gate
+    # would fail silently in — the determinism the content address rests on is the claim.
+    assert scanned > 200, f"the wall-clock sweep read only {scanned} modules"
     assert not offenders, (
         "non-deterministic calls in shipped code — a wall clock or a random identifier "
         "in any writer destroys the reproducible bundle digest:\n" + "\n".join(offenders)
