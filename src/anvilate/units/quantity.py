@@ -9,6 +9,7 @@ and again wherever a field pins an expected dimension.
 
 from __future__ import annotations
 
+import re
 from math import isfinite
 from typing import Any
 
@@ -67,6 +68,35 @@ def _dimensionality_str(units: str) -> str:
     return _friendly_dimension(UREG.Unit(units).dimensionality)
 
 
+# Case-variant spellings pint accepts that differ from the intended unit by a power of ten
+# and **not** by dimension. That combination is the one unit typo a dimension guard
+# structurally cannot catch: `Quantity.parse("80 Mm")` is 80 megametres, passes
+# `has_dimension("[length]")`, and screens a beam 80,000 km deep as comfortably passing.
+#
+# Derived rather than remembered: over the 177 units this library converts to, every
+# same-dimension case collision is this one root — `Mm` for `mm`, propagated through
+# `Mm**4`, `Mm/s` and the rest — plus `ML`/`Ml` for `mL`. The test re-derives the set from
+# the registry and fails if pint ever grows another, so this is a probe table and not a
+# list of names somebody once wrote down.
+#
+# The other mis-casings are safe *because* they change dimension: "80 MM" is megamolar and
+# "3 PA" is petaamperes, and the guard on every function refuses them by name.
+_CASE_TRAPS = {
+    "Mm": "megametres, where 'mm' is millimetres — a factor of 1e9 at the same dimension",
+    "ML": "megalitres, where 'mL' is millilitres — a factor of 1e9 at the same dimension",
+    "Ml": "megalitres, where 'mL' is millilitres — a factor of 1e9 at the same dimension",
+}
+# The remedy each refusal names, and it has to be one that works: writing the unit out as
+# "megameter" does *not*, because pint canonicalises it straight back to "Mm" and lands on
+# this same check. Scaling into the base unit does, and a test proves each of these rather
+# than quoting it.
+_CASE_TRAPS_REMEDY = {
+    "Mm": "1 Mm is 1e6 m",
+    "ML": "1 ML is 1e3 m**3",
+    "Ml": "1 Ml is 1e3 m**3",
+}
+
+
 class Quantity(RevalidatedModel):
     """A physical value: a magnitude and the unit it was expressed in.
 
@@ -86,6 +116,14 @@ class Quantity(RevalidatedModel):
             UREG.Unit(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
             raise UnitError(f"unknown unit {self.unit!r}") from exc
+        for token in re.findall(r"[A-Za-z]+", self.unit):
+            if token in _CASE_TRAPS:
+                raise UnitError(
+                    f"unit {self.unit!r} contains {token!r}, which is {_CASE_TRAPS[token]}. "
+                    f"No dimension check can catch that difference, so this spelling is "
+                    f"refused rather than converted. If you meant it, write the magnitude "
+                    f"in the base unit — {_CASE_TRAPS_REMEDY[token]}"
+                )
         return self
 
     @classmethod

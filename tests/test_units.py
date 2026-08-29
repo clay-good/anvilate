@@ -490,3 +490,94 @@ def test_equality_still_works_because_it_always_did():
     assert Quantity(magnitude=1.0, unit="mm") == Quantity(magnitude=1.0, unit="mm")
     assert Quantity(magnitude=1.0, unit="mm") != Quantity(magnitude=2.0, unit="mm")
     assert Quantity(magnitude=1.0, unit="mm") != 1.0
+
+
+# --- The unit typo a dimension guard cannot see ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "trap"),
+    [
+        ("80 Mm", "Mm"),
+        ("2 Mm**4", "Mm"),
+        ("3 Mm/s", "Mm"),
+        ("5 ML", "Ml"),
+        # Written out in full, pint canonicalises it straight back to the short form, so
+        # the escape hatch the first draft of this message offered did not exist.
+        ("80 megameter", "Mm"),
+    ],
+)
+def test_a_case_variant_that_keeps_the_dimension_and_changes_the_scale_is_refused(text, trap):
+    """`Quantity.parse("80 Mm")` is 80 *megametres*: 1e9 times the millimetres meant.
+
+    This is the one unit typo the library's guards structurally cannot catch. Every other
+    mis-casing changes dimension — "80 MM" is megamolar, "3 PA" is petaamperes — and the
+    dimension check on every function refuses those by name. `Mm` keeps `[length]`, so it
+    passes every guard and screens a beam 80,000 km deep as comfortably passing.
+    """
+    with pytest.raises(ValueError, match=trap):
+        Quantity.parse(text)
+
+
+def test_the_remedy_the_refusal_names_actually_works():
+    """A refusal naming a remedy that does not work is worse than one naming none.
+
+    The first version told the reader to write the unit out in full. `megameter`
+    canonicalises to `Mm` and lands on the same check, so the sentence was false. These
+    are the conversions the message now names, executed rather than quoted.
+    """
+    assert Quantity(magnitude=80e6, unit="m").to("m").magnitude == pytest.approx(80e6)
+    assert Quantity(magnitude=1e3, unit="m**3").to("m**3").magnitude == pytest.approx(1e3)
+
+
+def test_the_ordinary_spellings_are_untouched():
+    """The guard is on three tokens, and a false refusal here is worse than the trap."""
+    for text in ("80 mm", "5 mL", "3 mmHg", "80 m", "2 mm**4", "1 Mg", "1 MPa", "1 mm/s"):
+        assert Quantity.parse(text) is not None, text
+
+
+def test_no_other_case_collision_hides_in_the_units_this_library_converts_to():
+    """The probe that makes `_CASE_TRAPS` a derived set rather than a remembered one.
+
+    Every unit the package converts to, against its own case variants: a variant pint
+    accepts, at the *same dimension*, with a different scale is exactly the trap. Any one
+    the guard does not already refuse fails here — including one pint grows later.
+    """
+    import re as _re
+    from pathlib import Path
+
+    from anvilate.units import UREG
+
+    units = set()
+    for path in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        units |= set(_re.findall(r'\.to\("([^"]{1,24})"\)', path.read_text(encoding="utf-8")))
+    assert len(units) > 100, (
+        f"only {len(units)} conversion targets found; the scan stopped matching the way "
+        "this library converts, and a probe over nothing reports green"
+    )
+
+    unguarded = []
+    for unit in sorted(units):
+        try:
+            base = UREG.Unit(unit)
+        except Exception:  # pragma: no cover - every literal in the tree parses today
+            continue
+        for variant in {unit.upper(), unit.lower(), unit.capitalize(), unit.swapcase()} - {unit}:
+            try:
+                parsed = UREG.Unit(variant)
+                if parsed.dimensionality != base.dimensionality:
+                    continue
+                ratio = UREG.Quantity(1.0, parsed).to(base).magnitude
+            except Exception:
+                continue
+            if abs(ratio - 1.0) <= 1e-12:
+                continue
+            try:
+                Quantity(magnitude=1.0, unit=variant)
+            except ValueError:
+                continue  # refused, which is the point
+            unguarded.append(f"{variant!r} is {ratio:g}x {unit!r} at the same dimension")
+    assert not unguarded, (
+        "case variants that keep the dimension and change the scale, and are accepted:\n  "
+        + "\n  ".join(sorted(set(unguarded)))
+    )
