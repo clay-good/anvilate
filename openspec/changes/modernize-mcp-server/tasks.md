@@ -68,8 +68,22 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Agent-integration guide: driving Anvilate from a coding agent, with the
-      build-validate-read-scorecard loop
+- [x] 4.1 Agent-integration guide: driving Anvilate from a coding agent —
+      `docs/agent-mcp-integration.md`. **The loop the task names is the thing the page has
+      to say is missing.** Build-validate-read-scorecard is four steps and two of them are
+      not callable: `build_part` is task-dispatched with the Tasks extension unbuilt, and
+      `read_scorecard` takes no arguments and returns a scorecard, which is a session. So
+      the shape that works is two calls with the card read out of the validation reply, and
+      writing the guide around the four-step loop would have documented a client nobody can
+      write. The page also gives the answer most agents will actually get — the analytical
+      tier `not_evaluated` on every spec, naming the missing element type — because a guide
+      whose worked example is the happy path teaches a status handling that reads a check
+      which could not run as one that passed. Four worked examples, each executed in its own
+      process in CI with its printed output compared byte for byte; the unservable and
+      task-dispatched lists are derived from `stateless_gaps()` and the declared costs, so
+      prose that outlives the surface fails; and every backticked tool name is resolved
+      against the catalog, since a renamed tool leaves its old name in the prose reading
+      exactly as right as the new one
 
 ## Scope as shipped (1.2, 1.3)
 
