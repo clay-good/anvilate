@@ -262,6 +262,30 @@ Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity 
 its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
 check satisfied — the unsafe direction for a screen to be wrong in.
 
+## Two sweeps that came back clean
+
+Both were run at HEAD and found nothing. Recorded so the next person spends the afternoon
+somewhere else.
+
+**Numbers narrated in `examples/` docstrings.** The ratchet in `test_examples.py` requires
+every example quoting a figure to call `_assert_narrates`, which checks each narrated number
+against a computed value **in both directions** — a quoted figure with nothing behind it
+fails, and a computed value no figure uses fails too. Confirmed behaviourally rather than
+read: a sampled docstring number perturbed in four examples failed the suite every time.
+
+**Numbers quoted in `src/` docstrings.** 720 distinctive figures in function docstrings; 39
+are neither a numeric literal in their own module nor named anywhere in `tests/` or
+`examples/`. Every one spot-checked is a derived coefficient the docstring states alongside
+its exact form — `33/140 ≈ 0.236`, `72/56 = 1.286`, `ξ = 1 − 1/√3 ≈ 0.423`, the Rayleigh
+ratio at the ν the sentence names — so the prose carries its own derivation and a gate would
+be re-deriving what the sentence already shows.
+
+A gate over the arithmetic those sentences state was written and thrown away: eleven claims
+of the form `a/b ≈ c` across the whole package, seven of them real and all seven correct,
+and the four "failures" were the regex reading `1/√3 ≈ 0.577` as `√3 ≈ 0.577`. At that
+corpus size the pattern is likelier to be wrong than the prose is, which is the point at
+which a gate stops paying.
+
 ## Finding a published constant nothing pins
 
 The public-surface manifests say a symbol exists. They do not say anything exercises it.
