@@ -123,4 +123,43 @@ tells a script author they typed it wrong. They did not; the operation is specif
 unbuilt, and that is a different thing to be told. It is the same rule the
 [MCP surface](mcp-tool-contracts.md) follows for the operations it cannot serve.
 
+## Running it in CI
+
+`.github/actions/check` is a composite action that installs Anvilate and screens a whole
+repository:
+
+```yaml
+- uses: anvilate/anvilate/.github/actions/check@main
+  with:
+    path: parts/
+    report: anvilate-report.json
+```
+
+| Input | Default | What it does |
+| --- | --- | --- |
+| `path` | `.` | The file or directory to screen. A directory is searched recursively. |
+| `python-version` | `3.11` | The Python to install Anvilate under. |
+| `allow-not-evaluated` | `false` | Accept exit code 2 as a pass. |
+| `report` | (none) | Where to write the JSON report. |
+
+**`allow-not-evaluated` is off by default and that is the whole point.** A screen that
+could not run is not a screen that passed, and a merge gate treating the two alike is the
+silent green this tool exists to avoid. Turn it on only while a known gap is being closed,
+and the action prints a warning annotation when it fires.
+
+The report is written *before* the verdict is decided, so a failing run still leaves one —
+a CI job that fails and produces no artifact is a job somebody has to re-run to understand.
+
+The action's script is the least-tested code in most repositories: nothing imports it,
+nothing type-checks it, and it runs for the first time on somebody else's pull request. So
+`tests/test_ci_action.py` resolves it against the CLI — every flag it passes must exist,
+every environment variable it reads must be bound, and the exit codes its comment documents
+must be the ones `EXIT_CODES` can actually produce.
+
+**The container image the requirement also names is not shipped.** Building one is not
+something this repository can test: the suite runs with the socket layer closed, and a
+`docker build` is a network operation whose result no offline gate can check. An image
+published without a gate on what it contains is the kind of claim the rest of this project
+refuses to make. `pip install anvilate` is what the action does, and it is what the
+documentation recommends until an image can be held to something.
 

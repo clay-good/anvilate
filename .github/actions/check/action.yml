@@ -1,0 +1,66 @@
+name: "Anvilate check"
+description: >-
+  Screen every Design Spec in a repository and fail the run on any check that failed or
+  could not be evaluated.
+author: "Anvilate"
+
+inputs:
+  path:
+    description: >-
+      The file or directory to screen. A directory is searched recursively; a document
+      found by searching that carries no `anvilate_spec` key is skipped with a line on
+      stderr, while a file named here is taken at its word and is an error if it is not a
+      spec.
+    required: false
+    default: "."
+  python-version:
+    description: "The Python to install Anvilate under."
+    required: false
+    default: "3.11"
+  allow-not-evaluated:
+    description: >-
+      Accept exit code 2 — a card that could not be fully evaluated — as a pass. Off by
+      default, and deliberately: a screen that could not run is not a screen that passed,
+      and a merge gate that treats the two alike is the silent green this whole tool
+      exists to avoid. Turn it on only while a known gap is being closed.
+    required: false
+    default: "false"
+  report:
+    description: "Where to write the JSON report, or empty to write none."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install Anvilate
+      shell: bash
+      run: pip install anvilate
+    - name: Screen every spec
+      shell: bash
+      env:
+        ANVILATE_PATH: ${{ inputs.path }}
+        ANVILATE_ALLOW_NOT_EVALUATED: ${{ inputs.allow-not-evaluated }}
+        ANVILATE_REPORT: ${{ inputs.report }}
+      run: |
+        set -uo pipefail
+        if [ -n "$ANVILATE_REPORT" ]; then
+          anvilate check "$ANVILATE_PATH" --format json > "$ANVILATE_REPORT"
+        fi
+        anvilate check "$ANVILATE_PATH"
+        status=$?
+        # The exit codes are the interface:
+        #   0 passed
+        #   1 a check failed
+        #   2 a card could not be evaluated
+        #   3 the request was wrong
+        #   4 the operation is unbuilt
+        # Only 2 is ever forgiven, and only when the caller asked for it in as many words.
+        if [ "$status" -eq 2 ] && [ "$ANVILATE_ALLOW_NOT_EVALUATED" = "true" ]; then
+          echo "::warning::a card could not be fully evaluated; allow-not-evaluated is on"
+          exit 0
+        fi
+        exit "$status"
