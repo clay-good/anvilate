@@ -8198,6 +8198,16 @@ def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
     assert narrative is not None, "the category narrative in docs/lifting-devices.md has moved"
     stress = namespace["beam_bending_stress"]().to("MPa").magnitude
     assert stress == pytest.approx(float(narrative.group(1)), abs=0.05)
+    # The same sentence ends by restating both margins, which is what a reader carries
+    # away from the paragraph — and a restatement drifts from the figures above it.
+    restated = re.search(r"\*\*passes at SF ([\d.]+) and fails at ([\d.]+)\*\*", page)
+    assert restated is not None, "the two-margin sentence on lifting-devices.md has moved"
+    for claimed, entry in (
+        (restated.group(1), by_a["beam bending"]),
+        (restated.group(2), by_b["beam bending"]),
+    ):
+        assert entry.safety_factor == pytest.approx(float(claimed), abs=5e-3)
+    assert float(restated.group(2)) < 1.0 < float(restated.group(1))
     for allowable, entry in (
         (narrative.group(2), by_a["beam bending"]),
         (narrative.group(3), by_b["beam bending"]),

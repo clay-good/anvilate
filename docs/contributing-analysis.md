@@ -665,6 +665,19 @@ And two shapes that are *not* defects, both of which the sweep will report forev
   used to print. Nothing in the library should reproduce those, and a gate that pinned them
   would be pinning the bug.
 
+### Where the all-figures run stands
+
+Every gap it found is closed, and each gate was proved by mutating the claim it covers —
+about 120 mutations, page side and library side. What is left, and why none of it is work:
+
+| Left MISSED | Why |
+| --- | --- |
+| `1910.95`, `1926.251`, `§3.10` | Regulation and clause numbers. The pattern cannot tell one from a value; this is the standing false positive. |
+| `686,000` / `2,850,000` / `34,700,000` cycles, and the moment and second moment in `calculation-reports.md`'s narrated example | Six or more digits, so the sweep's last-digit change is a relative 1e-5 — under the rounding the page states, and the gates allow exactly that rounding. The same substitution on `citations.md` *is* gated, because that page tells a reader to multiply it out. |
+| Everything on `calculation-reports.md` after line 150 | Narrated history: the *wrong* output fixed bugs used to print. Pinning it would pin the bug. |
+| `pint 0.24.4`, `pydantic 2.9.2`, the CLI's toolchain line | Version strings in worked output — external, and stale on purpose where the prose says so. |
+| The `1234.56789` half of the record-precision sentence, `P(below 2.00)`, `util 0.94` | Illustrations with no case defined above them, so the figure feeds both sides of any comparison. Each gate's docstring says which figures it does not hold; see "an assertion that cannot fail" below. |
+
 Running it over every figure costs ~380 test runs. Spread the pages over independent copies
 of the tree (`git archive HEAD | tar -x -C worker/`) and run six at once — but **hold a
 tree for the whole page**, since a thread pool hands out threads in completion order and

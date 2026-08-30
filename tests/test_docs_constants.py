@@ -587,6 +587,23 @@ def test_the_lifting_devices_allowables_table_is_the_one_the_module_computes():
             stated = eval(rows[limit_state].replace("·", "*"), environment)  # noqa: S307
             assert stated == pytest.approx(field.to("MPa").magnitude, rel=1e-12), limit_state
 
+    # The page restates two of these formulas in prose further down, and a restatement
+    # drifts from the row it restates.
+    restated = re.search(
+        r"net-section tension against\s*\n?`(S_u/\(1\.20·N_d\))` and its pin bearing against "
+        r"`(1\.25·S_y/N_d)`",
+        page,
+    )
+    assert restated is not None, "the pin-plate sentence on lifting-devices.md has moved"
+    assert restated.group(1).replace(" ", "") == rows["Tension, net section"].replace(" ", "")
+    assert restated.group(2).replace(" ", "") == rows["Pin bearing, clearance fit"].replace(" ", "")
+
+    # And the design factors named in the same paragraph as the pair they multiply.
+    factors = re.search(r"buckling take N_d \((\d+\.\d+) / (\d+\.\d+)\)", page)
+    assert factors is not None, "the N_d parenthetical on lifting-devices.md has moved"
+    for stated, category in zip(factors.groups(), DesignCategory, strict=True):
+        assert float(stated) == category.design_factor
+
     # The routing argument later on the page: a shear stress checked against the tension
     # allowable would pass at 1/0.60 — the shear coefficient's own reciprocal.
     routed = re.search(r"would pass at 1/([\d.]+) = \*\*([\d.]+)x the margin", page)
@@ -743,6 +760,35 @@ def test_the_cold_formed_page_states_winters_limit_and_reduction():
         else:
             rho = (1.0 - reduction / slenderness) / slenderness
             assert effective == pytest.approx(rho * full, rel=1e-12), width
+    # The page names the two conventional plate-buckling coefficients, and the stiffened
+    # one is this function's default — the value a reader who passes nothing gets.
+    conventional = re.search(
+        r"is caller-supplied — ([\d.]+) for a\s+stiffened element, ([\d.]+) for an unstiffened one",
+        page,
+    )
+    assert conventional is not None, "the k sentence on cold-formed-steel.md has moved"
+    import inspect
+
+    default = (
+        inspect.signature(aisi_effective_width).parameters["plate_buckling_coefficient"].default
+    )
+    assert float(conventional.group(1)) == default
+    # And the unstiffened value is the softer support, so it sheds more of the flat.
+    softer = aisi_effective_width(
+        flat_width=Quantity.parse("150 mm"),
+        thickness=thickness,
+        stress=stress,
+        elastic_modulus=modulus,
+        plate_buckling_coefficient=float(conventional.group(2)),
+    )
+    stiffened = aisi_effective_width(
+        flat_width=Quantity.parse("150 mm"),
+        thickness=thickness,
+        stress=stress,
+        elastic_modulus=modulus,
+    )
+    assert softer.to("mm").magnitude < stiffened.to("mm").magnitude
+
     # Both branches were exercised: a 40 mm flat at 1.5 mm is fully effective, a 150 mm is not.
     assert (
         aisi_plate_slenderness(
@@ -1506,3 +1552,103 @@ def test_the_process_piping_example_bullet_is_the_examples_own_walls():
     # And the verdicts the bullet claims for each wall, which is the whole contrast.
     assert example["screen_schedule_10"]().status.name == "FAIL"
     assert example["screen_schedule_40"]().status.name == "PASS"
+
+
+def test_the_cold_formed_page_prints_the_prequalification_refusal_it_describes():
+    """The DSM refusal block, and the three limits inside it.
+
+    The page's point is that outside-prequalified is a *third state* — a downgrade that
+    only ever removes a green — and the block naming which dimension took the section out
+    is its evidence. The 472 and the [0.14, 0.87] band are AISI's numbers, held here
+    against `PREQUALIFIED_LIPPED_CHANNEL`, and the sentence's claim that the downgrade
+    never turns a fail into anything else is checked too.
+    """
+    from anvilate.analysis import dsm_scorecard
+    from anvilate.analysis.cold_formed_steel import (
+        PREQUALIFIED_LIPPED_CHANNEL,
+        ElasticBuckling,
+        dsm_compression_strength,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("cold-formed-steel.md")
+    printed = re.search(
+        r"\[NOT_EVALUATED\] (outside the AISI S100 §1\.1\.1\.1 prequalified geometry)\n"
+        r"\(web h/t = ([\d.]+) exceeds ([\d.]+); lip/flange d/b = ([\d.]+) outside "
+        r"\[([\d.]+), ([\d.]+)\]\)",
+        page,
+    )
+    assert printed is not None, "the prequalification block on cold-formed-steel.md has moved"
+    web, web_limit, ratio, low, high = (float(value) for value in printed.groups()[1:])
+    assert web_limit == PREQUALIFIED_LIPPED_CHANNEL.web_flat_to_thickness_max
+    assert (low, high) == PREQUALIFIED_LIPPED_CHANNEL.lip_to_flange_ratio_range
+    assert web > web_limit and not low <= ratio <= high, (
+        "the block's own figures no longer fall outside the limits it prints"
+    )
+
+    outside = PREQUALIFIED_LIPPED_CHANNEL.check(
+        web_flat_to_thickness=web,
+        flange_flat_to_thickness=1.0,
+        lip_flat_to_thickness=1.0,
+        web_to_flange=1.0,
+        lip_to_flange=ratio,
+    )
+    assert len(outside) == 2, outside
+    # A strength that would otherwise pass comfortably: the page's claim is that the
+    # downgrade removes a green, so the green has to be there to remove.
+    strength = dsm_compression_strength(
+        yield_load=Quantity.parse("200 kN"),
+        elastic_buckling=ElasticBuckling(
+            local=Quantity.parse("150 kN"),
+            distortional=Quantity.parse("180 kN"),
+            global_=Quantity.parse("220 kN"),
+            source="finite-strip analysis, docs gate",
+        ),
+    )
+    assert dsm_scorecard("stud", demand=Quantity.parse("10 kN"), strength=strength).status.name == (
+        "PASS"
+    )
+    entry = dsm_scorecard(
+        "stud",
+        demand=Quantity.parse("10 kN"),
+        strength=strength,
+        outside_prequalified=outside,
+    )
+    for fragment in (printed.group(1), f"web h/t = {web:.4g} exceeds {web_limit:.4g}"):
+        assert fragment in entry.detail, (fragment, entry.detail)
+    assert entry.status.name == "NOT_EVALUATED"
+    # "The downgrade only ever removes a green": the same section failing stays failed.
+    failing = dsm_scorecard(
+        "stud",
+        demand=Quantity.parse("500 kN"),
+        strength=strength,
+        outside_prequalified=outside,
+    )
+    assert failing.status.name == "FAIL"
+
+
+def test_the_citations_page_substituted_line_multiplies_out_to_its_own_result():
+    """ "That line multiplies out to the number under it" — the page's own instruction.
+
+    Step 1 of "how to verify one" is a worked line a reader is told to check by hand, and
+    nothing checked it. The units are part of the claim: N·mm × mm ÷ mm⁴ is a stress, and
+    the block prints the answer in MPa.
+    """
+    from anvilate.units import Quantity
+
+    page = _page("citations.md")
+    worked = re.search(
+        r"σ_b = M · c / I\nσ_b = ([\d.]+) N·mm · ([\d.]+) mm / ([\d.]+) mm⁴\n"
+        r"σ_b = ([\d.]+) MPa",
+        page,
+    )
+    assert worked is not None, "the worked substitution on citations.md has moved"
+    moment, fibre, second_moment, stress = (float(value) for value in worked.groups())
+    # The units layer refuses arithmetic between quantities on purpose, so the composition
+    # is checked as a unit and the magnitudes by hand — which is what the page asks a
+    # reader to do anyway.
+    composed = Quantity(magnitude=moment * fibre / second_moment, unit="N*mm*mm/mm**4")
+    assert composed.has_dimension("[pressure]"), (
+        "the line the page tells a reader to check by hand is not a stress"
+    )
+    assert composed.to("MPa").magnitude == pytest.approx(stress, abs=0.05)
