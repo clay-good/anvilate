@@ -1196,3 +1196,156 @@ def test_the_citations_page_is_right_about_where_the_en1993_curve_stops():
     assert at_two_million is not None
     extrapolated = at_two_million.to("MPa").magnitude * (2.0e6 / (0.99 * floor)) ** (1.0 / 3.0)
     assert extrapolated > just_inside.to("MPa").magnitude
+
+
+def test_the_process_piping_page_prints_the_temperature_refusal_it_describes():
+    """The block whose whole subject is that an allowable is only meaningful at a
+    temperature — and both temperatures in it were prose.
+
+    The two Kelvin figures are the claim: an allowable read at one temperature against a
+    line designed for another. The refusal names both, so a page that changed either would
+    be describing a mismatch the library does not report.
+    """
+    from anvilate.analysis import AllowableStress, asme_b313_pressure_scorecard
+    from anvilate.standards import default_pipe_schedule_table
+    from anvilate.units import Quantity
+
+    page = _page("process-piping.md")
+    block = re.search(
+        r'value=Quantity\.parse\("([^"]+)"\), temperature=Quantity\.parse\("([^"]+)"\),\s*\n'
+        r'\s*material="([^"]+)", source="([^"]+)",(?:.|\n)*?'
+        r'design_pressure=Quantity\.parse\("([^"]+)"\),\s*\n'
+        r'\s*design_temperature=Quantity\.parse\("([^"]+)"\),(?:.|\n)*?'
+        r'corrosion_allowance=Quantity\.parse\("([^"]+)"\),\s*\n\)\n'
+        r"# \[NOT EVALUATED\] ([^\n]+)",
+        page,
+    )
+    assert block is not None, "the temperature-mismatch block on process-piping.md has moved"
+    allowable = AllowableStress(
+        value=Quantity.parse(block.group(1)),
+        temperature=Quantity.parse(block.group(2)),
+        material=block.group(3),
+        source=block.group(4),
+    )
+    pipe = default_pipe_schedule_table().get("4", "40")
+    entry = asme_b313_pressure_scorecard(
+        "process line",
+        design_pressure=Quantity.parse(block.group(5)),
+        design_temperature=Quantity.parse(block.group(6)),
+        outside_diameter=pipe.outside_diameter.quantity,
+        nominal_wall=pipe.wall_thickness.quantity,
+        allowable=allowable,
+        corrosion_allowance=Quantity.parse(block.group(7)),
+    )
+    assert entry.status.name == "NOT_EVALUATED"
+    assert block.group(8).strip() in entry.detail, (block.group(8), entry.detail)
+    # And the sentence above it: the same allowable at its own temperature does evaluate,
+    # which is what makes the refusal a temperature check rather than a broken input.
+    assert allowable.is_valid_at(allowable.temperature)
+    assert not allowable.is_valid_at(Quantity.parse(block.group(6)))
+
+    # The prose names the two rows in Celsius and the block states them in Kelvin. A
+    # reader checking the example against the table it cites reads the two as the same
+    # pair, so they have to be — and only the conversion says whether they are.
+    rows = re.search(r"# (\d+) °C, not the (\d+) °C row", page)
+    assert rows is not None, "the row comment on process-piping.md has moved"
+    for kelvin, celsius in ((block.group(6), rows.group(1)), (block.group(2), rows.group(2))):
+        assert Quantity.parse(kelvin).to("degC").magnitude == pytest.approx(
+            float(celsius), abs=0.01
+        )
+
+
+def test_the_uncertainty_page_quotes_the_annotation_a_report_really_prints():
+    """ "the report says `P(below 2.00) = 3.1% over 4096 samples by monte_carlo`".
+
+    The page's subject is that the label travels with the number — method, sample count
+    and screening label together — and the example of that is a rendered line nothing
+    rendered. Built here from the figures the sentence itself states, so the format is
+    held as well as the fields: a probability printed to a different precision, or a
+    method dropped, no longer matches the page.
+    """
+    from anvilate.report import CalculationReport, ReportSection
+    from anvilate.scorecard import ScorecardEntry
+    from anvilate.uncertainty import MarginUncertainty
+    from anvilate.units import UnitSystem
+
+    page = _page("uncertainty-margins.md")
+    quoted = re.search(r"`P\(below ([\d.]+)\) = ([\d.]+)% over (\d+) samples by (\w+)`", page)
+    assert quoted is not None, "the rendered annotation on uncertainty-margins.md has moved"
+    required, percent, samples, method = quoted.groups()
+
+    uncertainty = MarginUncertainty(
+        method=method,
+        samples=int(samples),
+        seed=1,
+        sensitivities=(),
+        required=float(required),
+        mean=2.4,
+        std=0.3,
+        shortfall_probability=float(percent) / 100.0,
+        lower=1.9,
+        upper=3.0,
+        coverage=0.9,
+        citation="Screening only — not a certified reliability analysis.",
+    )
+    report = CalculationReport(
+        title="Uncertainty annotation",
+        project="Docs",
+        date="2026-07-27",
+        unit_system=UnitSystem.SI,
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "bending", computed=2.4, required=float(required)
+                ).model_copy(update={"uncertainty": uncertainty}),
+            ),
+        ),
+    )
+    assert quoted.group(0).strip("`") in report.to_text()
+    # And the label the same paragraph says is printed beneath it.
+    assert uncertainty.citation in report.to_text()
+
+
+def test_the_repair_feedback_page_prints_the_governing_shift_rendering():
+    """ "governing check changed: 'bending' (util 0.94) → 'bolt bearing' (util 0.88)".
+
+    The one line the page shows for `governing_shift`, and the direction in it is the
+    point: the reference moved to a check with a *lower* utilization, which is what makes
+    a shift worth reporting rather than a ranking. The block is an illustration — the page
+    defines no cards above it — so the two utilizations feed both sides and are not
+    pinned. What is held is the rendering itself, and the ordering claim: the new
+    reference is the tighter check, not the larger number.
+    """
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    page = _page("repair-feedback.md")
+    printed = re.search(
+        r"# governing check changed: '([^']+)' \(util ([\d.]+)\) → '([^']+)' \(util ([\d.]+)\)",
+        page,
+    )
+    assert printed is not None, "the governing-shift line on repair-feedback.md has moved"
+    was, was_utilization, now, now_utilization = printed.groups()
+
+    def _card(governing: str, utilization: str, other: str) -> Scorecard:
+        required = 1.5
+        return Scorecard(
+            entries=(
+                ScorecardEntry.from_safety_factor(
+                    governing, computed=required / float(utilization), required=required
+                ),
+                ScorecardEntry.from_safety_factor(
+                    other, computed=required / 0.1, required=required
+                ),
+            )
+        )
+
+    before = _card(was, was_utilization, now)
+    after = _card(now, now_utilization, was)
+    assert before.governing() is not None and before.governing().name == was
+    shift = after.governing_shift(before)
+    assert shift is not None, "the page shows a shift; these two cards produce none"
+    assert str(shift) == printed.group(0).removeprefix("# ")
+    # The page's own point: the new reference is the tighter check on this card and not
+    # the higher utilization of the two — so a rendering that sorted them would disagree.
+    assert float(now_utilization) < float(was_utilization)
+    assert after.governing_shift(after) is None
