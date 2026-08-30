@@ -76,6 +76,12 @@ def test_the_noise_example_is_the_packs_own_answer():
     )
     assert entry.safety_factor < louder.entries[0].safety_factor
     assert entry.reference is not None and "1910.95" in entry.reference
+    # The prose under the block restates the factor, and a restatement drifts from the
+    # thing it restates. Same for the power factor the feeder paragraph argues from,
+    # which is a field of the page's own code block.
+    restated = re.search(r"the\nfactor says so at ([\d.]+)\.", _PAGE)
+    assert restated is not None, "the noise-dose sentence on the page has moved"
+    assert entry.safety_factor == pytest.approx(float(restated.group(1)), abs=5e-3)
 
 
 def _page_kwargs(block: str, fields: dict[str, str]) -> dict:
@@ -186,6 +192,9 @@ def test_the_feeder_example_is_the_packs_own_answer():
     # undersizing, and the page says so, so it is asserted.
     unity = _factors(screen_feeder(Feeder(**{**declared, "power_factor": 1.0})))
     assert unity["conductor ampacity"] > factors["conductor ampacity"]
+    quoted = re.search(r"load\nat ([\d.]+) pf draws more than the same load at unity", _PAGE)
+    assert quoted is not None, "the power-factor sentence on the page has moved"
+    assert float(quoted.group(1)) == pytest.approx(declared["power_factor"], abs=5e-3)
 
 
 # --- the contract behind the page ----------------------------------------------------------

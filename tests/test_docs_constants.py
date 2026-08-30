@@ -1418,3 +1418,91 @@ def test_the_timber_anchor_table_rows_are_recomputed_from_their_own_problems():
     assert float(post.group(6)) > float(post.group(4)), (
         "the page's point is that skipping C_P reads *higher* than the post has"
     )
+
+
+def test_the_timber_example_bullets_are_the_examples_own_answers():
+    """The three example bullets on `timber-screening.md`, against the examples.
+
+    Each bullet is a small argument — the same post fails when it gets longer, the same
+    header passes on a wider bearing — and the figures carrying them were pinned only as
+    literals inside `test_examples.py`. A page and a test holding the same number by
+    coincidence is the state this repo keeps finding; the page is now read.
+    """
+    import runpy
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    page = _page("timber-screening.md")
+
+    post_bullet = re.search(
+        r"same 4x4 under the same ([\d,]+) lb passes at (\d+) ft \(SF ([\d.]+)\) and fails "
+        r"at (\d+) ft \(([\d.]+)\)",
+        page,
+    )
+    assert post_bullet is not None, "the post-slenderness bullet has moved"
+    post = runpy.run_path(str(examples / "timber_post_slenderness.py"))
+    assert post["AXIAL_LOAD"].to("lbf").magnitude == pytest.approx(
+        float(post_bullet.group(1).replace(",", "")), abs=0.5
+    )
+    for factor, screen in (
+        (post_bullet.group(3), post["screen_short_post"]()),
+        (post_bullet.group(5), post["screen_long_post"]()),
+    ):
+        assert screen.entries[0].safety_factor == pytest.approx(float(factor), abs=5e-3)
+    assert float(post_bullet.group(5)) < 1.0 < float(post_bullet.group(3)), (
+        "the bullet's whole point is that one passes and the other does not"
+    )
+
+    header_bullet = re.search(
+        r"whose bending \(SF ([\d.]+)\) and shear \(([\d.]+)\) both pass while the\s+"
+        r"bearing on a ([\d.]+) in wall plate crushes at ([\d.]+)\. Landing it on a "
+        r"([\d.]+) in post takes\s+bearing to ([\d.]+)",
+        page,
+    )
+    assert header_bullet is not None, "the header-bearing bullet has moved"
+    header = runpy.run_path(str(examples / "timber_header_bearing_governs.py"))
+    on_plate = {entry.name: entry for entry in header["screen_on_wall_plate"]().entries}
+    on_post = {entry.name: entry for entry in header["screen_on_post"]().entries}
+    for name, claimed in (
+        ("header bending", header_bullet.group(1)),
+        ("horizontal shear", header_bullet.group(2)),
+        ("end bearing", header_bullet.group(4)),
+    ):
+        assert on_plate[name].safety_factor == pytest.approx(float(claimed), abs=5e-3), name
+    assert on_post["end bearing"].safety_factor == pytest.approx(
+        float(header_bullet.group(6)), abs=5e-3
+    )
+    # "leaves the other two untouched: the repair is the detail, not a deeper beam".
+    for name in ("header bending", "horizontal shear"):
+        assert on_post[name].safety_factor == pytest.approx(on_plate[name].safety_factor, rel=1e-9)
+    assert float(header_bullet.group(5)) > float(header_bullet.group(3))
+
+
+def test_the_process_piping_example_bullet_is_the_examples_own_walls():
+    """ "a 5 MPa service where Schedule 10 looks like plenty at 3.05 mm".
+
+    The bullet is the page's summary of its one example and the two numbers in it are the
+    example's own constants — the service it is rated against and the nominal wall that
+    looks sufficient before the deductions. Both were prose.
+    """
+    import runpy
+
+    page = _page("process-piping.md")
+    bullet = re.search(
+        r"— a ([\d.]+) MPa\nservice where Schedule 10 looks like plenty at ([\d.]+) mm and rates "
+        r"below the service once\nthe mill tolerance and corrosion allowance come off, while "
+        r"Schedule 40 clears it with\nmargin",
+        page,
+    )
+    assert bullet is not None, "the example bullet on process-piping.md has moved"
+    example = runpy.run_path(
+        str(Path(__file__).resolve().parent.parent / "examples" / "process_pipe_schedule.py")
+    )
+    assert example["SERVICE_PRESSURE"].to("MPa").magnitude == pytest.approx(
+        float(bullet.group(1)), abs=5e-3
+    )
+    assert example["SCHEDULE_10"].to("mm").magnitude == pytest.approx(
+        float(bullet.group(2)), abs=5e-3
+    )
+    # And the verdicts the bullet claims for each wall, which is the whole contrast.
+    assert example["screen_schedule_10"]().status.name == "FAIL"
+    assert example["screen_schedule_40"]().status.name == "PASS"
