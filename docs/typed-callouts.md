@@ -18,7 +18,7 @@ finish = SurfaceFinish(
 )
 card = callout_scorecard(CalloutSet(callouts=(finish,)), ultimate_strength=Quantity.parse("655 MPa"))
 print(card.entries[0])
-# [PASS] surface finish at shaft_journal: [a8e65d1cd5a4243e] as forged, Ra 12.5 µm
+# [PASS] surface finish at shaft_journal: [3ae5c2487be1c5dd] as forged, Ra 12.5 µm
 #        → Marin surface factor k_a = 0.429 at S_u = 655 MPa [Shigley's ... k_a = a·S_u^b ...]
 ```
 

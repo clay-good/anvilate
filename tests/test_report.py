@@ -1144,3 +1144,42 @@ def test_an_empty_assumptions_list_still_names_the_heading():
         assert "Assumptions" in rendering
         assert "none declared" in rendering
     assert report._assumption_lines() == ("none declared",)
+
+
+def test_the_calculation_report_page_states_the_precision_the_record_actually_keeps():
+    """`docs/calculation-reports.md` contrasts a displayed figure with a recorded one.
+
+    "the page may show `1234.6 N` while the record holds `1234.56789`" is the whole
+    argument for the calc record existing, and both halves of it were prose. Held here
+    against the two mechanisms the sentence names: the display rounds, and the record
+    carries what was computed.
+    """
+    import re
+    from pathlib import Path
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "calculation-reports.md").read_text()
+    claim = re.search(r"`([\d.]+) N` while the record holds `([\d.]+)`", page)
+    assert claim is not None, "the record-precision sentence on calculation-reports.md has moved"
+    displayed, held = claim.groups()
+    assert float(displayed) != float(held), "the sentence only says something if they differ"
+
+    shown = SymbolValue(
+        symbol="P", description="pin load", value=Quantity.parse(f"{held} N"), unit="N"
+    )
+    assert shown.rendered() == f"{displayed} N"
+
+    report = CalculationReport(
+        title="Pin bearing",
+        project="Record precision",
+        date="2026-07-27",
+        unit_system=UnitSystem.SI,
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor("bearing", computed=1.2, required=1.0),
+                inputs=(shown,),
+            ),
+        ),
+    )
+    recorded = json.dumps(report.to_record())
+    assert held in recorded, "the record is meant to carry the value at full precision"
+    assert f'"{displayed}"' not in recorded

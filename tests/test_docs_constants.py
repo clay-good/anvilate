@@ -306,3 +306,72 @@ def test_the_agent_skill_page_quotes_a_governing_rule_the_scorecard_really_has()
     assert passing.governing() is None
     with pytest.raises(AttributeError):
         _ = passing.governing().name
+
+
+def test_the_callouts_page_prints_the_entry_the_library_actually_renders():
+    """docs/typed-callouts.md leads with a printed scorecard entry.
+
+    Three separate claims live in that block and none of them was joined to anything: the
+    characteristic identifier, the surface factor, and the strength it was evaluated at.
+    The identifier is the one that had gone stale — it is a digest of *what the
+    characteristic is*, so the page was naming a callout this library cannot mint, which
+    is exactly the field a reader would key a drawing revision on.
+    """
+    from anvilate.callouts import (
+        CalloutSet,
+        ProductionMethod,
+        SurfaceFinish,
+        callout_scorecard,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("typed-callouts.md")
+    printed = re.search(
+        r"# \[PASS\] surface finish at shaft_journal: \[([0-9a-f]{16})\] as forged, "
+        r"Ra ([\d.]+) µm\n#\s+→ Marin surface factor k_a = ([\d.]+) at S_u = (\d+) MPa",
+        page,
+    )
+    assert printed is not None, "the printed entry on typed-callouts.md has moved"
+    identifier, roughness, factor, strength = printed.groups()
+
+    finish = SurfaceFinish(
+        scope="shaft_journal",
+        roughness=Quantity.parse(f"{roughness} um"),
+        method=ProductionMethod.AS_FORGED,
+    )
+    card = callout_scorecard(
+        CalloutSet(callouts=(finish,)),
+        ultimate_strength=Quantity.parse(f"{strength} MPa"),
+    )
+    rendered = str(card.entries[0])
+    assert f"[{identifier}]" in rendered, (
+        f"the page names characteristic {identifier}; the library mints {finish.characteristic_id}"
+    )
+    assert f"k_a = {factor} at S_u = {strength} MPa" in rendered
+
+
+def test_the_callouts_page_kpsi_table_is_the_one_its_own_constants_give():
+    """The anchoring table on typed-callouts.md derives a_kpsi from a_MPa.
+
+    The derived column is a five-decimal figure the page states and nothing recomputed;
+    the published column is the transcription the identity exists to check. Both are held
+    here against `MARIN_SURFACE_CONSTANTS_MPA`, so a constant edited on either side of the
+    page fails.
+    """
+    from anvilate.callouts import MARIN_SURFACE_CONSTANTS_MPA
+
+    page = _page("typed-callouts.md")
+    rows = re.findall(r"\| (ground|machined|hot-rolled|as-forged) \| ([\d.]+) \| ([\d.]+) \|", page)
+    assert len(rows) == len(MARIN_SURFACE_CONSTANTS_MPA), (
+        "the anchoring table on typed-callouts.md no longer has one row per constant"
+    )
+    mpa_per_kpsi = 6.894757
+    for method, derived, published in rows:
+        a_mpa, b = MARIN_SURFACE_CONSTANTS_MPA[method.replace("-", "_")]
+        assert float(derived) == pytest.approx(a_mpa * mpa_per_kpsi**b, abs=5e-6), method
+        assert float(derived) == pytest.approx(float(published), rel=3e-3), method
+
+    # The same paragraph argues from the exponent that makes as-forged the loose row.
+    exponent = re.search(r"b = (−[\d.]+) is quoted to three decimals", page)
+    assert exponent is not None, "the as-forged sentence on typed-callouts.md has moved"
+    assert float(exponent.group(1).replace("−", "-")) == MARIN_SURFACE_CONSTANTS_MPA["as_forged"][1]

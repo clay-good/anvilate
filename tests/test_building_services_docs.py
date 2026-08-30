@@ -35,6 +35,26 @@ def _factors(card):
     return {entry.name: entry.safety_factor for entry in card.entries}
 
 
+def _assert_block_is_the_cards_own(card, marker: str) -> None:
+    """The page's rendered block, line for line, against the card that produced it.
+
+    Reading one safety factor per check left the rest of every block joined to nothing —
+    the status word, the reference line, and `required minimum 1.00`, which is the half of
+    the detail that says what the factor is measured against. Comparing the whole block
+    means a check whose target moves, or whose citation moves, fails here.
+    """
+    start = _PAGE.index("```text", _PAGE.index(marker))
+    block = _PAGE[start + len("```text\n") : _PAGE.index("```", start + 7)]
+    lines = block.rstrip("\n").split("\n")
+    assert len(lines) == 2 * len(card.entries), f"{marker}: block is not one pair per check"
+    for entry, head, reference in zip(card.entries, lines[::2], lines[1::2], strict=True):
+        shown = re.match(rf"{re.escape(entry.name)}\s+([A-Z_]+)\s+(.*)", head)
+        assert shown is not None, f"{marker}: {head!r} is not this check's line"
+        assert shown.group(1) == entry.status.name, f"{marker}: {entry.name} status"
+        assert shown.group(2) == entry.detail, f"{marker}: {entry.name} detail"
+        assert reference.strip() == entry.reference, f"{marker}: {entry.name} reference"
+
+
 def test_the_noise_example_is_the_packs_own_answer():
     from anvilate.packs.noise_exposure import WorkerNoiseExposure, screen_noise_exposure
 
@@ -48,9 +68,7 @@ def test_the_noise_example_is_the_packs_own_answer():
         WorkerNoiseExposure(machine_levels=levels, exposure_duration=Quantity.parse(hours))
     )
     (entry,) = card.entries
-    assert entry.safety_factor == pytest.approx(
-        _quoted(r"noise dose\s+FAIL\s+safety factor ([\d.]+)"), abs=5e-3
-    )
+    _assert_block_is_the_cards_own(card, "## Noise dose")
     # The page's argument: two machines combine logarithmically, so the pair is louder than
     # either. A screen that added them arithmetically would be worse, not better.
     louder = screen_noise_exposure(
@@ -117,12 +135,7 @@ def test_the_lighting_example_is_the_packs_own_answer():
     declared = _page_kwargs(block, _LIGHTING_FIELDS)
     card = screen_lighting(LightingInstallation(**declared))
     factors = _factors(card)
-    assert factors["task illuminance"] == pytest.approx(
-        _quoted(r"task illuminance\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
-    assert factors["lighting power density"] == pytest.approx(
-        _quoted(r"lighting power density\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
+    _assert_block_is_the_cards_own(card, "## Lighting")
     # The page's claim that the two pull against each other: more luminaires lifts the
     # illuminance and pushes the power density the other way.
     more = screen_lighting(LightingInstallation(**{**declared, "luminaire_count": 30}))
@@ -146,13 +159,9 @@ def test_the_ventilation_example_is_the_packs_own_answer():
         "required_air_changes": "float",
     }
     declared = _page_kwargs(block, fields)
-    factors = _factors(screen_ventilation(VentilationZone(**declared)))
-    assert factors["outdoor air"] == pytest.approx(
-        _quoted(r"outdoor air\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
-    assert factors["air changes per hour"] == pytest.approx(
-        _quoted(r"air changes per hour\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
+    card = screen_ventilation(VentilationZone(**declared))
+    factors = _factors(card)
+    _assert_block_is_the_cards_own(card, "## Ventilation")
     # "E_z is a divisor, so a poorly distributed zone needs MORE air, not less."
     mixed = _factors(
         screen_ventilation(
@@ -170,13 +179,9 @@ def test_the_feeder_example_is_the_packs_own_answer():
 
     block = _block("## Feeder")
     declared = _page_kwargs(block, _FEEDER_FIELDS)
-    factors = _factors(screen_feeder(Feeder(**declared)))
-    assert factors["voltage drop"] == pytest.approx(
-        _quoted(r"voltage drop\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
-    assert factors["conductor ampacity"] == pytest.approx(
-        _quoted(r"conductor ampacity\s+PASS\s+safety factor ([\d.]+)"), abs=5e-3
-    )
+    card = screen_feeder(Feeder(**declared))
+    factors = _factors(card)
+    _assert_block_is_the_cards_own(card, "## Feeder")
     # "a 37 kW load at 0.85 pf draws more than the same load at unity" — the classic
     # undersizing, and the page says so, so it is asserted.
     unity = _factors(screen_feeder(Feeder(**{**declared, "power_factor": 1.0})))
