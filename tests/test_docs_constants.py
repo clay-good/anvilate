@@ -538,3 +538,108 @@ def test_the_aluminum_page_is_right_that_the_beam_curve_carries_no_knockdown():
     assert beam.magnitude == pytest.approx(elastic, rel=1e-9), (
         "the beam curve has acquired a knockdown the page says it does not carry"
     )
+
+
+def test_the_lifting_devices_allowables_table_is_the_one_the_module_computes():
+    """The five BTH-1 allowables, evaluated from the formulas the page prints.
+
+    Three coefficients live only in those formulas — the 1.20 on net-section rupture, the
+    0.60 on shear, the 1.25 on pin bearing — and the page's own paragraph explains that
+    the 1.20 is what makes a rupture check stricter than a yield check. Evaluated here
+    with the module's symbols bound to real strengths, so a coefficient that moves on
+    either side fails, and a coefficient copied into the wrong row fails too.
+    """
+    from anvilate.analysis.lifting_device import (
+        DesignCategory,
+        bth1_allowable_stresses,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("lifting-devices.md")
+    rows = {
+        limit_state.strip(): formula
+        for limit_state, formula in re.findall(
+            r"\| ([^|]+?) \| §[\d.\-]+ \| `F_[tvbp] = ([^`]+)` \|", page
+        )
+    }
+    assert len(rows) == 5, "the allowables table on lifting-devices.md has moved"
+
+    yield_strength, ultimate = 250.0, 400.0
+    for category in DesignCategory:
+        allowables = bth1_allowable_stresses(
+            yield_strength=Quantity.parse(f"{yield_strength} MPa"),
+            ultimate_strength=Quantity.parse(f"{ultimate} MPa"),
+            category=category,
+        )
+        environment = {
+            "S_y": yield_strength,
+            "S_u": ultimate,
+            "N_d": category.design_factor,
+            "__builtins__": {},
+        }
+        for limit_state, field in (
+            ("Tension, gross section", allowables.tension_gross),
+            ("Tension, net section", allowables.tension_net),
+            ("Shear", allowables.shear),
+            ("Bending, compact and braced", allowables.bending),
+            ("Pin bearing, clearance fit", allowables.pin_bearing),
+        ):
+            stated = eval(rows[limit_state].replace("·", "*"), environment)  # noqa: S307
+            assert stated == pytest.approx(field.to("MPa").magnitude, rel=1e-12), limit_state
+
+    # The routing argument later on the page: a shear stress checked against the tension
+    # allowable would pass at 1/0.60 — the shear coefficient's own reciprocal.
+    routed = re.search(r"would pass at 1/([\d.]+) = \*\*([\d.]+)x the margin", page)
+    assert routed is not None, "the limit-state routing sentence on lifting-devices.md has moved"
+    assert eval(  # noqa: S307
+        rows["Shear"].replace("·", "*"), {"S_y": 1.0, "N_d": 1.0, "__builtins__": {}}
+    ) == pytest.approx(float(routed.group(1)), rel=1e-12)
+    assert 1.0 / float(routed.group(1)) == pytest.approx(float(routed.group(2)), abs=5e-3)
+
+    # The paragraph under the table: 1.20·N_d is what the Code tabulates as 2.40 and 3.60.
+    tabulated = re.search(
+        r"take\s*\n?(\d+\.\d+)·N_d\*\*, which the Code tabulates directly as "
+        r"(\d+\.\d+) and (\d+\.\d+)",
+        page,
+    )
+    assert tabulated is not None, "the 1.20·N_d paragraph on lifting-devices.md has moved"
+    extra = float(tabulated.group(1))
+    for stated, category in zip(tabulated.groups()[1:], DesignCategory, strict=True):
+        assert float(stated) == pytest.approx(extra * category.design_factor, rel=1e-12)
+
+
+def test_the_lifting_devices_service_class_table_is_the_enumerations_own():
+    """Every cycle boundary on the page, against `ServiceClass.cycle_range`.
+
+    The page says Class 0's upper bound is the only number in the table that changes
+    whether an analysis is required at all, and that boundary is quoted twice — once in
+    the table and once in the sentence — with nothing joining either to the enumeration.
+    """
+    from anvilate.analysis.lifting_device import ServiceClass
+
+    page = _page("lifting-devices.md")
+    rows = re.findall(
+        r"\| (\d) \| (?:(\S+) – (\S+)|over (\S+)) \| (\*\*Not required\*\*|Required) \|", page
+    )
+    assert len(rows) == len(ServiceClass), "the Service Class table on lifting-devices.md has moved"
+    for (name, low, high, unbounded, requirement), service_class in zip(
+        rows, ServiceClass, strict=True
+    ):
+        assert name == service_class.value
+        lower, upper = service_class.cycle_range
+        if unbounded:
+            assert upper is None
+            # "over 2,000,000" is the class below's ceiling, and the class starts one past it.
+            assert int(unbounded.replace(",", "")) == lower - 1
+        else:
+            assert int(low.replace(",", "")) == lower
+            assert upper is not None and int(high.replace(",", "")) == upper
+        assert (requirement == "Required") is service_class.fatigue_required
+
+    exempt = re.search(r"the ([\d,]+)-cycle boundary is the only one in the", page)
+    assert exempt is not None, "the exempt-boundary sentence on lifting-devices.md has moved"
+    assert int(exempt.group(1).replace(",", "")) == ServiceClass.CLASS_0.cycle_range[1]
+    assert not ServiceClass.CLASS_0.fatigue_required
+    assert all(
+        other.fatigue_required for other in ServiceClass if other is not ServiceClass.CLASS_0
+    )

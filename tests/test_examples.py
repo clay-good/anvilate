@@ -8003,9 +8003,20 @@ def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load(
     assert len(rows) == 2, "the bail table has moved"
     for load, claimed_stress, claimed_sf in rows:
         entry = namespace["screen_bail"](Quantity_(magnitude=float(load), unit="kN")).entries[1]
-        assert entry.safety_factor == pytest.approx(float(claimed_sf), abs=0.01)
+        assert entry.safety_factor == pytest.approx(float(claimed_sf), abs=0.005)
         # The stress is the allowable over the factor, which is what the table shows.
         assert allowable / entry.safety_factor == pytest.approx(float(claimed_stress), abs=0.2)
+
+    # And the sentence after the table, which is the page's argument for the category
+    # being a decision rather than a default: the same overload passes as Category A.
+    as_category_a = re.search(r"The same (\d+) kN bail as Category A passes at ([\d.]+)\.", page)
+    assert as_category_a is not None, "the Category A sentence on lifting-devices.md has moved"
+    recomputed = namespace["screen_bail"](
+        Quantity_(magnitude=float(as_category_a.group(1)), unit="kN"),
+        category=DesignCategory_.A,
+    ).entries[1]
+    assert recomputed.safety_factor == pytest.approx(float(as_category_a.group(2)), abs=0.005)
+    assert recomputed.status is CheckStatus.PASS
 
     card = namespace["screen_device"]()
     assert card.status is CheckStatus.FAIL
@@ -8140,14 +8151,28 @@ def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
     ):
         assert entry.safety_factor * stress == pytest.approx(float(allowable), abs=0.1)
 
-    block = re.search(r"lug net tension\s+pass\s+SF ([\d.]+)", page)
+    from anvilate.analysis.lifting_device import DesignCategory, ServiceClass
+
+    # The Category A block the page prints, row by row: its header states the design
+    # factor and the roll-up, and each row a status and a factor. Reading one row left
+    # the rest — including the factor the beam-bending sentence above it argues from —
+    # joined to nothing.
+    block = re.search(r"```\nCategory A \(N_d = ([\d.]+)\) -> (\w+)\n((?:  .*\n)+)```", page)
     assert block is not None, "the Category A output block has moved"
-    assert by_a["lug net tension"].safety_factor == pytest.approx(float(block.group(1)), abs=0.02)
+    assert float(block.group(1)) == DesignCategory.A.design_factor
+    assert block.group(2) == a.status.value
+    rows = re.findall(r"^  (\S.*?)\s\s+(\w+)\s+SF\s+(\S+)$", block.group(3), re.M)
+    assert len(rows) == len(a.entries), "the block no longer shows every check"
+    for entry, (name, status, factor) in zip(a.entries, rows, strict=True):
+        assert name.strip() == entry.name
+        assert status == entry.status.value
+        if factor == "—":
+            assert entry.safety_factor is None
+        else:
+            assert entry.safety_factor == pytest.approx(float(factor), abs=0.005)
     # Every allowable scales by exactly 2/3 between the categories, so every margin does.
     # The two design factors the docstring names, and the Service Class 0 boundary,
     # from the enumerations that define them.
-    from anvilate.analysis.lifting_device import DesignCategory, ServiceClass
-
     _assert_narrates(
         "spreader_beam_bth1_category.py",
         DesignCategory.A.design_factor,
