@@ -42635,11 +42635,16 @@ def test_the_pressure_equipment_pages_flange_anchor_numbers_are_the_computed_one
         assert claimed is not None, f"the page no longer prints {symbol} to full precision"
         assert value == pytest.approx(float(claimed.group(1)), abs=5e-8)
 
+    # The published figures the agreement is *against*, read off the page rather than
+    # transcribed here a second time — a copy in the test cannot disagree with the page,
+    # which is the only way this comparison can go quietly wrong.
+    reported = re.search(r"reports\n`T = ([\d.]+)` and `Z = ([\d.]+)`", page)
+    assert reported is not None, "the page no longer quotes the published T and Z"
     ppm = re.search(r"— ([\d.]+) and ([\d.]+) parts per million", page)
     assert ppm is not None, "the page no longer quotes the agreement in ppm"
     for claimed, value, published in (
-        (ppm.group(1), factors.t_factor, 1.74578),
-        (ppm.group(2), factors.z_factor, 2.97106),
+        (ppm.group(1), factors.t_factor, float(reported.group(1))),
+        (ppm.group(2), factors.z_factor, float(reported.group(2))),
     ):
         actual = 1e6 * abs(value - published) / published
         assert actual == pytest.approx(float(claimed), abs=0.05)
@@ -42648,12 +42653,22 @@ def test_the_pressure_equipment_pages_flange_anchor_numbers_are_the_computed_one
     # flange's dimensions rather than the K printed beside them.
     rounded = re.search(r"you get ([\d.]+) and ([\d.]+), which is a (\d+) ppm", page)
     assert rounded is not None, "the page no longer carries the rounded-K comparison"
+    # The rounded ratio the parenthetical is about, and the flange's own K beside it:
+    # both were printed and neither was joined to the dimensions they come from.
+    ratios = re.search(r"a (\d+) in bore, ([\d.]+) in OD flange \(`K = ([\d.]+)`\)", page)
+    assert ratios is not None, "the anchor flange's dimensions on the page have moved"
+    bore, outside, exact = (float(value) for value in ratios.groups())
+    assert outside / bore == pytest.approx(exact, abs=5e-8)
+    rounded_k = re.search(r"the \*rounded\* `K = ([\d.]+)`", page)
+    assert rounded_k is not None, "the rounded-K parenthetical has moved"
     at_rounded = asme_appendix_2_shape_factors(
-        outside_diameter=_q("26.96841 in"), inside_diameter=_q("19 in")
+        outside_diameter=_q(f"{float(rounded_k.group(1)) * bore} in"),
+        inside_diameter=_q(f"{bore} in"),
     )
     assert at_rounded.t_factor == pytest.approx(float(rounded.group(1)), abs=5e-7)
     assert at_rounded.z_factor == pytest.approx(float(rounded.group(2)), abs=5e-7)
-    assert 1e6 * abs(at_rounded.z_factor - 2.97106) / 2.97106 == pytest.approx(
+    published_z = float(reported.group(2))
+    assert 1e6 * abs(at_rounded.z_factor - published_z) / published_z == pytest.approx(
         float(rounded.group(3)), abs=0.5
     )
 

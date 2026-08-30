@@ -643,3 +643,268 @@ def test_the_lifting_devices_service_class_table_is_the_enumerations_own():
     assert all(
         other.fatigue_required for other in ServiceClass if other is not ServiceClass.CLASS_0
     )
+
+
+def test_the_masonry_page_states_the_formulas_the_module_evaluates():
+    """TMS 402's four coefficients, none of which appears anywhere but in a formula.
+
+    0.25·f'm is the allowable the whole page is derating, 140 and 70 are the slenderness
+    factor's own constants, 0.65 is what the steel adds, and 0.45·f'm is the flexural
+    allowable. Each is evaluated from the page's text against the function it describes,
+    on both sides of the h/r = 99 branch, so a coefficient that moves fails.
+    """
+    from anvilate.analysis.masonry import (
+        masonry_allowable_axial_stress,
+        masonry_allowable_flexural_stress,
+        masonry_column_axial_capacity,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("masonry-screening.md")
+    axial = re.search(
+        r"`([\d.]+)·f'm·\[1 − \(h/(\d+)r\)²\]` up to h/r = (\d+) and "
+        r"`([\d.]+)·f'm·\((\d+)r/h\)²` beyond",
+        page,
+    )
+    assert axial is not None, "the axial-allowable sentence on masonry-screening.md has moved"
+    stocky_coefficient, stocky_divisor, split, slender_coefficient, slender_numerator = (
+        float(value) for value in axial.groups()
+    )
+    strength = 12.0
+    for ratio in (split - 1.0, split + 1.0):
+        if ratio <= split:
+            stated = stocky_coefficient * strength * (1.0 - (ratio / stocky_divisor) ** 2)
+        else:
+            stated = slender_coefficient * strength * (slender_numerator / ratio) ** 2
+        computed = masonry_allowable_axial_stress(
+            masonry_strength=Quantity.parse(f"{strength} MPa"), slenderness_ratio=ratio
+        )
+        assert stated == pytest.approx(computed.to("MPa").magnitude, rel=1e-12), ratio
+
+    column = re.search(r"`\(([\d.]+)·f'm·A_n \+ ([\d.]+)·A_st·F_s\)` times the slenderness", page)
+    assert column is not None, "the column-capacity sentence on masonry-screening.md has moved"
+    masonry_share, steel_share = (float(value) for value in column.groups())
+    net_area, steel_area, steel_allowable, ratio = 50_000.0, 800.0, 165.0, 20.0
+    factor = 1.0 - (ratio / stocky_divisor) ** 2
+    stated = (masonry_share * strength * net_area + steel_share * steel_area * steel_allowable) * (
+        factor
+    )
+    computed = masonry_column_axial_capacity(
+        masonry_strength=Quantity.parse(f"{strength} MPa"),
+        net_area=Quantity.parse(f"{net_area} mm**2"),
+        slenderness_ratio=ratio,
+        steel_area=Quantity.parse(f"{steel_area} mm**2"),
+        steel_allowable_stress=Quantity.parse(f"{steel_allowable} MPa"),
+    )
+    assert stated == pytest.approx(computed.to("N").magnitude, rel=1e-9)
+
+    flexural = re.search(r"the flexural compressive allowable `([\d.]+)·f'm`", page)
+    assert flexural is not None, "the flexural-allowable line on masonry-screening.md has moved"
+    assert float(flexural.group(1)) * strength == pytest.approx(
+        masonry_allowable_flexural_stress(masonry_strength=Quantity.parse(f"{strength} MPa"))
+        .to("MPa")
+        .magnitude,
+        rel=1e-12,
+    )
+
+
+def test_the_cold_formed_page_states_winters_limit_and_reduction():
+    """ "b = w if λ ≤ 0.673, else ρ·w, ρ = (1 − 0.22/λ)/λ".
+
+    The whole effective-width rule, written on the page as a comment beside the call. The
+    1.052 in the slenderness was already held against its constant; the limit that decides
+    which branch runs, and the reduction applied above it, were not.
+    """
+    from anvilate.analysis.cold_formed_steel import aisi_effective_width, aisi_plate_slenderness
+    from anvilate.units import Quantity
+
+    page = _page("cold-formed-steel.md")
+    rule = re.search(r"# b = w if λ ≤ ([\d.]+), else ρ·w, ρ = \(1 − ([\d.]+)/λ\)/λ", page)
+    assert rule is not None, "the effective-width comment on cold-formed-steel.md has moved"
+    limit, reduction = (float(value) for value in rule.groups())
+    assert float(re.search(r"fully effective \(λ ≤ ([\d.]+)\)", page).group(1)) == limit, (
+        "the page states its own limit twice and the two disagree"
+    )
+
+    stress, modulus = Quantity.parse("345 MPa"), Quantity.parse("203000 MPa")
+    thickness = Quantity.parse("1.5 mm")
+    for width in ("40 mm", "150 mm"):
+        arguments = {
+            "flat_width": Quantity.parse(width),
+            "thickness": thickness,
+            "stress": stress,
+            "elastic_modulus": modulus,
+        }
+        slenderness = aisi_plate_slenderness(**arguments)
+        effective = aisi_effective_width(**arguments).to("mm").magnitude
+        full = Quantity.parse(width).to("mm").magnitude
+        if slenderness <= limit:
+            assert effective == pytest.approx(full, rel=1e-12), width
+        else:
+            rho = (1.0 - reduction / slenderness) / slenderness
+            assert effective == pytest.approx(rho * full, rel=1e-12), width
+    # Both branches were exercised: a 40 mm flat at 1.5 mm is fully effective, a 150 mm is not.
+    assert (
+        aisi_plate_slenderness(
+            flat_width=Quantity.parse("40 mm"),
+            thickness=thickness,
+            stress=stress,
+            elastic_modulus=modulus,
+        )
+        <= limit
+    )
+    assert (
+        aisi_plate_slenderness(
+            flat_width=Quantity.parse("150 mm"),
+            thickness=thickness,
+            stress=stress,
+            elastic_modulus=modulus,
+        )
+        > limit
+    )
+
+
+def test_the_concrete_page_quotes_the_tension_controlled_phi_the_module_returns():
+    """ "φ = 0.90 for a tension-controlled section", stated beside the nominal moment.
+
+    φ is what turns the module's nominal strength into a design strength, so the page
+    naming the wrong one would mis-scale every result a reader computes by hand.
+    """
+    from anvilate.analysis.reinforced_concrete import rc_strength_reduction_factor
+    from anvilate.units import Quantity
+
+    page = _page("reinforced-concrete.md")
+    claim = re.search(r"design strength is φ·M_n \(φ = ([\d.]+) for\s*\n?\s*a tension-", page)
+    assert claim is not None, "the φ sentence on reinforced-concrete.md has moved"
+    yield_strength = Quantity.parse("420 MPa")
+    assert rc_strength_reduction_factor(
+        net_tensile_strain=0.01, steel_yield=yield_strength
+    ) == pytest.approx(float(claim.group(1)), rel=1e-12)
+
+
+def test_every_page_naming_a_python_version_names_the_one_the_package_requires():
+    """Four places state the interpreter, and `requires-python` is the one that decides.
+
+    A page saying 3.11 beside a package requiring 3.12 sends a reader to an install that
+    fails, and the composite action's default is what a caller who names no version gets.
+    All of them are read here against `pyproject.toml`, which is the only one an installer
+    consults.
+    """
+    import tomllib
+
+    root = Path(__file__).resolve().parent.parent
+    with (root / "pyproject.toml").open("rb") as handle:
+        required = tomllib.load(handle)["project"]["requires-python"]
+    assert required.startswith(">="), f"requires-python is no longer a floor: {required}"
+    floor = required.removeprefix(">=").strip()
+
+    stated = {
+        "README.md": (root / "README.md").read_text(),
+        "docs/quickstart.md": _page("quickstart.md"),
+        "docs/headless-cli.md": _page("headless-cli.md"),
+        ".github/actions/check/action.yml": (
+            root / ".github" / "actions" / "check" / "action.yml"
+        ).read_text(),
+    }
+    claims = {
+        "README.md": r"Python ([\d.]+)\+",
+        "docs/quickstart.md": r"Python ([\d.]+) or newer",
+        "docs/headless-cli.md": r"\| `python-version` \| `([\d.]+)` \|",
+        ".github/actions/check/action.yml": r'python-version:(?:.|\n)*?default: "([\d.]+)"',
+    }
+    for where, pattern in claims.items():
+        found = re.search(pattern, stated[where])
+        assert found is not None, f"the Python-version claim in {where} has moved"
+        assert found.group(1) == floor, (
+            f"{where} names Python {found.group(1)}; pyproject requires {required}"
+        )
+
+
+def test_the_pressure_equipment_page_states_the_seating_width_rule_the_module_applies():
+    """ "`b = b₀` only up to b₀ = 6.35 mm (¼ in); above that `b = 2.52·√b₀`".
+
+    The page calls this one of Appendix 2's two traps and says using b₀ above the limit
+    overstates both bolt loads while staying plausible — so the limit and the coefficient
+    are the numbers the warning rests on, and both were prose. Checked on both sides of
+    the limit, including that the ¼ in the page glosses it with really is 6.35 mm.
+    """
+    from anvilate.analysis import asme_appendix_2_gasket_geometry
+    from anvilate.units import Quantity
+
+    page = _page("pressure-equipment.md")
+    rule = re.search(
+        r"`b = b₀` only up to b₀ = ([\d.]+) mm\n\(([\d/¼]+) in\); above that `b = ([\d.]+)·√b₀`",
+        page,
+    )
+    assert rule is not None, "the seating-width rule on pressure-equipment.md has moved"
+    limit, coefficient = float(rule.group(1)), float(rule.group(3))
+    assert limit == pytest.approx(Quantity.parse("0.25 in").to("mm").magnitude, abs=5e-3), (
+        "the page glosses the limit as a quarter inch"
+    )
+
+    outside = Quantity.parse("300 mm")
+    for basic, wide in ((limit - 0.05, False), (limit + 0.05, True), (2.0 * limit, True)):
+        geometry = asme_appendix_2_gasket_geometry(
+            contact_width=Quantity.parse(f"{2.0 * basic} mm"), outside_diameter=outside
+        )
+        assert geometry.is_wide is wide, basic
+        expected = coefficient * basic**0.5 if wide else basic
+        assert geometry.effective_width.to("mm").magnitude == pytest.approx(expected, rel=1e-9)
+        # "The diameter G moves with it": the mean diameter narrow, OD − 2b wide.
+        diameter = geometry.diameter.to("mm").magnitude
+        # b₀ is half the contact width N, so the gasket's mean diameter is OD − N.
+        assert diameter == pytest.approx(300.0 - 2.0 * (expected if wide else basic), rel=1e-9)
+
+
+def test_the_pressure_equipment_page_quotes_the_bolt_areas_appendix_2_requires():
+    """ "the required areas are 2,326 mm² and 3,645 mm²: operating governs, by 57%".
+
+    The section exists to say that comparing the two *loads* gets the answer backwards,
+    and every number in the argument — both areas, the percentage, and the one-number
+    form's answer — was prose. Recomputed from the loads and allowables the same
+    paragraph states.
+    """
+    from anvilate.analysis import asme_appendix_2_required_bolt_area
+    from anvilate.units import Quantity
+
+    page = _page("pressure-equipment.md")
+    stated = re.search(
+        r"the seating load is ([\d.]+) kN and the operating load ([\d.]+) kN.*?"
+        r"(\d+) MPa cold,\n(\d+) MPa at 400 °C — and the required areas are ([\d,]+) mm² and "
+        r"\*\*([\d,]+) mm²\*\*: operating\ngoverns, by (\d+)%\..*?returns ([\d,]+) mm²,\n"
+        r"\*\*(\d+)% short",
+        page,
+        re.S,
+    )
+    assert stated is not None, "the bolt-area paragraph on pressure-equipment.md has moved"
+    seating_load, operating_load = (float(value) for value in stated.groups()[:2])
+    cold, hot = (float(value) for value in stated.groups()[2:4])
+    seating_area, operating_area = (float(v.replace(",", "")) for v in stated.groups()[4:6])
+    margin, one_number, short = (
+        float(stated.group(7)),
+        float(stated.group(8).replace(",", "")),
+        float(stated.group(9)),
+    )
+
+    for load, allowable, claimed in (
+        (seating_load, cold, seating_area),
+        (operating_load, hot, operating_area),
+    ):
+        assert load * 1000.0 / allowable == pytest.approx(claimed, abs=1.0)
+    assert operating_area > seating_area, "the page's whole point is that operating governs"
+    assert 100.0 * (operating_area / seating_area - 1.0) == pytest.approx(margin, abs=0.5)
+    # The correct consumer returns the larger of the two; the one-number form returns the
+    # area the *larger load* gives against the seating allowable, which is the smaller.
+    required = (
+        asme_appendix_2_required_bolt_area(
+            operating_bolt_load=Quantity.parse(f"{operating_load} kN"),
+            seating_bolt_load=Quantity.parse(f"{seating_load} kN"),
+            operating_allowable=Quantity.parse(f"{hot} MPa"),
+            seating_allowable=Quantity.parse(f"{cold} MPa"),
+        )
+        .to("mm**2")
+        .magnitude
+    )
+    assert required == pytest.approx(operating_area, abs=1.0)
+    assert one_number == pytest.approx(seating_area, abs=1.0)
+    assert 100.0 * (1.0 - one_number / required) == pytest.approx(short, abs=0.5)

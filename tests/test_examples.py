@@ -8068,6 +8068,59 @@ def test_loose_ring_flange_example_is_governed_by_the_bolt_up_not_the_pressure()
     assert "seating governs" in thin.entries[0].detail
     assert thick.entries[0].safety_factor == pytest.approx(1.30, abs=0.01)
 
+    # docs/pressure-equipment.md prints this comparison as a table: two stresses and two
+    # safety factors per ring, against the two allowables named in its own header. Only
+    # the two seating factors were pinned, as literals here rather than off the page.
+    page = (_EXAMPLES.parent / "docs" / "pressure-equipment.md").read_text()
+    header = re.search(
+        r"\| Ring thickness \| Operating `S_T` \(vs (\d+) MPa hot\) "
+        r"\| Seating `S_T` \(vs (\d+) MPa cold\) \| Verdict \|",
+        page,
+    )
+    assert header is not None, "the ring-thickness table on pressure-equipment.md has moved"
+    assert float(header.group(1)) == namespace["FLANGE_ALLOWABLE_HOT"].to("MPa").magnitude
+    assert float(header.group(2)) == namespace["FLANGE_ALLOWABLE_AMBIENT"].to("MPa").magnitude
+    rows = re.findall(
+        r"\| (\d+) mm \| ([\d.]+) MPa — (\w+), SF ([\d.]+) "
+        r"\| ([\d.]+) MPa — \*{0,2}(\w+), SF ([\d.]+)\*{0,2} \| (\w+) \|",
+        page,
+    )
+    assert len(rows) == 2, "the ring-thickness table no longer has two rings"
+    for (
+        thickness,
+        operating_stress,
+        _,
+        operating_sf,
+        seating_stress,
+        _,
+        seating_sf,
+        verdict,
+    ) in rows:
+        card = namespace["screen_flange"](Quantity_.parse(f"{thickness} mm"))
+        entry = card.entries[0]
+        assert card.status.value == verdict.lower()
+        stresses = re.search(r"S_T ([\d.]+) MPa operating and ([\d.]+) MPa seating", entry.detail)
+        assert stresses is not None
+        # The table states whole MPa where the detail carries four figures.
+        assert float(operating_stress) == pytest.approx(float(stresses.group(1)), abs=0.6)
+        assert float(seating_stress) == pytest.approx(float(stresses.group(2)), abs=0.6)
+        # Each stress divides its own allowable — which is the trap the section is about.
+        assert float(operating_sf) == pytest.approx(
+            float(header.group(1)) / float(stresses.group(1)), abs=5e-3
+        )
+        assert float(seating_sf) == pytest.approx(
+            float(header.group(2)) / float(stresses.group(2)), abs=5e-3
+        )
+        # The reported factor is the governing one, and seating governs on both rings.
+        assert entry.safety_factor == pytest.approx(float(seating_sf), abs=5e-3)
+
+    over_bolted = re.search(
+        r"the joint needs ([\d,]+) mm² of bolt and sixteen M20 studs supply ([\d,]+) mm²", page
+    )
+    assert over_bolted is not None, "the over-bolting sentence on pressure-equipment.md has moved"
+    assert float(over_bolted.group(1).replace(",", "")) == pytest.approx(required, abs=0.5)
+    assert float(over_bolted.group(2).replace(",", "")) == pytest.approx(actual, abs=0.5)
+
 
 def test_pressure_vessel_example_fails_at_the_opening_before_it_fails_at_the_wall():
     namespace = runpy.run_path(str(_EXAMPLES / "pressure_vessel_nozzle_and_flange.py"))
