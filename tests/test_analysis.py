@@ -43261,3 +43261,59 @@ def test_a_fad_assessment_says_when_its_toughness_was_estimated():
     assert str(measured) != str(estimated)
     assert "Charpy correlation" in str(estimated)
     assert "Charpy" not in str(measured)
+
+
+def test_a_closed_and_an_open_thick_wall_cylinder_do_not_render_alike():
+    """Same pressure and geometry, different ends — and the rendering said nothing.
+
+    A closed cylinder carries a longitudinal stress an open one does not, which is the
+    whole meaning of `closed_ends`. Both hoop and radial are identical between them, so
+    the dropped field was the only thing telling the two apart. `ThinWallStress` prints
+    the same quantity; the thick-wall class did not.
+    """
+    from anvilate.analysis import thick_wall_cylinder
+
+    geometry = {
+        "pressure": _q("20 MPa"),
+        "radius": _q("100 mm"),
+        "wall_thickness": _q("25 mm"),
+    }
+    closed = thick_wall_cylinder(**geometry, closed_ends=True)
+    open_ended = thick_wall_cylinder(**geometry, closed_ends=False)
+
+    assert closed.hoop_stress == open_ended.hoop_stress
+    assert closed.radial_stress == open_ended.radial_stress
+    assert closed.longitudinal_stress.to("MPa").magnitude > 0.0
+    assert open_ended.longitudinal_stress.to("MPa").magnitude == 0.0
+    assert str(closed) != str(open_ended)
+    for rendered, stress in (
+        (str(closed), closed.longitudinal_stress),
+        (str(open_ended), open_ended.longitudinal_stress),
+    ):
+        assert f"long {stress.to('MPa')}" in rendered
+
+
+def test_two_lifters_rated_alike_and_weighing_differently_do_not_render_alike():
+    """The self weight is what the upper attachment sees on top of the rated load.
+
+    BTH-1 screening turns on exactly that difference — the documented example is a bail
+    that passes at the rated load and fails at rated-plus-self-weight — and the rendering
+    dropped it, so the two devices printed as the same device.
+    """
+    from anvilate.analysis.lifting_device import DesignCategory, LifterDevice, ServiceClass
+
+    light = LifterDevice(
+        name="spreader",
+        rated_load=_q("100 kN"),
+        self_weight=_q("8 kN"),
+        category=DesignCategory.B,
+        service_class=ServiceClass.CLASS_1,
+    )
+    heavy = light.model_copy(update={"self_weight": _q("30 kN")})
+
+    assert light.rated_load == heavy.rated_load
+    assert light.design_load != heavy.design_load
+    assert str(light) != str(heavy)
+    for device in (light, heavy):
+        assert f"+{device.self_weight}" in str(device)
+        assert f"design load {device.design_load}" in str(device)

@@ -175,7 +175,11 @@ class VerificationItem(BaseModel):
 
     def __str__(self) -> str:
         state = "planned" if self.outcome is None else self.status.value
-        return f"{self.name} [{state}]: {self.acceptance}"
+        # ``driving_checks`` is what this class's own docstring calls the link the matrix
+        # exists to make, so it is rendered: an item standing behind one check and an item
+        # standing behind three are different rows of the matrix.
+        behind = ", ".join(self.driving_checks) or "no driving check"
+        return f"{self.name} [{state}]: {self.acceptance} — for {behind}"
 
 
 DEFAULT_ARCHETYPES: tuple[VerificationArchetype, ...] = (

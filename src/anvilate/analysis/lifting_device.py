@@ -429,8 +429,12 @@ class LifterDevice(BaseModel):
         )
 
     def __str__(self) -> str:
+        # The self weight is the difference between the rated load and the load the upper
+        # attachment actually sees, and BTH-1 screening turns on that difference — so two
+        # devices rated alike and weighing differently must not render alike.
         return (
-            f"{self.name}: rated {self.rated_load}, Category {self.category.value}, "
+            f"{self.name}: rated {self.rated_load} (+{self.self_weight} self weight, "
+            f"design load {self.design_load}), Category {self.category.value}, "
             f"Service Class {self.service_class.value}"
         )
 

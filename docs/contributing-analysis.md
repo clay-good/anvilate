@@ -563,6 +563,38 @@ The remaining 44 are result types — `HertzContact`, `ThinWallStress`, `BeamBen
 and their kin. They are exercised by every test of the function that returns them; being
 named is not the same as being reached, and this sweep can only see the first.
 
+## Renderings nobody has looked at
+
+Point a coverage run at `__str__` / `render` / `summary` bodies rather than at raise sites:
+
+```bash
+.venv/bin/coverage run --source=src/anvilate -m pytest -q
+.venv/bin/coverage json -o /tmp/cov.json -q
+```
+
+then walk each class and ask whether **any** line of the method body is in the executed
+set. On 2026-08-30, **30 of 81 never ran**. The narrowing step is mechanical: parse the
+class, list its declared fields, and report the ones the method body never names. Twenty
+of the thirty drop at least one field, and most of those are legitimate — a summary is
+allowed to summarise. What you are looking for is narrower:
+
+> **the field that tells two different objects apart.**
+
+Render two instances that differ *only* in the dropped field and compare the strings. That
+is also the test to leave behind, and it fails for the right reason. Three came out of the
+thirty:
+
+| Class | What printed alike |
+| --- | --- |
+| `ThickWallStress` | A closed cylinder and an open one at the same pressure. The longitudinal stress is the entire meaning of `closed_ends`, and it is zero on one of them — `ThinWallStress` prints the same quantity. |
+| `LifterDevice` | Two lifters rated alike and weighing differently. The self weight is what the upper attachment sees on top of the rated load, and BTH-1 screening turns on that difference — the documented example is a bail that passes rated and fails rated-plus-self-weight. |
+| `VerificationItem` | An item standing behind one check and the same item standing behind three. `driving_checks` is what the class's own docstring calls the link the matrix exists to make. |
+
+A rendering that never executes is not covered by "the suite is green": nothing asserted
+the old strings, so nothing failed when they changed. That is the point of running the
+coverage pass rather than reading the methods — each of the three reads like a reasonable
+summary and is obvious the moment two instances print side by side.
+
 ## Finding a docs page whose numbers nothing checks
 
 The existing ratchet asks whether a page's *filename* appears in a test. That is a

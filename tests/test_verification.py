@@ -205,3 +205,32 @@ def test_routing_runs_off_the_citation_not_the_check_name():
     plan = plan_verification(misleading, parameters={"rated_load": _q("50 kN")})
     assert plan.analysis_only == ("proof load test",)
     assert plan.items[0].driving_checks == ("something else entirely",)
+
+
+def test_an_item_names_the_checks_it_stands_behind_when_it_renders():
+    """`driving_checks` is what this class's docstring calls the link the matrix makes.
+
+    "a test with no driving check is a test nobody asked for" — and the rendering dropped
+    it, so a proof load test standing behind one check and the same test standing behind
+    three printed identically. Two items differing only there must not.
+    """
+    from anvilate.verification import VerificationItem
+
+    one = VerificationItem(
+        name="proof load test",
+        archetype=DEFAULT_ARCHETYPES[0],
+        driving_checks=("lug net tension",),
+        acceptance="1.25 x rated load, no permanent set",
+    )
+    three = one.model_copy(
+        update={"driving_checks": ("lug net tension", "pin bearing", "beam bending")}
+    )
+    assert one.acceptance == three.acceptance
+    assert str(one) != str(three)
+    for item in (one, three):
+        for check in item.driving_checks:
+            assert check in str(item)
+
+    # An item with no driving check says so, rather than trailing off into nothing.
+    orphan = one.model_copy(update={"driving_checks": ()})
+    assert "no driving check" in str(orphan)

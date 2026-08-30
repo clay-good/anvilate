@@ -1227,9 +1227,13 @@ class ThickWallStress(BaseModel):
         return sy / self.bore_tresca_stress.to("MPa").magnitude
 
     def __str__(self) -> str:
+        # The longitudinal stress is what an open end takes away, and it is zero there —
+        # so without it a closed cylinder and an open one at the same pressure render
+        # identically while carrying different intensities. `ThinWallStress` prints it.
         return (
             f"thick-wall cylinder: bore hoop {self.hoop_stress.to('MPa')}, "
             f"radial {self.radial_stress.to('MPa')}, "
+            f"long {self.longitudinal_stress.to('MPa')}, "
             f"tresca {self.bore_tresca_stress.to('MPa')}"
         )
 
