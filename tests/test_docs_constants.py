@@ -1349,3 +1349,72 @@ def test_the_repair_feedback_page_prints_the_governing_shift_rendering():
     # the higher utilization of the two — so a rendering that sorted them would disagree.
     assert float(now_utilization) < float(was_utilization)
     assert after.governing_shift(after) is None
+
+
+def test_the_timber_anchor_table_rows_are_recomputed_from_their_own_problems():
+    """Two rows of the worked-example table, rebuilt from the problem stated beside them.
+
+    The table is the pack's regression floor as a *reader* meets it — the anchors are
+    pinned in `test_analysis.py` against hand-worked numbers, and the page restates them
+    with nothing joining the two. The beam-stability row states every input it needs; the
+    post row states the section, the length and the load, and its lesson ("skipping C_P
+    reports 2.52 on the same post") is a number in its own right.
+    """
+    from anvilate.analysis import (
+        nds_beam_slenderness_ratio,
+        nds_bending_buckling_stress,
+        nds_column_stability_factor,
+        nds_euler_buckling_stress,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("timber-screening.md")
+    beam = re.search(
+        r"\| Beam stability \| l_e ([\d.]+) in, ([\d.]+) x ([\d.]+) in, "
+        r"E'_min ([\d,]+) psi \| R_B ([\d.]+), F_bE ([\d,]+) psi, C_L ([\d.]+) \|",
+        page,
+    )
+    assert beam is not None, "the beam-stability anchor row on timber-screening.md has moved"
+    length, depth, breadth = (float(value) for value in beam.groups()[:3])
+    modulus = float(beam.group(4).replace(",", ""))
+    ratio = nds_beam_slenderness_ratio(
+        effective_length=Quantity.parse(f"{length} in"),
+        depth=Quantity.parse(f"{depth} in"),
+        breadth=Quantity.parse(f"{breadth} in"),
+    )
+    assert ratio == pytest.approx(float(beam.group(5)), abs=5e-3)
+    # F_bE at the *rounded* R_B the page prints, which is the chain the published example
+    # runs and the anchor test reproduces. At the unrounded ratio it is 7,656 psi — the
+    # same 0.04% gap the flange anchor on pressure-equipment.md is a parenthetical about,
+    # and asserting against it here would be holding the page to a chain nobody worked.
+    buckling = nds_bending_buckling_stress(
+        min_modulus=Quantity.parse(f"{modulus} psi"), slenderness_ratio=float(beam.group(5))
+    )
+    assert buckling.to("psi").magnitude == pytest.approx(
+        float(beam.group(6).replace(",", "")), abs=1.0
+    )
+
+    post = re.search(
+        r"\| Post \| (\d)x\d, (\d+) ft, ([\d,]+) lb \| compression SF ([\d.]+), "
+        r"bearing SF ([\d.]+) \|[^|]*?skipping it reports ([\d.]+) on the same post",
+        page,
+    )
+    assert post is not None, "the post anchor row on timber-screening.md has moved"
+    nominal, feet = int(post.group(1)), float(post.group(2))
+    load = float(post.group(3).replace(",", ""))
+    actual = nominal - 0.5  # a 6x6 is 5.5 in, the dressed size the anchor test works in
+    stress = load / actual**2
+    reference = Quantity.parse("1000 psi")
+    euler = nds_euler_buckling_stress(
+        min_modulus=Quantity.parse("580000 psi"), slenderness_ratio=feet * 12.0 / actual
+    )
+    stability = nds_column_stability_factor(
+        euler_buckling_stress=euler, reference_compression=reference
+    )
+    allowed = stability * reference.to("psi").magnitude
+    assert allowed / stress == pytest.approx(float(post.group(4)), abs=5e-3)
+    # The lesson column: the same post with the buckling factor left out.
+    assert reference.to("psi").magnitude / stress == pytest.approx(float(post.group(6)), abs=5e-3)
+    assert float(post.group(6)) > float(post.group(4)), (
+        "the page's point is that skipping C_P reads *higher* than the post has"
+    )
