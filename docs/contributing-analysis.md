@@ -623,13 +623,54 @@ re-running it in the hope of finding work, read this list:
 | `export-targets.md`, `valid-is-not-correct.md`, `research/*` (2) | External figures — package versions verified by hand, a paper's own results. On the allow-list in `test_contract.py`. |
 | `agent-skill.md` | "governs over one at 99.99%" is rhetoric. Blocking outranks utilization at *every* utilization, so the figure carries no claim; the ordering is gated instead, and the test says why the number is not. |
 | `evidence-attestation.md` | The prose quotes `pint 0.24.4` as the stale version a hand-written BOM once attested. A historical example, not a live claim. |
-| `thermal-screening.md` | The block states inputs with no computed result beside them, so there is nothing on the page to disagree with the library about. |
+| `thermal-screening.md` | Was "the block states inputs with no computed result beside them". That was true of the block the sweep perturbed and false of the page: the isolator entry further down prints five computed figures, and they are gated now. |
 | `timber-screening.md` | "§3.10" is a clause number. The number pattern cannot tell one from a value; two-decimal clause references are the sweep's standing false positive. |
 
 Two limits to hold in mind when reading a CAUGHT: the sweep perturbs each page's **first**
 distinctive number only, so a page it clears may still carry unguarded figures further down;
 and it runs only the test files that name the page, so a gate living elsewhere is invisible
 to it.
+
+## Past the first figure, which is where most of them were
+
+The first limit above is the whole finding. Running the same sweep over **every**
+distinctive figure — 344 of them across 32 pages — came back **161 caught, 149 missed**,
+and the missed ones were not the leftovers of the caught pages: they were the second half
+of an argument whose first number happened to be gated.
+
+Three shapes came back, and only the first is a defect in the usual sense:
+
+1. **The coefficient inside a formula the page prints.** `0.41·B_c/D_c`, `0.25·f'm`,
+   `S_u/(1.20·N_d)`, `ρ = (1 − 0.22/λ)/λ`, `F_cE = 0.822·E'_min/(l_e/d)²`. A page that
+   prints the formula is claiming it is the one that runs, and the coefficient lives
+   nowhere else on the page. The repair is not to compare it to a constant — it is to
+   **evaluate the page's own text** and hold the result against the function, which
+   catches a coefficient in the wrong row as well as one that moved.
+2. **The other half of a rendered block.** Every one of these pages showed a scorecard
+   block and a test read one line of it — a safety factor, an allowable — leaving the
+   status word, the citation, `required minimum 1.00`, and the clause naming the governing
+   limit state attached to nothing. Compare the block **record by record** against the card
+   that produced it. That is one assertion loop and it covers every field at once.
+3. **A tolerance one ulp too loose.** `approx(1.15, abs=0.02)` against a page stating two
+   decimals admits the last digit changing. Match the tolerance to the precision the page
+   prints, or the gate exists and does not hold.
+
+And two shapes that are *not* defects, both of which the sweep will report forever:
+
+- **A last-digit change to a large number is below the page's own rounding.** Perturbing
+  `686,000 cycles` to `686,007` is a relative change of 1e-5, and a gate that allows the
+  three significant figures the page states is right to ignore it. Read a MISSED on a
+  6-or-more-digit figure by hand before treating it as work.
+- **Narrated history.** `docs/calculation-reports.md` quotes the *wrong* output a fixed bug
+  used to print. Nothing in the library should reproduce those, and a gate that pinned them
+  would be pinning the bug.
+
+Running it over every figure costs ~380 test runs. Spread the pages over independent copies
+of the tree (`git archive HEAD | tar -x -C worker/`) and run six at once — but **hold a
+tree for the whole page**, since a thread pool hands out threads in completion order and
+two pages mutating one copy is silent nonsense rather than an error. Group-testing the
+page first (mutate every figure at once; only split if something fails) pays only on pages
+where nothing is gated, and costs more than it saves on the rest.
 
 Both are gated now, and both gates read the page rather than a copy of it. Where a page
 states inputs *and* a result, rebuild the case from the page's inputs. Where the page's

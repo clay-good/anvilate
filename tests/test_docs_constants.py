@@ -908,3 +908,194 @@ def test_the_pressure_equipment_page_quotes_the_bolt_areas_appendix_2_requires()
     assert required == pytest.approx(operating_area, abs=1.0)
     assert one_number == pytest.approx(seating_area, abs=1.0)
     assert 100.0 * (1.0 - one_number / required) == pytest.approx(short, abs=0.5)
+
+
+def test_the_timber_page_states_the_nds_coefficients_the_module_holds():
+    """Four NDS constants the page prints and nothing read.
+
+    The two Euler coefficients are the pair the page warns about — 1.20 for the beam and
+    0.822 for the column "in the identical shape", where swapping them understates the
+    beam's buckling stress by a third — so the swap is checked as well as the values. The
+    beam-stability formula's 1.9 and 0.95, and the §3.10.4 bearing bonus, are the other
+    fixed numbers on the page.
+    """
+    from anvilate.analysis import (
+        nds_beam_stability_factor,
+        nds_bearing_area_factor,
+        nds_bending_buckling_stress,
+        nds_euler_buckling_stress,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("timber-screening.md")
+    modulus, ratio = Quantity.parse("620000 psi"), 20.0
+
+    beam_coefficient = re.search(r"F_bE = \*\*([\d.]+)\*\*·E'_min/R_B²", page)
+    column_coefficient = re.search(r"F_cE = ([\d.]+)·E'_min/\(l_e/d\)²", page)
+    assert beam_coefficient is not None and column_coefficient is not None, (
+        "the two Euler-coefficient sentences on timber-screening.md have moved"
+    )
+    beam = nds_bending_buckling_stress(min_modulus=modulus, slenderness_ratio=ratio)
+    column = nds_euler_buckling_stress(min_modulus=modulus, slenderness_ratio=ratio)
+    for coefficient, stress in (
+        (beam_coefficient.group(1), beam),
+        (column_coefficient.group(1), column),
+    ):
+        assert stress.to("psi").magnitude == pytest.approx(
+            float(coefficient) * modulus.to("psi").magnitude / ratio**2, rel=1e-12
+        )
+    # "swapping them understates the beam's buckling stress by a third" — the page's own
+    # reason for warning about the pair, and it is the ratio of the two coefficients.
+    understated = re.search(r"understates the beam's\s+buckling stress by a (\w+)", page)
+    assert understated is not None and understated.group(1) == "third"
+    assert 1.0 - column.to("psi").magnitude / beam.to("psi").magnitude == pytest.approx(
+        1.0 / 3.0, abs=0.02
+    )
+
+    stability = re.search(
+        r"C_L = \(1\+x\)/([\d.]+) − √\(\[\(1\+x\)/([\d.]+)\]² − x/([\d.]+)\)", page
+    )
+    assert stability is not None, "the C_L formula on timber-screening.md has moved"
+    first, second, divisor = (float(value) for value in stability.groups())
+    assert first == second, "the page writes the same constant twice and they disagree"
+    reference = Quantity.parse("1000 psi")
+    for buckling in ("500 psi", "1500 psi"):
+        x = Quantity.parse(buckling).to("psi").magnitude / reference.to("psi").magnitude
+        stated = (1.0 + x) / first - (((1.0 + x) / first) ** 2 - x / divisor) ** 0.5
+        assert nds_beam_stability_factor(
+            buckling_stress=Quantity.parse(buckling), reference_bending_value=reference
+        ) == pytest.approx(stated, rel=1e-12), buckling
+
+    bearing = re.search(r"C_b = \(l_b \+ ([\d.]+) in\)/l_b", page)
+    assert bearing is not None, "the bearing-area factor on timber-screening.md has moved"
+    for length in ("1.5 in", "3.5 in"):
+        inches = Quantity.parse(length).to("in").magnitude
+        assert nds_bearing_area_factor(bearing_length=Quantity.parse(length)) == pytest.approx(
+            (inches + float(bearing.group(1))) / inches, rel=1e-12
+        )
+
+
+def test_the_timber_page_lists_the_load_duration_factors_the_table_holds():
+    """C_D, the one factor the page says is universally republished — all six of them.
+
+    The page names each factor beside the duration it belongs to, which is the part that
+    can go wrong silently: a value transposed between two rows leaves the same six numbers
+    on the page and screens every snow case as construction.
+    """
+    from anvilate.analysis import nds_load_duration_factor
+    from anvilate.analysis.nds_timber import LoadDuration
+
+    page = _page("timber-screening.md")
+    listed = re.search(r"values \(([^)]+)\)\. Every", page)
+    assert listed is not None, "the C_D list on timber-screening.md has moved"
+    named = re.findall(r"([\d.]+)\s+([a-z/\-]+)", listed.group(1))
+    assert len(named) == len(LoadDuration), "the page no longer lists every duration"
+    spelling = {
+        "permanent": LoadDuration.PERMANENT,
+        "ten-year": LoadDuration.TEN_YEAR,
+        "snow": LoadDuration.TWO_MONTH,
+        "construction": LoadDuration.SEVEN_DAY,
+        "wind/earthquake": LoadDuration.TEN_MINUTE,
+        "impact": LoadDuration.IMPACT,
+    }
+    for factor, duration in named:
+        assert duration in spelling, f"the page names a duration this test cannot place: {duration}"
+        assert float(factor) == pytest.approx(
+            nds_load_duration_factor(spelling[duration]), rel=1e-12
+        ), duration
+    assert {spelling[duration] for _, duration in named} == set(LoadDuration)
+
+
+def test_the_thermal_page_states_the_correlation_it_says_anvilate_evaluates():
+    """ "Nu = 0.664·Re^(1/2)·Pr^(1/3)", on a page whose framing is that no fluid-property
+    database is carried and the correlation is the whole contribution.
+
+    Evaluated from the page's own text, at a Reynolds number under the laminar limit the
+    same sentence names, and the limit itself is checked by asking for a `None` above it.
+    """
+    from anvilate.analysis import flat_plate_forced_convection_coefficient
+    from anvilate.units import Quantity
+
+    page = _page("thermal-screening.md")
+    stated = re.search(
+        r"Nu = ([\d.]+)·Re\^\(1/2\)·Pr\^\(1/3\)\. Above the laminar limit "
+        r"\(Re ≈ ([\d.]+)×10⁵\)",
+        page,
+    )
+    assert stated is not None, "the convection correlation on thermal-screening.md has moved"
+    coefficient, limit = float(stated.group(1)), float(stated.group(2)) * 1e5
+
+    conductivity, prandtl = Quantity.parse("0.026 W/m/K"), 0.71
+    viscosity, length = Quantity.parse("1.5e-5 m**2/s"), Quantity.parse("0.5 m")
+    # Bracketing the limit, not straddling it widely: a page naming the wrong Reynolds
+    # number still separates a low case from a high one, and only a tight bracket says
+    # the number on the page is where the refusal actually happens.
+    for reynolds in (0.99 * limit, 1.01 * limit):
+        velocity = reynolds * viscosity.to("m**2/s").magnitude / length.to("m").magnitude
+        computed = flat_plate_forced_convection_coefficient(
+            fluid_velocity=Quantity(magnitude=velocity, unit="m/s"),
+            plate_length=length,
+            thermal_conductivity=conductivity,
+            kinematic_viscosity=viscosity,
+            prandtl_number=prandtl,
+        )
+        if reynolds > limit:
+            assert computed is None, "the page says the correlation refuses past the limit"
+            continue
+        nusselt = coefficient * reynolds**0.5 * prandtl ** (1.0 / 3.0)
+        assert computed is not None
+        assert computed.to("W/m**2/K").magnitude == pytest.approx(
+            nusselt * conductivity.to("W/m/K").magnitude / length.to("m").magnitude, rel=1e-9
+        )
+
+
+def test_the_thermal_page_prints_the_isolator_entry_it_actually_renders():
+    """The AMPLIFIES entry, and the two transmissibilities the paragraph contrasts.
+
+    The page's argument is that a mount too stiff to isolate passes *more* than a rigid
+    bolt-down, so reporting its TR beside a real one would invite the wrong reading. Both
+    numbers in that sentence — the 5.69 and the 0.02 it must not be compared to — were
+    prose, as was every figure in the block above it.
+    """
+    from anvilate.analysis import isolator_selection_scorecard
+    from anvilate.units import Quantity
+
+    page = _page("thermal-screening.md")
+    call = re.search(
+        r'isolator_selection_scorecard\(\s*"([^"]+)", '
+        r'forcing_frequency=Quantity\.parse\("([^"]+)"\),\s*'
+        r"target_transmissibility=([\d.]+), "
+        r'selected_static_deflection=Quantity\.parse\("([^"]+)"\),',
+        page,
+    )
+    assert call is not None, "the isolator example on thermal-screening.md has moved"
+    printed = re.search(
+        r"# \[FAIL\] selected ([\d.]+) mm against ([\d.]+) mm required \(f_n ([\d.]+) Hz\), "
+        r"the mount AMPLIFIES\n#\s+\(f/f_n = ([\d.]+) < √2, TR = ([\d.]+)\)",
+        page,
+    )
+    assert printed is not None, "the printed isolator entry has moved"
+
+    entry = isolator_selection_scorecard(
+        call.group(1),
+        forcing_frequency=Quantity.parse(call.group(2)),
+        target_transmissibility=float(call.group(3)),
+        selected_static_deflection=Quantity.parse(call.group(4)),
+    )
+    for figure in printed.groups():
+        assert figure in entry.detail, f"the page prints {figure}; the entry says {entry.detail}"
+    assert "AMPLIFIES" in entry.detail
+
+    # And the scale the paragraph says the amplified figure does not belong on: the
+    # transmissibility a mount meeting the target would show.
+    contrast = re.search(
+        r"transmissibility of ([\d.]+) as\s+though it belonged on the same scale as (\d+\.\d+)",
+        page,
+    )
+    assert contrast is not None, "the amplification sentence on thermal-screening.md has moved"
+    assert contrast.group(1) == printed.group(5), (
+        "the sentence quotes a transmissibility the block above it does not print"
+    )
+    assert float(contrast.group(2)) < float(call.group(3)), (
+        "the contrast only lands if the other figure is an isolating one"
+    )
