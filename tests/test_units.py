@@ -595,3 +595,87 @@ def test_no_other_case_collision_hides_in_the_units_this_library_converts_to():
         "case variants that keep the dimension and change the scale, and are accepted:\n  "
         + "\n  ".join(sorted(set(unguarded)))
     )
+
+
+def test_every_unit_this_library_writes_can_be_read_back():
+    """The round trip, over the unit spellings the package itself emits.
+
+    A value this library renders and cannot re-read is a value a user cannot put in a
+    spec, quote in a document, or hand back to `anvilate check` — and two whole families
+    were in that state. Offset temperatures: pint refuses `"400 degC"` from text because
+    multiplying by an offset unit is ambiguous, while the library converts to it happily.
+    Angles: `rad` and `degree` are dimensionless in pint, so the bare-number guard took
+    them for bare numbers.
+
+    The scan derives its corpus from the tree rather than listing units here, so a unit
+    the library starts writing tomorrow is covered without anyone remembering to add it.
+    """
+    import re as _re
+    from pathlib import Path
+
+    from anvilate.units import Quantity
+
+    root = Path(__file__).resolve().parent.parent / "src" / "anvilate"
+    units: set[str] = set()
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        units |= set(_re.findall(r'\.to\("([^"]{1,24})"\)', text))
+        units |= set(_re.findall(r'unit="([^"]{1,24})"', text))
+    assert len(units) > 150, (
+        f"only {len(units)} unit spellings found; the scan stopped matching the way this "
+        "library writes units, and a probe over nothing reports green"
+    )
+
+    unreadable = []
+    for unit in sorted(units):
+        try:
+            written = Quantity(magnitude=1.5, unit=unit)
+        except ValueError:
+            continue  # a spelling the guard refuses on construction is not written either
+        rendered = str(written)
+        try:
+            read_back = Quantity.parse(rendered)
+        except Exception as error:  # noqa: BLE001 - the failure is the finding
+            unreadable.append(f"{rendered!r}: {type(error).__name__}: {error}")
+            continue
+        # Equality of *value*, not of spelling: the parser normalises `1/H` to `1 / H`,
+        # and a rendering that comes back as the same quantity has been read back. What
+        # would not be is a different magnitude, a different unit, or a second render that
+        # no longer re-reads — so idempotence is checked too.
+        if read_back.magnitude != written.magnitude or read_back.pint.units != written.pint.units:
+            unreadable.append(f"{rendered!r} read back as {str(read_back)!r}")
+            continue
+        again = Quantity.parse(str(read_back))
+        if str(again) != str(read_back):
+            unreadable.append(f"{rendered!r} does not settle: {str(read_back)!r} -> {str(again)!r}")
+    assert not unreadable, "rendered quantities this library cannot re-read:\n  " + "\n  ".join(
+        unreadable
+    )
+
+
+def test_the_front_door_takes_the_offset_temperatures_and_angles_it_writes():
+    """The two families above, named — so the census cannot go quiet by finding nothing.
+
+    A derived scan that stops matching reports green; these are the cases that were
+    actually broken, held by hand beside it.
+    """
+    from anvilate.units import Quantity
+
+    for text, unit in (("400 degC", "°C"), ("400 °C", "°C"), ("-20 °F", "°F")):
+        parsed = Quantity.parse(text)
+        assert parsed.unit == unit and parsed.magnitude == float(text.split()[0])
+        assert parsed.has_dimension("[temperature]")
+    # A bare C is the coulomb and stays the coulomb: the degree sign is what disambiguates.
+    assert Quantity.parse("20 C").has_dimension("[current] * [time]")
+
+    for text in ("30 degree", "0.5 rad", "12 arcminute"):
+        assert Quantity.parse(text).magnitude == float(text.split()[0])
+    assert Quantity.parse("30 degree").to("rad").magnitude == pytest.approx(0.5235987755982988)
+
+    # And the guard the angle exception has to leave standing: a ratio states no unit.
+    for ratio in ("12 %", "3 dimensionless", "75"):
+        with pytest.raises(MissingUnitError):
+            Quantity.parse(ratio)
+    # As does the refusal that keeps a range from multiplying itself out.
+    with pytest.raises(UnitError):
+        Quantity.parse("45-50 kN")

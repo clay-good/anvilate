@@ -170,7 +170,9 @@ label the field `design`.
 Labels normalize to stable field names (`Design Load (max):` → `design_load_max`). The
 magnitude tolerates thousands separators. Offset temperature units work: pint will not
 *parse* `-20 degC` from text, only construct it, and every real requirement sheet has a
-service temperature on it.
+service temperature on it. That is handled at the front door now — `Quantity.parse`
+takes `-20 degC` and `400 °C` — rather than by this pass alone, because a unit the
+library renders and cannot re-read is one a *spec* cannot state either.
 
 `load_bearing` defaults to True, and that default is the safe direction — a value nobody
 classified blocks the release until somebody looks at it, rather than slipping through as

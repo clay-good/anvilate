@@ -28,6 +28,52 @@ __all__ = [
 ]
 
 
+# The offset temperature units pint constructs but will not parse from a string, and the
+# angle units it parses as dimensionless. Both are spellings this library emits.
+_OFFSET_TEMPERATURE_UNITS = frozenset(
+    {"degc", "degf", "celsius", "fahrenheit", "degree_celsius", "degree_fahrenheit"}
+)
+# The angle units, by identity rather than by dimensionality: pint gives an angle the
+# same empty dimensionality as a ratio, so `12 %` converts to radians perfectly happily
+# and only the unit itself says which of the two a value is.
+_ANGLE_UNITS = frozenset(
+    UREG.Unit(name) for name in ("radian", "degree", "arcminute", "arcsecond", "gradian", "turn")
+)
+
+
+def _offset_temperature(text: str) -> pint.Quantity | None:
+    """``text`` as an offset-temperature quantity, or ``None`` if it is not one.
+
+    Deliberately narrow: only a plain magnitude followed by an offset temperature unit.
+    Anything else — a range, a tolerance, a second value hiding in the unit half — falls
+    through to the text parser's refusal, which is the behaviour that keeps
+    ``"45-50 kN"`` from becoming 2250 kN.
+    """
+    match = re.fullmatch(r"\s*([-+]?[\d.eE+]+)\s*(°?[A-Za-z_]+)\s*", text)
+    if match is None:
+        return None
+    spelling = match.group(2)
+    # `C` alone is the coulomb and stays the coulomb; `°C` is not ambiguous. Requiring the
+    # degree sign cannot be reached today — a bare `C` parses as the coulomb, so this
+    # fallback never sees one — and it is here so that if that ever stops being true the
+    # fallback cannot invent a temperature out of a charge.
+    named = spelling.lower().lstrip("°")
+    degrees = spelling.startswith("°")
+    if named not in _OFFSET_TEMPERATURE_UNITS and not (degrees and named in {"c", "f"}):
+        return None
+    if degrees:
+        spelling = "degC" if named in {"c", "celsius"} else "degF"
+    try:
+        return UREG.Quantity(float(match.group(1)), match.group(2))
+    except Exception:
+        return None
+
+
+def _is_angle(quantity: pint.Quantity) -> bool:
+    """Whether a dimensionless pint quantity carries an angle unit rather than none."""
+    return quantity.units in _ANGLE_UNITS
+
+
 class UnitError(ValueError):
     """Base class for unit and dimension problems."""
 
@@ -132,6 +178,20 @@ class Quantity(RevalidatedModel):
 
         A bare number (no unit) raises :class:`MissingUnitError`: a load-bearing
         value must never have its unit silently assumed.
+
+        Two families need more than pint's text constructor, and both are units this
+        library itself writes down — so refusing them meant a rendered value could not be
+        read back, and a spec could not state what a report had printed:
+
+        * **Offset temperatures.** ``UREG.Quantity("400 degC")`` raises, because
+          multiplying a magnitude by an offset unit is ambiguous; the two-argument form
+          is not. The fallback is for offset units and nothing else, because a general
+          escape hatch here would quietly re-admit everything the text parser declines —
+          a range (``"45-50 kN"``), a tolerance, a unit that is not one.
+        * **Angles.** ``rad``, ``degree`` and ``arcminute`` are dimensionless in pint,
+          so the dimensionless guard rejected them along with ``"12 %"`` and ``"3
+          dimensionless"``, which it is there for. An angle states its unit; a ratio does
+          not, and that is the line.
         """
         text = text.strip()
         try:
@@ -143,8 +203,11 @@ class Quantity(RevalidatedModel):
         try:
             pq = UREG.Quantity(text)
         except Exception as exc:
-            raise UnitError(f"could not parse quantity {text!r}") from exc
-        if pq.dimensionless:
+            offset = _offset_temperature(text)
+            if offset is None:
+                raise UnitError(f"could not parse quantity {text!r}") from exc
+            pq = offset
+        if pq.dimensionless and not _is_angle(pq):
             raise MissingUnitError(f"{text!r} has no unit; a physical quantity must state its unit")
         return cls(magnitude=pq.magnitude, unit=f"{pq.units:~}")
 
