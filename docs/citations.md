@@ -273,7 +273,11 @@ cites a clause now demands a design allowable**, because the clause is written o
 strength the material is sold with:
 
 ```python
-screen_tension_member(member, required_safety_factor=1.67)   # AA-6061-T6
+member = TensionMember(
+    name="tie", material="AA-6061-T6", load=Quantity.parse("50 kN"),
+    gross_area=Quantity.parse("500 mm**2"), net_area=Quantity.parse("450 mm**2"),
+)
+screen_tension_member(member, required_safety_factor=1.67)
 # [NOT_EVALUATED] tie gross yielding: not evaluated — AA-6061-T6 yield_strength is typical
 #   (ASM Aerospace Metals — 6061-T6), and this check requires at least specification_minimum
 ```

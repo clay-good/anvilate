@@ -1099,3 +1099,100 @@ def test_the_thermal_page_prints_the_isolator_entry_it_actually_renders():
     assert float(contrast.group(2)) < float(call.group(3)), (
         "the contrast only lands if the other figure is an isolating one"
     )
+
+
+def test_the_citations_page_prints_what_the_basis_gate_returns():
+    """Two blocks, one member, and the difference between them is the basis.
+
+    The page's argument is that a check citing a clause has to refuse a mean strength and
+    say so — and then that an opt-in must not put the silence back. Both blocks are its
+    evidence and both were prose: the refusal's wording, the factor the opt-in prints, and
+    the declaration that has to land on a *passing* entry. The member is now stated on the
+    page, so the numbers under it are reproducible rather than asserted.
+    """
+    from anvilate.packs.structural import TensionMember, screen_tension_member
+    from anvilate.standards import AllowableBasis
+    from anvilate.units import Quantity
+
+    page = _page("citations.md")
+    declared = re.search(
+        r'member = TensionMember\(\s*name="([^"]+)", material="([^"]+)", '
+        r'load=Quantity\.parse\("([^"]+)"\),\s*'
+        r'gross_area=Quantity\.parse\("([^"]+)"\), net_area=Quantity\.parse\("([^"]+)"\),',
+        page,
+    )
+    assert declared is not None, "the tension member on citations.md has moved"
+    member = TensionMember(
+        name=declared.group(1),
+        material=declared.group(2),
+        load=Quantity.parse(declared.group(3)),
+        gross_area=Quantity.parse(declared.group(4)),
+        net_area=Quantity.parse(declared.group(5)),
+    )
+
+    refused = re.search(
+        r"screen_tension_member\(member, required_safety_factor=([\d.]+)\)\n"
+        r"# \[NOT_EVALUATED\] ([^:]+): (not evaluated — [^\n]+)\n#\s+(\([^\n]+)",
+        page,
+    )
+    assert refused is not None, "the refusal block on citations.md has moved"
+    entry = screen_tension_member(member, required_safety_factor=float(refused.group(1))).entries[0]
+    assert entry.name == refused.group(2)
+    assert entry.status.name == "NOT_EVALUATED"
+    for fragment in (refused.group(3), refused.group(4)):
+        assert fragment.rstrip() in entry.detail, (fragment, entry.detail)
+
+    accepted = re.search(
+        r"screen_tension_member\(member, required_safety_factor=([\d.]+), "
+        r"required_basis=AllowableBasis\.([A-Z_]+)\)\n"
+        r"# \[PASS\] ([^:]+): (safety factor [\d.]+ vs required minimum [\d.]+)\n"
+        r"#\s+(\[screened against[^\n]+)",
+        page,
+    )
+    assert accepted is not None, "the opt-in block on citations.md has moved"
+    card = screen_tension_member(
+        member,
+        required_safety_factor=float(accepted.group(1)),
+        required_basis=AllowableBasis[accepted.group(2)],
+    )
+    assert card.entries[0].name == accepted.group(3)
+    assert card.entries[0].status.name == "PASS"
+    assert accepted.group(4) in card.entries[0].detail
+    assert accepted.group(5) in card.entries[0].detail
+    # "The declaration lands on every entry the screen produced, including the ones that
+    # passed" — the sentence under the block, and the reason the opt-in is not a silence.
+    declaration = accepted.group(5).rstrip("]").lstrip("[")
+    assert all(declaration in other.detail for other in card.entries)
+    assert len(card.entries) > 1, "one entry cannot show that the note lands on every one"
+
+
+def test_the_citations_page_is_right_about_where_the_en1993_curve_stops():
+    """ "returns nothing below 10,000 cycles ... while the bare formula will happily
+    evaluate there".
+
+    The paragraph's point is that a power law run past the end of its method returns a
+    number that looks exactly like data, so the boundary is the claim. Checked on both
+    sides of the figure the page names, and against the bare power law it contrasts with.
+    """
+    from anvilate.standards.fatigue import en1993_detail_category_curve
+    from anvilate.units import Quantity
+
+    page = _page("citations.md")
+    claim = re.search(
+        r"curve expressed in this schema returns nothing below ([\d,]+)\ncycles", page
+    )
+    assert claim is not None, "the cycle-range sentence on citations.md has moved"
+    floor = float(claim.group(1).replace(",", ""))
+
+    curve = en1993_detail_category_curve(detail_category=Quantity.parse("90 MPa"))
+    assert curve.stress_range_at(0.99 * floor) is None, (
+        f"the page says the curve declines below {floor:,.0f} cycles"
+    )
+    just_inside = curve.stress_range_at(1.01 * floor)
+    assert just_inside is not None
+    # "the bare formula will happily evaluate there": the same segment extrapolated by
+    # hand returns a plausible, larger number at the life the curve refuses.
+    at_two_million = curve.stress_range_at(2.0e6)
+    assert at_two_million is not None
+    extrapolated = at_two_million.to("MPa").magnitude * (2.0e6 / (0.99 * floor)) ** (1.0 / 3.0)
+    assert extrapolated > just_inside.to("MPa").magnitude
