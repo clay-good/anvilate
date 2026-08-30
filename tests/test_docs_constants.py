@@ -375,3 +375,166 @@ def test_the_callouts_page_kpsi_table_is_the_one_its_own_constants_give():
     exponent = re.search(r"b = (−[\d.]+) is quoted to three decimals", page)
     assert exponent is not None, "the as-forged sentence on typed-callouts.md has moved"
     assert float(exponent.group(1).replace("−", "-")) == MARIN_SURFACE_CONSTANTS_MPA["as_forged"][1]
+
+
+def test_the_weld_fatigue_page_quotes_the_damage_the_example_accumulates():
+    """ "identical loading gives Miner damage 2.54 (FAIL, SF 0.39) ... and 0.33 (PASS, SF 3.02)".
+
+    Four figures carrying the page's argument that the detail category, not the load,
+    decides the verdict. The example's own test pinned two of them as literals of its own,
+    so the sentence a reader takes away was joined to nothing — and damage is the
+    reciprocal of the factor, which is the relation that makes the sentence coherent.
+    """
+    import runpy
+
+    page = _page("weld-fatigue-screening.md")
+    claim = re.search(
+        r"Miner damage ([\d.]+) \(FAIL, SF ([\d.]+)\)\s*\n?\s*on a category-(\d+) detail and "
+        r"([\d.]+) \(PASS, SF ([\d.]+)\) on a category-(\d+) one",
+        page,
+    )
+    assert claim is not None, "the two-detail sentence on weld-fatigue-screening.md has moved"
+    harsh_damage, harsh_factor, harsh_category = claim.group(1), claim.group(2), claim.group(3)
+    good_damage, good_factor, good_category = claim.group(4), claim.group(5), claim.group(6)
+    assert int(harsh_category) < int(good_category), "the harsh detail is the lower category"
+
+    namespace = runpy.run_path(
+        str(Path(__file__).resolve().parent.parent / "examples" / "welded_bracket_fatigue.py")
+    )
+    for entry, damage, factor in (
+        (namespace["screen_harsh_detail"]().entries[0], harsh_damage, harsh_factor),
+        (namespace["screen_good_detail"]().entries[0], good_damage, good_factor),
+    ):
+        assert entry.safety_factor == pytest.approx(float(factor), abs=5e-3)
+        assert 1.0 / entry.safety_factor == pytest.approx(float(damage), abs=5e-3)
+
+
+def test_the_weld_fatigue_page_prints_the_mean_stress_numbers_the_module_returns():
+    """The stress-relief block: 200 MPa as-welded, 160 relieved, and a 0.80 factor.
+
+    The whole point of the paragraph is that claiming the bonus is a deliberate statement
+    about fabrication, so the size of the bonus is the number that matters — and it was
+    only ever a comment beside a call.
+    """
+    from anvilate.analysis import weld_effective_stress_range, weld_mean_stress_factor
+    from anvilate.units import Quantity
+
+    page = _page("weld-fatigue-screening.md")
+    block = re.search(
+        r'cycle = \{"max_stress": Quantity\.parse\("([^"]+)"\), '
+        r'"min_stress": Quantity\.parse\("([^"]+)"\)\}\n'
+        r"weld_effective_stress_range\(\*\*cycle\)\s+# ([\d.]+) MPa[^\n]*\n"
+        r"weld_effective_stress_range\(\*\*cycle, stress_relieved=True\)\s+# ([\d.]+) MPa\n"
+        r"weld_mean_stress_factor\(\*\*cycle, stress_relieved=True\)\s+# ([\d.]+)",
+        page,
+    )
+    assert block is not None, "the stress-relief block on weld-fatigue-screening.md has moved"
+    cycle = {
+        "max_stress": Quantity.parse(block.group(1)),
+        "min_stress": Quantity.parse(block.group(2)),
+    }
+    as_welded, relieved, factor = (float(value) for value in block.groups()[2:])
+    assert weld_effective_stress_range(**cycle).to("MPa").magnitude == pytest.approx(as_welded)
+    assert weld_effective_stress_range(**cycle, stress_relieved=True).to(
+        "MPa"
+    ).magnitude == pytest.approx(relieved)
+    assert weld_mean_stress_factor(**cycle, stress_relieved=True) == pytest.approx(factor)
+    # The sentence under the block: the factor is what relief buys, so it is below one.
+    assert factor < 1.0 and relieved < as_welded
+
+
+def test_the_aluminum_page_states_the_b4_formulas_the_module_evaluates():
+    """The §B.4 block on aluminum-screening.md is the page's central claim.
+
+    "No copy of the standard's tables is bundled" only means something if the formulas
+    printed underneath are the ones that run, and every coefficient in them — the 2250 and
+    1500 denominators, the /10, and the 0.41 intersection fraction — was transcribed prose.
+    Evaluated here from the page's own text and held against the constants the module
+    returns, so a coefficient edited on either side fails.
+    """
+    from anvilate.analysis.aluminum import aluminum_buckling_constants
+    from anvilate.units import Quantity
+
+    page = _page("aluminum-screening.md")
+    stated = re.findall(
+        r"B_([cp]) = F_cy\[1 \+ \(F_cy/(\d+)\)\^\(1/([23])\)\]\s+"
+        r"D_[cp] = \(B_[cp]/(\d+)\)\(B_[cp]/E\)\^\(1/2\)\s+"
+        r"C_[cp] = ([\d.]+)·B_[cp]/D_[cp]",
+        page,
+    )
+    assert len(stated) == 2, "the §B.4 formula block on aluminum-screening.md has moved"
+
+    yield_ksi, modulus_ksi = 35.0, 10100.0
+    constants = aluminum_buckling_constants(
+        compressive_yield=Quantity.parse(f"{yield_ksi} ksi"),
+        elastic_modulus=Quantity.parse(f"{modulus_ksi} ksi"),
+    )
+    computed = {
+        "c": (constants.intercept_member, constants.slope_member, constants.intersection_member),
+        "p": (constants.intercept_plate, constants.slope_plate, constants.intersection_plate),
+    }
+    for family, denominator, root, divisor, fraction in stated:
+        b = yield_ksi * (1.0 + (yield_ksi / float(denominator)) ** (1.0 / float(root)))
+        d = (b / float(divisor)) * (b / modulus_ksi) ** 0.5
+        c = float(fraction) * b / d
+        intercept, slope, intersection = computed[family]
+        # B and D are stresses; the ADM writes them in ksi and so does the page.
+        assert b == pytest.approx(intercept.to("ksi").magnitude, rel=1e-9), family
+        assert d == pytest.approx(slope.to("ksi").magnitude, rel=1e-9), family
+        assert c == pytest.approx(intersection, rel=1e-9), family
+
+
+def test_the_aluminum_page_is_right_that_the_beam_curve_carries_no_knockdown():
+    """ "the beam LTB moment, with **no** 0.85 knockdown".
+
+    A negative claim, and the only one on the page that names a constant it says is *not*
+    applied — so it goes stale in two ways: the module could start applying it, or the
+    module's factor could move and leave the sentence naming a number that no longer
+    exists. Both are checked, in the elastic branch where the knockdown is the whole
+    difference between the two curves.
+    """
+    from math import pi
+
+    from anvilate.analysis.aluminum import (
+        _OUT_OF_STRAIGHTNESS,
+        aluminum_buckling_constants,
+        aluminum_lateral_torsional_moment,
+        aluminum_member_buckling_stress,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("aluminum-screening.md")
+    named = re.search(r"with \*\*no\*\* ([\d.]+) knockdown", page)
+    assert named is not None, "the LTB row on aluminum-screening.md has moved"
+    assert float(named.group(1)) == _OUT_OF_STRAIGHTNESS, (
+        "the page names a knockdown factor the module no longer holds"
+    )
+
+    modulus = Quantity.parse("10100 ksi")
+    constants = aluminum_buckling_constants(
+        compressive_yield=Quantity.parse("35 ksi"), elastic_modulus=modulus
+    )
+    slenderness = 2.0 * constants.intersection_member  # well into the elastic branch of both
+    column = aluminum_member_buckling_stress(
+        slenderness=slenderness,
+        compressive_yield=Quantity.parse("35 ksi"),
+        elastic_modulus=modulus,
+        constants=constants,
+    ).to("MPa")
+    euler = pi**2 * modulus.to("MPa").magnitude / slenderness**2
+    assert column.magnitude == pytest.approx(_OUT_OF_STRAIGHTNESS * euler, rel=1e-9)
+
+    section_modulus = Quantity.parse("1.0e-4 m**3")
+    beam = aluminum_lateral_torsional_moment(
+        plastic_moment=Quantity.parse("50 kN*m"),
+        section_modulus=section_modulus,
+        slenderness=slenderness,
+        elastic_modulus=modulus,
+        constants=constants,
+    ).to("kN*m")
+    elastic = (
+        pi**2 * modulus.to("kPa").magnitude * section_modulus.to("m**3").magnitude / slenderness**2
+    )
+    assert beam.magnitude == pytest.approx(elastic, rel=1e-9), (
+        "the beam curve has acquired a knockdown the page says it does not carry"
+    )

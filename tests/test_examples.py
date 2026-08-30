@@ -7381,20 +7381,30 @@ def test_welded_aluminum_platform_beam_example_is_governed_by_the_weld():
     assert "F_cyw" in missing.detail
     assert card.status is CheckStatus.FAIL
 
-    # The allowables docs/aluminum-screening.md prints, and the example's own docstring
-    # quotes: the weld is the whole difference, and the two numbers are the difference.
+    # The block docs/aluminum-screening.md prints, line for line. Spot-checking the two
+    # allowables left the governing sentence in front of them — "member buckling governs:
+    # 87.38 MPa" — joined to nothing, and that is the half naming which limit state won.
     page = (_EXAMPLES.parent / "docs" / "aluminum-screening.md").read_text()
-    parent, weld_affected = re.search(
-        r"parent metal ([\d.]+) MPa,\s*\n?\s*weld-affected ([\d.]+) MPa", page
-    ).groups()
-    assert f"{float(parent):g} MPa" in unwelded.detail
-    assert f"{float(weld_affected):g} MPa" in welded.detail
-    # The page shows both safety factors too, and they are the reason the verdict flips.
-    for entry, claimed in (
-        (unwelded, re.search(r"unwelded member\s+pass\s+SF ([\d.]+)", page).group(1)),
-        (welded, re.search(r"welded at the connection\s+fail\s+SF ([\d.]+)", page).group(1)),
-    ):
-        assert entry.safety_factor == pytest.approx(float(claimed), abs=0.005)
+    block = re.search(r"names which governed:\n\n```\n(.*?)```", page, re.S)
+    assert block is not None, "the screened block on aluminum-screening.md has moved"
+    records = re.findall(
+        r"^(\S.*?)\s+(pass|fail|not_evaluated)\s+SF\s+(\S+)\n((?:    .*\n)+)",
+        block.group(1),
+        re.M,
+    )
+    assert len(records) == len(card.entries), "the page no longer shows every check"
+    for entry, (name, status, factor, detail) in zip(card.entries, records, strict=True):
+        assert name.strip() == entry.name
+        assert status == entry.status.value
+        if factor != "—":
+            assert entry.safety_factor == pytest.approx(float(factor), abs=0.005)
+        else:
+            assert entry.safety_factor is None
+        # The page elides one clause with "..."; every fragment either side of it has to
+        # appear, in order, in the detail the library actually renders.
+        rest = " ".join(detail.split())
+        for fragment in rest.split("..."):
+            assert fragment.strip() in entry.detail, (entry.name, fragment)
     _assert_narrates_computed("welded_aluminum_platform_beam.py", namespace)
 
 
