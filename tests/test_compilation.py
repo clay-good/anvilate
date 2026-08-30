@@ -368,3 +368,37 @@ def test_a_field_that_was_never_compared_does_not_read_like_one_that_was_wrong()
         detail="agreed",
     )
     assert str(ok) == "[match] material.ref: expected ASTM-A36, got ASTM-A36"
+
+
+def test_a_celsius_reference_is_compared_as_a_temperature_not_as_a_string():
+    """The grader reads a reference value with `Quantity.parse`, which refused Celsius.
+
+    A task whose reference said `"400 degC"` came back as *not a quantity*, so the
+    comparison fell through to string equality — and a candidate that produced the right
+    temperature, in the right unit, spelled the way the library renders it (`400 °C`) was
+    graded wrong. The spelling is not the answer; the temperature is.
+    """
+    task = CompilationTask(
+        task_id="celsius",
+        prompt="a line running at 400 °C",
+        reference={"design_temperature": "400 degC"},
+    )
+    for spelling in ("400 degC", "400 °C", "673.15 K"):
+        outcome = score_candidate(task, {"design_temperature": spelling})
+        (field,) = outcome.fields
+        assert field.matched, f"{spelling} is the same temperature and graded {field.detail}"
+
+    # A different temperature is still wrong, and says so as a temperature.
+    wrong = score_candidate(task, {"design_temperature": "200 degC"})
+    assert not wrong.fields[0].matched
+    assert "200 °C" in wrong.fields[0].detail
+
+    # And an angle, the other family the front door used to refuse: a reference in degrees
+    # against a candidate in radians is the same angle, not a mismatch.
+    angles = CompilationTask(
+        task_id="angle",
+        prompt="a 30 degree miter",
+        reference={"miter_angle": "30 degree"},
+    )
+    assert score_candidate(angles, {"miter_angle": "0.5235987755982988 rad"}).fields[0].matched
+    assert not score_candidate(angles, {"miter_angle": "45 degree"}).fields[0].matched
