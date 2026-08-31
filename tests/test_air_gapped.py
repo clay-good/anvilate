@@ -81,7 +81,11 @@ def test_the_block_catches_a_call_that_is_really_made(monkeypatch: pytest.Monkey
         with pytest.raises(NetworkAttempted):
             socket.create_connection(("example.invalid", 80), timeout=0.1)
         with pytest.raises(NetworkAttempted):
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("127.0.0.1", 9))
+            # Closed on the way out even though `connect` raises: an un-context-managed
+            # socket here leaked one per run, and the `ResourceWarning` it raised was the
+            # only thing standing between this suite and warnings-as-errors.
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as raw:
+                raw.connect(("127.0.0.1", 9))
         with pytest.raises(NetworkAttempted):
             socket.getaddrinfo("example.invalid", 80)
         with pytest.raises(NetworkAttempted):

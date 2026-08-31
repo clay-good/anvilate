@@ -63,3 +63,8 @@ select = ["E", "F", "I", "UP", "B", "C4"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# A warning is a check nobody reads. Pydantic and pint both announce a removal one minor
+# version before they make it, and a suite that prints those and goes green finds out on the
+# upgrade instead. Errors here, with no ignores: the day one is needed it should be written
+# down with the reason, not left as a standing exemption nobody revisits.
+filterwarnings = ["error"]

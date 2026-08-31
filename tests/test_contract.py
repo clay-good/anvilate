@@ -2126,3 +2126,28 @@ def test_the_cross_reference_gate_sees_a_field_as_well_as_an_attribute():
     assert _resolve_dotted("anvilate.analysis.CrossSection.no_such_field") is not None
     assert _resolve_dotted("anvilate.packs.screen_lifting_lug") is not None
     assert _resolve_dotted("anvilate.packs.structural.screen_lifting_lug") is None
+
+
+def test_a_warning_is_an_error_and_nothing_is_excused_from_that():
+    """A warning printed by a test run is a check nobody reads.
+
+    Pydantic and pint both announce a removal one minor version before they make it, and a
+    suite that prints those and goes green finds out on the upgrade. `filterwarnings =
+    ["error"]` turns each into a failure — the whole suite passed under it once a single
+    leaked socket in `test_air_gapped.py` was closed, so it costs nothing today.
+
+    What this holds is the *absence of ignores*. An `ignore::DeprecationWarning` added to
+    quiet one noisy dependency silences every other library's notice with it, which is the
+    state this started from, reached by a shorter route.
+    """
+    import tomllib
+
+    with (_REPO / "pyproject.toml").open("rb") as handle:
+        configured = tomllib.load(handle)["tool"]["pytest"]["ini_options"].get("filterwarnings")
+    assert configured, "pytest no longer turns warnings into errors"
+    assert configured[0] == "error", f"the first filter is {configured[0]!r}, not 'error'"
+    excused = [rule for rule in configured[1:] if rule.split(":", 1)[0] in {"ignore", "default"}]
+    assert not excused, (
+        f"warnings excused from the error filter: {excused}. An exemption belongs beside the "
+        "reason it exists and the version that will remove it, not in a standing list"
+    )
