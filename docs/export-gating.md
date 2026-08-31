@@ -15,9 +15,16 @@ file's metadata *and the evidence bundle* must be watermarked as unvalidated.
 ```python
 from anvilate.export.dxf import export_plate_dxf
 from anvilate.export.gate import authorize_export
+from anvilate.units import Quantity
 
 card = screen_lifting_lug(lug, required_safety_factor=1.5)
-export_plate_dxf(..., authorization=authorize_export(card))
+export_plate_dxf(
+    width=Quantity.parse("120 mm"),
+    height=Quantity.parse("80 mm"),
+    holes=[],
+    path="lug.dxf",
+    authorization=authorize_export(card),
+)
 ```
 
 | The card | `authorize_export` | The file |

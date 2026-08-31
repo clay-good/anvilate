@@ -43136,17 +43136,28 @@ def test_the_reinforced_concrete_pages_block_and_constants_are_the_modules_own()
         float(moment.group(1)), abs=0.05
     )
 
+    # The block used to elide this call as `f(required_moment=..., ...)` — prose punctuation
+    # a reader could not run, and a `SyntaxError` besides. It now states every argument, so
+    # the call is read off the page rather than borrowed from the block above it: a figure
+    # copied into the wrong row is caught, which reusing `inputs` here could not do.
     steel = re.search(
-        r"rc_tension_steel_for_moment\(required_moment=Quantity\.parse\(\"(\d+) kN\*m\"\), "
-        r"\.\.\.\) # (\d+) mm²",
+        r"rc_tension_steel_for_moment\( required_moment=Quantity\.parse\(\"(\d+) kN\*m\"\), "
+        r"steel_yield=Quantity\.parse\(\"(\d+) MPa\"\), "
+        r"concrete_strength=Quantity\.parse\(\"(\d+) MPa\"\), "
+        r"beam_width=Quantity\.parse\(\"(\d+) mm\"\), "
+        r"effective_depth=Quantity\.parse\(\"(\d+) mm\"\), \) # (\d+) mm²",
         page,
     )
     assert steel is not None, "the design-inverse line on the RC page has moved"
+    moment_in, yield_in, strength_in, width_in, depth_in, expected = steel.groups()
     required = rc_tension_steel_for_moment(
-        required_moment=_q(f"{steel.group(1)} kN*m"),
-        **{k: v for k, v in inputs.items() if k != "steel_area"},
+        required_moment=_q(f"{moment_in} kN*m"),
+        steel_yield=_q(f"{yield_in} MPa"),
+        concrete_strength=_q(f"{strength_in} MPa"),
+        beam_width=_q(f"{width_in} mm"),
+        effective_depth=_q(f"{depth_in} mm"),
     )
-    assert required.to("mm**2").magnitude == pytest.approx(float(steel.group(2)), abs=1.0)
+    assert required.to("mm**2").magnitude == pytest.approx(float(expected), abs=1.0)
 
     # The stress-block intensity the page states twice, checked through the depth it sets.
     intensity = set(re.findall(r"([\d.]+)·f'c", page))

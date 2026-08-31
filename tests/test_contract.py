@@ -1911,3 +1911,129 @@ def test_every_pytest_step_in_ci_counts_the_tests_it_actually_names():
         f"only {len(checked)} CI step(s) count their passes; this gate covers the steps "
         "that prove a scheduled job did not skip, and there are more than one"
     )
+
+
+# --- the code a reader copies off a page ---------------------------------------------------
+#
+# 72 fenced Python blocks across `docs/`, and one of them did not parse. Most are excerpts
+# that deliberately omit their imports, so executing them is not the bar; what is checkable
+# without running anything is that they parse, that every anvilate symbol they import exists,
+# and that every call they make is one the real signature accepts.
+
+_PYTHON_FENCE = re.compile(r"```python\n(.*?)```", re.S)
+
+
+def _documented_blocks():
+    """Every fenced Python block in the repository's Markdown, as ``(label, source)``."""
+    pages = [_REPO / "README.md", *sorted((_REPO / "docs").rglob("*.md"))]
+    blocks = []
+    for page in pages:
+        if not page.exists():  # pragma: no cover - README and docs/ both ship
+            continue
+        text = page.read_text(encoding="utf-8")
+        for index, block in enumerate(_PYTHON_FENCE.findall(text)):
+            blocks.append((f"{page.relative_to(_REPO)}#{index}", block))
+    assert len(blocks) > 50, f"only {len(blocks)} documented Python blocks were found"
+    return blocks
+
+
+def test_every_documented_python_block_parses():
+    """`docs/reinforced-concrete.md` shipped a block a reader could not run at all.
+
+    Its last line elided the arguments as `f(required_moment=..., ...)` — prose punctuation
+    inside a call, and a positional argument after a keyword one, which is a `SyntaxError`.
+    The figure it claimed was right and gated elsewhere; the code around it was not code.
+    """
+    broken = []
+    for label, block in _documented_blocks():
+        try:
+            ast.parse(block)
+        except SyntaxError as slip:
+            broken.append(f"{label}: line {slip.lineno}: {slip.msg}")
+    assert not broken, "documented Python that does not parse:\n  " + "\n  ".join(broken)
+
+
+def _imported_anvilate_names(tree):
+    """``{local name: object}`` for every anvilate symbol a block imports."""
+    bound = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("anvilate"):
+            module = importlib.import_module(node.module)
+            for alias in node.names:
+                bound[alias.asname or alias.name] = getattr(module, alias.name, None)
+    return bound
+
+
+def test_every_symbol_a_documented_block_imports_exists():
+    """A rename leaves the page importing a name nothing answers to, and the page is where
+    a reader starts. Held for the import itself, which is the line they copy first."""
+    missing = []
+    for label, block in _documented_blocks():
+        try:
+            tree = ast.parse(block)
+        except SyntaxError:  # reported by the gate above
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not (node.module or "").startswith(
+                "anvilate"
+            ):
+                continue
+            try:
+                module = importlib.import_module(node.module)
+            except Exception as slip:  # noqa: BLE001 - the failure is the finding
+                missing.append(f"{label}: import {node.module} -> {type(slip).__name__}")
+                continue
+            for alias in node.names:
+                if not hasattr(module, alias.name):
+                    missing.append(f"{label}: {node.module} has no {alias.name!r}")
+    assert not missing, "documented imports that no longer resolve:\n  " + "\n  ".join(missing)
+
+
+def test_every_documented_call_is_one_the_signature_accepts():
+    """`docs/cold-formed-steel.md` told a reader to write `aisi_effective_width(...)`.
+
+    It parses — `...` is a legal expression — and it raises `TypeError: takes 0 positional
+    arguments but 1 was given`, because every analysis function here is keyword-only. Two
+    pages carried that elision and a third carried the version that does not even parse.
+
+    Only what a block *states* is checked, with `bind_partial`: an omitted required argument
+    is how an excerpt is written, but a keyword the function does not take, or a positional
+    where none is accepted, is a call that cannot work. Calls that splat (`*args`,
+    `**kwargs`) are skipped — there is nothing to bind.
+    """
+    probed, wrong = 0, []
+    for label, block in _documented_blocks():
+        try:
+            tree = ast.parse(block)
+        except SyntaxError:  # reported by the gate above
+            continue
+        bound = _imported_anvilate_names(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            target = bound.get(node.func.id)
+            if target is None or not callable(target):
+                continue
+            if any(isinstance(argument, ast.Starred) for argument in node.args):
+                continue
+            if any(keyword.arg is None for keyword in node.keywords):
+                continue
+            try:
+                signature = inspect.signature(target)
+            except (TypeError, ValueError):  # pragma: no cover - every target resolves today
+                continue
+            probed += 1
+            marker = object()
+            try:
+                signature.bind_partial(
+                    *[marker] * len(node.args),
+                    **{keyword.arg: marker for keyword in node.keywords},
+                )
+            except TypeError as slip:
+                wrong.append(f"{label}: {node.func.id}(...) at line {node.lineno}: {slip}")
+
+    assert probed > 40, (
+        f"only {probed} documented calls were checked against a signature; this gate covers "
+        "the pages or it covers nothing"
+    )
+    assert not wrong, "documented calls the function would refuse:\n  " + "\n  ".join(wrong)

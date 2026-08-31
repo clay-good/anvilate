@@ -20,7 +20,12 @@ lam = aisi_plate_slenderness(              # λ = (1.052/√k)·(w/t)·√(f/E)
     stress=Quantity.parse("345 MPa"),      # the edge stress (at yield here)
     elastic_modulus=Quantity.parse("203000 MPa"),
 )
-b = aisi_effective_width(...)              # b = w if λ ≤ 0.673, else ρ·w, ρ = (1 − 0.22/λ)/λ
+b = aisi_effective_width(                  # b = w if λ ≤ 0.673, else ρ·w, ρ = (1 − 0.22/λ)/λ
+    flat_width=Quantity.parse("100 mm"),
+    thickness=Quantity.parse("1.5 mm"),
+    stress=Quantity.parse("345 MPa"),
+    elastic_modulus=Quantity.parse("203000 MPa"),
+)                                          # λ = 1.446, so b = 58.6 mm — 59% effective
 ```
 
 - **`aisi_plate_slenderness`** = λ, the dimensionless slenderness that decides whether

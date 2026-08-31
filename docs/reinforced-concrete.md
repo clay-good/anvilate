@@ -18,7 +18,13 @@ mn = rc_beam_nominal_moment(
     beam_width=Quantity.parse("300 mm"),
     effective_depth=Quantity.parse("550 mm"),
 )                                              # 320.6 kN·m
-As = rc_tension_steel_for_moment(required_moment=Quantity.parse("400 kN*m"), ...)  # 1915 mm²
+As = rc_tension_steel_for_moment(
+    required_moment=Quantity.parse("400 kN*m"),
+    steel_yield=Quantity.parse("420 MPa"),
+    concrete_strength=Quantity.parse("30 MPa"),
+    beam_width=Quantity.parse("300 mm"),
+    effective_depth=Quantity.parse("550 mm"),
+)                                              # 1915 mm²
 ```
 
 - **`rc_stress_block_depth`** = A_s·f_y/(0.85·f'c·b), the Whitney block depth from

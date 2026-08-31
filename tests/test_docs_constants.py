@@ -760,6 +760,28 @@ def test_the_cold_formed_page_states_winters_limit_and_reduction():
         else:
             rho = (1.0 - reduction / slenderness) / slenderness
             assert effective == pytest.approx(rho * full, rel=1e-12), width
+    # The worked call the page opens with, evaluated from the arguments it states rather
+    # than from arguments repeated here: the block used to elide them as `f(...)`, which a
+    # reader could not run and which no figure could be recomputed from.
+    worked = re.search(
+        r"b = aisi_effective_width\((.*?)\)\s*"
+        r"# λ = ([\d.]+), so b = ([\d.]+) mm — (\d+)% effective",
+        page,
+        re.S,
+    )
+    assert worked is not None, "the worked effective-width call on cold-formed-steel.md has moved"
+    stated = dict(re.findall(r'(\w+)=Quantity\.parse\("([^"]+)"\)', worked.group(1)))
+    assert set(stated) == {"flat_width", "thickness", "stress", "elastic_modulus"}, stated
+    arguments = {name: Quantity.parse(value) for name, value in stated.items()}
+    printed_lambda, printed_width, printed_percent = (float(g) for g in worked.groups()[1:])
+    assert aisi_plate_slenderness(**arguments) == pytest.approx(printed_lambda, abs=0.0005)
+    computed = aisi_effective_width(**arguments).to("mm").magnitude
+    assert computed == pytest.approx(printed_width, abs=0.05)
+    # And the percentage the surrounding prose quotes is that width over the stated flat.
+    flat = arguments["flat_width"].to("mm").magnitude
+    assert round(100.0 * computed / flat) == printed_percent
+    assert f"{printed_percent:.0f}% effective at {stated['thickness']}" in page
+
     # The page names the two conventional plate-buckling coefficients, and the stiffened
     # one is this function's default — the value a reader who passes nothing gets.
     conventional = re.search(
