@@ -261,7 +261,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     for name, reason in _UNBUILT.items():
-        commands.add_parser(name, help=f"specified, unbuilt — {reason.split('.')[0]}")
+        unbuilt = commands.add_parser(
+            name, help=f"specified, unbuilt — {reason.split('.')[0]}", description=reason
+        )
+        # Everything after the name is swallowed, because there is no invocation of an
+        # unbuilt operation that would be correct. `anvilate build part.yaml` — the thing a
+        # reader of the help above actually types — answered "unrecognized arguments" and
+        # exited 3, which this CLI defines as *the request was wrong*. The request was not
+        # wrong; the operation is unbuilt, and that is what code 4 is for.
+        unbuilt.add_argument(
+            "ignored",
+            nargs=argparse.REMAINDER,
+            help="accepted and ignored — the refusal is about the operation, not the arguments",
+        )
     return parser
 
 

@@ -825,6 +825,43 @@ def test_diff_is_no_longer_on_the_unbuilt_list():
     assert "geometry-generation" in _DIFF_NEEDS_GEOMETRY
 
 
+def test_an_unbuilt_operation_is_refused_by_name_however_it_is_invoked():
+    """`anvilate build part.yaml` is what a reader of the help types, and it used to fail
+    as a *usage error*.
+
+    "unrecognized arguments: part.yaml", exit 3 — which this CLI defines as *the request was
+    wrong*. The request was not wrong. The operation is specified and unbuilt, which is what
+    code 4 exists to say, and bare `anvilate build` said exactly that all along. There is no
+    invocation of an unbuilt operation that would be correct, so an argparse complaint about
+    the arguments can only send the caller looking in the wrong place.
+    """
+    for arguments in ([], ["part.yaml"], ["a.yaml", "b.yaml"], ["part.yaml", "--output", "x.step"]):
+        code, _out, err = _run("build", *arguments)
+        assert code == EXIT_UNBUILT, (arguments, code, err)
+        assert _UNBUILT["build"] in err, (arguments, err)
+        assert "unrecognized arguments" not in err, arguments
+
+
+def test_a_built_command_still_reports_a_usage_error_as_one():
+    """The other half: swallowing arguments for the unbuilt command must not have taught
+    the built ones to swallow theirs. A missing spec is still a bad request, not a verdict.
+    """
+    for command, arguments in (("check", []), ("diff", ["only-one.yaml"]), ("verify", [])):
+        # `ArgumentParser.error` raises rather than returning; `main` is what turns it into
+        # an exit code, so the code is read off the SystemExit here as it is above.
+        with pytest.raises(SystemExit) as refused:
+            _run(command, *arguments)
+        assert refused.value.code == EXIT_BAD_REQUEST, command
+
+
+def test_asking_an_unbuilt_command_for_help_is_not_a_failure():
+    """`--help` exits 0 everywhere, including here — asking what a command is waiting on is
+    not the same as invoking it."""
+    with pytest.raises(SystemExit) as asked:
+        _run("build", "--help")
+    assert asked.value.code == EXIT_OK
+
+
 def test_the_diff_is_of_the_spec_not_of_the_file(tmp_path):
     """Two files that differ textually and compile to the same spec are *no change*.
 

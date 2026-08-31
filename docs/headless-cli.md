@@ -69,6 +69,18 @@ than collapsing to pass/fail:
 | 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
 
+### An unbuilt operation is refused however it is invoked
+
+`anvilate build` said what it was waiting on and exited 4. `anvilate build part.yaml` — the
+thing a reader of that help actually types — answered `unrecognized arguments: part.yaml`
+and exited 3, which this table defines as *the request was wrong*. The request was not
+wrong; the operation is unbuilt.
+
+There is no invocation of an unbuilt operation that would be correct, so everything after
+the command name is now accepted and ignored, and the answer is the same reason and the same
+code every time. `--help` still exits 0: asking what a command is waiting on is not invoking
+it. The built commands are untouched — a missing spec is still a bad request.
+
 ### A code 3 has to say what to write
 
 The likeliest way to get one is a hand-written document, and the likeliest mistake in one is
