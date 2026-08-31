@@ -463,7 +463,7 @@ def bth1_pin_plate_scorecard(
     P/(d·t) against F_p = 1.25·S_y/N_d.
 
     **The two allowables come off different strengths, and that is the part a generic
-    lug check gets wrong.** :func:`~anvilate.packs.screen_lifting_lug` screens both
+    lug check gets wrong.** :func:`~anvilate.packs.structural.screen_lifting_lug` screens both
     states against *yield* at a caller-chosen margin, which is a reasonable general
     check but is not this one: BTH-1 puts the net section against *ultimate* over
     1.20·N_d, because a net section that has yielded has not failed — it tears. On

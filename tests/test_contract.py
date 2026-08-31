@@ -2037,3 +2037,92 @@ def test_every_documented_call_is_one_the_signature_accepts():
         "the pages or it covers nothing"
     )
     assert not wrong, "documented calls the function would refuse:\n  " + "\n  ".join(wrong)
+
+
+# --- the cross-references the library makes about itself ------------------------------------
+
+_REST_REFERENCE = re.compile(r":(?:func|meth|class|mod|attr|data|exc):`~?(anvilate[\w.]*)`")
+
+
+def _resolve_dotted(target: str):
+    """``target`` as an object, or a string saying which step of it does not exist."""
+    parts = target.split(".")
+    module, rest = None, []
+    for cut in range(len(parts), 0, -1):
+        try:
+            module = importlib.import_module(".".join(parts[:cut]))
+        except ImportError:
+            continue
+        rest = parts[cut:]
+        break
+    if module is None:
+        return f"no module in {target!r} imports"
+    current = module
+    for step in rest:
+        # A pydantic field is not an attribute of its class — v2 strips them off — so a
+        # reference to one has to be resolved through `model_fields` or every model
+        # attribute in the package reads as missing. The first version of this walk said
+        # `CrossSection.shear_form_factor` was gone; it is a field, and it is there.
+        fields = getattr(current, "model_fields", None)
+        if isinstance(fields, dict) and step in fields:
+            current = fields[step]
+            continue
+        current = getattr(current, step, None)
+        if current is None:
+            return f"{target!r}: {step!r} does not exist"
+    return None
+
+
+def test_every_cross_reference_the_docstrings_make_resolves():
+    """A `:func:` pointing at a symbol that moved is rot no manifest gate can see.
+
+    `analysis/lifting_device.py` pointed at `anvilate.packs.screen_lifting_lug` from the
+    paragraph explaining the one thing a generic lug check gets wrong — the sentence most
+    worth following — and `screen_lifting_lug` lives in `anvilate.packs.structural`, which
+    `anvilate.packs` does not re-export.
+
+    Only the 799 module-qualified references are resolvable; the 1,424 bare ones
+    (`` :func:`some_name` ``) name no module and Sphinx resolves them by context, so they
+    are outside what this can hold.
+    """
+    broken, checked = [], 0
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(
+                node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                continue
+            docstring = ast.get_docstring(node)
+            if not docstring:
+                continue
+            for target in _REST_REFERENCE.findall(docstring):
+                checked += 1
+                problem = _resolve_dotted(target)
+                if problem is not None:
+                    broken.append(f"{path.relative_to(_REPO)}: {problem}")
+
+    assert checked > 700, (
+        f"only {checked} qualified cross-references were resolved; this gate covers the "
+        "docstrings or it covers nothing"
+    )
+    assert not broken, "docstring cross-references that no longer resolve:\n  " + "\n  ".join(
+        broken
+    )
+
+
+def test_the_cross_reference_gate_sees_a_field_as_well_as_an_attribute():
+    """The gate's own blind spot, closed and kept closed.
+
+    `model_fields` is the only way to reach a pydantic field from its class, and a walk that
+    used `getattr` alone reported every documented model attribute as missing — a false
+    positive that would have been "fixed" by deleting a correct reference.
+    """
+    assert _resolve_dotted("anvilate.analysis.CrossSection.shear_form_factor") is None
+    assert getattr(analysis_pkg.CrossSection, "shear_form_factor", None) is None, (
+        "pydantic now exposes fields as class attributes; the model_fields branch above is "
+        "no longer the only thing holding this and should say so"
+    )
+    assert _resolve_dotted("anvilate.analysis.CrossSection.no_such_field") is not None
+    assert _resolve_dotted("anvilate.packs.screen_lifting_lug") is not None
+    assert _resolve_dotted("anvilate.packs.structural.screen_lifting_lug") is None
