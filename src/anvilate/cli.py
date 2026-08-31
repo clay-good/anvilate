@@ -451,12 +451,49 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
 
     report = verify_attestation(attestation, artifacts=artifacts or None, signer=signer)
     if args.format == "json":
-        print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
+        # `status`, `attested` and the attested toolchain are computed rather than stored,
+        # so `model_dump` left all three out and the payload carried only the fields behind
+        # them. `attested` is the consequential one: a consumer reading
+        # `signature_state: symmetric_verified` and nothing else concludes the envelope is
+        # attested, which is exactly what the text rendering exists to correct — a shared
+        # secret proves the envelope was not altered, not who made it. And the requirement
+        # asks this command to report the toolchain the envelope attests, which was true of
+        # one of its two renderings.
+        payload = {
+            **report.model_dump(mode="json"),
+            "status": report.status.value,
+            "attested": report.attested,
+            **_attested_toolchain(attestation.statement()),
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
         print(_render_verification(report, attestation.statement()), file=out)
     for problem in report.problems:
         print(f"anvilate verify: {problem}", file=err)
     return EXIT_CODES[report.status]
+
+
+def _attested_toolchain(statement: dict) -> dict:
+    """``producer`` and ``toolchain`` as the verified statement records them.
+
+    Read out of the statement rather than out of the environment, for the reason the text
+    renderer gives: what a verifier wants to know is what produced the artifact, not what is
+    installed on the machine reading it. One reader for both renderings, so they cannot come
+    to report different toolchains for the same envelope.
+    """
+    bom = (statement.get("predicate") or {}).get("bom") or {}
+    metadata = (bom.get("metadata") or {}).get("component") or {}
+    return {
+        "producer": (
+            None
+            if not metadata
+            else {"name": metadata.get("name"), "version": metadata.get("version")}
+        ),
+        "toolchain": [
+            {"name": component.get("name"), "version": component.get("version")}
+            for component in bom.get("components") or []
+        ],
+    }
 
 
 def _render_verification(report, statement: dict) -> str:
@@ -491,16 +528,14 @@ def _render_verification(report, statement: dict) -> str:
         # Both lists always render. A run that checked nothing and one whose subjects all
         # matched must not look the same.
         lines.append(f"  {label:11} {', '.join(subjects) or 'none'}")
-    bom = (statement.get("predicate") or {}).get("bom") or {}
-    components = bom.get("components") or []
-    metadata = (bom.get("metadata") or {}).get("component") or {}
-    if metadata:
-        lines.append(f"  produced by {metadata.get('name')} {metadata.get('version')}")
+    attested = _attested_toolchain(statement)
+    components = attested["toolchain"]
+    producer = attested["producer"]
+    if producer is not None:
+        lines.append(f"  produced by {producer['name']} {producer['version']}")
     # Always rendered, `none` included: a bundle attesting no toolchain and one whose
     # toolchain nobody printed must not read the same.
-    listed = ", ".join(
-        f"{component.get('name')} {component.get('version')}" for component in components
-    )
+    listed = ", ".join(f"{component['name']} {component['version']}" for component in components)
     lines.append(f"  toolchain   {listed or 'none attested'}")
     for problem in report.problems:
         lines.append(f"  problem     {problem}")

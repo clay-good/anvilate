@@ -84,6 +84,14 @@ reads this output. Both are carried now, per spec and for the run:
             "scorecard": {"entries": ["..."]}}]}
 ```
 
+`verify --format json` was missing three of the report's conclusions for the same reason —
+`status`, `attested`, and the toolchain the envelope records are computed rather than
+stored, so a plain model dump left all three out. **`attested` is the consequential one.** A
+consumer reading `signature_state: symmetric_verified` and nothing else concludes the
+envelope is attested, which is exactly what the text headline exists to correct: a shared
+secret proves the envelope was not altered and says nothing about who made it. All three are
+carried, and one reader supplies the toolchain to both renderings.
+
 `export` carries the same roll-up: `status` at the top of the payload, a
 `N bundles: WORST` line at the end of the text, and the exit code — all three from one
 computation, because three renderings of one run that can disagree eventually will.

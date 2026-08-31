@@ -721,6 +721,46 @@ def test_verify_json_is_the_report(envelope):
     assert code == EXIT_OK
 
 
+def test_the_verify_json_carries_what_the_text_headline_says(envelope):
+    """Three of the report's conclusions are computed rather than stored, so `model_dump`
+    left all three out and the payload carried only the fields behind them.
+
+    **`attested` is the consequential one.** A consumer reading
+    `signature_state: symmetric_verified` and nothing else concludes the envelope is
+    attested — which is precisely what the text headline exists to correct, because a
+    shared secret proves the envelope was not altered and says nothing about who made it.
+    The text printed `attested=False` and the paragraph explaining it; the JSON gave a
+    machine only the half that invites the wrong conclusion.
+
+    `status` was absent too, and so was the toolchain the requirement asks this command to
+    report — which was true of one of its two renderings.
+    """
+    code, text, _err = _run(*_verify_args(envelope))
+    _code, raw, _err = _run(*_verify_args(envelope), "--format", "json")
+    payload = json.loads(raw)
+
+    assert text.splitlines()[0] == f"{payload['status'].upper()}  attested={payload['attested']}"
+    assert payload["attested"] is False, "a symmetric signature is not attestation"
+    assert payload["status"] == "pass" and code == EXIT_OK
+
+    producer = payload["producer"]
+    assert f"produced by {producer['name']} {producer['version']}" in text
+    listed = ", ".join(f"{c['name']} {c['version']}" for c in payload["toolchain"])
+    assert f"toolchain   {listed}" in text
+    assert any(component["name"] == "pint" for component in payload["toolchain"])
+
+
+def test_a_signature_nobody_checked_is_not_a_pass_in_the_json_either(envelope):
+    """The rule the whole library follows, on the surface a machine reads. Without a key
+    the signature was not checked, and the payload must say `not_evaluated` rather than
+    leave a consumer to infer it from `signature_state` alone."""
+    code, raw, _err = _run(*_verify_args(envelope, key=False), "--format", "json")
+    payload = json.loads(raw)
+    assert payload["status"] == "not_evaluated"
+    assert payload["attested"] is False
+    assert code == EXIT_NOT_EVALUATED
+
+
 def test_verify_reports_the_toolchain_the_envelope_attests(envelope):
     """`evidence-attestation`'s own scenario: an engineer running the verification command
     "confirms the signature, that artifact digests match, **and reports the toolchain
