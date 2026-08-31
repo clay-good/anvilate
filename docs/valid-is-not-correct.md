@@ -80,3 +80,18 @@ compared against another one — and comparing "reason free, then constrain late
 Every report carries that caveat in its citation. The numbers are only as good as the
 reference fields the task set declares, and a task set is a claim about what the compiler
 should have understood.
+
+## A task set survives being written down
+
+`CompilationTask.reference` maps a dotted path to the value expected there, and that value
+is typed `Any` — a spec field can be a string, a number or a quantity. `Any` is the one
+annotation pydantic cannot rebuild from, so a task stating `force` as `5 kN` serialized to
+`{"magnitude": 5.0, "unit": "kN"}` and read back as exactly that dictionary. The reloaded
+task no longer compared equal to the one it was written from, and a report scored against it
+printed its own expected value as `{'magnitude': 5.0, 'unit': 'kN'}` where the original
+printed `5 kN`. The verdict was the same either way, which is what kept it quiet.
+
+Only the two-key shape Anvilate's own serializer emits is rebuilt. A `{"magnitude", "unit"}`
+pair that does not parse stays a dictionary, and a string is never coerced: a task stating
+`"5 kN"` as a string is asking for a string, and answering it with a quantity would score a
+different question than the task asked.

@@ -258,3 +258,119 @@ def test_a_frozen_mapping_still_serializes_as_a_plain_object():
     }
     assert json.loads(task.model_dump_json())["reference"] == {"name": "x"}
     assert CompilationTask.model_validate(task.model_dump()) == task
+
+
+# --- what `Any` costs on the way back in ---------------------------------------------------
+#
+# `Any` is the one annotation pydantic cannot rebuild from. Everything else in this package
+# carries enough type to reconstruct itself; an `Any` field hands back whatever JSON says,
+# which for a Quantity is a two-key dictionary. There are three such fields, they are listed
+# here by name, and a fourth appearing without a case below fails rather than shipping.
+
+
+def _any_typed_fields():
+    """Every ``(module, class, field)`` in the package whose annotation mentions ``Any``."""
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    import anvilate
+
+    found: set[tuple[str, str, str]] = set()
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - an optional dependency is absent
+            continue
+        for value in vars(module).values():
+            if not (isinstance(value, type) and issubclass(value, BaseModel)):
+                continue
+            if not value.__module__.startswith("anvilate"):
+                continue
+            for name, field in value.model_fields.items():
+                if "Any" in str(field.annotation):
+                    found.add((value.__module__, value.__name__, name))
+    assert found, "the walk imported no models, so this census checked nothing"
+    return found
+
+
+def _any_field_probes():
+    """One instance per ``Any``-typed field, holding the values that field really carries."""
+    from anvilate.compilation import CompilationTask
+    from anvilate.mcp import tool_catalog
+    from anvilate.units import Quantity
+
+    task = CompilationTask(
+        task_id="t1",
+        prompt="a bracket carrying 5 kN",
+        reference={
+            # The value that broke: dumped to {"magnitude", "unit"} and read back as that.
+            "load_cases.0.force": Quantity.parse("5 kN"),
+            # And the values that must survive *unconverted*, in both directions.
+            "element.kind": "beam",
+            "element.count": 3,
+            "element.ratio": 1.5,
+            "element.checked": True,
+            "element.absent": None,
+            "element.label": "5 kN",
+            "element.shape": {"magnitude": "not a number", "unit": "kN"},
+            "element.other": {"a": 1, "b": 2},
+        },
+    )
+    tool = tool_catalog()[0]
+    return {
+        ("anvilate.compilation", "CompilationTask", "reference"): task,
+        ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
+        ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,
+    }
+
+
+def test_every_any_typed_field_is_one_this_file_round_trips():
+    """A census, so a fourth `Any` field cannot land with nothing holding it."""
+    assert _any_typed_fields() == set(_any_field_probes()), (
+        "the Any-typed fields in the package and the ones probed below have diverged: "
+        f"unprobed {sorted(_any_typed_fields() - set(_any_field_probes()))}, "
+        f"probed but gone {sorted(set(_any_field_probes()) - _any_typed_fields())}"
+    )
+
+
+@pytest.mark.parametrize(("where", "instance"), sorted(_any_field_probes().items()))
+def test_a_model_reads_back_what_it_writes(where, instance):
+    """The defect: a task set this library wrote could not be read back as itself.
+
+    `CompilationTask.reference` is typed `Any` because a spec field can be a string, a number
+    or a quantity. A task stating `force` as `5 kN` dumped to `{"magnitude": 5.0, "unit":
+    "kN"}` and read back as exactly that dictionary — so the reloaded task did not compare
+    equal to the one it was written from, and every report scored against it rendered its own
+    expected value as `{'magnitude': 5.0, 'unit': 'kN'}` where the original printed `5 kN`.
+    The *verdict* was right either way, because `_compare` already recognises that shape as a
+    quantity, which is exactly what kept it quiet.
+    """
+    model = type(instance)
+    assert model.model_validate(instance.model_dump()) == instance, f"{where} via model_dump"
+    assert model.model_validate_json(instance.model_dump_json()) == instance, f"{where} via JSON"
+
+
+def test_only_the_serialisers_own_shape_is_rebuilt():
+    """The other half: the repair must not turn every mapping into a quantity.
+
+    Two-key and unparseable, three-key, and a string that *would* parse — a task stating
+    `"5 kN"` as a string is asking for a string, and answering with a quantity would be
+    scoring a different question than the task asked.
+    """
+    from anvilate.compilation import CompilationTask
+    from anvilate.units import Quantity
+
+    task = _any_field_probes()[("anvilate.compilation", "CompilationTask", "reference")]
+    for reloaded in (
+        CompilationTask.model_validate(task.model_dump()),
+        CompilationTask.model_validate_json(task.model_dump_json()),
+    ):
+        reference = reloaded.reference
+        assert isinstance(reference["load_cases.0.force"], Quantity)
+        assert reference["element.label"] == "5 kN"
+        assert not isinstance(reference["element.label"], Quantity)
+        assert reference["element.shape"] == {"magnitude": "not a number", "unit": "kN"}
+        assert reference["element.other"] == {"a": 1, "b": 2}
+        assert reference["element.count"] == 3 and reference["element.checked"] is True
+        assert reference["element.absent"] is None

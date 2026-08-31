@@ -38,11 +38,11 @@ is the shape a result has to have for those to be judged honestly.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from math import isclose
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from ._models import FrozenMap, RevalidatedModel
 from .units import Quantity, UnitError
@@ -183,6 +183,37 @@ class CompilationTask(RevalidatedModel):
     prompt: str
     reference: FrozenMap[str, Any]
     notes: str | None = None
+
+    @field_validator("reference", mode="before")
+    @classmethod
+    def _a_quantity_survives_a_round_trip(cls, value: Any) -> Any:
+        """A task set this library writes, read back, used to hold dictionaries.
+
+        ``reference`` is typed ``Any`` because a spec field can be a string, a number or a
+        quantity, and ``Any`` is not told how to rebuild anything. So a task stating
+        ``force`` as ``5 kN`` dumped to ``{"magnitude": 5.0, "unit": "kN"}`` and read back as
+        exactly that dictionary: the reloaded task no longer compared equal to the one it was
+        written from, and every report scored against it rendered its own expected value as
+        ``{'magnitude': 5.0, 'unit': 'kN'}`` where the original printed ``5 kN``.
+
+        The verdict was right either way — :func:`_compare` already recognises that shape as
+        a quantity — which is what kept this quiet. Only the two-key shape Anvilate's own
+        serialiser emits is rebuilt, and a value that does not parse as a quantity is left
+        exactly as it was found. Strings are **not** coerced: ``"5 kN"`` stated as a string is
+        a string a compiler is expected to produce, and turning it into a quantity here would
+        be answering a different question than the task asked.
+        """
+        if not isinstance(value, Mapping):
+            return value
+        rebuilt = {}
+        for key, entry in value.items():
+            if isinstance(entry, Mapping) and set(entry) == {"magnitude", "unit"}:
+                try:
+                    entry = Quantity(magnitude=float(entry["magnitude"]), unit=str(entry["unit"]))
+                except (UnitError, TypeError, ValueError):
+                    pass
+            rebuilt[key] = entry
+        return rebuilt
 
     @model_validator(mode="after")
     def _has_something_to_check(self) -> CompilationTask:
