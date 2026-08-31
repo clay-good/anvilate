@@ -47,6 +47,36 @@ def test_the_analysis_module_count_is_the_real_one():
     assert int(_claimed(r"\(([\d,]+) closed-form modules").replace(",", "")) == len(modules)
 
 
+def test_the_example_count_is_the_directorys_own():
+    """The sibling of the two counts above, and the one nobody held.
+
+    It read 484 against 490 on disk — six examples written, executed in CI by
+    `test_every_example_is_executed_by_this_file`, and absent from the number a reader is
+    given. The stronger half of that sentence, that each one runs in CI, was already gated;
+    only the count was free to drift.
+    """
+    examples = sorted((_REPO / "examples").glob("*.py"))
+    assert len(examples) > 400, "the examples directory came back implausibly small"
+    claimed = int(_claimed(r"([\d,]+) runnable examples").replace(",", ""))
+    assert claimed == len(examples), (
+        f"the README says {claimed:,} runnable examples; {len(examples):,} are on disk"
+    )
+
+
+def test_every_example_the_index_names_exists():
+    """`examples/README.md` is a curated index, not a listing — it names 183 of the 490 and
+    that is the point of it. What it may not do is name one that is gone, which is the only
+    half of it a reader can be sent wrong by, and nothing held either half before this.
+    """
+    import re
+
+    index = (_REPO / "examples" / "README.md").read_text(encoding="utf-8")
+    named = sorted(set(re.findall(r"`(\w[\w]*\.py)`", index)))
+    assert len(named) > 100, f"the index names only {len(named)} examples; it has stopped listing"
+    missing = [name for name in named if not (_REPO / "examples" / name).exists()]
+    assert not missing, f"the examples index names files that are gone: {missing}"
+
+
 def test_the_public_symbol_count_is_the_manifests_own():
     manifest = [
         line
