@@ -1792,3 +1792,70 @@ def test_every_public_analysis_function_refuses_a_wrapped_number_by_naming_the_m
         f"{len(failures)} public function(s) answer a quantity where a plain number belongs "
         "with something other than a ValueError:\n  " + "\n  ".join(sorted(failures)[:25])
     )
+
+
+# --- The installed metadata is a snapshot, and the BOM is derived from it ---------------
+
+
+def _requirements_by_extra(requirements):
+    """``{extra or None: {requirement without its marker}}``, normalised for comparison."""
+    grouped: dict[str | None, set[str]] = {}
+    for requirement in requirements:
+        head, _, marker = requirement.partition(";")
+        extra = re.search(r"""extra\s*==\s*['"]([^'"]+)['"]""", marker)
+        grouped.setdefault(extra.group(1) if extra else None, set()).add(head.strip())
+    return grouped
+
+
+def test_the_installed_metadata_still_says_what_pyproject_declares():
+    """`EnvironmentBOM.of_this_environment()` reads the *installed* dependency list.
+
+    `importlib.metadata.requires` does not read `pyproject.toml`. It reads the snapshot
+    written into `.dist-info/METADATA` at install time, and an editable install — the shape
+    every contributor here works in — does not rewrite that snapshot when the project's
+    dependencies change. So a dependency added to `pyproject.toml` is invisible to the BOM
+    until somebody reinstalls, and nothing says so.
+
+    That is not hypothetical. This checkout sat with `export = ["ezdxf>=1.1"]` declared,
+    ezdxf 1.4.4 installed and importable, `anvilate.export.dxf` able to write a DXF — and
+    the attestation for that bundle naming only pint, pydantic and pyyaml. The provenance
+    record was missing the library that wrote the artifact. The only thing that noticed was
+    `test_dev_tooling_is_not_reported_as_having_produced_the_bundle`, which reads as an
+    accusation against the BOM code and sends you into `attestation.py` rather than to
+    `pip install`.
+
+    Names *and* specifiers are compared, per extra, because setuptools copies each
+    requirement through verbatim and only appends the marker. What this does **not** hold
+    is the environment itself: a declared dependency can still be absent or at a version
+    outside its own bound, and the BOM leaves an uninstalled one out by design.
+    """
+    import tomllib
+    from importlib.metadata import PackageNotFoundError, requires
+
+    with (_REPO / "pyproject.toml").open("rb") as handle:
+        project = tomllib.load(handle)["project"]
+    declared = {None: {r.strip() for r in project["dependencies"]}}
+    for extra, entries in (project.get("optional-dependencies") or {}).items():
+        declared[extra] = {r.strip() for r in entries}
+
+    try:
+        installed = _requirements_by_extra(requires("anvilate") or ())
+    except PackageNotFoundError:  # pragma: no cover - anvilate is installed in every dev env
+        pytest.fail("anvilate is not installed, so nothing can read a BOM off this environment")
+
+    drift = []
+    for extra in sorted(set(declared) | set(installed), key=lambda e: (e is not None, e or "")):
+        where = "dependencies" if extra is None else f"optional-dependencies.{extra}"
+        missing = sorted(declared.get(extra, set()) - installed.get(extra, set()))
+        invented = sorted(installed.get(extra, set()) - declared.get(extra, set()))
+        if missing:
+            drift.append(f"{where}: declared but not in the installed metadata: {missing}")
+        if invented:
+            drift.append(f"{where}: in the installed metadata but no longer declared: {invented}")
+
+    assert not drift, (
+        "the installed distribution metadata has drifted from pyproject.toml, so every "
+        "bill of materials this environment attests is derived from a stale dependency "
+        "list:\n  " + "\n  ".join(drift) + "\n\nReinstall to refresh the snapshot:\n"
+        "  pip install -e . --no-deps"
+    )

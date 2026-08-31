@@ -91,6 +91,20 @@ A test requires every version the BOM reports to equal what `importlib.metadata`
 another requires that no example anywhere states a version literal for an installed
 package — a stale literal in an example teaches the defect.
 
+### The declaration it is derived from is a snapshot
+
+"Declared dependencies" means the list written into `.dist-info/METADATA` at install time,
+not the one in `pyproject.toml` today. An editable install — the shape every contributor
+works in — does not rewrite that snapshot when the project's dependencies change, so a new
+dependency is invisible to the BOM until somebody reinstalls. This repository sat in exactly
+that state: `export = ["ezdxf>=1.1"]` declared, ezdxf installed and importable, and the
+attestation for a bundle containing a DXF naming only pint, pydantic and pyyaml.
+
+A gate in `tests/test_contract.py` compares the two lists, requirement by requirement and
+per extra, and names the drift and the reinstall that clears it. It does not hold the
+environment itself — a declared dependency can still be absent, or at a version outside its
+own bound.
+
 ## Four things that are deliberate
 
 **No wall clock, anywhere.** CycloneDX's `metadata.timestamp` and `serialNumber` are both

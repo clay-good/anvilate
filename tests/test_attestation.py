@@ -909,6 +909,9 @@ def test_dev_tooling_is_not_reported_as_having_produced_the_bundle():
     # And the rule is "the dev extra", not "these three names": `export`'s ezdxf really does
     # write the DXF, so it belongs in the inventory when it is installed.
     pytest.importorskip("ezdxf")
+    # A red here usually means the installed metadata predates the `export` extra rather
+    # than that the BOM is wrong. The metadata-drift gate in tests/test_contract.py says
+    # which of the two it is, and how to refresh the snapshot.
     assert "ezdxf" in reported
 
 
