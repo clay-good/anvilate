@@ -162,6 +162,35 @@ def test_the_json_says_everything_the_text_says(tmp_path):
     assert code == EXIT_FAILED
 
 
+def test_the_export_roll_up_is_in_both_renderings_and_is_the_exit_code(tmp_path):
+    """`check` prints its run-level verdict in text and in JSON. `export` printed it in
+    neither, and a CI job publishing bundles for a repository got N blocks with the worst
+    to be found by scanning them. A verdict only an exit code carries is one nobody reads
+    in a log.
+
+    The three are one computation now, so the printed line, the payload and the exit code
+    cannot disagree about the same run — which is the failure having three of them invites.
+    """
+    first, second = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    first.write_text(_SPEC, encoding="utf-8")
+    second.write_text(
+        _SPEC.replace("deck_plate", "other_plate").replace("ASTM-A36", "NOT-A-REAL-ALLOY"),
+        encoding="utf-8",
+    )
+
+    code, text, _err = _run("export", str(first), str(second))
+    json_code, raw, _err = _run("export", "--format", "json", str(first), str(second))
+    payload = json.loads(raw)
+
+    assert {bundle["bundle"]["status"] for bundle in payload["bundles"]} == {
+        "not_evaluated",
+        "fail",
+    }, "the two bundles agree, so a worst-of and a best-of are indistinguishable here"
+    assert payload["status"] == "fail"
+    assert text.splitlines()[-1] == "2 bundles: FAIL"
+    assert code == json_code == EXIT_FAILED
+
+
 def test_a_card_with_nothing_to_govern_says_so_in_both_renderings():
     """`governing()` returns None on an ordinary card of passing checks that carry no
     safety factor. The text prints a line saying so rather than omitting it, because a
@@ -325,7 +354,9 @@ def test_export_json_is_the_bundle_document(spec_file):
     code, out, _err = _run("export", "--format", "json", str(spec_file))
     payload = json.loads(out)
     # A list whatever the count, the same shape `check --format json` uses.
-    assert list(payload) == ["bundles"] and len(payload["bundles"]) == 1
+    # `status` is the run-level roll-up, which is also the exit code. Keys asserted
+    # exactly rather than by membership, so a third cannot appear unremarked.
+    assert sorted(payload) == ["bundles", "status"] and len(payload["bundles"]) == 1
     entry = payload["bundles"][0]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
     assert entry["bundle"]["status"] == "not_evaluated"

@@ -538,12 +538,19 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             return spec
         results.append((path, spec, BundleSections(scorecard=screen_spec(spec))))
 
+    # One roll-up, read by the exit code and by both renderings. `check` prints its
+    # run-level verdict in each; this printed it in neither, so a CI job publishing bundles
+    # for a repository got N blocks and had to find the worst by scanning them. The exit
+    # code carried it, and a verdict only an exit code carries is one nobody reads in a log.
+    worst = _worst_status(sections for _p, _s, sections in results)
+
     if args.format == "json":
         payload = {
+            "status": worst.value,
             "bundles": [
                 {"path": str(path), "name": spec.name, "bundle": sections.to_json_dict()}
                 for path, spec, sections in results
-            ]
+            ],
         }
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
@@ -553,10 +560,9 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             if len(results) > 1:
                 print(f"# {path}", file=out)
             print(sections.render(), file=out)
-    return max(
-        (EXIT_CODES[sections.status] for _p, _s, sections in results),
-        key=_EXIT_SEVERITY.index,
-    )
+        if len(results) > 1:
+            print(f"\n{len(results)} bundles: {worst.value.upper()}", file=out)
+    return EXIT_CODES[worst]
 
 
 def _load(path: Path, *, err, command: str):

@@ -84,6 +84,10 @@ reads this output. Both are carried now, per spec and for the run:
             "scorecard": {"entries": ["..."]}}]}
 ```
 
+`export` carries the same roll-up: `status` at the top of the payload, a
+`N bundles: WORST` line at the end of the text, and the exit code — all three from one
+computation, because three renderings of one run that can disagree eventually will.
+
 `governing` is `null` rather than absent on a card with nothing to govern — an ordinary card
 of passing checks that carry no safety factor — because a missing key and a card with
 nothing to govern must not look the same. That is the rule the text line already followed.
