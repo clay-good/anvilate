@@ -63,6 +63,13 @@ jobs:
           sed -i 's#https://ptb.de/si/v2.2.1/SI_Format.xsd#SI_Format.xsd#' dcc/dcc.xsd
           sed -i 's#https://www.ptb.de/dcc/d-sig/xmldsig-core-schema.xsd#xmldsig-core-schema.xsd#' dcc/dcc.xsd
           sed -i 's#https://www.ptb.de/si/v2.2.1/qudt/quantitykind.xsd#quantitykind.xsd#' dcc/SI_Format.xsd
+      - name: Fetch the CycloneDX 1.6 JSON schema
+        run: |
+          mkdir -p cyclonedx
+          base=https://raw.githubusercontent.com/CycloneDX/specification/master/schema
+          for name in bom-1.6.schema.json jsf-0.82.schema.json spdx.schema.json; do
+            curl -sSfL -o "cyclonedx/$name" "$base/$name"
+          done
       - name: Fetch one of those schemas through the fetch-on-first-use flow
         # The offline tests inject the transport, so the one line that opens a socket is
         # only ever exercised here — and this doubles as a live check of the recipe's
@@ -85,6 +92,7 @@ jobs:
         env:
           ANVILATE_QIF_XSD: qif/xsd
           ANVILATE_DCC_XSD: dcc
+          ANVILATE_CYCLONEDX_SCHEMA: cyclonedx
         run: |
           set -o pipefail
           # Named exactly, not selected by keyword: a `-k` expression that stops matching
@@ -93,11 +101,14 @@ jobs:
             "tests/test_qif.py::test_the_document_validates_against_the_published_schemas" \
             "tests/test_qif.py::test_every_qif_name_this_module_emits_exists_in_the_published_schema" \
             "tests/test_dcc.py::test_the_fixture_validates_against_the_published_dcc_schema" \
+            "tests/test_attestation.py::test_the_bom_validates_against_the_published_cyclonedx_schema" \
+            "tests/test_attestation.py::test_every_component_kind_is_one_the_published_schema_defines" \
+            "tests/test_attestation.py::test_the_declared_spec_version_is_the_schema_the_document_is_checked_against" \
             | tee result.txt
           # A skip here means the schemas did not arrive and nothing was validated, which is
           # exactly the outcome this job exists to rule out. Passing on a skip would make the
           # job a green light for a check that never ran.
-          grep -qE "^3 passed" result.txt
+          grep -qE "^6 passed" result.txt
           if grep -q skipped result.txt; then
             echo "the schema tests skipped; nothing was validated"
             exit 1

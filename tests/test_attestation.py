@@ -1077,3 +1077,122 @@ def test_the_schema_check_runs_only_for_the_type_this_verifier_understands():
     # so a negative on the word "schema" passes while every key is being reported.
     assert len(reported) == 1, reported
     assert "which this verifier does not know" in reported[0]
+
+
+# --- the BOM against the schema it declares conformance to ---------------------------------
+#
+# `to_cyclonedx()` emits a document that says `"bomFormat": "CycloneDX"` and names a spec
+# version. Until now the only thing holding that claim was this file's own idea of the
+# shape. CycloneDX publishes the JSON Schema, so the claim is checkable, and the pattern is
+# the one `test_qif.py` and `test_dcc.py` already use: opt-in because the schema is a
+# separate download, and the scheduled CI job proves it did not skip.
+
+_CYCLONEDX_SCHEMAS = {
+    "http://cyclonedx.org/schema/jsf-0.82.schema.json": "jsf-0.82.schema.json",
+    "http://cyclonedx.org/schema/spdx.schema.json": "spdx.schema.json",
+}
+
+
+def _cyclonedx_schema():
+    """The published schema as a parsed document, or a skip saying which part is missing."""
+    location = os.environ.get("ANVILATE_CYCLONEDX_SCHEMA")
+    if not location:
+        pytest.skip(
+            "set ANVILATE_CYCLONEDX_SCHEMA to a directory holding bom-1.6.schema.json and "
+            "the two schemas it references (jsf-0.82, spdx) from "
+            "https://github.com/CycloneDX/specification/tree/master/schema"
+        )
+    directory = Path(location)
+    # Which file to read is decided by what is *there*, not by the constant under test.
+    # Naming the file `bom-{CYCLONEDX_SPEC_VERSION}.schema.json` made a wrong constant skip
+    # this gate rather than fail it: the schema for the version it wrongly claimed was
+    # simply absent. A skip is not a pass, and a gate that disarms itself on the mutation
+    # it exists to catch is worse than no gate.
+    available = sorted(directory.glob("bom-*.schema.json"))
+    if not available:
+        pytest.skip(f"no bom-*.schema.json under {location}")
+    by_version = {path.name[len("bom-") : -len(".schema.json")]: path for path in available}
+    bom = by_version.get(CYCLONEDX_SPEC_VERSION)
+    assert bom is not None, (
+        f"this module emits CycloneDX {CYCLONEDX_SPEC_VERSION} and {location} holds the "
+        f"schemas for {sorted(by_version)}; nothing here can check that claim"
+    )
+    return json.loads(bom.read_text(encoding="utf-8")), directory
+
+
+def _cyclonedx_validator():
+    jsonschema = pytest.importorskip("jsonschema")
+    referencing = pytest.importorskip("referencing")
+    from referencing.jsonschema import DRAFT7
+
+    schema, directory = _cyclonedx_schema()
+    resources = []
+    for uri, filename in _CYCLONEDX_SCHEMAS.items():
+        referenced = directory / filename
+        if not referenced.exists():
+            pytest.skip(f"no {filename} under {directory}; the BOM schema references it")
+        contents = json.loads(referenced.read_text(encoding="utf-8"))
+        resources.append((uri, referencing.Resource(contents=contents, specification=DRAFT7)))
+    registry = referencing.Registry().with_resources(resources)
+    return jsonschema.Draft7Validator(schema, registry=registry), schema
+
+
+def test_the_bom_validates_against_the_published_cyclonedx_schema():
+    """The real conformance check, and it is run over every component kind this can emit.
+
+    A BOM built from the live environment exercises the ordinary path, and a hand-built one
+    adds the two kinds that path never produces: the caller-stated versioned database, and
+    an application entry sitting among the components. The top level and the component
+    definition are both ``additionalProperties: false``, so a key emitted under a name
+    CycloneDX does not define fails here rather than shipping in a document that says it is
+    CycloneDX.
+    """
+    validator, _ = _cyclonedx_validator()
+
+    stated = EnvironmentBOM(
+        application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
+        components=(
+            Component(name="pint", version="0.25.3"),
+            Component(name="asme-bth-1", version="2023", kind=ComponentKind.DATA),
+            Component(name="calculix", version="2.21", kind=ComponentKind.APPLICATION),
+        ),
+    )
+    for bom in (EnvironmentBOM.of_this_environment(), stated):
+        document = bom.to_cyclonedx()
+        errors = sorted(validator.iter_errors(document), key=lambda error: list(error.path))
+        assert not errors, "\n".join(f"{list(error.path)}: {error.message}" for error in errors)
+
+
+def test_every_component_kind_is_one_the_published_schema_defines():
+    """The anchor, and it is not the same check as validating a document.
+
+    A document only exercises the kinds its fixture happens to build, so a `ComponentKind`
+    added to the enum and emitted by some caller elsewhere would ship unvalidated. Every
+    member is held against the schema's own `component.type` enumeration instead.
+    """
+    schema, _ = _cyclonedx_schema()
+    published = set(schema["definitions"]["component"]["properties"]["type"]["enum"])
+    unknown = sorted(kind.value for kind in ComponentKind if kind.value not in published)
+    assert not unknown, (
+        f"{unknown} is emitted as a CycloneDX component type and the {CYCLONEDX_SPEC_VERSION} "
+        f"schema defines only {sorted(published)}"
+    )
+
+
+def test_the_declared_spec_version_is_the_schema_the_document_is_checked_against():
+    """The one claim in the document the schema itself does not hold.
+
+    `specVersion` is declared as a plain string with `"1.6"` as an *example* — no enum, no
+    pattern — so a BOM emitting `"1.4"` validates against the 1.6 schema and reports the
+    wrong spec to every reader. Held here against the schema's own `$id`, which is the only
+    place the file says which version it is.
+    """
+    schema, _ = _cyclonedx_schema()
+    assert schema["$id"] == f"http://cyclonedx.org/schema/bom-{CYCLONEDX_SPEC_VERSION}.schema.json"
+    assert "enum" not in schema["properties"]["specVersion"], (
+        "specVersion is now constrained by the schema; this gate is no longer the only "
+        "thing holding it and should say so"
+    )
+    assert EnvironmentBOM.of_this_environment().to_cyclonedx()["specVersion"] == (
+        CYCLONEDX_SPEC_VERSION
+    )

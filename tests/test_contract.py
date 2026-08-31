@@ -1859,3 +1859,55 @@ def test_the_installed_metadata_still_says_what_pyproject_declares():
         "list:\n  " + "\n  ".join(drift) + "\n\nReinstall to refresh the snapshot:\n"
         "  pip install -e . --no-deps"
     )
+
+
+def test_every_pytest_step_in_ci_counts_the_tests_it_actually_names():
+    """`grep -qE "^N passed"` is what stops a scheduled job going green on a skip.
+
+    It is also a hand-typed number sitting beside a hand-typed list of node ids, and the two
+    drift in the direction that matters: add a test to the list, leave the count alone, and
+    the step still passes while proving one fewer thing than it says. The scheduled job
+    would catch it — a week later, in a run nobody is watching. This catches it here.
+
+    The number is what pytest *collects*, which is not the length of the list: one of the
+    node ids the fetch step names is parametrized and counts twice. So the ids are handed to
+    a real collection rather than counted, which also settles whether each one still exists —
+    pytest errors on a node id it cannot find, and a renamed test is the quieter half of
+    this. Only steps that name their tests exactly are held; a `-k` step has no list.
+    """
+    import subprocess
+    import sys
+
+    workflow = (_REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    steps = re.findall(
+        r"(?s)\n      - name: ([^\n]+)\n(.*?)(?=\n      - name: |\n\n  |\Z)", workflow
+    )
+    checked = []
+    for name, body in steps:
+        expected = re.search(r'grep -qE "\^(\d+) passed"', body)
+        if expected is None:
+            continue
+        named = re.findall(r'"(tests/[\w/]+\.py::\w+)"', body)
+        assert named, f"the {name!r} step counts passes but names no test to run"
+        checked.append(name)
+        collected = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", "--no-header", *named],
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+        )
+        assert collected.returncode == 0, (
+            f"the {name!r} step names a test pytest cannot collect:\n{collected.stdout[-2000:]}"
+        )
+        counted = re.search(r"(\d+) tests? collected", collected.stdout)
+        assert counted is not None, collected.stdout[-2000:]
+        assert int(counted.group(1)) == int(expected.group(1)), (
+            f"the {name!r} step collects {counted.group(1)} test(s) and requires "
+            f"'{expected.group(1)} passed'; the difference is the number of checks it "
+            "reports as run without running them"
+        )
+
+    assert len(checked) >= 2, (
+        f"only {len(checked)} CI step(s) count their passes; this gate covers the steps "
+        "that prove a scheduled job did not skip, and there are more than one"
+    )

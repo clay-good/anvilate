@@ -105,6 +105,24 @@ per extra, and names the drift and the reinstall that clears it. It does not hol
 environment itself — a declared dependency can still be absent, or at a version outside its
 own bound.
 
+### The CycloneDX claim is checked against the published schema
+
+A document that says `"bomFormat": "CycloneDX"` is making a claim about a specification
+somebody else wrote, and CycloneDX publishes the JSON Schema, so it is checkable. The
+scheduled `interchange-schemas` job fetches `bom-1.6.schema.json` and validates what
+`to_cyclonedx()` emits — over every component kind this can produce, including the two the
+live environment never yields: a caller-stated versioned database, and an application entry
+sitting among the components. Both the document and its component definition are
+`additionalProperties: false`, so a key emitted under a name CycloneDX does not define fails
+there rather than shipping.
+
+One claim the schema does not hold: `specVersion` is a plain string with `"1.6"` as an
+*example*, no enum and no pattern, so a BOM declaring `"1.4"` validates against the 1.6
+schema and reports the wrong spec to every reader. It is held instead against the `$id` of
+the schema file being validated against, and which file that is comes from what the download
+contains rather than from the constant under test — naming the file after the constant made
+a wrong version *skip* the check instead of failing it.
+
 ## Four things that are deliberate
 
 **No wall clock, anywhere.** CycloneDX's `metadata.timestamp` and `serialNumber` are both
