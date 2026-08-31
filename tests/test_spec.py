@@ -385,6 +385,68 @@ def test_default_requires_rationale():
         Provenanced(value=2.0, origin=Origin.DEFAULT)  # no rationale
 
 
+def test_a_bare_value_is_refused_by_naming_what_to_write():
+    """The likeliest spec-authoring mistake, and the answer it used to get.
+
+    `units: SI` is the natural thing to write in a YAML document, and every provenanced
+    field in the IR answered it with pydantic's own
+    `Input should be a valid dictionary or instance of Provenanced[UnitSystem]` — a Python
+    generic reported to somebody holding a YAML file, on `anvilate check` and on the MCP
+    `compile_spec` surface alike. The refusal now names the shape to write, the origins
+    that are legal, and the one that needs a rationale besides.
+    """
+    with pytest.raises(ValidationError) as refused:
+        DesignSpec(
+            name="bracket",
+            description="A bracket.",
+            units="SI",
+            material=MaterialRef(ref="ASTM-A36"),
+            manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+        )
+    message = str(refused.value)
+    assert "origin: user_stated" in message, message
+    assert "'SI'" in message, "the refusal does not quote back the value it was handed"
+    for origin in Origin:
+        assert origin.value in message, f"{origin.value} is legal and the refusal omits it"
+    # And it says so without inventing one: a bare value is not silently user_stated.
+    assert "not filled in for you" in message
+
+
+def test_a_bare_value_is_not_quietly_taken_as_user_stated():
+    """The other half. Coercing `SI` to `user_stated` would make the document parse and
+    would record an origin nobody claimed — the one thing this wrapper exists to prevent."""
+    for candidate in ("SI", 2.0, 0, None, ["SI"], UnitSystem.SI):
+        with pytest.raises(ValidationError):
+            Provenanced[UnitSystem].model_validate(candidate)
+    # A mapping and an existing instance both still pass straight through.
+    assert Provenanced[float].model_validate({"value": 2.0, "origin": "user_stated"}).value == 2.0
+    stated = Provenanced.stated(UnitSystem.SI)
+    assert Provenanced[UnitSystem].model_validate(stated) == stated
+
+
+def test_the_cli_page_shows_a_provenanced_value_the_parser_accepts():
+    """`docs/headless-cli.md` prints the wrong form beside the right one. The right one is
+    the line a reader copies, so it is loaded and validated rather than read."""
+    import re
+
+    import yaml
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "headless-cli.md").read_text()
+    block = re.search(r"```yaml\n(.*?)```", page, re.S)
+    assert block is not None, "the provenanced-value block on headless-cli.md has moved"
+    # The block shows `units:` twice — the bare form first, the correct one second — and
+    # PyYAML keeps the last, which is the one under test.
+    shown = yaml.safe_load(block.group(1))
+    assert set(shown) == {"units"}, shown
+    loaded = Provenanced[UnitSystem].model_validate(shown["units"])
+    assert loaded.value is UnitSystem.SI
+    assert loaded.origin is Origin.USER_STATED
+    # And the form the page calls wrong really is refused, so the contrast it draws is real.
+    with pytest.raises(ValidationError):
+        Provenanced[UnitSystem].model_validate("SI")
+
+
 def test_provenance_survives_serialization():
     spec = golden_bracket().model_copy(
         update={

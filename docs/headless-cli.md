@@ -69,6 +69,29 @@ than collapsing to pass/fail:
 | 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
 
+### A code 3 has to say what to write
+
+The likeliest way to get one is a hand-written document, and the likeliest mistake in one is
+writing a provenanced value bare:
+
+```yaml
+units: SI                 # what you would naturally write
+units:                    # what the IR asks for
+  value: SI
+  origin: user_stated
+```
+
+Every value in a compiled spec carries where it came from, so `units` is a wrapper rather
+than a scalar. The first form used to be refused with `Input should be a valid dictionary or
+instance of Provenanced[UnitSystem]` — pydantic's own message, naming a Python generic to
+somebody holding a YAML file, on this command and on the MCP `compile_spec` surface alike.
+It now names the shape to write, the three legal origins, and the one that also needs a
+rationale.
+
+A bare value is **not** taken as `user_stated`. Where a number came from is what the wrapper
+records, and inventing an origin for one that states none is the same silent green the
+scorecard refuses to give.
+
 **Code 2 is the one that matters and No-silent-green settles it.** A screen that could not
 run is not a screen that passed, so a merge gate on `anvilate check` must not go green on
 it. Keeping it distinct from 1 lets a caller that genuinely wants "nothing failed" say so

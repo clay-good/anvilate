@@ -8,8 +8,9 @@ engineer stated and which the tool assumed.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import model_validator
 
@@ -34,6 +35,31 @@ class Provenanced(RevalidatedModel, Generic[T]):
     value: T
     origin: Origin
     rationale: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_bare_value_records_no_origin(cls, data: Any) -> Any:
+        """The refusal a spec author actually gets for the likeliest mistake.
+
+        Writing ``units: SI`` in a spec document is the natural thing to write and the
+        wrong thing: pydantic answered it with ``Input should be a valid dictionary or
+        instance of Provenanced[UnitSystem]``, which names a Python generic at somebody
+        holding a YAML file. Every provenanced field in the IR reaches this, so the message
+        is here rather than in each of them.
+
+        A bare value is not coerced to ``user_stated``. Where a number came from is the
+        entire reason this wrapper exists, and inventing an origin for one that states none
+        is the same silent green the scorecard refuses to give.
+        """
+        if isinstance(data, (Mapping, Provenanced)):
+            return data
+        raise ValueError(
+            f"a provenanced value is written as "
+            f"{{value: {data!r}, origin: user_stated}}, not as a bare {data!r}. "
+            f"Origin is one of {', '.join(sorted(o.value for o in Origin))}, and "
+            f"{Origin.DEFAULT.value!r} also needs a rationale. It is not filled in for you: "
+            "where a value came from is what this records"
+        )
 
     @model_validator(mode="after")
     def _default_needs_rationale(self) -> Provenanced[T]:
