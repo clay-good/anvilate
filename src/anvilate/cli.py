@@ -610,15 +610,29 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
         # A list whatever the count. A shape that changes with the number of arguments is a
         # shape every caller has to branch on, and the branch is wrong the first time a
         # directory happens to hold one spec.
+        # `status` and `governing` are the two conclusions the text rendering prints and
+        # this payload used to drop. The verdict is recoverable from the exit code, but
+        # `governing` is not recoverable at all: it is the worst check by a specific
+        # ordering, and a consumer left to recompute it from `entries` is reimplementing
+        # `Scorecard.governing()` at every call site. Both are always present, `governing`
+        # as null when there is none — a card with nothing to govern and a payload missing
+        # the key must not look the same, which is the rule the text line already follows.
         payload = {
+            "status": _worst_status(card for _path, _spec, card in results).value,
             "specs": [
                 {
                     "path": str(path),
                     "name": spec.name,
+                    "status": card.status.value,
+                    "governing": (
+                        None
+                        if (governing := card.governing()) is None
+                        else {"name": governing.name, "status": governing.status.value}
+                    ),
                     "scorecard": card.model_dump(mode="json"),
                 }
                 for path, spec, card in results
-            ]
+            ],
         }
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
@@ -632,7 +646,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             heading = spec.name if len(results) == 1 else f"{spec.name}  ({path})"
             print(_render(heading, card), file=out)
         if len(results) > 1:
-            worst = max((card.status for _p, _s, card in results), key=_BLOCKING_ORDER.index)
+            worst = _worst_status(card for _p, _s, card in results)
             print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
 
     # Every blocking check on stderr, which is what the requirement asks for and what a CI
@@ -717,6 +731,15 @@ def _render(name: str, card: Scorecard) -> str:
     else:
         lines.append(f"  governing:     {governing.name} ({governing.status.value})")
     return "\n".join(lines)
+
+
+def _worst_status(cards):
+    """The blocking-worst status over a run, which both renderings report.
+
+    One function rather than two, because the text summary and the JSON payload disagreeing
+    about the verdict of the same run is the defect that having two of them invites.
+    """
+    return max((card.status for card in cards), key=_BLOCKING_ORDER.index)
 
 
 def main() -> None:

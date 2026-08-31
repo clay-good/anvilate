@@ -69,6 +69,25 @@ than collapsing to pass/fail:
 | 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
 
+### The JSON says what the text says
+
+`--format json` used to carry the checks and nothing else — not the card's verdict, and not
+the governing check. The verdict is recoverable from the exit code. **`governing` is not
+recoverable at all**: it is the worst check by a specific ordering, and a consumer left to
+work it out from `entries` is reimplementing `Scorecard.governing()` at every call site that
+reads this output. Both are carried now, per spec and for the run:
+
+```json
+{"status": "fail",
+ "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
+            "governing": {"name": "T0 geometry", "status": "not_evaluated"},
+            "scorecard": {"entries": ["..."]}}]}
+```
+
+`governing` is `null` rather than absent on a card with nothing to govern — an ordinary card
+of passing checks that carry no safety factor — because a missing key and a card with
+nothing to govern must not look the same. That is the rule the text line already followed.
+
 ### An unbuilt operation is refused however it is invoked
 
 `anvilate build` said what it was waiting on and exited 4. `anvilate build part.yaml` — the

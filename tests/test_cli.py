@@ -102,11 +102,79 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     # A list whatever the count. A shape that changes with the number of arguments is a
     # shape every caller has to branch on, and the branch is wrong the first time a
     # directory happens to hold exactly one spec.
-    assert list(payload) == ["specs"] and len(payload["specs"]) == 1
+    # `status` is the run-level verdict the text summary prints; it joined `specs` when the
+    # payload stopped dropping the two conclusions the text rendering carries. The keys are
+    # asserted exactly rather than by membership, so a third cannot appear unremarked.
+    assert sorted(payload) == ["specs", "status"] and len(payload["specs"]) == 1
     entry = payload["specs"][0]
+    assert sorted(entry) == ["governing", "name", "path", "scorecard", "status"]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
     assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated", "pass"]
     assert code == EXIT_NOT_EVALUATED
+
+
+def test_the_json_says_everything_the_text_says(tmp_path):
+    """Two renderings of one run, compared line by line rather than spot-checked.
+
+    The payload used to carry `entries` and nothing else: not the card's verdict, and not
+    the governing check. The verdict is recoverable from the exit code; **`governing` is not
+    recoverable at all** without reimplementing `Scorecard.governing()` — the worst check by
+    a specific ordering — at every call site that reads this JSON. A layer of verdicts
+    dropped from a machine-readable rendering is the same silent green the interchange file
+    is gated against.
+
+    Two specs, so the run-level summary line is exercised as well as the per-spec ones —
+    and they screen to *different* verdicts on purpose. Two cards that agree cannot tell a
+    worst-of from a best-of, and the mutation that swaps them survived while they did.
+    """
+    first, second = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    first.write_text(_SPEC, encoding="utf-8")
+    second.write_text(
+        _SPEC.replace("deck_plate", "other_plate").replace("ASTM-A36", "NOT-A-REAL-ALLOY"),
+        encoding="utf-8",
+    )
+
+    _code, text, _err = _run("check", str(first), str(second))
+    code, raw, _err = _run("check", "--format", "json", str(first), str(second))
+    payload = json.loads(raw)
+
+    # The run-level verdict, which the text prints as its last line.
+    assert text.splitlines()[-1] == f"2 specs: {payload['status'].upper()}"
+
+    assert len(payload["specs"]) == 2
+    for entry in payload["specs"]:
+        block = next(b for b in text.split("\n\n") if b.startswith(f"{entry['name']}  ("))
+        lines = block.splitlines()
+        assert lines[0] == f"{entry['name']}  ({entry['path']}): {entry['status'].upper()}"
+        governing = entry["governing"]
+        printed = next(line for line in lines if line.startswith("  governing:"))
+        assert governing is not None, "the text names a governing check and the JSON has none"
+        assert printed.split(":", 1)[1].strip() == (f"{governing['name']} ({governing['status']})")
+        # And every check in the text is one the JSON carries, with the same verdict.
+        rendered = [line for line in lines[1:-1] if not line.startswith("       ")]
+        assert len(rendered) == len(entry["scorecard"]["entries"])
+        for line, check in zip(rendered, entry["scorecard"]["entries"], strict=True):
+            assert line.split() == [check["status"], *check["name"].split()]
+
+    verdicts = {entry["status"] for entry in payload["specs"]}
+    assert verdicts == {"not_evaluated", "fail"}, verdicts
+    assert payload["status"] == "fail", "the run reports the worst card, not the best"
+    assert code == EXIT_FAILED
+
+
+def test_a_card_with_nothing_to_govern_says_so_in_both_renderings():
+    """`governing()` returns None on an ordinary card of passing checks that carry no
+    safety factor. The text prints a line saying so rather than omitting it, because a
+    missing line and a card with nothing to govern must not look the same — and the JSON
+    key is present and null for exactly the same reason."""
+    from anvilate.cli import _render
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(ScorecardEntry(name="tip deflection", status=CheckStatus.PASS, detail="4.8 mm"),)
+    )
+    assert card.governing() is None
+    assert "governing:     none" in _render("plate", card)
 
 
 @pytest.mark.parametrize("command", sorted(_UNBUILT))
