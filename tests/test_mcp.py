@@ -284,6 +284,68 @@ def test_the_wire_payload_is_the_clients_own_copy():
     assert catalog_issues() == []
 
 
+def test_both_schemas_of_every_tool_are_the_clients_own_copy():
+    """The exemption above is only as good as the mechanism it names, and half of it was
+    unheld.
+
+    `ToolDefinition` is the one frozen model excused from the frozen-mapping census in
+    `tests/test_revalidated_copy.py`, and the excuse is that this module holds its schemas a
+    different way: a deep copy on the way out, and a catalog rebuilt on every call. Removing
+    the deep copy from **`outputSchema`** broke nothing — the test above mutates `inputSchema`
+    on the first tool only, so the other schema and the other tools were carried by nothing.
+
+    Every tool, both schemas, and the mutation is one the catalog gate names, so a payload
+    that wrote through would be reported rather than merely different.
+    """
+    catalog = tool_catalog()
+    assert [tool["name"] for tool in wire_definitions()] == [tool.name for tool in catalog]
+    keys = (("inputSchema", "input_schema"), ("outputSchema", "output_schema"))
+    for tool in catalog:
+        for wire_key, field in keys:
+            payload = tool.to_wire()
+            payload[wire_key]["additionalProperties"] = True
+            payload[wire_key].pop("$schema", None)
+            # The definition the caller is still holding, not a freshly read one. Re-reading
+            # the catalog hands back a new object whose schemas were never aliased, so it
+            # says nothing about the copy and passes with the copy removed — which is the
+            # mistake the first version of this test made.
+            assert getattr(tool, field)["additionalProperties"] is False, (
+                f"{tool.name}.{wire_key} is handed out by reference; a client editing the "
+                "payload it was given is editing the definition it still holds"
+            )
+            assert "$schema" in getattr(tool, field), f"{tool.name}.{wire_key}"
+    assert catalog_issues() == []
+
+
+def test_a_definition_a_caller_wrote_through_does_not_reach_the_next_catalog():
+    """The other half of the same excuse, and it was carried by nothing at all.
+
+    `frozen` does not reach inside a `dict` field, so the schema on a live definition can be
+    written to directly — not the wire copy, the model's own. What stops that mattering is
+    that `tool_catalog()` builds fresh definitions on every call, so the edit cannot outlive
+    the caller that made it. Caching the catalog broke no test; with it cached, one caller's
+    edit reaches every later reader *and* `catalog_issues()`, which is the gate.
+    """
+    poisoned = tool_catalog()
+    for tool in poisoned:
+        tool.input_schema["additionalProperties"] = True
+        tool.output_schema.pop("$schema", None)
+    # The mutation is a real defect and not merely a difference: fed to the catalog's own
+    # checker, the poisoned schemas are reported. `catalog_issues()` cannot see them, and
+    # that is the property under test — it rebuilds, so it never reads the poisoned objects.
+    assert _schema_issues(poisoned[0], "inputSchema", poisoned[0].input_schema)
+    assert _schema_issues(poisoned[0], "outputSchema", poisoned[0].output_schema)
+
+    for tool in tool_catalog():
+        assert tool.input_schema["additionalProperties"] is False, (
+            f"{tool.name}: a definition handed to one caller is the same object the next "
+            "caller gets, so an edit to it outlives the caller and reaches the gate"
+        )
+        assert "$schema" in tool.output_schema, tool.name
+    assert catalog_issues() == []
+    assert tool_catalog()[0] is not poisoned[0]
+
+
 @pytest.mark.parametrize(
     "nesting",
     [
