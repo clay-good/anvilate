@@ -2504,3 +2504,45 @@ def test_every_name_field_refuses_a_blank():
         + "\nDeclare it as anvilate._models.Named, or add the model to the exemptions above "
         "with the reason its own validator is better."
     )
+
+
+def test_every_capability_spec_is_one_openspec_would_accept():
+    """`openspec validate --specs --strict` is not in CI, and CI is where a broken spec would
+    be caught.
+
+    The tool needs node; this needs nothing, and it holds the rule whose breakage is
+    realistic: a requirement added with no scenario. That is what an archive merge carries
+    into the spec when a change delta is written in a hurry, and it is exactly what strict
+    mode refuses — confirmed by making the edit against a copy of this tree and watching the
+    tool fail on it.
+    """
+    import re
+
+    specs = sorted((_REPO / "openspec" / "specs").glob("*/spec.md"))
+    assert len(specs) >= 25, f"only {len(specs)} capability specs found; the glob has moved"
+
+    problems = []
+    for spec in specs:
+        capability = spec.parent.name
+        text = spec.read_text()
+        blocks = re.split(r"^### Requirement: ", text, flags=re.MULTILINE)[1:]
+        if not blocks:
+            problems.append(f"{capability}: no requirements")
+            continue
+        names = [block.splitlines()[0].strip() for block in blocks]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            problems.append(f"{capability}: two requirements share a name: {duplicates}")
+        for name, block in zip(names, blocks, strict=True):
+            scenarios = re.split(r"^#### Scenario: ", block, flags=re.MULTILINE)[1:]
+            if not scenarios:
+                problems.append(f"{capability}: requirement {name!r} demonstrates nothing")
+                continue
+            for scenario in scenarios:
+                title = scenario.splitlines()[0].strip()
+                body = scenario[: scenario.find("\n###")] if "\n###" in scenario else scenario
+                if "**WHEN**" not in body or "**THEN**" not in body:
+                    problems.append(
+                        f"{capability}: scenario {title!r} under {name!r} has no WHEN/THEN"
+                    )
+    assert not problems, "capability specs openspec would refuse:\n  " + "\n  ".join(problems)
