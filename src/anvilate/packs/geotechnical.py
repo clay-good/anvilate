@@ -30,6 +30,7 @@ from ..analysis import (
     retaining_wall_sliding_factor,
     terzaghi_bearing_capacity,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -144,12 +145,54 @@ def screen_shallow_footing(
 
     applied_pressure = load / (b * lo)  # kN/m^2 = kPa
     safety_factor = q_ult / applied_pressure if applied_pressure > 0 else None
+    # The three bearing factors are carried in already corrected, because that product is
+    # what the capacity was computed from: rendering the raw N alongside a q_ult built from
+    # N·s·d would show a formula that does not reach its own result.
+    derivation = Derivation(
+        symbolic="q_ult = c · N_c + q · N_q + 0.5 · γ · B · N_γ",
+        inputs=(
+            SymbolValue(
+                symbol="c", description="soil cohesion", value=footing.cohesion, unit="kPa"
+            ),
+            SymbolValue(
+                symbol="N_c",
+                description="cohesion bearing factor with Vesić shape and depth corrections "
+                "(N_c · s_c · d_c)",
+                value=factors["N_c"] * shape["s_c"] * depth_factors["d_c"],
+            ),
+            SymbolValue(
+                symbol="q",
+                description="overburden surcharge at founding level, γ · D_f",
+                value=surcharge,
+                unit="kPa",
+            ),
+            SymbolValue(
+                symbol="N_q",
+                description="surcharge bearing factor with Vesić corrections (N_q · s_q · d_q)",
+                value=factors["N_q"] * shape["s_q"] * depth_factors["d_q"],
+            ),
+            SymbolValue(symbol="γ", description="soil unit weight", value=footing.unit_weight),
+            SymbolValue(symbol="B", description="footing width", value=footing.width, unit="m"),
+            SymbolValue(
+                symbol="N_γ",
+                description="self-weight bearing factor with Vesić corrections (N_γ · s_γ · d_γ)",
+                value=factors["N_gamma"] * shape["s_gamma"] * depth_factors["d_gamma"],
+            ),
+        ),
+        result=SymbolValue(
+            symbol="q_ult",
+            description="ultimate bearing pressure",
+            value=Quantity(magnitude=q_ult, unit="kPa"),
+            unit="kPa",
+        ),
+        citation=_BEARING_REFERENCE,
+    )
     entry = ScorecardEntry.from_safety_factor(
         "bearing capacity",
         computed=safety_factor,
         required=required_safety_factor,
     )
-    entry = entry.model_copy(update={"reference": _BEARING_REFERENCE})
+    entry = entry.model_copy(update={"reference": _BEARING_REFERENCE, "derivation": derivation})
     # Monotonicity declaration, not an inverse: widening the footing drops the contact
     # pressure ∝ 1/B *and* raises q_ult through the 0.5·γ·B·N_gamma term, while the depth
     # factors (which fall with B) never overtake either. Swept over 5,346 points spanning
@@ -221,12 +264,79 @@ def screen_retaining_wall(
         vertical_load=wall.vertical_load,
         base_friction_coefficient=wall.base_friction_coefficient,
     )
+    # P_a is carried in rather than expanded to ½·K_a·γ·H²: K_a is tan²(45° − φ/2), and a
+    # symbolic form naming a function the substituter cannot evaluate renders as a formula
+    # with a bare `tan` where a number belongs. The gloss carries what it is instead.
+    thrust_symbol = SymbolValue(
+        symbol="P_a",
+        description="Rankine active thrust on the stem, ½ · K_a · γ · H²",
+        value=thrust,
+        unit="kN/m",
+    )
+    load_symbol = SymbolValue(
+        symbol="V",
+        description="stabilizing vertical load per metre of wall",
+        value=wall.vertical_load,
+        unit="kN/m",
+    )
     overturning = ScorecardEntry.from_safety_factor(
         "overturning", computed=fs_overturning, required=overturning_safety_factor
-    ).model_copy(update={"reference": _OVERTURNING_REFERENCE})
+    ).model_copy(
+        update={
+            "reference": _OVERTURNING_REFERENCE,
+            "derivation": Derivation(
+                symbolic="FS_ot = V · a / (P_a · y)",
+                inputs=(
+                    load_symbol,
+                    SymbolValue(
+                        symbol="a",
+                        description="lever arm of the vertical load about the toe",
+                        value=wall.load_arm,
+                        unit="m",
+                    ),
+                    thrust_symbol,
+                    SymbolValue(
+                        symbol="y",
+                        description="height of the thrust above the base, H/3 for the "
+                        "triangular pressure distribution",
+                        value=thrust_height,
+                        unit="m",
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="FS_ot",
+                    description="restoring moment over overturning moment about the toe",
+                    value=fs_overturning,
+                ),
+                citation=_OVERTURNING_REFERENCE,
+            ),
+        }
+    )
     sliding = ScorecardEntry.from_safety_factor(
         "sliding", computed=fs_sliding, required=sliding_safety_factor
-    ).model_copy(update={"reference": _SLIDING_REFERENCE})
+    ).model_copy(
+        update={
+            "reference": _SLIDING_REFERENCE,
+            "derivation": Derivation(
+                symbolic="FS_sl = μ · V / P_a",
+                inputs=(
+                    SymbolValue(
+                        symbol="μ",
+                        description="friction coefficient between the base and the soil",
+                        value=wall.base_friction_coefficient,
+                    ),
+                    load_symbol,
+                    thrust_symbol,
+                ),
+                result=SymbolValue(
+                    symbol="FS_sl",
+                    description="base friction resistance over driving thrust",
+                    value=fs_sliding,
+                ),
+                citation=_SLIDING_REFERENCE,
+            ),
+        }
+    )
     # Both external-stability factors are linear in the stabilizing weight — FS_ot = V·a/(P·y)
     # and FS_sl = μ·V/P — so the weight that reaches the required margin is V·required/FS,
     # exactly, for either. Weight is also the shared lever an engineer actually pulls (a
@@ -294,9 +404,48 @@ def screen_infinite_slope(
         slope_angle=slope.slope_angle,
         pore_pressure=slope.pore_pressure,
     )
+    # σ' and τ_d are carried in already evaluated. The effective normal stress is floored at
+    # zero — a pore pressure above the total normal stress floats the grains apart, it does
+    # not make the stress negative — and a symbolic form cannot express that floor, so
+    # expanding it here would render a formula that disagrees with the number beside it.
+    beta = radians(slope.slope_angle)
+    gamma_z = slope.unit_weight.to("kN/m**3").magnitude * slope.depth.to("m").magnitude
+    pore = 0.0 if slope.pore_pressure is None else slope.pore_pressure.to("kPa").magnitude
+    normal = max(gamma_z * cos(beta) ** 2 - pore, 0.0)
+    driving = gamma_z * sin(beta) * cos(beta)
+    derivation = Derivation(
+        symbolic="FS = (c + σ' · tanφ) / τ_d",
+        inputs=(
+            SymbolValue(symbol="c", description="soil cohesion", value=slope.cohesion, unit="kPa"),
+            SymbolValue(
+                symbol="σ'",
+                description="effective normal stress on the failure plane, "
+                "γ · z · cos²β − u, floored at zero",
+                value=Quantity(magnitude=normal, unit="kPa"),
+                unit="kPa",
+            ),
+            SymbolValue(
+                symbol="tanφ",
+                description=f"tangent of the drained friction angle φ = {slope.friction_angle:g}°",
+                value=tan(radians(slope.friction_angle)),
+            ),
+            SymbolValue(
+                symbol="τ_d",
+                description="driving shear stress on the failure plane, γ · z · sinβ · cosβ",
+                value=Quantity(magnitude=driving, unit="kPa"),
+                unit="kPa",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="FS",
+            description="resisting shear strength over driving shear stress",
+            value=factor_of_safety,
+        ),
+        citation=_SLOPE_REFERENCE,
+    )
     entry = ScorecardEntry.from_safety_factor(
         "slope stability", computed=factor_of_safety, required=required_safety_factor
-    ).model_copy(update={"reference": _SLOPE_REFERENCE})
+    ).model_copy(update={"reference": _SLOPE_REFERENCE, "derivation": derivation})
     return Scorecard(entries=(_hinted(entry, _slope_repair_hint(slope, required_safety_factor)),))
 
 
@@ -394,9 +543,38 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
     )
     load = pile.applied_load.to("kN").magnitude
     demand_ratio = allowable / load if load > 0 else None
+    derivation = Derivation(
+        symbolic="Q_a = (Q_s + Q_b) / FS",
+        inputs=(
+            SymbolValue(
+                symbol="Q_s",
+                description="α-method shaft friction, α · s_u · π · D · L",
+                value=shaft,
+                unit="kN",
+            ),
+            SymbolValue(
+                symbol="Q_b",
+                description="end bearing, N_c · s_u · A_b with N_c = 9",
+                value=tip,
+                unit="kN",
+            ),
+            SymbolValue(
+                symbol="FS",
+                description="factor of safety applied to the ultimate capacity",
+                value=pile.factor_of_safety,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="Q_a",
+            description="allowable axial capacity",
+            value=Quantity(magnitude=allowable, unit="kN"),
+            unit="kN",
+        ),
+        citation=_PILE_REFERENCE,
+    )
     entry = ScorecardEntry.from_safety_factor(
         "pile capacity", computed=demand_ratio, required=1.0
-    ).model_copy(update={"reference": _PILE_REFERENCE})
+    ).model_copy(update={"reference": _PILE_REFERENCE, "derivation": derivation})
     # Shaft friction is linear in the embedded length and end bearing does not depend on it,
     # so the length that reaches a demand ratio of 1.0 is exact: the shaft has to supply
     # (FS·load − tip), and it does so in proportion to L. Driving deeper is also the repair

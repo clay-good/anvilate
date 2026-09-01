@@ -119,6 +119,18 @@ def test_infinite_slope_dry_passes_saturated_fails():
     assert screen_infinite_slope(wet).status is CheckStatus.FAIL
 
 
+def _slope(**overrides) -> InfiniteSlope:
+    fields = {
+        "cohesion": _q("20 kPa"),
+        "friction_angle": 30.0,
+        "unit_weight": _q("19 kN/m**3"),
+        "depth": _q("2.5 m"),
+        "slope_angle": 35.0,
+    }
+    fields.update(overrides)
+    return InfiniteSlope(**fields)
+
+
 def _pile(**overrides) -> DrivenPile:
     fields = {
         "diameter": _q("0.4 m"),
@@ -314,3 +326,76 @@ def test_the_pile_factor_of_safety_default_divides_the_capacity_it_is_supposed_t
     assert at_default.safety_factor / at_three.safety_factor == pytest.approx(3.0 / 2.5, rel=1e-9)
     # The ultimate capacity behind both: 350 kN x 1.2279 x 2.5 = 1074 kN.
     assert at_default.safety_factor * 2.5 * 350.0 == pytest.approx(1074.4, rel=1e-3)
+
+
+def test_every_geotechnical_entry_shows_the_work_it_did():
+    """All five checks render a worked calculation that reaches its own result.
+
+    The substitution is the assertion: a derivation whose formula drifted from the
+    function that computed the number would still render, and would render something
+    plausible. Reproducing the result from the substituted line is what catches that.
+    """
+    cards = [
+        screen_shallow_footing(_footing()),
+        screen_retaining_wall(_wall()),
+        screen_infinite_slope(_slope()),
+        screen_driven_pile(_pile()),
+    ]
+    entries = [entry for card in cards for entry in card.entries]
+    assert len(entries) == 5
+
+    for entry in entries:
+        derivation = entry.derivation
+        assert derivation is not None, f"{entry.name} carries no derivation"
+        assert derivation.unresolved_symbols() == ()
+        assert derivation.citation == entry.reference
+        # Every symbol the formula uses is glossed, and no symbol is glossed twice.
+        symbols = [row[0] for row in derivation.glossary()]
+        assert len(symbols) == len(set(symbols))
+        assert all(row[1] for row in derivation.glossary())
+
+    worked = {entry.name: entry.derivation for entry in entries}
+
+    # The two wall factors are the results themselves, so they are held against the
+    # verdict directly.
+    for name in ("overturning", "sliding"):
+        entry = next(e for e in entries if e.name == name)
+        assert worked[name].result.value == pytest.approx(entry.safety_factor, rel=1e-12)
+    assert worked["slope stability"].result.value == pytest.approx(
+        next(e for e in entries if e.name == "slope stability").safety_factor, rel=1e-12
+    )
+
+    # The other two produce a capacity, and the entry divides it by the demand.
+    q_ult = worked["bearing capacity"].result.value.to("kPa").magnitude
+    footing = _footing()
+    applied = footing.applied_load.to("kN").magnitude / (
+        footing.width.to("m").magnitude * footing.length.to("m").magnitude
+    )
+    bearing = next(e for e in entries if e.name == "bearing capacity")
+    assert q_ult / applied == pytest.approx(bearing.safety_factor, rel=1e-12)
+
+    allowable = worked["pile capacity"].result.value.to("kN").magnitude
+    pile = next(e for e in entries if e.name == "pile capacity")
+    assert allowable / _pile().applied_load.to("kN").magnitude == pytest.approx(
+        pile.safety_factor, rel=1e-12
+    )
+
+
+def test_the_slope_derivation_carries_the_effective_stress_floor():
+    """The one derivation whose formula cannot state its own guard.
+
+    A pore pressure above the total normal stress floats the grains apart: the effective
+    stress is zero, not negative. The symbolic form has no way to write that floor, so the
+    floored value is carried in as σ' — and if it were expanded to γ·z·cos²β − u the
+    rendered line would disagree with the result printed beside it. This holds the
+    substitution against the number the check actually used.
+    """
+    drowned = _slope(pore_pressure=Quantity.parse("500 kPa"))
+    entry = screen_infinite_slope(drowned).entries[0]
+    effective = next(i for i in entry.derivation.inputs if i.symbol == "σ'")
+    assert effective.value.to("kPa").magnitude == 0.0
+    assert "0.0 kPa · " in entry.derivation.substituted()
+    # With no friction left the factor of safety is cohesion over the driving stress, and
+    # it is positive — the failure the floor exists to prevent is a negative one.
+    assert entry.derivation.result.value == pytest.approx(entry.safety_factor, rel=1e-12)
+    assert entry.safety_factor > 0
