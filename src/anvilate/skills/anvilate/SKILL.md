@@ -231,6 +231,74 @@ bundle PASS over 1 layer (checks); not covered: design basis, verification, revi
 Report the bundle's own sentence, including what it does not cover. When you are asked
 whether the part is good, the honest answer names the layers nobody has run.
 
+## 7. Screen the document, not a rebuilt element
+
+<!-- doctrine: screen-the-document -->
+
+When the part arrives as a Design Spec, screen the spec. `screen_spec` reads the element
+the document declares — `element_type` names the element and `element_params` carries its
+own fields — and dispatches it to the discipline pack that screens it. Rebuilding the pack
+element by hand from the same document is how a transcription error enters a run nobody
+can see it in.
+
+```python
+from anvilate.screening import screen_spec
+from anvilate.spec import (
+    AcceptanceCriteria,
+    Constraints,
+    DesignSpec,
+    Manufacturing,
+    ManufacturingProcess,
+    MaterialRef,
+    Provenanced,
+    ValidationTier,
+)
+from anvilate.units import Quantity, UnitSystem
+
+spec = DesignSpec(
+    name="padeye",
+    description="A lifting padeye on a skid frame.",
+    units=Provenanced.stated(UnitSystem.SI),
+    material=MaterialRef(ref="ASTM-A36"),
+    manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
+    element_type="lifting_lug",
+    element_params={
+        "name": "padeye",
+        "material": "ASTM-A36",
+        "width": Quantity.parse("120 mm"),
+        "hole_diameter": Quantity.parse("40 mm"),
+        "thickness": Quantity.parse("20 mm"),
+        "load": Quantity.parse("60 kN"),
+    },
+    constraints=Constraints(min_safety_factor=Provenanced.stated(2.0)),
+    acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+)
+card = screen_spec(spec)
+print(card.status.value, "|", len(card.entries), "checks")
+
+bare = spec.model_copy(update={"constraints": Constraints()})
+print(screen_spec(bare).entries[0].detail)
+```
+
+```text
+pass | 3 checks
+the lifting_lug screen is judged against a required safety factor and the spec states none; declare constraints.min_safety_factor
+```
+
+Two things in the document are yours to ask about and never to choose:
+
+- **The element.** A document that declares none is `NOT_EVALUATED` naming that, and an
+  unknown tag is refused with the near miss suggested. `anvilate.screening.element_registry`
+  lists the tags; `structure` is the one that takes a list of members, for a part that is an
+  assembly rather than a single element.
+- **The required safety factor.** It is read from `constraints.min_safety_factor`. A spec
+  that states none is `NOT_EVALUATED`, as above. Ask the user for the figure and where it
+  comes from; a screen run against a number you supplied is a screen against your
+  assumption.
+
+At the shell the same path is `anvilate check <document>`, and its exit code carries the
+verdict.
+
 ## What you must not do
 
 - Do not present a screening result as certified, stamped, or sealed analysis.

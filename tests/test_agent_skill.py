@@ -60,6 +60,7 @@ _REQUIRED_DOCTRINE: dict[str, tuple[str, ...]] = {
     "inverse-first-repair": ("bolt_diameter_for_shear", "required_safety_factor"),
     "confirm-before-use": ("release()", "with_confirmation"),
     "screening-not-certified": ("BundleSections(", "assert bundle.verified is False"),
+    "screen-the-document": ("screen_spec(", "element_type="),
 }
 
 # The exact sentences the skill is *required* to contain, which happen to contain phrases the
@@ -145,6 +146,11 @@ _AGENTS_DOCTRINE = """\
 - **Confirm before use.** Values read from a requirements document or a calibration
   certificate are drafts. `release()` refuses until a named person confirms them — do not
   read the drafts directly, and never make the confirmation decision for the user.
+- **Screen the document.** When the part is described by a Design Spec, screen the spec
+  with `screen_spec` rather than rebuilding a pack element by hand: the tag it declares
+  selects the screen, and the required safety factor comes from the document. A spec that
+  declares neither reports `NOT_EVALUATED` saying so — supply what is missing by asking,
+  never by choosing a house number.
 - **Screening, not certified.** Say what a green scorecard is: the closed-form checks that
   ran were satisfied by the inputs given. Report what the evidence bundle says it does not
   cover.

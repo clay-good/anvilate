@@ -165,7 +165,7 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
             if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
                 continue
             tag = _tag(annotation.__name__)
-            if tag in found:  # pragma: no cover - the 23 tags are distinct today
+            if tag in found:  # pragma: no cover - the pack tags are distinct today
                 raise RuntimeError(
                     f"two pack elements answer to {tag!r}: {found[tag][0].__name__} and "
                     f"{annotation.__name__}; a document naming it would screen the wrong one"
@@ -221,7 +221,7 @@ def _screen_element(
                 ),
             )
         ]
-    # Every pack screen takes the element and, for twelve of the twenty-three, a required
+    # Every pack screen takes the element and, for thirteen of the twenty-four, a required
     # safety factor. That is the one thing outside the element the document already states,
     # so it comes from `constraints.min_safety_factor` -- and when the screen requires one
     # and the spec declares none, the tier is NOT_EVALUATED rather than screened against a

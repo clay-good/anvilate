@@ -24,8 +24,8 @@ unit-checked, fast — and it is not a certified analysis.
 
 The full guidance, with a worked example for every rule, ships inside the package at
 `src/anvilate/skills/anvilate/SKILL.md` (installed as `anvilate/skills/anvilate/SKILL.md`,
-so it is available offline). Read it before driving the library. The six rules it expands
-on, in short:
+so it is available offline). Read it before driving the library. The seven rules it
+expands on, in short:
 
 - **Retrieval, not recall.** Standard dimensions come from the bundled databases with
   their citations attached. A refusal names the near misses; do not answer it with a
@@ -41,6 +41,11 @@ on, in short:
 - **Confirm before use.** Values read from a requirements document or a calibration
   certificate are drafts. `release()` refuses until a named person confirms them — do not
   read the drafts directly, and never make the confirmation decision for the user.
+- **Screen the document.** When the part is described by a Design Spec, screen the spec
+  with `screen_spec` rather than rebuilding a pack element by hand: the tag it declares
+  selects the screen, and the required safety factor comes from the document. A spec that
+  declares neither reports `NOT_EVALUATED` saying so — supply what is missing by asking,
+  never by choosing a house number.
 - **Screening, not certified.** Say what a green scorecard is: the closed-form checks that
   ran were satisfied by the inputs given. Report what the evidence bundle says it does not
   cover.
