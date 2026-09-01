@@ -381,3 +381,50 @@ def test_the_docs_index_is_sections_not_one_list():
 def test_the_docs_index_is_reachable_from_the_readme():
     readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
     assert "docs/README.md" in readme, "the index nothing links is the index nobody finds"
+
+
+def test_the_readme_document_is_a_document_that_screens_to_what_it_shows():
+    """The front page's other front door: a spec file and the card `anvilate check` prints.
+
+    Held the same way as the quickstart above — the YAML is written to a file and the CLI is
+    driven as a real subprocess, so what a reader copies is what a reader runs. A block that
+    only *looks* like a document is the failure this repository has already had once, on the
+    screening page, one `...` at a time.
+    """
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    page = (_REPO / "README.md").read_text()
+    document = re.search(r"```yaml\n(name: padeye\n.*?)```", page, re.S)
+    printed = re.search(
+        r"```bash\nanvilate check padeye\.yaml\n```\n\n```text\n(.*?)```", page, re.S
+    )
+    assert document is not None and printed is not None, "the README's document block has moved"
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "padeye.yaml"
+        path.write_text(document.group(1), encoding="utf-8")
+        completed = subprocess.run(  # noqa: S603 - our own CLI, fixed argv, no shell
+            [
+                sys.executable,
+                "-c",
+                "from anvilate.cli import run; raise SystemExit(run())",
+                "check",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            env={"PYTHONPATH": str(_REPO / "src"), "PATH": "/usr/bin:/bin"},
+            check=False,
+        )
+    assert completed.returncode == 0, completed.stderr
+    # The path differs from the README's, and the first line names it; the rest is the card.
+    shown = printed.group(1).splitlines()
+    actual = completed.stdout.splitlines()
+    assert actual[0] == "padeye: PASS", actual[0]
+    assert actual[1:] == shown[1:], (
+        "the README's card is not what `anvilate check` prints for its own document:\n"
+        + "\n".join(actual[1:])
+    )
