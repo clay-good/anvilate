@@ -173,6 +173,23 @@ def test_a_curve_cannot_be_both_r_independent_and_carry_an_r():
         _specimen(stress_ratio_independent=True, stress_ratio=0.1)
 
 
+def test_a_stress_concentration_factor_below_one_is_refused():
+    """Kt is a *concentration*: the peak stress over the nominal, so it is at least 1.
+
+    Below 1 the notch would be relieving stress rather than raising it, and a curve
+    recorded against such a factor would read as more fatigue life than the specimen had.
+    The refusal existed and nothing had run it; pinned by the boundary, since 1.0 is a
+    smooth specimen and a real record rather than an error.
+    """
+    for below in (0.999, 0.5, 0.0, -1.0):
+        with pytest.raises(ValidationError, match="stress concentration factor is at least 1"):
+            _specimen(stress_concentration_factor=below)
+    assert _specimen(stress_concentration_factor=1.0).stress_concentration_factor == 1.0
+    assert _specimen(stress_concentration_factor=3.2).stress_concentration_factor == 3.2
+    # And omitting it stays legal: an unrecorded factor is not a factor of one.
+    assert _specimen().stress_concentration_factor is None
+
+
 def test_a_plain_specimen_curve_carries_its_r():
     specimen = _specimen(
         geometry=SpecimenGeometry.POLISHED,

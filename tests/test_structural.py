@@ -772,6 +772,59 @@ def test_overhang_member_validators():
             mass_per_length=_q("1.57 kg/m"),
             **common,
         )
+    # The one refusal in this block nothing had ever run, and it is the one that would cost
+    # margin rather than raise an error. An overhang dispatches on the tip, so a
+    # `load_position` handed to it is not applied -- it is *ignored*, and the beam is
+    # screened at the tip for a load that is somewhere else.
+    #
+    # Two of the three fields reach it; `pair_offset` is caught one validator earlier by the
+    # rule that it is only encoded for a simply-supported point load. Each is asserted
+    # against the message it actually gets, because a test written against the message it
+    # ought to get would have passed on the earlier refusal and left this one cold.
+    for field, value, load, load_type, expected in (
+        (
+            "load_position",
+            _q("100 mm"),
+            _q("100 N"),
+            LoadType.POINT,
+            "not encoded for an overhang member",
+        ),
+        (
+            "loaded_length",
+            _q("120 mm"),
+            _q("1 N/mm"),
+            LoadType.DISTRIBUTED,
+            "not encoded for an overhang member",
+        ),
+        (
+            "pair_offset",
+            _q("50 mm"),
+            _q("100 N"),
+            LoadType.POINT,
+            "only encoded for a simply-supported point load",
+        ),
+    ):
+        with pytest.raises(ValidationError, match=expected):
+            BeamMember(
+                support=Support.OVERHANG,
+                load=load,
+                load_type=load_type,
+                overhang_length=_q("250 mm"),
+                **{field: value},
+                **common,
+            )
+    # And the overhang still builds without them, or the refusal above is a ban on the
+    # member rather than on the combination.
+    assert (
+        BeamMember(
+            support=Support.OVERHANG,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            overhang_length=_q("250 mm"),
+            **common,
+        ).load_position
+        is None
+    )
 
 
 def test_shear_screen_uses_the_section_form_factor():
