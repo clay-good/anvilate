@@ -1246,3 +1246,32 @@ def test_every_command_line_the_docs_print_is_one_this_cli_accepts():
     assert not problems, "documented command lines the CLI would refuse:\n  " + "\n  ".join(
         problems
     )
+
+
+def test_the_card_prints_the_repair_hint_under_a_failing_check():
+    """The most actionable thing a failing entry carries, and the shell dropped it.
+
+    Where a design inverse exists the hint is the value that lands exactly on the required
+    margin. The calculation report printed it; `anvilate check` printed the failure and left
+    the reader to solve the inverse themselves.
+    """
+    from anvilate.cli import _render
+    from anvilate.scorecard import Direction, RepairHint, Scorecard, ScorecardEntry
+
+    hint = RepairHint(
+        parameter="thickness", direction=Direction.INCREASE, corrective_value=12.0, unit="mm"
+    )
+    failing = ScorecardEntry.from_safety_factor(
+        "pin bearing", computed=1.0, required=2.0, repair_hint=hint
+    )
+    passing = ScorecardEntry.from_safety_factor("net tension", computed=2.0, required=2.0)
+    rendered = _render("padeye", Scorecard(entries=(failing, passing)))
+
+    assert "→ increase thickness to 12 mm" in rendered
+    # One arrow, not two: a passing check carries no hint and must not grow a line.
+    assert rendered.count("→") == 1
+    # And it sits under its own entry rather than at the end of the card.
+    lines = rendered.splitlines()
+    assert lines.index("                 → increase thickness to 12 mm") < lines.index(
+        "  pass           net tension"
+    )

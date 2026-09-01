@@ -766,6 +766,12 @@ def _render(name: str, card: Scorecard) -> str:
         lines.append(f"  {entry.status.value:<14} {entry.name}")
         if entry.detail:
             lines.append(f"                 {entry.detail}")
+        # The repair hint is the most actionable thing a failing entry carries — where a
+        # design inverse exists it is the value that lands exactly on the required margin —
+        # and it was printed by the calculation report and by nothing at the shell. A reader
+        # was told the check failed and left to solve the inverse themselves.
+        if entry.repair_hint is not None:
+            lines.append(f"                 → {entry.repair_hint}")
     governing = card.governing()
     if governing is None:
         lines.append("  governing:     none — nothing blocks and no check carries a margin")

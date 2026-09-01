@@ -17,6 +17,11 @@ deck_plate: NOT_EVALUATED
   governing:     T1 analytical (not_evaluated)
 ```
 
+**A failing check prints its repair hint under it**, marked with `→`. Where a design
+inverse exists the hint is the value that lands exactly on the required margin — `→ increase
+thickness to 12 mm` — so the shell answers "what do I change?" as well as "what failed?". A
+check that carries no hint grows no line.
+
 **The governing check is named last because it is what a reviewer reads first.** It is the
 check closest to — or furthest past — its limit, and blocking status outranks utilization,
 so a check that could not run governs over one at 99% and the card says which. A card with
