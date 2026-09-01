@@ -1029,11 +1029,22 @@ def test_the_render_truth_gate_can_actually_see_a_square_root():
 
     from anvilate.units.registry import UREG
 
-    plain = UREG.parse_expression("\u221a((250000 mm**2)/(40000 mm**2))")
-    expanded = UREG.parse_expression(_expand_roots("\u221a((250000 mm**2)/(40000 mm**2))"))
-    # 6.25 before, 2.5 after: the radical was being thrown away.
-    assert math.isclose(float(plain), 6.25)
+    radical = "\u221a((250000 mm**2)/(40000 mm**2))"
+    expanded = UREG.parse_expression(_expand_roots(radical))
     assert math.isclose(float(expanded), 2.5)
+
+    # What pint does with the radical *itself* depends on the interpreter, and the claim
+    # here is that neither answer can be trusted. On 3.11 it drops the character and returns
+    # 6.25 — the ratio, unrooted, which is the silent wrong number this expansion exists to
+    # prevent. On 3.12 the rewritten tokenizer hands the character to the unit lookup and it
+    # raises. Asserting the 3.11 behaviour alone made this test a claim about CPython's
+    # tokenizer, and it failed the first time the suite met 3.12.
+    try:
+        plain = float(UREG.parse_expression(radical))
+    except Exception:  # noqa: BLE001 - any refusal is the acceptable outcome
+        plain = None
+    assert plain is None or math.isclose(plain, 6.25)
+    assert plain != 2.5, "pint answered the radical correctly; the expansion is now dead code"
 
 
 def test_every_derivation_the_library_builds_evaluates_to_its_own_result():

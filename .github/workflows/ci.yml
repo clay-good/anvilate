@@ -13,11 +13,19 @@ on:
 jobs:
   python:
     runs-on: ubuntu-latest
+    # `requires-python` says >=3.11 and this ran 3.11 only, so two of the three versions the
+    # package claims were untested. The first run on 3.12 found a test asserting a pint quirk
+    # that only holds on 3.11 — CPython's rewritten tokenizer hands pint a character the old
+    # one dropped — which is exactly the class of thing a single-version matrix cannot see.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - name: Install
         run: pip install -e ".[dev]"
       - name: Lint
