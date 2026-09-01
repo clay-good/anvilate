@@ -538,3 +538,31 @@ def test_the_pages_that_count_something_count_the_real_thing():
     )
     assert words[claimed.group(2)] == len(materials)
     assert words[claimed.group(1)] == minima
+
+
+def test_every_file_and_symbol_the_readme_names_still_exists():
+    """The front page backticks fifty-nine example filenames and a handful of spec fields, and
+    a rename leaves the old one reading exactly as right as the new one.
+
+    The packaged skill has had this gate since it shipped — "a renamed function fails the
+    build rather than shipping as advice" — and the README, which more people read, had none.
+
+    The first draft of this test filtered to names starting with `anvilate.` and checked
+    exactly one thing while reporting clean, which is the failure mode it is written against:
+    both halves assert how many names they found before checking any of them.
+    """
+    import re
+
+    from anvilate.spec import Constraints
+
+    text = (_REPO / "README.md").read_text(encoding="utf-8")
+
+    examples = sorted(set(re.findall(r"`([a-z0-9_]+\.py)`", text)))
+    assert len(examples) >= 40, f"only {len(examples)} example filenames found; the regex moved"
+    absent = [name for name in examples if not (_REPO / "examples" / name).exists()]
+    assert not absent, f"the README names examples that are not in examples/: {absent}"
+
+    fields = sorted(set(re.findall(r"`constraints\.([a-z_]+)`", text)))
+    assert fields, "the README no longer names a constraints field"
+    unknown = [name for name in fields if name not in Constraints.model_fields]
+    assert not unknown, f"the README names constraints fields the model does not have: {unknown}"
