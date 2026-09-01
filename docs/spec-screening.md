@@ -166,6 +166,16 @@ carries a force and no nature makes it `NOT_EVALUATED`, because the demand was t
 from part of the declared loads; and a seismic basis with no `seismic_design_acceleration`
 lands on the card rather than raising out of the screen.
 
+**A general tolerance class is a reference, and it is resolved like one.** `Manufacturing`
+said in its own docstring that its DFM parameters were "checked against" the process, and
+neither was read on any screening path. `tolerance_class` is the ISO 2768 class the drawing
+states — `anvilate.tolerance.resolve_class` exists for exactly it — and it was resolved only
+when the evidence bundle was assembled. So a document writing the class the way a drawing
+writes it, `ISO2768-m`, screened to **PASS** and then raised `'iso2768-m' is not a valid
+ToleranceClass` out of `anvilate export`: two surfaces disagreeing about one document, and
+the one a user runs first said nothing. It is a FAIL on the card now, with the near misses
+named. `min_wall` is a bound on built geometry and is reported unscreened.
+
 **Two more declarations the card used to be silent about.** A geometric tolerance is
 carried into the provenance record and screened by nothing — a spec's `GeometricTolerance`
 is a different type from `anvilate.gdt.FeatureControlFrame`, the semantic layer that could

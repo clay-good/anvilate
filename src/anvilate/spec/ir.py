@@ -101,6 +101,15 @@ class ManufacturingProcess(StrEnum):
 class Manufacturing(_Base):
     """The manufacturing process and the DFM parameters it is checked against."""
 
+    # The docstring is the published schema's description for this type, so it is left
+    # exactly as it was: changing it would change `design-spec.schema.json` and owe the
+    # contract a version bump for a sentence. What it means, precisely: `process` selects the
+    # achievable-tolerance floor a T2 screen compares against; `tolerance_class` is a
+    # reference resolved on the card, near misses named, like any other identifier; and
+    # `min_wall` is a bound on built geometry, so a screen reports it as unscreened rather
+    # than checking it. Neither of the last two was read on any screening path until the
+    # screen learned to answer them.
+
     process: ManufacturingProcess
     min_wall: Length | None = None
     tolerance_class: str | None = None  # e.g. ISO 2768 "medium"

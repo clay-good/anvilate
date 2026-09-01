@@ -1062,6 +1062,9 @@ _ANSWERED_BY_A_CHECK = {
     "element_type": "the pack screen it selects, or the T1 gap naming it",
     "element_params": "the pack screen it selects, or the T1 gap naming it",
     "constraints": "min_safety_factor is consumed; the rest are reported as unscreened",
+    "manufacturing": (
+        "the process picks the tolerance floor, the class resolves, min_wall is reported"
+    ),
     "acceptance": "the tiers it demands are what produce the entries",
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
@@ -1069,7 +1072,6 @@ _NOT_A_CLAIM_ABOUT_THE_PART = {
     "name": "an identifier for the part",
     "description": "prose for a reader",
     "units": "the system the quantities are rendered in",
-    "manufacturing": "the process, which the tolerance floor is read from",
     "exports": "contracts this part publishes for others, not a property of this one",
 }
 
@@ -1088,3 +1090,65 @@ def test_every_field_a_spec_declares_is_answered_or_named():
     )
     stale = (set(_ANSWERED_BY_A_CHECK) | set(_NOT_A_CLAIM_ABOUT_THE_PART)) - declared
     assert not stale, f"the census names fields DesignSpec does not have: {sorted(stale)}"
+
+
+def _manufactured(**fields):
+    from anvilate.spec import Manufacturing, ManufacturingProcess
+
+    return _lug_spec(
+        manufacturing=Manufacturing(process=ManufacturingProcess.CNC_MILLING, **fields)
+    )
+
+
+def test_a_general_tolerance_class_written_the_way_a_drawing_writes_it_is_a_verdict():
+    """`tolerance_class` is a reference, and it was resolved only when the evidence bundle
+    was assembled.
+
+    So a document writing the class the way a drawing writes it — `ISO2768-m` — screened to
+    PASS, and then raised `'iso2768-m' is not a valid ToleranceClass` out of the bundle. Two
+    surfaces disagreeing about the same document, and the one a user runs first said nothing.
+    """
+    card = screen_spec(_manufactured(tolerance_class="ISO2768-m"))
+    entry = next(e for e in card.entries if e.name == "general tolerance class")
+    assert entry.status is CheckStatus.FAIL
+    assert "ISO2768-m" in entry.detail
+    assert card.status is CheckStatus.FAIL
+
+    resolved = screen_spec(_manufactured(tolerance_class="medium"))
+    good = next(e for e in resolved.entries if e.name == "general tolerance class")
+    assert good.status is CheckStatus.PASS and "ISO 2768 medium" in good.detail
+    # A near miss is named, which is the whole of the retrieval rule.
+    typo = screen_spec(_manufactured(tolerance_class="mediun"))
+    assert (
+        "did you mean medium"
+        in next(e for e in typo.entries if e.name == "general tolerance class").detail
+    )
+
+
+def test_a_declared_min_wall_is_reported_as_unscreened():
+    """A bound on built geometry, like the bounds in `constraints`, and `Manufacturing` said
+    in its own docstring that it was checked."""
+    card = screen_spec(_manufactured(min_wall=_q("2 mm")))
+    entry = next(e for e in card.entries if e.name == "minimum wall")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "2 mm" in entry.detail and "no geometry is generated" in entry.detail
+    # And a spec that declares neither gets neither entry.
+    plain = [e.name for e in screen_spec(_lug_spec()).entries]
+    assert "minimum wall" not in plain and "general tolerance class" not in plain
+
+
+def test_the_card_and_the_evidence_bundle_agree_about_a_tolerance_class():
+    """The two surfaces that disagreed. The screen now refuses what the bundle refuses, and
+    the bundle still builds for what the screen accepts."""
+    from anvilate.evidence import collect_provenance
+    from anvilate.standards import default_components_db, default_materials_db
+
+    good = _manufactured(tolerance_class="medium")
+    collect_provenance(good, materials=default_materials_db(), components=default_components_db())
+
+    bad = _manufactured(tolerance_class="ISO2768-m")
+    assert screen_spec(bad).status is CheckStatus.FAIL
+    with pytest.raises(ValueError, match="not a valid ToleranceClass"):
+        collect_provenance(
+            bad, materials=default_materials_db(), components=default_components_db()
+        )

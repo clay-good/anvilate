@@ -63,7 +63,7 @@ from ._models import EMPTY_MAP, FrozenMap, rebuilt_quantities
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
 from .standards import default_standards_resolver
-from .tolerance.general import ToleranceRangeError
+from .tolerance.general import ToleranceClass, ToleranceRangeError, resolve_class
 from .tolerance.process import tolerance_is_achievable
 
 __all__ = [
@@ -497,6 +497,66 @@ def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
+def _manufacturing_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """The DFM parameters `Manufacturing` says it is checked against.
+
+    Its docstring said exactly that and neither field was read on any screening path.
+
+    ``tolerance_class`` is a *reference*: the general-tolerance class the drawing states, and
+    `anvilate.tolerance.resolve_class` — whose own docstring says it resolves "a spec's
+    optional tolerance_class" — was called only when the evidence bundle was assembled. So a
+    document writing the class the way a drawing writes it, ``ISO2768-m``, screened to PASS
+    and then raised `'iso2768-m' is not a valid ToleranceClass` out of `anvilate export`. It
+    is a verdict here, with the near misses named, for the same reason an unknown material
+    is.
+
+    ``min_wall`` is a bound on built geometry, so it is reported unscreened rather than
+    checked, like the bounds in `constraints`.
+    """
+    entries: list[ScorecardEntry] = []
+    declared = spec.manufacturing.tolerance_class
+    if declared is not None:
+        try:
+            resolved = resolve_class(declared)
+        except ValueError:
+            known = [member.value for member in ToleranceClass]
+            entries.append(
+                ScorecardEntry(
+                    name="general tolerance class",
+                    status=CheckStatus.FAIL,
+                    detail=(
+                        f"unknown general tolerance class {declared!r} — "
+                        f"{_near_misses(declared, known)} The class governs every dimension "
+                        "the drawing does not tolerance individually."
+                    ),
+                )
+            )
+        else:
+            entries.append(
+                ScorecardEntry(
+                    name="general tolerance class",
+                    status=CheckStatus.PASS,
+                    detail=(
+                        f"{declared!r} resolves to ISO 2768 {resolved.value}, the class "
+                        "governing every dimension not toleranced individually"
+                    ),
+                )
+            )
+    if spec.manufacturing.min_wall is not None:
+        entries.append(
+            ScorecardEntry(
+                name="minimum wall",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares min_wall {spec.manufacturing.min_wall}, and nothing "
+                    "screened it: a wall thickness is measured on a built solid, and no "
+                    "geometry is generated from a spec today"
+                ),
+            )
+        )
+    return entries
+
+
 def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
     """Whether every force-carrying load case declares the nature a combination needs.
 
@@ -704,6 +764,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
+    entries.extend(_manufacturing_entries(spec))
     geometric = _geometric_tolerance_entry(spec)
     if geometric is not None:
         entries.append(geometric)
