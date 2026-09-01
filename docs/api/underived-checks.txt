@@ -63,7 +63,5 @@ Kirchhoff plate theory (axisymmetric closed form) :: the clamped and simply-supp
 NDS :: the adjusted design values F'_b, F'_c, F'_v — the reference value times the applicable adjustment factors, which is exactly what a reviewer recomputes.
 Roark's Formulas, Table 11.4 :: the table supplies the coefficient; the deflection and stress formulas it feeds are closed form.
 Shigley's Mechanical Engineering Design, Marin surface factor k_a = a·S_u^b (surface-finish table, S_u in MPa); screening estimate, not a measured factor :: the citation states the formula; a and b are tabular and S_u is not.
-TMS 402 §8.2.4 allowable axial stress :: the allowable axial stress with its slenderness reduction.
-TMS 402 §8.2.4.2 combined axial + flexure unity :: f_a/F_a + f_b/F_b.
 Timoshenko plate theory :: derived for the plate-bending half; the flatness half renders the limit without the deflection formula behind it.
 half-sine shock response spectrum :: the SRS amplification as a function of the pulse duration times the natural frequency.

@@ -1005,6 +1005,7 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
         geotechnical,
         hydraulics,
         lighting,
+        masonry,
         noise_exposure,
         ventilation,
     )
@@ -1165,6 +1166,29 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
                     provided_outdoor_airflow=q("300 L/s"),
                     room_volume=q("900 m**3"),
                     required_air_changes=1.0,
+                )
+            ),
+        ),
+        # Both sides of the h/r = 99 crossover, where §8.2.4 changes formula.
+        (
+            "masonry slender",
+            masonry.screen_masonry_wall(
+                masonry.MasonryWall(
+                    masonry_strength=q("13.8 MPa"),
+                    slenderness_ratio=110.0,
+                    axial_stress=q("1.2 MPa"),
+                    flexural_stress=q("0.9 MPa"),
+                )
+            ),
+        ),
+        (
+            "masonry stocky",
+            masonry.screen_masonry_wall(
+                masonry.MasonryWall(
+                    masonry_strength=q("13.8 MPa"),
+                    slenderness_ratio=84.0,
+                    axial_stress=q("1.2 MPa"),
+                    flexural_stress=q("0.9 MPa"),
                 )
             ),
         ),

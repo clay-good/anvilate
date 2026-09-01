@@ -19,6 +19,7 @@ from ..analysis import (
     masonry_allowable_flexural_stress,
     masonry_combined_stress_ratio,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -71,9 +72,42 @@ def screen_masonry_wall(
     f_a = wall.axial_stress.to("MPa").magnitude
     fa_allow = allowable_axial.to("MPa").magnitude
     axial_sf = fa_allow / f_a if f_a > 0 else None
+    # §8.2.4 is two curves meeting at h/r = 99, so the reduction is carried in as a value
+    # with the branch that produced it named in its gloss: a symbolic line showing one of
+    # the two would be wrong for every wall on the other side of the meeting point.
+    ratio = wall.slenderness_ratio
+    reduction = fa_allow / (0.25 * wall.masonry_strength.to("MPa").magnitude)
+    branch = (
+        f"1 − (h/140r)² at h/r = {ratio:g}"
+        if ratio <= 99.0
+        else f"(70r/h)² at h/r = {ratio:g}, past the h/r = 99 crossover"
+    )
+    axial_derivation = Derivation(
+        symbolic="F_a = 0.25 · f'm · R",
+        inputs=(
+            SymbolValue(
+                symbol="f'm",
+                description="specified masonry compressive strength",
+                value=wall.masonry_strength,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="R",
+                description=f"§8.2.4 slenderness reduction, {branch}",
+                value=reduction,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="F_a",
+            description="allowable axial compressive stress",
+            value=allowable_axial,
+            unit="MPa",
+        ),
+        citation=_AXIAL_REFERENCE,
+    )
     axial_entry = ScorecardEntry.from_safety_factor(
         "axial stress", computed=axial_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _AXIAL_REFERENCE})
+    ).model_copy(update={"reference": _AXIAL_REFERENCE, "derivation": axial_derivation})
 
     unity = masonry_combined_stress_ratio(
         axial_stress=wall.axial_stress,
@@ -82,7 +116,42 @@ def screen_masonry_wall(
         allowable_flexural_stress=allowable_flexural,
     )
     combined_sf = 1.0 / unity if unity > 0 else None
+    combined_derivation = Derivation(
+        symbolic="U = f_a / F_a + f_b / F_b",
+        inputs=(
+            SymbolValue(
+                symbol="f_a",
+                description="applied axial compressive stress",
+                value=wall.axial_stress,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="F_a",
+                description="allowable axial stress from §8.2.4, slenderness reduced",
+                value=allowable_axial,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="f_b",
+                description="applied flexural compressive stress",
+                value=wall.flexural_stress,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="F_b",
+                description="allowable flexural stress, 0.45 · f'm",
+                value=allowable_flexural,
+                unit="MPa",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="U",
+            description="combined axial-plus-flexure unity ratio; 1.0 is the §8.2.4.2 limit",
+            value=unity,
+        ),
+        citation=_COMBINED_REFERENCE,
+    )
     combined_entry = ScorecardEntry.from_safety_factor(
         "combined axial + flexure", computed=combined_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _COMBINED_REFERENCE})
+    ).model_copy(update={"reference": _COMBINED_REFERENCE, "derivation": combined_derivation})
     return Scorecard(entries=(axial_entry, combined_entry))

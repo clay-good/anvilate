@@ -26,8 +26,16 @@
 # work reached those packs and widened the harvest. They are recorded rather than
 # versioned because the edition has to be read off the standard, not guessed: 62.1 and
 # 90.1 are both on a three-year cycle and the pack takes its rates from the caller, so
-# there is no number in the library that says which book they came out of.
+# there is no number in the library that says which book they came out of. The two TMS
+# 402 lines arrived the same way and for the same reason.
+#
+# That this list GREW is not the ratchet slipping. It only ever saw the references the
+# structural pack builds plus whatever the render-truth sample happened to reach, so
+# every other pack's citations were outside it. Widening the harvest is what found
+# these; the list is longer because it is now closer to complete.
 AISC Design Guide 1
 ASHRAE 62.1 ventilation-rate procedure (Voz)
 ASHRAE 90.1 / IECC — lighting power density allowance
 ASME BTH-1 §3-3
+TMS 402 §8.2.4 allowable axial stress
+TMS 402 §8.2.4.2 combined axial + flexure unity
