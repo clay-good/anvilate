@@ -255,3 +255,40 @@ def test_a_hostile_document_screens_the_same_way_on_both_surfaces(label, tmp_pat
     assert at_the_shell == card_over_mcp, label
     assert card_over_mcp["status"] != CheckStatus.PASS.value, f"{label}: this must not pass"
     assert code == EXIT_CODES[CheckStatus(card_over_mcp["status"])], label
+
+
+@pytest.mark.parametrize("label", sorted(_hostile_documents()))
+def test_a_hostile_document_exports_the_same_bundle_on_both_surfaces(label, tmp_path):
+    """The same corpus, one door further along, because export added a join to cross.
+
+    Screening parity is a claim about one function reached two ways. Export is not: over MCP
+    the card is serialised to JSON, written to the subject store, read back and revalidated
+    before a bundle is built from it, and at the shell it goes straight from `screen_spec`
+    into `BundleSections`. That round-trip is a real opportunity for the two documents to
+    differ — a field that dumps to JSON and does not come back, a quantity that reads back
+    as a string — and it is invisible on a clean spec whose card holds nothing interesting.
+
+    These thirteen hold something interesting: refusal details quoting a pack's own message,
+    near-miss lists, a fit designation past the end of a table. If the round-trip loses
+    anything, it loses it here first.
+    """
+    import yaml
+
+    document = _hostile_documents()[label]
+    path = tmp_path / "part.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    code, out, _err = _cli("export", "--artifact", "evidence-bundle", "--format", "json", str(path))
+    at_the_shell = json.loads(out)["bundles"][0]["bundle"]
+
+    handle = _mcp("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]
+    result = _mcp("export_artifact", {"subject": handle, "format": "evidence_bundle"})
+    assert "error" not in result, f"{label}: MCP refused an export the shell served"
+    over_mcp = result["result"]["structuredContent"]["bundle"]
+
+    assert over_mcp == at_the_shell, label
+    # And neither surface withheld the document for the part being bad, which is the case
+    # the ruling turns on: these all fail, and all thirteen still produce their evidence.
+    assert over_mcp["status"] != CheckStatus.PASS.value, f"{label}: this must not pass"
+    assert over_mcp["disclaimer"], label
+    assert code == EXIT_CODES[CheckStatus(over_mcp["status"])], label

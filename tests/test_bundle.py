@@ -19,7 +19,7 @@ from anvilate.attestation import (
     Subject,
     sha256_hex,
 )
-from anvilate.bundle import BundleSections, assemble_evidence_bundle
+from anvilate.bundle import SCREENING_DISCLAIMER, BundleSections, assemble_evidence_bundle
 from anvilate.callouts import CalloutSet, ProductionMethod, SurfaceFinish
 from anvilate.review import ReviewRecord, artifact_digest, build_dossier
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -668,3 +668,111 @@ def test_the_material_fields_are_still_optional():
     sections = BundleSections(scorecard=_card())
     assert sections.base_material is None
     assert sections.known_materials == ()
+
+
+# ------------------------------------------------------- the bundle a reviewer receives
+
+
+def _a_card_worth_reading() -> Scorecard:
+    """A card with all three verdicts on it, so a rendering that drops one is visible."""
+    return Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="net tension",
+                status=CheckStatus.PASS,
+                detail="safety factor 4.40 vs required minimum 1.50",
+                reference="ASME BTH-1 §3-3",
+            ),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=1.1, required=1.5),
+            ScorecardEntry(
+                name="material resolution",
+                status=CheckStatus.NOT_EVALUATED,
+                detail="unknown material 'NOT-A-REAL-ALLOY'",
+            ),
+        )
+    )
+
+
+def test_the_exported_bundle_carries_every_check_and_the_rollup_does_not():
+    """`artifact-export` asks the bundle to carry "the scorecard with thresholds and measured
+    values", and its scenario is an engineer who receives **only the bundle**.
+
+    For a long time both export surfaces handed that engineer `render()` — the roll-up over
+    layers, whose checks line reads `3 run, 1 failing, 0 not evaluated` and names nothing.
+    Which check failed, at what margin, against which clause: none of it was in the document.
+    The requirement was quoted in a spec and enforced nowhere, and the reason it survived is
+    that `render()` was correct for the consumer it was written for — the attestation
+    predicate, which carries the card in its own field beside the roll-up.
+
+    So the two are asserted apart. The roll-up must stay silent about individual checks,
+    because moving it moves the canonical form under every signature already given; the
+    exported document must name all of them.
+    """
+    sections = BundleSections(scorecard=_a_card_worth_reading())
+
+    rollup = sections.render()
+    document = sections.render_document()
+    for entry in sections.scorecard.entries:
+        assert entry.name not in rollup, f"the roll-up names {entry.name}; its digest is signed"
+        assert entry.name in document, f"the exported bundle does not name {entry.name}"
+        assert str(entry) in document, f"{entry.name} is named without its detail"
+    # The clause a check cites travels with it, which is the half a reviewer checks against
+    # the standard on their own desk.
+    assert "ASME BTH-1 §3-3" in document
+    assert SCREENING_DISCLAIMER in document
+    # And the disclaimer stays last: a label a reader scrolls past the evidence to find is
+    # one they read after forming the opinion it exists to qualify.
+    assert document.rstrip().endswith(SCREENING_DISCLAIMER)
+
+
+def test_the_exported_json_carries_the_card_and_the_predicates_form_does_not():
+    """The same split, in JSON. `to_json_dict` is hashed into `sections_json`."""
+    sections = BundleSections(scorecard=_a_card_worth_reading())
+    rollup = sections.to_json_dict()
+    document = sections.to_document_dict()
+
+    assert "scorecard" not in rollup
+    assert document["scorecard"] == sections.scorecard.model_dump(mode="json")
+    # The document is a superset: every key of the roll-up survives with its value, so a
+    # client reading the roll-up's keys off the exported bundle is not reading a different
+    # document that happens to share a name.
+    assert all(document[key] == value for key, value in rollup.items())
+    assert set(document) - set(rollup) == {"scorecard"}
+
+
+def test_a_bundle_over_an_empty_card_cannot_be_constructed_to_be_rendered():
+    """Why `render_document` has no empty-checks branch, asserted rather than assumed.
+
+    The first draft of it carried one — a "checks: none on the card" line, so a bundle whose
+    card was empty could not render identically to one whose checks nobody printed. The line
+    was unreachable: the model refuses the bundle a step earlier. An unreachable branch is a
+    claim about behaviour nobody can observe, so it went, and this is what took its place.
+    """
+    with pytest.raises(ValidationError, match="nothing to be evidence of"):
+        BundleSections(scorecard=Scorecard())
+
+
+def test_the_attested_predicate_still_carries_the_rollup_and_not_the_document():
+    """The reason the split exists, asserted where it would actually go wrong.
+
+    Folding the card into `to_json_dict` would have been the one-line fix, and it would have
+    moved the canonical form hashed into every predicate — invalidating attestations already
+    signed — and put two copies of one scorecard inside one signed document, which is two
+    chances for them to disagree.
+    """
+    import json
+
+    sections = BundleSections(scorecard=_a_card_worth_reading())
+    bundle = assemble_evidence_bundle(
+        sections,
+        subjects=(),
+        artifacts={"scorecard.json": b'{"status":"fail"}'},
+        spec_digest="a" * 64,
+        bom=_bom(),
+        ai_disclosure=AIDisclosure.none(),
+    )
+    carried = json.loads(bundle.predicate.sections_json)
+    assert carried == sections.to_json_dict()
+    assert "scorecard" not in carried
+    # It is carried once, in the field that exists for it.
+    assert bundle.predicate.scorecard == sections.scorecard

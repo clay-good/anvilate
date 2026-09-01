@@ -20,6 +20,36 @@ print(sections.render())
 #     analysis, 0 unresolved
 ```
 
+## The roll-up is not the bundle a reviewer receives
+
+`render()` above is the **roll-up**: one line per layer, and the checks layer's line reads
+`2 run, 0 failing, 0 not evaluated`. That is the right document for the attestation
+predicate, which carries the scorecard in its own field beside it. It is the wrong document
+to hand a person, and both export surfaces were handing it to one — `anvilate export`
+printed it and the MCP `export_artifact` returned it, each calling it the evidence bundle
+while it named no check, no margin and no clause.
+
+`artifact-export` asks the bundle to carry "the scorecard with thresholds and measured
+values", and its scenario is a senior engineer who receives **only the bundle** and re-runs
+the analysis. So there are two renderings, and which one you want depends on who reads it:
+
+| | who reads it | what it carries |
+| --- | --- | --- |
+| `render()` / `to_json_dict()` | the attestation predicate | the roll-up over layers, the assumptions, the disclaimer |
+| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail and its clause |
+
+The split is not tidiness. Folding the card into `to_json_dict()` would move the canonical
+form hashed into every predicate — invalidating attestations already signed — and put two
+copies of one scorecard inside one signed document, which is two chances for them to
+disagree. A test asserts the predicate still carries the roll-up and not the document.
+
+**What the requirement asks for and this still does not carry: the spec itself.** The
+bundle names the part's verdicts and not the dimensions, loads and materials they were
+computed from, so "re-run the identical analysis" is not yet reachable from the bundle
+alone. At the shell the spec is in hand; over MCP the tool holds a scorecard handle and
+would need a second one. That is a contract decision rather than an oversight, and it is
+written down as one rather than left as a silence.
+
 ## Five rules, and each is a judgement
 
 **A layer that is absent is not a layer that passed.** `missing()` names what is not there

@@ -424,17 +424,74 @@ class BundleSections(RevalidatedModel):
         The disclaimer is appended here rather than passed in, so there is no call that
         renders a bundle without it.
         """
+        return "\n".join([self.render_rollup(), SCREENING_DISCLAIMER])
+
+    def render_rollup(self) -> str:
+        """The roll-up block without the trailing disclaimer, shared by both renderings.
+
+        Factored out rather than duplicated: the disclaimer has to be last in each rendering
+        and the block above it is the same block, so a section added here reaches the
+        exported bundle too instead of only the summary somebody remembered to update.
+        """
         return "\n".join(
             [
                 self.summary(),
                 *(f"  {section}" for section in self.sections()),
                 *self.assumptions_block(),
+            ]
+        )
+
+    def render_document(self) -> str:
+        """The exported bundle: the roll-up block, and then the checks themselves.
+
+        `artifact-export` asks the evidence bundle to carry "the scorecard with thresholds
+        and measured values", and its scenario is a senior engineer who receives **only the
+        bundle** and re-runs the analysis. :meth:`render` cannot serve that reader and was
+        never meant to: it is the roll-up over layers, one line per layer, and the line for
+        the checks layer says ``3 run, 1 failing, 0 not evaluated``. Which one failed, at
+        what safety factor, against which clause — none of it is in there.
+
+        That was fine while the only consumer was the attestation predicate, which carries
+        :attr:`scorecard` alongside the roll-up. It stopped being fine when ``anvilate
+        export`` printed the roll-up as *the bundle*, and again when the MCP tool returned
+        it: two surfaces handing a reviewer a document with no evidence in it, both saying
+        the word "evidence" while they did it.
+
+        So the roll-up stays exactly as it is — the predicate's canonical form must not move
+        under an attestation somebody already signed — and the exported document is this,
+        which is the roll-up plus every check the card carries. ``ScorecardEntry.__str__``
+        does the per-check line, so the bundle and ``anvilate check`` cannot describe one
+        check two ways.
+        """
+        # No empty-card branch: `_a_bundle_is_evidence_of_something` refuses a bundle over a
+        # scorecard with no entries, so "checks:" is never a heading over nothing.
+        return "\n".join(
+            [
+                self.render_rollup(),
+                "checks:",
+                *(f"  {entry}" for entry in self.scorecard.entries),
                 SCREENING_DISCLAIMER,
             ]
         )
 
+    def to_document_dict(self) -> dict[str, object]:
+        """The exported bundle as JSON: the roll-up, and the whole card under ``scorecard``.
+
+        The JSON half of :meth:`render_document`, and the same reasoning. Kept separate from
+        :meth:`to_json_dict` rather than folded into it because that one is hashed into an
+        attested predicate that already carries the card in its own field — folding it in
+        would move every existing attestation's digest and put two copies of one card inside
+        one signed document.
+        """
+        return {**self.to_json_dict(), "scorecard": self.scorecard.model_dump(mode="json")}
+
     def to_json_dict(self) -> dict[str, object]:
-        """The sections as JSON-safe primitives, for the attestation predicate."""
+        """The sections as JSON-safe primitives, for the attestation predicate.
+
+        The **roll-up**, not the exported bundle: no per-check detail, because the predicate
+        carries :attr:`AnvilatePredicate.scorecard` beside it. A surface handing this to a
+        person wants :meth:`to_document_dict`.
+        """
         card = self.callout_card()
         body: dict[str, object] = {
             # Always present, in both the rendered block and the predicate body: a label a

@@ -608,7 +608,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
         payload = {
             "status": worst.value,
             "bundles": [
-                {"path": str(path), "name": spec.name, "bundle": sections.to_json_dict()}
+                {"path": str(path), "name": spec.name, "bundle": sections.to_document_dict()}
                 for path, spec, sections in results
             ],
         }
@@ -619,7 +619,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
                 print("", file=out)
             if len(results) > 1:
                 print(f"# {path}", file=out)
-            print(sections.render(), file=out)
+            print(sections.render_document(), file=out)
         if len(results) > 1:
             print(f"\n{len(results)} bundles: {worst.value.upper()}", file=out)
     return EXIT_CODES[worst]

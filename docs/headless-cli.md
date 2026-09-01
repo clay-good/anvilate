@@ -188,7 +188,14 @@ anvilate export parts/ --format json   # one bundle per spec in the tree
 ```
 
 `export` takes the same paths `check` does — a file, several files, or a directory searched recursively — because CI publishing bundles for a repository should not be a shell loop in a script nothing type-checks. The evidence bundle is assembled from a scorecard, so it needs no geometry — and the exit
-code is the bundle's own roll-up, which is never better than its worst section. A DXF or a
+code is the bundle's own roll-up, which is never better than its worst section.
+
+**What comes out is the document, not the roll-up.** For a long time this command printed
+`BundleSections.render()` — the layer summary, whose checks line says `3 run, 1 failing`
+and names none of them. A reviewer holding that output could not tell which check failed,
+at what margin, or against which clause. It prints `render_document()` now: the same
+roll-up, then every check with its detail and its citation, then the disclaimer. See
+[the evidence bundle](evidence-bundle.md) for why the roll-up still exists. A DXF or a
 QIF results file does need a built part, and each is refused by name:
 
 ```text

@@ -508,8 +508,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             output_schema=_object_schema(
                 {
                     "format": {"type": "string"},
-                    # The bundle itself, as the primitives `BundleSections.to_json_dict`
-                    # produces. Untyped here because there is no published bundle contract
+                    # The bundle itself, as the primitives `BundleSections.to_document_dict`
+                    # produces — the roll-up *and* the card, because a bundle whose checks a
+                    # reviewer cannot read is not evidence. Untyped here because there is no
+                    # published bundle contract
                     # to `$ref` — `contracts.py` generates a spec schema and a scorecard
                     # schema and no third one — and paraphrasing the document inline would
                     # be a second description of it that drifts from the model.
@@ -1142,7 +1144,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     except UnknownSubject as unknown:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
-    document = BundleSections(scorecard=Scorecard.model_validate(card)).to_json_dict()
+    document = BundleSections(scorecard=Scorecard.model_validate(card)).to_document_dict()
     # The digest of the bundle's own canonical JSON, which is the same content addressing
     # the store and the attestation layer use — so the sha256 a client is handed names the
     # bytes it was handed, and two calls that produce the same bundle produce the same
