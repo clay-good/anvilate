@@ -821,3 +821,28 @@ def test_every_energy_unit_pint_defines_keeps_its_own_unit_in_a_derivation():
     # applied without the dimensionality check would have broken.
     assert _system_unit(Quantity(magnitude=1.0, unit="mm"), UnitSystem.US) == "in"
     assert _system_unit(Quantity(magnitude=1.0, unit="MPa"), UnitSystem.US) == "ksi"
+
+
+def test_a_unit_spelling_is_parsed_once_and_the_answers_do_not_move():
+    """Every construction validated its unit and every conversion built a pint quantity, and
+    both re-parsed the unit *string* — 310 pint unit parses per lifting lug screened.
+
+    The registry's unit objects are immutable and the spelling is the whole of the key, so
+    the parse is memoised. What has to stay true is that nothing else moved: the same
+    spelling gives the same object, conversions and dimension checks give the same answers,
+    and a unit that is not one is still refused — every time, not only the first, which is
+    the way a memoised failure would show itself.
+    """
+    from anvilate.units.quantity import _unit_object
+
+    assert _unit_object("mm") is _unit_object("mm")
+
+    length = Quantity.parse("35 mm")
+    assert length.to("in").magnitude == pytest.approx(1.3779527559055118)
+    assert length.to("m").magnitude == pytest.approx(0.035)
+    assert length.has_dimension("[length]") and not length.has_dimension("[pressure]")
+    assert length.dimensionality == "[length]"
+
+    for _ in range(3):
+        with pytest.raises(ValueError, match="unknown unit"):
+            Quantity(magnitude=1.0, unit="not_a_unit")

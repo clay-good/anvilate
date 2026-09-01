@@ -10,6 +10,7 @@ and again wherever a field pins an expected dimension.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from math import isfinite
 from typing import Any
 
@@ -109,9 +110,27 @@ def _friendly_dimension(dimensionality: Any) -> str:
     return str(dimensionality)
 
 
+@lru_cache(maxsize=8192)
+def _unit_object(unit: str) -> pint.Unit:
+    """``UREG.Unit(unit)``, parsed once per spelling.
+
+    Every construction validates its unit and every conversion builds a pint quantity, and
+    both parsed the unit *string* again each time — 310 pint unit parses per lifting lug
+    screened. The registry's unit objects are immutable and the spelling is the whole of the
+    key, so the parse is memoised here rather than repeated at each call site.
+    """
+    return UREG.Unit(unit)
+
+
+@lru_cache(maxsize=1024)
+def _dimensionality_of(expected: str) -> object:
+    """``UREG.get_dimensionality(expected)``, for the same reason."""
+    return UREG.get_dimensionality(expected)
+
+
 def _dimensionality_str(units: str) -> str:
     """Human-readable dimensionality, e.g. ``[pressure]`` or the base form."""
-    return _friendly_dimension(UREG.Unit(units).dimensionality)
+    return _friendly_dimension(_unit_object(units).dimensionality)
 
 
 # Case-variant spellings pint accepts that differ from the intended unit by a power of ten
@@ -159,7 +178,7 @@ class Quantity(RevalidatedModel):
     @model_validator(mode="after")
     def _validate_unit(self) -> Quantity:
         try:
-            UREG.Unit(self.unit)
+            _unit_object(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
             raise UnitError(f"unknown unit {self.unit!r}") from exc
         for token in re.findall(r"[A-Za-z]+", self.unit):
@@ -214,7 +233,7 @@ class Quantity(RevalidatedModel):
     @property
     def pint(self) -> pint.Quantity:
         """The canonical Pint quantity for computation and conversion."""
-        return UREG.Quantity(self.magnitude, self.unit)
+        return UREG.Quantity(self.magnitude, _unit_object(self.unit))
 
     @property
     def dimensionality(self) -> str:
@@ -227,7 +246,7 @@ class Quantity(RevalidatedModel):
 
     def has_dimension(self, expected: str) -> bool:
         """Whether this quantity's dimension matches ``expected`` (e.g. ``"[pressure]"``)."""
-        return self.pint.dimensionality == UREG.get_dimensionality(expected)
+        return self.pint.dimensionality == _dimensionality_of(expected)
 
     def __str__(self) -> str:
         return f"{self.magnitude:g} {self.unit}"
