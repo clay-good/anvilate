@@ -118,6 +118,7 @@ where a line could plausibly be read two ways, it is declined and recorded:
 | `Bore: 25 ±0.1 mm` | **2.5 mm** | declined as a tolerance |
 | `Span: 1,5 m` | **15 m** — a tenfold error on a European sheet | declined as an ambiguous comma |
 | `Temp: 20 C` | 20 **coulomb** | declined; write `degC` |
+| `Temp: 20 c` | 20 × **the speed of light** | declined; write `degC` |
 | `Grade: 8.8 min` | 8.8 **minutes** | declined; write `minute` if you mean time |
 | `Minimum bore: 30 mm max` | 30 mm, one end silently chosen | declined; the line states both ends |
 | `Pressure: 5 bar g` | bar·**gram** | declined; a gauge marker is not a unit |

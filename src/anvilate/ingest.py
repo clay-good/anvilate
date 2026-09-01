@@ -814,10 +814,33 @@ def _unit(text: str) -> tuple[str, Bound]:
     return unit, bound
 
 
-# The offset temperature units pint can construct but not parse from text.
-_OFFSET_TEMPERATURE_UNITS = frozenset(
-    {"degc", "degf", "celsius", "fahrenheit", "degree_celsius", "degree_fahrenheit", "c", "f"}
-)
+#: What a requirements sheet writes for an offset temperature, mapped to the unit pint
+#: constructs for it. A mapping rather than a set, because the membership test was
+#: case-insensitive and the construction was not: ``"20 Celsius"`` was declared handled here
+#: and then raised on the capital C, so the line was declined for the wrong reason.
+_OFFSET_TEMPERATURE_UNITS = {
+    "degc": "degC",
+    "c": "degC",
+    "celsius": "degC",
+    "degree_celsius": "degC",
+    "degf": "degF",
+    "f": "degF",
+    "fahrenheit": "degF",
+    "degree_fahrenheit": "degF",
+}
+
+#: The unit tokens a document writes for a temperature that pint **already parses as
+#: something else**. ``C`` is the coulomb, ``F`` the farad, and lowercase ``c`` the speed of
+#: light, so ``Quantity.parse`` succeeds on all three and the offset fallback below never saw
+#: them: "operating temperature: 5 C" came out of this pass as five coulombs. Refused by name
+#: rather than guessed at — a requirements pass that silently picks one of two readings is
+#: the same silent green the scorecard refuses, one layer earlier.
+_AMBIGUOUS_UNIT_TOKENS = {
+    "C": ("coulomb", "degC"),
+    "c": ("the speed of light", "degC"),
+    "F": ("farad", "degF"),
+    "f": ("farad", "degF"),
+}
 
 
 def _quantity(magnitude: str, unit: str) -> Quantity:
@@ -830,6 +853,14 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     parse failure falls back to direct construction, which handles the offset units and
     still raises on a unit that is not one.
     """
+    bare = unit.strip()
+    if bare in _AMBIGUOUS_UNIT_TOKENS:
+        reads_as, meant = _AMBIGUOUS_UNIT_TOKENS[bare]
+        raise ValueError(
+            f"{bare!r} is {reads_as} to the unit registry, not a temperature, and this line "
+            f"gives no way to tell which was meant. Write {meant!r} or '°{bare.upper()}' for "
+            f"the temperature, or the unit's full name for the electrical quantity"
+        )
     try:
         quantity = Quantity.parse(f"{magnitude} {unit}")
     except (UnitError, ValueError):
@@ -840,9 +871,12 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
         # on every requirement sheet there is. So the fallback is for those units and
         # nothing else; a general escape hatch here quietly re-admitted everything parse
         # had just declined.
-        if unit.lower().lstrip("°") not in _OFFSET_TEMPERATURE_UNITS:
+        offset = _OFFSET_TEMPERATURE_UNITS.get(unit.lower().lstrip("°"))
+        if offset is None:
             raise
-        quantity = Quantity(magnitude=float(magnitude), unit=unit)
+        # Constructed with pint's own spelling rather than the document's, so a sheet
+        # writing "Celsius" is handled as the list above says it is.
+        quantity = Quantity(magnitude=float(magnitude), unit=offset)
     # The general net under the specific ones. If the parsed magnitude is not the magnitude
     # the line stated, the "unit" half contained a number and pint multiplied it in:
     # "45–50 kN" came back as 2250 kN and "25 ±0.1 mm" as 2.5 mm. Whatever produced that,

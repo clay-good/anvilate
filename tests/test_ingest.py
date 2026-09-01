@@ -770,3 +770,128 @@ def test_every_bound_says_itself_in_a_sentence():
     # Distinct, because a phrase shared by two members is a rendering that cannot tell
     # a ceiling from a floor — which is the whole point of carrying the bound.
     assert len(set(phrases.values())) == len(Bound)
+
+
+def test_a_lowercase_c_is_declined_rather_than_read_as_the_speed_of_light():
+    """ "Temp: 20 c" was **taken**, as twenty times the speed of light.
+
+    The ambiguity list that catches `C` and `F` is keyed on the exact token, so it held the
+    capitals and nothing else. Lowercase `c` is a unit pint knows — it is *c* — so
+    `Quantity.parse` succeeded; the magnitude matched what the line stated, so the
+    range-and-tolerance net below caught nothing either; and a temperature requirement
+    entered the checklist with a dimensionality of `[length]/[time]`.
+
+    Asserted at the public entry point on purpose. The private helper had a list of its own
+    and the pass walked past it, which is how the two disagreed in the first place.
+    """
+    for line, reads_as in (("Temp: 20 c", "speed of light"), ("Temp: 20 f", "farad")):
+        draft = extract_requirements(line + "\n", document="rfq.txt")
+        assert draft.values == (), (
+            f"{line!r} was taken as "
+            f"{[(str(v.quantity), str(v.quantity.dimensionality)) for v in draft.values]}"
+        )
+        (declined,) = draft.unparsed
+        assert reads_as in declined.reason, declined.reason
+        assert "deg" in declined.reason, "the refusal does not say what to write instead"
+    # The capitals were already held one layer up, and still are.
+    assert extract_requirements("Temp: 20 C\n", document="rfq.txt").values == ()
+
+
+def test_a_temperature_written_in_words_is_taken_rather_than_declined_on_its_capital():
+    """ "Temp: 20 Celsius" was declined with a raw `1 validation error for Quantity`.
+
+    The offset-temperature list matched on `unit.lower()` and then handed pint the
+    document's own spelling, which pint does not know with a capital C. A spelling the list
+    claims to handle was refused, and refused for the wrong reason — not "this is not a
+    unit" but "we said we handled this".
+    """
+    draft = extract_requirements("Temp: 20 Celsius\n", document="rfq.txt")
+    assert draft.unparsed == (), [u.reason for u in draft.unparsed]
+    (value,) = draft.values
+    assert str(value.quantity.dimensionality) == "[temperature]"
+    assert value.quantity.to("K").magnitude == pytest.approx(293.15)
+
+
+def test_the_offset_units_are_declined_or_taken_but_never_read_as_another_dimension():
+    """The property under all of it: a temperature spelling is either taken as a temperature
+    or declined by name. What it must never be is taken as something else."""
+    from anvilate.ingest import _quantity
+
+    for token, other in (("C", "coulomb"), ("c", "speed of light"), ("F", "farad")):
+        with pytest.raises(ValueError) as refused:
+            _quantity("5", token)
+        message = str(refused.value)
+        assert other in message, message
+        assert "deg" in message, "the refusal does not say what to write instead"
+
+    # The unambiguous spellings all still work, including the degree sign, which strips to
+    # the same letter and must not be swept into the refusal.
+    for magnitude, unit, expected in (
+        ("-20", "degC", "[temperature]"),
+        ("-20", "°C", "[temperature]"),
+        ("20", "°F", "[temperature]"),
+        ("300", "K", "[temperature]"),
+    ):
+        assert str(_quantity(magnitude, unit).dimensionality) == expected, unit
+    # And the electrical quantities are still reachable by their full names, which is what
+    # the refusal tells an author to write.
+    assert str(_quantity("5", "coulomb").dimensionality) == "[current] * [time]"
+
+
+def test_the_offset_temperature_list_constructs_what_it_claims_to_handle():
+    """The membership test was case-insensitive and the construction was not.
+
+    `"20 Celsius"` matched the list on `unit.lower()` and was then handed to pint with its
+    capital C, which pint does not know — so the line was declined, and declined for the
+    wrong reason: not "this is not a unit" but "we said we handled this". Every spelling the
+    list claims is now constructed through pint's own name for it.
+    """
+    from anvilate.ingest import _OFFSET_TEMPERATURE_UNITS, _quantity
+
+    assert _OFFSET_TEMPERATURE_UNITS, "the offset-temperature list is empty"
+    for written, canonical in _OFFSET_TEMPERATURE_UNITS.items():
+        for spelling in (written, written.upper(), written.capitalize(), f"°{written}"):
+            try:
+                quantity = _quantity("20", spelling)
+            except ValueError as refused:
+                # Only the bare-letter tokens may be refused, and only for ambiguity.
+                assert spelling.strip("°").lower() in {"c", "f"}, (spelling, refused)
+                assert "not a temperature" in str(refused), spelling
+                continue
+            assert str(quantity.dimensionality) == "[temperature]", spelling
+            assert str(quantity.to("K").unit) == "K"
+            assert canonical in {"degC", "degF"}
+
+
+def test_every_line_the_docs_table_says_is_declined_really_is():
+    """A page whose whole subject is what the pass refuses, held against the pass.
+
+    Six rows, and one of them was **false**: `Temp: 20 C` was documented as "declined; write
+    `degC`" and was read as twenty coulombs. Nothing was holding the table, so the page and
+    the code disagreed about the one behaviour the page exists to describe.
+
+    The lines are read off the page rather than restated, so a row added to the table has to
+    be true, and the *reason* is not asserted — only that the value is not taken, which is
+    the claim every row makes.
+    """
+    import re
+    from pathlib import Path
+
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "requirements-ingestion.md"
+    ).read_text(encoding="utf-8")
+    table = re.search(r"\| Line \| Would have been \| Now \|\n\|[^\n]*\n((?:\|[^\n]*\n)+)", page)
+    assert table is not None, "the declined-lines table on requirements-ingestion.md has moved"
+
+    rows = [row for row in table.group(1).splitlines() if row.strip()]
+    assert len(rows) >= 6, f"the table has shrunk to {len(rows)} rows"
+    for row in rows:
+        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+        line = cells[0].strip("`")
+        draft = extract_requirements(line + "\n", document="rfq.txt")
+        assert draft.values == (), (
+            f"the page says {line!r} is declined, and the pass took "
+            f"{[str(v.quantity) for v in draft.values]} from it"
+        )
+        assert draft.unparsed, f"{line!r} was neither taken nor recorded as unparsed"
+        assert draft.unparsed[0].reason.strip(), f"{line!r} is declined with no reason given"
