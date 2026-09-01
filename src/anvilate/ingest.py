@@ -54,7 +54,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
-from math import isclose
+from math import isclose, isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -879,11 +879,27 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     # the line stated, the "unit" half contained a number and pint multiplied it in:
     # "45–50 kN" came back as 2250 kN and "25 ±0.1 mm" as 2.5 mm. Whatever produced that,
     # the answer is not what the document says.
-    if quantity.magnitude != float(magnitude):
+    stated = float(magnitude)
+    if quantity.magnitude != stated:
         raise ValueError(
             f"{magnitude!r} in {unit!r} parsed to a magnitude of {quantity.magnitude:g}, so "
             f"the unit half carries a number of its own — a range, a tolerance, or a second "
             f"value. This is not one quantity"
+        )
+    # The two ways a written number stops being the number written. `inf kN` is refused by
+    # the value pattern above, and `1e400 kN` walked straight past it: `float` overflows to
+    # the same infinity, the comparison two lines up is inf == inf, and the pass released an
+    # infinite load as a confirmable draft value. `1e-400 mm` is the mirror — a dimension
+    # the author wrote as positive, extracted as exactly zero.
+    if not isfinite(stated):
+        raise ValueError(
+            f"{magnitude!r} overflows to {stated}; a value a float cannot hold is not the "
+            f"value the document states, and an infinite one is refused however it is spelt"
+        )
+    if stated == 0.0 and any(digit in magnitude for digit in "123456789"):
+        raise ValueError(
+            f"{magnitude!r} underflows to zero; the document states a value that is not "
+            f"zero and this pass will not record it as one"
         )
     return quantity
 

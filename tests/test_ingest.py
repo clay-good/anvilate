@@ -895,3 +895,33 @@ def test_every_line_the_docs_table_says_is_declined_really_is():
         )
         assert draft.unparsed, f"{line!r} was neither taken nor recorded as unparsed"
         assert draft.unparsed[0].reason.strip(), f"{line!r} is declined with no reason given"
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("design load: 1e400 kN", "overflows to inf"),
+        ("design load: -1e400 kN", "overflows to -inf"),
+        ("bore diameter: 1e-400 mm", "underflows to zero"),
+    ],
+)
+def test_a_number_a_float_cannot_hold_is_not_extracted(line, expected):
+    """`inf kN` is refused by the value pattern; `1e400 kN` walked straight past it.
+
+    `float` overflows both to the same infinity, and the general net in `_quantity` compares
+    the parsed magnitude against `float(magnitude)` — inf == inf — so the pass released an
+    infinite, load-bearing, confirmable draft value. The mirror case is quieter and worse: a
+    dimension the author wrote as a positive number, extracted as exactly zero.
+    """
+    draft = extract_requirements(line, document="rfq.txt")
+    assert not draft.values, f"{line} was extracted as {[str(v) for v in draft.values]}"
+    assert len(draft.unparsed) == 1
+    assert expected in str(draft.unparsed[0])
+
+
+def test_a_zero_the_document_actually_states_is_still_extracted():
+    """The underflow refusal must not swallow an honest zero — a clearance of 0 mm is a
+    requirement somebody writes on purpose."""
+    draft = extract_requirements("gap: 0 mm\nlash: 0.0 mm", document="rfq.txt")
+    assert [v.field for v in draft.values] == ["gap", "lash"]
+    assert all(v.quantity.magnitude == 0.0 for v in draft.values)
