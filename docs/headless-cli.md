@@ -17,6 +17,10 @@ deck_plate: NOT_EVALUATED
   governing:     T1 analytical (not_evaluated)
 ```
 
+**Each check prints the clause it cites**, in brackets under its detail. It is the thing
+that separates a scorecard from a spreadsheet, and a check with no clause — a material
+resolving, a tier gap — grows no line.
+
 **A failing check prints its repair hint under it**, marked with `→`. Where a design
 inverse exists the hint is the value that lands exactly on the required margin — `→ increase
 thickness to 12 mm` — so the shell answers "what do I change?" as well as "what failed?". A

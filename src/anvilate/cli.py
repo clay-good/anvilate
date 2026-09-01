@@ -766,6 +766,11 @@ def _render(name: str, card: Scorecard) -> str:
         lines.append(f"  {entry.status.value:<14} {entry.name}")
         if entry.detail:
             lines.append(f"                 {entry.detail}")
+        # The clause is what separates this from a spreadsheet, and the shell dropped it.
+        # `ScorecardEntry.__str__` has always appended it; this renderer builds its own lines
+        # and printed the detail alone, so every cited check read as an uncited one.
+        if entry.reference:
+            lines.append(f"                 [{entry.reference}]")
         # The repair hint is the most actionable thing a failing entry carries — where a
         # design inverse exists it is the value that lands exactly on the required margin —
         # and it was printed by the calculation report and by nothing at the shell. A reader

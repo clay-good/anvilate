@@ -1275,3 +1275,27 @@ def test_the_card_prints_the_repair_hint_under_a_failing_check():
     assert lines.index("                 → increase thickness to 12 mm") < lines.index(
         "  pass           net tension"
     )
+
+
+def test_the_card_prints_the_clause_each_check_cites():
+    """The clause is what separates this from a spreadsheet, and the shell dropped it.
+
+    `ScorecardEntry.__str__` has always appended `[reference]`; this renderer builds its own
+    lines and printed the detail alone, so every cited check read at the shell as an uncited
+    one. A check with no clause — a material resolving, a tier gap — grows no line.
+    """
+    from anvilate.cli import _render
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    cited = ScorecardEntry.from_safety_factor("pin bearing", computed=3.0, required=2.0).model_copy(
+        update={"reference": "ASME BTH-1 §3-3"}
+    )
+    uncited = ScorecardEntry.from_safety_factor("net tension", computed=2.5, required=2.0)
+    rendered = _render("padeye", Scorecard(entries=(cited, uncited)))
+
+    assert "[ASME BTH-1 §3-3]" in rendered
+    assert rendered.count("[ASME BTH-1 §3-3]") == 1, "one clause, on the check that cites it"
+    lines = rendered.splitlines()
+    assert lines.index("                 [ASME BTH-1 §3-3]") < lines.index(
+        "  pass           net tension"
+    )
