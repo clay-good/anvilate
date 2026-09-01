@@ -166,6 +166,12 @@ carries a force and no nature makes it `NOT_EVALUATED`, because the demand was t
 from part of the declared loads; and a seismic basis with no `seismic_design_acceleration`
 lands on the card rather than raising out of the screen.
 
+**A displacement limit written on the acceptance criteria reached nothing.** The pack
+screens take their deflection limit from the element itself — a beam member's
+`deflection_limit` — so `acceptance.max_displacement` was a number the user stated and no
+check read. It is reported as unscreened, and the entry says where the limit does belong,
+because that is the reader's next question.
+
 **A general tolerance class is a reference, and it is resolved like one.** `Manufacturing`
 said in its own docstring that its DFM parameters were "checked against" the process, and
 neither was read on any screening path. `tolerance_class` is the ISO 2768 class the drawing

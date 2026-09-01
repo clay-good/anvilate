@@ -1152,3 +1152,61 @@ def test_the_card_and_the_evidence_bundle_agree_about_a_tolerance_class():
         collect_provenance(
             bad, materials=default_materials_db(), components=default_components_db()
         )
+
+
+def test_a_declared_displacement_limit_is_reported_and_says_where_it_belongs():
+    """`acceptance.max_displacement` is a limit the user states, read by nothing.
+
+    The pack screens take their deflection limit from the element itself — a beam member's
+    `deflection_limit` — so the one written on the acceptance criteria reached nothing. The
+    entry says that rather than only reporting a gap, because the reader's next question is
+    where to put it.
+    """
+    from anvilate.units import Quantity
+
+    card = screen_spec(
+        _lug_spec(
+            acceptance=AcceptanceCriteria(
+                tiers=[ValidationTier.T1_ANALYTICAL], max_displacement=Quantity.parse("5 mm")
+            )
+        )
+    )
+    entry = next(e for e in card.entries if e.name == "displacement limit")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "5 mm" in entry.detail and "deflection_limit" in entry.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+    assert "displacement limit" not in [e.name for e in screen_spec(_lug_spec()).entries]
+
+
+# The two sub-models that carry bounds of their own. `Constraints` has its own census above;
+# these are the other places a document states a number that something has to answer for.
+_ACCEPTANCE_FIELDS = {
+    "tiers": "the tiers it demands are what produce the entries",
+    "max_displacement": "reported as unscreened, naming where the limit does belong",
+    "fea_convergence_tol": "answered by the T3 gap entry, which names the convergence criterion",
+}
+_MANUFACTURING_FIELDS = {
+    "process": "selects the achievable-tolerance floor a T2 screen compares against",
+    "tolerance_class": "resolved on the card, near misses named",
+    "min_wall": "reported as unscreened; a wall is measured on built geometry",
+}
+
+
+def test_every_bound_a_document_states_outside_constraints_is_accounted_for():
+    """The same census as `Constraints`, one level down, where `max_displacement`,
+    `tolerance_class` and `min_wall` were all sitting unread at once."""
+    from anvilate.spec import AcceptanceCriteria as Acceptance
+    from anvilate.spec import Manufacturing
+
+    for model, accounted in (
+        (Acceptance, _ACCEPTANCE_FIELDS),
+        (Manufacturing, _MANUFACTURING_FIELDS),
+    ):
+        declared = set(model.model_fields)
+        assert declared, f"{model.__name__} declares no fields; the census is looking at nothing"
+        assert declared == set(accounted), (
+            f"{model.__name__}: unaccounted {sorted(declared - set(accounted))}, "
+            f"named but gone {sorted(set(accounted) - declared)}"
+        )
+        for field, reason in accounted.items():
+            assert reason.strip(), f"{model.__name__}.{field} is accounted for with no reason"

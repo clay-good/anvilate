@@ -497,8 +497,8 @@ def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
-def _manufacturing_entries(spec: DesignSpec) -> list[ScorecardEntry]:
-    """The DFM parameters `Manufacturing` says it is checked against.
+def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """The bounds a document states outside `constraints`, and what answers them.
 
     Its docstring said exactly that and neither field was read on any screening path.
 
@@ -510,8 +510,11 @@ def _manufacturing_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     is a verdict here, with the near misses named, for the same reason an unknown material
     is.
 
-    ``min_wall`` is a bound on built geometry, so it is reported unscreened rather than
-    checked, like the bounds in `constraints`.
+    ``min_wall`` and ``acceptance.max_displacement`` are bounds nothing screens, so they are
+    reported unscreened rather than dropped, like the bounds in `constraints`. The
+    displacement one says where the limit does belong: the pack screens take it from the
+    element (`BeamMember.deflection_limit`), which is why the one on the acceptance criteria
+    was reaching nothing.
     """
     entries: list[ScorecardEntry] = []
     declared = spec.manufacturing.tolerance_class
@@ -542,6 +545,20 @@ def _manufacturing_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                     ),
                 )
             )
+    if spec.acceptance.max_displacement is not None:
+        entries.append(
+            ScorecardEntry(
+                name="displacement limit",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares acceptance.max_displacement "
+                    f"{spec.acceptance.max_displacement}, and nothing screened it: a "
+                    "displacement limit is judged against a deflection the element screen "
+                    "computes, and the screens take their limit from the element itself "
+                    "(a beam member's `deflection_limit`), not from the acceptance criteria"
+                ),
+            )
+        )
     if spec.manufacturing.min_wall is not None:
         entries.append(
             ScorecardEntry(
@@ -764,7 +781,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
-    entries.extend(_manufacturing_entries(spec))
+    entries.extend(_declared_bound_entries(spec))
     geometric = _geometric_tolerance_entry(spec)
     if geometric is not None:
         entries.append(geometric)
