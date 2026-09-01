@@ -73,7 +73,41 @@ whose first argument is a typed element is reachable by that element's name in s
 `anvilate.screening.element_registry()` is the list, and a gate holds it against the packs in
 both directions.
 
-**The required safety factor comes from the document.** Twelve of the twenty-three screens
+### A document can name a whole structure
+
+One tag addresses one element, and a frame is not one element. The structural pack has always
+had `screen_structure`, which takes a *list* of members — and a list is not addressable by a
+tag, so a document describing an assembly could name only one of its parts.
+
+`structure` is that tag. Its members are written the way the top level is written, so moving
+a part into an assembly is a change of indentation rather than a rewrite:
+
+```yaml
+element_type: structure
+element_params:
+  members:
+    - element_type: lifting_lug
+      element_params: {name: front, material: ASTM-A36, ...}
+    - element_type: bolted_connection
+      element_params: {name: splice, ...}
+constraints:
+  min_safety_factor: {value: 2.0, origin: user_stated}
+```
+
+Each member goes back through the same registry a top-level element goes through, so it
+reaches exactly the screen it would have reached on its own — refusals included. Entries
+carry the member that produced them (`member 2 (bolted_connection): splice bolt shear`),
+because two beams in one frame otherwise contribute two checks with the same name and a
+reader cannot tell which one failed. **One member that cannot be screened does not
+un-screen the others:** it contributes its own `NOT_EVALUATED` entry, which the roll-up
+already refuses to treat as a pass, and the rest of the frame is still screened.
+
+It is the one tag the packs do not supply — a structure belongs to no discipline, since its
+members can come from any of them — and it is the one element whose members can come from
+several packs at once. A structure cannot be a member of a structure; list the members
+alongside the others.
+
+**The required safety factor comes from the document.** Thirteen of the twenty-four screens
 are judged against one and have no default, so it is read from
 `constraints.min_safety_factor`. A spec that states none reports `NOT_EVALUATED` saying so
 rather than screening against a figure this library made up — a safety factor nobody stated

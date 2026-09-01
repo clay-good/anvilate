@@ -9,6 +9,7 @@
 _models.EMPTY_MAP
 _models.FrozenMap
 _models.RevalidatedModel
+_models.rebuilt_quantities
 agenteval.AgentEvalReport
 agenteval.AgentRunOutcome
 agenteval.AgentTask
@@ -188,8 +189,11 @@ scorecard.RepairHint
 scorecard.GoverningChange
 scorecard.ScorecardEntry
 scorecard.Scorecard
+screening.Structure
+screening.StructureMember
 screening.element_registry
 screening.screen_spec
+screening.screen_structure_element
 specbench.MUSE_CASE_INDEX
 specbench.CaseSpecification
 specbench.ScopeVerdict

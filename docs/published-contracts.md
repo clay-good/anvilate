@@ -72,7 +72,9 @@ https://anvilate.dev/schemas/elements/lifting_lug/1.0.0.json
 They are generated from the same registry the screen resolves through, so an element that
 ships is an element that is published, and a gate holds the two sets equal in both
 directions — an element with no schema is a document a client cannot check, and a schema
-with no element is a tag that resolves to nothing.
+with no element is a tag that resolves to nothing. That includes `structure`, the composite
+element a document names to describe a whole assembly, which is registered by the screening
+module rather than by a pack and published on the same terms as the rest.
 
 They are frozen and drift-gated exactly like the two contracts above, and **each element
 carries its own version**. A new element publishes at `ELEMENT_SCHEMA_INITIAL_VERSION`, so a

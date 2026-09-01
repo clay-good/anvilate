@@ -298,6 +298,7 @@ def _any_field_probes():
     """One instance per ``Any``-typed field, holding the values that field really carries."""
     from anvilate.compilation import CompilationTask
     from anvilate.mcp import tool_catalog
+    from anvilate.screening import StructureMember
     from anvilate.spec import (
         AcceptanceCriteria,
         DesignSpec,
@@ -346,10 +347,17 @@ def _any_field_probes():
         },
         acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
     )
+    # A structure's members carry the same `Any` map one level further down, where the
+    # spec's own repair does not reach: a member's quantities sit inside a list.
+    member = StructureMember(
+        element_type="lifting_lug",
+        element_params={"name": "padeye", "load": Quantity.parse("60 kN"), "grade": "A36"},
+    )
     return {
         ("anvilate.compilation", "CompilationTask", "reference"): task,
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
         ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,
+        ("anvilate.screening", "StructureMember", "element_params"): member,
         ("anvilate.spec.ir", "DesignSpec", "element_params"): spec,
     }
 

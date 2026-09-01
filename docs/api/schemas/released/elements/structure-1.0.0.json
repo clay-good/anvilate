@@ -1,0 +1,42 @@
+{
+  "$defs": {
+    "StructureMember": {
+      "description": "One member of a structure, named the same way a spec names a single element.\n\nThe nesting is deliberate rather than a second vocabulary: a member is written with the\n``element_type``/``element_params`` pair a reader already knows from the document's top\nlevel, so moving a part into a structure is a change of indentation rather than a\nrewrite.",
+      "properties": {
+        "element_params": {
+          "additionalProperties": true,
+          "title": "Element Params",
+          "type": "object"
+        },
+        "element_type": {
+          "title": "Element Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "element_type"
+      ],
+      "title": "StructureMember",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/structure/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'structure': the fields a Design Spec puts in `element_params` when it declares `element_type: structure`. Generated from anvilate.screening.Structure.",
+  "properties": {
+    "members": {
+      "items": {
+        "$ref": "#/$defs/StructureMember"
+      },
+      "minItems": 1,
+      "title": "Members",
+      "type": "array"
+    }
+  },
+  "required": [
+    "members"
+  ],
+  "title": "Structure",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

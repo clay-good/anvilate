@@ -526,7 +526,7 @@ def test_a_spec_that_names_its_element_reaches_the_pack_that_screens_it():
 def test_the_required_safety_factor_comes_from_the_document_and_is_never_invented():
     """A screen judged against a number nobody stated is the assumption least worth making.
 
-    Twelve of the twenty-three pack screens take a required safety factor and have no
+    Thirteen of the twenty-four screens take a required safety factor and have no
     default. The spec already states one, so it is read from there — and a spec that states
     none reports NOT_EVALUATED saying so rather than screening against a house figure.
     """
@@ -602,7 +602,8 @@ def test_the_element_registry_covers_every_pack_screen_that_takes_one_element():
     Held the other way round here: every `screen_*` a pack exports whose first parameter is
     a model must be reachable by a tag, or a pack ships an element no document can name and
     nothing says so. `screen_structure` takes a *list* and is excluded by that rule rather
-    than by name.
+    than by name; `structure` is registered by the screening module itself in its place, and
+    is the one tag the packs do not supply.
     """
     import importlib
     import inspect
@@ -633,7 +634,13 @@ def test_the_element_registry_covers_every_pack_screen_that_takes_one_element():
 
     assert total > 20, f"only {total} single-element pack screens were found"
     assert not missing, "pack elements no document can name:\n  " + "\n  ".join(missing)
-    assert len(registry) == total
+    from anvilate.screening import Structure
+
+    assert registry["structure"][0] is Structure
+    assert len(registry) == total + 1, (
+        f"the registry holds {len(registry)} tags for {total} pack elements plus the one "
+        "composite; anything else in it is unaccounted for"
+    )
     # And the tags are distinct, or a document naming one would screen the other.
     assert len(set(registry)) == len(registry)
 
@@ -690,3 +697,99 @@ def test_the_docs_page_element_block_is_a_document_that_screens():
     for entry in card.entries:
         if entry.name in named:
             assert entry.reference and "BTH-1" in entry.reference, entry.reference
+
+
+def _structure_spec(members, **overrides) -> DesignSpec:
+    """A spec whose element is a whole structure rather than one part."""
+    return _lug_spec(element_type="structure", element_params={"members": members}, **overrides)
+
+
+def _lug_member(name: str) -> dict:
+    return {
+        "element_type": "lifting_lug",
+        "element_params": {**_lug_spec().element_params, "name": name},
+    }
+
+
+def test_a_spec_can_name_a_whole_structure_and_every_member_is_screened():
+    """The gap this element closes: `screen_structure` takes a *list*, so no single tag
+    addressed it and a document describing a frame could name only one of its members.
+
+    Every member reaches the screen it would have reached on its own, and the entries carry
+    the member that produced them — two lugs in one frame otherwise contribute two checks
+    called the same thing and a reader cannot tell which one failed.
+    """
+    card = screen_spec(_structure_spec([_lug_member("first"), _lug_member("second")]))
+    named = [entry.name for entry in card.entries if entry.name.startswith("member")]
+    assert named == [
+        "member 1 (lifting_lug): first net tension",
+        "member 1 (lifting_lug): first pin bearing",
+        "member 2 (lifting_lug): second net tension",
+        "member 2 (lifting_lug): second pin bearing",
+    ]
+    assert "T1 analytical" not in [entry.name for entry in card.entries]
+    assert card.status is CheckStatus.PASS
+    # The citation survives the prefixing, or the member entries are checks with no clause.
+    for entry in card.entries:
+        if entry.name.startswith("member"):
+            assert entry.reference and "BTH-1" in entry.reference
+
+
+def test_one_unscreenable_member_does_not_un_screen_the_others():
+    """A report naming one bad member and one good one is worth more than one naming nothing,
+    and NOT_EVALUATED is already what the roll-up refuses to treat as a pass."""
+    card = screen_spec(
+        _structure_spec(
+            [
+                _lug_member("first"),
+                {"element_type": "lifting_lugg", "element_params": {}},
+                {"element_type": "lifting_lug", "element_params": {"name": "bare"}},
+            ]
+        )
+    )
+    by_name = {entry.name: entry for entry in card.entries}
+    assert by_name["member 1 (lifting_lug): first net tension"].status is CheckStatus.PASS
+
+    unknown = by_name["member 2 (lifting_lugg): T1 analytical"]
+    assert unknown.status is CheckStatus.NOT_EVALUATED
+    assert "did you mean 'lifting_lug'" in unknown.detail
+
+    refused = by_name["member 3 (lifting_lug): T1 analytical"]
+    assert refused.status is CheckStatus.NOT_EVALUATED
+    assert "do not build a LiftingLug" in refused.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+
+
+def test_a_structure_is_not_a_member_of_a_structure():
+    """Not a depth limit dressed up as a rule — a nested structure carries nothing the flat
+    list does not — but it is also what keeps the member loop from reaching itself."""
+    card = screen_spec(
+        _structure_spec([{"element_type": "structure", "element_params": {"members": []}}])
+    )
+    entry = card.entries[0]
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "a structure cannot be a member of a structure" in entry.detail
+
+
+def test_a_structure_needs_the_safety_factor_its_members_are_judged_against():
+    """The composite is judged by the same rule as the elements inside it: a screen that
+    needs a required safety factor and is given none is NOT_EVALUATED, never screened
+    against a figure this library made up."""
+    card = screen_spec(_structure_spec([_lug_member("first")], constraints=Constraints()))
+    assert card.entries[0].status is CheckStatus.NOT_EVALUATED
+    assert "the structure screen is judged against a required safety factor" in (
+        card.entries[0].detail
+    )
+
+
+def test_a_structure_survives_being_written_down():
+    """A member's quantities sit one level deeper than the spec's own round-trip repair
+    reaches — inside a list — so a frame written to disk is screened after a reload, not
+    only in memory."""
+    from anvilate.spec import dump_spec_yaml, load_spec_yaml
+
+    spec = _structure_spec([_lug_member("first"), _lug_member("second")])
+    reloaded = load_spec_yaml(dump_spec_yaml(spec))
+    assert [(e.name, e.status) for e in screen_spec(reloaded).entries] == [
+        (e.name, e.status) for e in screen_spec(spec).entries
+    ]

@@ -43,11 +43,16 @@
       byte for byte identical — because the shared constant made every version agree by
       construction, which is why nothing failed while it was wrong. A pin naming a tag no
       pack registers is refused, so a rename cannot leave a bump silently not applying.
-- [ ] 4.2 `screen_structure` takes a *list* of members rather than one element, so it is not
-      addressable by a single tag. A spec describing a whole structure still cannot name it.
+- [x] 4.2 `screen_structure` takes a *list* of members rather than one element, so it is not
+      addressable by a single tag. `structure` is that tag: a composite element registered by
+      the screening module rather than by a pack, whose members are written with the same
+      `element_type`/`element_params` pair and dispatched back through the same registry — so
+      a member reaches exactly the screen it would have reached alone, refusals included, and
+      one unscreenable member does not un-screen the frame. Published and frozen on the same
+      terms as the pack elements.
 
 ## Status
 
-The main path works: `anvilate check` on a YAML document returns cited ASME BTH-1 checks for
-a padeye. `docs/spec-screening.md` shows the block and a test screens it rather than reading
-it.
+Complete. `anvilate check` on a YAML document returns cited ASME BTH-1 checks for a padeye,
+and a document naming `structure` returns them for every member of an assembly.
+`docs/spec-screening.md` shows both blocks and a test screens them rather than reading them.

@@ -38,13 +38,13 @@ is the shape a result has to have for those to be judged honestly.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from math import isclose
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from ._models import FrozenMap, RevalidatedModel
+from ._models import FrozenMap, RevalidatedModel, rebuilt_quantities
 from .units import Quantity, UnitError
 
 __all__ = [
@@ -203,17 +203,7 @@ class CompilationTask(RevalidatedModel):
         a string a compiler is expected to produce, and turning it into a quantity here would
         be answering a different question than the task asked.
         """
-        if not isinstance(value, Mapping):
-            return value
-        rebuilt = {}
-        for key, entry in value.items():
-            if isinstance(entry, Mapping) and set(entry) == {"magnitude", "unit"}:
-                try:
-                    entry = Quantity(magnitude=float(entry["magnitude"]), unit=str(entry["unit"]))
-                except (UnitError, TypeError, ValueError):
-                    pass
-            rebuilt[key] = entry
-        return rebuilt
+        return rebuilt_quantities(value)
 
     @model_validator(mode="after")
     def _has_something_to_check(self) -> CompilationTask:

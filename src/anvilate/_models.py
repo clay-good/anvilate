@@ -26,7 +26,37 @@ from typing import Annotated, Any, Self, TypeVar
 
 from pydantic import AfterValidator, BaseModel, PlainSerializer
 
-__all__ = ["EMPTY_MAP", "FrozenMap", "RevalidatedModel"]
+__all__ = ["EMPTY_MAP", "FrozenMap", "RevalidatedModel", "rebuilt_quantities"]
+
+
+def rebuilt_quantities(value: Any) -> Any:
+    """A mapping of ``Any``-typed values with the serialised quantities in it rebuilt.
+
+    ``Any`` is the one annotation pydantic cannot reconstruct from, so a field holding a
+    :class:`~anvilate.units.Quantity` writes ``{"magnitude": 5.0, "unit": "kN"}`` and reads
+    back as exactly that dictionary. The model then no longer compares equal to the one it
+    was written from, and whatever consumes the field is handed a mapping where it expects a
+    quantity.
+
+    Three fields need that repair — a compilation task's ``reference``, a spec's
+    ``element_params``, and a structure member's — and it was written out twice before it was
+    written once. Only the two-key shape this library's own serialiser emits is rebuilt, and
+    a value that does not parse as a quantity is left exactly as it was found. Strings are
+    **not** coerced: ``"5 kN"`` stated as a string is a string the writer meant to state.
+    """
+    from .units import Quantity
+
+    if not isinstance(value, Mapping):
+        return value
+    rebuilt: dict[Any, Any] = {}
+    for key, entry in value.items():
+        if isinstance(entry, Mapping) and set(entry) == {"magnitude", "unit"}:
+            try:
+                entry = Quantity(magnitude=float(entry["magnitude"]), unit=str(entry["unit"]))
+            except (TypeError, ValueError):  # UnitError is a ValueError, so this covers it
+                pass
+        rebuilt[key] = entry
+    return rebuilt
 
 
 class RevalidatedModel(BaseModel):

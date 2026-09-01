@@ -55,16 +55,24 @@ import pkgutil
 import re
 from collections.abc import Callable, Mapping
 from functools import cache
+from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from ._models import EMPTY_MAP, FrozenMap, rebuilt_quantities
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
 from .standards import default_standards_resolver
 from .tolerance.general import ToleranceRangeError
 from .tolerance.process import tolerance_is_achievable
 
-__all__ = ["element_registry", "screen_spec"]
+__all__ = [
+    "Structure",
+    "StructureMember",
+    "element_registry",
+    "screen_spec",
+    "screen_structure_element",
+]
 
 # Why T1 cannot run when a spec declares no element. Written once because it is quoted in
 # the scorecard entry, in the docs page, and in the test that pins it — three places that
@@ -74,6 +82,48 @@ _NO_ELEMENT_REASON = (
     "be selected from it; declare element_type and element_params, or build the pack's "
     "element and screen that"
 )
+
+
+class StructureMember(BaseModel):
+    """One member of a structure, named the same way a spec names a single element.
+
+    The nesting is deliberate rather than a second vocabulary: a member is written with the
+    ``element_type``/``element_params`` pair a reader already knows from the document's top
+    level, so moving a part into a structure is a change of indentation rather than a
+    rewrite.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    element_type: str
+    element_params: FrozenMap[str, Any] = Field(default_factory=lambda: EMPTY_MAP)
+
+    _a_quantity_survives_a_round_trip = field_validator("element_params", mode="before")(
+        # A member's parameters are the same `Any`-typed map a top-level element declares,
+        # and `DesignSpec`'s own repair does not reach them: it rebuilds the two-key shape
+        # one level down, and a member's quantities are two levels down, inside a list. So a
+        # structure written to disk came back with every member's dimensions as mappings and
+        # every member refused by its own pack model.
+        staticmethod(rebuilt_quantities)
+    )
+
+
+class Structure(BaseModel):
+    """Several elements screened into one card, so a document can describe a whole assembly.
+
+    `screen_structure` in the structural pack takes a *list* of members, so no single tag
+    addressed it and a spec describing a frame could name only one of its members. This is
+    the element that closes that: ``element_type: structure`` with the members underneath.
+
+    Each member is dispatched through the same registry a top-level element goes through, so
+    a member reaches exactly the screen it would have reached on its own — including the
+    refusals. A member that cannot be screened is NOT_EVALUATED naming itself, and the
+    other members still run: a frame is not un-screened because one brace was misspelt.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    members: list[StructureMember] = Field(min_length=1)
 
 
 def _tag(name: str) -> str:
@@ -92,9 +142,12 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
     stale silently — which is the failure mode this module already documents for the tier
     it could not run.
 
-    `screen_structure` takes a *list* of members rather than one element and is therefore
-    not addressable by a single tag; it is skipped by the same rule that selects the others
-    rather than by name.
+    `screen_structure` in the structural pack takes a *list* of members rather than one
+    element, so it is skipped by the same rule that selects the others rather than by name.
+    What a document needs from it is here instead, as the one entry this function adds to
+    what the packs give it: :class:`Structure`, under the tag ``structure``, which dispatches
+    each member back through this same registry. It is registered here rather than in a pack
+    because it belongs to no discipline — a structure's members can come from any of them.
     """
     from . import packs
 
@@ -118,42 +171,41 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
                     f"{annotation.__name__}; a document naming it would screen the wrong one"
                 )
             found[tag] = (annotation, screen)
+    found[_tag(Structure.__name__)] = (Structure, screen_structure_element)
     return found
 
 
-def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
-    """The T1 entries for the element a spec declares, or one saying why there are none.
+def _screen_element(
+    tag: str, params: Mapping[str, Any], min_safety_factor: float | None
+) -> list[ScorecardEntry]:
+    """The entries one declared element produces, or one saying why there are none.
 
     Every failure to reach the pack is reported as NOT_EVALUATED naming what went wrong: an
     unknown tag, or parameters the element's own model refuses. A screen that could not be
     selected is not a screen that passed, and this is the tier where that matters most.
+
+    Taken as a tag and a parameter map rather than as a spec, because a structure's members
+    are declared the same way and must reach the packs down the same path. A second dispatch
+    written beside this one would be a second set of refusals to keep in step.
     """
-    if spec.element_type is None:
-        return [
-            ScorecardEntry(
-                name="T1 analytical",
-                status=CheckStatus.NOT_EVALUATED,
-                detail=_NO_ELEMENT_REASON,
-            )
-        ]
     registry = element_registry()
-    entry = registry.get(spec.element_type)
+    entry = registry.get(tag)
     if entry is None:
-        near = difflib.get_close_matches(spec.element_type, sorted(registry), n=1)
+        near = difflib.get_close_matches(tag, sorted(registry), n=1)
         suggestion = f"; did you mean {near[0]!r}?" if near else ""
         return [
             ScorecardEntry(
                 name="T1 analytical",
                 status=CheckStatus.NOT_EVALUATED,
                 detail=(
-                    f"element_type {spec.element_type!r} is not one of the "
-                    f"{len(registry)} elements the discipline packs screen{suggestion}"
+                    f"element_type {tag!r} is not one of the "
+                    f"{len(registry)} elements this library screens{suggestion}"
                 ),
             )
         ]
     model, screen = entry
     try:
-        element = model.model_validate(dict(spec.element_params))
+        element = model.model_validate(dict(params))
     except ValidationError as refused:
         reasons = "; ".join(
             f"{'.'.join(str(part) for part in error['loc']) or '<element>'}: {error['msg']}"
@@ -165,7 +217,7 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 status=CheckStatus.NOT_EVALUATED,
                 detail=(
                     f"element_params do not build a {model.__name__} for element_type "
-                    f"{spec.element_type!r} — {reasons}"
+                    f"{tag!r} — {reasons}"
                 ),
             )
         ]
@@ -179,16 +231,15 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     wanted = parameters.get("required_safety_factor")
     keywords: dict[str, object] = {}
     if wanted is not None:
-        stated = spec.constraints.min_safety_factor
-        if stated is not None:
-            keywords["required_safety_factor"] = stated.value
+        if min_safety_factor is not None:
+            keywords["required_safety_factor"] = min_safety_factor
         elif wanted.default is inspect.Parameter.empty:
             return [
                 ScorecardEntry(
                     name="T1 analytical",
                     status=CheckStatus.NOT_EVALUATED,
                     detail=(
-                        f"the {spec.element_type} screen is judged against a required safety "
+                        f"the {tag} screen is judged against a required safety "
                         "factor and the spec states none; declare "
                         "constraints.min_safety_factor"
                     ),
@@ -200,10 +251,67 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             ScorecardEntry(
                 name="T1 analytical",
                 status=CheckStatus.NOT_EVALUATED,
-                detail=f"the {spec.element_type} screen produced no checks",
+                detail=f"the {tag} screen produced no checks",
             )
         ]
     return list(card.entries)
+
+
+def screen_structure_element(structure: Structure, *, required_safety_factor: float) -> Scorecard:
+    """Screen every member of a declared structure into one card.
+
+    The members go back through the same dispatch a top-level element goes through, so a
+    member is screened by exactly the screen it would have reached on its own, refusals
+    included. Each entry is prefixed with the member that produced it, because two beams in
+    one frame otherwise contribute two checks called the same thing and a reader cannot tell
+    which one failed.
+
+    **A member that cannot be screened does not stop the others.** It contributes its own
+    NOT_EVALUATED entry, which the roll-up already refuses to treat as a pass, and the rest
+    of the frame is still screened — a report naming one bad member and nine good ones is
+    worth more than one naming nothing.
+    """
+    entries: list[ScorecardEntry] = []
+    for index, member in enumerate(structure.members, start=1):
+        label = f"member {index} ({member.element_type})"
+        if member.element_type == _tag(Structure.__name__):
+            # Not a depth limit dressed up as a rule: a structure inside a structure has no
+            # meaning the flat list does not already carry, and allowing it would make this
+            # loop reachable from itself.
+            produced = [
+                ScorecardEntry(
+                    name="T1 analytical",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        "a structure cannot be a member of a structure; list its members "
+                        "alongside the others"
+                    ),
+                )
+            ]
+        else:
+            produced = _screen_element(
+                member.element_type, member.element_params, required_safety_factor
+            )
+        entries.extend(
+            entry.model_copy(update={"name": f"{label}: {entry.name}"}) for entry in produced
+        )
+    return Scorecard(entries=tuple(entries))
+
+
+def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """The T1 entries for the element a spec declares, or one saying why there are none."""
+    if spec.element_type is None:
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=_NO_ELEMENT_REASON,
+            )
+        ]
+    stated = spec.constraints.min_safety_factor
+    return _screen_element(
+        spec.element_type, spec.element_params, None if stated is None else stated.value
+    )
 
 
 def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:

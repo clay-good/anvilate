@@ -165,8 +165,10 @@ Spec that does not say what kind of element the part is cannot select a discipli
 screen, so the analytical tier reports `not_evaluated` naming the gap rather than reporting a
 pass on checks it never ran.
 
-Say what the part is, and the tier runs. `element_type` names one of the elements the packs
-screen and `element_params` carries that element's own fields:
+Say what the part is, and the tier runs. `element_type` names one of the elements this
+library screens and `element_params` carries that element's own fields — or `structure`,
+whose `element_params` is a list of members written the same way, when the part is an
+assembly rather than one element:
 
 ```python
 from anvilate.mcp import handle_request

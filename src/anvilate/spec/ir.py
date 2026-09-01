@@ -9,13 +9,12 @@ origin recorded via :class:`Provenanced`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
 
-from .._models import FrozenMap, RevalidatedModel
+from .._models import FrozenMap, RevalidatedModel, rebuilt_quantities
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -579,17 +578,7 @@ class DesignSpec(_Base):
         needed, for the same reason, and only the two-key shape this library's own
         serialiser emits: a mapping that does not parse stays a mapping.
         """
-        if not isinstance(value, Mapping):
-            return value
-        rebuilt: dict[str, Any] = {}
-        for key, entry in value.items():
-            if isinstance(entry, Mapping) and set(entry) == {"magnitude", "unit"}:
-                try:
-                    entry = Quantity(magnitude=float(entry["magnitude"]), unit=str(entry["unit"]))
-                except (TypeError, ValueError):
-                    pass
-            rebuilt[key] = entry
-        return rebuilt
+        return rebuilt_quantities(value)
 
     @model_validator(mode="after")
     def _an_element_is_a_tag_and_its_fields(self) -> DesignSpec:
