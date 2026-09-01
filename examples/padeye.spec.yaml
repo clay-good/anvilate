@@ -1,0 +1,18 @@
+# The document the README shows, shipped so a reader can run it:
+#   anvilate check examples/padeye.spec.yaml
+# Held byte for byte against the README block by tests/test_readme_claims.py.
+name: padeye
+description: A lifting padeye on a skid frame.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+element_type: lifting_lug
+element_params:
+  name: padeye
+  material: ASTM-A36
+  width: {magnitude: 120.0, unit: mm}
+  hole_diameter: {magnitude: 40.0, unit: mm}
+  thickness: {magnitude: 20.0, unit: mm}
+  load: {magnitude: 60.0, unit: kN}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+acceptance: {tiers: [T1_analytical]}

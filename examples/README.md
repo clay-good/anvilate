@@ -250,4 +250,15 @@ and reuse it. The DXF example additionally needs the `export` extra
 
 `nema23_bracket.spec.yaml` is that golden-path Design Spec IR (schema 1.0.0),
 loadable with `anvilate.spec.load_spec_yaml` — the typed, diffable representation a
-prompt compiles into.
+prompt compiles into. It predates `element_type`, so screening it reports the analytical
+tier as a named gap; that is the document to read for the IR's shape.
+
+`padeye.spec.yaml` is the one to *run*. It is the document the README shows, shipped so a
+reader can screen it rather than retype it:
+
+```bash
+anvilate check examples/padeye.spec.yaml
+```
+
+It declares its element, so the analytical tier returns cited ASME BTH-1 checks rather than
+a gap. The two files are held equal to the README block byte for byte.

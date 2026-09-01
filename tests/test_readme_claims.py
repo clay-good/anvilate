@@ -416,9 +416,20 @@ def test_the_readme_document_is_a_document_that_screens_to_what_it_shows():
     page = (_REPO / "README.md").read_text()
     document = re.search(r"```yaml\n(name: padeye\n.*?)```", page, re.S)
     printed = re.search(
-        r"```bash\nanvilate check padeye\.yaml\n```\n\n```text\n(.*?)```", page, re.S
+        r"```bash\nanvilate check examples/padeye\.spec\.yaml\n```\n\n```text\n(.*?)```",
+        page,
+        re.S,
     )
     assert document is not None and printed is not None, "the README's document block has moved"
+
+    # The block is shipped as a file so a reader can run it rather than retype it, and the
+    # two are held equal here — one document, not a page and a copy of it that drift.
+    shipped = _REPO / "examples" / "padeye.spec.yaml"
+    body = shipped.read_text(encoding="utf-8")
+    assert body.endswith(document.group(1)), (
+        "examples/padeye.spec.yaml is not the document the README shows"
+    )
+    assert body.startswith("#"), "the shipped copy should say where it comes from"
 
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "padeye.yaml"

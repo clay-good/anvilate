@@ -92,8 +92,11 @@ constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
 acceptance: {tiers: [T1_analytical]}
 ```
 
+It ships as [`examples/padeye.spec.yaml`](examples/padeye.spec.yaml), so this is a command
+rather than a retyping exercise:
+
 ```bash
-anvilate check padeye.yaml
+anvilate check examples/padeye.spec.yaml
 ```
 
 ```text
