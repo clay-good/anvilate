@@ -42,9 +42,28 @@ _UNIT_DECIMALS = {
 _MAX_RELATIVE_ROUNDING = 0.005
 
 # Units that share a moment's dimensionality but are energies; see _system_unit.
-_ENERGY_UNITS = frozenset(
-    {"J", "kJ", "MJ", "mJ", "Wh", "kWh", "MWh", "BTU", "Btu", "cal", "kcal", "eV", "keV", "MeV"}
-)
+#: Energy and moment share one dimensionality, and pint has 49 units in it. Named here so
+#: the two can be told apart *structurally* rather than by a list of spellings.
+_ENERGY_DIMENSIONALITY = UREG.Unit("joule").dimensionality
+
+
+def _is_written_as_energy(quantity: Quantity) -> bool:
+    """Whether ``quantity`` is written in an energy unit rather than a force times a length.
+
+    Energy, work and torque are one dimensionality and only one of them is a moment, so
+    relabelling a strain energy or a heat duty as "9.34 kip·in" is arithmetically right and
+    unreadable. Telling them apart used to be a set of fourteen spellings plus eight
+    substrings, and both are lists: pint has **49** units in this dimensionality, and the one
+    a US mechanical engineer actually writes — ``ft_lb`` — was on neither.
+
+    There is no dimension to test, because that is the whole problem. There is a *structure*:
+    every energy unit pint defines is a single named unit (``joule``, ``foot_pound``,
+    ``kilowatt_hour``, ``british_thermal_unit``, ``hartree``), and every moment is a force
+    times a length (``newton * meter``, ``kip * inch``, ``force_pound * foot``). One
+    component means energy; two mean a moment.
+    """
+    components = dict(UREG.Unit(quantity.unit)._units)
+    return len(components) == 1 and next(iter(components.values())) == 1
 
 
 def decimals_for(unit: str, magnitude: float | None = None) -> int:
@@ -178,13 +197,9 @@ def _engineering_order(label: str) -> str:
 def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
     """The conventional unit for ``quantity``'s dimension in ``system``."""
     dim = quantity.pint.dimensionality
-    # Energy, work and torque are one dimensionality, and only one of them is a moment.
-    # Relabelling a strain energy or a heat duty as "9.34 kip·in" is arithmetically right
-    # and unreadable, so a quantity already written in an energy unit keeps it.
-    if str(quantity.unit) in _ENERGY_UNITS or any(
-        token in str(quantity.unit).lower()
-        for token in ("joule", "watt", "hour", "calorie", "btu", "erg", "therm", "electron_volt")
-    ):
+    # A quantity already written in an energy unit keeps it — see `_is_written_as_energy`
+    # for why that cannot be decided by the unit's spelling.
+    if dim == _ENERGY_DIMENSIONALITY and _is_written_as_energy(quantity):
         return None
     mapping = [
         ("[length]", system.length_unit),

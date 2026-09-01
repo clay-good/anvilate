@@ -773,3 +773,51 @@ def test_the_angular_mil_is_a_rotation_and_not_a_count():
     # And the near-miss the substring fix would have created: a millimole rate is not an
     # angle, and "mil" is a substring of "milli".
     assert count_rate_per_second(Quantity(magnitude=5.0, unit="mmol/s/mol"), name="rate") > 0
+
+
+def test_every_energy_unit_pint_defines_keeps_its_own_unit_in_a_derivation():
+    """Energy and moment are one dimensionality and only one of them is a moment.
+
+    Relabelling a strain energy or a heat duty as "9.34 kip·in" is arithmetically right and
+    unreadable, so a quantity already written in an energy unit keeps it. Deciding that used
+    to be fourteen spellings plus eight substrings, and pint has **49 units** in this
+    dimensionality — including `ft_lb`, which is the one a US mechanical engineer writes and
+    was on neither list. A derivation would have relabelled it as a moment.
+
+    There is no dimension to test; that is the problem itself. There is a structure: every
+    energy unit pint defines is a single named unit, and every moment is a force times a
+    length. This holds that against the whole registry rather than a fixture.
+    """
+    from anvilate.units.format import _system_unit
+    from anvilate.units.registry import UREG
+
+    energy = UREG.Unit("joule").dimensionality
+    checked = 0
+    for name in dir(UREG):
+        try:
+            unit = UREG.Unit(name)
+        except Exception:  # noqa: BLE001 - `dir` yields plenty that is not a unit
+            continue
+        if unit.dimensionality != energy:
+            continue
+        try:
+            quantity = Quantity(magnitude=1.0, unit=name)
+        except Exception:  # noqa: BLE001 - a few registry names do not survive the model
+            continue
+        checked += 1
+        for system in UnitSystem:
+            assert _system_unit(quantity, system) is None, (
+                f"{name} is an energy unit and a {system.name} derivation would relabel it "
+                f"as {_system_unit(quantity, system)}"
+            )
+    assert checked > 30, f"only {checked} energy units were checked; the sweep found too few"
+
+    # The other half: a moment written as a force times a length really is relabelled, or
+    # this test is satisfied by a function that returns None for everything.
+    for moment in ("N*m", "kN*m", "kip*in", "lbf*ft", "in*lbf"):
+        assert _system_unit(Quantity(magnitude=1.0, unit=moment), UnitSystem.SI) == "N*mm"
+        assert _system_unit(Quantity(magnitude=1.0, unit=moment), UnitSystem.US) == "kip*in"
+    # And a plain length is still converted, which a "one component means keep it" rule
+    # applied without the dimensionality check would have broken.
+    assert _system_unit(Quantity(magnitude=1.0, unit="mm"), UnitSystem.US) == "in"
+    assert _system_unit(Quantity(magnitude=1.0, unit="MPa"), UnitSystem.US) == "ksi"
