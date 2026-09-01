@@ -1145,6 +1145,31 @@ def test_screen_structure_rolls_up_beams_and_columns():
     assert card.status is CheckStatus.PASS
 
 
+def test_screen_structure_refuses_a_member_it_does_not_screen():
+    """The last branch of the dispatch used to be the shear plate rather than a refusal, so
+    any member the chain did not recognise was screened *as* a shear plate.
+
+    Nothing that ships today carries the fields `screen_shear_plate` reads, so what a caller
+    saw was an AttributeError naming a missing `material` — a diagnosis pointing at the
+    member's contents when the fault is its type. A member that did carry them would have
+    been screened on the wrong limit states with nothing saying so. The annotation cannot
+    catch it: `list[StructuralMember]` on a plain function is checked by nobody at run time.
+    """
+    from anvilate.packs.hydraulics import PumpDuty
+
+    duty = PumpDuty(
+        flow_rate=Quantity.parse("20 m**3/hour"),
+        total_head=Quantity.parse("30 m"),
+        fluid_density=Quantity.parse("998 kg/m**3"),
+        efficiency=0.7,
+        motor_rating=Quantity.parse("5 kW"),
+        npsh_available=Quantity.parse("6 m"),
+        npsh_required=Quantity.parse("3 m"),
+    )
+    with pytest.raises(TypeError, match="cannot screen a PumpDuty"):
+        screen_structure([duty], required_safety_factor=2.0)
+
+
 def test_screen_structure_fails_if_any_member_fails():
     beam = _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N")
     overloaded_column = _column("500 mm", load="20 kN")

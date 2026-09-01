@@ -2306,6 +2306,22 @@ def screen_shear_plate(
     )
 
 
+# The members `screen_structure` dispatches, as a tuple as well as a type union: the union
+# is an annotation, which nothing checks at run time, and the refusal below has to name them.
+_STRUCTURAL_MEMBER_TYPES = (
+    BeamMember,
+    ColumnMember,
+    BoltedConnection,
+    WeldedConnection,
+    BasePlate,
+    LiftingLug,
+    GussetPlate,
+    TensionMember,
+    BeamColumnMember,
+    ConcreteBearing,
+    ShearPlate,
+)
+
 StructuralMember = (
     BeamMember
     | ColumnMember
@@ -2400,12 +2416,23 @@ def screen_structure(
             )
         elif isinstance(member, ConcreteBearing):
             card = screen_concrete_bearing(member, required_safety_factor=required_safety_factor)
-        else:
+        elif isinstance(member, ShearPlate):
             card = screen_shear_plate(
                 member,
                 required_safety_factor=required_safety_factor,
                 materials=materials,
                 required_basis=required_basis,
+            )
+        else:
+            # The last branch used to be the shear plate rather than a refusal, so anything
+            # this chain did not recognise was screened *as* a shear plate. Nothing that
+            # ships today carries the fields it reads, so what a caller actually saw was an
+            # AttributeError naming a missing `material` -- a diagnosis pointing at the
+            # member's contents when the fault is its type. And a member that did carry them
+            # would have been screened on the wrong limit states with no sign of it.
+            raise TypeError(
+                f"screen_structure cannot screen a {type(member).__name__}; a member must be "
+                f"one of {', '.join(sorted(m.__name__ for m in _STRUCTURAL_MEMBER_TYPES))}"
             )
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))
