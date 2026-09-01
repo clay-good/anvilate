@@ -22,6 +22,7 @@ from math import cos, log10, radians, sin, sqrt, tan
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
@@ -1058,7 +1059,49 @@ def asme_b313_branch_reinforcement_scorecard(
             f"{detail}; short by {reinforcement.deficit.magnitude:.4g} mm², which is the "
             f"area a reinforcing pad has to supply"
         )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_B313_BRANCH})
+    # The three credits, added the way §304.3.3 adds them. A1 is not a symbol here: it is
+    # the number this sum is judged against, and it is named in the result's gloss and in
+    # the detail line rather than shown as a term of a sum it is not part of.
+    derivation = Derivation(
+        symbolic="A_avail = A_2 + A_3 + A_4",
+        inputs=(
+            SymbolValue(
+                symbol="A_2",
+                description="run's excess wall inside the zone, (2·d2 − d1)(T_h − t_h − c)",
+                value=reinforcement.run_excess,
+                unit="mm**2",
+            ),
+            SymbolValue(
+                symbol="A_3",
+                description="branch's excess wall inside the zone, 2·L4·(T_b − t_b − c)/sin β",
+                value=reinforcement.branch_excess,
+                unit="mm**2",
+            ),
+            SymbolValue(
+                symbol="A_4",
+                description="pad and weld metal the caller declared",
+                value=reinforcement.added,
+                unit="mm**2",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="A_avail",
+            description=(
+                f"reinforcement available against the {need:.4g} mm² the opening removed "
+                f"(A1 = t_h · d1 · (2 − sin β))"
+            ),
+            value=reinforcement.available,
+            unit="mm**2",
+        ),
+        citation=_CLAUSE_B313_BRANCH,
+    )
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_B313_BRANCH,
+            "derivation": derivation,
+        }
+    )
 
 
 def asme_b313_allowable_displacement_stress_range(
@@ -1791,9 +1834,57 @@ def asme_b313_pressure_scorecard(
         )
     service = design_pressure.to("MPa").magnitude
     computed = None if service <= 0 else rating.to("MPa").magnitude / service
+    # t is the wall the pipe can be RELIED on to have, not the wall it was ordered at: the
+    # mill under-tolerance and the corrosion allowance are already off it. Substituting the
+    # nominal wall here would render a formula that rates a pipe nobody bought.
+    derivation = Derivation(
+        symbolic="P = 2 · t · S · E / (D − 2 · Y · t)",
+        inputs=(
+            SymbolValue(
+                symbol="t",
+                description=(
+                    f"pressure-design wall available — the {nominal_wall} ordered wall less "
+                    f"the {mill_tolerance_fraction:.1%} mill under-tolerance"
+                    + ("" if corrosion_allowance is None else f" and {corrosion_allowance}")
+                ),
+                value=Quantity(magnitude=available, unit="mm"),
+                unit="mm",
+            ),
+            SymbolValue(
+                symbol="S",
+                description=f"B31.3 allowable stress at {allowable.temperature}",
+                value=allowable.value,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="E",
+                description="longitudinal weld joint quality factor",
+                value=quality_factor,
+            ),
+            SymbolValue(
+                symbol="D",
+                description="pipe outside diameter",
+                value=outside_diameter,
+                unit="mm",
+            ),
+            SymbolValue(
+                symbol="Y",
+                description="material coefficient from Table 304.1.1",
+                value=coefficient_y,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="P",
+            description="pressure the available wall is rated to carry",
+            value=rating,
+            unit="MPa",
+        ),
+        citation=_CLAUSE_B313_PRESSURE_DESIGN,
+    )
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(
         update={
             "reference": _CLAUSE_B313_PRESSURE_DESIGN,
+            "derivation": derivation,
             "detail": (
                 f"{available:.2f} mm available wall rates {rating.to('MPa').magnitude:.2f} MPa "
                 f"against a {service:.2f} MPa service ({allowable})"
@@ -2105,7 +2196,42 @@ def asme_ug37_reinforcement_scorecard(
             f"{detail}; short by {reinforcement.deficit.magnitude:.4g} mm², which is the "
             f"area a reinforcing pad has to supply"
         )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_UG37})
+    derivation = Derivation(
+        symbolic="A_avail = A_1 + A_2 + A_41",
+        inputs=(
+            SymbolValue(
+                symbol="A_1",
+                description="shell's excess thickness available as reinforcement",
+                value=reinforcement.shell_excess,
+                unit="mm**2",
+            ),
+            SymbolValue(
+                symbol="A_2",
+                description="nozzle wall's excess thickness inside the limits",
+                value=reinforcement.nozzle_excess,
+                unit="mm**2",
+            ),
+            SymbolValue(
+                symbol="A_41",
+                description="outward nozzle fillet weld metal",
+                value=reinforcement.weld_area,
+                unit="mm**2",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="A_avail",
+            description=(
+                f"reinforcement available against the {need:.4g} mm² UG-37 requires "
+                f"(A = d · t_r · F + 2 · t_n · t_r · F · (1 − f_r1))"
+            ),
+            value=reinforcement.available,
+            unit="mm**2",
+        ),
+        citation=_CLAUSE_UG37,
+    )
+    return entry.model_copy(
+        update={"detail": detail, "reference": _CLAUSE_UG37, "derivation": derivation}
+    )
 
 
 class FlangeGasketGeometry(BaseModel):

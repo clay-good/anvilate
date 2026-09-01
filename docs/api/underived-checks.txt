@@ -43,12 +43,9 @@ standards effectivity :: a consistency verdict over the citations a bundle carri
 AISC 360-16 §L3 :: the serviceability deflection limit δ vs L/n. Derived on 23 of 135 entries; the rest render the limit without the span it came from.
 AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
 ASCE 7-22 §2.3.1 :: derived where a capacity is screened against the combination; the spec-screening entry that only reports which combination governs re-resolves the set from its name and does not carry the factored sum.
-ASME B31.3 §304.1.2 straight-pipe pressure design :: t = P·D/(2·(S·E·W + P·Y)) and the margin the wall has over it.
-ASME B31.3 §304.3.3 (reinforcement of welded branch connections) :: the area-replacement balance around the branch opening.
 ASME BTH-1 §3-1.4 (Service Class) :: the stress range against the §3-4 allowable for the declared Service Class.
 ASME BTH-1 §3-2/§3-3 (allowable stresses) :: the allowables are coefficients on S_y/N_d and S_u/N_d, and the coefficient that applies is the part a reviewer needs to see.
-ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: the flange moments and the longitudinal, radial and tangential hub stresses.
-ASME VIII Div 1 UG-37 (reinforcement of openings) :: the area-replacement balance A_required vs A_available.
+ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: S_T = Y · M / (t² · B). LooseRingFlangeStress carries the shape factor and both stresses but not the moment, the thickness or B, so the scorecard cannot render the formula without those three being carried on it first.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
 BS 7910 / R6 Option 1 failure assessment diagram :: K_r = K_I/K_mat, L_r = σ_ref/σ_y, and the Option 1 envelope the point is assessed against.
 EN 15978 life-cycle modules; ISO 14040 cradle-to-gate boundary :: the embodied carbon is the material mass over the process yield times the cited factor.

@@ -1208,7 +1208,78 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
         if entry.derivation is not None
     ]
     out.extend(_load_combination_derivations())
+    out.extend(_pressure_vessel_derivations())
     return out
+
+
+def _pressure_vessel_derivations() -> list[tuple[str, object]]:
+    """The three pressure-equipment scorecards that render a formula.
+
+    These live in `anvilate.analysis`, not in a pack, so the pack-coverage gate does not
+    reach them — and a formula the render-truth gate never evaluates is a formula nothing
+    checks, whichever package it lives in.
+    """
+    from anvilate.analysis import (
+        AllowableStress,
+        asme_b313_branch_reinforcement,
+        asme_b313_branch_reinforcement_scorecard,
+        asme_b313_pressure_scorecard,
+        asme_ug37_nozzle_reinforcement,
+        asme_ug37_reinforcement_scorecard,
+    )
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    allowable = AllowableStress(
+        value=q("138 MPa"), temperature=q("477.6 K"), material="A106-B", source="Table A-1"
+    )
+    entries = [
+        (
+            "b313 pressure",
+            asme_b313_pressure_scorecard(
+                "process line",
+                design_pressure=q("5 MPa"),
+                design_temperature=q("477.6 K"),
+                outside_diameter=q("114.3 mm"),
+                nominal_wall=q("6.02 mm"),
+                allowable=allowable,
+                corrosion_allowance=q("1.5 mm"),
+            ),
+        ),
+        (
+            "b313 branch",
+            asme_b313_branch_reinforcement_scorecard(
+                "branch opening",
+                reinforcement=asme_b313_branch_reinforcement(
+                    run_outside_diameter=q("406.40 mm"),
+                    run_wall=q("4.18 mm"),
+                    run_pressure_design_thickness=q("3.78 mm"),
+                    branch_outside_diameter=q("26.7 mm"),
+                    branch_wall=q("2.51 mm"),
+                    branch_pressure_design_thickness=q("0.25 mm"),
+                    mechanical_allowance=q("0 mm"),
+                ),
+            ),
+        ),
+        (
+            "ug37 nozzle",
+            asme_ug37_reinforcement_scorecard(
+                "nozzle opening",
+                reinforcement=asme_ug37_nozzle_reinforcement(
+                    shell_thickness=q("12 mm"),
+                    shell_required_thickness=q("8 mm"),
+                    nozzle_outside_diameter=q("168.3 mm"),
+                    nozzle_thickness=q("10.97 mm"),
+                    nozzle_required_thickness=q("4 mm"),
+                    corrosion_allowance=q("1.5 mm"),
+                    weld_leg=q("8 mm"),
+                ),
+            ),
+        ),
+    ]
+    return [(label, entry.derivation) for label, entry in entries if entry.derivation is not None]
 
 
 def _load_combination_derivations() -> list[tuple[str, object]]:
