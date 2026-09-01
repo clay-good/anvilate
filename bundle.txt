@@ -1,4 +1,0 @@
-bundle NOT_EVALUATED over 1 layer (checks); not covered: verification, review, exploration, callouts, load combinations, export, geometric tolerances; not test-verified
-  [NOT_EVALUATED] checks: 1 run, 0 failing, 1 not evaluated
-assumptions: none declared
-These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.

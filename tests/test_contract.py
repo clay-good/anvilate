@@ -2214,3 +2214,46 @@ def test_a_serialised_verdict_cannot_be_asserted_into_a_document():
     dumped = card.model_dump(mode="json")
     assert dumped["status"] == "fail"
     assert Scorecard.model_validate({**dumped, "status": "pass"}).status is CheckStatus.FAIL
+
+
+def test_the_repository_root_holds_only_files_that_belong_there():
+    """The root is where regenerable output lands, because an example writes to its own
+    working directory and a reader runs it from the checkout.
+
+    Three artifacts had been committed that way. `position_callout.dxf` was rewritten by
+    every run of the suite — its diff is a timestamp and two GUIDs — so it attached itself
+    to whatever commit came next, in this repository's history four times running. Two more,
+    `bundle.txt` and `docranges.json`, were a CLI redirect and an audit scratch file that
+    nothing read.
+
+    An allowlist rather than a pattern, because the failure is not "a DXF at the root": the
+    two scratch files were a `.txt` and a `.json`, extensions no gate can ban. What the root
+    of a repository holds is a short, deliberate list, and adding to it should be a diff.
+    """
+    import subprocess
+
+    allowed = {
+        ".gitignore",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "LICENSE",
+        "README.md",
+        "package-lock.json",
+        "package.json",
+        "pyproject.toml",
+    }
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", ":(top)*"],
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split("\0")
+    root_files = {name for name in tracked if name and "/" not in name}
+    assert root_files, "git ls-files listed nothing; the gate is looking at an empty set"
+    assert "pyproject.toml" in root_files, "the gate is not looking at this repository"
+    assert root_files <= allowed, (
+        "these are tracked at the repository root and are not on the list of files that "
+        f"belong there: {sorted(root_files - allowed)}. If one is example output, add it to "
+        ".gitignore and `git rm --cached` it; if it belongs, add it to the list above"
+    )
