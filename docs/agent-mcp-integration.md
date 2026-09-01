@@ -252,15 +252,15 @@ def refusal(name, arguments):
     return error["code"], error["message"].split(";")[0].split(",")[0]
 
 
-print(refusal("read_scorecard", {}))
+print(refusal("render_viewport", {"subject": "sha256:" + "a" * 64, "view": "iso"}))
 print(refusal("build_part", {"spec": {}}))
 print(refusal("run_validation", {}))
 ```
 
 ```text
-cannot be served statelessly: render_viewport, measure_geometry, read_scorecard, export_artifact
+cannot be served statelessly: 
 task-dispatched: build_part, run_fea_validation
-(-32000, 'read_scorecard names nothing in its input to act on')
+(-32000, 'render_viewport is not dispatched yet: rendering an image needs built geometry')
 (-32000, 'build_part is task-dispatched because its cost is unbounded')
 (-32602, "run_validation requires 'spec'")
 ```
@@ -268,14 +268,68 @@ task-dispatched: build_part, run_fea_validation
 - **`-32602` is yours to fix.** The arguments did not match the published `inputSchema`.
 - **`-32000`, task-dispatched.** Not a failure and not a retry: the operation's cost is
   bounded by a convergence criterion or by your own code, so a synchronous call cannot
-  promise a reply. Waiting or backing off will not help; the Tasks extension is what will.
-- **`-32000`, stateless.** The tool names nothing in its input to act on. Four are in that
-  position — `render_viewport`, `measure_geometry`, `read_scorecard` and `export_artifact`
-  — and `run_fea_validation` joins `build_part` on the task side. Retrying is pointless:
-  this is an open contract question, not an outage. Do not work around it by assuming the
-  server remembers your last call.
+  promise a reply. `build_part` and `run_fea_validation` are the two. Waiting or backing off
+  will not help; the Tasks extension is what will.
+- **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
+  behind them is not, and the message names what it waits on — `render_viewport`,
+  `measure_geometry` and `export_artifact` all wait on built geometry. Retrying is pointless;
+  a result invented there would be indistinguishable from a real one.
+
+  This used to be a different refusal. Four tools named nothing in their input to act on, so
+  they could not be served by a server with no memory between calls — an open contract
+  question rather than an outage. It is closed: every tool now takes a **subject**, a handle
+  returned by an earlier call, and `stateless_gaps()` is empty as a consequence rather than
+  as an edit. See [what a subject is](#subjects-a-handle-not-a-memory).
 - **`-32603`** you should never see. It means a handler produced a result the tool's own
   published `outputSchema` rejects, which is a bug in Anvilate, not in your client.
+
+## Subjects: a handle, not a memory
+
+Four tools take a **subject** — `render_viewport`, `measure_geometry`, `read_scorecard` and
+`export_artifact`. It is a handle: `sha256:` and the digest of the document it names, returned
+by an earlier call.
+
+```python
+from anvilate.mcp import handle_request
+
+DECK = {
+    "name": "deck_plate",
+    "description": "A mezzanine deck plate.",
+    "units": {"value": "SI", "origin": "user_stated"},
+    "material": {"ref": "ASTM-A36"},
+    "manufacturing": {"process": "sheet_metal"},
+    "acceptance": {"tiers": ["T1_analytical"]},
+}
+
+
+def call(name, arguments, request_id=9):
+    return handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        }
+    )["result"]["structuredContent"]
+
+
+screened = call("run_validation", {"spec": DECK})
+handle = screened["subject"]
+print(handle.startswith("sha256:"), len(handle))
+print(call("read_scorecard", {"subject": handle})["scorecard"]["status"])
+```
+
+```text
+True 71
+not_evaluated
+```
+
+Why a handle rather than the payload, or a session: the server keeps no memory between
+calls, so any instance can serve any call and a reconnect loses nothing — and the whole
+geometry does not cross the wire on every request. What it costs is a store, whose location,
+reach and retention `anvilate.store` states rather than assumes. **A handle resolves in one
+place or in none**: one the store does not hold is refused by name, never answered with
+whatever the server did most recently.
 
 ## What a client can rely on
 

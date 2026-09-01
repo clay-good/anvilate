@@ -52,6 +52,7 @@ from pydantic import ConfigDict, Field, model_validator
 from ._models import Named, RevalidatedModel
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .spec import ValidationTier
+from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
 
 __all__ = [
     "Cost",
@@ -129,6 +130,20 @@ REQUIRED_OPERATIONS = frozenset(
 # contracts and decides what a client pinned to the old one is owed.
 _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
 _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.2.0.json"
+
+# What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
+# a memory of the last call. `openspec/changes/resolve-mcp-tool-subjects` chose this over
+# carrying whole payloads and over a session; `anvilate.store` states the store's location,
+# reach and retention, which is the cost the choice was made with open eyes about.
+_SUBJECT_SCHEMA = {
+    "type": "string",
+    "pattern": SUBJECT_PATTERN,
+    "description": (
+        "A handle returned by an earlier call — 'sha256:' and the digest of the document it "
+        "names. Resolved from the subject store; a handle that is not there is refused "
+        "rather than guessed at."
+    ),
+}
 
 # Tiers whose cost is a convergence criterion rather than the size of the input. Anything
 # covering one of these is task-dispatched; see the module docstring.
@@ -298,6 +313,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {
                     "spec": {"$ref": _SPEC_REF},
                     "errors": {"type": "array", "items": {"type": "string"}},
+                    "subject": _SUBJECT_SCHEMA,
                 },
                 required=["errors"],
             ),
@@ -339,13 +355,14 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             input_schema=_object_schema(
                 {
+                    "subject": _SUBJECT_SCHEMA,
                     "view": {
                         "type": "string",
                         "enum": ["iso", "front", "top", "right"],
                     },
                     "width_px": {"type": "integer", "minimum": 64, "maximum": 4096},
                 },
-                required=["view"],
+                required=["subject", "view"],
             ),
             output_schema=_object_schema(
                 {
@@ -356,6 +373,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["view", "width_px", "height_px"],
             ),
             cost=Cost.BOUNDED,
+            subject="subject",
         ),
         ToolDefinition(
             name="measure_geometry",
@@ -366,8 +384,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "spec asked for."
             ),
             input_schema=_object_schema(
-                {"query": {"type": "string", "minLength": 1}},
-                required=["query"],
+                {"subject": _SUBJECT_SCHEMA, "query": {"type": "string", "minLength": 1}},
+                required=["subject", "query"],
             ),
             output_schema=_object_schema(
                 {
@@ -378,6 +396,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["value", "unit"],
             ),
             cost=Cost.BOUNDED,
+            subject="subject",
         ),
         ToolDefinition(
             name="run_validation",
@@ -406,8 +425,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["spec"],
             ),
             output_schema=_object_schema(
-                {"scorecard": {"$ref": _SCORECARD_REF}},
-                required=["scorecard"],
+                {"scorecard": {"$ref": _SCORECARD_REF}, "subject": _SUBJECT_SCHEMA},
+                required=["scorecard", "subject"],
             ),
             cost=Cost.BOUNDED,
             tiers=(
@@ -457,13 +476,14 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "four-valued enumeration and not_evaluated is not a pass, which is why this "
                 "is a typed document rather than a summary sentence."
             ),
-            input_schema=_object_schema({}, required=[]),
+            input_schema=_object_schema({"subject": _SUBJECT_SCHEMA}, required=["subject"]),
             output_schema=_object_schema(
                 {"scorecard": {"$ref": _SCORECARD_REF}},
                 required=["scorecard"],
             ),
             cost=Cost.BOUNDED,
-            backing="anvilate.scorecard:Scorecard",
+            backing="anvilate.store:SubjectStore",
+            subject="subject",
         ),
         ToolDefinition(
             name="export_artifact",
@@ -476,10 +496,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             input_schema=_object_schema(
                 {
+                    "subject": _SUBJECT_SCHEMA,
                     "format": {"type": "string", "enum": ["qif", "dxf", "evidence_bundle"]},
                     "destination": {"type": "string", "minLength": 1},
                 },
-                required=["format", "destination"],
+                required=["subject", "format", "destination"],
             ),
             output_schema=_object_schema(
                 {
@@ -492,6 +513,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             cost=Cost.BOUNDED,
             emits_artifacts=True,
             backing="anvilate.export.qif:export_qif_results",
+            subject="subject",
         ),
     )
 
@@ -920,11 +942,16 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     handler = _DISPATCH.get(tool.name)
     if handler is None:
+        # Naming what each one waits on, because "not implemented" is not an answer a client
+        # can act on — the same rule the CLI follows for its unbuilt command. Until the
+        # subjects landed these three were refused for having nothing to act on, which hid
+        # the real reason behind a contract problem that has since been fixed.
+        waiting = _UNBUILT.get(tool.name, "the operation behind the contract")
         return _error(
             request_id,
             TOOL_UNAVAILABLE,
-            f"{tool.name} is not dispatched yet: the contract and this handler are built, "
-            f"the operation behind them is not. A result invented here would be "
+            f"{tool.name} is not dispatched yet: {waiting}. The contract and this handler "
+            f"are built and the operation is not; a result invented here would be "
             f"indistinguishable from a real one",
         )
     try:
@@ -975,7 +1002,12 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         # document it could not even attempt, and it still belongs in `errors` rather than
         # crashing the loop that called it.
         return {"errors": [str(failure)]}
-    return {"spec": spec.model_dump(mode="json"), "errors": []}
+    # Published, so the next call has something to name. A compiled document is the subject
+    # `run_validation` and the geometry tools act on, and a handle is what keeps the payload
+    # off the wire without giving the server a memory between calls.
+    document_json = spec.model_dump(mode="json")
+    handle = subject_store().publish("design-spec", document_json)
+    return {"spec": document_json, "errors": [], "subject": handle}
 
 
 def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -1018,13 +1050,52 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {failure}"]) from failure
-    return {"scorecard": screen_spec(spec).model_dump(mode="json")}
+    card = screen_spec(spec).model_dump(mode="json")
+    # The card is returned *and* published: returned because it is closed-form and the answer
+    # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
+    # for it that is not "the last thing you asked me".
+    return {"scorecard": card, "subject": subject_store().publish("scorecard", card)}
 
+
+def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``read_scorecard``, resolved from the subject store.
+
+    This tool used to take nothing at all: it returned "the" scorecard, which is only an
+    operation if the server remembers which one. With a handle it is a real read — of the
+    document that handle names, from a store any instance can reach, and a handle the store
+    does not hold is refused by name rather than answered with whatever is most recent.
+    """
+    handle = arguments["subject"]
+    try:
+        return {"scorecard": subject_store().resolve(handle, kind="scorecard")}
+    except UnknownSubject as unknown:
+        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+
+
+# What each undispatched tool is waiting on. A census in tests/test_mcp.py holds this against
+# the dispatch map, so a tool that stops being served, or starts, cannot leave a stale reason
+# behind — and one that is neither dispatched nor named here fails the build.
+_UNBUILT: dict[str, str] = {
+    "render_viewport": (
+        "rendering an image needs built geometry, and no geometry is generated from a spec "
+        "today (see openspec/specs/geometry-generation)"
+    ),
+    "measure_geometry": (
+        "measuring a feature needs built geometry, and no geometry is generated from a spec "
+        "today (see openspec/specs/geometry-generation)"
+    ),
+    "export_artifact": (
+        "a QIF results file and a DXF are drawn from built geometry, and the evidence bundle "
+        "an `anvilate export` writes is assembled from more than a scorecard: subjects, an "
+        "environment BOM and an AI disclosure this call does not carry"
+    ),
+}
 
 # The operations wired to real code today. A tool absent from this map is refused with the
 # reason rather than answered — see the refusal above.
 _DISPATCH: dict[str, Any] = {
     "compile_spec": _compile_spec,
+    "read_scorecard": _read_scorecard,
     "run_validation": _run_validation,
 }
 

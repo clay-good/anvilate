@@ -62,7 +62,7 @@ def test_every_code_fence_is_one_this_file_knows():
 
 def test_the_extractor_finds_the_examples_that_are_there():
     """Without this the whole file passes on a regex that matched nothing."""
-    assert len(_examples()) == 5, [source[:40] for source, _ in _examples()]
+    assert len(_examples()) == 6, [source[:40] for source, _ in _examples()]
     assert all(claimed.strip() for _source, claimed in _examples())
 
 
@@ -70,7 +70,7 @@ def test_the_extractor_finds_the_examples_that_are_there():
     ("index", "source", "claimed"),
     [(i, source, claimed) for i, (source, claimed) in enumerate(_examples())],
 )
-def test_each_example_prints_what_the_guide_says_it_prints(index, source, claimed):
+def test_each_example_prints_what_the_guide_says_it_prints(index, source, claimed, tmp_path):
     """Its own process each time, so one example cannot rebind a library attribute and make
     a later one print a sentence the library never says."""
     assert claimed.strip(), f"example {index} claims no output, so nothing is compared"
@@ -79,7 +79,14 @@ def test_each_example_prints_what_the_guide_says_it_prints(index, source, claime
         capture_output=True,
         text=True,
         cwd=_REPO,
-        env={"PYTHONPATH": str(_SRC), "PATH": "/usr/bin:/bin"},
+        # The subject store defaults to the user's cache, and an example that publishes a
+        # handle would write there. The suite's autouse fixture cannot reach a subprocess
+        # with a fixed environment, so the path is passed in.
+        env={
+            "PYTHONPATH": str(_SRC),
+            "PATH": "/usr/bin:/bin",
+            "ANVILATE_SUBJECT_STORE": str(tmp_path / "subjects"),
+        },
         timeout=180,
         check=False,
     )

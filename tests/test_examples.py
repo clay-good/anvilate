@@ -7548,9 +7548,11 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     responses = namespace["session"]()
     by_id = {r.get("id"): r for r in responses}
 
-    # Eight messages in, seven responses out — the notification takes none.
+    # Eight messages in, seven responses out — the notification takes none — and then a
+    # ninth, sent only after the eighth answered: `read_scorecard` takes the handle
+    # `run_validation` returned, which is what makes this a session rather than a transcript.
     assert len(namespace["_requests"]()) == 8
-    assert len(responses) == 7
+    assert len(responses) == 8
     assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
     assert len(by_id[2]["result"]["tools"]) == 8
 
@@ -7566,9 +7568,16 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert [entry["status"] for entry in card["entries"]] == ["not_evaluated", "pass"]
     assert "declares no structural element type" in card["entries"][0]["detail"]
 
-    # Two refusals, each a different statement about why.
+    # Two refusals, each a different statement about why: one bounded by nothing this
+    # library controls, one whose contract is sound and whose operation is unbuilt.
     assert "task-dispatched" in by_id[6]["error"]["message"]
-    assert "no memory between calls" in by_id[7]["error"]["message"]
+    assert "needs built geometry" in by_id[7]["error"]["message"]
+
+    # And the round trip subjects exist for: the card came back with a handle, and reading
+    # that handle returns the same card, with no memory in the server between the two calls.
+    handle = by_id[5]["result"]["structuredContent"]["subject"]
+    assert handle.startswith("sha256:")
+    assert by_id[8]["result"]["structuredContent"]["scorecard"] == card
 
 
 def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_passes():

@@ -15,6 +15,8 @@ implemented layers everything else builds on:
   (pass / fail / not-evaluated).
 - :mod:`anvilate.specbench` — an external structured-spec suite read case by case,
   with the cases nothing could compile named rather than counted as failures.
+- :mod:`anvilate.store` — the content-addressed store an MCP tool resolves its
+  subject from, with its location, reach and retention stated rather than assumed.
 
 On top of the scorecard sit the cross-cutting layers, each of which takes checks
 that already ran and does one more thing with them:

@@ -102,29 +102,30 @@ deprecated protocol feature is used — server-initiated sampling — belongs th
 a property of what the server does, and a tool definition has no place to declare it, so
 asserting it here would be a check that reads prose rather than behavior.
 
-## Four tools a stateless server cannot serve
+## Every tool names what it acts on
 
 The contracts were published before the server so that a mistake in the tool surface would
-be cheap to fix. Writing the request handler found one, and it is not small:
-**`render_viewport`, `measure_geometry`, `read_scorecard` and `export_artifact` name
-nothing in their input to act on.** `read_scorecard` takes no arguments at all and returns
-a scorecard; `export_artifact` takes a format and a destination and exports — what?
+be cheap to fix. Writing the request handler found one, and it was not small: **four tools
+named nothing in their input to act on.** `read_scorecard` took no arguments at all and
+returned a scorecard; `export_artifact` took a format and a destination and exported — what?
+Each was asking the server to remember what the last call produced. That is a session, and
+the headless-automation spec describes a **stateless** skeleton.
 
-Each of them is asking the server to remember what the last call produced. That is a
-session, and the headless-automation spec describes a **stateless** skeleton. The two are
-different servers, and which one Anvilate ships is a design decision that had not been
-made — so it is now written down as one:
-[`openspec/changes/resolve-mcp-tool-subjects`](../openspec/changes/resolve-mcp-tool-subjects/proposal.md)
-carries the three options and recommends content-addressed handles, which keep
-protocol-level statelessness (any instance serves any call; a reconnect loses nothing)
-while keeping whole geometries off the wire.
+The decision is made and shipped: **content-addressed handles**. A tool returns a `subject`
+— `sha256:` and the digest of the document it produced — and a later tool takes that handle
+as its own subject, resolving it from
+[`anvilate.store`](../src/anvilate/store.py). The protocol surface stays stateless in the
+sense the spec means (any instance serves any call; a reconnect loses nothing) and whole
+payloads stay off the wire. The cost is a dependency rather than a detail — the store has to
+exist, be reachable by every instance, and have a retention policy — and that module states
+all three rather than assuming them.
 
-It is surfaced rather than papered over. `ToolDefinition` now declares a **`subject`**: the
-required input property carrying the thing the operation acts on. The constructor refuses a
-subject that is not a property of the input schema, and refuses one the schema does not
-require — an optional subject is server-side state for exactly the calls that omit it.
-`stateless_gaps()` is then derived from the declarations rather than listed, so giving a
-tool an argument that carries its subject takes it off the list and nothing else changes.
+`ToolDefinition` declares the `subject`: the required input property carrying the thing the
+operation acts on. The constructor refuses a subject that is not a property of the input
+schema, and refuses one the schema does not require — an optional subject is server-side
+state for exactly the calls that omit it. `stateless_gaps()` is derived from those
+declarations rather than listed, which is why it emptied itself as the subjects landed
+instead of needing an edit.
 
 | Tool | Subject | Servable statelessly |
 | --- | --- | --- |
@@ -132,10 +133,18 @@ tool an argument that carries its subject takes it off the list and nothing else
 | `build_part` | `spec` | yes (task-dispatched) |
 | `run_validation` | `spec` | yes |
 | `run_fea_validation` | `spec` | yes (task-dispatched) |
-| `render_viewport` | — | **no** |
-| `measure_geometry` | — | **no** |
-| `read_scorecard` | — | **no** |
-| `export_artifact` | — | **no** |
+| `render_viewport` | `subject` | yes — waiting on built geometry |
+| `measure_geometry` | `subject` | yes — waiting on built geometry |
+| `read_scorecard` | `subject` | yes, and dispatched |
+| `export_artifact` | `subject` | yes — waiting on the bundle inputs a call does not carry |
+
+**What a client pinned to the old surface is owed.** The four schemas gained a *required*
+property, and `compile_spec` and `run_validation` gained one in their output, so this is a
+breaking change to the tool surface — which is exactly why the contracts shipped before the
+server. No client has integrated; that is what makes it cheap, and that fact has a shelf
+life. A client written against the old shapes gets `-32602` naming the missing `subject`
+rather than a silent misread, because `additionalProperties` is false on every schema and
+`required` is enforced at both ends.
 
 ## The request handler
 

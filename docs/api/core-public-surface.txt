@@ -204,6 +204,11 @@ specbench.SuiteAccounting
 specbench.parse_case_specification
 specbench.scope_verdict
 specbench.suite_accounting
+store.SUBJECT_PATTERN
+store.SubjectStore
+store.UnknownSubject
+store.subject_store
+store.subject_store_root
 uncertainty.Normal
 uncertainty.Uniform
 uncertainty.Symmetric

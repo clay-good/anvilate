@@ -136,24 +136,32 @@ def test_neither_surface_serves_an_operation_the_other_would_refuse_for_being_un
     assert not {t.name for t in tool_catalog()} & {"diff"}
 
 
-def test_export_is_the_one_divergence_and_it_is_the_recorded_one():
+def test_export_is_the_one_divergence_and_its_cause_has_moved():
     """The CLI writes an evidence bundle from a spec file; MCP refuses `export_artifact`.
 
-    That is not a parity bug, and the difference is the whole content of
-    `openspec/changes/resolve-mcp-tool-subjects`: the MCP tool **names nothing in its input
-    to act on**, so a stateless server cannot serve it, while the CLI's export takes the
-    path of the spec it is exporting. The shell command is what the tool would look like
-    with a subject — so this asserts the divergence *and* its cause, and it will fail the day
-    `export_artifact` is given one, which is exactly when this test should be revisited.
+    The divergence is the same and its cause is not. It used to be that the tool **named
+    nothing in its input to act on**, so a stateless server could not serve it at all —
+    which is what `openspec/changes/resolve-mcp-tool-subjects` was about, and that change is
+    now made: `export_artifact` takes a subject handle like every other tool.
+
+    What is left is the operation. Assembling an evidence bundle needs more than a scorecard
+    — subjects, an environment BOM, an AI disclosure — and the tool call carries none of
+    them, so it is refused with *that* reason. The CLI has the spec file and assembles them
+    from it, which is why the two surfaces still differ, and this asserts the reason so the
+    day it changes again somebody reads this test.
     """
     from pathlib import Path
 
-    assert "export_artifact" in stateless_gaps()
+    assert stateless_gaps() == (), "a tool names nothing to act on again; that is the old bug"
     tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
-    assert tool.subject is None, "export_artifact has a subject now; revisit the parity here"
+    assert tool.subject == "subject"
 
-    error = _mcp("export_artifact", {"format": "evidence_bundle", "destination": "out"})["error"]
-    assert "names nothing in its input to act on" in error["message"]
+    error = _mcp(
+        "export_artifact",
+        {"subject": "sha256:" + "a" * 64, "format": "evidence_bundle", "destination": "out"},
+    )["error"]
+    assert "is not dispatched yet" in error["message"]
+    assert "assembled from more than a scorecard" in error["message"]
 
     # The CLI takes what it acts on, which is why it can serve the same artifact — shown by
     # serving it rather than by reading the parser's internals.
@@ -164,15 +172,6 @@ def test_export_is_the_one_divergence_and_it_is_the_recorded_one():
         path.write_text(_SPEC, encoding="utf-8")
         code, out, _err = _cli("export", "--artifact", "evidence-bundle", str(path))
     assert "bundle" in out and code == EXIT_CODES[CheckStatus.NOT_EVALUATED]
-
-    change = (
-        Path(__file__).resolve().parent.parent
-        / "openspec"
-        / "changes"
-        / "resolve-mcp-tool-subjects"
-        / "proposal.md"
-    )
-    assert change.exists(), "the divergence is supposed to be recorded as a proposed change"
 
 
 def _hostile_documents():

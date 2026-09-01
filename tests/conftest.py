@@ -102,6 +102,18 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
             _import_skips.add(f"{missing.group(1)}|{report.nodeid}")
 
 
+@pytest.fixture(autouse=True)
+def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
+    """The MCP subject store defaults to the user's cache directory, and a test that publishes
+    a handle would write there.
+
+    The dataset cache has the same shape and the fetch tests pass a temporary directory for
+    exactly this reason; an autouse fixture is the version that cannot be forgotten, since a
+    test three files away can publish a subject by calling a tool.
+    """
+    monkeypatch.setenv("ANVILATE_SUBJECT_STORE", str(tmp_path / "subjects"))
+
+
 def pytest_configure(config: pytest.Config) -> None:
     pytest.approx = _recording_approx
 

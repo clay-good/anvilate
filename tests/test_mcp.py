@@ -37,6 +37,7 @@ from anvilate.mcp import (
     wire_definitions,
 )
 from anvilate.spec import ValidationTier
+from anvilate.store import SUBJECT_PATTERN
 
 
 def test_the_catalog_is_clean():
@@ -451,26 +452,49 @@ def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
     assert unbounded == {"build_part", "run_fea_validation"}
 
 
-def test_the_four_tools_a_stateless_server_cannot_serve_are_derived_not_listed():
-    """The finding this handler exists to surface.
+def test_every_tool_names_what_it_acts_on():
+    """The finding this handler existed to surface, and the answer that closed it.
 
-    Four published tools name nothing in their input to act on. That is a contradiction
-    between the contracts and the stateless skeleton the spec describes, and it shows up
-    the moment someone tries to serve them — which is the whole reason for publishing the
-    contracts before the server.
+    Four published tools named nothing in their input to act on — `read_scorecard` took no
+    arguments at all — which is a contradiction between the contracts and the stateless
+    skeleton the spec describes. `openspec/changes/resolve-mcp-tool-subjects` resolved it
+    with content-addressed handles: a tool returns a handle to what it produced and a later
+    tool takes that handle as its subject, so the server keeps no memory between calls and
+    the payload stays off the wire.
+
+    `stateless_gaps()` is derived from the declarations, so it emptied itself as the subjects
+    landed. It is asserted empty here *and* the derivation is asserted, because an empty tuple
+    is also what a broken derivation returns.
     """
-    assert stateless_gaps() == (
-        "render_viewport",
-        "measure_geometry",
-        "read_scorecard",
-        "export_artifact",
-    )
-    for name in stateless_gaps():
-        error = _call(name, _minimum_arguments(name))["error"]
-        assert error["code"] == -32000
-        assert "no memory between calls" in error["message"]
-    # Derived from the declaration, not from the tuple above.
-    assert set(stateless_gaps()) == {t.name for t in tool_catalog() if t.subject is None}
+    assert stateless_gaps() == ()
+    assert {t.name for t in tool_catalog() if t.subject is None} == set()
+    for tool in tool_catalog():
+        assert tool.subject in tool.input_schema["properties"], tool.name
+        assert tool.subject in tool.input_schema["required"], tool.name
+
+
+def test_a_subject_the_store_does_not_hold_is_refused_by_name():
+    """The property a handle buys over a session: a name that resolves in one place or in
+    none, never to whatever the server happened to do last."""
+    reply = _call("read_scorecard", {"subject": "sha256:" + "0" * 64})
+    assert reply["error"]["code"] == -32602
+    assert "not in the subject store" in reply["error"]["message"]
+
+    malformed = _call("read_scorecard", {"subject": "the last one"})
+    assert malformed["error"]["code"] == -32602
+    # Refused by the published pattern, before the store is asked anything.
+    assert "must match" in malformed["error"]["message"]
+
+
+def test_a_scorecard_read_back_by_handle_is_the_one_that_was_screened():
+    """The loop the requirement's own scenario describes, with no session under it."""
+    validated = _call("run_validation", {"spec": _spec_document()})["result"]["structuredContent"]
+    handle = validated["subject"]
+    read = _call("read_scorecard", {"subject": handle})["result"]["structuredContent"]
+    assert read["scorecard"] == validated["scorecard"]
+    # Content addressing, not a counter: screening the same document again names it the same.
+    again = _call("run_validation", {"spec": _spec_document()})["result"]["structuredContent"]
+    assert again["subject"] == handle
 
 
 def _minimum_arguments(name: str) -> dict:
@@ -487,6 +511,14 @@ def _minimum_arguments(name: str) -> dict:
         schema = properties[key]
         if schema.get("enum"):
             return schema["enum"][0]
+        pattern = schema.get("pattern")
+        if pattern is not None:
+            # A filler that ignores `pattern` is refused by the argument checker, which is
+            # the right behaviour and the wrong answer for a helper whose job is to get past
+            # it. The one pattern the surface publishes is the subject handle; a second one
+            # should fail here rather than be filled with something that happens to pass.
+            assert pattern == SUBJECT_PATTERN, f"{key} declares an unhandled pattern {pattern}"
+            return "sha256:" + "a" * 64
         filler = {
             "object": {},
             "array": [],
@@ -519,15 +551,15 @@ def test_a_declared_subject_must_be_a_required_input():
         ToolDefinition(**{**base.model_dump(), "input_schema": optional})
 
 
-def test_every_servable_tool_is_dispatched_and_the_refusal_stays_as_a_net():
-    """The "not dispatched yet" branch is now unreachable by any tool in the catalog.
+def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
+    """Three tools are servable and unwired, and that is now the honest state.
 
-    That is worth asserting in both directions. A handler returning a plausible result for
-    an operation nobody wired would be indistinguishable from a real one, so the refusal
-    stays — and a tool that becomes servable without a handler must hit it rather than
-    404. But an unreachable branch nobody notices is the dead guard this library hunts
-    everywhere else, so the reachable half is exercised directly, on a tool the catalog
-    does not contain.
+    Until they carried subjects they were refused for naming nothing to act on, which hid the
+    real reason behind a contract problem. With handles the contract is sound and what
+    remains is geometry — so the refusal names that, the way the CLI names what its unbuilt
+    command waits on, and this holds the two lists against each other: a tool that is neither
+    dispatched nor named in `_UNBUILT` fails here, and a reason left behind for a tool that
+    has since been wired fails too.
     """
     from anvilate import mcp
 
@@ -537,12 +569,20 @@ def test_every_servable_tool_is_dispatched_and_the_refusal_stays_as_a_net():
         if tool.dispatch is mcp.Dispatch.SYNCHRONOUS and tool.is_stateless
     ]
     assert servable, "the catalog has no servable tool at all"
-    undispatched = [tool.name for tool in servable if tool.name not in mcp._DISPATCH]
-    assert undispatched == [], f"servable and unwired: {undispatched}"
+    undispatched = {tool.name for tool in servable if tool.name not in mcp._DISPATCH}
+    assert undispatched == set(mcp._UNBUILT), (
+        f"undispatched {sorted(undispatched)}; reasons written for {sorted(mcp._UNBUILT)}"
+    )
+    assert undispatched == {"render_viewport", "measure_geometry", "export_artifact"}
 
-    # The branch itself, reached by removing the handler for a tool that has one. Patching
-    # the map rather than the catalog keeps the tool's published contract untouched, which
-    # is the state a half-shipped operation would actually be in.
+    for name in sorted(undispatched):
+        error = _call(name, _minimum_arguments(name))["error"]
+        assert error["code"] == -32000
+        assert mcp._UNBUILT[name].split(",")[0] in error["message"], name
+
+    # And the branch stays a net for a tool that becomes servable without a handler: patching
+    # the map rather than the catalog keeps the published contract untouched, which is the
+    # state a half-shipped operation would actually be in.
     original = dict(mcp._DISPATCH)
     try:
         del mcp._DISPATCH["run_validation"]
@@ -552,7 +592,6 @@ def test_every_servable_tool_is_dispatched_and_the_refusal_stays_as_a_net():
         mcp._DISPATCH.update(original)
     assert error["code"] == -32000
     assert "not dispatched yet" in error["message"]
-    assert "invented" in error["message"]
 
 
 def test_a_request_that_is_not_json_rpc_2_is_refused():
@@ -716,17 +755,26 @@ def test_a_value_outside_its_declared_enum_or_bounds_is_refused():
     the first draft of the argument check enforced none of it — a `view` of "sideways"
     and a `width_px` of 1 both got as far as the stateless refusal, which reports the
     wrong problem."""
-    enum_error = _call("render_viewport", {"view": "sideways"})["error"]
+    handle = "sha256:" + "a" * 64
+    enum_error = _call("render_viewport", {"subject": handle, "view": "sideways"})["error"]
     assert enum_error["code"] == -32602
     assert "must be one of" in enum_error["message"]
 
     for width, wording in ((1, "at least 64"), (9999, "at most 4096")):
-        error = _call("render_viewport", {"view": "iso", "width_px": width})["error"]
+        error = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": width})[
+            "error"
+        ]
         assert error["code"] == -32602
         assert wording in error["message"]
 
+    # A subject that is not a handle is refused by its published pattern, before the store is
+    # asked anything — the same kind of check as the enum, on the property that says *what*.
+    shape = _call("render_viewport", {"subject": "the last one", "view": "iso"})["error"]
+    assert shape["code"] == -32602 and "must match" in shape["message"]
+
     # In range, the argument check passes and the honest refusal comes back instead.
-    assert _call("render_viewport", {"view": "iso", "width_px": 800})["error"]["code"] == -32000
+    valid = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 800})
+    assert valid["error"]["code"] == -32000
 
 
 def test_an_exclusive_bound_is_exclusive():
@@ -1106,3 +1154,77 @@ def test_a_ref_property_must_be_an_object():
     )
     assert reply["error"]["code"] == -32602
     assert "must be a JSON object" in json.dumps(reply["error"])
+
+
+def test_a_handle_survives_the_server_that_made_it(tmp_path):
+    """The scenario the requirement states, and the whole justification for handles: a client
+    that reconnects — to a *different* instance — loses nothing.
+
+    Two separate `python -m anvilate.mcp` subprocesses, sharing only the store directory. The
+    first screens a document and answers with a handle; the second, which has never seen that
+    document, reads the card back. Nothing is remembered between them; the handle names the
+    bytes.
+    """
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parent.parent / "src"
+    environment = {
+        "PYTHONPATH": str(source),
+        "PATH": "/usr/bin:/bin",
+        "ANVILATE_SUBJECT_STORE": str(tmp_path / "subjects"),
+    }
+
+    def serve(request: dict) -> dict:
+        completed = subprocess.run(  # noqa: S603 - our own module, fixed argv, no shell
+            [sys.executable, "-m", "anvilate.mcp"],
+            input=json.dumps(request) + "\n",
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=120,
+            check=True,
+        )
+        return json.loads(completed.stdout.splitlines()[0])
+
+    screened = serve(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "run_validation", "arguments": {"spec": _spec_document()}},
+        }
+    )["result"]["structuredContent"]
+
+    read = serve(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "read_scorecard",
+                "arguments": {"subject": screened["subject"]},
+            },
+        }
+    )["result"]["structuredContent"]
+
+    assert read["scorecard"] == screened["scorecard"]
+
+    # And an instance pointed at a *different* store refuses it rather than answering with
+    # something else — a handle resolves in one place or in none.
+    environment["ANVILATE_SUBJECT_STORE"] = str(tmp_path / "elsewhere")
+    elsewhere = serve(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "read_scorecard",
+                "arguments": {"subject": screened["subject"]},
+            },
+        }
+    )
+    assert elsewhere["error"]["code"] == -32602
+    assert "not in the subject store" in elsewhere["error"]["message"]
