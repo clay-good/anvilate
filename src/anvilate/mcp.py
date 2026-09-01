@@ -1085,9 +1085,11 @@ _UNBUILT: dict[str, str] = {
         "today (see openspec/specs/geometry-generation)"
     ),
     "export_artifact": (
-        "a QIF results file and a DXF are drawn from built geometry, and the evidence bundle "
-        "an `anvilate export` writes is assembled from more than a scorecard: subjects, an "
-        "environment BOM and an AI disclosure this call does not carry"
+        "a QIF results file and a DXF are drawn from built geometry; the evidence bundle is "
+        "producible from a spec handle alone — `anvilate export` does exactly that — and "
+        "what this tool needs first is a decision about writing a file to a path the caller "
+        "names, which the CLI gets from the user typing it (see "
+        "openspec/changes/export-over-mcp)"
     ),
 }
 

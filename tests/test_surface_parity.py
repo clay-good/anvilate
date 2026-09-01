@@ -144,11 +144,12 @@ def test_export_is_the_one_divergence_and_its_cause_has_moved():
     which is what `openspec/changes/resolve-mcp-tool-subjects` was about, and that change is
     now made: `export_artifact` takes a subject handle like every other tool.
 
-    What is left is the operation. Assembling an evidence bundle needs more than a scorecard
-    — subjects, an environment BOM, an AI disclosure — and the tool call carries none of
-    them, so it is refused with *that* reason. The CLI has the spec file and assembles them
-    from it, which is why the two surfaces still differ, and this asserts the reason so the
-    day it changes again somebody reads this test.
+    What is left is smaller and sharper. The bundle needs no geometry — the CLI produces it
+    from a spec file by screening and rolling up, and the tool has the same spec through its
+    handle — so the operation is three lines. What it needs first is a decision about writing
+    a file to a path the caller names, which the CLI gets from a user typing it into their
+    own shell. That is `openspec/changes/export-over-mcp`, and the refusal a client receives
+    says so, which is where this test looks.
     """
     from pathlib import Path
 
@@ -161,7 +162,7 @@ def test_export_is_the_one_divergence_and_its_cause_has_moved():
         {"subject": "sha256:" + "a" * 64, "format": "evidence_bundle", "destination": "out"},
     )["error"]
     assert "is not dispatched yet" in error["message"]
-    assert "assembled from more than a scorecard" in error["message"]
+    assert "openspec/changes/export-over-mcp" in error["message"]
 
     # The CLI takes what it acts on, which is why it can serve the same artifact — shown by
     # serving it rather than by reading the parser's internals.
@@ -172,6 +173,15 @@ def test_export_is_the_one_divergence_and_its_cause_has_moved():
         path.write_text(_SPEC, encoding="utf-8")
         code, out, _err = _cli("export", "--artifact", "evidence-bundle", str(path))
     assert "bundle" in out and code == EXIT_CODES[CheckStatus.NOT_EVALUATED]
+
+    change = (
+        Path(__file__).resolve().parent.parent
+        / "openspec"
+        / "changes"
+        / "export-over-mcp"
+        / "proposal.md"
+    )
+    assert change.exists(), "the refusal names a change that is not written down"
 
 
 def _hostile_documents():

@@ -136,7 +136,7 @@ instead of needing an edit.
 | `render_viewport` | `subject` | yes — waiting on built geometry |
 | `measure_geometry` | `subject` | yes — waiting on built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
-| `export_artifact` | `subject` | yes — waiting on the bundle inputs a call does not carry |
+| `export_artifact` | `subject` | yes — waiting on a decision, [`export-over-mcp`](../openspec/changes/export-over-mcp/proposal.md) |
 
 **The documents land on disk, and that is worth knowing.** Publishing a handle writes the
 document it names — a compiled spec, a screened scorecard — under the store root. A spec is
