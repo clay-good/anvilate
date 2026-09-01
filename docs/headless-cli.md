@@ -261,6 +261,8 @@ SPEC
   -description: A mezzanine deck plate.
   +description: A mezzanine deck plate, revised.
 
+VERDICT  pass → fail
+
 CHECKS
   ! bending: pass → fail
       the moment exceeds the section
@@ -288,6 +290,13 @@ status among checks that moved for the worse, and 0 when none did — with a reg
 
 A check present in only one card is reported as added or removed. A different set of checks
 is not a worse set, and calling it either would be a guess.
+
+**The card's own verdict is compared too, and that is not a guess.** A revision that renames
+the element deletes every check by name and adds a not-evaluated gap in their place: nothing
+"moved for the worse" under a name-by-name rule, and the part went from screened to
+unscreened while `diff` exited 0. `VERDICT before → after` is on the card and counts toward
+the exit code, because a different *verdict* is a worse verdict and `Scorecard.status` is
+defined for exactly that comparison.
 
 **The geometry half is named rather than omitted**, for the same reason the unbuilt command
 is named rather than left unknown: a reader who sees no mass delta should be told there is

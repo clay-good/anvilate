@@ -1326,3 +1326,39 @@ def test_the_command_answers_a_hostile_document_rather_than_raising(label, tmp_p
     assert code in (EXIT_FAILED, EXIT_NOT_EVALUATED), f"{label}: exited {code}"
     assert out.strip(), f"{label}: printed no card"
     assert "Traceback" not in out and "Traceback" not in err
+
+
+def test_diff_reports_the_cards_own_verdict_moving(tmp_path):
+    """The regression no per-check comparison can see.
+
+    A revision that renames the element deletes every check *by name* and adds a
+    not-evaluated gap in their place. Nothing "moved for the worse" under a name-by-name
+    rule, so `diff` exited 0 while the part went from screened to unscreened — and a merge
+    gate reading that exit code was told nothing had got worse.
+
+    A different set of checks is still not a worse set; that decision stands. A different
+    verdict is a worse verdict, and `Scorecard.status` is defined for exactly this
+    comparison.
+    """
+    from anvilate.spec import dump_spec_yaml
+    from test_screening import _lug_spec
+
+    before = tmp_path / "before.yaml"
+    after = tmp_path / "after.yaml"
+    before.write_text(dump_spec_yaml(_lug_spec()), encoding="utf-8")
+    after.write_text(dump_spec_yaml(_lug_spec(element_type="lifting_lugg")), encoding="utf-8")
+
+    code, out, err = _run("diff", str(before), str(after))
+    assert "VERDICT  pass → not_evaluated" in out
+    assert "the card: pass → not_evaluated" in err
+    assert code == EXIT_NOT_EVALUATED
+
+    # And a revision that changes nothing about the verdict still exits 0, or every edit
+    # would fail a merge gate.
+    same = tmp_path / "same.yaml"
+    same.write_text(
+        dump_spec_yaml(_lug_spec(description="A lifting padeye, revised.")), encoding="utf-8"
+    )
+    code, out, _err = _run("diff", str(before), str(same))
+    assert code == EXIT_OK
+    assert "VERDICT  pass → pass" in out

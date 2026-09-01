@@ -335,9 +335,23 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
     regressions = _regressions(before_card, after_card)
     for name, was, now in regressions:
         print(f"anvilate diff: {name}: {was.value} → {now.value}", file=err)
-    if not regressions:
+    # The card's own verdict, which no per-check comparison can see. A revision that renames
+    # the element deletes every check by name and adds a not-evaluated gap in their place:
+    # nothing "moved for the worse", and the part went from screened to unscreened. A
+    # different set of checks is not a worse set — that decision stands — but a different
+    # verdict is a worse verdict, and the roll-up is defined for exactly this comparison.
+    worse = _BLOCKING_ORDER.index(after_card.status) > _BLOCKING_ORDER.index(before_card.status)
+    if worse:
+        print(
+            f"anvilate diff: the card: {before_card.status.value} → {after_card.status.value}",
+            file=err,
+        )
+    if not regressions and not worse:
         return EXIT_OK
-    return max((EXIT_CODES[now] for _n, _w, now in regressions), key=_EXIT_SEVERITY.index)
+    codes = [EXIT_CODES[now] for _n, _w, now in regressions]
+    if worse:
+        codes.append(EXIT_CODES[after_card.status])
+    return max(codes, key=_EXIT_SEVERITY.index)
 
 
 def _regressions(before: Scorecard, after: Scorecard):
@@ -375,7 +389,7 @@ def _render_diff(before_spec, after_spec, before: Scorecard, after: Scorecard) -
     ]
     lines.extend(f"  {line}" for line in changed or ("no change",))
 
-    lines.extend(["", "CHECKS"])
+    lines.extend(["", f"VERDICT  {before.status.value} → {after.status.value}", "", "CHECKS"])
     was = {entry.name: entry for entry in before.entries}
     now = {entry.name: entry for entry in after.entries}
     moved = []
