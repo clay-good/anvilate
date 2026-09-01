@@ -58,10 +58,16 @@ class AchievabilityCheck(BaseModel):
     note: str
 
     def __str__(self) -> str:
+        # With the note, which this class's own docstring says is what stops the flag being
+        # read as a hard limit — and which the only rendering dropped, so the caveat existed
+        # in the record and in no sentence anybody sees. It is also the most useful thing on
+        # a refusal: "tighter needs grinding/reaming" is the answer to the question an
+        # UNACHIEVABLE verdict raises.
         verdict = "achievable" if self.achievable else "UNACHIEVABLE"
         d = self.demanded.to("mm").magnitude
         f = self.finest.to("mm").magnitude
-        return f"{self.process}: {d:.3f} mm demanded vs {f:.3f} mm floor — {verdict}"
+        note = f" ({self.note})" if self.note.strip() else ""
+        return f"{self.process}: {d:.3f} mm demanded vs {f:.3f} mm floor — {verdict}{note}"
 
 
 _TABLE: dict | None = None

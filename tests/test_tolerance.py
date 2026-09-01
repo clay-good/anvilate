@@ -1183,3 +1183,22 @@ def test_an_angular_general_tolerance_names_the_leg_that_selected_it():
     # And the deviation really does differ, so the rendering is carrying a real distinction
     # rather than decorating two equal values.
     assert short.deviation != long.deviation
+
+
+def test_an_achievability_check_renders_the_caveat_it_carries():
+    """`AchievabilityCheck`'s docstring says `note` carries the floor's caveat "so a flag is
+    never read as a hard limit" — and the only rendering dropped it, so the caveat lived in
+    the record and in no sentence anybody reads.
+
+    It is also the most useful thing on a refusal: "tighter needs grinding/reaming" answers
+    the question an UNACHIEVABLE verdict raises.
+    """
+    refused = tolerance_is_achievable("cnc_milling", Quantity.parse("0.02 mm"))
+    assert not refused.achievable
+    rendered = str(refused)
+    assert "UNACHIEVABLE" in rendered
+    assert refused.note in rendered
+    assert "grinding/reaming" in rendered
+
+    met = tolerance_is_achievable("cnc_milling", Quantity.parse("0.4 mm"))
+    assert met.achievable and met.note in str(met)
