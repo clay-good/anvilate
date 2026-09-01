@@ -287,4 +287,9 @@ task-dispatched: build_part, run_fea_validation
 - **A notification gets no response line.** If you send one and then block on a read, you
   will block forever.
 - **Rubbish does not take the stream down.** A line that is not JSON gets a `-32700` with a
-  null id and the loop continues.
+  null id and the loop continues. Nor does a well-formed line carrying the wrong shape: a
+  property declared as one of the published schemas must arrive as a JSON object, and a
+  string or a null where a document belongs is `-32602` rather than an exception out of the
+  handler. That is worth stating because it was not true — the argument checker treats a
+  `$ref` as something the operation resolves, and the operation resolved it by calling
+  `dict()` on whatever arrived.

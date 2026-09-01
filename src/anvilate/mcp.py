@@ -709,6 +709,15 @@ def _typed_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
     which is resolved by the operation rather than by this function.
     """
     declared = schema.get("type")
+    if declared is None and "$ref" in schema:
+        # A `$ref` here names one of the published schemas, and every one of them describes
+        # a JSON *object*. The operation resolves the contents; what it cannot do is resolve
+        # a string or a null, and `run_validation` proved it: `{"spec": "text"}` reached the
+        # handler and raised `dict()`'s own message out of the server, where the client is
+        # owed INVALID_PARAMS. Holding the shape here keeps the answer in one place.
+        if not isinstance(value, Mapping):
+            return [f"{label} must be a JSON object; got {type(value).__name__}"]
+        return []
     expected = _JSON_TYPES.get(declared) if declared is not None else None
     if expected is None:
         return []
@@ -988,14 +997,20 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .screening import screen_spec
     from .spec import SpecValidationError, parse_spec
 
-    document = dict(arguments["spec"])
+    # `dict()` on a string raises ValueError and on None a TypeError, and both used to
+    # happen here rather than in the try below. The schema check above holds the shape now;
+    # this stays inside the guarded block so a direct caller gets the same answer.
     requested = arguments.get("tiers")
-    if requested is not None:
-        document = {
-            **document,
-            "acceptance": {**dict(document.get("acceptance") or {}), "tiers": list(requested)},
-        }
     try:
+        document = dict(arguments["spec"])
+        if requested is not None:
+            document = {
+                **document,
+                "acceptance": {
+                    **dict(document.get("acceptance") or {}),
+                    "tiers": list(requested),
+                },
+            }
         spec = parse_spec(document)
     except SpecValidationError as failure:
         raise _InvalidArguments(

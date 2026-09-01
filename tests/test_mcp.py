@@ -1041,3 +1041,68 @@ def test_the_stdio_loop_and_the_handler_agree_on_a_non_object():
     assert responses[0]["error"]["code"] == -32600
     # And the loop still serves the message after it, which is the reason it catches at all.
     assert responses[1]["id"] == 9
+
+
+_MALFORMED_MESSAGES = {
+    "a message that is not an object": [1, 2, 3],
+    "a message with no method": {"jsonrpc": "2.0", "id": 1},
+    "a method that is not a string": {"jsonrpc": "2.0", "id": 1, "method": 7},
+    "params that are not an object": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": [],
+    },
+    "a call naming no tool": {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}},
+    "arguments that are not an object": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "compile_spec", "arguments": 5},
+    },
+    "a spec that is a string": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "run_validation", "arguments": {"spec": "text"}},
+    },
+    "a spec that is null": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "run_validation", "arguments": {"spec": None}},
+    },
+}
+
+
+@pytest.mark.parametrize("label", sorted(_MALFORMED_MESSAGES))
+def test_a_malformed_message_is_answered_with_an_error_not_an_exception(label):
+    """The MCP surface is the one other software drives, so a crash here takes a server down
+    rather than printing a traceback somebody reads.
+
+    Six of these eight were already clean JSON-RPC errors. The two that were not are the two
+    where a declared `$ref` property arrived as something other than an object: the checker
+    treats a `$ref` as "resolved by the operation", and the operation resolved it by calling
+    `dict()` on it — so `{"spec": "text"}` answered with `dict()`'s own message raised out of
+    the server, and `{"spec": null}` with a TypeError.
+    """
+    reply = handle_request(_MALFORMED_MESSAGES[label])
+    assert reply is not None, f"{label}: no reply at all"
+    assert "error" in reply, f"{label}: {reply}"
+    assert reply["error"]["code"] in (-32600, -32601, -32602), reply["error"]
+
+
+def test_a_ref_property_must_be_an_object():
+    """The general half: every `$ref` in this surface names a published schema, and every
+    published schema describes an object. The message says so rather than leaking the
+    resolver's own failure."""
+    reply = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "run_validation", "arguments": {"spec": 7}},
+        }
+    )
+    assert reply["error"]["code"] == -32602
+    assert "must be a JSON object" in json.dumps(reply["error"])
