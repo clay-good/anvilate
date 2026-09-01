@@ -25,6 +25,7 @@ from math import isfinite
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ._models import Named, Provenance, RevalidatedModel, cited
+from .derivation import Derivation, SymbolValue
 from .scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -286,7 +287,70 @@ def combination_scorecard(
     computed = capacity / magnitude
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"{entry.detail}; demand {demand:g} from {governing}"
-    return entry.model_copy(update={"detail": detail, "reference": reference or governing.citation})
+    citation = reference or governing.citation
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": citation,
+            "derivation": _combination_derivation(governing, loads, demand, citation),
+        }
+    )
+
+
+def _combination_derivation(
+    governing: LoadCombination,
+    loads: Mapping[LoadNature, float],
+    demand: float,
+    citation: str,
+) -> Derivation:
+    """The governing combination written out as the standard writes it.
+
+    The symbolic line is built from the combination's own factors — ``U = 1.2·D + 1.6·L``
+    — rather than from a fixed template, because which combination governs is the answer
+    and a template would render the same expression for all of them. Only the natures this
+    combination factors appear: a load the set does not factor is not part of this sum, and
+    showing it beside a zero factor invites a reviewer to look for it in the total.
+
+    The loads are bare numbers here, not quantities. The caller's own unit is what the
+    capacity and the demand are both in, so the substituted line is unitless on purpose —
+    stating one would be inventing it.
+    """
+    terms: list[str] = []
+    inputs: list[SymbolValue] = []
+    for nature, factor in governing.factors.items():
+        sign = " − " if factor < 0 else (" + " if terms else "")
+        # ASCE writes its factors to at least one decimal — 1.0W, not 1W — and a bare "1"
+        # beside a "1.2" reads as a typo rather than as the unit factor it is.
+        written = f"{abs(factor):g}"
+        terms.append(f"{sign}{written if '.' in written else written + '.0'} · {nature.value}")
+        inputs.append(
+            SymbolValue(
+                symbol=nature.value,
+                description=f"{_NATURE_NAMES[nature]} load, as the caller supplied it",
+                value=float(loads.get(nature, 0.0)),
+            )
+        )
+    return Derivation(
+        symbolic="U = " + "".join(terms),
+        inputs=tuple(inputs),
+        result=SymbolValue(
+            symbol="U",
+            description=f"factored demand from the governing combination, {governing.name}",
+            value=demand,
+        ),
+        citation=citation,
+    )
+
+
+_NATURE_NAMES = {
+    LoadNature.DEAD: "dead",
+    LoadNature.LIVE: "live",
+    LoadNature.ROOF_LIVE: "roof live",
+    LoadNature.SNOW: "snow",
+    LoadNature.RAIN: "rain",
+    LoadNature.WIND: "wind",
+    LoadNature.SEISMIC: "seismic",
+}
 
 
 def asce7_lrfd_seismic(*, s_ds: float, redundancy: float = 1.0) -> CombinationSet:

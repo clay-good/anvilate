@@ -212,8 +212,16 @@ class _Parser:
             return _Node("superscript", token, (node, _Node("number", digits)))
         return node
 
+    # A sign in front of a value, not between two of them. It reaches the parser wherever
+    # a substituted value is negative — an uplift demand, a counteracting load combination,
+    # a sagging moment — and without it the whole formula fell out of the grammar and the
+    # report rendered a line of plain text instead of a typeset one.
+    _SIGNS = frozenset({"-", "\u2212", "+"})
+
     def _atom(self) -> _Node:
         token = self._take()
+        if token in self._SIGNS:
+            return _Node("sign", token, (self._atom(),))
         if token == "√":
             return _Node("root", "√", (self._atom(),))
         if token == "(":
@@ -234,6 +242,8 @@ def _unparse(node: _Node) -> str:
         return node.text
     if node.kind == "group":
         return f"({_unparse(node.children[0])})"
+    if node.kind == "sign":
+        return f"{node.text}{_unparse(node.children[0])}"
     if node.kind == "root":
         return f"√{_unparse(node.children[0])}"
     if node.kind == "superscript":
@@ -273,6 +283,8 @@ def _emit(node: _Node, *, unwrap: bool = False) -> str:
         if unwrap:
             return inner
         return f"<mo>(</mo>{inner}<mo>)</mo>"
+    if node.kind == "sign":
+        return f"<mo>{escape(node.text)}</mo>{_emit(node.children[0])}"
     if node.kind == "root":
         return f"<msqrt>{_emit(node.children[0], unwrap=True)}</msqrt>"
     if node.kind in {"superscript", "power"}:

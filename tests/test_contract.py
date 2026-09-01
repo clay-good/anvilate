@@ -1201,12 +1201,62 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
             ),
         ),
     ]
-    return [
+    out = [
         (f"{label} {entry.name}", entry.derivation)
         for label, card in cards
         for entry in card.entries
         if entry.derivation is not None
     ]
+    out.extend(_load_combination_derivations())
+    return out
+
+
+def _load_combination_derivations() -> list[tuple[str, object]]:
+    """One entry per ASCE 7 combination set, including the counteracting case.
+
+    The combination derivation builds its symbolic line from the governing combination's
+    own factors, so a template error would show up only on the combination that governs —
+    which is why the uplift case is here beside the gravity one.
+    """
+    from anvilate.loads import (
+        LoadNature,
+        asce7_asd_basic,
+        asce7_lrfd_basic,
+        asce7_lrfd_seismic,
+        combination_scorecard,
+    )
+
+    cases = (
+        (
+            "gravity",
+            asce7_lrfd_basic(),
+            {LoadNature.DEAD: 12.0, LoadNature.LIVE: 30.0, LoadNature.SNOW: 8.0},
+            90.0,
+            False,
+        ),
+        ("uplift", asce7_lrfd_basic(), {LoadNature.DEAD: 12.0, LoadNature.WIND: -40.0}, 30.0, True),
+        ("asd", asce7_asd_basic(), {LoadNature.DEAD: 12.0, LoadNature.LIVE: 30.0}, 60.0, False),
+        (
+            "seismic",
+            asce7_lrfd_seismic(s_ds=0.9),
+            {LoadNature.DEAD: 12.0, LoadNature.LIVE: 30.0, LoadNature.SEISMIC: 25.0},
+            90.0,
+            False,
+        ),
+    )
+    out: list[tuple[str, object]] = []
+    for label, combinations, loads, capacity, minimize in cases:
+        entry = combination_scorecard(
+            label,
+            combinations=combinations,
+            loads=loads,
+            capacity=capacity,
+            required=1.0,
+            minimize=minimize,
+        )
+        if entry.derivation is not None:
+            out.append((f"combination {label}", entry.derivation))
+    return out
 
 
 def test_every_pack_that_writes_a_derivation_is_in_the_render_truth_sample():

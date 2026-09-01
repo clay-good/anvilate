@@ -1240,3 +1240,43 @@ def test_a_repair_hint_carries_where_its_number_came_from():
         repair_hint=RepairHint.directional("thickness", direction=Direction.INCREASE),
     )
     assert _repair_source(_Section(bare)) == ""
+
+
+def test_a_negative_value_does_not_drop_a_formula_out_of_the_grammar():
+    """A sign in front of a value, which the grammar had no rule for.
+
+    Every substituted line carrying a negative number fell outside the grammar, so the
+    report rendered it as plain text — and negatives are not exotic here: an uplift demand,
+    a counteracting load combination and a sagging moment all produce one. The load
+    combination that surfaced it evaluates to −29.2 under 0.9D + 1.0W.
+
+    The round-trip guard is what makes this safe to add: a sign parsed into the wrong shape
+    would write back out as a different string and the renderer would decline rather than
+    typeset something the check did not say.
+    """
+    from xml.etree import ElementTree as ET
+
+    from anvilate.report.mathml import formula_to_mathml
+
+    for formula in (
+        "U = 0.9 · 12 + 1.0 · -40",
+        "U = -29.2",
+        "M = -12.5 kN·m",
+        "ΔT = +4.0 K",
+    ):
+        math = formula_to_mathml(formula)
+        assert math is not None, formula
+        ET.fromstring(math)
+
+    # A minus BETWEEN two values is still a subtraction, not a sign — the round trip is
+    # what proves the tree did not change shape.
+    binary = formula_to_mathml("x = 3 - 2")
+    assert binary is not None
+    assert "<mn>3</mn><mo>-</mo><mn>2</mn>" in binary
+    assert "<mo>-</mo><mn>29.2</mn>" in formula_to_mathml("U = -29.2")
+
+    # And the grammar has not become permissive: what it declined before, it still
+    # declines. A doubled operator in particular — the shape a careless sign rule admits.
+    assert formula_to_mathml("x = 3 · · 4") is None
+    assert formula_to_mathml("x = (3") is None
+    assert formula_to_mathml("ΔV% = 100 · I") is None
