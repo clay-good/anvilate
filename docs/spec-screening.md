@@ -182,6 +182,15 @@ ToleranceClass` out of `anvilate export`: two surfaces disagreeing about one doc
 the one a user runs first said nothing. It is a FAIL on the card now, with the near misses
 named. `min_wall` is a bound on built geometry and is reported unscreened.
 
+**No field of a document is an infinity or a NaN.** A `Quantity` may hold one —
+intermediate arithmetic produces them and each consumer guards its own — but a document never
+states one, and nothing checked it. `max_mass: .inf kg` read as a stated requirement and
+meant nothing (`min_safety_factor > 0` is True for infinity, too). A dimension whose nominal
+was NaN was worse: it screened to **PASS** on its tolerance band, because the achievability
+check compares the band against the process floor and never looks at the size it belongs to.
+One rule on the base class every spec model shares, rather than an `isfinite` in each
+validator that was written one field at a time.
+
 **A pack screen's own refusal is a fact about the document too.** The screens raise for what
 they cannot work with — an alloy the database does not carry, a quantity outside a standard's
 range — and those raises were uncaught, so `element_params` naming a bad alloy took the whole

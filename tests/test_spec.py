@@ -1235,3 +1235,55 @@ def test_the_specs_own_combination_evidence_cannot_forget_the_unclassified_cases
 
 def test_a_spec_with_no_combination_basis_has_no_combination_evidence():
     assert golden_bracket().combination_evidence() is None
+
+
+@pytest.mark.parametrize(
+    ("build", "field"),
+    [
+        (
+            lambda: ToleranceDimension(
+                tag="bore",
+                nominal=Quantity(magnitude=float("nan"), unit="mm"),
+                tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.1 mm")),
+            ),
+            "nominal",
+        ),
+        (
+            lambda: Constraints(
+                max_mass=Provenanced.stated(Quantity(magnitude=float("inf"), unit="kg"))
+            ),
+            "max_mass",
+        ),
+        (lambda: Constraints(min_safety_factor=Provenanced.stated(float("inf"))), "safety"),
+        (
+            lambda: LoadCase(
+                name="hook",
+                kind=LoadKind.STATIC,
+                applied_to="top",
+                force=Quantity(magnitude=float("inf"), unit="kN"),
+            ),
+            "force",
+        ),
+    ],
+)
+def test_a_document_cannot_state_an_infinite_or_undefined_number(build, field):
+    """A `Quantity` may hold a non-finite magnitude — intermediate arithmetic produces them
+    and each consumer guards its own — but a *document* never states one, and nothing checked
+    it.
+
+    The two halves of the consequence differ. `max_mass: .inf kg` is a requirement that reads
+    as stated and means nothing, and `min_safety_factor > 0` is True for infinity. A dimension
+    whose nominal is NaN was worse: it screened to **PASS** on its tolerance band, because the
+    achievability check compares the band against the process floor and never looks at the
+    size it belongs to.
+    """
+    with pytest.raises(ValidationError, match="not a number a document can state"):
+        build()
+
+
+def test_the_finite_rule_leaves_an_ordinary_document_alone():
+    """The guard walks every field of every spec model, so the thing to hold is that it lets
+    a real one through."""
+    spec = golden_bracket()
+    assert spec.constraints.max_mass.value.to("g").magnitude == pytest.approx(150.0)
+    assert spec.constraints.min_safety_factor.value > 0

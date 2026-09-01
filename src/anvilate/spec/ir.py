@@ -10,6 +10,7 @@ origin recorded via :class:`Provenanced`.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isfinite
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
@@ -74,6 +75,35 @@ Force = Annotated[Quantity, AfterValidator(require_dimension("[force]", name="fo
 
 class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid")  # unknown keys are rejected
+
+    @model_validator(mode="after")
+    def _every_number_is_finite(self) -> _Base:
+        """No field of a document is an infinity or a NaN.
+
+        A `Quantity` may hold one — intermediate arithmetic produces them and each consumer
+        guards its own — but a *document* never states one. Nothing checked it, and the two
+        halves of the consequence differ: `max_mass: .inf kg` is a requirement that reads as
+        stated and means nothing, while a dimension whose nominal is NaN screened to **PASS**
+        on its tolerance band, because the achievability check compares the band against the
+        process floor and never looks at the size it belongs to.
+
+        One rule here rather than a `isfinite` in every validator below: they were written
+        one field at a time, and `min_safety_factor > 0` is True for infinity.
+        """
+        for name in type(self).model_fields:
+            value = getattr(self, name, None)
+            # A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the
+            # number is two layers in. Unwrapping by attribute rather than by type keeps this
+            # from importing the provenance module, and an enum's `.value` is a string, which
+            # the float check below filters out.
+            value = getattr(value, "value", value)
+            magnitude = value.magnitude if isinstance(value, Quantity) else value
+            if isinstance(magnitude, float) and not isfinite(magnitude):
+                raise ValueError(
+                    f"{name} is {magnitude}, which is not a number a document can state; "
+                    f"a requirement that is infinite or undefined is not a requirement"
+                )
+        return self
 
 
 # --- Material and manufacturing ---
