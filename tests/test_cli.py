@@ -1446,3 +1446,42 @@ def test_the_command_table_lists_the_parsers_own_commands_and_flags():
         assert rows[name] == flags, (
             f"{name}: the table says {sorted(rows[name])}, it takes {sorted(flags)}"
         )
+
+
+def test_the_module_says_how_many_of_its_commands_are_backed():
+    """A count in prose, on the module that owns the commands.
+
+    It said "two of the four are backed" while four of five were: `diff` and `verify` had
+    landed since somebody wrote it, and nothing compared the sentence to the parser. The
+    same words are in `pyproject.toml` beside the console script, which is the first place a
+    packager reads.
+    """
+    import argparse
+    import re
+    import tomllib
+
+    import anvilate.cli as cli
+
+    parser = cli._build_parser()
+    commands = next(
+        dict(action.choices)
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    backed = sorted(set(commands) - set(cli._UNBUILT))
+    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+    claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
+    assert claimed is not None, "the module no longer says how many commands are backed"
+    # The sentence counts the four `headless-automation` names; `verify` comes from the
+    # attestation capability and is the "fifth" the next clause names.
+    assert words[claimed.group(2).lower()] == len(commands) - 1
+    assert words[claimed.group(1).lower()] == len([name for name in backed if name != "verify"])
+
+    packaging = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    assert set(packaging["project"]["scripts"]) == {"anvilate", "anvilate-mcp"}
+    comment = (_REPO / "pyproject.toml").read_text(encoding="utf-8")
+    stale = re.search(r"# The headless CLI\. (\w+) of its (\w+) commands are backed", comment)
+    assert stale is not None, "the pyproject comment no longer states the split"
+    assert words[stale.group(1).lower()] == len(backed)
+    assert words[stale.group(2).lower()] == len(commands)

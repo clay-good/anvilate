@@ -6,8 +6,9 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Two of the four are backed today**, and a fifth command the attestation capability names
-is backed as well. ``check`` compiles a spec document and screens it,
+**Three of the four are backed today**, and a fifth command the attestation capability names
+is backed as well: only ``build`` is refused, and it is refused by name with what it waits
+on. ``check`` compiles a spec document and screens it,
 which is exactly the path :func:`anvilate.screening.screen_spec` already serves over MCP.
 ``export`` serves the one artifact that needs no geometry — the evidence bundle, which is
 assembled from a scorecard — and refuses the two that do.
