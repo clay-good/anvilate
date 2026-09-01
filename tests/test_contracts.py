@@ -347,3 +347,44 @@ def test_the_lifting_lug_schema_accepts_the_document_the_docs_page_shows():
     # And a document missing a required field is refused by the schema, not only by the pack.
     del params["hole_diameter"]
     assert list(validator.iter_errors(params))
+
+
+def test_bumping_one_element_moves_only_that_element(monkeypatch):
+    """The point of per-element versions, held by the only test that can tell the difference.
+
+    Under a single shared number every element schema was regenerated with the same version,
+    so changing one element's fields re-issued all twenty-odd `$id`s: a client pinned to
+    `bolted_connection/1.0.0` would be told its contract had moved because a pump duty
+    gained a field. Nothing failed when that happened, which is why it survived — the shared
+    constant made every version agree by construction.
+
+    So the assertion is on the blast radius. Bump one tag; every other document, `$id`
+    included, must come back byte for byte identical.
+    """
+    from anvilate import contracts
+
+    before = {tag: _serialize(schema) for tag, schema in contracts.element_json_schemas().items()}
+    bumped = sorted(before)[0]
+
+    monkeypatch.setitem(contracts.ELEMENT_SCHEMA_VERSIONS, bumped, "2.0.0")
+    after = {tag: _serialize(schema) for tag, schema in contracts.element_json_schemas().items()}
+
+    assert set(before) == set(after)
+    assert after[bumped] != before[bumped], f"bumping {bumped} changed nothing"
+    assert f"/{bumped}/2.0.0.json" in after[bumped]
+    moved = {tag for tag in before if before[tag] != after[tag]}
+    assert moved == {bumped}, f"bumping {bumped} also re-issued {sorted(moved - {bumped})}"
+
+
+def test_a_version_pin_names_an_element_that_exists():
+    """A renamed or withdrawn element must not leave a live pin behind.
+
+    The entry would keep resolving — `dict.get` on a tag nothing registers is simply never
+    read — so the bump would silently stop applying, and the element it was renamed to would
+    quietly publish at the initial version again.
+    """
+    from anvilate.contracts import ELEMENT_SCHEMA_VERSIONS
+    from anvilate.screening import element_registry
+
+    stale = sorted(set(ELEMENT_SCHEMA_VERSIONS) - set(element_registry()))
+    assert not stale, f"ELEMENT_SCHEMA_VERSIONS pins tags no pack registers: {stale}"

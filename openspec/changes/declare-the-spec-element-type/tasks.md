@@ -19,8 +19,9 @@
 - [x] 2.3 B's cost paid rather than waved through: each pack element's own schema is
       published under `docs/api/schemas/elements/<tag>.schema.json`, addressed by the same
       tag a document writes, generated from the same registry the screen resolves through,
-      and frozen and drift-gated like the two named contracts. Versioned as a set for now,
-      and that limit is stated on the page rather than left to be discovered.
+      and frozen and drift-gated like the two named contracts. Versioned as a set at first,
+      and stated on the page rather than left to be discovered; 4.1 has since made the
+      versions per element.
 
 ## 3. Implementation
 
@@ -35,10 +36,13 @@
 
 ## 4. Still open
 
-- [ ] 4.1 Per-element schema versions. Today the element schemas share one version, so
-      changing one element's fields moves every element schema's `$id`. It does not touch
-      `SPEC_SCHEMA_VERSION`, which is the coupling that mattered, but it is not the honest
-      end state.
+- [x] 4.1 Per-element schema versions. Each element now carries its own: a tag absent from
+      `ELEMENT_SCHEMA_VERSIONS` publishes at `ELEMENT_SCHEMA_INITIAL_VERSION`, so a pack
+      still ships an element by existing, and bumping one moves that `$id` and no other. The
+      gate is on the blast radius — bump one tag and every other document must come back
+      byte for byte identical — because the shared constant made every version agree by
+      construction, which is why nothing failed while it was wrong. A pin naming a tag no
+      pack registers is refused, so a rename cannot leave a bump silently not applying.
 - [ ] 4.2 `screen_structure` takes a *list* of members rather than one element, so it is not
       addressable by a single tag. A spec describing a whole structure still cannot name it.
 

@@ -74,11 +74,13 @@ ships is an element that is published, and a gate holds the two sets equal in bo
 directions — an element with no schema is a document a client cannot check, and a schema
 with no element is a tag that resolves to nothing.
 
-They are frozen and drift-gated exactly like the two contracts above. **They are versioned
-as a set, and that limit is real:** changing one element's fields moves every element
-schema's `$id`. Per-element versioning is the honest end state and is not what ships today.
-What it deliberately does *not* do is move `SPEC_SCHEMA_VERSION`, which is the coupling the
-tag exists to avoid.
+They are frozen and drift-gated exactly like the two contracts above, and **each element
+carries its own version**. A new element publishes at `ELEMENT_SCHEMA_INITIAL_VERSION`, so a
+pack still ships an element by existing; bumping one means adding its tag to
+`ELEMENT_SCHEMA_VERSIONS`, and that edit moves that one `$id` and no other. A client pinned
+to `bolted_connection/1.0.0` is not told its contract moved because a pump duty gained a
+field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
+exists to avoid.
 
 ### 1.1.0: the contract said "with the rolled-up status" and did not carry one
 

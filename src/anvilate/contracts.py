@@ -38,7 +38,9 @@ __all__ = [
     "RELEASED_DIRECTORY",
     "freeze_release",
     "released_path",
-    "ELEMENT_SCHEMA_VERSION",
+    "ELEMENT_SCHEMA_INITIAL_VERSION",
+    "ELEMENT_SCHEMA_VERSIONS",
+    "element_schema_version",
     "SCORECARD_SCHEMA_VERSION",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -128,11 +130,26 @@ def scorecard_json_schema() -> dict[str, Any]:
 ELEMENTS_DIRECTORY = "elements"
 
 # The element schemas move with the packs rather than with the Spec IR, which is the whole
-# point of the tag: a new pack element must not bump `SPEC_SCHEMA_VERSION`. They are
-# versioned as a set for now, and that limit is real -- changing one element's fields moves
-# every element schema's `$id`. Per-element versioning is the honest end state and it is not
-# what ships today.
-ELEMENT_SCHEMA_VERSION = "1.0.0"
+# point of the tag: a new pack element must not bump `SPEC_SCHEMA_VERSION`. And they move
+# **one at a time**. A single shared number would have meant that changing one element's
+# fields re-issued all twenty-odd `$id`s, so a client pinned to `bolted_connection/1.0.0`
+# would be told its contract had moved because a pump duty gained a field.
+#
+# The version an element publishes at the day it first ships. A pack ships an element by
+# existing -- the registry is derived from the packs -- so a new element must not require an
+# edit here to be publishable, and this is what it gets until somebody bumps it.
+ELEMENT_SCHEMA_INITIAL_VERSION = "1.0.0"
+
+# Elements whose schema has moved since, keyed by the same tag a document writes. Add an
+# entry to bump one element; every other element's `$id` is untouched by that edit. An entry
+# naming a tag no pack registers is refused by the gate in tests/test_contracts.py -- a
+# renamed element must not leave a live version pin behind pointing at nothing.
+ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {}
+
+
+def element_schema_version(tag: str) -> str:
+    """The published schema version for one element tag."""
+    return ELEMENT_SCHEMA_VERSIONS.get(tag, ELEMENT_SCHEMA_INITIAL_VERSION)
 
 
 def element_json_schemas() -> dict[str, dict[str, Any]]:
@@ -154,7 +171,7 @@ def element_json_schemas() -> dict[str, dict[str, Any]]:
         tag: _artifact(
             model,
             name=f"{ELEMENTS_DIRECTORY}/{tag}",
-            version=ELEMENT_SCHEMA_VERSION,
+            version=element_schema_version(tag),
             description=(
                 f"Anvilate pack element {tag!r}: the fields a Design Spec puts in "
                 f"`element_params` when it declares `element_type: {tag}`. Generated from "
