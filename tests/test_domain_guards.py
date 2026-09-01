@@ -606,3 +606,260 @@ def test_the_one_guard_left_unpinned_is_unreachable_by_construction():
         "an advance approaching 180 degrees would send the ratio to infinity; none of "
         "these is near it, which is what makes the guard a net rather than a limit"
     )
+
+
+# --- the eleven that were still cold ------------------------------------------------------
+#
+# Re-run at HEAD, the raise-site trace says 2,400 of 4,794 sites never execute — but only
+# **eleven** of those cold refusals state a number, which is the subset whose constant can be
+# wrong without anything noticing. This section is those eleven. Ten are tripped; the
+# eleventh is genuinely unreachable and what is pinned instead is the fact that makes it so.
+
+
+def test_a_polytropic_exponent_below_one_is_refused():
+    """n = 1 is isothermal and n ≈ 1.4 adiabatic; below 1 is neither, and the gas-law
+    expansion the usable volume rests on has no meaning there."""
+    from anvilate.analysis import accumulator_usable_volume
+
+    sizes = {
+        "total_volume": Quantity.parse("10 L"),
+        "precharge_pressure": Quantity.parse("100 bar"),
+        "minimum_pressure": Quantity.parse("150 bar"),
+        "maximum_pressure": Quantity.parse("250 bar"),
+    }
+    with pytest.raises(ValueError, match="polytropic_exponent must be at least 1"):
+        accumulator_usable_volume(**sizes, polytropic_exponent=0.999)
+    # And the boundary itself is accepted: isothermal is a real process, not an error.
+    assert accumulator_usable_volume(**sizes, polytropic_exponent=1.0).to("L").magnitude > 0
+
+
+def test_a_torsional_amplification_below_one_is_refused():
+    """Ax scales the accidental eccentricity *up* for a torsionally irregular building.
+    Below 1 it would scale it down, which is a discount ASCE 7 does not offer."""
+    from anvilate.analysis import seismic_accidental_torsional_moment
+
+    inputs = {
+        "story_shear": Quantity.parse("100 kN"),
+        "building_dimension": Quantity.parse("30 m"),
+    }
+    with pytest.raises(ValueError, match="amplification_factor must be at least 1.0"):
+        seismic_accidental_torsional_moment(**inputs, amplification_factor=0.999)
+    at_one = seismic_accidental_torsional_moment(**inputs, amplification_factor=1.0)
+    assert at_one.to("kN*m").magnitude == pytest.approx(100.0 * 0.05 * 30.0)
+
+
+def test_a_non_wetting_contact_angle_is_refused_rather_than_returning_a_negative_time():
+    """cos θ ≤ 0 is a liquid that does not wick. Washburn would return a *negative*
+    penetration time for it — a number with the right units and the wrong sign."""
+    from anvilate.analysis import washburn_penetration_time
+
+    inputs = {
+        "surface_tension": Quantity.parse("0.072 N/m"),
+        "pore_radius": Quantity.parse("50 um"),
+        "viscosity": Quantity.parse("0.001 Pa*s"),
+        "length": Quantity.parse("10 mm"),
+    }
+    for outside in (90.001, 135.0, 179.0):
+        with pytest.raises(ValueError, match="below 90 degrees"):
+            washburn_penetration_time(**inputs, contact_angle=outside)
+    # Just inside, and the time is positive — the property the guard exists to keep.
+    assert washburn_penetration_time(**inputs, contact_angle=89.0).to("s").magnitude > 0
+    # Exactly 90 is not refused, and the reason is arithmetic rather than intent:
+    # `cos(radians(90.0))` is 6.1e-17, not 0. The guard tests the cosine, so the knife edge
+    # falls on the accepting side and the answer is a very large but finite time.
+    assert washburn_penetration_time(**inputs, contact_angle=90.0).to("s").magnitude > 1e12
+
+
+def test_losses_that_exceed_the_fuel_are_refused_rather_than_reported_as_a_negative():
+    """η = 100 − qA − other. Losses summing past 100 give a negative efficiency, which
+    reads as a number rather than as the input error it is."""
+    from anvilate.analysis import combustion_efficiency
+
+    with pytest.raises(ValueError, match="exceed 100"):
+        combustion_efficiency(dry_flue_gas_loss_percent=95.0, other_losses_percent=10.0)
+    with pytest.raises(ValueError, match="exceed 100"):
+        combustion_efficiency(dry_flue_gas_loss_percent=100.0)
+    assert combustion_efficiency(dry_flue_gas_loss_percent=99.0) == pytest.approx(1.0)
+
+
+def test_the_neuber_constant_must_be_a_quantity_and_says_so_by_name():
+    """√a is a **√length**, and the one way to get it wrong is to pass the bare number off
+    a table. The refusal names the dimension rather than failing inside the arithmetic."""
+    from anvilate.analysis import neuber_notch_sensitivity
+
+    with pytest.raises(ValueError, match=r"neuber_constant must be a \[length\]\*\*0.5"):
+        neuber_notch_sensitivity(notch_radius=Quantity.parse("1 mm"), neuber_constant=0.25)
+    with pytest.raises(ValueError, match=r"neuber_constant must be a \[length\]\*\*0.5"):
+        neuber_notch_sensitivity(
+            notch_radius=Quantity.parse("1 mm"), neuber_constant=Quantity.parse("0.25 mm")
+        )
+    q = neuber_notch_sensitivity(
+        notch_radius=Quantity.parse("1 mm"), neuber_constant=Quantity.parse("0.25 mm**0.5")
+    )
+    assert 0.0 <= q <= 1.0
+
+
+def test_a_weld_metal_shear_fraction_outside_its_band_is_refused():
+    """The 0.6 in F_nw = 0.6·F_EXX is a ratio of shear strength to tensile. Above 1 it
+    would make the weld metal stronger in shear than in tension."""
+    from anvilate.analysis import fillet_weld_directional_strength
+
+    inputs = {
+        "leg_size": Quantity.parse("6 mm"),
+        "length": Quantity.parse("100 mm"),
+        "electrode_strength": Quantity.parse("70 ksi"),
+        "load_angle": 0.5,
+    }
+    for outside in (0.0, -0.1, 1.01):
+        with pytest.raises(ValueError, match=r"must lie in \(0, 1\]"):
+            fillet_weld_directional_strength(**inputs, weld_metal_shear_fraction=outside)
+    # 1.0 is the closed end and is accepted, which is what makes the band a band.
+    assert (
+        fillet_weld_directional_strength(**inputs, weld_metal_shear_fraction=1.0).to("kN").magnitude
+        > 0
+    )
+
+
+def test_a_pressure_past_the_thin_wall_sphere_limit_is_refused():
+    """ASME UG-27's sphere formula divides by 2·S·E − 0.2·P. At the limit the thickness
+    goes to infinity; past it the sign flips and a *negative* thickness comes back."""
+    from anvilate.analysis import asme_spherical_shell_thickness
+
+    inputs = {"radius": Quantity.parse("500 mm"), "allowable_stress": Quantity.parse("100 MPa")}
+    # 2·S·E = 200 MPa, so the limit is P = 1000 MPa.
+    with pytest.raises(ValueError, match=r"2·S·E .* must exceed 0.2·P"):
+        asme_spherical_shell_thickness(
+            pressure=Quantity.parse("1000 MPa"), joint_efficiency=1.0, **inputs
+        )
+    inside = asme_spherical_shell_thickness(
+        pressure=Quantity.parse("900 MPa"), joint_efficiency=1.0, **inputs
+    )
+    assert inside.to("mm").magnitude > 0
+    # The efficiency is on the same side of the comparison, so halving it halves the limit.
+    with pytest.raises(ValueError, match=r"2·S·E .* must exceed 0.2·P"):
+        asme_spherical_shell_thickness(
+            pressure=Quantity.parse("900 MPa"), joint_efficiency=0.5, **inputs
+        )
+
+
+def test_a_pressure_past_the_conical_head_limit_is_refused():
+    """The cone's denominator is S·E − 0.6·P, a different constant on a different
+    geometry — so it is pinned separately rather than assumed to follow the sphere."""
+    from anvilate.analysis import asme_conical_head_thickness
+
+    inputs = {
+        "diameter": Quantity.parse("1000 mm"),
+        "allowable_stress": Quantity.parse("100 MPa"),
+        "half_apex_angle_deg": 30.0,
+    }
+    # S·E = 100 MPa, so the limit is P = 100/0.6 = 166.67 MPa.
+    with pytest.raises(ValueError, match=r"S·E .* must exceed 0.6·P"):
+        asme_conical_head_thickness(
+            pressure=Quantity.parse("170 MPa"), joint_efficiency=1.0, **inputs
+        )
+    assert (
+        asme_conical_head_thickness(
+            pressure=Quantity.parse("160 MPa"), joint_efficiency=1.0, **inputs
+        )
+        .to("mm")
+        .magnitude
+        > 0
+    )
+
+
+def test_a_temperature_band_given_as_a_bare_number_is_named_rather_than_crashed_on():
+    """The guard that checked the type read the unit off the value first.
+
+    `unit = str(tolerance.unit)` sat one line **above** `isinstance(tolerance, Quantity)`, so
+    a caller passing `25.0` never reached the refusal that names the dimension — they got
+    `AttributeError: 'float' object has no attribute 'unit'` from the guard that was
+    supposed to be checking them. The order is the fix; this pins it.
+    """
+    from anvilate.analysis.pressure_vessel import AllowableStress
+
+    allowable = AllowableStress(
+        value=Quantity.parse("100 MPa"),
+        temperature=Quantity.parse("300 K"),
+        material="ASTM-A36",
+        source="a test fixture",
+    )
+    for bare in (25.0, "25 K", 0):
+        with pytest.raises(ValueError, match=r"tolerance must be a \[temperature\] quantity"):
+            allowable.is_valid_at(Quantity.parse("290 K"), tolerance=bare)
+    # And the offset-scale refusal beside it, which had never fired at all. It tested the
+    # unit's *spelling* — "degree_Celsius", "degree_Fahrenheit", "deg" — and pint renders
+    # those units as "°C" and "°F", which contain none of the three. So the failure the
+    # guard was written to prevent was live: a `25 degC` tolerance became a **298 K** band.
+    hot = AllowableStress(
+        value=Quantity.parse("100 MPa"),
+        temperature=Quantity.parse("600 K"),
+        material="ASTM-A36",
+        source="a test fixture",
+    )
+    for offset in ("25 degC", "25 degF"):
+        with pytest.raises(ValueError, match="temperature DIFFERENCE"):
+            hot.is_valid_at(Quantity.parse("500 K"), tolerance=Quantity.parse(offset))
+    # The consequence, stated: 500 K is 100 K below a value tabulated at 600 K, and every
+    # unit that really is a band width says so.
+    for width in ("25 K", "25 delta_degC", "25 degR"):
+        assert not hot.is_valid_at(Quantity.parse("500 K"), tolerance=Quantity.parse(width))
+    assert allowable.is_valid_at(Quantity.parse("290 K"), tolerance=Quantity.parse("25 K"))
+
+
+def test_a_parallelogram_linkage_reaches_the_advance_angle_refusal():
+    """An excuse this file already carried, and it was wrong.
+
+    The advance-angle guard was described here as "a net rather than a limit" because no
+    ordinary crank-rocker comes near 180 degrees. **200,000 random link sets never reached
+    it either** — which is not evidence, because the condition is an exact one and a random
+    sweep steps over exact conditions.
+
+    Solving it instead: each toggle angle is an `acos`, so both are in [0°, 180°] and their
+    difference reaches 180° only when one is 0° and the other 180°. That needs
+    ``r4 = |r1 − (r2+r3)|`` and ``r4 = r1 + (r3−r2)`` at once, which gives ``r1 = r2`` and
+    ``r3 = r4`` — a **parallelogram**, the linkage whose two extreme positions coincide.
+    """
+    from anvilate.analysis import fourbar_time_ratio
+
+    def links(ground, crank, coupler, rocker):
+        return {
+            "ground": Quantity(magnitude=float(ground), unit="mm"),
+            "input_link": Quantity(magnitude=float(crank), unit="mm"),
+            "coupler": Quantity(magnitude=float(coupler), unit="mm"),
+            "output_link": Quantity(magnitude=float(rocker), unit="mm"),
+        }
+
+    for ground, coupler in ((60, 100), (50, 80), (45, 120)):
+        with pytest.raises(ValueError, match="advance angle must be below 180"):
+            fourbar_time_ratio(**links(ground, ground, coupler, coupler))
+    # And it really is an isolated point rather than the middle of a region. Move any one
+    # link by a millimetre in either direction and the linkage leaves the crank-rocker
+    # family altogether — the *toggle-existence* guard answers first, not this one. That is
+    # why a random sweep finds nothing: there is no neighbourhood to land in.
+    for perturbed in ((60, 60, 100, 99), (60, 60, 100, 101), (60, 61, 100, 100)):
+        with pytest.raises(ValueError, match="is not a crank"):
+            fourbar_time_ratio(**links(*perturbed))
+
+
+def test_the_angular_tolerance_table_is_what_makes_its_last_refusal_unreachable():
+    """The one cold refusal that cannot be tripped, and the fact it rests on.
+
+    `general.py` walks the ISO 2768-1 angular ranges and raises after the loop if none
+    matched. It never can, because the table's last row is open-topped — and *that* is the
+    claim worth holding. A data edit closing the top would make the refusal reachable and
+    the excuse false, and nothing would have noticed.
+    """
+    from anvilate.tolerance.general import _angular_table, general_angular_tolerance
+
+    rows = _angular_table()["ranges"]
+    assert rows, "the angular table is empty"
+    assert rows[-1]["leg_up_to_mm"] is None, (
+        "the last ISO 2768-1 angular range is no longer open-topped, so the refusal after "
+        "the loop is now reachable and needs a case rather than a comment"
+    )
+    assert all(row["leg_up_to_mm"] is not None for row in rows[:-1]), (
+        "an open top in the middle of the table would end the walk early"
+    )
+    # And the open top really does answer: a leg far past every stated range still resolves.
+    huge = general_angular_tolerance(shorter_leg=Quantity.parse("1e6 mm"), tolerance_class="m")
+    assert huge.deviation.to("arcminute").magnitude > 0

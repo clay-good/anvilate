@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
+from ..units.temperature import temperature_difference_kelvin
 from .stress import von_mises_principal
 
 __all__ = [
@@ -1665,18 +1666,26 @@ class AllowableStress(RevalidatedModel):
             # ABSOLUTE temperature: Quantity(25, "degC").to("K") is 298.15, not 25. Written
             # in the same unit as the temperatures — the obvious thing to do — that
             # silently widened the band twelvefold and disarmed the check.
-            unit = str(tolerance.unit)
+            # The unit is read *after* the type is checked. Reading it first made the
+            # refusal below unreachable: a bare `25.0` never got "tolerance must be a
+            # [temperature] quantity", it got `AttributeError: 'float' object has no
+            # attribute 'unit'` off the guard that was checking it.
             if not isinstance(tolerance, Quantity):
                 raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance!r}")
             if not tolerance.has_dimension("[temperature]"):
                 raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance}")
-            if "degree_Celsius" in unit or "degree_Fahrenheit" in unit or "deg" in unit.lower():
-                raise ValueError(
-                    f"tolerance is a band WIDTH, so it must be given in kelvin or "
-                    f"degree-Rankine, not {unit}: pint converts a degC/degF quantity as an "
-                    f"absolute temperature, and 25 degC would become a 298 K band."
-                )
-            band = tolerance.to("K").magnitude
+            # This checked the unit's *spelling* -- "degree_Celsius", "degree_Fahrenheit",
+            # "deg" -- and pint renders those units as "°C" and "°F", which contain none of
+            # the three. The guard had never fired, and the failure it was written to
+            # prevent was live: `tolerance="25 degC"` gave a **298 K** band, so an allowable
+            # tabulated at 600 K read as valid for a design at 500 K. A 100 K extrapolation,
+            # reported as in-range.
+            #
+            # `temperature_difference_kelvin` is the library's own answer and it is not
+            # keyed on a spelling: it converts 1 and 2 of the unit and requires the result to
+            # be linear, which is true of K, delta_degC, delta_degF and degR and false of
+            # every offset scale however it is written.
+            band = temperature_difference_kelvin(tolerance, name="tolerance")
             if band < 0:
                 raise ValueError(f"tolerance must not be negative; got {tolerance}")
         read_at = self.temperature.to("K").magnitude
