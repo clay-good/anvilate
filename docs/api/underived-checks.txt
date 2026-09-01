@@ -55,7 +55,6 @@ ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: the flange m
 ASME VIII Div 1 UG-37 (reinforcement of openings) :: the area-replacement balance A_required vs A_available.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
 BS 7910 / R6 Option 1 failure assessment diagram :: K_r = K_I/K_mat, L_r = σ_ref/σ_y, and the Option 1 envelope the point is assessed against.
-Darcy-Weisbach friction + fitting minor losses :: h_f = f·(L/D)·v²/2g plus ΣK·v²/2g.
 EN 15978 life-cycle modules; ISO 14040 cradle-to-gate boundary :: the embodied carbon is the material mass over the process yield times the cited factor.
 EN 1993-1-9 :: the S-N endurance N = 2·10⁶·(Δσ_c/Δσ)^m and the Miner damage sum over the spectrum.
 IES Lighting Handbook — recommended task illuminance :: the recommended illuminance is tabular, but the delivered illuminance the check compares against it is computed.
@@ -68,10 +67,8 @@ Kirchhoff plate theory (axisymmetric closed form) :: the clamped and simply-supp
 NDS :: the adjusted design values F'_b, F'_c, F'_v — the reference value times the applicable adjustment factors, which is exactly what a reviewer recomputes.
 NEC 210.19(A)/215.2 informational note — feeder voltage drop :: the drop V_d = √3·I·(R·cosφ + X·sinφ)·L and the percentage it is of the line voltage.
 NEC 310.16 — conductor ampacity :: the table supplies the ampacity, but the load current I = P/(√3·V·pf) the check compares against it is computed.
-NPSH available vs required (cavitation margin) :: NPSH_a = (p_a − p_v)/ρg + z − h_f.
 OSHA 29 CFR 1910.95 / NIOSH REL — 85 dBA criterion, 3 dB exchange rate :: the dose D = Σ C_i/T_i with T = 8/2^((L−85)/3).
 OSHA 29 CFR 1910.95 / NIOSH REL — 90 dBA criterion, 5 dB exchange rate :: the same dose sum with the 90 dBA criterion and the 5 dB exchange rate.
-Pump shaft power P = ρgQH/η :: the citation is the formula, and the formula is not rendered.
 Rankine active thrust, base friction resistance :: P_a = ½·K_a·γ·H² and the base friction μ·N it is resisted by.
 Rankine active thrust, moment balance about the toe :: the same thrust, taken as a moment about the toe against the restoring moment.
 Roark's Formulas, Table 11.4 :: the table supplies the coefficient; the deflection and stress formulas it feeds are closed form.

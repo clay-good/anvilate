@@ -109,7 +109,7 @@ formula to fill the space — an honest gap is worth more to a reviewer than a
 plausible fabrication.
 
 Which checks those are is not left to prose. Every clause the library cites is
-counted on each test run, and the run prints the ratio: **15 of 62 cited clauses are
+counted on each test run, and the run prints the ratio: **18 of 62 cited clauses are
 fully worked** as of this writing. A clause counts as worked only when *every* entry
 citing it carries a derivation — half a clause renders a formula for some parts and a
 bare table for others, which reads as though all of it was derived.
@@ -121,7 +121,7 @@ are not interchangeable:
 | Section | What it means | Lines |
 | --- | --- | --- |
 | `[lookup]` | No formula to render. A capability table, a classification, a consistency verdict. Finished as it stands. | 4 |
-| `[debt]` | A formula whose derivation has not been written yet. Downward-only. | 43 |
+| `[debt]` | A formula whose derivation has not been written yet. Downward-only. | 40 |
 
 Filing a debt as a lookup would convert unfinished work into a decision, so the gate
 does not take the reason on trust: a clause whose entries carry a computed **safety

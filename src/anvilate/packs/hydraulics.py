@@ -24,6 +24,7 @@ from ..analysis import (
     pump_shaft_power,
     reynolds_number,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -34,6 +35,11 @@ __all__ = [
     "screen_pipe_run",
     "screen_pump_duty",
 ]
+
+# The g the analysis layer already used: anvilate.analysis.pump and
+# anvilate.analysis.pipe_flow both compute at standard gravity, and a derivation that
+# substituted a different one would render work that is not the work that was done.
+_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
 
 _MOTOR_REFERENCE = "Pump shaft power P = ρgQH/η"
 _NPSH_REFERENCE = "NPSH available vs required (cavitation margin)"
@@ -82,16 +88,68 @@ def screen_pump_duty(
     )
     motor = duty.motor_rating.to("kW").magnitude
     motor_sf = motor / shaft if shaft > 0 else None
+    motor_derivation = Derivation(
+        symbolic="P_s = ρ · g · Q · H / η",
+        inputs=(
+            SymbolValue(symbol="ρ", description="fluid density", value=duty.fluid_density),
+            SymbolValue(symbol="g", description="standard gravity", value=_GRAVITY),
+            SymbolValue(
+                symbol="Q", description="volumetric flow rate", value=duty.flow_rate, unit="L/s"
+            ),
+            SymbolValue(
+                symbol="H", description="total dynamic head", value=duty.total_head, unit="m"
+            ),
+            SymbolValue(
+                symbol="η",
+                description="pump efficiency at the duty point",
+                value=duty.efficiency,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="P_s",
+            description="shaft power the driver must supply",
+            value=Quantity(magnitude=shaft, unit="kW"),
+            unit="kW",
+        ),
+        citation=_MOTOR_REFERENCE,
+    )
     motor_entry = ScorecardEntry.from_safety_factor(
         "motor rating", computed=motor_sf, required=motor_service_factor
-    ).model_copy(update={"reference": _MOTOR_REFERENCE})
+    ).model_copy(update={"reference": _MOTOR_REFERENCE, "derivation": motor_derivation})
 
     npsh_a = duty.npsh_available.to("m").magnitude
     npsh_r = duty.npsh_required.to("m").magnitude
     npsh_sf = npsh_a / npsh_r if npsh_r > 0 else None
+    # Both figures are the caller's — one from the installation, one from the pump curve —
+    # so the work here is the comparison itself, written as the margin a reviewer reads off
+    # the suction side rather than as a ratio they have to reconstruct from the detail line.
+    npsh_derivation = Derivation(
+        symbolic="Δh = NPSHa − NPSHr",
+        inputs=(
+            SymbolValue(
+                symbol="NPSHa",
+                description="net positive suction head available from the installation",
+                value=duty.npsh_available,
+                unit="m",
+            ),
+            SymbolValue(
+                symbol="NPSHr",
+                description="net positive suction head the pump curve requires",
+                value=duty.npsh_required,
+                unit="m",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="Δh",
+            description="suction head in hand before cavitation",
+            value=Quantity(magnitude=npsh_a - npsh_r, unit="m"),
+            unit="m",
+        ),
+        citation=_NPSH_REFERENCE,
+    )
     npsh_entry = ScorecardEntry.from_safety_factor(
         "NPSH margin", computed=npsh_sf, required=npsh_margin_factor
-    ).model_copy(update={"reference": _NPSH_REFERENCE})
+    ).model_copy(update={"reference": _NPSH_REFERENCE, "derivation": npsh_derivation})
     return Scorecard(entries=(motor_entry, npsh_entry))
 
 
@@ -152,7 +210,38 @@ def screen_pipe_run(pipe: PipeRun) -> Scorecard:
     total_loss = friction + minor
     available = pipe.available_head.to("m").magnitude
     ratio = available / total_loss if total_loss > 0 else None
+    # One formula, because the friction and the fitting losses share the velocity head and
+    # a reviewer checks them together: the run either fits inside the source's head or it
+    # does not. f is the value the Colebrook solve returned, carried in as an input.
+    pipe_derivation = Derivation(
+        symbolic="h_L = (f · L / D + ΣK) · v² / (2 · g)",
+        inputs=(
+            SymbolValue(
+                symbol="f",
+                description="Darcy friction factor at the run's Reynolds number and roughness",
+                value=friction_factor,
+            ),
+            SymbolValue(symbol="L", description="pipe length", value=pipe.length, unit="m"),
+            SymbolValue(
+                symbol="D", description="pipe inside diameter", value=pipe.diameter, unit="m"
+            ),
+            SymbolValue(
+                symbol="ΣK",
+                description="summed minor-loss coefficient of the valves, bends and fittings",
+                value=pipe.fitting_loss_coefficient,
+            ),
+            SymbolValue(symbol="v", description="mean flow velocity", value=velocity, unit="m/s"),
+            SymbolValue(symbol="g", description="standard gravity", value=_GRAVITY),
+        ),
+        result=SymbolValue(
+            symbol="h_L",
+            description="total head the pipe and its fittings consume",
+            value=Quantity(magnitude=total_loss, unit="m"),
+            unit="m",
+        ),
+        citation=_PIPE_REFERENCE,
+    )
     entry = ScorecardEntry.from_safety_factor(
         "head budget", computed=ratio, required=1.0
-    ).model_copy(update={"reference": _PIPE_REFERENCE})
+    ).model_copy(update={"reference": _PIPE_REFERENCE, "derivation": pipe_derivation})
     return Scorecard(entries=(entry,))

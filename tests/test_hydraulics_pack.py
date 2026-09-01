@@ -110,3 +110,45 @@ def test_the_two_required_margins_are_pinned_not_merely_implied():
     # And they are live: a requirement above the computed factor flips the verdict.
     tightened = screen_pump_duty(_duty(), npsh_margin_factor=10.0, motor_service_factor=10.0)
     assert all(e.status is CheckStatus.FAIL for e in tightened.entries)
+
+
+def test_every_hydraulics_entry_shows_the_work_it_did():
+    """The three checks render a worked calculation, and it is the one they performed.
+
+    A derivation is only worth carrying if its substituted line reproduces the number the
+    verdict rests on. These assert both halves: that no symbol is left standing where a
+    value belongs, and that the result agrees with the safety factor the entry reports —
+    so a derivation that drifted away from its own check fails here rather than shipping a
+    plausible formula beside an unrelated verdict.
+    """
+    entries = list(screen_pump_duty(_duty()).entries) + list(screen_pipe_run(_pipe()).entries)
+    assert len(entries) == 3
+
+    for entry in entries:
+        assert entry.derivation is not None, f"{entry.name} carries no derivation"
+        assert entry.derivation.unresolved_symbols() == ()
+        assert entry.derivation.citation == entry.reference
+
+    worked = {entry.name: entry.derivation for entry in entries}
+
+    # P_s = ρ·g·Q·H/η = 1000 · 9.80665 · 0.05 · 20 / 0.70 = 14.010 kW, and the motor is
+    # 18.5 kW — which is the 1.3205 safety factor the entry reports.
+    shaft = worked["motor rating"].result.value.to("kW").magnitude
+    assert shaft == pytest.approx(14.0095, rel=1e-5)
+    assert 18.5 / shaft == pytest.approx(
+        next(e for e in entries if e.name == "motor rating").safety_factor, rel=1e-12
+    )
+
+    # The suction margin is a subtraction, so it is checked against the ratio the verdict
+    # uses rather than restated: 5.6 − 4 = 1.6 m in hand on a 4 m requirement.
+    npsh = worked["NPSH margin"]
+    assert npsh.result.value.to("m").magnitude == pytest.approx(1.6, rel=1e-12)
+    assert "5.600 m − 4.000 m" in npsh.substituted()
+
+    # h_L = (f·L/D + ΣK)·v²/2g. The pinned friction factor above gives 6.5495 m against
+    # the 10 m available, and the head-budget entry divides exactly those two.
+    losses = worked["head budget"].result.value.to("m").magnitude
+    assert losses == pytest.approx(6.5495, rel=1e-4)
+    assert 10.0 / losses == pytest.approx(
+        next(e for e in entries if e.name == "head budget").safety_factor, rel=1e-12
+    )
