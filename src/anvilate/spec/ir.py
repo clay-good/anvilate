@@ -513,6 +513,12 @@ class Constraints(_Base):
     max_mass: Provenanced[Mass] | None = None
     envelope: Envelope | None = None
     min_safety_factor: Provenanced[float] | None = None
+    # The band's other end: a check running above it is OVER_MARGIN — passing, and flagged as
+    # over-engineered. The status has been first-class in the scorecard, the exit codes and
+    # the QIF export since they were written, and exactly one pack screen could produce it,
+    # from a `target_safety_factor` argument no document could set. This is how a document
+    # asks for it.
+    max_safety_factor: Provenanced[float] | None = None
     max_cost: Provenanced[float] | None = None  # currency handled by cost-estimation
 
     @model_validator(mode="after")
@@ -522,6 +528,20 @@ class Constraints(_Base):
         if self.min_safety_factor is not None and self.min_safety_factor.value <= 0:
             raise ValueError(
                 f"min_safety_factor must be positive; got {self.min_safety_factor.value}"
+            )
+        if self.max_safety_factor is not None and self.max_safety_factor.value <= 0:
+            raise ValueError(
+                f"max_safety_factor must be positive; got {self.max_safety_factor.value}"
+            )
+        if (
+            self.min_safety_factor is not None
+            and self.max_safety_factor is not None
+            and self.max_safety_factor.value <= self.min_safety_factor.value
+        ):
+            raise ValueError(
+                f"max_safety_factor {self.max_safety_factor.value:g} is not above "
+                f"min_safety_factor {self.min_safety_factor.value:g}; a band whose top is at "
+                "or below its floor asks for a check to pass and be over-engineered at once"
             )
         if self.max_cost is not None and self.max_cost.value <= 0:
             raise ValueError(f"max_cost must be positive; got {self.max_cost.value}")
@@ -556,9 +576,11 @@ class AcceptanceCriteria(_Base):
 # --- The spec ---
 
 # 1.1.0 added the optional LoadCase.nature classification, the DesignSpec
-# combination_basis, and the seismic parameters (all additive; a 1.0.0 spec loads
-# unchanged and is re-stamped).
-SCHEMA_VERSION = "1.2.0"
+# combination_basis, and the seismic parameters. 1.2.0 added element_type and
+# element_params. 1.3.0 added constraints.max_safety_factor, the top of the target band an
+# OVER_MARGIN verdict is measured against. All additive; an older 1.x spec loads unchanged
+# and is re-stamped.
+SCHEMA_VERSION = "1.3.0"
 
 
 class DesignSpec(_Base):

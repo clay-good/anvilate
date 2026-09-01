@@ -928,7 +928,11 @@ def test_every_constraint_is_either_screened_or_named_as_unscreened():
 
     declared = set(Constraints.model_fields)
     assert len(declared) >= 4, f"the census is looking at {len(declared)} constraint fields"
-    unaccounted = declared - set(_UNSCREENED_CONSTRAINTS) - {"min_safety_factor"}
+    # The two the screen consumes: the floor every judged screen is measured against, and the
+    # top of the band, which reaches the screens that take one and is *reported* on the
+    # elements that do not.
+    consumed = {"min_safety_factor", "max_safety_factor"}
+    unaccounted = declared - set(_UNSCREENED_CONSTRAINTS) - consumed
     assert not unaccounted, (
         f"these bounds are declared by a spec and neither screened nor reported: "
         f"{sorted(unaccounted)}"
@@ -1061,7 +1065,7 @@ _ANSWERED_BY_A_CHECK = {
     "seismic_redundancy_factor": "read by combination_set for a seismic basis",
     "element_type": "the pack screen it selects, or the T1 gap naming it",
     "element_params": "the pack screen it selects, or the T1 gap naming it",
-    "constraints": "min_safety_factor is consumed; the rest are reported as unscreened",
+    "constraints": ("min_safety_factor and max_safety_factor are consumed; the rest are reported"),
     "manufacturing": (
         "the process picks the tolerance floor, the class resolves, min_wall is reported"
     ),
@@ -1393,3 +1397,55 @@ def test_a_screen_that_is_simply_broken_still_raises(monkeypatch):
     monkeypatch.setitem(registry, "lifting_lug", (model, broken))
     with pytest.raises(TypeError, match="unexpected keyword argument"):
         screen_spec(_lug_spec())
+
+
+def test_a_declared_band_makes_an_over_engineered_check_say_so():
+    """`OVER_MARGIN` has been first-class in the scorecard, the exit codes and the QIF export
+    since they were written, and reachable only from a `target_safety_factor` argument no
+    document could set. `constraints.max_safety_factor` is how a document asks for it."""
+    band = Constraints(
+        min_safety_factor=Provenanced.stated(2.0), max_safety_factor=Provenanced.stated(3.0)
+    )
+    card = screen_spec(_lug_spec(constraints=band))
+    tension = next(e for e in card.entries if e.name == "padeye net tension")
+    assert tension.status is CheckStatus.OVER_MARGIN
+    assert "over-engineered" in tension.detail
+    assert tension.upper_safety_factor == 3.0
+    # Over margin is passing, not blocking: the exit code a caller branches on stays 0.
+    assert card.passed
+
+    # And the same lug with no band declared screens exactly as it did before.
+    plain = screen_spec(_lug_spec())
+    assert next(e for e in plain.entries if e.name == "padeye net tension").status is (
+        CheckStatus.PASS
+    )
+
+
+def test_a_band_an_element_cannot_use_is_reported_rather_than_ignored():
+    """One of the twenty-four screens takes an upper bound today. A spec that states the band
+    and an element whose screen cannot use it is the silent-drop shape this module spends its
+    length refusing, so it is an entry naming the element rather than a field quietly
+    dropped."""
+    band = Constraints(
+        min_safety_factor=Provenanced.stated(2.0), max_safety_factor=Provenanced.stated(3.0)
+    )
+    card = screen_spec(
+        _lug_spec(
+            element_type="bolted_connection",
+            element_params={
+                "name": "splice",
+                "bolt_diameter": _q("20 mm"),
+                "plate_thickness": _q("10 mm"),
+                "load": _q("15 kN"),
+                "bolt_material": "ASTM-A36",
+                "plate_material": "ASTM-A36",
+            },
+            constraints=band,
+        )
+    )
+    entry = next(e for e in card.entries if e.name == "over-margin band")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "bolted_connection" in entry.detail and "OVER_MARGIN" in entry.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+    # The checks that could run still did.
+    assert any(e.name == "splice bolt shear" for e in card.entries)

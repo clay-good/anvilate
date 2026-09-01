@@ -84,6 +84,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.3.0: a document can ask to be told it is over-engineered
+
+`constraints.max_safety_factor` is the top of the target band. `OVER_MARGIN` was first-class
+everywhere a verdict is read and reachable only from a pack argument no document could set,
+so the status shipped for months with no way to ask for it. Additive, like every 1.x change
+before it: an older spec loads unchanged and is re-stamped.
+
 ### 1.2.0: a derivation with nothing substituted into it
 
 `Derivation.inputs` now requires at least one entry, so the scorecard schema states

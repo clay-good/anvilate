@@ -176,7 +176,10 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
 
 
 def _screen_element(
-    tag: str, params: Mapping[str, Any], min_safety_factor: float | None
+    tag: str,
+    params: Mapping[str, Any],
+    min_safety_factor: float | None,
+    max_safety_factor: float | None = None,
 ) -> list[ScorecardEntry]:
     """The entries one declared element produces, or one saying why there are none.
 
@@ -245,6 +248,17 @@ def _screen_element(
                     ),
                 )
             ]
+    # The band's top, where the screen takes one. `OVER_MARGIN` has been first-class in the
+    # scorecard, the exit codes and the QIF export since they were written, and reachable
+    # only from a `target_safety_factor` argument no document could set. A spec that states
+    # the band and an element whose screen cannot use it is the silent-drop shape this module
+    # spends its length refusing, so it is an entry rather than a quietly ignored field.
+    unusable_band = False
+    if max_safety_factor is not None:
+        if "target_safety_factor" in parameters:
+            keywords["target_safety_factor"] = max_safety_factor
+        else:
+            unusable_band = True
     try:
         card = screen(element, **keywords)
     except (ValueError, LookupError) as refused:
@@ -276,7 +290,20 @@ def _screen_element(
                 detail=f"the {tag} screen produced no checks",
             )
         ]
-    return list(card.entries)
+    entries = list(card.entries)
+    if unusable_band:
+        entries.append(
+            ScorecardEntry(
+                name="over-margin band",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares constraints.max_safety_factor "
+                    f"{max_safety_factor:g} and the {tag} screen is not judged against an "
+                    "upper bound, so no check here can report OVER_MARGIN"
+                ),
+            )
+        )
+    return entries
 
 
 def screen_structure_element(structure: Structure, *, required_safety_factor: float) -> Scorecard:
@@ -331,8 +358,12 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             )
         ]
     stated = spec.constraints.min_safety_factor
+    band = spec.constraints.max_safety_factor
     return _screen_element(
-        spec.element_type, spec.element_params, None if stated is None else stated.value
+        spec.element_type,
+        spec.element_params,
+        None if stated is None else stated.value,
+        None if band is None else band.value,
     )
 
 

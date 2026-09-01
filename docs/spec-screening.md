@@ -207,6 +207,14 @@ reason. And an *imported* interface, which names another spec's published contra
 skipped by a `continue`: a screen of one document cannot fetch another, so it is
 `NOT_EVALUATED` saying which contract went unread rather than absent from the card.
 
+**A document can ask to be told it is over-engineered.** `OVER_MARGIN` — passing, and
+flagged as more margin than the design asked for — has been first-class in the scorecard, the
+exit codes and the QIF export since they were written, and reachable only from a
+`target_safety_factor` argument no document could set. `constraints.max_safety_factor` is the
+top of that band, and a check running above it says so with the figure. One of the
+twenty-four screens takes an upper bound today; a spec that declares the band for an element
+whose screen cannot use it gets an entry saying that, rather than a field quietly dropped.
+
 **The same goes for a bound the document sets.** `constraints` is the plainest declaration a
 spec makes — it is the requirement, written down by the person the card is for — and three of
 its four fields were read by nothing. A spec stating `max_mass: 150 g` screened to PASS with

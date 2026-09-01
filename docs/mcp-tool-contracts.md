@@ -36,7 +36,7 @@ the live importable surface — so a rename fails the build instead of shipping 
 ## Referenced, not paraphrased
 
 A tool that consumes a spec does not describe a spec. It `$ref`s
-`https://anvilate.dev/schemas/design-spec/1.2.0.json`, the artifact
+`https://anvilate.dev/schemas/design-spec/1.3.0.json`, the artifact
 [published as JSON Schema 2020-12](published-contracts.md); a tool that returns a scorecard
 `$ref`s the scorecard at its version. The tool contract an agent reads and the
 structured-output constraint a compiler is decoded under therefore resolve to one document,
