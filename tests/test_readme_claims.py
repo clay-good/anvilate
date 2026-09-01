@@ -428,3 +428,41 @@ def test_the_readme_document_is_a_document_that_screens_to_what_it_shows():
         "the README's card is not what `anvilate check` prints for its own document:\n"
         + "\n".join(actual[1:])
     )
+
+
+def test_the_screen_counts_on_the_screening_page_are_the_registrys_own():
+    """Two figures in one sentence, and both move on their own.
+
+    `docs/spec-screening.md` says how many screens there are and how many of them are judged
+    against a required safety factor. A pack ships an element by existing, so both numbers
+    change without anybody editing the page — which is the definition of a sentence that
+    needs a gate rather than a proofread.
+    """
+    import inspect
+
+    from anvilate.screening import element_registry
+
+    words = {
+        "eleven": 11,
+        "twelve": 12,
+        "thirteen": 13,
+        "fourteen": 14,
+        "twenty-three": 23,
+        "twenty-four": 24,
+        "twenty-five": 25,
+    }
+    claimed_judged, claimed_total = re.search(
+        r"([\w-]+) of the ([\w-]+) screens\s+are judged against one",
+        (_REPO / "docs" / "spec-screening.md").read_text(encoding="utf-8"),
+    ).groups()
+
+    registry = element_registry()
+    judged = sum(
+        1
+        for _tag, (_model, screen) in registry.items()
+        if (parameter := inspect.signature(screen).parameters.get("required_safety_factor"))
+        is not None
+        and parameter.default is inspect.Parameter.empty
+    )
+    assert words[claimed_total.lower()] == len(registry)
+    assert words[claimed_judged.lower()] == judged
