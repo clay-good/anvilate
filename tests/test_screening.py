@@ -1262,3 +1262,87 @@ def test_a_chain_over_an_unresolvable_dimension_is_an_entry_not_a_crash():
     assert entry.status is CheckStatus.NOT_EVALUATED
     assert "IT77" in entry.detail
     assert any(e.name.startswith("padeye") for e in card.entries), "the element still screened"
+
+
+def _adversarial_specs() -> dict[str, DesignSpec]:
+    """Documents that are valid per the schema and hostile to the screen.
+
+    Every one of these is something a person can write down and hand to `anvilate check`.
+    Two of them raised out of `screen_spec` before this file caught them, and a traceback
+    where a scorecard was owed is the one answer the command must never give.
+    """
+    from anvilate.spec.ir import (
+        ChainLink,
+        DimensionChain,
+        ImportedInterface,
+        StandardComponentInterface,
+    )
+    from anvilate.tolerance.explicit import FitTolerance
+
+    bad_fit = ToleranceDimension(
+        tag="bore", nominal=_q("35 mm"), tolerance=FitTolerance(designation="H77")
+    )
+    oversize = ToleranceDimension(
+        tag="bore", nominal=_q("10 m"), tolerance=FitTolerance(designation="H7")
+    )
+    t2 = AcceptanceCriteria(tiers=[ValidationTier.T2_DFM])
+    return {
+        "a fit designation the table does not carry": _lug_spec(
+            dimensions=[bad_fit], acceptance=t2
+        ),
+        "a nominal past the end of the ISO 286 table": _lug_spec(
+            dimensions=[oversize], acceptance=t2
+        ),
+        "a chain over an unresolvable dimension": _lug_spec(
+            dimensions=[bad_fit],
+            chains=[
+                DimensionChain(
+                    name="gap",
+                    links=[ChainLink(dimension="bore", direction=1)],
+                    required_min=_q("0.1 mm"),
+                    required_max=_q("0.3 mm"),
+                )
+            ],
+        ),
+        "a chain naming a dimension nobody declared": _lug_spec(
+            chains=[
+                DimensionChain(
+                    name="gap",
+                    links=[ChainLink(dimension="absent", direction=1)],
+                    required_min=_q("0.1 mm"),
+                    required_max=_q("0.3 mm"),
+                )
+            ]
+        ),
+        "a seismic basis with no acceleration": _lug_spec(
+            load_cases=_classified_cases(), combination_basis="asce7_lrfd_seismic"
+        ),
+        "an unknown material": _lug_spec(material=MaterialRef(ref="NOT-A-REAL-ALLOY")),
+        "an unknown standard component": _lug_spec(
+            interfaces=[StandardComponentInterface(ref="NEMA-999", tag="pilot")]
+        ),
+        "an imported contract nobody can fetch": _lug_spec(
+            interfaces=[ImportedInterface(source_spec="other", contract="face", tag="pilot")]
+        ),
+        "an element tag no pack registers": _lug_spec(element_type="lifting_lugg"),
+        "element params the pack model refuses": _lug_spec(
+            element_type="lifting_lug", element_params={"name": "bare"}
+        ),
+        "a structure whose member is unknown": _lug_spec(
+            element_type="structure",
+            element_params={"members": [{"element_type": "nope", "element_params": {}}]},
+        ),
+        "a general tolerance class nobody can resolve": _manufactured(tolerance_class="ISO2768-m"),
+    }
+
+
+@pytest.mark.parametrize("label", sorted(_adversarial_specs()))
+def test_the_screen_answers_a_hostile_document_rather_than_raising(label):
+    """The rule this corpus exists for: `screen_spec` returns a card for anything the schema
+    accepts. A fact about the document belongs on the card, where a reader sees it and the
+    exit code carries it — not in a traceback that loses every other check with it."""
+    card = screen_spec(_adversarial_specs()[label])
+    assert card.entries, f"{label}: the screen returned an empty card"
+    assert card.status is not CheckStatus.PASS, f"{label}: this document must not pass"
+    # Whatever went wrong, the checks that had nothing to do with it still ran.
+    assert any(e.name == "material resolution" for e in card.entries), label
