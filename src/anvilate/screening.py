@@ -485,9 +485,11 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     """One entry per bound the document declares and nothing screens.
 
     A constraint is the plainest declaration a spec makes: it is the requirement, written
-    down by the person the card is for. Three of the four were read by nothing — a spec
-    stating `max_mass: 150 g` screened to PASS with the mass never computed and never
-    mentioned, which is the same silence the tier gaps above exist to break.
+    down by the person the card is for. `max_mass`, `envelope` and `max_cost` were read by
+    nothing anywhere in the library — a spec stating `max_mass: 150 g` screened to PASS with
+    the mass never computed and never mentioned, which is the same silence the tier gaps
+    above exist to break. (Named rather than counted, because the count moved the moment
+    `max_safety_factor` was added.)
 
     They are NOT_EVALUATED rather than absent, and each says what checking it would take.
     """
