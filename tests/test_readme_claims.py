@@ -347,6 +347,23 @@ def test_every_docs_page_is_in_the_docs_index():
     pages = {path.name for path in (root / "docs").glob("*.md") if path.name != "README.md"}
     assert len(pages) > 40, f"the docs directory has only {len(pages)} pages"
 
+    # The index opens by saying how many pages it maps, and that sentence went stale the
+    # first time somebody added one: it said forty-four while forty-five shipped. It is the
+    # count this test already has in its hand, so it is held here rather than proofread.
+    words = {
+        "Forty-three": 43,
+        "Forty-four": 44,
+        "Forty-five": 45,
+        "Forty-six": 46,
+        "Forty-seven": 47,
+        "Fifty": 50,
+    }
+    claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)
+    assert claimed is not None, "the index no longer opens by saying how many pages it maps"
+    assert words[claimed.group(1)] == len(pages), (
+        f"docs/README.md says {claimed.group(1)} pages; {len(pages)} ship"
+    )
+
     linked = set(re.findall(r"\]\(([a-z0-9-]+\.md)\)", index))
     unindexed = sorted(pages - linked)
     assert not unindexed, (
@@ -466,3 +483,47 @@ def test_the_screen_counts_on_the_screening_page_are_the_registrys_own():
     )
     assert words[claimed_total.lower()] == len(registry)
     assert words[claimed_judged.lower()] == judged
+
+
+def test_the_pages_that_count_something_count_the_real_thing():
+    """Three prose counts on three pages, each derivable and none of them held.
+
+    The docs index said forty-four pages while forty-five shipped, which is what a count in
+    prose does the first time somebody adds one. These are the other two: the number of MCP
+    tools, and the split of bundled materials that carry a specification minimum — the figure
+    the allowable-basis section is *about*, so it going stale would make the page argue from
+    a number it no longer has.
+    """
+    from anvilate.mcp import tool_catalog
+    from anvilate.standards import default_materials_db
+    from anvilate.standards.records import AllowableBasis
+
+    words = {
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "Eight": 8,
+        "Nine": 9,
+        "sixteen": 16,
+        "seventeen": 17,
+        "eighteen": 18,
+    }
+
+    tools = _claimed(r"says what the (\w+) tools \*are\*", page="docs/agent-mcp-integration.md")
+    assert words[tools] == len(tool_catalog())
+
+    page = (_REPO / "docs" / "citations.md").read_text(encoding="utf-8")
+    claimed = re.search(r"(\w+) of the (\w+) bundled materials carry a specification", page)
+    assert claimed is not None, "the allowable-basis sentence on citations.md has moved"
+    database = default_materials_db()
+    materials = database.known_materials()
+    minima = sum(
+        1
+        for identifier in materials
+        if database.get(identifier).yield_strength.citation.basis
+        is AllowableBasis.SPECIFICATION_MINIMUM
+    )
+    assert words[claimed.group(2)] == len(materials)
+    assert words[claimed.group(1)] == minima

@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Forty-four pages, arranged by what you are trying to do. The [README](../README.md) is the
+Forty-five pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
