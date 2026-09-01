@@ -1362,3 +1362,44 @@ def test_diff_reports_the_cards_own_verdict_moving(tmp_path):
     code, out, _err = _run("diff", str(before), str(same))
     assert code == EXIT_OK
     assert "VERDICT  pass → pass" in out
+
+
+_MALFORMED_ENVELOPES = {
+    "not json at all": "{not json",
+    "json that is not an object": "[1, 2, 3]",
+    "an object with no envelope fields": "{}",
+    "a payload that is not base64": json.dumps(
+        {"payload": "!!!", "payloadType": "application/vnd.in-toto+json", "signatures": []}
+    ),
+    "a payload that is base64 over non-JSON": json.dumps(
+        {
+            "payload": "Z2FyYmFnZQ==",
+            "payloadType": "application/vnd.in-toto+json",
+            "signatures": [],
+        }
+    ),
+    "signatures of the wrong type": json.dumps(
+        {"payload": "e30=", "payloadType": "x", "signatures": {}}
+    ),
+    "a null payload": json.dumps({"payload": None, "payloadType": "x", "signatures": []}),
+}
+
+
+@pytest.mark.parametrize("label", sorted(_MALFORMED_ENVELOPES))
+@pytest.mark.parametrize("fmt", ["text", "json"])
+def test_verify_refuses_a_malformed_envelope_rather_than_raising(label, fmt, tmp_path):
+    """An envelope arrives from somewhere else. It is untrusted input, and a traceback is
+    the one answer this command must not give to it.
+
+    Six of these seven were already clean refusals. The seventh — a payload that is valid
+    base64 over bytes that are not JSON — produced the *right* report, saying the payload is
+    not readable JSON, and then raised `JSONDecodeError` on the way to printing it: both
+    renderings re-parse the payload to read the attested toolchain, and neither asked whether
+    it parsed.
+    """
+    path = tmp_path / "envelope.json"
+    path.write_text(_MALFORMED_ENVELOPES[label], encoding="utf-8")
+    code, out, err = _run("verify", "--format", fmt, str(path))
+    assert code in (EXIT_BAD_REQUEST, EXIT_FAILED, EXIT_NOT_EVALUATED), f"{label}: exit {code}"
+    assert (out + err).strip(), f"{label}: said nothing"
+    assert "Traceback" not in out and "Traceback" not in err

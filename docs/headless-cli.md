@@ -223,6 +223,13 @@ PASS  attested=False
   note        a symmetric key proves the envelope was not altered, not who made it — anyone holding the key could have, so this is not attestation
 ```
 
+**A malformed envelope is refused, never a traceback.** An envelope arrives from somewhere
+else, so it is untrusted input: a file that is not JSON, an object with none of the DSSE
+fields, a payload that is not base64, and a payload that is valid base64 over bytes that are
+not JSON all come back as a refusal with the reason. The last of those used to produce the
+right report — "the envelope payload is not readable JSON" — and then raise on the way to
+printing it, because both renderings re-parse the payload to read the attested toolchain.
+
 **The toolchain is read out of the envelope, not out of the machine.** The requirement's
 own scenario says an engineer running this "confirms the signature, that artifact digests
 match, and reports the toolchain versions attested" — and a verifier on a different machine

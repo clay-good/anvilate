@@ -464,6 +464,16 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
             return EXIT_BAD_REQUEST
 
     report = verify_attestation(attestation, artifacts=artifacts or None, signer=signer)
+    # Both renderings read the carried statement for the toolchain, and `statement()` parses
+    # the payload — which `verify_attestation` has just *reported* as unreadable when it is.
+    # An envelope whose payload is valid base64 over non-JSON therefore produced the right
+    # report and then a JSONDecodeError on the way to printing it. An envelope arriving from
+    # somewhere else is untrusted input; a traceback is the one answer this command must not
+    # give to it.
+    try:
+        statement = attestation.statement()
+    except (ValueError, UnicodeDecodeError):
+        statement = {}
     if args.format == "json":
         # `status`, `attested` and the attested toolchain are computed rather than stored,
         # so `model_dump` left all three out and the payload carried only the fields behind
@@ -477,11 +487,11 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
             **report.model_dump(mode="json"),
             "status": report.status.value,
             "attested": report.attested,
-            **_attested_toolchain(attestation.statement()),
+            **_attested_toolchain(statement),
         }
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
-        print(_render_verification(report, attestation.statement()), file=out)
+        print(_render_verification(report, statement), file=out)
     for problem in report.problems:
         print(f"anvilate verify: {problem}", file=err)
     return EXIT_CODES[report.status]
