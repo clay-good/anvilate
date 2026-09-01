@@ -433,3 +433,15 @@ def test_evidence_refuses_a_blank_identifier(field, expected):
     }
     with pytest.raises(ValidationError, match=expected):
         CombinationEvidence(**{**kwargs, field: "  "})
+
+
+def test_a_combination_that_factors_nothing_is_refused():
+    """It sums to zero, so it can never govern in either direction: an empty combination
+    sits in the set looking like a case that was checked, and is the one case that was not.
+
+    The envelope is a `max` for a demand check and a `min` for a counteracting one, and a
+    zero demand loses both — so nothing downstream ever reports it. The set is the only
+    place it can be caught.
+    """
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        LoadCombination(name="0.9D + 1.0E", factors={}, citation="ASCE 7-22 §2.3.6")

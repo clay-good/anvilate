@@ -84,6 +84,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### 1.2.0: a derivation with nothing substituted into it
+
+`Derivation.inputs` now requires at least one entry, so the scorecard schema states
+`minItems: 1` on it. A derivation carrying no inputs renders as its own formula with nothing
+substituted — the reconstruction the type exists to replace, dressed as a worked
+calculation. No card this library has ever written carried one, which is why this tightens
+what Anvilate writes without changing what a reader must accept.
+
 ### 1.1.0: the contract said "with the rolled-up status" and did not carry one
 
 The scorecard schema described `entries` and nothing else, because `Scorecard.status` was a

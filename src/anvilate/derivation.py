@@ -22,7 +22,7 @@ derivation renders character-identically on every rebuild.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ._models import Provenance
 from .units import Quantity, UnitSystem, render
@@ -106,7 +106,10 @@ class Derivation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     symbolic: str
-    inputs: tuple[SymbolValue, ...]
+    # At least one. A derivation with no inputs renders as its own formula with
+    # nothing substituted into it — which is the reconstruction this type exists to
+    # replace, dressed as a worked calculation.
+    inputs: tuple[SymbolValue, ...] = Field(min_length=1)
     result: SymbolValue
     citation: Provenance
 

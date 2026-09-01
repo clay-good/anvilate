@@ -1183,3 +1183,21 @@ def test_the_calculation_report_page_states_the_precision_the_record_actually_ke
     recorded = json.dumps(report.to_record())
     assert held in recorded, "the record is meant to carry the value at full precision"
     assert f'"{displayed}"' not in recorded
+
+
+def test_a_derivation_with_no_inputs_is_refused():
+    """A derivation is the formula *with its values in it*.
+
+    With no inputs, `substituted()` returns the symbolic form unchanged — the
+    reconstruction this type exists to replace, rendered under the heading of a worked
+    calculation. Nothing this library writes ever built one, which is what let it stand.
+    """
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        Derivation(
+            symbolic="σ = M / S",
+            inputs=(),
+            result=SymbolValue(
+                symbol="σ", description="bending stress", value=Quantity.parse("120 MPa")
+            ),
+            citation="AISC 360-22 §F2",
+        )

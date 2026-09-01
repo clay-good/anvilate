@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ._models import Provenance, RevalidatedModel, cited
 from .scorecard import CheckStatus, ScorecardEntry
@@ -75,7 +75,10 @@ class LoadCombination(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    factors: Mapping[LoadNature, float]
+    # At least one. A combination that factors nothing sums to zero, so it can never
+    # govern in either direction: it sits in the set looking like a case that was
+    # checked, and is the one case that was not.
+    factors: Mapping[LoadNature, float] = Field(min_length=1)
     citation: Provenance
 
     def evaluate(self, loads: Mapping[LoadNature, float]) -> float:
