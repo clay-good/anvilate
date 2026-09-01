@@ -838,6 +838,7 @@ def test_a_unit_spelling_is_parsed_once_and_the_answers_do_not_move():
     assert _unit_object("mm") is _unit_object("mm")
 
     length = Quantity.parse("35 mm")
+    assert _unit_object("mm ** 2") is _unit_object("mm ** 2")
     assert length.to("in").magnitude == pytest.approx(1.3779527559055118)
     assert length.to("m").magnitude == pytest.approx(0.035)
     assert length.has_dimension("[length]") and not length.has_dimension("[pressure]")
@@ -846,3 +847,8 @@ def test_a_unit_spelling_is_parsed_once_and_the_answers_do_not_move():
     for _ in range(3):
         with pytest.raises(ValueError, match="unknown unit"):
             Quantity(magnitude=1.0, unit="not_a_unit")
+
+    # The conversion target is memoised too, and the two cases that would break first are an
+    # offset unit and a compound spelling.
+    assert Quantity(magnitude=20.0, unit="degC").to("K").magnitude == pytest.approx(293.15)
+    assert Quantity.parse("1 m**2").to("mm ** 2").magnitude == pytest.approx(1e6)

@@ -241,7 +241,9 @@ class Quantity(RevalidatedModel):
 
     def to(self, unit: str) -> Quantity:
         """Return this quantity converted to ``unit`` (preserving as a Quantity)."""
-        converted = self.pint.to(unit)
+        # The target spelling is memoised for the same reason the source one is: `.to("MPa")`
+        # inside a screen ran pint's unit parser on every call.
+        converted = self.pint.to(_unit_object(unit))
         return Quantity(magnitude=converted.magnitude, unit=f"{converted.units:~}")
 
     def has_dimension(self, expected: str) -> bool:
