@@ -1,6 +1,6 @@
 # Spec IR
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Element declaration
 
