@@ -156,6 +156,16 @@ carries a `NOT_EVALUATED` entry naming what was declared and the tier that would
 screened it. The tier is still not forced: the acceptance criteria remain the contract, and
 the answer to something nobody screened is "not evaluated", never a pass.
 
+**A declared combination basis is now resolved rather than noted.** `combination_basis`
+had a complete implementation behind it — `DesignSpec.combination_set` resolves the ASCE 7-22
+generator and `DesignSpec.combination_evidence` picks the governing combination by the same
+rule `combination_scorecard` screens with — reachable only from a caller who already knew to
+call it. A document declaring `asce7_lrfd` screened as though it had said nothing. The card
+now names the combination that governs, its factored demand and its clause; a case that
+carries a force and no nature makes it `NOT_EVALUATED`, because the demand was then summed
+from part of the declared loads; and a seismic basis with no `seismic_design_acceleration`
+lands on the card rather than raising out of the screen.
+
 **The same goes for a bound the document sets.** `constraints` is the plainest declaration a
 spec makes — it is the requirement, written down by the person the card is for — and three of
 its four fields were read by nothing. A spec stating `max_mass: 150 g` screened to PASS with

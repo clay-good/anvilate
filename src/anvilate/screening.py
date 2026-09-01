@@ -436,6 +436,41 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     return entries
 
 
+def _combination_entry(spec: DesignSpec) -> ScorecardEntry | None:
+    """The combination the declared basis makes govern, or why none can be named.
+
+    ``None`` when the spec declares no ``combination_basis`` — there is nothing to resolve.
+
+    The machinery for this was complete and joined to nothing: `DesignSpec.combination_set`
+    resolves the basis, `DesignSpec.combination_evidence` selects the governing combination
+    with the same rule `combination_scorecard` screens by, and both were reachable only from
+    a caller who already knew to call them. A document declaring `asce7_lrfd` screened as
+    though it had said nothing.
+
+    A seismic basis needs S_DS and refuses without it. That refusal is a fact about the
+    document, so it lands on the card rather than out of the call: a spec that asks for the
+    seismic set and does not say what to factor it against is not a spec that screened.
+    """
+    if spec.combination_basis is None:
+        return None
+    try:
+        evidence = spec.combination_evidence()
+    except ValueError as refused:
+        return ScorecardEntry(
+            name="load combination",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"the {spec.combination_basis} basis could not be resolved — {refused}",
+        )
+    if evidence is None:  # pragma: no cover - a declared basis always resolves to a set
+        return None
+    return ScorecardEntry(
+        name="load combination",
+        status=evidence.status,
+        detail=evidence.detail(),
+        reference=evidence.citation if evidence.status is CheckStatus.PASS else None,
+    )
+
+
 def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
     """Whether every force-carrying load case declares the nature a combination needs.
 
@@ -629,4 +664,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     load = _load_entry(spec)
     if load is not None:
         entries.append(load)
+    combination = _combination_entry(spec)
+    if combination is not None:
+        entries.append(combination)
     return Scorecard(entries=tuple(entries))

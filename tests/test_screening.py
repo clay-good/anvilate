@@ -937,3 +937,72 @@ def test_every_constraint_is_either_screened_or_named_as_unscreened():
     assert not stale, f"the unscreened table names fields Constraints does not have: {stale}"
     for field, reason in _UNSCREENED_CONSTRAINTS.items():
         assert reason.strip(), f"{field} is listed as unscreened with no reason"
+
+
+def _classified_cases():
+    from anvilate.loads import LoadNature
+
+    return [
+        LoadCase(
+            name="self weight",
+            kind=LoadKind.STATIC,
+            applied_to="top",
+            force=_q("10 kN"),
+            nature=LoadNature.DEAD,
+        ),
+        LoadCase(
+            name="hook load",
+            kind=LoadKind.STATIC,
+            applied_to="top",
+            force=_q("60 kN"),
+            nature=LoadNature.LIVE,
+        ),
+    ]
+
+
+def test_a_declared_combination_basis_names_its_governing_combination():
+    """The machinery was complete and joined to nothing.
+
+    `DesignSpec.combination_set` resolves the basis and `DesignSpec.combination_evidence`
+    selects the governing combination by the same rule `combination_scorecard` screens with —
+    and both were reachable only from a caller who already knew to call them, so a document
+    declaring `asce7_lrfd` screened as though it had said nothing.
+    """
+    card = screen_spec(_lug_spec(load_cases=_classified_cases(), combination_basis="asce7_lrfd"))
+    entry = next(e for e in card.entries if e.name == "load combination")
+    assert entry.status is CheckStatus.PASS
+    assert "governs under ASCE 7-22 LRFD" in entry.detail
+    assert entry.reference == "ASCE 7-22 §2.3.1"
+    # The demand is the factored one, not a load read off a case: 1.2 x 10 + 1.6 x 60 kN.
+    assert "108000 N" in entry.detail
+
+
+def test_a_seismic_basis_with_no_acceleration_lands_on_the_card_rather_than_raising():
+    """A spec that asks for the seismic set and does not say what to factor it against is a
+    fact about the document, so it is a NOT_EVALUATED entry — not an exception out of
+    `screen_spec`, which would take the rest of the card with it."""
+    card = screen_spec(
+        _lug_spec(load_cases=_classified_cases(), combination_basis="asce7_lrfd_seismic")
+    )
+    entry = next(e for e in card.entries if e.name == "load combination")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "seismic_design_acceleration" in entry.detail
+    assert any(e.name.startswith("padeye") for e in card.entries), "the rest of the card ran"
+
+
+def test_an_unclassified_case_makes_the_combination_not_evaluated():
+    """The demand was summed from part of the declared loads, so the combination that
+    'governs' governs over a subset — which is the one way this entry could mislead."""
+    unclassified = LoadCase(
+        name="hook", kind=LoadKind.STATIC, applied_to="top", force=_q("60 kN"), nature=None
+    )
+    card = screen_spec(_lug_spec(load_cases=[unclassified], combination_basis="asce7_lrfd"))
+    entry = next(e for e in card.entries if e.name == "load combination")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "summed from part of the declared loads" in entry.detail
+    assert entry.reference is None, "a demand summed from part of the loads cites no clause"
+
+
+def test_a_spec_with_no_combination_basis_gets_no_combination_entry():
+    card = screen_spec(_lug_spec(load_cases=_classified_cases()))
+    assert "load combination" not in [e.name for e in card.entries]
