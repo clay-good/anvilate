@@ -1182,3 +1182,67 @@ def test_a_card_with_nothing_to_govern_says_so(spec_file, monkeypatch):
     assert code == EXIT_OK
     assert "governing:     none" in out
     assert "nothing blocks" in out
+
+
+def test_every_command_line_the_docs_print_is_one_this_cli_accepts():
+    """A shell block is the part of a docs page a reader runs first.
+
+    Nothing held them against the parser, so a renamed command or a dropped flag would ship
+    as instructions — and the pages carry twelve invocations across four commands, which is
+    the kind of surface that drifts a flag at a time. Held by parsing the parser rather than
+    by a list here: a flag added to `check` needs no edit, and one removed fails on the page
+    that still tells a reader to pass it.
+
+    Only ```bash blocks are read. A ```text block prints Anvilate's *output*, which quotes
+    command lines back — including the refusals, whose whole point is that they name a flag
+    combination the parser accepted and the library then declined.
+    """
+    import argparse
+    import re
+    from pathlib import Path
+
+    from anvilate.cli import _build_parser
+
+    parser = _build_parser()
+    commands = next(
+        dict(action.choices)
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    flags = {
+        name: {option for a in sub._actions for option in a.option_strings}
+        for name, sub in commands.items()
+    }
+
+    repo = Path(__file__).resolve().parent.parent
+    pages = [repo / "README.md", *sorted((repo / "docs").rglob("*.md"))]
+    invocations = []
+    for page in pages:
+        for block in re.findall(r"^```bash\n(.*?)^```", page.read_text(), re.M | re.S):
+            for line in block.splitlines():
+                line = line.split("#", 1)[0].strip()
+                match = re.match(r"anvilate\s+(\S+)((?:\s+\S+)*)", line)
+                if match:
+                    invocations.append((page.name, match.group(1), match.group(2).split()))
+
+    assert len(invocations) >= 8, f"only {len(invocations)} documented command lines found"
+    problems = []
+    for page, command, rest in invocations:
+        if command.startswith("-"):
+            if command not in {option for a in parser._actions for option in a.option_strings}:
+                problems.append(f"{page}: `anvilate {command}` is not an option of anvilate")
+            continue
+        if command not in commands:
+            problems.append(
+                f"{page}: `anvilate {command}` is not a command; have {sorted(commands)}"
+            )
+            continue
+        for token in rest:
+            if token.startswith("--") and token not in flags[command]:
+                problems.append(
+                    f"{page}: `anvilate {command} {token}` — {command} takes "
+                    f"{sorted(f for f in flags[command] if f.startswith('--'))}"
+                )
+    assert not problems, "documented command lines the CLI would refuse:\n  " + "\n  ".join(
+        problems
+    )
