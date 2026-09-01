@@ -414,13 +414,22 @@ def test_evidence_refuses_a_non_finite_demand():
         )
 
 
-@pytest.mark.parametrize("field", ["basis", "governing", "citation"])
-def test_evidence_refuses_a_blank_identifier(field):
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("basis", "must state its basis"),
+        ("governing", "must state its governing"),
+        # The citation is a provenance field: refused by the shared rule with its own
+        # sentence, not by this model's loop. See anvilate._models.cited.
+        ("citation", "the clause the governing combination comes from"),
+    ],
+)
+def test_evidence_refuses_a_blank_identifier(field, expected):
     kwargs = {
         "basis": "ASCE 7-22 LRFD (strength)",
         "governing": "LRFD 1",
         "citation": "ASCE 7-22 §2.3.1",
         "demand_newtons": 14_000.0,
     }
-    with pytest.raises(ValidationError, match=f"must state its {field}"):
+    with pytest.raises(ValidationError, match=expected):
         CombinationEvidence(**{**kwargs, field: "  "})

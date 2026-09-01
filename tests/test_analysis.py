@@ -39823,7 +39823,7 @@ def test_alloy_properties_will_not_accept_a_set_with_no_provenance():
         return AlloyProperties(**kwargs)
 
     build()  # the baseline is valid
-    with pytest.raises(ValueError, match="source must record"):
+    with pytest.raises(ValueError, match="the mill certificate, the ADM table read"):
         build(source="   ")
     with pytest.raises(ValueError, match="must be positive"):
         build(compressive_yield=_q("0 ksi"))
@@ -41766,7 +41766,7 @@ def test_a_carbon_factor_refuses_to_ship_without_provenance_or_a_band():
     from anvilate.analysis import ModuleScope
 
     _carbon_factor()  # the baseline is valid
-    with pytest.raises(ValueError, match="source must record"):
+    with pytest.raises(ValueError, match="the dataset and its identifier, the EPD"):
         _carbon_factor(source="   ")
     with pytest.raises(ValueError, match="must be a positive, finite"):
         _carbon_factor(value=0.0)

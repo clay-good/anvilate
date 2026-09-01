@@ -41,9 +41,20 @@ def _value(**kwargs) -> TimberDesignValue:
     return TimberDesignValue(**{**defaults, **kwargs})
 
 
-@pytest.mark.parametrize("field", ["standard", "edition", "table", "species", "grade"])
-def test_a_design_value_cannot_be_a_bare_number(field):
-    with pytest.raises(ValidationError, match=f"must state its {field}"):
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        # `standard` and `edition` are provenance fields, refused by the shared rule with
+        # their own sentence; the other three by this model's own loop.
+        ("standard", "the standard this design value comes from"),
+        ("edition", "the edition this design value comes from"),
+        ("table", "must state its table"),
+        ("species", "must state its species"),
+        ("grade", "must state its grade"),
+    ],
+)
+def test_a_design_value_cannot_be_a_bare_number(field, expected):
+    with pytest.raises(ValidationError, match=expected):
         _value(**{field: "  "})
 
 

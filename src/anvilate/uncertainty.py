@@ -27,7 +27,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import Provenance, RevalidatedModel
 
 __all__ = [
     "Normal",
@@ -168,7 +168,7 @@ class MarginUncertainty(BaseModel):
     upper: float
     coverage: float
     sensitivities: tuple[Sensitivity, ...]
-    citation: str = MONTE_CARLO_CITATION
+    citation: Provenance = MONTE_CARLO_CITATION
 
     def is_fragile(self, threshold: float = 0.05) -> bool:
         """Whether the shortfall probability exceeds ``threshold`` (default 5%).

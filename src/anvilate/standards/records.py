@@ -14,7 +14,7 @@ from enum import StrEnum
 
 from pydantic import AfterValidator, ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import Provenance, RevalidatedModel
 from ..units import DimensionError, Quantity
 
 __all__ = [
@@ -79,9 +79,9 @@ class PropertyCitation(_Base):
     demands a minimum rather than passing as though somebody had.
     """
 
-    source: str
+    source: Provenance
     condition: str  # temper and/or test condition, e.g. "T6 temper, room temperature"
-    license: str
+    license: Provenance
     retrieved: str  # ISO date the value was recorded
     estimated: bool = False
     method: str | None = None

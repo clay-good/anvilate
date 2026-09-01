@@ -37,7 +37,7 @@ from math import isfinite, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, cited
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -273,7 +273,10 @@ class AlloyProperties(RevalidatedModel):
     tensile_ultimate: Quantity  # F_tu
     elastic_modulus: Quantity  # E
     temper_group: TemperGroup
-    source: str
+    source: cited(
+        "where these properties came from — the mill certificate, the ADM table read, or "
+        "the project specification"
+    )
     tension_coefficient: float = 1.0  # k_t, ADM Table A.3.3
     weld_affected: AlloyProperties | None = None
 
@@ -292,11 +295,6 @@ class AlloyProperties(RevalidatedModel):
         if self.tension_coefficient < 1.0:
             raise ValueError(
                 f"tension_coefficient k_t must be at least 1.0; got {self.tension_coefficient}"
-            )
-        if not self.source.strip():
-            raise ValueError(
-                "source must record where these properties came from — the mill "
-                "certificate, the ADM table read, or the project specification"
             )
         if self.weld_affected is not None and self.weld_affected.weld_affected is not None:
             raise ValueError(

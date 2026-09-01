@@ -38,7 +38,7 @@ from math import isfinite
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, cited
 from ..units import Quantity
 
 __all__ = [
@@ -119,8 +119,14 @@ class TimberDesignValue(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: str
-    edition: str
+    standard: cited(
+        "the standard this design value comes from; the number alone does not say which "
+        "piece of wood it describes"
+    )
+    edition: cited(
+        "the edition this design value comes from; the number alone does not say which "
+        "piece of wood it describes"
+    )
     table: str
     species: str
     grade: str
@@ -131,8 +137,6 @@ class TimberDesignValue(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> TimberDesignValue:
         for field, text in (
-            ("standard", self.standard),
-            ("edition", self.edition),
             ("table", self.table),
             ("species", self.species),
             ("grade", self.grade),

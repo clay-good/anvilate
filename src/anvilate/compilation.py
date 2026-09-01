@@ -44,7 +44,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from ._models import FrozenMap, RevalidatedModel, rebuilt_quantities
+from ._models import FrozenMap, Provenance, RevalidatedModel, rebuilt_quantities
 from .units import Quantity, UnitError
 
 __all__ = [
@@ -361,7 +361,7 @@ class CompilationReport(RevalidatedModel):
 
     outcomes: tuple[CompilationOutcome, ...]
     configuration: str  # how this run was decoded: which pass structure, which backend
-    citation: str = CONSTRAINT_TAX_CITATION
+    citation: Provenance = CONSTRAINT_TAX_CITATION
 
     @model_validator(mode="after")
     def _measures_something(self) -> CompilationReport:

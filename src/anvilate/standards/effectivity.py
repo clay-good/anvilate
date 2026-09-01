@@ -39,7 +39,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .._models import EMPTY_MAP, FrozenMap, RevalidatedModel
+from .._models import EMPTY_MAP, FrozenMap, Provenance, RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -173,8 +173,8 @@ class Citation(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: str
-    edition: str
+    standard: Provenance
+    edition: Provenance
     clause: str = ""
     # How the source joined the designation to the edition, kept because it cannot be
     # derived. All three conventions are in daily use — `AISC 360-16`, `Aluminum Design
@@ -251,7 +251,7 @@ class MixedEditionWaiver(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: str
+    standard: Provenance
     editions: tuple[str, ...]
     accepted_by: str
     rationale: str

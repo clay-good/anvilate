@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
 
-from .._models import FrozenMap, RevalidatedModel, rebuilt_quantities
+from .._models import FrozenMap, Provenance, RevalidatedModel, rebuilt_quantities
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -82,7 +82,7 @@ class _Base(RevalidatedModel):
 class MaterialRef(_Base):
     """A database identifier for a material (e.g. ``AA-6061-T6``)."""
 
-    ref: str
+    ref: Provenance
 
 
 class ManufacturingProcess(StrEnum):
@@ -137,7 +137,7 @@ class StandardComponentInterface(_Base):
     """An interface to a standard component, referenced by database ID."""
 
     type: Literal["standard_component"] = "standard_component"
-    ref: str  # e.g. "NEMA23", resolved from the standards DB at build time
+    ref: Provenance  # e.g. "NEMA23", resolved from the standards DB at build time
     tag: str  # semantic tag for the resulting feature, e.g. "motor_pilot_bore"
 
 

@@ -16,6 +16,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from .._models import Provenance
 from ..units import Quantity
 from .general import ToleranceRangeError
 
@@ -38,7 +39,7 @@ class StandardTolerance(BaseModel):
     grade: int  # the IT grade number, e.g. 7 for IT7
     width: Quantity  # the standard tolerance (total width of the zone), a length
     size_range: str  # the ISO 286-1 range applied, e.g. "over 18 up to 30 mm"
-    source: str
+    source: Provenance
 
     @property
     def designation(self) -> str:
@@ -251,7 +252,7 @@ class LimitDeviations(BaseModel):
     upper: Quantity  # ES (hole) / es (shaft), signed, a length
     lower: Quantity  # EI (hole) / ei (shaft), signed, a length
     size_range: str
-    source: str
+    source: Provenance
 
     @property
     def width(self) -> Quantity:
@@ -413,7 +414,7 @@ class Fit(BaseModel):
     min_clearance: Quantity  # signed; negative => interference
     max_clearance: Quantity  # signed
     kind: Literal["clearance", "transition", "interference"]
-    source: str
+    source: Provenance
 
     def satisfies_clearance(self, min_required: Quantity, max_required: Quantity) -> bool:
         """Whether the fit's whole clearance range falls within a required band.

@@ -37,7 +37,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import RevalidatedModel
+from ._models import Provenance, RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
 
@@ -113,7 +113,7 @@ class VerificationArchetype(BaseModel):
     key: str
     method: VerificationMethod
     title: str
-    citation: str
+    citation: Provenance
     required_parameters: tuple[str, ...] = ()
     practice_default: bool = False
 

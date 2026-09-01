@@ -24,7 +24,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import RevalidatedModel
+from ._models import Provenance, RevalidatedModel, cited
 from .scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -76,7 +76,7 @@ class LoadCombination(BaseModel):
 
     name: str
     factors: Mapping[LoadNature, float]
-    citation: str
+    citation: Provenance
 
     def evaluate(self, loads: Mapping[LoadNature, float]) -> float:
         """The combined demand: ``Σ factor · load`` over this combination's natures.
@@ -393,7 +393,7 @@ class CombinationEvidence(RevalidatedModel):
 
     basis: str
     governing: str
-    citation: str
+    citation: cited("the clause the governing combination comes from")
     demand_newtons: float
     # Load cases carrying a force with no declared nature. Any at all and the evidence is
     # NOT_EVALUATED: the demand was summed from part of the declared loads.
@@ -404,7 +404,6 @@ class CombinationEvidence(RevalidatedModel):
         for field, value in (
             ("basis", self.basis),
             ("governing", self.governing),
-            ("citation", self.citation),
         ):
             if not value.strip():
                 raise ValueError(f"combination evidence must state its {field}")

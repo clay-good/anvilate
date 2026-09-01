@@ -21,7 +21,7 @@ from math import cos, log10, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import Provenance, RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
@@ -1621,7 +1621,7 @@ class AllowableStress(RevalidatedModel):
     value: Quantity
     temperature: Quantity
     material: str
-    source: str
+    source: Provenance
 
     @model_validator(mode="after")
     def _well_formed(self) -> AllowableStress:

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from ._models import Provenance
 from .units import Quantity, UnitSystem, render
 
 __all__ = [
@@ -107,7 +108,7 @@ class Derivation(BaseModel):
     symbolic: str
     inputs: tuple[SymbolValue, ...]
     result: SymbolValue
-    citation: str
+    citation: Provenance
 
     def substituted(self, *, system: UnitSystem | None = None) -> str:
         """The symbolic formula with every input symbol replaced by its value.

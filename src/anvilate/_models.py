@@ -26,7 +26,50 @@ from typing import Annotated, Any, Self, TypeVar
 
 from pydantic import AfterValidator, BaseModel, PlainSerializer
 
-__all__ = ["EMPTY_MAP", "FrozenMap", "RevalidatedModel", "rebuilt_quantities"]
+__all__ = [
+    "EMPTY_MAP",
+    "FrozenMap",
+    "Provenance",
+    "RevalidatedModel",
+    "cited",
+    "rebuilt_quantities",
+]
+
+
+def cited(states: str) -> Any:
+    """A provenance field that refuses to be present and blank, with its own sentence.
+
+    A citation, source, licence or reference identifier is what this library exists to
+    carry. A *missing* one is a modelled state -- `cited(...) | None`, or a default of `""`
+    where the absence has its own meaning -- but a field that is present and blank is
+    neither: it reads as filled in every rendering and serialises as a citation nobody can
+    follow. `Citation(standard="", edition="", clause="")` rendered as `"-"`.
+
+    Seven models had this check written into their own after-validators, each with a
+    sentence worth keeping ("the mill certificate, the ADM table read, or the project
+    specification"), and thirty-two comparable fields had nothing. So the rule is one
+    mechanism and the sentence stays per field: ``states`` completes "this field must
+    state ...".
+
+    The census that holds every provenance field to this is in tests/test_contract.py; it
+    finds them by the marker below rather than by the annotation, since a field declared
+    ``cited(...) | None`` reports a plain ``str``.
+    """
+
+    def refuse_a_blank(value: str) -> str:
+        if not value.strip():
+            raise ValueError(f"this field must state {states}")
+        return value
+
+    refuse_a_blank.__anvilate_provenance__ = True  # type: ignore[attr-defined]
+    return Annotated[str, AfterValidator(refuse_a_blank)]
+
+
+# The default spelling, for a field with nothing more specific to say than the rule itself.
+Provenance = cited(
+    "where it came from — the standard, table, certificate or record this value was read "
+    "from; a blank citation is one the document carries and no reader can follow"
+)
 
 
 def rebuilt_quantities(value: Any) -> Any:

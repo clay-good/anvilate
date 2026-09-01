@@ -58,7 +58,7 @@ from math import isclose
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import RevalidatedModel, cited
 from .units import Quantity, UnitError, render
 
 __all__ = [
@@ -225,7 +225,10 @@ class CertificateProvenance(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    identifier: str  # the certificate's unique identifier
+    identifier: cited(
+        "the certificate's unique identifier; without it the measured value is traceable "
+        "to nothing in particular"
+    )
     laboratory: str  # the issuing calibration laboratory
     signature_status: SignatureStatus
     claims_electronic_seal: bool = False
@@ -236,11 +239,6 @@ class CertificateProvenance(RevalidatedModel):
 
     @model_validator(mode="after")
     def _identified(self) -> CertificateProvenance:
-        if not self.identifier.strip():
-            raise ValueError(
-                "a calibration certificate must carry its unique identifier; without it "
-                "the measured value is traceable to nothing in particular"
-            )
         if not self.laboratory.strip():
             raise ValueError("a calibration certificate must name the laboratory that issued it")
         return self

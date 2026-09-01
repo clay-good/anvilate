@@ -324,11 +324,21 @@ def _category(**kwargs) -> WeldDetailCategory:
     return WeldDetailCategory(**{**defaults, **kwargs})
 
 
-@pytest.mark.parametrize("field", ["standard", "edition", "table", "description"])
-def test_a_detail_category_cannot_be_a_bare_number(field):
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        # `standard` and `edition` are provenance fields, refused by the shared rule with
+        # their own sentence; the other two by this model's own loop.
+        ("standard", "the standard the detail category is read from"),
+        ("edition", "the edition the detail category is read from"),
+        ("table", "must state its table"),
+        ("description", "must state its description"),
+    ],
+)
+def test_a_detail_category_cannot_be_a_bare_number(field, expected):
     """The number is a curve label. Which standard drew the curve, and on what geometry,
     is what decides whether it applies to this weld."""
-    with pytest.raises(ValidationError, match=f"must state its {field}"):
+    with pytest.raises(ValidationError, match=expected):
         _category(**{field: "  "})
 
 

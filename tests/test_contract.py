@@ -2257,3 +2257,136 @@ def test_the_repository_root_holds_only_files_that_belong_there():
         f"belong there: {sorted(root_files - allowed)}. If one is example output, add it to "
         ".gitignore and `git rm --cached` it; if it belongs, add it to the list above"
     )
+
+
+# Field names that carry provenance: a citation, the source a number was read from, the
+# licence it ships under, the identifier a record is looked up by. Two of them are exempt,
+# and both default to `""` because for those a blank *is* the modelled absence.
+_PROVENANCE_FIELDS = frozenset(
+    {
+        "citation",
+        "source",
+        "reference",
+        "ref",
+        "attribution",
+        "license",
+        "provenance",
+        "standard",
+        "edition",
+        "identifier",
+        "clause",
+        "origin_detail",
+        "spdx",
+    }
+)
+_BLANK_MEANS_ABSENT = {
+    ("Citation", "clause"): "a standard cited without a clause; the renderer drops it",
+    ("ReviewItem", "origin_detail"): "no detail recorded about where the decision came from",
+}
+
+
+def _provenance_fields():
+    """Every provenance-named string field on a model in the package, with its guard."""
+    import importlib
+    import inspect
+    import pkgutil
+    import types
+    import typing
+
+    from pydantic import BaseModel
+
+    import anvilate
+
+    def is_string(annotation) -> bool:
+        if annotation is str:
+            return True
+        if typing.get_origin(annotation) in (types.UnionType, typing.Union):
+            return set(typing.get_args(annotation)) == {str, type(None)}
+        return False
+
+    found, seen = [], set()
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - an optional dependency, not a model
+            continue
+        for _, model in inspect.getmembers(module, inspect.isclass):
+            if not issubclass(model, BaseModel) or model is BaseModel or model in seen:
+                continue
+            seen.add(model)
+            for name, field in model.model_fields.items():
+                if name not in _PROVENANCE_FIELDS or not is_string(field.annotation):
+                    continue
+                guarded = any(
+                    getattr(getattr(meta, "func", None), "__anvilate_provenance__", False)
+                    for meta in field.metadata
+                )
+                found.append((model, name, field, guarded))
+    return found
+
+
+def test_every_provenance_field_refuses_to_be_present_and_blank():
+    """A citation that is the empty string is worse than a missing one.
+
+    It reads as filled in every rendering and serialises as a citation nobody can follow:
+    `Citation(standard="", edition="", clause="")` rendered as `"-"`, and a
+    `LoadCombination(name="", factors={}, citation="")` printed as `": "`.
+
+    Seven models already refused it — each with its own after-validator and its own sentence
+    worth keeping — and thirty-two comparable fields had nothing at all, which is what a rule
+    implemented seven times looks like from the outside. It is one rule now
+    (`anvilate._models.cited`), the sentence stays per field, and this is the census that
+    keeps a thirty-third from landing unguarded.
+
+    A field whose absence is meaningful states that in its type — `cited(...) | None` — or
+    is exempt below with the reason a blank is its own answer.
+    """
+    fields = _provenance_fields()
+    # Thirty-eight today. The floor is here so a broken census reports "nothing to
+    # check" as a failure rather than as a pass.
+    assert len(fields) >= 35, f"the census found only {len(fields)} provenance fields"
+
+    unguarded = sorted(
+        f"{model.__module__}.{model.__name__}.{name}"
+        for model, name, _field, guarded in fields
+        if not guarded and (model.__name__, name) not in _BLANK_MEANS_ABSENT
+    )
+    assert not unguarded, (
+        "these carry provenance and accept a blank string:\n  "
+        + "\n  ".join(unguarded)
+        + "\nDeclare them with anvilate._models.cited(...), or add them to "
+        "_BLANK_MEANS_ABSENT with the reason a blank is their answer."
+    )
+
+    for model, name, field, guarded in fields:
+        if (model.__name__, name) not in _BLANK_MEANS_ABSENT:
+            continue
+        assert not guarded, f"{model.__name__}.{name} is guarded; drop its exemption"
+        assert field.default == "", (
+            f"{model.__name__}.{name} is exempt as 'blank means absent' and does not "
+            f"default to blank; it defaults to {field.default!r}"
+        )
+    stale = sorted(
+        f"{cls}.{name}"
+        for cls, name in _BLANK_MEANS_ABSENT
+        if not any(model.__name__ == cls and field == name for model, field, _f, _g in fields)
+    )
+    assert not stale, f"exempted fields that no longer exist: {stale}"
+
+
+@pytest.mark.parametrize(
+    ("factory", "blank"),
+    [(lambda: __import__("anvilate.loads", fromlist=["x"]).LoadCombination, "  ")],
+)
+def test_the_provenance_guard_actually_refuses(factory, blank):
+    """The census above checks a marker; this checks that the marker means something.
+
+    A gate that asserts an annotation and never constructs anything is satisfied by a
+    decoration that does nothing.
+    """
+    import pydantic
+
+    model = factory()
+    with pytest.raises(pydantic.ValidationError, match="must state"):
+        model(name="LRFD 1", factors={"D": 1.4}, citation=blank)
+    assert model(name="LRFD 1", factors={"D": 1.4}, citation="ASCE 7-22 §2.3.1").citation

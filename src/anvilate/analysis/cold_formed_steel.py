@@ -22,7 +22,7 @@ from math import sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import Provenance, RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -187,7 +187,7 @@ class ElasticBuckling(RevalidatedModel):
 
     local: Quantity
     global_: Quantity
-    source: str
+    source: Provenance
     distortional: Quantity | None = None
 
     @model_validator(mode="after")

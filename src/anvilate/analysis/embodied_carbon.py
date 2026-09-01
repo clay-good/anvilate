@@ -38,7 +38,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, cited
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -100,7 +100,11 @@ class CarbonFactor(RevalidatedModel):
     material: str
     value: float  # kgCO2e per kg
     scope: ModuleScope
-    source: str
+    source: cited(
+        "where this factor came from — the dataset and its identifier, the EPD, or the "
+        "publication. A factor with no source cannot be checked, and an unbounded number "
+        "nobody can check is not a screen"
+    )
     band_low: float
     band_high: float
     dataset_id: str = ""
@@ -118,12 +122,6 @@ class CarbonFactor(RevalidatedModel):
         for bound, bound_name in ((self.band_low, "band_low"), (self.band_high, "band_high")):
             if not isfinite(bound):
                 raise ValueError(f"{bound_name} must be finite; got {bound}")
-        if not self.source.strip():
-            raise ValueError(
-                "source must record where this factor came from — the dataset and its "
-                "identifier, the EPD, or the publication. A factor with no source cannot "
-                "be checked, and an unbounded number nobody can check is not a screen."
-            )
         if not 0 < self.band_low <= 1.0 <= self.band_high:
             raise ValueError(
                 f"band_low must be in (0, 1] and band_high at least 1.0, as multipliers "

@@ -36,7 +36,7 @@ from math import isfinite
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import RevalidatedModel
+from .._models import Provenance, RevalidatedModel, cited
 from ..units import Quantity
 
 __all__ = [
@@ -110,7 +110,7 @@ class DatasetProvenance(RevalidatedModel):
 
     dataset: str
     version: str
-    license: str
+    license: Provenance
     retrieved: str  # ISO date the record was taken
     doi: str | None = None
     url: str | None = None
@@ -458,8 +458,13 @@ class WeldDetailCategory(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: str
-    edition: str
+    standard: cited(
+        "the standard the detail category is read from; a bare number is a curve "
+        "label, not a detail"
+    )
+    edition: cited(
+        "the edition the detail category is read from; a bare number is a curve label, not a detail"
+    )
     table: str
     description: str
     detail_category: Quantity
@@ -468,8 +473,6 @@ class WeldDetailCategory(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> WeldDetailCategory:
         for field, value in (
-            ("standard", self.standard),
-            ("edition", self.edition),
             ("table", self.table),
             ("description", self.description),
         ):

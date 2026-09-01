@@ -19,6 +19,7 @@ from math import isnan
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
+from ._models import Provenance
 from .derivation import Derivation
 from .uncertainty import MarginUncertainty
 from .units import decimals_distinguishing
@@ -87,7 +88,7 @@ class RepairHint(BaseModel):
     direction: Direction
     corrective_value: float | None = None
     unit: str | None = None
-    provenance: str | None = None
+    provenance: Provenance | None = None
 
     @classmethod
     def solved(
@@ -172,7 +173,7 @@ class ScorecardEntry(BaseModel):
     name: str
     status: CheckStatus
     detail: str
-    reference: str | None = None  # the code/standard clause behind the check, if any
+    reference: Provenance | None = None  # the code/standard clause behind the check, if any
     # The numbers behind the verdict, kept alongside the detail line so a report
     # can rank checks by how close they run to their limit rather than re-parsing
     # prose. Both are None for a check that did not come from a safety factor.

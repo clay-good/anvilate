@@ -18,7 +18,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
-from .._models import RevalidatedModel
+from .._models import Provenance, RevalidatedModel
 from ..units import Quantity, require_dimension
 from .iso286 import zone_limits
 
@@ -52,7 +52,7 @@ class ResolvedTolerance(BaseModel):
     upper: Quantity  # signed deviation, a length
     lower: Quantity  # signed deviation, a length
     label: str  # human designation, e.g. "±0.100 mm" or "H7"
-    source: str | None  # citation for a fit; None for a user-declared band
+    source: Provenance | None  # citation for a fit; None for a user-declared band
 
     @property
     def width(self) -> Quantity:

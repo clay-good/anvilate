@@ -14,6 +14,7 @@ from enum import StrEnum
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from .._models import Provenance
 from ..units import Quantity
 
 __all__ = [
@@ -83,7 +84,7 @@ class GeneralTolerance(BaseModel):
     tolerance_class: ToleranceClass
     deviation: Quantity  # the permissible ± deviation, a length
     size_range: str  # the ISO 2768-1 range applied, e.g. "over 30 up to 120 mm"
-    source: str
+    source: Provenance
 
     @property
     def min_size(self) -> Quantity:
@@ -218,7 +219,7 @@ class AngularTolerance(BaseModel):
     tolerance_class: ToleranceClass
     deviation: Quantity  # the permissible ± deviation, an angle (arcminutes)
     leg_range: str  # the shorter-leg length range applied
-    source: str
+    source: Provenance
 
     def __str__(self) -> str:
         # The shorter leg is *why* this deviation and not another one: ISO 2768-1 bands the

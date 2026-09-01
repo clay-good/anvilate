@@ -13,6 +13,7 @@ from __future__ import annotations
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from .._models import Provenance
 from ..units import Quantity
 from .general import ToleranceRangeError
 
@@ -33,7 +34,7 @@ class ProcessCapability(BaseModel):
 
     process: str
     finest_tolerance: Quantity  # finest achievable total tolerance band, a length
-    source: str
+    source: Provenance
     note: str
 
 
@@ -53,7 +54,7 @@ class AchievabilityCheck(BaseModel):
     demanded: Quantity
     finest: Quantity
     achievable: bool
-    source: str
+    source: Provenance
     note: str
 
     def __str__(self) -> str:

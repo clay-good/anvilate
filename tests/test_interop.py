@@ -183,9 +183,12 @@ def test_imported_section_axes_swapped_is_refused_because_both_numbers_look_plau
         _section(second_moment=_q("2.05e8 mm**2"))
     with pytest.raises(pydantic.ValidationError, match="must be positive"):
         _section(area=_q("0 mm**2"))
-    for blank in ("name", "source", "source_version", "method"):
+    for blank in ("name", "source_version", "method"):
         with pytest.raises(pydantic.ValidationError, match=f"need a {blank}"):
             _section(**{blank: " "})
+    # `source` is a provenance field, refused by the shared rule rather than by this model.
+    with pytest.raises(pydantic.ValidationError, match="the tool that computed these"):
+        _section(source=" ")
 
 
 def test_an_imported_section_never_guesses_a_shear_form_factor():
