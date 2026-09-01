@@ -448,3 +448,71 @@ def test_plate_cut_length_and_mass_account_for_rounded_corners():
     )
     expected_area = 100 * 80 - (4 - pi) * 10**2
     assert mass.to("kg").magnitude == pytest.approx(expected_area * 5 * 1e-9 * 7850, rel=1e-12)
+
+
+def test_a_plate_its_cut_outs_consume_is_refused_rather_than_weighed():
+    """The mass is density times *net* area, so a plate whose holes remove all of it has a
+    mass of zero or less — a number in kilograms that no plate has.
+
+    The refusal was never executed by anything. Pinned by its boundary: a cut-out pattern
+    just inside the limit still weighs something, and one just past it is refused.
+    """
+    from math import pi
+
+    from anvilate.export.dxf import plate_mass
+
+    plate = {
+        "width": _q("100 mm"),
+        "height": _q("100 mm"),
+        "thickness": _q("5 mm"),
+        "density": _q("7850 kg/m**3"),
+    }
+    # One hole whose area is just under, then just over, the 10 000 mm² plate.
+    under = 2.0 * (10000.0 * 0.999 / pi) ** 0.5
+    over = 2.0 * (10000.0 * 1.001 / pi) ** 0.5
+    assert (
+        plate_mass(**plate, holes=[Hole(diameter=_q(f"{under} mm"), x=_q("0 mm"), y=_q("0 mm"))])
+        .to("kg")
+        .magnitude
+        > 0
+    )
+    with pytest.raises(ValueError, match="net area is not positive"):
+        plate_mass(**plate, holes=[Hole(diameter=_q(f"{over} mm"), x=_q("0 mm"), y=_q("0 mm"))])
+    # And through the slots, which subtract a different shape and so are a separate path.
+    with pytest.raises(ValueError, match="net area is not positive"):
+        plate_mass(
+            **plate,
+            slots=[
+                Slot(
+                    length=_q("200 mm"),
+                    width=_q("99 mm"),
+                    x=_q("0 mm"),
+                    y=_q("0 mm"),
+                    angle=0.0,
+                )
+            ],
+        )
+
+
+def test_the_gdt_writer_handles_every_stroke_the_union_declares():
+    """`export/dxf.py` raises `TypeError: unknown stroke primitive` after its isinstance
+    chain, excused as unreachable because "the stroke union is closed".
+
+    The excuse is true and the fact it rests on is not held by anything: `Stroke` is a union
+    in `export/fcf.py`, and a fourth member added there would make the refusal reachable and
+    every frame carrying one silently undrawn. So the union's members are read from the
+    annotation and each one must be named in the writer's chain.
+    """
+    import inspect
+    import typing
+
+    from anvilate.export import dxf, fcf
+
+    members = typing.get_args(fcf.Stroke)
+    assert len(members) >= 3, f"the Stroke union has {len(members)} members"
+    source = inspect.getsource(dxf)
+    for member in members:
+        assert f"isinstance(stroke, {member.__name__})" in source, (
+            f"{member.__name__} is a Stroke and the DXF writer's chain does not name it, so "
+            "a frame carrying one raises 'unknown stroke primitive' at export"
+        )
