@@ -37,7 +37,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import Provenance, RevalidatedModel
+from ._models import Named, Provenance, RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
 
@@ -159,7 +159,7 @@ class VerificationItem(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     archetype: VerificationArchetype
     driving_checks: tuple[str, ...]
     acceptance: str

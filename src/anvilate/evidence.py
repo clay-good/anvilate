@@ -19,7 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from ._models import Provenance
+from ._models import Named, Provenance
 from .spec import DesignSpec, StandardComponentInterface
 from .standards import (
     BearingTable,
@@ -50,7 +50,7 @@ class SourceRecord(BaseModel):
 
     ref: Provenance  # the referenced database ID or dimension tag, e.g. "AA-6061-T6"
     kind: Literal["material", "component", "tolerance"]
-    name: str  # the record's name, or a fit designation for a tolerance
+    name: Named  # the record's name, or a fit designation for a tolerance
     sources: tuple[str, ...]
 
 

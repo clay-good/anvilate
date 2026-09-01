@@ -522,8 +522,20 @@ def test_two_checks_with_one_name_stay_two_characteristics():
 
 
 def test_an_unnamed_check_still_gets_a_key():
-    card = Scorecard(entries=(ScorecardEntry(name="   ", status=CheckStatus.PASS, detail="x"),))
-    assert "unnamed check" in _read_characteristics(_export(_sections(card)))
+    """`_unique_names` takes strings, not entries, so its blank-name placeholder is tested
+    where it lives.
+
+    It used to be exercised by building a `ScorecardEntry` with a blank name, which a
+    scorecard can no longer carry — the name is a `Named` field now. The placeholder stays
+    because this helper's contract is about strings a caller hands it, and a key that does
+    not exist is worse for the software joining on it than a placeholder that does."""
+    from anvilate.export.qif import _unique_names
+
+    assert _unique_names(["   ", "bending", "   "]) == [
+        "unnamed check",
+        "bending",
+        "unnamed check #2",
+    ]
 
 
 def test_a_failing_factor_is_not_rounded_up_onto_its_own_limit():

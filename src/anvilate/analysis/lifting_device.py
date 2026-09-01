@@ -39,6 +39,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from .._models import Named
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -365,7 +366,7 @@ class LifterMemberStress(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     stress: Quantity
     limit_state: BTH1LimitState
 
@@ -383,7 +384,7 @@ class LifterPinPlate(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     width: Quantity
     hole_diameter: Quantity
     thickness: Quantity
@@ -414,7 +415,7 @@ class LifterDevice(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     rated_load: Quantity
     self_weight: Quantity
     category: DesignCategory

@@ -8,6 +8,7 @@
 # growing the public surface is a deliberate act with a diff, not a side effect.
 _models.EMPTY_MAP
 _models.FrozenMap
+_models.Named
 _models.Provenance
 _models.RevalidatedModel
 _models.cited

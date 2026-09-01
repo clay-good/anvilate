@@ -30,6 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .._models import Named
 from ..units import Quantity
 from .explicit import ResolvedTolerance
 
@@ -74,7 +75,7 @@ class StackContributor(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     tolerance: ResolvedTolerance
     direction: Literal[1, -1] = 1
     distribution: Literal["normal", "uniform"] = "normal"
@@ -112,7 +113,7 @@ class Contribution(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     share: float
     half_width: Quantity  # the contributor's own equal-bilateral half-width
 

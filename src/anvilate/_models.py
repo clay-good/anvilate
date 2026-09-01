@@ -29,6 +29,7 @@ from pydantic import AfterValidator, BaseModel, PlainSerializer
 __all__ = [
     "EMPTY_MAP",
     "FrozenMap",
+    "Named",
     "Provenance",
     "RevalidatedModel",
     "cited",
@@ -64,6 +65,15 @@ def cited(states: str) -> Any:
     refuse_a_blank.__anvilate_provenance__ = True  # type: ignore[attr-defined]
     return Annotated[str, AfterValidator(refuse_a_blank)]
 
+
+# What a thing is called. A blank one is the same failure as a blank citation seen from the
+# other side: the field reads as filled, and every rendering downstream prints an entry, a
+# record or a check with nothing where its name goes. `[FAIL]    : safety factor 0.8` is a
+# scorecard line a reader cannot act on, and `governing()` names it as the check to look at.
+Named = cited(
+    "what it is called; a blank name renders as an unnamed check, record or element and "
+    "gives a reader nothing to follow"
+)
 
 # The default spelling, for a field with nothing more specific to say than the rule itself.
 Provenance = cited(

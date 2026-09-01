@@ -19,7 +19,7 @@ from math import isnan
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from ._models import Provenance
+from ._models import Named, Provenance
 from .derivation import Derivation
 from .uncertainty import MarginUncertainty
 from .units import decimals_distinguishing
@@ -170,7 +170,7 @@ class ScorecardEntry(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     status: CheckStatus
     detail: str
     reference: Provenance | None = None  # the code/standard clause behind the check, if any

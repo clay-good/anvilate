@@ -54,7 +54,7 @@ from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import RevalidatedModel
+from ._models import Named, RevalidatedModel
 from .attestation import (
     AIDisclosure,
     AnvilatePredicate,
@@ -127,7 +127,7 @@ class SectionStatus(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     status: CheckStatus
     detail: str
     informational: bool = False

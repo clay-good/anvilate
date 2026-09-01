@@ -20,6 +20,7 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from .._models import Named
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -59,7 +60,7 @@ class ExtrusionProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     designation: str
-    name: str
+    name: Named
     profile_width: Length
     slot_width: Length
 

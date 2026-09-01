@@ -2450,3 +2450,57 @@ def test_the_delta_gate_is_looking_at_real_deltas():
         if "archive" not in path.parts
     ]
     assert len(deltas) >= 5, f"only {len(deltas)} change deltas found; the glob has moved"
+
+
+def test_every_name_field_refuses_a_blank():
+    """A blank name is a blank citation seen from the other side.
+
+    The field reads as filled and every rendering downstream prints an entry, a record or a
+    check with nothing where its name goes: `[FAIL]    : safety factor 0.8` is a scorecard
+    line a reader cannot act on, and `governing()` names it as the check to look at. Four
+    models refused it and thirty-nine did not, which is the same split the provenance census
+    found one field-name over.
+
+    Held by the marker `anvilate._models.cited` attaches, so a model that writes its own
+    validator instead is listed as an exemption with the reason rather than silently passing.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    import anvilate
+
+    own_validator = {
+        "Component": "a BOM component names its own rule about the subject line",
+        "Subject": "an attestation subject names its own rule about the subject line",
+        "Parameter": "an explore parameter says what a blank sweep axis would mean",
+        "FatigueRecord": "a fatigue record refuses several blanks in one message",
+    }
+    unguarded, seen = [], set()
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - an optional dependency, not a model
+            continue
+        for _, model in inspect.getmembers(module, inspect.isclass):
+            if not issubclass(model, BaseModel) or model is BaseModel or model in seen:
+                continue
+            seen.add(model)
+            field = model.model_fields.get("name")
+            if field is None or field.annotation is not str:
+                continue
+            guarded = any(
+                getattr(getattr(meta, "func", None), "__anvilate_provenance__", False)
+                for meta in field.metadata
+            )
+            if not guarded and model.__name__ not in own_validator:
+                unguarded.append(f"{model.__module__}.{model.__name__}")
+    assert len(seen) > 100, f"the census walked only {len(seen)} models"
+    assert not unguarded, (
+        "these accept a blank name, which renders as an unnamed one:\n  "
+        + "\n  ".join(sorted(unguarded))
+        + "\nDeclare it as anvilate._models.Named, or add the model to the exemptions above "
+        "with the reason its own validator is better."
+    )

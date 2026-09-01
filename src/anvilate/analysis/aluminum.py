@@ -37,7 +37,7 @@ from math import isfinite, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel, cited
+from .._models import Named, RevalidatedModel, cited
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -267,7 +267,7 @@ class AlloyProperties(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     compressive_yield: Quantity  # F_cy
     tensile_yield: Quantity  # F_ty
     tensile_ultimate: Quantity  # F_tu

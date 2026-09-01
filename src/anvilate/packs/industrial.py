@@ -20,6 +20,7 @@ from enum import StrEnum
 
 from pydantic import ConfigDict, model_validator
 
+from .._models import Named
 from ..analysis import (
     DEFAULT_POISSON_RATIO,
     clamped_annular_plate_fundamental_frequency,
@@ -129,7 +130,7 @@ class CoverPlate(GuardedInputs):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     pressure: Quantity
     thickness: Quantity
     material: str

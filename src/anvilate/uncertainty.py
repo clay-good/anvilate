@@ -27,7 +27,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import Provenance, RevalidatedModel
+from ._models import Named, Provenance, RevalidatedModel
 
 __all__ = [
     "Normal",
@@ -141,7 +141,7 @@ class Sensitivity(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     variance_share: float  # 0..1, the fraction of the response variance this input drives
 
 

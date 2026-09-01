@@ -24,7 +24,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from ._models import Provenance, RevalidatedModel, cited
+from ._models import Named, Provenance, RevalidatedModel, cited
 from .scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -74,7 +74,7 @@ class LoadCombination(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     # At least one. A combination that factors nothing sums to zero, so it can never
     # govern in either direction: it sits in the set looking like a case that was
     # checked, and is the one case that was not.

@@ -49,7 +49,7 @@ from typing import Any, TextIO
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import RevalidatedModel
+from ._models import Named, RevalidatedModel
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .spec import ValidationTier
 
@@ -165,7 +165,7 @@ class ToolDefinition(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    name: Named = Field(pattern=r"^[a-z][a-z0-9_]*$")
     title: str = Field(min_length=1)
     description: str = Field(min_length=1)
     input_schema: dict[str, Any]

@@ -38,7 +38,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import FrozenMap, RevalidatedModel
+from ._models import FrozenMap, Named, RevalidatedModel
 from .scorecard import CheckStatus, Scorecard
 
 __all__ = [
@@ -178,7 +178,7 @@ class Objective(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     sense: ObjectiveSense = ObjectiveSense.MINIMIZE
 
 
@@ -198,7 +198,7 @@ class Study(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     parameters: tuple[Parameter, ...]
     objectives: tuple[Objective, ...]
     strategy: SamplingStrategy = SamplingStrategy.GRID

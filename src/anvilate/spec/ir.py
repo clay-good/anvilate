@@ -15,7 +15,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
 
-from .._models import FrozenMap, Provenance, RevalidatedModel, rebuilt_quantities
+from .._models import FrozenMap, Named, Provenance, RevalidatedModel, rebuilt_quantities
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -167,7 +167,7 @@ class HolePattern(_Base):
 class InterfaceContract(_Base):
     """A published, importable interface: the geometry a mating part designs against."""
 
-    name: str
+    name: Named
     mating_plane: str  # semantic tag of the mating face
     pattern: HolePattern
 
@@ -237,7 +237,7 @@ class DimensionChain(_Base):
     :class:`~anvilate.tolerance.StackUp` for worst-case / RSS analysis.
     """
 
-    name: str
+    name: Named
     links: list[ChainLink] = Field(min_length=1)
     required_min: Length
     required_max: Length
@@ -324,7 +324,7 @@ class ChainAnalysis(_Base):
     Each result already ranks its per-contributor sensitivities.
     """
 
-    name: str
+    name: Named
     required_min: Length
     required_max: Length
     worst_case: StackResult
@@ -463,7 +463,7 @@ class LoadCase(_Base):
     that does not use load combinations leaves it unset.
     """
 
-    name: str
+    name: Named
     kind: LoadKind
     applied_to: str  # semantic tag the load acts on
     force: Force | None = None
@@ -565,7 +565,7 @@ class DesignSpec(_Base):
     """A complete, typed statement of engineering intent for one part."""
 
     anvilate_spec: str = SCHEMA_VERSION
-    name: str
+    name: Named
     description: str
     units: Provenanced[UnitSystem]
     material: MaterialRef

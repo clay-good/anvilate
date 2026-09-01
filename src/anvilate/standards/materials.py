@@ -17,7 +17,7 @@ from typing import Annotated
 import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import Named, RevalidatedModel
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
 
@@ -64,7 +64,7 @@ class Material(_Base):
     """
 
     id: str
-    name: str
+    name: Named
     category: str  # e.g. "aluminum", "carbon_steel", "stainless_steel"
     bundled: bool = True  # False marks a user- or team-local extension record
 

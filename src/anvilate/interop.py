@@ -34,7 +34,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import FrozenMap, RevalidatedModel, cited
+from ._models import FrozenMap, Named, RevalidatedModel, cited
 from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
 from .units import Quantity, require_finite
@@ -246,7 +246,7 @@ class ExternalSectionProperties(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     source: cited("the tool that computed these properties")
     source_version: str
     method: str

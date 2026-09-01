@@ -20,7 +20,7 @@ from typing import Annotated
 import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import Named, RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -47,7 +47,7 @@ class NemaFrame(_Base):
     """
 
     id: str
-    name: str
+    name: Named
     bundled: bool = True
 
     faceplate_width: Length

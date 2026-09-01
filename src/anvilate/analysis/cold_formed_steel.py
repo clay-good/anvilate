@@ -22,7 +22,7 @@ from math import sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import Provenance, RevalidatedModel
+from .._models import Named, Provenance, RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -248,7 +248,7 @@ class PrequalifiedLimits(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str
+    name: Named
     web_flat_to_thickness_max: float
     flange_flat_to_thickness_max: float
     lip_flat_to_thickness_max: float

@@ -20,6 +20,7 @@ from enum import StrEnum
 
 from pydantic import ConfigDict, model_validator
 
+from .._models import Named
 from ..analysis import (
     ColumnEnd,
     CrossSection,
@@ -351,7 +352,7 @@ class BeamMember(GuardedInputs):
         "pair_offset",
     )
 
-    name: str
+    name: Named
     section: CrossSection
     length: Quantity
     support: Support
@@ -783,7 +784,7 @@ class ColumnMember(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("axial_load",)
 
-    name: str
+    name: Named
     section: CrossSection
     length: Quantity
     end_condition: ColumnEnd = ColumnEnd.PINNED_PINNED
@@ -922,7 +923,7 @@ class BoltedConnection(GuardedInputs):
         "tension",
     )
 
-    name: str
+    name: Named
     bolt_diameter: Quantity
     plate_thickness: Quantity
     load: Quantity
@@ -1204,7 +1205,7 @@ class WeldedConnection(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     leg_size: Quantity
     weld_length: Quantity
     load: Quantity
@@ -1284,7 +1285,7 @@ class BasePlate(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("axial_load",)
 
-    name: str
+    name: Named
     width: Quantity
     depth: Quantity
     axial_load: Quantity
@@ -1463,7 +1464,7 @@ class LiftingLug(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     width: Quantity
     hole_diameter: Quantity
     thickness: Quantity
@@ -1616,7 +1617,7 @@ class GussetPlate(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     net_shear_area: Quantity
     net_tension_area: Quantity
     load: Quantity
@@ -1715,7 +1716,7 @@ class TensionMember(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     gross_area: Quantity
     net_area: Quantity
     load: Quantity
@@ -1863,7 +1864,7 @@ class BeamColumnMember(GuardedInputs):
         "moment",
     )
 
-    name: str
+    name: Named
     section: CrossSection
     length: Quantity
     axial_load: Quantity
@@ -2062,7 +2063,7 @@ class ConcreteBearing(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     bearing_area: Quantity
     support_area: Quantity
     concrete_strength: Quantity
@@ -2171,7 +2172,7 @@ class ShearPlate(GuardedInputs):
     model_config = ConfigDict(frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
-    name: str
+    name: Named
     gross_shear_area: Quantity
     net_shear_area: Quantity
     load: Quantity

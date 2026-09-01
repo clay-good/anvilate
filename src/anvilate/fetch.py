@@ -38,7 +38,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from ._models import Provenance
+from ._models import Named, Provenance
 
 __all__ = [
     "ConsentRequired",
@@ -82,7 +82,7 @@ class DatasetRecipe(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: str
+    name: Named
     url: str
     sha256: str
     license: Provenance
@@ -130,7 +130,7 @@ class FetchProvenance(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: str
+    name: Named
     url: str
     sha256: str
     license: Provenance
