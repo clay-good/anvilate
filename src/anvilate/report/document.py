@@ -24,7 +24,7 @@ from __future__ import annotations
 from html import escape
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -191,6 +191,9 @@ class CalculationReport(BaseModel):
         """The report's checks as a scorecard, for the usual roll-up rules."""
         return Scorecard(entries=tuple(section.entry for section in self.sections))
 
+    # Serialised with the report: `to_json` dumps this model, and a submittal document
+    # carrying its sections without its verdict leaves the reader to roll them up.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """The rolled-up verdict, honouring No-silent-green."""

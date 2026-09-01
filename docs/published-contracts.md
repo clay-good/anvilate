@@ -69,6 +69,16 @@ among the entries, has nothing to take a worst of and reports a pass over no che
 consumer rebuilding the verdict from its own reading of this library's output could produce
 exactly the silent green the library exists to refuse.
 
+It was not the only one. A `status` property returning a `CheckStatus` is a **rolled-up
+verdict**, and eight models had one: the scorecard, the attestation predicate, the
+verification report, the bundle sections, a load-combination evidence record, a calculation
+report, and both halves of a verification plan. The plan is the one worth naming beside the
+scorecard — its own docstring says *a plan is not evidence*, and the serialized plan carried
+its items, every one of them with `outcome: null`, and nothing that said so. All eight are
+computed fields now, and a gate keyed on the **annotation** holds them: a `status` returning
+a plain `str` — `ExportAuthorization`'s `"VALIDATED"` label, one line off a boolean already
+in the document — is deliberately not swept in by a rule about names.
+
 `status` is a computed field in 1.1.0: required, read-only, and dump-only, so a document
 cannot assert a verdict that disagrees with its own checks. 1.0.0 is unchanged and still
 frozen — a client pinned to it receives what it always did. The bundle digest moved with it,

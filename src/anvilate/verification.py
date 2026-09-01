@@ -35,7 +35,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from ._models import RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -166,6 +166,9 @@ class VerificationItem(BaseModel):
     required_accuracy: str | None = None
     outcome: VerificationOutcome | None = None
 
+    # Serialised, because the dump of this item is what a bundle's `verification` block
+    # is made of and the state was the one thing it did not carry.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """``NOT_EVALUATED`` until an outcome is recorded; then that outcome's verdict."""
@@ -238,6 +241,10 @@ class VerificationPlan(BaseModel):
     unresolved: tuple[tuple[str, str], ...]
     failing_checks: tuple[str, ...] = ()
 
+    # The sharpest case of a conclusion a plain property drops. This class's own
+    # docstring says a plan is not evidence, and the serialised plan carried its items
+    # -- every one of them with `outcome: null` -- and nothing that said so.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """The plan's roll-up. ``NOT_EVALUATED`` until every planned test has a result.

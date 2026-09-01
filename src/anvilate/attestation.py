@@ -50,7 +50,14 @@ from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from ._models import RevalidatedModel
 from .evidence import SourceRecord
@@ -568,6 +575,9 @@ class AnvilatePredicate(RevalidatedModel):
             )
         return self
 
+    # A verdict a serialised document does not carry is one its reader has to
+    # rebuild. See `Scorecard.status` for what that costs.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """The verdict this predicate carries — the bundle roll-up when there is one.
@@ -848,6 +858,9 @@ class VerificationReport(BaseModel):
     unverified_signatures: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
 
+    # A verdict a serialised document does not carry is one its reader has to
+    # rebuild. See `Scorecard.status` for what that costs.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         # An INVALID signature is a failure whether or not anyone wrote a sentence about

@@ -52,7 +52,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from ._models import RevalidatedModel
 from .attestation import (
@@ -361,6 +361,9 @@ class BundleSections(RevalidatedModel):
             if name not in present
         )
 
+    # A verdict a serialised document does not carry is one its reader has to
+    # rebuild. See `Scorecard.status` for what that costs.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """The one status over every present layer, at the scorecard's own precedence.

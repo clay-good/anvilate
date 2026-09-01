@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from ._models import RevalidatedModel
 from .scorecard import CheckStatus, ScorecardEntry
@@ -415,6 +415,9 @@ class CombinationEvidence(RevalidatedModel):
             )
         return self
 
+    # A verdict a serialised document does not carry is one its reader has to
+    # rebuild. See `Scorecard.status` for what that costs.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         """``NOT_EVALUATED`` when the demand was summed from part of the declared loads,

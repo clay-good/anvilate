@@ -2151,3 +2151,66 @@ def test_a_warning_is_an_error_and_nothing_is_excused_from_that():
         f"warnings excused from the error filter: {excused}. An exemption belongs beside the "
         "reason it exists and the version that will remove it, not in a standing list"
     )
+
+
+def test_every_rolled_up_verdict_survives_serialisation():
+    """A `status` returning a `CheckStatus` is a verdict, and a verdict has to serialise.
+
+    A plain `@property` is invisible to `model_dump`, and the dump is the document: the
+    attested `scorecard.json`, the `scorecard` and `verification` blocks inside a signed
+    predicate, `anvilate check --format json`, a rendered report's JSON. Every one of those
+    went out as the checks with no verdict on them, leaving the reader to rebuild a roll-up
+    that is **not** a maximum — an empty scorecard is NOT_EVALUATED, and the obvious
+    reimplementation reports a pass over no checks.
+
+    Keyed on the annotation, not on the name. `ExportAuthorization.status` is also a
+    property called `status`, and it is a label -- `"VALIDATED"` off a boolean already in the
+    document -- so a rule that swept it in on its name would be asking for a field nobody
+    needs. It returns `str`, and that is what keeps it out.
+    """
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    from anvilate.scorecard import CheckStatus
+
+    plain, checked = [], 0
+    seen: set[type] = set()
+    for info in pkgutil.walk_packages(anvilate_pkg.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - an optional dependency is absent
+            continue
+        for value in vars(module).values():
+            if not (isinstance(value, type) and issubclass(value, BaseModel)):
+                continue
+            if not value.__module__.startswith("anvilate") or value in seen:
+                continue
+            seen.add(value)
+            prop = vars(value).get("status")
+            if not isinstance(prop, property):
+                continue
+            if inspect.signature(prop.fget).return_annotation != CheckStatus.__name__:
+                continue
+            checked += 1
+            if "status" not in (value.model_computed_fields or {}):
+                plain.append(f"{value.__module__}.{value.__name__}")
+
+    assert checked >= 8, (
+        f"only {checked} rolled-up verdicts were found; this gate covers them or it covers nothing"
+    )
+    assert not plain, (
+        "these roll up a verdict with a plain property, so every document they are dumped "
+        "into carries the checks and not the conclusion:\n  " + "\n  ".join(sorted(plain))
+    )
+
+
+def test_a_serialised_verdict_cannot_be_asserted_into_a_document():
+    """The other direction, and the reason `computed_field` is the right tool rather than a
+    stored field. A document claiming a verdict its own checks contradict must lose."""
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(entries=(ScorecardEntry.from_safety_factor("b", computed=1.0, required=2.0),))
+    dumped = card.model_dump(mode="json")
+    assert dumped["status"] == "fail"
+    assert Scorecard.model_validate({**dumped, "status": "pass"}).status is CheckStatus.FAIL
