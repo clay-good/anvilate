@@ -126,3 +126,39 @@ def test_the_quickstart_is_short_enough_to_be_a_quickstart():
     words = len(prose.split())
     assert words < 700, f"the quickstart runs to {words} words of prose"
     assert words > 150, f"the quickstart is {words} words; it explains nothing"
+
+
+def test_the_version_the_pages_ask_for_is_the_one_the_package_requires():
+    """Two pages tell a reader which Python to bring, and `pyproject.toml` decides whether
+    pip agrees.
+
+    Three places, no gate between them — and the version claim is the one a user acts on
+    before anything else works. CI now runs every version the claim covers, which is what
+    makes the claim worth checking here.
+    """
+    import re
+    import tomllib
+
+    config = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    floor = config["project"]["requires-python"]
+    assert floor.startswith(">="), f"requires-python is {floor!r}; this gate reads a floor"
+    version = floor.removeprefix(">=").strip()
+
+    for page, pattern in (
+        ("README.md", r"Python (\d+\.\d+)\+"),
+        ("docs/quickstart.md", r"Python (\d+\.\d+) or newer"),
+    ):
+        claimed = re.search(pattern, (_REPO / page).read_text(encoding="utf-8"))
+        assert claimed is not None, f"{page} no longer says which Python to bring"
+        assert claimed.group(1) == version, (
+            f"{page} asks for Python {claimed.group(1)}; pyproject requires {version}"
+        )
+
+    # And CI exercises the floor and everything above it that the workflow names, so the
+    # claim is tested rather than asserted.
+    workflow = (_REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    matrix = re.search(r"python-version: \[([^\]]+)\]", workflow)
+    assert matrix is not None, "the CI matrix no longer lists its Python versions"
+    versions = [item.strip().strip('"') for item in matrix.group(1).split(",")]
+    assert version in versions, f"CI runs {versions} and the package requires {version}"
+    assert len(versions) > 1, "a floor of >= is a claim about more than one version"
