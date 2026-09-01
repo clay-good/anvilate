@@ -109,10 +109,6 @@ class SubjectStore:
     def __init__(self, root: str | Path | None = None) -> None:
         self._root = subject_store_root(root)
 
-    @property
-    def root(self) -> Path:
-        return self._root
-
     def publish(self, kind: str, document: Any) -> str:
         """Store ``document`` under its own digest and return the handle.
 
