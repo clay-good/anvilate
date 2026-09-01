@@ -1456,3 +1456,41 @@ def test_the_band_reaches_an_element_whose_screen_takes_no_such_argument():
     material = next(e for e in card.entries if e.name == "material resolution")
     assert material.status is CheckStatus.PASS
     assert material.upper_safety_factor is None
+
+
+def test_the_screening_pages_table_is_the_models_own_fields():
+    """The page answers the document field by field, in a table. A table is exactly the shape
+    that goes stale: a field renamed or a bound added leaves a row describing a spec nobody
+    can write.
+
+    So every name the table quotes must be a field some spec model has, and every bound the
+    module reports as unscreened must appear in the row that lists them.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.screening import _UNSCREENED_CONSTRAINTS
+    from anvilate.spec import AcceptanceCriteria, Manufacturing
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "spec-screening.md").read_text()
+    start = page.index("| The document says |")
+    table = page[start : page.index("A census test holds that table")]
+    assert table.count("\n|") >= 10, "the field-by-field table on spec-screening.md has shrunk"
+
+    models = {
+        "constraints": Constraints,
+        "acceptance": AcceptanceCriteria,
+        "manufacturing": Manufacturing,
+    }
+    unknown = []
+    for name in sorted(set(re.findall(r"`([a-z_]+\.[a-z_]+)`", table))):
+        root, _, leaf = name.partition(".")
+        model = models.get(root)
+        if model is None or leaf not in model.model_fields:
+            unknown.append(name)
+    assert not unknown, f"the table names fields no spec model has: {unknown}"
+
+    for field in _UNSCREENED_CONSTRAINTS:
+        assert f"`constraints.{field}`" in table or f"`{field}`" in table, (
+            f"{field} is reported as unscreened and the page's table does not mention it"
+        )

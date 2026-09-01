@@ -133,98 +133,63 @@ is not part of a synchronous screen at all.
 
 ## The rule that makes the card safe to read
 
-**A tier the spec demanded always produces an entry.** Including — especially — when the
-document carries nothing to run it against: a spec that demands T2 and declares no
-toleranced dimension gets one `NOT_EVALUATED` entry saying so.
+**Every claim the document makes gets an answer.** A tier it demands produces an entry even
+when there is nothing to run it against; a declaration it makes is answered whatever tiers it
+names; and a claim nothing in this library can screen is reported as unscreened, with what
+checking it would take. The one thing the card never does is stay silent, because a claim
+nobody looked at must not be indistinguishable from one that passed.
 
-The alternative is what makes this worth writing down. A demanded tier that quietly produced
-no entries would leave `Scorecard.passed` green on the strength of whatever checks happened
-to exist, and a part screened on zero checks would be indistinguishable from a part that
-passed. Every tier the caller asked about is answered, and a tier the spec did not demand is
-not screened and not reported — the acceptance criteria are the contract for which tiers
-must run.
+That is the whole rule. What it means field by field:
 
-**A declaration no demanded tier screens is the exception, and it is the same rule seen from
-the other side.** A spec that names its element, its material and its load and demands only
-T2 used to screen to PASS on a tolerance band, with nothing on the card saying the lug had
-never been looked at. It goes both ways: a spec declaring a ±0.0001 mm band — achievable on
-no process this library knows — and demanding only T1 passed with the band unlooked at.
+| The document says | The card answers |
+| --- | --- |
+| a tier in `acceptance.tiers` | its checks, or one `NOT_EVALUATED` entry saying why none ran |
+| `element_type` + `element_params` | the pack screen's cited verdicts — or, if no demanded tier screens it, an entry naming the element and the tier that would have |
+| `dimensions` | each band against the process floor — or, under no demanded T2, an entry naming what went unscreened |
+| `chains` | each stack-up on its worst case |
+| `combination_basis` | the governing combination, its factored demand and its clause |
+| `material`, a standard-component `interface` | resolved, with the near misses named on a refusal |
+| an *imported* interface | `NOT_EVALUATED`: a screen of one document cannot fetch another |
+| `manufacturing.tolerance_class` | resolved like any other identifier |
+| `constraints.min_safety_factor` | the figure every judged screen is measured against |
+| `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
+| `constraints.max_mass`, `envelope`, `max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take |
 
-An element and a toleranced dimension are declarations the *document* makes, like a reference
-or a stack-up chain, and this library answers those whatever tiers are named. So the card
-carries a `NOT_EVALUATED` entry naming what was declared and the tier that would have
-screened it. The tier is still not forced: the acceptance criteria remain the contract, and
-the answer to something nobody screened is "not evaluated", never a pass.
+A census test holds that table: every field of a `DesignSpec` is either answered by a named
+check or listed as not being a claim about the part — the schema version, the name, the
+prose, the unit system, the contracts this part publishes for others. A field that is neither
+fails the build.
 
-**A declared combination basis is now resolved rather than noted.** `combination_basis`
-had a complete implementation behind it — `DesignSpec.combination_set` resolves the ASCE 7-22
-generator and `DesignSpec.combination_evidence` picks the governing combination by the same
-rule `combination_scorecard` screens with — reachable only from a caller who already knew to
-call it. A document declaring `asce7_lrfd` screened as though it had said nothing. The card
-now names the combination that governs, its factored demand and its clause; a case that
-carries a force and no nature makes it `NOT_EVALUATED`, because the demand was then summed
-from part of the declared loads; and a seismic basis with no `seismic_design_acceleration`
-lands on the card rather than raising out of the screen.
+**Three of these are worth the story**, because each was a silent green that a green suite
+could not see.
 
-**A displacement limit written on the acceptance criteria reached nothing.** The pack
-screens take their deflection limit from the element itself — a beam member's
-`deflection_limit` — so `acceptance.max_displacement` was a number the user stated and no
-check read. It is reported as unscreened, and the entry says where the limit does belong,
-because that is the reader's next question.
+A spec that named its element, its material and its 60 kN load and demanded only T2 screened
+to **PASS** on a tolerance band, with nothing saying the lug had never been looked at. It
+goes both ways: a ±0.0001 mm band — achievable on no process this library knows — passed
+under T1 alone. The tier is still not forced; the acceptance criteria remain the contract.
+But the answer to something nobody screened is "not evaluated", never a pass.
 
-**A general tolerance class is a reference, and it is resolved like one.** `Manufacturing`
-said in its own docstring that its DFM parameters were "checked against" the process, and
-neither was read on any screening path. `tolerance_class` is the ISO 2768 class the drawing
-states — `anvilate.tolerance.resolve_class` exists for exactly it — and it was resolved only
-when the evidence bundle was assembled. So a document writing the class the way a drawing
-writes it, `ISO2768-m`, screened to **PASS** and then raised `'iso2768-m' is not a valid
-ToleranceClass` out of `anvilate export`: two surfaces disagreeing about one document, and
-the one a user runs first said nothing. It is a FAIL on the card now, with the near misses
-named. `min_wall` is a bound on built geometry and is reported unscreened.
+`max_mass: 150 g` read as a stated requirement and was consumed by nothing anywhere in the
+library — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
+one field at a time, passed `.inf` too. No field of a document may now be an infinity or a
+NaN: a dimension whose nominal was NaN had screened to PASS on its band, because the
+achievability check compares the band against the process floor and never looks at the size
+the band belongs to.
 
-**No field of a document is an infinity or a NaN.** A `Quantity` may hold one —
-intermediate arithmetic produces them and each consumer guards its own — but a document never
-states one, and nothing checked it. `max_mass: .inf kg` read as a stated requirement and
-meant nothing (`min_safety_factor > 0` is True for infinity, too). A dimension whose nominal
-was NaN was worse: it screened to **PASS** on its tolerance band, because the achievability
-check compares the band against the process floor and never looks at the size it belongs to.
-One rule on the base class every spec model shares, rather than an `isfinite` in each
-validator that was written one field at a time.
+`tolerance_class` written the way a drawing writes it — `ISO2768-m` — screened to PASS and
+then raised `'iso2768-m' is not a valid ToleranceClass` out of `anvilate export`. The class
+was resolved when the evidence bundle was assembled and nowhere else: two surfaces
+disagreeing about one document, and the one a user runs first said nothing.
 
-**A pack screen's own refusal is a fact about the document too.** The screens raise for what
-they cannot work with — an alloy the database does not carry, a quantity outside a standard's
-range — and those raises were uncaught, so `element_params` naming a bad alloy took the whole
-card with it and printed a traceback where a scorecard was owed. They are `NOT_EVALUATED`
-entries quoting the pack's own message now. Only `ValueError` and `LookupError`: a `TypeError`
-out of a screen is this library's bug rather than the document's, and filing our own defect
-under "not evaluated" on somebody's card would be the worst kind of silence.
-
-**Two more declarations the card used to be silent about.** A geometric tolerance is
-carried into the provenance record and screened by nothing — a spec's `GeometricTolerance`
-is a different type from `anvilate.gdt.FeatureControlFrame`, the semantic layer that could
-check it, and nothing converts one to the other — so it is reported as unscreened with that
-reason. And an *imported* interface, which names another spec's published contract, was
-skipped by a `continue`: a screen of one document cannot fetch another, so it is
-`NOT_EVALUATED` saying which contract went unread rather than absent from the card.
-
-**A document can ask to be told it is over-engineered.** `OVER_MARGIN` — passing, and
-flagged as more margin than the design asked for — has been first-class in the scorecard, the
-exit codes and the QIF export since they were written, and reachable only from a
-`target_safety_factor` argument no document could set. `constraints.max_safety_factor` is the
-top of that band, and a check running above it says so with the figure. One of the
-twenty-four screens takes an upper bound as an argument; the band reaches the other
-twenty-three anyway, because it is applied to the *entry* — which every screen produces and
-which already carries both numbers the judgement needs. A check that is not a safety-factor
-check, a material resolving or a tier that could not run, is left alone by it.
-
-**The same goes for a bound the document sets.** `constraints` is the plainest declaration a
-spec makes — it is the requirement, written down by the person the card is for — and three of
-its four fields were read by nothing. A spec stating `max_mass: 150 g` screened to PASS with
-the mass never computed and never mentioned. Each declared bound the library cannot screen
-now gets an entry saying so and what checking it would take: a mass and an envelope need a
-built solid, and a cost needs a cost model this library does not ship. `min_safety_factor` is
-the one it consumes, and it is consumed by the pack screen the element selects. A census test
-holds that split, so a fifth bound cannot land and be quietly ignored.
+**A refusal is an entry, never a traceback.** The pack screens raise for what they cannot
+work with — an alloy the database does not carry, a quantity outside a standard's range — and
+those raises were uncaught, so `element_params` naming a bad alloy took the whole card with
+it. They are `NOT_EVALUATED` entries quoting the pack's own message now. `ValueError` and
+`LookupError` only: a `TypeError` out of a screen is this library's bug rather than the
+document's, and filing our own defect under "not evaluated" on somebody's card would be the
+worst silence of the lot. A standing corpus of documents that are valid per the schema and
+hostile to the screen is run at the library, the CLI and the MCP surface, and asserts each
+comes back with a card that does not pass.
 
 ## References resolve, and the answer is a verdict
 
