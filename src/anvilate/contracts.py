@@ -38,7 +38,9 @@ __all__ = [
     "RELEASED_DIRECTORY",
     "freeze_release",
     "released_path",
+    "ELEMENT_SCHEMA_VERSION",
     "SCORECARD_SCHEMA_VERSION",
+    "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
     "schema_artifacts",
     "schema_issues",
@@ -122,11 +124,56 @@ def scorecard_json_schema() -> dict[str, Any]:
     )
 
 
+# Where the pack elements' own schemas are published, relative to the schema directory.
+ELEMENTS_DIRECTORY = "elements"
+
+# The element schemas move with the packs rather than with the Spec IR, which is the whole
+# point of the tag: a new pack element must not bump `SPEC_SCHEMA_VERSION`. They are
+# versioned as a set for now, and that limit is real -- changing one element's fields moves
+# every element schema's `$id`. Per-element versioning is the honest end state and it is not
+# what ships today.
+ELEMENT_SCHEMA_VERSION = "1.0.0"
+
+
+def element_json_schemas() -> dict[str, dict[str, Any]]:
+    """Each pack element a spec can name, as a JSON Schema document keyed by its tag.
+
+    `DesignSpec.element_params` is an untyped map on purpose -- it is what keeps `spec-ir`
+    from depending on twenty-odd packs -- and what that trades away is a published contract
+    that describes a complete document. These are the other half of that trade: the element's
+    own fields, published beside the spec schema and addressed by the same tag a document
+    writes, so a client can still validate what it is about to send without the Spec IR
+    having to know what a lifting lug is.
+
+    Generated from the same registry the screen resolves through, so an element that ships
+    is an element that is published.
+    """
+    from .screening import element_registry
+
+    return {
+        tag: _artifact(
+            model,
+            name=f"{ELEMENTS_DIRECTORY}/{tag}",
+            version=ELEMENT_SCHEMA_VERSION,
+            description=(
+                f"Anvilate pack element {tag!r}: the fields a Design Spec puts in "
+                f"`element_params` when it declares `element_type: {tag}`. Generated from "
+                f"{model.__module__}.{model.__name__}."
+            ),
+        )
+        for tag, (model, _screen) in sorted(element_registry().items())
+    }
+
+
 def schema_artifacts() -> dict[str, dict[str, Any]]:
     """Every published schema, keyed by the file name it is written under."""
     return {
         "design-spec.schema.json": spec_json_schema(),
         "scorecard.schema.json": scorecard_json_schema(),
+        **{
+            f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema
+            for tag, schema in element_json_schemas().items()
+        },
     }
 
 
@@ -145,13 +192,21 @@ def write_schemas(directory: Path) -> list[Path]:
     written = []
     for name, schema in schema_artifacts().items():
         path = directory / name
+        # The element schemas live in a subdirectory, so the parent is made rather than
+        # assumed: a writer that assumed it would fail on a fresh checkout only.
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_serialize(schema), encoding="utf-8")
         written.append(path)
     return written
 
 
 def released_path(directory: Path, name: str, version: str) -> Path:
-    """Where the frozen copy of one version of one schema lives."""
+    """Where the frozen copy of one version of one schema lives.
+
+    ``name`` may carry a subdirectory — the pack elements publish under ``elements/`` — and
+    the frozen tree mirrors it rather than flattening, so two elements could not collide on
+    a shared basename.
+    """
     return directory / RELEASED_DIRECTORY / f"{name.removesuffix('.schema.json')}-{version}.json"
 
 
@@ -172,6 +227,7 @@ def freeze_release(directory: Path) -> list[Path]:
     for name, schema in schema_artifacts().items():
         version = str(schema["x-anvilate-version"])
         path = released_path(directory, name, version)
+        path.parent.mkdir(parents=True, exist_ok=True)
         serialized = _serialize(schema)
         if path.exists():
             if path.read_text(encoding="utf-8") != serialized:

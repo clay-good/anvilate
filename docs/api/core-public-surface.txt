@@ -79,10 +79,12 @@ contracts.JSON_SCHEMA_DIALECT
 contracts.RELEASED_DIRECTORY
 contracts.freeze_release
 contracts.released_path
+contracts.ELEMENT_SCHEMA_VERSION
 contracts.SCORECARD_SCHEMA_VERSION
 contracts.SPEC_SCHEMA_VERSION
 contracts.schema_artifacts
 contracts.schema_issues
+contracts.element_json_schemas
 contracts.scorecard_json_schema
 contracts.spec_json_schema
 contracts.write_schemas

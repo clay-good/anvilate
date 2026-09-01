@@ -271,3 +271,79 @@ def test_disambiguation_is_not_quadratic_in_the_size_of_a_duplicate_group():
     elapsed = time.perf_counter() - start
     assert len(set(unique)) == 8000
     assert elapsed < 1.0, f"disambiguating 8000 identical names took {elapsed:.1f}s"
+
+
+def test_every_element_a_spec_can_name_has_a_published_schema():
+    """The other half of the tag-and-map trade, held in both directions.
+
+    `DesignSpec.element_params` is an untyped map so that `spec-ir` need not depend on
+    twenty-odd packs, and what that costs is a published contract that no longer describes a
+    complete document. These schemas are what pays it back — the element's own fields,
+    addressed by the same tag a document writes.
+
+    So the registry and the published set must be the same set. An element with no schema is
+    a document a client cannot validate before sending; a schema with no element is a tag
+    that resolves to nothing.
+    """
+    from anvilate.contracts import ELEMENTS_DIRECTORY, element_json_schemas
+    from anvilate.screening import element_registry
+
+    registry, published = element_registry(), element_json_schemas()
+    assert len(registry) > 20, f"only {len(registry)} elements are registered"
+    assert set(registry) == set(published), (
+        f"unpublished: {sorted(set(registry) - set(published))}; "
+        f"published but unreachable: {sorted(set(published) - set(registry))}"
+    )
+
+    on_disk = {
+        path.stem.removesuffix(".schema")
+        for path in (_SCHEMAS / ELEMENTS_DIRECTORY).glob("*.schema.json")
+    }
+    assert on_disk == set(registry), (
+        f"the checked-in element schemas and the registry disagree: "
+        f"{sorted(on_disk ^ set(registry))}"
+    )
+
+
+def test_an_element_schema_describes_the_fields_its_own_screen_requires():
+    """Generated from the model the screen takes, so the schema and the thing it validates
+    cannot be two different ideas of an element. Held on the required set, which is the half
+    a client actually needs: a document missing one of these does not screen."""
+    import jsonschema
+
+    from anvilate.contracts import element_json_schemas
+    from anvilate.screening import element_registry
+
+    registry = element_registry()
+    for tag, schema in sorted(element_json_schemas().items()):
+        jsonschema.Draft202012Validator.check_schema(schema)
+        model = registry[tag][0]
+        required = {name for name, field in model.model_fields.items() if field.is_required()}
+        assert set(schema.get("required", ())) == required, tag
+        assert schema["$id"].endswith(".json") and f"/{tag}/" in schema["$id"], tag
+
+
+def test_the_lifting_lug_schema_accepts_the_document_the_docs_page_shows():
+    """The end of the trade, demonstrated rather than asserted: a client that fetches the
+    element schema by tag can validate its `element_params` before sending them."""
+    import re
+
+    import jsonschema
+    import yaml
+
+    from anvilate.contracts import element_json_schemas
+
+    page = (_SCHEMAS.parent.parent / "spec-screening.md").read_text(encoding="utf-8")
+    block = re.search(r"```yaml\n(element_type:.*?)```", page, re.S)
+    assert block is not None, "the element block on spec-screening.md has moved"
+    shown = yaml.safe_load(block.group(1))
+
+    schema = element_json_schemas()[shown["element_type"]]
+    validator = jsonschema.Draft202012Validator(schema)
+    params = json.loads(json.dumps(shown["element_params"]))
+    assert not list(validator.iter_errors(params)), [
+        e.message for e in validator.iter_errors(params)
+    ]
+    # And a document missing a required field is refused by the schema, not only by the pack.
+    del params["hole_diameter"]
+    assert list(validator.iter_errors(params))

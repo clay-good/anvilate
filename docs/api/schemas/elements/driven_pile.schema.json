@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/driven_pile/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'driven_pile': the fields a Design Spec puts in `element_params` when it declares `element_type: driven_pile`. Generated from anvilate.packs.geotechnical.DrivenPile.",
+  "properties": {
+    "adhesion_factor": {
+      "title": "Adhesion Factor",
+      "type": "number"
+    },
+    "applied_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "factor_of_safety": {
+      "default": 2.5,
+      "title": "Factor Of Safety",
+      "type": "number"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [
+        "applied_load"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "undrained_shear_strength": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "diameter",
+    "length",
+    "undrained_shear_strength",
+    "adhesion_factor",
+    "applied_load"
+  ],
+  "title": "DrivenPile",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

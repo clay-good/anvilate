@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/ventilation_zone/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'ventilation_zone': the fields a Design Spec puts in `element_params` when it declares `element_type: ventilation_zone`. Generated from anvilate.packs.ventilation.VentilationZone.",
+  "properties": {
+    "area_outdoor_rate": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "floor_area": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "occupancy": {
+      "title": "Occupancy",
+      "type": "number"
+    },
+    "people_outdoor_rate": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "provided_outdoor_airflow": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "required_air_changes": {
+      "title": "Required Air Changes",
+      "type": "number"
+    },
+    "room_volume": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "zone_air_distribution_effectiveness": {
+      "title": "Zone Air Distribution Effectiveness",
+      "type": "number"
+    }
+  },
+  "required": [
+    "people_outdoor_rate",
+    "occupancy",
+    "area_outdoor_rate",
+    "floor_area",
+    "zone_air_distribution_effectiveness",
+    "provided_outdoor_airflow",
+    "room_volume",
+    "required_air_changes"
+  ],
+  "title": "VentilationZone",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

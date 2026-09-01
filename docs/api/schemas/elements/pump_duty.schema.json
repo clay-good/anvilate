@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/pump_duty/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'pump_duty': the fields a Design Spec puts in `element_params` when it declares `element_type: pump_duty`. Generated from anvilate.packs.hydraulics.PumpDuty.",
+  "properties": {
+    "efficiency": {
+      "title": "Efficiency",
+      "type": "number"
+    },
+    "flow_rate": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "fluid_density": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "motor_rating": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "npsh_available": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "npsh_required": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "total_head": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "flow_rate",
+    "total_head",
+    "fluid_density",
+    "efficiency",
+    "motor_rating",
+    "npsh_available",
+    "npsh_required"
+  ],
+  "title": "PumpDuty",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

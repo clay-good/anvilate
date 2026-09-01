@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/pipe_run/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'pipe_run': the fields a Design Spec puts in `element_params` when it declares `element_type: pipe_run`. Generated from anvilate.packs.hydraulics.PipeRun.",
+  "properties": {
+    "available_head": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "fitting_loss_coefficient": {
+      "title": "Fitting Loss Coefficient",
+      "type": "number"
+    },
+    "flow_rate": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "kinematic_viscosity": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "roughness": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "flow_rate",
+    "diameter",
+    "length",
+    "roughness",
+    "fitting_loss_coefficient",
+    "kinematic_viscosity",
+    "available_head"
+  ],
+  "title": "PipeRun",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

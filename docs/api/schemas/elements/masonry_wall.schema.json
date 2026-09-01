@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/masonry_wall/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'masonry_wall': the fields a Design Spec puts in `element_params` when it declares `element_type: masonry_wall`. Generated from anvilate.packs.masonry.MasonryWall.",
+  "properties": {
+    "axial_stress": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "flexural_stress": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "masonry_strength": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "slenderness_ratio": {
+      "title": "Slenderness Ratio",
+      "type": "number"
+    }
+  },
+  "required": [
+    "masonry_strength",
+    "slenderness_ratio",
+    "axial_stress",
+    "flexural_stress"
+  ],
+  "title": "MasonryWall",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

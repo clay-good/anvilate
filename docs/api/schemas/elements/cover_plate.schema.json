@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "PlateEdge": {
+      "description": "How a cover's rim is held: free to rotate (gasketed, clipped) or built in\n(welded all around, or bolted stiffly enough to hold the edge slope).",
+      "enum": [
+        "simply_supported",
+        "clamped"
+      ],
+      "title": "PlateEdge",
+      "type": "string"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/cover_plate/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'cover_plate': the fields a Design Spec puts in `element_params` when it declares `element_type: cover_plate`. Generated from anvilate.packs.industrial.CoverPlate.",
+  "properties": {
+    "deflection_limit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "diameter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "edge": {
+      "$ref": "#/$defs/PlateEdge",
+      "default": "simply_supported"
+    },
+    "hole_diameter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "length": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "material": {
+      "title": "Material",
+      "type": "string"
+    },
+    "min_frequency": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "patch_length": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "patch_width": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pressure": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "thickness": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "name",
+    "pressure",
+    "thickness",
+    "material"
+  ],
+  "title": "CoverPlate",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "ColumnEnd": {
+      "description": "Standard end-condition cases and their theoretical effective-length factor\nK, exposed via :meth:`factor`.",
+      "enum": [
+        "pinned_pinned",
+        "fixed_fixed",
+        "fixed_pinned",
+        "fixed_free"
+      ],
+      "title": "ColumnEnd",
+      "type": "string"
+    },
+    "CrossSection": {
+      "description": "A prismatic cross-section's properties, all about the bending neutral axis.\n\n``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the\noutermost fibre) are the trio the stress checks consume;\n:attr:`section_modulus` (I/c) and :attr:`radius_of_gyration` (√(I/A)) derive\nfrom them. ``second_moment_transverse`` is I about the perpendicular\ncentroidal axis — the weak axis of a section oriented depth-into-the-load —\nwhich :attr:`least_radius_of_gyration` folds in for column slenderness.\n``shear_form_factor`` is the peak-over-average transverse-shear ratio k in\nτ_max = k·V/A (1.5 for a rectangle, 4/3 for a solid round, exact for a\ntube, the web-area ratio for I and box shapes); a hand-built section\nleaves it ``None`` and a shear screen must report NOT_EVALUATED rather\nthan guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,\n:meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`\n(the builders fill both second moments and the form factor).",
+      "properties": {
+        "area": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "extreme_fibre": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "second_moment": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "second_moment_transverse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shear_form_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shear Form Factor"
+        }
+      },
+      "required": [
+        "area",
+        "second_moment",
+        "extreme_fibre"
+      ],
+      "title": "CrossSection",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/beam_column_member/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'beam_column_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_column_member`. Generated from anvilate.packs.structural.BeamColumnMember.",
+  "properties": {
+    "axial_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "end_condition": {
+      "$ref": "#/$defs/ColumnEnd",
+      "default": "pinned_pinned"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "title": "Material",
+      "type": "string"
+    },
+    "moment": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "section": {
+      "$ref": "#/$defs/CrossSection"
+    },
+    "signed_fields": {
+      "default": [
+        "axial_load",
+        "moment"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "section",
+    "length",
+    "axial_load",
+    "moment",
+    "material"
+  ],
+  "title": "BeamColumnMember",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

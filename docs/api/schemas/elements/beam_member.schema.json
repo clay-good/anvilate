@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "CrossSection": {
+      "description": "A prismatic cross-section's properties, all about the bending neutral axis.\n\n``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the\noutermost fibre) are the trio the stress checks consume;\n:attr:`section_modulus` (I/c) and :attr:`radius_of_gyration` (√(I/A)) derive\nfrom them. ``second_moment_transverse`` is I about the perpendicular\ncentroidal axis — the weak axis of a section oriented depth-into-the-load —\nwhich :attr:`least_radius_of_gyration` folds in for column slenderness.\n``shear_form_factor`` is the peak-over-average transverse-shear ratio k in\nτ_max = k·V/A (1.5 for a rectangle, 4/3 for a solid round, exact for a\ntube, the web-area ratio for I and box shapes); a hand-built section\nleaves it ``None`` and a shear screen must report NOT_EVALUATED rather\nthan guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,\n:meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`\n(the builders fill both second moments and the form factor).",
+      "properties": {
+        "area": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "extreme_fibre": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "second_moment": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "second_moment_transverse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shear_form_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shear Form Factor"
+        }
+      },
+      "required": [
+        "area",
+        "second_moment",
+        "extreme_fibre"
+      ],
+      "title": "CrossSection",
+      "type": "object"
+    },
+    "LoadType": {
+      "description": "How the member is loaded: a single point load, a uniform distributed load,\na linearly varying (triangular) one — zero at one support, peaking at the\nother (at the fixed end on a cantilever or fixed-pinned member), as\nhydrostatic pressure loads a stiffener — or an applied end moment (a couple\na bracket or hub hands the member at the tip of a cantilever, at one\nsupport of a simply-supported span, or at the prop of a fixed-pinned\nmember).",
+      "enum": [
+        "point",
+        "distributed",
+        "triangular",
+        "moment"
+      ],
+      "title": "LoadType",
+      "type": "string"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Support": {
+      "description": "A beam's end-support condition.",
+      "enum": [
+        "cantilever",
+        "simply_supported",
+        "fixed_fixed",
+        "fixed_pinned",
+        "overhang"
+      ],
+      "title": "Support",
+      "type": "string"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/beam_member/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'beam_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_member`. Generated from anvilate.packs.structural.BeamMember.",
+  "properties": {
+    "deflection_limit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load_position": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "load_type": {
+      "$ref": "#/$defs/LoadType"
+    },
+    "loaded_length": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "mass_per_length": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "material": {
+      "title": "Material",
+      "type": "string"
+    },
+    "min_frequency": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "overhang_length": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pair_offset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "patch_centered": {
+      "default": false,
+      "title": "Patch Centered",
+      "type": "boolean"
+    },
+    "section": {
+      "$ref": "#/$defs/CrossSection"
+    },
+    "signed_fields": {
+      "default": [
+        "load",
+        "load_position",
+        "pair_offset"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "support": {
+      "$ref": "#/$defs/Support"
+    },
+    "triangle_mirrored": {
+      "default": false,
+      "title": "Triangle Mirrored",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "section",
+    "length",
+    "support",
+    "load",
+    "load_type",
+    "material"
+  ],
+  "title": "BeamMember",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

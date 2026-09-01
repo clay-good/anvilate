@@ -56,6 +56,30 @@ reappear one function call further away.
 
 `$id` carries the version, so the identifier and the document cannot disagree.
 
+## The pack elements publish their own schemas
+
+`DesignSpec.element_params` is an untyped map, which is what keeps the Spec IR from
+depending on twenty-odd discipline packs — and what it trades away is a published contract
+that describes a *complete* document. These are the other half of that trade:
+[`docs/api/schemas/elements/`](api/schemas/elements/) carries one schema per element,
+addressed by the same tag a document writes, so a client can validate what it is about to
+send without the Spec IR having to know what a lifting lug is.
+
+```
+https://anvilate.dev/schemas/elements/lifting_lug/1.0.0.json
+```
+
+They are generated from the same registry the screen resolves through, so an element that
+ships is an element that is published, and a gate holds the two sets equal in both
+directions — an element with no schema is a document a client cannot check, and a schema
+with no element is a tag that resolves to nothing.
+
+They are frozen and drift-gated exactly like the two contracts above. **They are versioned
+as a set, and that limit is real:** changing one element's fields moves every element
+schema's `$id`. Per-element versioning is the honest end state and is not what ships today.
+What it deliberately does *not* do is move `SPEC_SCHEMA_VERSION`, which is the coupling the
+tag exists to avoid.
+
 ### 1.1.0: the contract said "with the rolled-up status" and did not carry one
 
 The scorecard schema described `entries` and nothing else, because `Scorecard.status` was a

@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/retaining_wall/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'retaining_wall': the fields a Design Spec puts in `element_params` when it declares `element_type: retaining_wall`. Generated from anvilate.packs.geotechnical.RetainingWall.",
+  "properties": {
+    "backfill_friction_angle": {
+      "title": "Backfill Friction Angle",
+      "type": "number"
+    },
+    "backfill_unit_weight": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "base_friction_coefficient": {
+      "title": "Base Friction Coefficient",
+      "type": "number"
+    },
+    "load_arm": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "retained_height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [
+        "vertical_load"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "vertical_load": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "retained_height",
+    "backfill_unit_weight",
+    "backfill_friction_angle",
+    "vertical_load",
+    "load_arm",
+    "base_friction_coefficient"
+  ],
+  "title": "RetainingWall",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

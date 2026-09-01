@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/shallow_footing/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'shallow_footing': the fields a Design Spec puts in `element_params` when it declares `element_type: shallow_footing`. Generated from anvilate.packs.geotechnical.ShallowFooting.",
+  "properties": {
+    "applied_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "cohesion": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "embedment_depth": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "friction_angle": {
+      "title": "Friction Angle",
+      "type": "number"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [
+        "applied_load"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "unit_weight": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "width",
+    "length",
+    "embedment_depth",
+    "applied_load",
+    "friction_angle",
+    "cohesion",
+    "unit_weight"
+  ],
+  "title": "ShallowFooting",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

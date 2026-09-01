@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/lighting_installation/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'lighting_installation': the fields a Design Spec puts in `element_params` when it declares `element_type: lighting_installation`. Generated from anvilate.packs.lighting.LightingInstallation.",
+  "properties": {
+    "allowable_power_density": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "coefficient_of_utilization": {
+      "title": "Coefficient Of Utilization",
+      "type": "number"
+    },
+    "floor_area": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "input_watts_per_luminaire": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "light_loss_factor": {
+      "title": "Light Loss Factor",
+      "type": "number"
+    },
+    "lumens_per_luminaire": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "luminaire_count": {
+      "title": "Luminaire Count",
+      "type": "integer"
+    },
+    "required_illuminance": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "luminaire_count",
+    "lumens_per_luminaire",
+    "input_watts_per_luminaire",
+    "coefficient_of_utilization",
+    "light_loss_factor",
+    "floor_area",
+    "required_illuminance",
+    "allowable_power_density"
+  ],
+  "title": "LightingInstallation",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

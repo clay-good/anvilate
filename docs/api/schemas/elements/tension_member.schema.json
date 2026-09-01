@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/tension_member/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'tension_member': the fields a Design Spec puts in `element_params` when it declares `element_type: tension_member`. Generated from anvilate.packs.structural.TensionMember.",
+  "properties": {
+    "gross_area": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "title": "Material",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "net_area": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "shear_lag_factor": {
+      "default": 1.0,
+      "title": "Shear Lag Factor",
+      "type": "number"
+    },
+    "signed_fields": {
+      "default": [
+        "load"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "gross_area",
+    "net_area",
+    "load",
+    "material"
+  ],
+  "title": "TensionMember",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

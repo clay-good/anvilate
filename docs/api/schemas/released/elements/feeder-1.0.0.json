@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/feeder/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate pack element 'feeder': the fields a Design Spec puts in `element_params` when it declares `element_type: feeder`. Generated from anvilate.packs.electrical.Feeder.",
+  "properties": {
+    "conductor_ampacity": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "conductor_area": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "drop_limit_percent": {
+      "default": 3.0,
+      "title": "Drop Limit Percent",
+      "type": "number"
+    },
+    "line_voltage": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load_power": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "one_way_length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "power_factor": {
+      "title": "Power Factor",
+      "type": "number"
+    },
+    "reactance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resistivity": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [
+        "load_power",
+        "reactance"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "load_power",
+    "power_factor",
+    "line_voltage",
+    "resistivity",
+    "one_way_length",
+    "conductor_area",
+    "conductor_ampacity"
+  ],
+  "title": "Feeder",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}
