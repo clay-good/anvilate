@@ -1403,3 +1403,46 @@ def test_verify_refuses_a_malformed_envelope_rather_than_raising(label, fmt, tmp
     assert code in (EXIT_BAD_REQUEST, EXIT_FAILED, EXIT_NOT_EVALUATED), f"{label}: exit {code}"
     assert (out + err).strip(), f"{label}: said nothing"
     assert "Traceback" not in out and "Traceback" not in err
+
+
+def test_the_command_table_lists_the_parsers_own_commands_and_flags():
+    """The page is a reference, and a reference with a stale table is worse than none.
+
+    A reader had to walk five sections to learn that `check` takes `--format` and `export`
+    takes `--artifact`. The table that saves them is held against the parser in both
+    directions: a command missing from it, and a flag it claims that does not exist.
+    """
+    import argparse
+    import re
+    from pathlib import Path
+
+    from anvilate.cli import _build_parser
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "headless-cli.md").read_text()
+    start = page.index("| Command | Takes | Flags | 0 means |")
+    rows = {}
+    for line in page[start:].splitlines()[2:]:
+        if not line.startswith("|"):
+            break
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        rows[cells[0].strip("`")] = set(re.findall(r"`(--[\w-]+)`", cells[2]))
+
+    parser = _build_parser()
+    commands = next(
+        dict(action.choices)
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    assert set(rows) == set(commands), (
+        f"the table lists {sorted(rows)}; the parser has {sorted(commands)}"
+    )
+    for name, sub in commands.items():
+        flags = {
+            option
+            for action in sub._actions
+            for option in action.option_strings
+            if option.startswith("--") and option != "--help"
+        }
+        assert rows[name] == flags, (
+            f"{name}: the table says {sorted(rows[name])}, it takes {sorted(flags)}"
+        )

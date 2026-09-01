@@ -4,6 +4,18 @@ Three of the four commands `headless-automation` names are backed, and a fifth t
 `evidence-attestation` names is backed too. The one that is not is refused by name, with
 what it is waiting on.
 
+| Command | Takes | Flags | 0 means |
+| --- | --- | --- | --- |
+| `check` | one or more specs, or a directory | `--format` | every check passed, or passed with margin to spare |
+| `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
+| `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
+| `diff` | two specs | — | nothing got worse |
+| `build` | a spec | — | nothing: it is specified and unbuilt, and exits 4 |
+
+Each command's `--help` states its own exit rule, because what counts as failure differs
+between them — `diff` returns 0 on a run where every check fails, as long as none of them
+got worse.
+
 ```bash
 anvilate check part.yaml
 anvilate check parts/            # every spec under a directory, recursively
