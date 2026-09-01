@@ -2390,3 +2390,63 @@ def test_the_provenance_guard_actually_refuses(factory, blank):
     with pytest.raises(pydantic.ValidationError, match="must state"):
         model(name="LRFD 1", factors={"D": 1.4}, citation=blank)
     assert model(name="LRFD 1", factors={"D": 1.4}, citation="ASCE 7-22 §2.3.1").citation
+
+
+def test_every_change_delta_names_a_requirement_the_archive_can_merge():
+    """A change that cannot be archived is a change that fails when the work is done.
+
+    `openspec validate --strict` passes a delta whose `## MODIFIED Requirements` names a
+    requirement the capability has never had; the mismatch surfaces only at `openspec
+    archive`, which refuses with "not found" and changes nothing. That is exactly what
+    happened to `declare-the-spec-element-type`: its element requirement was written as
+    MODIFIED, `spec-ir` had never carried one, and the refusal came months later when
+    somebody tried to file the finished work.
+
+    So the check is the archive's own rule, run early: a MODIFIED, REMOVED or RENAMED header
+    must name a requirement the capability has, and an ADDED one must not.
+    """
+    import re
+
+    problems = []
+    for delta in sorted((_REPO / "openspec" / "changes").glob("*/specs/*/spec.md")):
+        if "archive" in delta.parts:
+            continue
+        capability = delta.parent.name
+        target = _REPO / "openspec" / "specs" / capability / "spec.md"
+        existing = (
+            set(re.findall(r"^### Requirement: (.+)$", target.read_text(), re.M))
+            if target.exists()
+            else set()
+        )
+        change = delta.parent.parent.parent.name
+        section = None
+        for line in delta.read_text().splitlines():
+            header = re.match(r"^## (ADDED|MODIFIED|REMOVED|RENAMED) Requirements", line)
+            if header:
+                section = header.group(1)
+                continue
+            named = re.match(r"^### Requirement: (.+)$", line)
+            if not named or section is None:
+                continue
+            requirement = named.group(1).strip()
+            if section != "ADDED" and requirement not in existing:
+                problems.append(
+                    f"{change}: {section} '{requirement}' is not in specs/{capability}; "
+                    "the archive would refuse it"
+                )
+            if section == "ADDED" and requirement in existing:
+                problems.append(
+                    f"{change}: ADDED '{requirement}' already exists in specs/{capability}"
+                )
+    assert not problems, "change deltas the archive would refuse:\n  " + "\n  ".join(problems)
+
+
+def test_the_delta_gate_is_looking_at_real_deltas():
+    """The gate above passes trivially if it finds no deltas — which is how a path typo in a
+    glob reads from the outside."""
+    deltas = [
+        path
+        for path in (_REPO / "openspec" / "changes").glob("*/specs/*/spec.md")
+        if "archive" not in path.parts
+    ]
+    assert len(deltas) >= 5, f"only {len(deltas)} change deltas found; the glob has moved"
