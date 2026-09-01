@@ -173,3 +173,43 @@ def test_export_is_the_one_divergence_and_it_is_the_recorded_one():
         / "proposal.md"
     )
     assert change.exists(), "the divergence is supposed to be recorded as a proposed change"
+
+
+def _hostile_documents():
+    """The screening tests' corpus of documents that are valid and hostile, as raw mappings."""
+    import yaml
+
+    from anvilate.spec import dump_spec_yaml
+    from test_screening import _adversarial_specs
+
+    return {
+        label: yaml.safe_load(dump_spec_yaml(spec)) for label, spec in _adversarial_specs().items()
+    }
+
+
+@pytest.mark.parametrize("label", sorted(_hostile_documents()))
+def test_a_hostile_document_screens_the_same_way_on_both_surfaces(label, tmp_path):
+    """Parity where it is worth the most: the documents that go wrong.
+
+    An agreement on a clean spec can be a coincidence of two code paths that happen to work.
+    An agreement on a document naming an alloy nobody has, or a fit designation the ISO 286
+    table does not carry, is the two surfaces sharing one answer about what is wrong — which
+    is the whole claim of having a screen behind both doors. One of these took the shell down
+    with a traceback while the library function was fine, so the corpus earns its keep here.
+    """
+    import yaml
+
+    document = _hostile_documents()[label]
+    path = tmp_path / "part.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    over_mcp = _mcp("run_validation", {"spec": document})
+    assert "error" not in over_mcp, f"{label}: MCP refused a document the schema accepts"
+    card_over_mcp = over_mcp["result"]["structuredContent"]["scorecard"]
+
+    code, out, _err = _cli("check", "--format", "json", str(path))
+    at_the_shell = json.loads(out)["specs"][0]["scorecard"]
+
+    assert at_the_shell == card_over_mcp, label
+    assert card_over_mcp["status"] != CheckStatus.PASS.value, f"{label}: this must not pass"
+    assert code == EXIT_CODES[CheckStatus(card_over_mcp["status"])], label
