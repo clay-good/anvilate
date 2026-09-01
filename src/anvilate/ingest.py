@@ -256,8 +256,16 @@ class CertificateProvenance(RevalidatedModel):
 
     def __str__(self) -> str:
         dated = f", issued {self.issue_date}" if self.issue_date else ""
+        # The date the calibration was *performed*, which decides whether the value is still
+        # inside its calibration interval and which nothing rendered. The identifier can
+        # actively mislead about it: `PTB-2026-04711` reads as a 2026 measurement, and the
+        # certificate carrying it may record a performance date years earlier.
+        measured = ""
+        if self.performance_end_date and self.performance_end_date != self.issue_date:
+            measured = f", measured {self.performance_end_date}"
         return (
-            f"certificate {self.identifier} from {self.laboratory}{dated} — {self.signature_line()}"
+            f"certificate {self.identifier} from {self.laboratory}{dated}{measured} — "
+            f"{self.signature_line()}"
         )
 
 

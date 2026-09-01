@@ -925,3 +925,30 @@ def test_a_zero_the_document_actually_states_is_still_extracted():
     draft = extract_requirements("gap: 0 mm\nlash: 0.0 mm", document="rfq.txt")
     assert [v.field for v in draft.values] == ["gap", "lash"]
     assert all(v.quantity.magnitude == 0.0 for v in draft.values)
+
+
+def test_a_certificate_says_when_the_calibration_was_performed():
+    """The identifier can actively mislead about it.
+
+    `PTB-2026-04711` reads as a 2026 measurement, and the certificate carrying it may record
+    a performance date years earlier — which is what decides whether the value is still inside
+    its calibration interval. The rendering carried the issue date and dropped the
+    performance one.
+    """
+    from anvilate.ingest import CertificateProvenance, SignatureStatus
+
+    def certificate(**dates):
+        return CertificateProvenance(
+            identifier="PTB-2026-04711",
+            laboratory="PTB",
+            signature_status=SignatureStatus.ABSENT,
+            **dates,
+        )
+
+    assert "measured 2019-03-14" in str(certificate(performance_end_date="2019-03-14"))
+    both = str(certificate(issue_date="2026-01-05", performance_end_date="2019-03-14"))
+    assert "issued 2026-01-05, measured 2019-03-14" in both
+    # The same date twice is one fact, not two: a certificate issued the day it was measured
+    # renders as it did.
+    same = str(certificate(issue_date="2026-01-05", performance_end_date="2026-01-05"))
+    assert same == str(certificate(issue_date="2026-01-05"))
