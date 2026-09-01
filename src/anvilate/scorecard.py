@@ -327,7 +327,16 @@ class ScorecardEntry(BaseModel):
             )
         if computed < required:
             status = CheckStatus.FAIL
-            detail = f"safety factor {computed:.2f} vs required minimum {required:.2f}"
+            # Widened to the precision that keeps the two figures apart, which the
+            # over-margin branch below has always done and this one did not. At two fixed
+            # places a safety factor of 1.999 against a required 2.0 printed
+            # "safety factor 2.00 vs required minimum 2.00" — a FAIL whose own numbers show
+            # no shortfall, on the blocking verdict, and on the near-miss an engineer most
+            # needs to read correctly.
+            places = decimals_distinguishing(computed, required)
+            detail = (
+                f"safety factor {computed:.{places}f} vs required minimum {required:.{places}f}"
+            )
         elif upper is not None and computed > upper:
             status = CheckStatus.OVER_MARGIN
             # The excess is printed at whatever precision keeps it off zero. At two places

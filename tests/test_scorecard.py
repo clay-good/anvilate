@@ -638,3 +638,97 @@ def test_the_published_scorecard_contract_requires_the_verdict():
     old = released.with_name("scorecard-1.0.0.json")
     if old.exists():
         assert "status" not in json_module.loads(old.read_text())["properties"]
+
+
+def test_a_failing_detail_never_prints_two_equal_numbers():
+    """A FAIL whose own figures show no shortfall.
+
+    At two fixed decimal places, a safety factor of 1.999 against a required 2.0 rendered as
+    ``safety factor 2.00 vs required minimum 2.00`` — a blocking verdict contradicted by the
+    numbers inside it, on the near-miss an engineer most needs to read correctly. The
+    over-margin branch beside it had been widened for exactly this and the failing branch had
+    not, so the fix written for one contradiction never reached the other.
+
+    Swept across the boundary rather than spot-checked, because the defect only appears where
+    the two figures are within half a printed place of each other.
+    """
+    import re
+
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+
+    printed = re.compile(r"safety factor (-?[\d.]+) vs required minimum (-?[\d.]+)")
+    checked = 0
+    for required in (1.0, 1.5, 1.67, 2.0, 2.5, 3.0):
+        for delta in (-0.5, -1e-2, -1e-3, -1e-4, -1e-5, -1e-9, 0.0, 1e-9, 1e-3, 0.5):
+            entry = ScorecardEntry.from_safety_factor(
+                "bending", computed=required + delta, required=required
+            )
+            match = printed.search(entry.detail)
+            if match is None:  # the over-margin branch writes a different sentence
+                continue
+            checked += 1
+            shown, minimum = (float(group) for group in match.groups())
+            failed = entry.status is CheckStatus.FAIL
+            assert failed == (shown < minimum), (
+                f"the card says {entry.status.value} and the line reads {entry.detail!r}, "
+                "which is the opposite"
+            )
+    assert checked > 40, f"only {checked} details were rendered; the sweep found too few"
+
+    # And the ordinary case keeps conventional precision: widening every line to nine places
+    # to fix the near-miss would be a different rendering defect.
+    ordinary = ScorecardEntry.from_safety_factor("bending", computed=1.5, required=2.0)
+    assert ordinary.detail == "safety factor 1.50 vs required minimum 2.00"
+
+
+def test_every_verdict_the_examples_print_agrees_with_its_own_numbers():
+    """The same property over the rendered corpus rather than the renderer.
+
+    490 examples print 217 lines that state a verdict beside the two numbers behind it. A
+    line whose status and figures disagree is the failure this library exists to make
+    impossible, at the surface a reader actually reads — and nothing had ever compared the
+    two halves of one.
+    """
+    import io
+    import re
+    import runpy
+    from contextlib import redirect_stdout
+    from pathlib import Path
+
+    shapes = (
+        (True, re.compile(r"safety factor (-?[\d.]+) vs required minimum (-?[\d.]+)")),
+        (True, re.compile(r"fundamental (-?[\d.]+) \S+ vs required minimum (-?[\d.]+)")),
+        (False, re.compile(r"deflection (-?[\d.]+) \S+ vs limit (-?[\d.]+)")),
+    )
+    status = re.compile(r"\[(PASS|FAIL|OVER_MARGIN|NOT_EVALUATED)\]")
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    checked, wrong = 0, []
+    for path in sorted(examples.glob("*.py")):
+        buffer = io.StringIO()
+        try:
+            with redirect_stdout(buffer):
+                namespace = runpy.run_path(str(path))
+                main = namespace.get("main")
+                if callable(main):
+                    main()
+        except Exception:  # noqa: BLE001 - test_examples.py owns whether they run at all
+            continue
+        for line in buffer.getvalue().splitlines():
+            verdict = status.search(line)
+            if verdict is None:
+                continue
+            for at_least, pattern in shapes:
+                found = pattern.search(line)
+                if found is None:
+                    continue
+                left, right = (float(group) for group in found.groups())
+                holds = left >= right if at_least else left <= right
+                checked += 1
+                if (verdict.group(1) in ("PASS", "OVER_MARGIN")) != holds:
+                    wrong.append(f"{path.name}: {line.strip()}")
+
+    assert checked > 150, f"only {checked} rendered verdicts were found across the examples"
+    assert not wrong, "printed verdicts contradicted by their own figures:\n  " + "\n  ".join(
+        wrong[:20]
+    )
