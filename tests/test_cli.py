@@ -48,6 +48,14 @@ acceptance: {tiers: [T1_analytical]}
 """
 
 
+def _hostile_documents():
+    """Documents that are valid per the schema and hostile to the screen, from the screening
+    tests — one corpus, exercised at both surfaces."""
+    from test_screening import _adversarial_specs
+
+    return _adversarial_specs()
+
+
 def _run(*argv):
     out, err = io.StringIO(), io.StringIO()
     code = run(list(argv), stdout=out, stderr=err)
@@ -1299,3 +1307,22 @@ def test_the_card_prints_the_clause_each_check_cites():
     assert lines.index("                 [ASME BTH-1 §3-3]") < lines.index(
         "  pass           net tension"
     )
+
+
+@pytest.mark.parametrize("label", sorted(_hostile_documents()))
+def test_the_command_answers_a_hostile_document_rather_than_raising(label, tmp_path):
+    """The same corpus as `tests/test_screening.py`, driven through the command.
+
+    The distinction earns itself: that corpus builds a `DesignSpec` in Python and calls
+    `screen_spec`, and it missed a crash the command hit on the first try — an alloy the
+    database does not carry, named inside `element_params` where a real document names it.
+    A screen is not the surface a user runs; this is.
+    """
+    from anvilate.spec import dump_spec_yaml
+
+    path = tmp_path / "part.yaml"
+    path.write_text(dump_spec_yaml(_hostile_documents()[label]), encoding="utf-8")
+    code, out, err = _run("check", str(path))
+    assert code in (EXIT_FAILED, EXIT_NOT_EVALUATED), f"{label}: exited {code}"
+    assert out.strip(), f"{label}: printed no card"
+    assert "Traceback" not in out and "Traceback" not in err

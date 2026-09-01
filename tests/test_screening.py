@@ -1333,6 +1333,14 @@ def _adversarial_specs() -> dict[str, DesignSpec]:
             element_params={"members": [{"element_type": "nope", "element_params": {}}]},
         ),
         "a general tolerance class nobody can resolve": _manufactured(tolerance_class="ISO2768-m"),
+        # The document a person actually writes: the alloy is named twice, once for the spec
+        # and once inside the element, and both are the same wrong string. The first version
+        # of this corpus changed only the spec's, and missed the crash the command hit on
+        # its first run.
+        "an alloy the database does not carry, named in the element too": _lug_spec(
+            material=MaterialRef(ref="NOT-A-REAL-ALLOY"),
+            element_params={**_lug_spec().element_params, "material": "NOT-A-REAL-ALLOY"},
+        ),
     }
 
 
