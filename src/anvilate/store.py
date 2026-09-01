@@ -3,9 +3,10 @@
 Four of the published tools named nothing in their input to act on — `render_viewport` an
 image of *what*, `read_scorecard` a scorecard of *what* — and each was asking the server to
 remember what the last call produced. That is a session, and `headless-automation` requires
-the server to operate statelessly. `openspec/changes/resolve-mcp-tool-subjects` set out three
-ways to resolve the contradiction and this is the third: **a tool returns a handle to what it
-produced, and a later tool takes that handle as its subject.**
+the server to operate statelessly. Three ways to resolve the contradiction were set out in
+`openspec/changes/archive/2026-09-01-resolve-mcp-tool-subjects`, and this is the third: **a
+tool returns a handle to what it produced, and a later tool takes that handle as its
+subject.**
 
 What the choice buys, said plainly, because the alternatives each bought something too:
 

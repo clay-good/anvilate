@@ -132,9 +132,10 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
 _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.2.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
-# a memory of the last call. `openspec/changes/resolve-mcp-tool-subjects` chose this over
-# carrying whole payloads and over a session; `anvilate.store` states the store's location,
-# reach and retention, which is the cost the choice was made with open eyes about.
+# a memory of the last call. This was chosen over carrying whole payloads and over a session
+# in `openspec/changes/archive/2026-09-01-resolve-mcp-tool-subjects`; `anvilate.store` states
+# the store's location, reach and retention, which is the cost the choice was made with open
+# eyes about.
 _SUBJECT_SCHEMA = {
     "type": "string",
     "pattern": SUBJECT_PATTERN,

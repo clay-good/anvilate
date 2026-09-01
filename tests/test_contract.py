@@ -2576,3 +2576,27 @@ def test_every_relative_link_in_the_docs_resolves():
                 broken.append(f"{page.relative_to(_REPO)} -> {target}")
     assert checked >= 100, f"only {checked} relative links found; the pattern has moved"
     assert not broken, "links to files that do not exist:\n  " + "\n  ".join(broken)
+
+
+def test_every_repository_path_the_source_names_exists():
+    """A refusal that points a reader at a file is only useful while the file is there.
+
+    Archiving a completed change moves it under `openspec/changes/archive/<date>-<name>/`,
+    which broke two comments the same afternoon the change landed — one of them in the module
+    docstring of a module written that hour. The docs have a link gate; the source, whose
+    messages a *user* reads out of a refused MCP call, had none.
+    """
+    import re
+
+    pattern = re.compile(
+        r"(openspec/(?:specs|changes)/[a-z0-9/-]+(?:\.md)?|src/anvilate/[a-z_/]+\.py"
+        r"|docs/[a-z0-9-]+\.md|examples/[a-z0-9_]+\.py|tests/[a-z0-9_]+\.py)"
+    )
+    named, missing = 0, []
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        for target in sorted(set(pattern.findall(path.read_text(encoding="utf-8")))):
+            named += 1
+            if not (_REPO / target).exists():
+                missing.append(f"{path.relative_to(_REPO)} names {target}")
+    assert named >= 10, f"only {named} repository paths found in src/; the pattern has moved"
+    assert not missing, "the source names paths that do not exist:\n  " + "\n  ".join(missing)
