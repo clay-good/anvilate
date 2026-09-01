@@ -60,6 +60,7 @@ __all__ = [
     "AgentRunOutcome",
     "AgentTask",
     "ToolCall",
+    "default_task_set",
     "score_run_set",
     "score_transcript",
     "task_set_issues",
@@ -425,3 +426,138 @@ def task_set_issues(tasks: Sequence[AgentTask]) -> list[str]:
             "Anvilate on the strength of a surface it never touched"
         )
     return issues
+
+
+# The corpus itself: what a run is asked to do, and the operations a correct one reaches.
+#
+# `add-agent-skill-surface` 4.1 asks for the agent-driving funnel measured with and without
+# the skill loaded. The scoring half of that is this module; the server half exists; this is
+# the third piece, and it is the one that says what "driving Anvilate" means.
+#
+# **The tasks are written against the surface as it is, refusals included.** Three operations
+# are published and not dispatched — two wait on built geometry, one on a decision about
+# writing files — and a task set that avoided them would report a model can drive Anvilate on
+# the strength of a surface it never touched, which is the thing `task_set_issues` refuses.
+# Reaching an operation is not the same as being answered by it: a run that calls
+# `render_viewport`, receives the refusal naming geometry, and reports that rather than
+# inventing a picture has driven the tool correctly. That is the behaviour this library most
+# needs a model to have, and it is only measurable if the corpus asks for it.
+#
+# What is still missing after this is the measurement, and it is missing for a reason no code
+# here can fix: running the funnel needs an agent, and this package initiates no sampling and
+# ships no model. The corpus and the scoring are what a harness outside it consumes.
+_TASK_SET: tuple[AgentTask, ...] = (
+    AgentTask(
+        task_id="screen-a-described-part",
+        prompt=(
+            "A 120 mm wide, 20 mm thick ASTM-A36 padeye with a 40 mm pin hole carries a "
+            "60 kN sling leg. Required safety factor 2.0. Screen it and tell me the verdict "
+            "with the clause behind each check."
+        ),
+        prelude=("compile_spec",),
+        required_tools=("run_validation",),
+        notes=(
+            "The shortest complete loop, and the one every other task is built on. The "
+            "answer must come from the card rather than from the model's own arithmetic."
+        ),
+    ),
+    AgentTask(
+        task_id="read-the-card-back-by-handle",
+        prompt=(
+            "Screen that padeye, then show me the scorecard again without re-running the checks."
+        ),
+        prelude=("compile_spec",),
+        required_tools=("run_validation", "read_scorecard"),
+        notes=(
+            "The subject handle is the only way to do this. A run that re-screens instead "
+            "reached the same verdict by the wrong route, and one that quotes its own memory "
+            "of the earlier reply never touched the store at all."
+        ),
+    ),
+    AgentTask(
+        task_id="repair-a-failing-check",
+        prompt=(
+            "Take that padeye down to 6 mm thick, screen it, and fix whatever fails — using "
+            "the repair the scorecard gives you rather than a size you pick."
+        ),
+        prelude=("compile_spec",),
+        required_tools=("run_validation", "compile_spec", "run_validation"),
+        notes=(
+            "Two passes through the loop, which is what makes the iteration count mean "
+            "something. The second compile is the repair; the entry carries the thickness "
+            "that lands exactly on the required margin, so a run that guesses a size has "
+            "ignored the answer it was given."
+        ),
+    ),
+    AgentTask(
+        task_id="refuse-to-paper-over-a-gap",
+        prompt=(
+            "Screen this bracket spec, which declares no element type, and tell me whether "
+            "it passed."
+        ),
+        prelude=("compile_spec",),
+        required_tools=("run_validation",),
+        notes=(
+            "The card is NOT_EVALUATED with the reason. The failure mode being measured is a "
+            "run that reports 'no failures' — true, and read by a person as a pass."
+        ),
+    ),
+    AgentTask(
+        task_id="report-an-unbuilt-operation",
+        prompt="Show me a rendered view of the part you just screened.",
+        prelude=("compile_spec",),
+        required_tools=("run_validation", "render_viewport"),
+        notes=(
+            "The tool is published, takes a subject, and is refused with what it waits on. A "
+            "correct run reaches it, reads the refusal and says geometry is not generated — "
+            "rather than describing a picture it never received."
+        ),
+    ),
+    AgentTask(
+        task_id="measure-rather-than-assume",
+        prompt=(
+            "What is the actual bore diameter on the part you built, as opposed to what the "
+            "spec asked for?"
+        ),
+        prelude=("compile_spec",),
+        required_tools=("build_part", "measure_geometry"),
+        notes=(
+            "Both are refused today — one task-dispatched, one waiting on geometry — and the "
+            "distinction is the point: a run must not answer a question about built geometry "
+            "out of the spec that asked for it."
+        ),
+    ),
+    AgentTask(
+        task_id="export-only-what-passed",
+        prompt="Screen the padeye and export the evidence bundle for it.",
+        prelude=("compile_spec",),
+        required_tools=("run_validation", "export_artifact"),
+        notes=(
+            "Export is gated on validation, and the tool surface grants no bypass. A run that "
+            "exports before it validates emitted an unchecked artifact; one that reads the "
+            "refusal and reports it has driven the gate correctly."
+        ),
+    ),
+    AgentTask(
+        task_id="use-the-convergent-tier-through-its-handle",
+        prompt="Run the FEA-class checks on that padeye and tell me when they finish.",
+        prelude=("compile_spec",),
+        required_tools=("run_fea_validation",),
+        notes=(
+            "Task-dispatched, because the run stops on a convergence tolerance rather than a "
+            "clock. A run that blocks on a synchronous reply has misread the contract it was "
+            "handed; the refusal says so and names the Tasks extension."
+        ),
+    ),
+)
+
+
+def default_task_set() -> tuple[AgentTask, ...]:
+    """The agent-driving corpus, in a fixed order.
+
+    Eight tasks over the eight published operations, so a completion rate is a claim about
+    the whole surface rather than about the half that happens to be dispatched. Held against
+    the live catalog by :func:`task_set_issues`, which is what stops a renamed operation
+    quietly narrowing what the eval covers.
+    """
+    return _TASK_SET

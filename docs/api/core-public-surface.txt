@@ -17,6 +17,7 @@ agenteval.AgentEvalReport
 agenteval.AgentRunOutcome
 agenteval.AgentTask
 agenteval.ToolCall
+agenteval.default_task_set
 agenteval.score_run_set
 agenteval.score_transcript
 agenteval.task_set_issues

@@ -42,6 +42,14 @@
 ## 4. Evaluation
 
 - [ ] 4.1 Measure the agent-driving funnel with and without the skill loaded; publish the
-      delta — the scoring half now exists (`anvilate.agenteval`, from
-      `extend-benchmarking-agent-evals` 2.1-2.3), so what is still missing is the task
-      corpus and a server to drive. An unmeasured delta is not published as one
+      delta. Three of the four pieces are now in place: the scoring
+      (`anvilate.agenteval`, from `extend-benchmarking-agent-evals` 2.1-2.3), the server
+      (every tool names its subject and the loop runs end to end), and the corpus —
+      `agenteval.default_task_set`, eight tasks over the eight published operations,
+      including the three that are refused, because a set that avoided them would report a
+      model can drive Anvilate on the strength of a surface it never touched.
+
+      **What is missing is the measurement, and no code here can supply it**: running the
+      funnel needs an agent, and this package initiates no sampling and ships no model. The
+      corpus and the scoring are what a harness outside it consumes. An unmeasured delta is
+      still not published as one.

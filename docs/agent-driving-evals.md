@@ -56,15 +56,25 @@ so a number recorded without them cannot be compared with another one.
 
 ## Scope
 
-**The corpus is not written.** A task set is a claim about what an agent should have done
-with the tools, and of the eight specified operations four are backed by shipping code. The
-format and its gate are what a corpus needs to be judged against; writing the corpus first
-would be writing it against nothing — the same order
-[the compilation metrics](valid-is-not-correct.md) shipped in, and for the same reason.
+**The corpus is written now**, as `agenteval.default_task_set`: eight tasks over the eight
+published operations. It waited for the server, because a task set is a claim about what an
+agent should have done with the tools and writing it before they could be driven would have
+been writing it against nothing — the same order
+[the compilation metrics](valid-is-not-correct.md) shipped in.
 
-Nothing here runs a model. It scores a transcript, which is what makes it testable offline
-and what keeps the published recommendation gated on a measurement rather than an
-impression.
+**It asks for the refusals on purpose.** Three operations are published and not dispatched —
+two wait on built geometry, one on a decision about writing files — and a corpus that skipped
+them would report that a model can drive Anvilate on the strength of the half that answers.
+Reaching an operation is not the same as being answered by it: a run that calls
+`render_viewport`, reads the refusal naming geometry and says so, rather than describing a
+picture it never received, has driven the tool correctly. That is the behaviour this library
+most needs a model to have, and it is only measurable if the corpus asks for it.
+
+**What is still missing is the measurement.** Running the funnel needs an agent, and nothing
+here runs a model: this package initiates no sampling and ships none. It scores a transcript,
+which is what makes it testable offline and what keeps the published recommendation gated on
+a measurement rather than an impression — and the delta between "with the skill" and "without
+it" stays unpublished until somebody outside this package produces the transcripts.
 
 ## The other half: external suites, referenced rather than bundled
 

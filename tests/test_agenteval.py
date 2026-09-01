@@ -308,3 +308,48 @@ def test_an_outcome_cannot_be_copied_past_its_validators():
     run = score_transcript(_task(), _calls("compile_spec", *LOOP))
     with pytest.raises(ValidationError, match="no required operations"):
         run.model_copy(update={"required_tools": ()})
+
+
+def test_the_default_task_set_covers_the_surface_it_claims_to():
+    """The corpus half of `add-agent-skill-surface` 4.1, held against the live catalog.
+
+    A completion rate is a claim about driving *Anvilate*, so the set has to reach every
+    published operation — `task_set_issues` refuses one that leaves half the surface
+    untouched, and this asserts the set it is given is the shipped one rather than a fixture
+    that happens to pass.
+    """
+    from anvilate.agenteval import default_task_set, task_set_issues
+    from anvilate.mcp import REQUIRED_OPERATIONS, tool_catalog
+
+    tasks = default_task_set()
+    assert len(tasks) >= 8, f"only {len(tasks)} tasks; the set has shrunk"
+    assert task_set_issues(list(tasks)) == []
+
+    exercised = {operation for task in tasks for operation in task.operations}
+    assert exercised == REQUIRED_OPERATIONS == {tool.name for tool in tool_catalog()}
+
+    # Every task states its opening separately from its loop, which is what makes an
+    # iteration count mean anything — a set whose tasks fold the two together would report
+    # one pass for a run that repaired twice.
+    assert all(task.prelude for task in tasks)
+    assert all(task.notes and task.notes.strip() for task in tasks), (
+        "a task with no note is a prompt whose grading rule nobody wrote down"
+    )
+    assert len({task.task_id for task in tasks}) == len(tasks)
+
+
+def test_the_corpus_asks_for_the_behaviour_the_refusals_exist_to_get():
+    """Three operations are published and not dispatched, and a corpus that avoided them
+    would measure only the half of the surface that answers.
+
+    Reaching an operation is not being answered by it: a run that calls `render_viewport`,
+    reads the refusal naming geometry and reports it has driven the tool correctly, and that
+    is the behaviour this library most needs a model to have.
+    """
+    from anvilate import mcp
+    from anvilate.agenteval import default_task_set
+
+    undispatched = set(mcp._UNBUILT)
+    assert undispatched, "nothing is refused any more; this test has outlived its subject"
+    reached = {operation for task in default_task_set() for operation in task.operations}
+    assert undispatched <= reached, f"no task reaches {sorted(undispatched - reached)}"
