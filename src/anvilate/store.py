@@ -153,13 +153,27 @@ class SubjectStore:
             )
         path = self._path(handle)
         try:
-            record = json.loads(path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
         except OSError as missing:
             raise UnknownSubject(
                 f"{handle} is not in the subject store at {self._root}. A handle resolves "
                 f"only where its document was published, and nothing here evicts an entry — "
                 f"so this is a store that never held it, or one whose directory was removed"
             ) from missing
+        try:
+            record = json.loads(text)
+        except ValueError as unreadable:
+            # An entry that is present and unreadable is a different fact from one that is
+            # absent, and both are "this handle gives you no document" to a caller — so it is
+            # the same exception with a message that says which. Raw `JSONDecodeError` here
+            # would raise straight past a caller handling `UnknownSubject`, which is the trap
+            # `parse_dcc` had against `ValueError`: an entry a killed process or an editor
+            # truncated would 500 a tool call instead of refusing it.
+            raise UnknownSubject(
+                f"{handle} is in the store at {self._root} and is not readable JSON: "
+                f"{unreadable}. Publishing is atomic, so this is a file something outside "
+                f"this library wrote or truncated; delete it and publish the document again"
+            ) from unreadable
         if kind is not None and record.get("kind") != kind:
             raise UnknownSubject(
                 f"{handle} names a {record.get('kind')!r}, and a {kind!r} was asked for"
