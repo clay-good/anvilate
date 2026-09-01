@@ -278,6 +278,28 @@ def test_mezzanine_structure_example_passes():
     assert all(e.passed for e in card.entries)
 
 
+def test_skid_frame_document_example_names_the_member_that_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "skid_frame_document.py"))
+    card = namespace["screen_skid_frame"]()
+    assert card.status is CheckStatus.FAIL
+    # Both eyes' checks are in one card, and the member prefix is what keeps the two
+    # identically named checks apart. Without it a reader cannot tell which eye failed.
+    names = [e.name for e in card.entries if e.name.startswith("member")]
+    assert names == [
+        "member 1 (lifting_lug): front eye net tension",
+        "member 1 (lifting_lug): front eye pin bearing",
+        "member 2 (lifting_lug): rear eye net tension",
+        "member 2 (lifting_lug): rear eye pin bearing",
+    ]
+    assert card.governing().name == "member 2 (lifting_lug): rear eye net tension"
+    # The single-element path is unchanged by the composite: the same front eye declared
+    # on its own screens to the same two checks, without a member prefix.
+    alone = namespace["screen_front_eye_only"]()
+    assert alone.status is CheckStatus.PASS
+    assert "front eye net tension" in {e.name for e in alone.entries}
+    _assert_narrates_computed("skid_frame_document.py", namespace)
+
+
 def test_lifting_padeye_example_flags_pin_bearing():
     namespace = runpy.run_path(str(_EXAMPLES / "lifting_padeye.py"))
     card = namespace["screen_padeye"]()

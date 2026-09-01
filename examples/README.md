@@ -27,6 +27,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `monorail_trolley_sweep.py` | A 10 kN trolley swept along a propped runway beam: the governing moment peaks at L/√3 from the prop, so mid-span passes at SF 2.03 while the true worst parking spot fails at 1.98. |
 | `flat_bar_strut_weak_axis.py` | A 20 × 60 mm flat-bar strut declared about its strong axis: the column screen buckles it about `least_radius_of_gyration` automatically (r 5.8 vs 17.3 mm — the AISC §E3 elastic branch, honest FAIL at 1.4); only a hand-built raw section with no transverse second moment can still produce the false 4.3. |
 | `mezzanine_structure.py` | A whole structure — a floor beam on two posts — screened into one scorecard via `screen_structure`. |
+| `skid_frame_document.py` | The same idea from a *document*: a Design Spec declaring `element_type: structure` with two padeyes as members, screened into one card whose entries name the member that produced them. |
 | `beam_column_check.py` | A round HSS pipe column under combined axial load and bending, screened by the AISC §H1.1 interaction equation (the case pure-beam and pure-column checks can't express). |
 | `brace_tie_check.py` | A bolted single-angle tension brace (AISC §D2): gross yielding passes comfortably, but shear lag makes net-section rupture govern. |
 | `column_base_plate.py` | A column base plate sized for AISC concrete bearing (§J8) *and* cantilever plate bending (Design Guide 1) — bearing passes but the plate-bending check governs and fails, flagging a too-thin plate. |
