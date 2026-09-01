@@ -2546,3 +2546,33 @@ def test_every_capability_spec_is_one_openspec_would_accept():
                         f"{capability}: scenario {title!r} under {name!r} has no WHEN/THEN"
                     )
     assert not problems, "capability specs openspec would refuse:\n  " + "\n  ".join(problems)
+
+
+def test_every_relative_link_in_the_docs_resolves():
+    """A 404 is the way a reader meets a file that moved.
+
+    The docs index has a gate holding its entries against the pages that ship, and every
+    other link in the tree — a page pointing at an example, a module, an openspec change,
+    another page — had none. There are hundreds of them and they are exactly the kind of
+    thing a rename breaks silently.
+    """
+    import re
+
+    pages = [
+        *sorted((_REPO / "docs").rglob("*.md")),
+        _REPO / "README.md",
+        _REPO / "AGENTS.md",
+        _REPO / "examples" / "README.md",
+    ]
+    checked, broken = 0, []
+    for page in pages:
+        if not page.exists():  # pragma: no cover - all three ship
+            continue
+        for target in re.findall(r"\]\(([^)#]+?)(?:#[^)]*)?\)", page.read_text(encoding="utf-8")):
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            checked += 1
+            if not (page.parent / target).resolve().exists():
+                broken.append(f"{page.relative_to(_REPO)} -> {target}")
+    assert checked >= 100, f"only {checked} relative links found; the pattern has moved"
+    assert not broken, "links to files that do not exist:\n  " + "\n  ".join(broken)
