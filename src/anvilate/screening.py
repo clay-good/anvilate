@@ -499,9 +499,10 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     run. The card is never empty: every spec declares at least one tier, and every tier
     produces at least one entry.
 
-    **A declared element that no demanded tier screens is reported, not dropped.** A spec
-    naming its element and demanding only T2 would otherwise pass on a tolerance band with
-    nothing saying the part itself was never screened.
+    **A declaration that no demanded tier screens is reported, not dropped.** A spec naming
+    its element and demanding only T2 would otherwise pass on a tolerance band with nothing
+    saying the part itself was never screened, and a spec declaring a tolerance band and
+    demanding only T1 would pass with the band unlooked at.
 
     ``resolver`` is where the material and component identifiers are looked up; the default
     is the bundled standards databases. Pass one built from
@@ -547,6 +548,22 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
         )
     if ValidationTier.T2_DFM in tiers:
         entries.extend(_dfm_entries(spec))
+    elif spec.dimensions:
+        # The same shape as the element above, and it bites harder: a spec declaring a
+        # ±0.0001 mm band — achievable on no process this library knows — and demanding only
+        # T1 screened to PASS, because the band nobody asked to check is a band nobody
+        # checked. The document states it; the card answers it or says it did not.
+        entries.append(
+            ScorecardEntry(
+                name="tolerance achievability",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares {len(spec.dimensions)} toleranced dimension(s) and "
+                    f"acceptance.tiers does not demand {ValidationTier.T2_DFM.value}, so "
+                    "none was screened against the process floor"
+                ),
+            )
+        )
     if ValidationTier.T3_FEA in tiers:
         entries.append(
             ScorecardEntry(

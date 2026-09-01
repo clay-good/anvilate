@@ -855,3 +855,34 @@ def test_a_spec_with_no_element_and_no_t1_says_nothing_about_elements():
     )
     assert "T1 analytical" not in [entry.name for entry in card.entries]
     assert card.status is CheckStatus.PASS
+
+
+def test_a_declared_tolerance_no_tier_screens_is_reported_rather_than_dropped():
+    """The same hole as the element's, one field over, and it bites harder.
+
+    The band here — ±0.0001 mm — is achievable on no process this library knows. Demanding
+    only T1, the spec screened to PASS: the dimension the document states was never compared
+    to anything, and the card said so nowhere.
+    """
+    card = screen_spec(
+        _lug_spec(
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+            dimensions=[_dimension("w", "120 mm", "0.0001 mm")],
+        )
+    )
+    gap = next(entry for entry in card.entries if entry.name == "tolerance achievability")
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert "T2_dfm" in gap.detail and "1 toleranced dimension" in gap.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+    # The tier that was demanded still ran.
+    assert any(entry.name.startswith("padeye") for entry in card.entries)
+
+
+def test_a_spec_with_no_dimensions_and_no_t2_says_nothing_about_tolerances():
+    """The entry is about a declaration the document made; a spec with no toleranced
+    dimension has none to answer for."""
+    card = screen_spec(
+        _lug_spec(acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]))
+    )
+    assert "tolerance achievability" not in [entry.name for entry in card.entries]
+    assert card.status is CheckStatus.PASS
