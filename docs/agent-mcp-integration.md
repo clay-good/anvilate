@@ -58,7 +58,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 protocol: 2026-07-28
 server: anvilate
 tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact
-compile_spec output $ref: {"$ref": "https://anvilate.dev/schemas/design-spec/1.1.0.json"}
+compile_spec output $ref: {"$ref": "https://anvilate.dev/schemas/design-spec/1.2.0.json"}
 ```
 
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a
@@ -153,19 +153,74 @@ print("statuses present:", sorted(statuses))
 
 ```text
 not_evaluated  T1 analytical
-               the Design Spec declares no structural element type, so no discipline-pack screen can be selected from it; build the pack's element and screen that
+               the Design Spec declares no structural element type, so no discipline-pack screen can be selected from it; declare element_type and element_params, or build the pack's element and screen that
 pass           material resolution
                ASTM-A36 resolves in the bundled materials database
 passed: False
 statuses present: ['not_evaluated', 'pass']
 ```
 
-**This is the answer most agents will get today, and it is the honest one.** A Design Spec
-states a material, a process, dimensions, tolerances and loads — but not what kind of
-structural element the part is, and every discipline-pack screen takes a typed element. So
-the analytical tier reports `not_evaluated` naming that gap rather than reporting a pass on
-checks it never ran. See [screening a spec](spec-screening.md); closing it is a change to a
-published schema, not more analysis code.
+**That card is honest and it is also incomplete, and the reason is in the detail.** A Design
+Spec that does not say what kind of element the part is cannot select a discipline-pack
+screen, so the analytical tier reports `not_evaluated` naming the gap rather than reporting a
+pass on checks it never ran.
+
+Say what the part is, and the tier runs. `element_type` names one of the elements the packs
+screen and `element_params` carries that element's own fields:
+
+```python
+from anvilate.mcp import handle_request
+
+DOCUMENT = {
+    "anvilate_spec": "1.2.0",
+    "name": "padeye",
+    "description": "A lifting padeye on a skid frame.",
+    "units": {"value": "SI", "origin": "user_stated"},
+    "material": {"ref": "ASTM-A36"},
+    "manufacturing": {"process": "sheet_metal"},
+    "element_type": "lifting_lug",
+    "element_params": {
+        "name": "padeye",
+        "material": "ASTM-A36",
+        "width": {"magnitude": 120.0, "unit": "mm"},
+        "hole_diameter": {"magnitude": 40.0, "unit": "mm"},
+        "thickness": {"magnitude": 20.0, "unit": "mm"},
+        "load": {"magnitude": 60.0, "unit": "kN"},
+    },
+    "constraints": {"min_safety_factor": {"value": 2.0, "origin": "user_stated"}},
+    "acceptance": {"tiers": ["T1_analytical"]},
+}
+
+reply = handle_request(
+    {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {"name": "run_validation", "arguments": {"spec": DOCUMENT}},
+    }
+)
+card = reply["result"]["structuredContent"]["scorecard"]
+for entry in card["entries"]:
+    print(f"{entry['status']:14} {entry['name']}")
+    print(f"               {entry['detail']}")
+print("card status:", card["status"])
+```
+
+```text
+pass           padeye net tension
+               safety factor 6.67 vs required minimum 2.00
+pass           padeye pin bearing
+               safety factor 3.33 vs required minimum 2.00
+pass           material resolution
+               ASTM-A36 resolves in the bundled materials database
+card status: pass
+```
+
+Two ASME BTH-1 checks, from a document, with no Python written against the analysis library
+at all. `constraints.min_safety_factor` is what the checks are judged against and it is not
+defaulted: a screen that needs one and is given none reports `not_evaluated` saying so,
+because a safety factor nobody stated is the assumption least worth inventing. See
+[screening a spec](spec-screening.md) for the whole element list.
 
 **And this card is the exact shape the trap has.** One entry passed and one could not run:
 `all(e["status"] == "pass")` is False, `not any(e["status"] == "fail")` is True, and only

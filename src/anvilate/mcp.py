@@ -127,7 +127,7 @@ REQUIRED_OPERATIONS = frozenset(
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.1.0.json"
+_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.2.0.json"
 _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.1.0.json"
 
 # Tiers whose cost is a convergence criterion rather than the size of the input. Anything

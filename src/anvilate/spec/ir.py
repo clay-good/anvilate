@@ -9,12 +9,13 @@ origin recorded via :class:`Provenanced`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
 
-from .._models import RevalidatedModel
+from .._models import FrozenMap, RevalidatedModel
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -519,7 +520,7 @@ class AcceptanceCriteria(_Base):
 # 1.1.0 added the optional LoadCase.nature classification, the DesignSpec
 # combination_basis, and the seismic parameters (all additive; a 1.0.0 spec loads
 # unchanged and is re-stamped).
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 
 class DesignSpec(_Base):
@@ -547,8 +548,67 @@ class DesignSpec(_Base):
     # spectral acceleration S_DS and the redundancy factor ρ.
     seismic_design_acceleration: float | None = Field(default=None, gt=0)
     seismic_redundancy_factor: float = Field(default=1.0, gt=0)
+    # The discipline-pack element this part *is*, as a tag plus the element's own fields.
+    # Until this landed a `DesignSpec` could not say what kind of structural element it
+    # described, so no pack screen could be selected from a document and the T1 analytical
+    # tier reported NOT_EVALUATED on every spec -- 236 closed-form modules unreachable from
+    # the front door.
+    #
+    # A tag and a parameter map rather than a typed union, deliberately: `spec-ir` and the
+    # packs stay independently versionable, and a new pack element ships without a bump to
+    # this published schema or to the MCP tool contracts that reference it at its version.
+    # What that trades away is total validation at parse time, and the trade is paid for
+    # rather than waved through -- each element's own schema is published beside this one
+    # and named by the same tag, so the contract stays complete without this file learning
+    # what a lifting lug is. `anvilate.screening.element_registry` resolves the tag.
+    element_type: str | None = None
+    element_params: FrozenMap[str, Any] = Field(default_factory=dict)
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
+
+    @field_validator("element_params", mode="before")
+    @classmethod
+    def _a_quantity_survives_a_round_trip(cls, value: Any) -> Any:
+        """An element parameter written as a quantity comes back as one.
+
+        ``element_params`` is typed ``Any`` because a pack element's fields are quantities,
+        numbers, strings and enum tags, and ``Any`` is not told how to rebuild any of them.
+        So a spec stating ``pin_diameter`` as ``25 mm`` serialised to
+        ``{"magnitude": 25.0, "unit": "mm"}`` and read back as that dictionary -- and the
+        pack model behind the tag takes a `Quantity`. The same repair `CompilationTask`
+        needed, for the same reason, and only the two-key shape this library's own
+        serialiser emits: a mapping that does not parse stays a mapping.
+        """
+        if not isinstance(value, Mapping):
+            return value
+        rebuilt: dict[str, Any] = {}
+        for key, entry in value.items():
+            if isinstance(entry, Mapping) and set(entry) == {"magnitude", "unit"}:
+                try:
+                    entry = Quantity(magnitude=float(entry["magnitude"]), unit=str(entry["unit"]))
+                except (TypeError, ValueError):
+                    pass
+            rebuilt[key] = entry
+        return rebuilt
+
+    @model_validator(mode="after")
+    def _an_element_is_a_tag_and_its_fields(self) -> DesignSpec:
+        """Neither half of an element declaration means anything without the other."""
+        if self.element_type is None:
+            if self.element_params:
+                raise ValueError(
+                    "element_params were given with no element_type, so nothing says which "
+                    "pack element they belong to; declare the type or drop the parameters"
+                )
+            return self
+        if not self.element_type.strip():
+            raise ValueError("element_type is a pack element's tag; an empty string is not one")
+        if not self.element_params:
+            raise ValueError(
+                f"element_type {self.element_type!r} is declared with no element_params, and "
+                "no pack element screens on its name alone; state the element's fields"
+            )
+        return self
 
     # Interface contracts this part publishes for others to import against.
     exports: list[InterfaceContract] = Field(default_factory=list)

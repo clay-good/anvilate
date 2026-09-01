@@ -49,6 +49,14 @@ that happened to exist.
 from __future__ import annotations
 
 import difflib
+import importlib
+import inspect
+import pkgutil
+import re
+from collections.abc import Callable, Mapping
+from functools import cache
+
+from pydantic import BaseModel, ValidationError
 
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
@@ -56,14 +64,146 @@ from .standards import default_standards_resolver
 from .tolerance.general import ToleranceRangeError
 from .tolerance.process import tolerance_is_achievable
 
-__all__ = ["screen_spec"]
+__all__ = ["element_registry", "screen_spec"]
 
-# Why T1 cannot run from a spec alone. Written once because it is quoted in the scorecard
-# entry, in the docs page, and in the test that pins it — three places that must not drift.
+# Why T1 cannot run when a spec declares no element. Written once because it is quoted in
+# the scorecard entry, in the docs page, and in the test that pins it — three places that
+# must not drift.
 _NO_ELEMENT_REASON = (
     "the Design Spec declares no structural element type, so no discipline-pack screen can "
-    "be selected from it; build the pack's element and screen that"
+    "be selected from it; declare element_type and element_params, or build the pack's "
+    "element and screen that"
 )
+
+
+def _tag(name: str) -> str:
+    """``LiftingLug`` as ``lifting_lug`` — the tag a document writes."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+@cache
+def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scorecard]]]:
+    """Every pack element a spec can name, mapped to its model and its screen.
+
+    **Derived from the packs, not typed here.** Each `anvilate.packs.*` module exports its
+    screens as ``screen_*``, and each takes the element it screens as its first parameter;
+    the tag is that model's own name in snake case. So a pack that ships a new element
+    registers it by existing, and a registry written as a list would be a list that goes
+    stale silently — which is the failure mode this module already documents for the tier
+    it could not run.
+
+    `screen_structure` takes a *list* of members rather than one element and is therefore
+    not addressable by a single tag; it is skipped by the same rule that selects the others
+    rather than by name.
+    """
+    from . import packs
+
+    found: dict[str, tuple[type[BaseModel], Callable[..., Scorecard]]] = {}
+    for info in pkgutil.iter_modules(packs.__path__, "anvilate.packs."):
+        module = importlib.import_module(info.name)
+        for name in sorted(getattr(module, "__all__", ())):
+            if not name.startswith("screen_"):
+                continue
+            screen = getattr(module, name)
+            first = next(iter(inspect.signature(screen).parameters.values()), None)
+            annotation = first.annotation if first is not None else None
+            if isinstance(annotation, str):
+                annotation = getattr(module, annotation, None)
+            if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
+                continue
+            tag = _tag(annotation.__name__)
+            if tag in found:  # pragma: no cover - the 23 tags are distinct today
+                raise RuntimeError(
+                    f"two pack elements answer to {tag!r}: {found[tag][0].__name__} and "
+                    f"{annotation.__name__}; a document naming it would screen the wrong one"
+                )
+            found[tag] = (annotation, screen)
+    return found
+
+
+def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """The T1 entries for the element a spec declares, or one saying why there are none.
+
+    Every failure to reach the pack is reported as NOT_EVALUATED naming what went wrong: an
+    unknown tag, or parameters the element's own model refuses. A screen that could not be
+    selected is not a screen that passed, and this is the tier where that matters most.
+    """
+    if spec.element_type is None:
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=_NO_ELEMENT_REASON,
+            )
+        ]
+    registry = element_registry()
+    entry = registry.get(spec.element_type)
+    if entry is None:
+        near = difflib.get_close_matches(spec.element_type, sorted(registry), n=1)
+        suggestion = f"; did you mean {near[0]!r}?" if near else ""
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"element_type {spec.element_type!r} is not one of the "
+                    f"{len(registry)} elements the discipline packs screen{suggestion}"
+                ),
+            )
+        ]
+    model, screen = entry
+    try:
+        element = model.model_validate(dict(spec.element_params))
+    except ValidationError as refused:
+        reasons = "; ".join(
+            f"{'.'.join(str(part) for part in error['loc']) or '<element>'}: {error['msg']}"
+            for error in refused.errors()
+        )
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"element_params do not build a {model.__name__} for element_type "
+                    f"{spec.element_type!r} — {reasons}"
+                ),
+            )
+        ]
+    # Every pack screen takes the element and, for twelve of the twenty-three, a required
+    # safety factor. That is the one thing outside the element the document already states,
+    # so it comes from `constraints.min_safety_factor` -- and when the screen requires one
+    # and the spec declares none, the tier is NOT_EVALUATED rather than screened against a
+    # number this library made up. A safety factor nobody stated is the assumption most
+    # worth refusing to make.
+    parameters = inspect.signature(screen).parameters
+    wanted = parameters.get("required_safety_factor")
+    keywords: dict[str, object] = {}
+    if wanted is not None:
+        stated = spec.constraints.min_safety_factor
+        if stated is not None:
+            keywords["required_safety_factor"] = stated.value
+        elif wanted.default is inspect.Parameter.empty:
+            return [
+                ScorecardEntry(
+                    name="T1 analytical",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"the {spec.element_type} screen is judged against a required safety "
+                        "factor and the spec states none; declare "
+                        "constraints.min_safety_factor"
+                    ),
+                )
+            ]
+    card = screen(element, **keywords)
+    if not card.entries:  # pragma: no cover - every pack screen returns at least one check
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=f"the {spec.element_type} screen produced no checks",
+            )
+        ]
+    return list(card.entries)
 
 
 def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
@@ -274,13 +414,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
             )
         )
     if ValidationTier.T1_ANALYTICAL in tiers:
-        entries.append(
-            ScorecardEntry(
-                name="T1 analytical",
-                status=CheckStatus.NOT_EVALUATED,
-                detail=_NO_ELEMENT_REASON,
-            )
-        )
+        entries.extend(_element_entries(spec))
     if ValidationTier.T2_DFM in tiers:
         entries.extend(_dfm_entries(spec))
     if ValidationTier.T3_FEA in tiers:

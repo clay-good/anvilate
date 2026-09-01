@@ -62,7 +62,7 @@ def test_every_code_fence_is_one_this_file_knows():
 
 def test_the_extractor_finds_the_examples_that_are_there():
     """Without this the whole file passes on a regex that matched nothing."""
-    assert len(_examples()) == 4, [source[:40] for source, _ in _examples()]
+    assert len(_examples()) == 5, [source[:40] for source, _ in _examples()]
     assert all(claimed.strip() for _source, claimed in _examples())
 
 
@@ -122,6 +122,11 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "not_evaluated",
         "anvilate_spec",
         "read_scorecard",
+        # The two fields a document uses to say what kind of element it is. Spec-IR field
+        # names rather than tool names, like `anvilate_spec` above.
+        "element_type",
+        "element_params",
+        "min_safety_factor",
     }
     named = set(re.findall(r"`([a-z_]+_[a-z_]+)`", _TEXT))
     unknown = sorted(named - allowed)

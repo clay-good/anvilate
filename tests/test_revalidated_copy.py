@@ -298,7 +298,16 @@ def _any_field_probes():
     """One instance per ``Any``-typed field, holding the values that field really carries."""
     from anvilate.compilation import CompilationTask
     from anvilate.mcp import tool_catalog
-    from anvilate.units import Quantity
+    from anvilate.spec import (
+        AcceptanceCriteria,
+        DesignSpec,
+        Manufacturing,
+        ManufacturingProcess,
+        MaterialRef,
+        Provenanced,
+        ValidationTier,
+    )
+    from anvilate.units import Quantity, UnitSystem
 
     task = CompilationTask(
         task_id="t1",
@@ -318,10 +327,30 @@ def _any_field_probes():
         },
     )
     tool = tool_catalog()[0]
+    # A pack element's fields are quantities, numbers, strings and enum tags, so a spec
+    # declaring one carries the same `Any` and needs the same repair.
+    spec = DesignSpec(
+        name="padeye",
+        description="A lifting padeye.",
+        units=Provenanced.stated(UnitSystem.SI),
+        material=MaterialRef(ref="ASTM-A36"),
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
+        element_type="lifting_lug",
+        element_params={
+            "name": "padeye",
+            "material": "ASTM-A36",
+            "width": Quantity.parse("120 mm"),
+            "hole_diameter": Quantity.parse("40 mm"),
+            "thickness": Quantity.parse("20 mm"),
+            "load": Quantity.parse("60 kN"),
+        },
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    )
     return {
         ("anvilate.compilation", "CompilationTask", "reference"): task,
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
         ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,
+        ("anvilate.spec.ir", "DesignSpec", "element_params"): spec,
     }
 
 

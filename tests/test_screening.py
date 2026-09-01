@@ -15,6 +15,7 @@ from anvilate.screening import screen_spec
 from anvilate.spec import (
     AcceptanceCriteria,
     ChainLink,
+    Constraints,
     DesignSpec,
     DimensionChain,
     LoadCase,
@@ -475,3 +476,217 @@ def test_an_injected_resolver_screens_a_team_local_material():
         next(e for e in screen_spec(spec).entries if e.name == "material resolution").status
         is CheckStatus.FAIL
     )
+
+
+# --- The tier a document can now reach ----------------------------------------------------
+#
+# Until `element_type` landed, T1 reported NOT_EVALUATED on **every** spec and would have
+# gone on doing so however much analysis was written: 236 closed-form modules unreachable
+# from the front door, because the IR had no way to say what kind of element the part was.
+
+
+def _lug_spec(**overrides) -> DesignSpec:
+    """A spec that names its element — the whole point of the field."""
+    params = {
+        "name": "padeye",
+        "material": "ASTM-A36",
+        "width": _q("120 mm"),
+        "hole_diameter": _q("40 mm"),
+        "thickness": _q("20 mm"),
+        "load": _q("60 kN"),
+    }
+    base = {
+        "element_type": "lifting_lug",
+        "element_params": params,
+        "constraints": Constraints(min_safety_factor=Provenanced.stated(2.0)),
+        "acceptance": AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    }
+    base.update(overrides)
+    return _spec(**base)
+
+
+def test_a_spec_that_names_its_element_reaches_the_pack_that_screens_it():
+    """The main path, end to end from a document.
+
+    Two ASME BTH-1 checks, selected from the tag, judged against the safety factor the
+    document itself states — and no `T1 analytical` gap entry, because there is no longer a
+    gap to name.
+    """
+    card = screen_spec(_lug_spec())
+    names = [entry.name for entry in card.entries]
+    assert "T1 analytical" not in names, "the gap is still reported on a spec that closes it"
+    assert "padeye net tension" in names and "padeye pin bearing" in names
+    for entry in card.entries:
+        if entry.name.startswith("padeye"):
+            assert entry.status is CheckStatus.PASS
+            assert "required minimum 2.00" in entry.detail
+    assert card.status is CheckStatus.PASS
+
+
+def test_the_required_safety_factor_comes_from_the_document_and_is_never_invented():
+    """A screen judged against a number nobody stated is the assumption least worth making.
+
+    Twelve of the twenty-three pack screens take a required safety factor and have no
+    default. The spec already states one, so it is read from there — and a spec that states
+    none reports NOT_EVALUATED saying so rather than screening against a house figure.
+    """
+    stated = screen_spec(_lug_spec())
+    assert all(
+        "required minimum 2.00" in entry.detail
+        for entry in stated.entries
+        if entry.name.startswith("padeye")
+    )
+
+    # The same element, judged against a different declared minimum, moves the verdict.
+    tight = screen_spec(
+        _lug_spec(constraints=Constraints(min_safety_factor=Provenanced.stated(5.0)))
+    )
+    bearing = next(e for e in tight.entries if e.name == "padeye pin bearing")
+    assert bearing.status is CheckStatus.FAIL, bearing.detail
+    assert "required minimum 5.00" in bearing.detail
+
+    # And with none stated at all, the tier is named rather than run.
+    silent = screen_spec(_lug_spec(constraints=Constraints()))
+    gap = next(e for e in silent.entries if e.name == "T1 analytical")
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert "states none" in gap.detail and "min_safety_factor" in gap.detail
+
+
+def test_an_element_type_no_pack_screens_is_named_rather_than_ignored():
+    """An unknown tag is a document that asked for a screen this library does not have. The
+    refusal counts the elements it does have and suggests the near miss, because the
+    likeliest cause is a spelling."""
+    card = screen_spec(_lug_spec(element_type="lifting_lugs"))
+    gap = next(e for e in card.entries if e.name == "T1 analytical")
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert "'lifting_lugs' is not one of the" in gap.detail
+    assert "did you mean 'lifting_lug'?" in gap.detail
+
+
+def test_element_params_the_pack_refuses_are_reported_as_the_gap_they_are():
+    """The cost of a tag-and-map rather than a typed union is that a malformed element is
+    caught at screening rather than at parse. It is paid here: the pack model's own refusal
+    is quoted, naming the field, so the answer is as specific as a parse error would be."""
+    broken = dict(_lug_spec().element_params)
+    del broken["hole_diameter"]
+    card = screen_spec(_lug_spec(element_params=broken))
+    gap = next(e for e in card.entries if e.name == "T1 analytical")
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert "do not build a LiftingLug" in gap.detail
+    assert "hole_diameter" in gap.detail
+
+    # A field of the right name and the wrong dimension is the pack's own message too.
+    wrong = dict(_lug_spec().element_params)
+    wrong["load"] = _q("60 mm")
+    detail = next(
+        e for e in screen_spec(_lug_spec(element_params=wrong)).entries if e.name == "T1 analytical"
+    ).detail
+    assert "load" in detail
+
+
+def test_neither_half_of_an_element_declaration_stands_alone():
+    """A tag with no fields screens nothing, and fields with no tag belong to no element."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="no element_params"):
+        _spec(element_type="lifting_lug")
+    with pytest.raises(ValidationError, match="no element_type"):
+        _spec(element_params={"name": "padeye"})
+    with pytest.raises(ValidationError, match="an empty string is not one"):
+        _spec(element_type="  ", element_params={"name": "padeye"})
+
+
+def test_the_element_registry_covers_every_pack_screen_that_takes_one_element():
+    """The registry is derived from the packs, so a new pack element registers by existing.
+
+    Held the other way round here: every `screen_*` a pack exports whose first parameter is
+    a model must be reachable by a tag, or a pack ships an element no document can name and
+    nothing says so. `screen_structure` takes a *list* and is excluded by that rule rather
+    than by name.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    from anvilate import packs
+    from anvilate.screening import element_registry
+
+    registry = element_registry()
+    reachable = {model for model, _screen in registry.values()}
+    missing, total = [], 0
+    for info in pkgutil.iter_modules(packs.__path__, "anvilate.packs."):
+        module = importlib.import_module(info.name)
+        for name in sorted(getattr(module, "__all__", ())):
+            if not name.startswith("screen_"):
+                continue
+            first = next(iter(inspect.signature(getattr(module, name)).parameters.values()), None)
+            annotation = first.annotation if first is not None else None
+            if isinstance(annotation, str):
+                annotation = getattr(module, annotation, None)
+            if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
+                continue
+            total += 1
+            if annotation not in reachable:
+                missing.append(f"{info.name}.{name} screens {annotation.__name__}")
+
+    assert total > 20, f"only {total} single-element pack screens were found"
+    assert not missing, "pack elements no document can name:\n  " + "\n  ".join(missing)
+    assert len(registry) == total
+    # And the tags are distinct, or a document naming one would screen the other.
+    assert len(set(registry)) == len(registry)
+
+
+def test_an_element_declaration_survives_being_written_down():
+    """A spec is a *document*, so the element it declares has to come back off disk as the
+    element it was. `element_params` is typed `Any`, which pydantic cannot rebuild from, so
+    a quantity in it went out as `{"magnitude", "unit"}` and came back as a dictionary the
+    pack model refuses."""
+    from anvilate.spec import dump_spec_yaml, load_spec_yaml
+
+    spec = _lug_spec()
+    reloaded = load_spec_yaml(dump_spec_yaml(spec))
+    assert reloaded.element_type == "lifting_lug"
+    assert isinstance(reloaded.element_params["load"], Quantity)
+    assert reloaded.element_params["load"].to("kN").magnitude == pytest.approx(60.0)
+    # And it screens to the same card, which is the property that actually matters.
+    assert [(e.name, e.status) for e in screen_spec(reloaded).entries] == [
+        (e.name, e.status) for e in screen_spec(spec).entries
+    ]
+
+
+def test_the_docs_page_element_block_is_a_document_that_screens():
+    """The page prints the two fields a reader copies. They are loaded and screened rather
+    than read, because a block nobody runs is prose that looks like code."""
+    import re
+    from pathlib import Path
+
+    import yaml
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "spec-screening.md").read_text()
+    block = re.search(r"```yaml\n(element_type:.*?)```", page, re.S)
+    assert block is not None, "the element block on spec-screening.md has moved"
+    shown = yaml.safe_load(block.group(1))
+    assert set(shown) == {"element_type", "element_params", "constraints"}, shown
+
+    card = screen_spec(
+        _spec(
+            element_type=shown["element_type"],
+            element_params=shown["element_params"],
+            constraints=Constraints(
+                min_safety_factor=Provenanced.stated(
+                    shown["constraints"]["min_safety_factor"]["value"]
+                )
+            ),
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+        )
+    )
+    named = [entry.name for entry in card.entries if entry.name.startswith("padeye")]
+    assert named, f"the page's element screened nothing: {[e.name for e in card.entries]}"
+    assert "T1 analytical" not in [entry.name for entry in card.entries]
+    # The page says two cited ASME BTH-1 checks come back; that is the claim, so it is held.
+    assert len(named) == 2
+    for entry in card.entries:
+        if entry.name in named:
+            assert entry.reference and "BTH-1" in entry.reference, entry.reference

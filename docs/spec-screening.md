@@ -33,18 +33,53 @@ dimensions on a 0.2 mm nominal gap span 0.1..0.3 mm worst-case and about 0.129..
 RSS, so a requirement of 0.12..0.28 mm passes statistically and fails in the worst case. A
 part that can be built out of tolerance is one that will be.
 
-## What it cannot do, and why that is not a missing feature
+## Saying what the part is
 
-**A `DesignSpec` does not say what kind of structural element the part is.** It states a
-material, a process, interfaces, dimensions, tolerances, loads and acceptance criteria — and
-nothing that lets a screen choose between a lifting lug, a beam and a shallow footing. So no
-discipline-pack screen can be selected from a spec, and **the T1 analytical tier reports
-`NOT_EVALUATED` on every spec**, with that reason.
+For a long time a `DesignSpec` could not say what kind of structural element it described.
+It stated a material, a process, interfaces, dimensions, tolerances, loads and acceptance
+criteria — and nothing that let a screen choose between a lifting lug, a beam and a shallow
+footing. So no discipline-pack screen could be selected from a document, and **the T1
+analytical tier reported `NOT_EVALUATED` on every spec**: 236 closed-form modules that no
+amount of further analysis code would have made reachable from the front door.
 
-That is a gap in the IR, not in the screen, and closing it means giving the IR an element
-declaration — a change to a published schema with a version bump and a story for clients
-pinned to the old one. It is stated here rather than papered over by matching on a part's
-name, which would be a guess that reads exactly like a fact once it is in a scorecard.
+Two fields close it:
+
+```yaml
+element_type: lifting_lug
+element_params:
+  name: padeye
+  material: ASTM-A36
+  width: {magnitude: 120.0, unit: mm}
+  hole_diameter: {magnitude: 40.0, unit: mm}
+  thickness: {magnitude: 20.0, unit: mm}
+  load: {magnitude: 60.0, unit: kN}
+constraints:
+  min_safety_factor: {value: 2.0, origin: user_stated}
+```
+
+`anvilate check` on that document returns two cited ASME BTH-1 checks rather than a gap.
+
+**A tag and a parameter map, not a typed union**, and the trade is worth stating. A union of
+every pack element would validate a document completely at parse time and would make
+`spec-ir` depend on all twenty-odd packs, so every new element became a bump to this
+published schema *and* to the MCP tool contracts that reference it at its version. The tag
+keeps the two surfaces independently versionable. What it costs is that a malformed element
+is caught at screening rather than at parse — paid for by quoting the pack model's own
+refusal, naming the field, so the answer is as specific as a parse error would have been.
+
+**The registry is derived from the packs, not listed here.** Every `screen_*` a pack exports
+whose first argument is a typed element is reachable by that element's name in snake case —
+`LiftingLug` is `lifting_lug` — so a pack that ships a new element registers it by existing.
+`anvilate.screening.element_registry()` is the list, and a gate holds it against the packs in
+both directions.
+
+**The required safety factor comes from the document.** Twelve of the twenty-three screens
+are judged against one and have no default, so it is read from
+`constraints.min_safety_factor`. A spec that states none reports `NOT_EVALUATED` saying so
+rather than screening against a figure this library made up — a safety factor nobody stated
+is the assumption least worth inventing.
+
+## What it still cannot do
 
 T0 reports the same way: it checks a built solid, and no geometry is generated from a spec
 today. T3 is bounded by a convergence criterion rather than by the size of its input, so it

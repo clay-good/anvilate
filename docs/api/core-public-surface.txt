@@ -184,6 +184,7 @@ scorecard.RepairHint
 scorecard.GoverningChange
 scorecard.ScorecardEntry
 scorecard.Scorecard
+screening.element_registry
 screening.screen_spec
 specbench.MUSE_CASE_INDEX
 specbench.CaseSpecification
