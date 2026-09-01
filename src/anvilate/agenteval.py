@@ -533,9 +533,10 @@ _TASK_SET: tuple[AgentTask, ...] = (
         prelude=("compile_spec",),
         required_tools=("run_validation", "export_artifact"),
         notes=(
-            "Export is gated on validation, and the tool surface grants no bypass. A run that "
-            "exports before it validates emitted an unchecked artifact; one that reads the "
-            "refusal and reports it has driven the gate correctly."
+            "The order is the whole task: the export takes the scorecard handle, so a run "
+            "that reaches for it before validating has nothing to name and is refused. It is "
+            "also the one task whose tool answers with a document rather than a file — a run "
+            "that reports a path it was never given has invented one."
         ),
     ),
     AgentTask(

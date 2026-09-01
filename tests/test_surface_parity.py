@@ -136,52 +136,85 @@ def test_neither_surface_serves_an_operation_the_other_would_refuse_for_being_un
     assert not {t.name for t in tool_catalog()} & {"diff"}
 
 
-def test_export_is_the_one_divergence_and_its_cause_has_moved():
-    """The CLI writes an evidence bundle from a spec file; MCP refuses `export_artifact`.
+def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
+    """The CLI writes an evidence bundle from a spec file; MCP now returns the same bundle.
 
-    The divergence is the same and its cause is not. It used to be that the tool **named
-    nothing in its input to act on**, so a stateless server could not serve it at all —
-    which is what `openspec/changes/resolve-mcp-tool-subjects` was about, and that change is
-    now made: `export_artifact` takes a subject handle like every other tool.
+    This test carried the divergence through two changes and it has run out of divergence
+    to carry. First the tool **named nothing in its input to act on**, so a stateless server
+    could not serve it at all; `resolve-mcp-tool-subjects` fixed that with handles. What was
+    left was a decision — writing a file to a path the caller names, which the CLI gets from
+    a user typing it into their own shell — and `export-over-mcp` answered it: the tool
+    returns the document and writes nothing.
 
-    What is left is smaller and sharper. The bundle needs no geometry — the CLI produces it
-    from a spec file by screening and rolling up, and the tool has the same spec through its
-    handle — so the operation is three lines. What it needs first is a decision about writing
-    a file to a path the caller names, which the CLI gets from a user typing it into their
-    own shell. That is `openspec/changes/export-over-mcp`, and the refusal a client receives
-    says so, which is where this test looks.
+    So the two surfaces are held against each other by *value*. Not "both produce a bundle":
+    the same spec, screened either way, has to roll up to the same document, and the
+    comparison is `to_json_dict()` against the CLI's own `--format json` payload. A
+    difference of one section, one missing-layer name or one status is a failure here.
     """
+    import tempfile
     from pathlib import Path
 
     assert stateless_gaps() == (), "a tool names nothing to act on again; that is the old bug"
     tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
     assert tool.subject == "subject"
-
-    error = _mcp(
-        "export_artifact",
-        {"subject": "sha256:" + "a" * 64, "format": "evidence_bundle", "destination": "out"},
-    )["error"]
-    assert "is not dispatched yet" in error["message"]
-    assert "openspec/changes/export-over-mcp" in error["message"]
-
-    # The CLI takes what it acts on, which is why it can serve the same artifact — shown by
-    # serving it rather than by reading the parser's internals.
-    import tempfile
+    # The tool publishes no destination. That is the ruling, and it is checked on the
+    # contract rather than on the handler: a `destination` property reappearing is the
+    # capability coming back, whatever the code behind it does with it.
+    assert "destination" not in tool.input_schema["properties"]
+    assert set(tool.input_schema["required"]) == {"subject", "format"}
 
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "deck.yaml"
         path.write_text(_SPEC, encoding="utf-8")
-        code, out, _err = _cli("export", "--artifact", "evidence-bundle", str(path))
-    assert "bundle" in out and code == EXIT_CODES[CheckStatus.NOT_EVALUATED]
+        code, out, _err = _cli(
+            "export", "--artifact", "evidence-bundle", "--format", "json", str(path)
+        )
+    assert code == EXIT_CODES[CheckStatus.NOT_EVALUATED]
+    at_the_shell = json.loads(out)["bundles"][0]["bundle"]
 
-    change = (
-        Path(__file__).resolve().parent.parent
-        / "openspec"
-        / "changes"
-        / "export-over-mcp"
-        / "proposal.md"
+    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
+    result = _mcp("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"]
+    over_mcp = result["structuredContent"]
+
+    assert over_mcp["bundle"] == at_the_shell
+    assert over_mcp["format"] == "evidence_bundle"
+    assert result["isError"] is False
+    # The bundle does not pass — that is what the CLI's exit code says — and it came back
+    # anyway. An evidence bundle is the evidence a part failed as much as the evidence it
+    # passed, so refusing here would be the one surface that will not tell you.
+    assert at_the_shell["status"] == CheckStatus.NOT_EVALUATED.value
+
+
+def test_the_two_formats_that_need_geometry_are_refused_in_the_same_words():
+    """`dxf` and `qif` are unbuilt on both surfaces, and neither invents its own reason.
+
+    The MCP handler imports the CLI's table rather than restating it, so this is really a
+    check that it still does: a second copy of "what a DXF waits on" is a sentence that goes
+    stale in one place and not the other, and a client reading the MCP refusal and a user
+    reading the shell one would then be told different things about the same gap.
+    """
+    from anvilate.cli import _UNBUILT_ARTIFACTS, EXIT_UNBUILT
+
+    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
+    assert set(_UNBUILT_ARTIFACTS) == {"dxf", "qif"}
+    for artifact, reason in sorted(_UNBUILT_ARTIFACTS.items()):
+        error = _mcp("export_artifact", {"subject": handle, "format": artifact})["error"]
+        # -32000 and not -32602: an unbuilt operation is not an argument the caller can fix,
+        # and a client that retries an INVALID_PARAMS with a better argument would loop.
+        assert error["code"] == -32000, artifact
+        assert reason in error["message"], artifact
+        code, _out, err = _cli("export", "--artifact", artifact, "unused.yaml")
+        assert code == EXIT_UNBUILT
+        assert reason in err
+
+    # And the format the enum publishes that is *not* in that table is the one served, so a
+    # third unbuilt format cannot be added without this failing.
+    published = set(
+        {t.name: t for t in tool_catalog()}["export_artifact"].input_schema["properties"]["format"][
+            "enum"
+        ]
     )
-    assert change.exists(), "the refusal names a change that is not written down"
+    assert published - set(_UNBUILT_ARTIFACTS) == {"evidence_bundle"}
 
 
 def _hostile_documents():

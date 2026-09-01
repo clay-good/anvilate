@@ -9,8 +9,9 @@ of holes, and nothing in the file said whether anything had been checked.
 The last two tests here are the ones that keep this from rotting. One reads the source of
 every public export entry point and requires an ``authorization`` parameter, so a new
 exporter cannot be added ungated. The other holds the MCP tool catalog's declared gates
-against what the backing symbol actually requires, so ``export_artifact``'s "the MCP
-surface grants no bypass" is a claim that can fail.
+against what each *published format* really discharges — a mandatory ``authorization`` on
+the CAD exporters, an unomittable disclaimer on the evidence bundle — so
+``export_artifact``'s "the MCP surface grants no bypass" is a claim that can fail.
 """
 
 from __future__ import annotations
@@ -427,29 +428,94 @@ def test_an_exempt_entry_point_is_one_that_really_emits_nothing():
             )
 
 
-def test_the_mcp_tools_that_emit_artifacts_are_backed_by_something_that_gates():
+def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format():
     """``export_artifact`` declares the validation and watermark gates. This is the parity.
 
     The MCP surface "grants no bypass" is a sentence in the headless-automation spec and a
-    ``_meta`` field in the published tool definition. It becomes a fact here: the symbol
-    named in ``backing`` is resolved and required to take a mandatory ``authorization``,
-    so a tool cannot declare a gate its implementation does not have.
+    ``_meta`` field in the published tool definition. It becomes a fact here.
+
+    ``backing`` used to be the whole answer: resolve the one named symbol and require a
+    mandatory ``authorization`` on it. That stopped being the right question when
+    `export-over-mcp` landed. The tool serves *one* of its three published formats now, and
+    it is the one whose gate is discharged by a different mechanism — so a single symbol
+    cannot answer for all three, and a test that kept asking it would either fail on a
+    correct surface or be relaxed into asking nothing.
+
+    Asked per format, which is what the surface actually publishes:
+
+    * ``dxf`` and ``qif`` are CAD artifacts, and ``artifact-export`` gates those on the
+      acceptance checks passing. Neither is served — both wait on built geometry — and the
+      exporters that will serve them each take a mandatory ``authorization``, which is the
+      assertion this test has always made, now made about them by name rather than about
+      whichever one ``backing`` happened to point at.
+    * ``evidence_bundle`` is the evidence, including the evidence that a part did **not**
+      pass, so it is served whatever the verdict. Its watermark is ``SCREENING_DISCLAIMER``
+      and it is not a field a caller can omit — there is no argument to ``to_json_dict``
+      that leaves it out — and the bundle the server really returns is checked for it here
+      rather than the model being taken at its word.
     """
-    from anvilate.mcp import Gate, tool_catalog
+    from anvilate.bundle import SCREENING_DISCLAIMER
+    from anvilate.cli import _UNBUILT_ARTIFACTS
+    from anvilate.mcp import Gate, handle_request, tool_catalog
 
     emitting = [tool for tool in tool_catalog() if Gate.WATERMARK in tool.gates]
-    assert len(emitting) == 1, f"expected one artifact-emitting tool, found {emitting}"
-    for tool in emitting:
-        assert Gate.VALIDATION in tool.gates
-        assert tool.backing is not None, (
-            f"{tool.name} declares the watermark gate and names no implementation, so the "
-            f"claim is untestable"
-        )
-        module_path, _, symbol = tool.backing.partition(":")
+    assert [tool.name for tool in emitting] == ["export_artifact"]
+    tool = emitting[0]
+    assert Gate.VALIDATION in tool.gates
+    assert tool.backing is not None, (
+        f"{tool.name} declares the watermark gate and names no implementation, so the "
+        f"claim is untestable"
+    )
+
+    published = set(tool.input_schema["properties"]["format"]["enum"])
+    gated_cad = published & set(_UNBUILT_ARTIFACTS)
+    assert gated_cad == {"dxf", "qif"}, published
+
+    # The CAD half: refused today, and each exporter takes the authorization as a required
+    # keyword, so neither can be wired here without one.
+    for symbol_path in (
+        "anvilate.export.dxf:export_plate_dxf",
+        "anvilate.export.qif:export_qif_results",
+    ):
+        module_path, _, symbol = symbol_path.partition(":")
         module = __import__(module_path, fromlist=[symbol])
         parameters = inspect.signature(getattr(module, symbol)).parameters
-        assert "authorization" in parameters
-        assert parameters["authorization"].default is inspect.Parameter.empty
+        assert "authorization" in parameters, symbol_path
+        assert parameters["authorization"].default is inspect.Parameter.empty, symbol_path
+
+    # The half that is served: the watermark rides on the document, and here it is.
+    def call(name: str, arguments: dict) -> dict:
+        return handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }
+        )
+
+    spec = {
+        "anvilate_spec": "1.1.0",
+        "name": "gated_plate",
+        "description": "A plate exported over MCP.",
+        "units": {"value": "SI", "origin": "user_stated"},
+        "material": {"ref": "ASTM-A36"},
+        "manufacturing": {"process": "sheet_metal"},
+        "acceptance": {"tiers": ["T1_analytical"]},
+    }
+    handle = call("run_validation", {"spec": spec})["result"]["structuredContent"]["subject"]
+    for artifact in sorted(gated_cad):
+        assert (
+            call("export_artifact", {"subject": handle, "format": artifact})["error"]["code"]
+            == -32000
+        )
+    bundle = call("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"][
+        "structuredContent"
+    ]["bundle"]
+    assert bundle["disclaimer"] == SCREENING_DISCLAIMER
+    # And it did not pass — which is exactly the case the watermark exists for, and exactly
+    # the case a surface that refused failing cards would never produce a document in.
+    assert bundle["status"] != "pass"
 
 
 def test_the_sandbox_gate_is_declared_and_undischarged():

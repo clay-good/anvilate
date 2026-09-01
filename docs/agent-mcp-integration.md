@@ -271,9 +271,14 @@ task-dispatched: build_part, run_fea_validation
   promise a reply. `build_part` and `run_fea_validation` are the two. Waiting or backing off
   will not help; the Tasks extension is what will.
 - **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
-  behind them is not, and the message names what it waits on — `render_viewport`,
-  `measure_geometry` and `export_artifact` all wait on built geometry. Retrying is pointless;
-  a result invented there would be indistinguishable from a real one.
+  behind them is not, and the message names what it waits on — `render_viewport` and
+  `measure_geometry` both wait on built geometry. Retrying is pointless; a result invented
+  there would be indistinguishable from a real one.
+- **`-32000`, that format is not built.** The narrower version of the same fact, and the one
+  place a tool is dispatched while part of what it publishes is not: `export_artifact` serves
+  `evidence_bundle` and refuses `dxf` and `qif`, which are drawn from geometry. It is not
+  `-32602`, so do not retry with a different argument — retry with a different *format*, or
+  not at all.
 
   This used to be a different refusal. Four tools named nothing in their input to act on, so
   they could not be served by a server with no memory between calls — an open contract
@@ -287,7 +292,10 @@ task-dispatched: build_part, run_fea_validation
 
 Four tools take a **subject** — `render_viewport`, `measure_geometry`, `read_scorecard` and
 `export_artifact`. It is a handle: `sha256:` and the digest of the document it names, returned
-by an earlier call.
+by an earlier call. `read_scorecard` and `export_artifact` both want the *scorecard* handle
+`run_validation` returns, not the spec handle `compile_spec` returns; the store records each
+document's kind, so handing over the wrong one is refused by name rather than failing three
+layers down in a schema you did not send.
 
 ```python
 from anvilate.mcp import handle_request

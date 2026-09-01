@@ -24,14 +24,18 @@ is empty. The worked table is
 | `build_part` | task | sandbox | not built |
 | `render_viewport` | synchronous | — | not built |
 | `measure_geometry` | synchronous | — | not built |
-| `run_validation` | synchronous | — | `anvilate.bundle:assemble_evidence_bundle` |
+| `run_validation` | synchronous | — | `anvilate.screening:screen_spec` |
 | `run_fea_validation` | task | — | not built |
-| `read_scorecard` | synchronous | — | `anvilate.scorecard:Scorecard` |
-| `export_artifact` | synchronous | validation, watermark | `anvilate.export.qif:export_qif_results` |
+| `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
+| `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
 
 Four of the eight run today. The other four say so with `None` rather than naming a symbol
 that does not exist, and the four that *are* backed name a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
+Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
+as nothing was wired and went on resolving after it was dispatched to the screen, so each
+backed tool's named symbol is also *replaced* in a test and the call has to raise through it.
+This table is checked against `tool_catalog()` row by row.
 
 ## Referenced, not paraphrased
 
@@ -85,9 +89,13 @@ that goes with it, and CI asserts that every gate is still carried by at least o
 gate no tool declares is a rule the surface has quietly stopped inheriting.
 
 Two of the three gates now have code behind the declaration, and the parity is tested rather
-than described. `export_artifact` declares validation and watermark; its `backing` symbol is
-resolved and required to take a mandatory `authorization`, so the tool cannot declare a gate
-its implementation does not have — see [the export gate](export-gating.md). The sandbox gate
+than described. `export_artifact` declares validation and watermark, and the parity is asked
+**per published format**, because its three formats discharge the gate differently: `dxf` and
+`qif` are the CAD artifacts `artifact-export` gates on the checks passing, they are not served
+here, and the exporters that will serve them each take a mandatory `authorization`;
+`evidence_bundle` is served whatever the verdict and carries the screening disclaimer
+unconditionally — see [the export gate](export-gating.md). A single `backing` symbol used to
+answer for all three, which stopped being a question with one answer. The sandbox gate
 is the honest exception: `build_part` declares it, names no backing symbol because the
 operation is unbuilt, and a test asserts it stays that way, so the day an implementation
 lands somebody has to decide what discharges it.
@@ -129,14 +137,14 @@ instead of needing an edit.
 
 | Tool | Subject | Servable statelessly |
 | --- | --- | --- |
-| `compile_spec` | `document` | yes |
+| `compile_spec` | `document` | yes, and dispatched |
 | `build_part` | `spec` | yes (task-dispatched) |
-| `run_validation` | `spec` | yes |
+| `run_validation` | `spec` | yes, and dispatched |
 | `run_fea_validation` | `spec` | yes (task-dispatched) |
 | `render_viewport` | `subject` | yes — waiting on built geometry |
 | `measure_geometry` | `subject` | yes — waiting on built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
-| `export_artifact` | `subject` | yes — waiting on a decision, [`export-over-mcp`](../openspec/changes/export-over-mcp/proposal.md) |
+| `export_artifact` | `subject` | yes, and dispatched for the evidence bundle |
 
 **The documents land on disk, and that is worth knowing.** Publishing a handle writes the
 document it names — a compiled spec, a screened scorecard — under the store root. A spec is
@@ -160,10 +168,10 @@ encode back, so a stdio loop, an HTTP handler and a test drive the same code. It
 `initialize`, `tools/list` and `tools/call`, and returns `None` for a notification, which
 the protocol says takes no response — including no error response.
 
-**Every operation that is servable at all is dispatched: `compile_spec` and
-`run_validation`.** Those are the two tools that are backed, bounded and servable
-statelessly all at once; the other six are refused for a structural reason rather than for
-want of a handler.
+**Four operations are dispatched: `compile_spec`, `run_validation`, `read_scorecard` and
+`export_artifact`.** Those are the tools that are backed, bounded and servable statelessly
+all at once; the other four are refused for a structural reason — two are task-dispatched by
+declared cost, and two wait on built geometry — rather than for want of a handler.
 
 `compile_spec` answers with a spec or with the paths that stopped it. A document that does
 not validate comes back as a **result**, not a transport error: the output schema requires
@@ -201,13 +209,42 @@ Everything else ends in a refusal, and the kinds are worth separating:
   to look at its *document* for a problem in a different argument.
 - **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
   waited on, by its declared cost rather than by name.
-- **`-32000`, stateless.** One of the four above.
+- **`-32000`, stateless.** Empty today — every tool names its subject — and kept as the net
+  for the next tool that stops declaring one.
 - **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does
   not. A result invented here would be indistinguishable from a real one, which is the
-  failure a published tool contract makes most likely. **No tool in today's catalog reaches
-  this branch** — every servable one is wired. It stays as the net for the next tool that
-  becomes servable before it is built, and a test asserts both halves: that no catalogued
-  tool hits it, and that the branch itself still refuses when it is hit.
+  failure a published tool contract makes most likely. `render_viewport` and
+  `measure_geometry` reach it, each naming built geometry as what it waits on, and a census
+  test holds that list of reasons against the dispatch table in **both** directions — a tool
+  neither dispatched nor given a reason fails, and so does a reason left behind for a tool
+  that has since been wired.
+- **`-32000`, that format is not built.** New with the export ruling, and the reason it is
+  separate: `export_artifact` is dispatched, and two of the three formats it publishes still
+  wait on geometry. A per-tool refusal could not express that, and answering `-32602` would
+  tell a client its argument was wrong — which invites a retry with a different one.
+
+`export_artifact` answers with the evidence bundle for the scorecard its handle names, and
+**writes nothing**. That was the open decision — three shapes were considered, and the one
+chosen is the only one that grants no capability: the tool publishes no `destination`, names
+no path and creates no file, so a client saves the document or does not. The reply is
+`{format, bundle, sha256}`, where the digest is over the bundle's own canonical JSON, so it
+names the bytes the client was handed and two calls for the same card agree.
+
+Three things about it are decisions rather than details:
+
+- **The subject is a scorecard handle, not a spec handle.** A bundle is a document about a
+  screening result and that is what `BundleSections` takes. Re-screening from a spec would
+  be a second answer to a question the client already holds an answer to, and against tables
+  that have moved it can disagree with the card in hand. A spec handle is refused by name —
+  the store carries each record's kind precisely so that mistake is caught at the door.
+- **A card that does not pass still gets a bundle.** `artifact-export` gates the CAD
+  artifacts — a DXF somebody cuts from. The evidence bundle is the evidence, including the
+  evidence that a part failed, and it carries the screening disclaimer and its own status in
+  every case. `anvilate export` does the same at the shell; a surface that refused here
+  would be the one that will not tell you.
+- **`dxf` and `qif` are refused per format, from the CLI's own table.** The handler imports
+  `_UNBUILT_ARTIFACTS` rather than restating it, so the two surfaces cannot report different
+  reasons for the same gap.
 
 ## The result is held to the same contract as the request
 

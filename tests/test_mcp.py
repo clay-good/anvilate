@@ -552,7 +552,7 @@ def test_a_declared_subject_must_be_a_required_input():
 
 
 def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
-    """Three tools are servable and unwired, and that is now the honest state.
+    """Two tools are servable and unwired, and that is now the honest state.
 
     Until they carried subjects they were refused for naming nothing to act on, which hid the
     real reason behind a contract problem. With handles the contract is sound and what
@@ -560,6 +560,11 @@ def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
     command waits on, and this holds the two lists against each other: a tool that is neither
     dispatched nor named in `_UNBUILT` fails here, and a reason left behind for a tool that
     has since been wired fails too.
+
+    `export_artifact` was the third until `export-over-mcp` was decided. It is dispatched
+    now, so its reason had to *leave* `_UNBUILT` — and that direction is the one this test
+    is really for: a stale "waiting on a decision" behind a tool that answers is a refusal a
+    client would believe.
     """
     from anvilate import mcp
 
@@ -573,7 +578,7 @@ def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
     assert undispatched == set(mcp._UNBUILT), (
         f"undispatched {sorted(undispatched)}; reasons written for {sorted(mcp._UNBUILT)}"
     )
-    assert undispatched == {"render_viewport", "measure_geometry", "export_artifact"}
+    assert undispatched == {"render_viewport", "measure_geometry"}
 
     for name in sorted(undispatched):
         error = _call(name, _minimum_arguments(name))["error"]
@@ -1016,16 +1021,21 @@ def test_the_result_gate_enforces_the_digest_pattern_on_the_real_schema():
     every pattern — the mutation that deleted the check killed nothing. The probe table now
     holds each keyword to a synthetic schema; this holds `pattern` to the *published* one,
     since a probe agreeing with itself is not evidence the catalog's own digest is checked.
-    `export_artifact` is not dispatched, so its schema is exercised directly: a digest of
-    the wrong length, the wrong alphabet, or the right shape buried in a longer string.
+    `export_artifact` publishes the only digest on the surface, so its schema is exercised
+    directly: a digest of the wrong length, the wrong alphabet, or the right shape buried in
+    a longer string.
     """
     from anvilate.mcp import result_issues
 
     tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
     good = "a" * 64
-    assert result_issues(tool, {"format": "dxf", "path": "part.dxf", "sha256": good}) == []
+
+    def result(digest: str) -> dict:
+        return {"format": "evidence_bundle", "bundle": {}, "sha256": digest}
+
+    assert result_issues(tool, result(good)) == []
     for bad in ("deadbeef", "A" * 64, "g" * 64, f"sha256:{good}"):
-        issues = result_issues(tool, {"format": "dxf", "path": "part.dxf", "sha256": bad})
+        issues = result_issues(tool, result(bad))
         assert any("must match" in issue for issue in issues), (bad, issues)
 
 
@@ -1228,3 +1238,91 @@ def test_a_handle_survives_the_server_that_made_it(tmp_path):
     )
     assert elsewhere["error"]["code"] == -32602
     assert "not in the subject store" in elsewhere["error"]["message"]
+
+
+def _scorecard_handle() -> str:
+    """A scorecard published by the server, named the way a client would name it."""
+    return _call("run_validation", {"spec": _spec_document()})["result"]["structuredContent"][
+        "subject"
+    ]
+
+
+def test_export_artifact_returns_the_bundle_and_names_no_path(tmp_path):
+    """The ruling `export-over-mcp` made, checked as behaviour rather than as a schema.
+
+    Three claims, and the third is the one worth a test: the tool answers with a bundle, the
+    digest names that bundle's own bytes, and **nothing is written**. The last is checked by
+    handing the call a directory that was empty and asserting it still is — a handler that
+    grew a `destination` back, or that helpfully saved a copy somewhere, fails here even if
+    the published schema still says it does not.
+    """
+    from anvilate.attestation import canonical_json, sha256_hex
+
+    # Snapshotted *after* the handle exists, so the store's own entry — which `anvilate.store`
+    # declares and this tool does not add to — is not counted as a write by the export.
+    handle = _scorecard_handle()
+    before = sorted(tmp_path.rglob("*"))
+    structured = _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})[
+        "result"
+    ]["structuredContent"]
+
+    assert structured["format"] == "evidence_bundle"
+    assert structured["bundle"]["disclaimer"], "the screening label is what the watermark is"
+    assert structured["sha256"] == sha256_hex(canonical_json(structured["bundle"]).encode("utf-8"))
+    assert sorted(tmp_path.rglob("*")) == before
+
+
+def test_the_export_digest_is_stable_across_calls():
+    """Content addressing means two calls for the same card agree, and this says so.
+
+    Cheap, and it would have caught the plausible mistake: digesting `json.dumps` of the
+    document rather than its canonical form, which is stable within a process and not
+    across one whose dict ordering differs.
+    """
+    handle = _scorecard_handle()
+    first = _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"]
+    second = _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"]
+    assert first["structuredContent"] == second["structuredContent"]
+
+
+def test_export_artifact_refuses_a_handle_to_the_wrong_kind_of_document():
+    """A spec handle is not a scorecard handle, and the store says so by name.
+
+    `compile_spec` and `run_validation` both hand back a handle and they are not
+    interchangeable. Without the `kind` check this would resolve a Design Spec, hand it to
+    `Scorecard.model_validate`, and report a pydantic failure three layers down about
+    fields the caller never mentioned.
+    """
+    spec_handle = _call("compile_spec", {"document": _spec_document()})["result"][
+        "structuredContent"
+    ]["subject"]
+    error = _call("export_artifact", {"subject": spec_handle, "format": "evidence_bundle"})["error"]
+    assert error["code"] == -32602
+    assert "names a 'design-spec'" in error["message"]
+    assert "'scorecard' was asked for" in error["message"]
+
+
+def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
+    """`backing` resolving is not evidence the handler goes anywhere near it.
+
+    The same trap `run_validation` fell into: it named `anvilate.bundle` while it was
+    unwired and went on resolving after being dispatched somewhere else. This tool names
+    `BundleSections` and the call has to raise through it. It is a separate test from the
+    parametrized one above because that helper sends a single argument and this tool takes
+    a handle it cannot invent.
+    """
+
+    class _Reached(Exception):
+        pass
+
+    def _raise(*_args, **_kwargs):
+        raise _Reached
+
+    import anvilate.bundle
+
+    tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
+    assert tool.backing == "anvilate.bundle:BundleSections"
+    handle = _scorecard_handle()
+    monkeypatch.setattr(anvilate.bundle, "BundleSections", _raise)
+    with pytest.raises(_Reached):
+        _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})

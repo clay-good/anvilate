@@ -50,6 +50,7 @@ from typing import Any, TextIO
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, RevalidatedModel
+from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
@@ -490,30 +491,36 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             name="export_artifact",
             title="Export an artifact",
             description=(
-                "Write a downstream document — a QIF results file, a DXF, an evidence "
-                "bundle — from the validated state. Export is gated on validation and the "
-                "result carries the screening watermark; the MCP surface grants no bypass "
-                "of either."
+                "Return a downstream document — an evidence bundle today, a QIF results "
+                "file or a DXF once there is built geometry — for the scorecard a handle "
+                "names. The document is returned, not written: this surface names no path "
+                "and touches no filesystem the caller chose, so a client saves it or does "
+                "not. Export is gated on validation and the result carries the screening "
+                "watermark; the MCP surface grants no bypass of either."
             ),
             input_schema=_object_schema(
                 {
                     "subject": _SUBJECT_SCHEMA,
                     "format": {"type": "string", "enum": ["qif", "dxf", "evidence_bundle"]},
-                    "destination": {"type": "string", "minLength": 1},
                 },
-                required=["subject", "format", "destination"],
+                required=["subject", "format"],
             ),
             output_schema=_object_schema(
                 {
                     "format": {"type": "string"},
-                    "path": {"type": "string"},
+                    # The bundle itself, as the primitives `BundleSections.to_json_dict`
+                    # produces. Untyped here because there is no published bundle contract
+                    # to `$ref` — `contracts.py` generates a spec schema and a scorecard
+                    # schema and no third one — and paraphrasing the document inline would
+                    # be a second description of it that drifts from the model.
+                    "bundle": {"type": "object"},
                     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                 },
-                required=["format", "path", "sha256"],
+                required=["format", "bundle", "sha256"],
             ),
             cost=Cost.BOUNDED,
             emits_artifacts=True,
-            backing="anvilate.export.qif:export_qif_results",
+            backing="anvilate.bundle:BundleSections",
             subject="subject",
         ),
     )
@@ -827,6 +834,18 @@ class _InvalidArguments(ValueError):
         super().__init__("; ".join(issues))
 
 
+class _Unavailable(RuntimeError):
+    """A handler's refusal of a *part* of its surface that is specified and not built.
+
+    Distinct from :class:`_InvalidArguments` because the two are different facts and a
+    client acts on them differently: invalid arguments are the caller's to fix and worth
+    retrying, an unbuilt operation is not. ``export_artifact`` is the case that needs it —
+    the tool is dispatched, and two of the three formats it publishes still wait on built
+    geometry. Reaching TOOL_UNAVAILABLE rather than INVALID_PARAMS is what makes the MCP
+    answer the same fact the CLI reports with its own ``EXIT_UNBUILT``.
+    """
+
+
 def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message}
     if data:
@@ -854,8 +873,8 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     Three methods are served. ``initialize`` reports the protocol revision and the
     capabilities this surface has. ``tools/list`` returns :func:`wire_definitions`.
     ``tools/call`` validates the arguments against the tool's published input schema,
-    dispatches the two operations that are wired — ``compile_spec`` and ``run_validation``
-    — and holds what comes back to the tool's published *output* schema before sending it.
+    dispatches the operations that are wired — everything in :data:`_DISPATCH` — and holds
+    what comes back to the tool's published *output* schema before sending it.
 
     **A call is checked at both ends against the same document the client was handed.**
     Arguments in by :func:`_argument_issues`, structured content out by
@@ -870,11 +889,11 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     * **An unbounded tool cannot be called here at all.** ``build_part`` and
       ``run_fea_validation`` are task-dispatched by declared cost; a synchronous
       ``tools/call`` for one is refused with the reason rather than blocked on.
-    * **Four tools cannot be served by a stateless server.** ``render_viewport``,
-      ``measure_geometry``, ``read_scorecard`` and ``export_artifact`` name nothing in
-      their input to act on — see :func:`stateless_gaps`. That is a real contradiction
-      between the published contracts and the stateless skeleton the spec describes, and
-      it is surfaced here rather than resolved by inventing an argument.
+    * **Every tool names what it acts on.** :func:`stateless_gaps` is empty and stays
+      empty: a tool that named nothing was asking the server to remember its last call,
+      which is a session, and four of them did. They take subject handles now — see
+      :mod:`anvilate.store` — and the refusal is still here for the tool that stops
+      declaring one.
     """
     # "Is this an object at all" comes first, and it belongs HERE rather than in the stdio
     # loop that used to hold it. This function is documented as the one place every
@@ -959,6 +978,8 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         structured = handler(arguments)
     except _InvalidArguments as refusal:
         return _error(request_id, INVALID_PARAMS, str(refusal))
+    except _Unavailable as refusal:
+        return _error(request_id, TOOL_UNAVAILABLE, str(refusal))
     wrong = result_issues(tool, structured)
     if wrong:
         return _error(
@@ -1073,6 +1094,67 @@ def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
 
+def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``export_artifact``, dispatched to :class:`anvilate.bundle.BundleSections`.
+
+    **The document is returned and nothing is written.** That was the open question —
+    `openspec/changes/archive/2026-09-01-export-over-mcp` sets out the three shapes — and
+    the answer is the one that grants no capability: the tool has no ``destination``, names
+    no path, and creates no file. A client that wants one saves what it was handed. The
+    alternatives each asked an operator to decide how far to trust an MCP client with the
+    server's filesystem, and this asks nobody anything.
+
+    **The subject is a scorecard, not a spec.** A bundle is a document *about a screening
+    result*, and ``BundleSections`` takes exactly that — the card is its one required
+    section. Taking a spec handle instead would mean re-screening, and a re-screen is a
+    second answer: the same document, run against tables that may have moved, can produce a
+    bundle that disagrees with the card the client was already holding. So this exports the
+    card that was screened.
+
+    **A failing card still gets a bundle, and that is the gate working rather than being
+    skipped.** ``artifact-export`` gates *CAD artifacts* on the acceptance checks passing —
+    a DXF somebody cuts from, a QIF somebody measures against. The evidence bundle is the
+    evidence, including the evidence that a part did not pass: it renders ``status: fail``
+    and carries ``SCREENING_DISCLAIMER`` unconditionally, which is what the watermark rule
+    asks of it. ``anvilate export`` does the same thing at the shell — it prints the bundle
+    and reports the verdict in its exit code — and a surface that refused here would answer
+    a question the other surface answers.
+    """
+    from .bundle import BundleSections
+
+    # The CLI's own table of what each artifact waits on, imported rather than restated.
+    # Two surfaces cannot report an artifact as unbuilt in one place and buildable in the
+    # other if they read the same dict, and the keys are already the format names this
+    # tool's enum publishes.
+    from .cli import _UNBUILT_ARTIFACTS
+    from .scorecard import Scorecard
+
+    artifact = arguments["format"]
+    if artifact in _UNBUILT_ARTIFACTS:
+        raise _Unavailable(
+            f"export_artifact cannot produce {artifact}: {_UNBUILT_ARTIFACTS[artifact]} "
+            f"The evidence bundle needs no geometry and is served."
+        )
+
+    handle = arguments["subject"]
+    try:
+        card = subject_store().resolve(handle, kind="scorecard")
+    except UnknownSubject as unknown:
+        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+
+    document = BundleSections(scorecard=Scorecard.model_validate(card)).to_json_dict()
+    # The digest of the bundle's own canonical JSON, which is the same content addressing
+    # the store and the attestation layer use — so the sha256 a client is handed names the
+    # bytes it was handed, and two calls that produce the same bundle produce the same
+    # digest. The published output declared one when the tool wrote a file; it means the
+    # document rather than the file now, and it still means the same kind of thing.
+    return {
+        "format": artifact,
+        "bundle": document,
+        "sha256": sha256_hex(canonical_json(document).encode("utf-8")),
+    }
+
+
 # What each undispatched tool is waiting on. A census in tests/test_mcp.py holds this against
 # the dispatch map, so a tool that stops being served, or starts, cannot leave a stale reason
 # behind — and one that is neither dispatched nor named here fails the build.
@@ -1085,19 +1167,13 @@ _UNBUILT: dict[str, str] = {
         "measuring a feature needs built geometry, and no geometry is generated from a spec "
         "today (see openspec/specs/geometry-generation)"
     ),
-    "export_artifact": (
-        "a QIF results file and a DXF are drawn from built geometry; the evidence bundle is "
-        "producible from a spec handle alone — `anvilate export` does exactly that — and "
-        "what this tool needs first is a decision about writing a file to a path the caller "
-        "names, which the CLI gets from the user typing it (see "
-        "openspec/changes/export-over-mcp)"
-    ),
 }
 
 # The operations wired to real code today. A tool absent from this map is refused with the
 # reason rather than answered — see the refusal above.
 _DISPATCH: dict[str, Any] = {
     "compile_spec": _compile_spec,
+    "export_artifact": _export_artifact,
     "read_scorecard": _read_scorecard,
     "run_validation": _run_validation,
 }

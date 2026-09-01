@@ -198,7 +198,13 @@ part to draw. See openspec/specs/geometry-generation.
 
 The three artifact names are the same three `export_artifact`'s published MCP schema
 declares, held equal by a test — a CLI offering a fourth, or silently dropping one, is a
-surface saying something different from the contract. Dropping one is how this went wrong
+surface saying something different from the contract. The two surfaces now agree on more
+than the names: `export_artifact` returns the same bundle document for the same spec, the
+two are compared by value in `tests/test_surface_parity.py`, and the MCP handler reads the
+refusal reasons above out of this module rather than restating them. The difference that
+remains is where the document goes — the CLI prints it, and the tool returns it and writes
+nothing at all, because a path an MCP client names is a capability the server does not
+grant. Dropping one is how this went wrong
 the first time: `export` was refused whole on the reasoning that it "writes a downstream
 artifact from a built part", which is true of a DXF and false of the bundle. A refusal wide
 enough to cover something that works is as misleading as a missing one.
