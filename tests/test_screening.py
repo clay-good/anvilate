@@ -1465,6 +1465,15 @@ def test_the_screening_pages_table_is_the_models_own_fields():
 
     So every name the table quotes must be a field some spec model has, and every bound the
     module reports as unscreened must appear in the row that lists them.
+
+    **And the table is held in the other direction too**, which is the half that was missing.
+    The dotted names were resolved against their models and the *bare* ones — `chains`,
+    `dimensions`, `element_type`, half the names on the page — were not looked at, so a
+    renamed top-level field would have gone on being documented under its old spelling. Nor
+    did anything require a field the census calls answered to appear here at all:
+    `load_cases` and the two seismic fields were screened, entered on the card, and absent
+    from the table a reader consults to find out what their document gets back. A census that
+    lives in a Python dict is not the documentation; this table is.
     """
     import re
     from pathlib import Path
@@ -1483,12 +1492,33 @@ def test_the_screening_pages_table_is_the_models_own_fields():
         "manufacturing": Manufacturing,
     }
     unknown = []
-    for name in sorted(set(re.findall(r"`([a-z_]+\.[a-z_]+)`", table))):
-        root, _, leaf = name.partition(".")
-        model = models.get(root)
-        if model is None or leaf not in model.model_fields:
+    quoted = sorted(set(re.findall(r"`([a-z_]+(?:\.[a-z_]+)?)`", table)))
+    assert len(quoted) >= 15, f"the table quotes {len(quoted)} names; it has lost most of them"
+    for name in quoted:
+        root, dot, leaf = name.partition(".")
+        if dot:
+            model = models.get(root)
+            if model is None or leaf not in model.model_fields:
+                unknown.append(name)
+        # A bare name is a top-level field of the document, and the row for one of the three
+        # container fields quotes it dotted — so a bare name that `DesignSpec` does not carry
+        # is prose that reads exactly like a field, which is how `interface` sat in this table
+        # for a field actually spelled `interfaces`.
+        elif root not in DesignSpec.model_fields:
             unknown.append(name)
     assert not unknown, f"the table names fields no spec model has: {unknown}"
+
+    # Every field the census calls answered has a row here. `constraints`, `manufacturing`
+    # and `acceptance` are the containers, quoted dotted rather than bare.
+    containers = set(models) - {"constraints"} | {"constraints"}
+    for field in _ANSWERED_BY_A_CHECK:
+        if field in containers:
+            assert f"`{field}." in table, f"{field} is answered and no row quotes any of it"
+        else:
+            assert f"`{field}`" in table, (
+                f"{field} is answered on the card and the page's field-by-field table does "
+                f"not mention it, so a reader cannot find out what their document gets back"
+            )
 
     for field in _UNSCREENED_CONSTRAINTS:
         assert f"`constraints.{field}`" in table or f"`{field}`" in table, (

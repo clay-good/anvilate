@@ -147,18 +147,25 @@ That is the whole rule. What it means field by field:
 | `element_type` + `element_params` | the pack screen's cited verdicts — or, if no demanded tier screens it, an entry naming the element and the tier that would have |
 | `dimensions` | each band against the process floor — or, under no demanded T2, an entry naming what went unscreened |
 | `chains` | each stack-up on its worst case |
+| `load_cases` | one entry: PASS naming the count, or `NOT_EVALUATED` naming each force-carrying case with no declared nature, since a combination treats an unsupplied nature as zero |
 | `combination_basis` | the governing combination, its factored demand and its clause |
-| `material`, a standard-component `interface` | resolved, with the near misses named on a refusal |
+| `seismic_design_acceleration`, `seismic_redundancy_factor` | read by the combination set a seismic basis builds; a seismic `combination_basis` that cannot be resolved without them makes the load-combination entry `NOT_EVALUATED` rather than combining without the hazard |
+| `material`, and each `interfaces` entry naming a standard component | resolved, with the near misses named on a refusal |
 | an *imported* interface | `NOT_EVALUATED`: a screen of one document cannot fetch another |
 | `manufacturing.tolerance_class` | resolved like any other identifier |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
-| `constraints.max_mass`, `envelope`, `max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take |
+| `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take |
 
-A census test holds that table: every field of a `DesignSpec` is either answered by a named
-check or listed as not being a claim about the part — the schema version, the name, the
-prose, the unit system, the contracts this part publishes for others. A field that is neither
-fails the build.
+A census test holds that table, in both directions. Every field of a `DesignSpec` is either
+answered by a named check or listed as not being a claim about the part — the schema version,
+the name, the prose, the unit system, the contracts this part publishes for others — and a
+field that is neither fails the build. And every field the census says is *answered* has to
+appear in the table above, because the census is a Python dict nobody reads and this is the
+page they do: the load cases and the two seismic fields were answered on the card and missing
+from this table, which is the same silence one layer out. Every name the table quotes is
+resolved against the model that would have to carry it, so a renamed field cannot go on being
+documented under its old spelling.
 
 **Three of these are worth the story**, because each was a silent green that a green suite
 could not see.
