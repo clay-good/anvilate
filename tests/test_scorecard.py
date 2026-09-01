@@ -568,3 +568,73 @@ def test_a_check_that_could_not_run_is_counted_in_the_one_liner():
 
 def test_an_empty_card_names_no_governing_check_rather_than_inventing_one():
     assert str(Scorecard()) == "scorecard NOT_EVALUATED (0 checks)"
+
+
+def test_a_serialised_scorecard_carries_its_verdict():
+    """The document a consumer receives used to be the checks and nothing else.
+
+    `Scorecard.status` was a plain property, so `model_dump` dropped it — and the dump is
+    what the attested `scorecard.json` artifact is, what the `scorecard` inside a signed
+    predicate is, and what `anvilate check --format json` prints. A quality system, a
+    verifier, and a CI job all got `{"entries": [...]}` and were left to rebuild the roll-up.
+
+    **The roll-up is not a maximum**, which is what makes that dangerous rather than
+    inconvenient. An *empty* card is NOT_EVALUATED; the obvious reimplementation — the worst
+    status among the entries — has nothing to take a worst of and reports a pass over no
+    checks. That is the silent green this library exists to refuse, produced by reading its
+    own output.
+    """
+    import json
+
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bending", computed=2.4, required=2.0),
+            ScorecardEntry.from_safety_factor("bearing", computed=None, required=2.0),
+        )
+    )
+    dumped = card.model_dump(mode="json")
+    assert dumped["status"] == card.status.value == CheckStatus.NOT_EVALUATED.value
+    assert json.loads(card.model_dump_json())["status"] == card.status.value
+
+    # The case a consumer's own roll-up gets wrong, stated as a test rather than as prose.
+    empty = Scorecard()
+    assert empty.model_dump(mode="json") == {"entries": [], "status": "not_evaluated"}
+
+    # Dump-only: a card read back from its own document is the same card, and `status` is
+    # not something a caller can assert into a document that disagrees with its checks.
+    assert Scorecard.model_validate(dumped) == card
+    assert (
+        Scorecard.model_validate({**dumped, "status": "pass"}).status is CheckStatus.NOT_EVALUATED
+    )
+
+
+def test_the_published_scorecard_contract_requires_the_verdict():
+    """A schema that only describes `entries` describes a document with no verdict in it.
+
+    Held against the released artifact rather than the live model: a client resolves the
+    versioned URL, and that file is what it gets.
+    """
+    import json as json_module
+    from pathlib import Path
+
+    from anvilate.contracts import SCORECARD_SCHEMA_VERSION
+
+    released = (
+        Path(__file__).resolve().parent.parent
+        / "docs"
+        / "api"
+        / "schemas"
+        / "released"
+        / f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"
+    )
+    schema = json_module.loads(released.read_text(encoding="utf-8"))
+    assert "status" in schema["properties"], "the published contract describes no verdict"
+    assert "status" in schema.get("required", []), (
+        "a verdict a document may omit is one a consumer has to cope with missing"
+    )
+    # And 1.0.0 stays what it was: a client pinned to it must not receive different content.
+    old = released.with_name("scorecard-1.0.0.json")
+    if old.exists():
+        assert "status" not in json_module.loads(old.read_text())["properties"]

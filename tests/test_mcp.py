@@ -847,12 +847,17 @@ def _released_registry():
     """
     from referencing import Registry, Resource
 
+    from anvilate.contracts import SCORECARD_SCHEMA_VERSION, SPEC_SCHEMA_VERSION
+
+    # The filenames are derived from the version constants rather than typed. They were
+    # typed, and a scorecard version bump left this resolving the *previous* contract —
+    # a released-schema check that had stopped checking the released schema.
     return Registry().with_resources(
         [
             (document["$id"], Resource.from_contents(document))
             for document in (
-                _released("design-spec-1.1.0.json"),
-                _released("scorecard-1.0.0.json"),
+                _released(f"design-spec-{SPEC_SCHEMA_VERSION}.json"),
+                _released(f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"),
             )
         ]
     )

@@ -231,7 +231,12 @@ def test_a_changed_spec_changes_the_digest():
 # The digest of the fixture bundle, pinned. Restating `sha256_hex(canonical_json(...))`
 # here would pass however the canonicalisation drifted -- it is the implementation with
 # the same words. A literal is the only form of this assertion that can fail.
-_GOLDEN_DIGEST = "5c23d7d8baa00757ddac31823dfe4ddc46c49b8e33836ead23adcf4cd7a675a5"
+#
+# It moved once, from 5c23d7d8..., when `Scorecard.status` became a serialised field. That
+# is the pin working: the scorecard is inside the bundle, so a scorecard document that says
+# something new *is* a different bundle, and a content address that had not moved would
+# have meant the verdict was not covered by it.
+_GOLDEN_DIGEST = "75e7072053f5634383de3f22ae2b1cc9c15fb98492cf240580dc2aafd719d2e5"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

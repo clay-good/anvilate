@@ -11,7 +11,7 @@ anvilate.
 | Artifact | What it describes | Version |
 | --- | --- | --- |
 | [`docs/api/schemas/design-spec.schema.json`](api/schemas/design-spec.schema.json) | the typed part description the pipeline consumes | the same number a spec file states in `anvilate_spec` |
-| [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `1.0.0` |
+| [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `1.1.0` |
 
 ```python
 from anvilate.contracts import freeze_release, scorecard_json_schema, write_schemas
@@ -55,6 +55,26 @@ message — and `freeze_release` refuses to overwrite a frozen version, so the h
 reappear one function call further away.
 
 `$id` carries the version, so the identifier and the document cannot disagree.
+
+### 1.1.0: the contract said "with the rolled-up status" and did not carry one
+
+The scorecard schema described `entries` and nothing else, because `Scorecard.status` was a
+plain Python property and a plain property does not serialize. The document a consumer
+receives — the attested `scorecard.json`, the `scorecard` inside a signed predicate,
+`anvilate check --format json` — was the checks with no verdict on them.
+
+**The roll-up is not a maximum**, which is what makes that dangerous rather than
+inconvenient. An empty card is `not_evaluated`; the obvious reimplementation, worst status
+among the entries, has nothing to take a worst of and reports a pass over no checks. A
+consumer rebuilding the verdict from its own reading of this library's output could produce
+exactly the silent green the library exists to refuse.
+
+`status` is a computed field in 1.1.0: required, read-only, and dump-only, so a document
+cannot assert a verdict that disagrees with its own checks. 1.0.0 is unchanged and still
+frozen — a client pinned to it receives what it always did. The bundle digest moved with it,
+which is the pin working: a scorecard document that says something new is a different
+bundle, and a content address that had *not* moved would have meant the verdict was not
+covered by it.
 
 ## The tri-state is in the contract
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isnan
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from .derivation import Derivation
 from .uncertainty import MarginUncertainty
@@ -373,6 +373,15 @@ class Scorecard(BaseModel):
 
     entries: tuple[ScorecardEntry, ...] = ()
 
+    # A **serialised** scorecard used to carry its checks and no verdict. The attested
+    # `scorecard.json`, the scorecard inside a signed predicate and `anvilate check
+    # --format json` all went out as `{"entries": [...]}`, leaving every consumer to
+    # rebuild the roll-up above — and the roll-up is not a maximum. An *empty* card is
+    # NOT_EVALUATED, which the obvious reimplementation (worst status over the entries)
+    # reports as a pass over no checks: the silent green this library exists to refuse,
+    # produced by reading its own output. Declared as a computed field so it serialises,
+    # and dump-only, so a card read back from its own dump is unchanged.
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def status(self) -> CheckStatus:
         if any(e.status is CheckStatus.FAIL for e in self.entries):
