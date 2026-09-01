@@ -59,6 +59,14 @@ assumes the response is locally smooth. It answers "given these input spreads, h
 often does the margin fall short?" — a design question — not "what is the certified
 failure rate of this part?" Full FORM/SORM-class methods stay out of scope.
 
+**A fragile check says so on its own line.** `ScorecardEntry.is_fragile()` has always been
+public and the calculation report has always rendered the annotation, but the entry's own
+one-line rendering — what `print(entry)` gives you, and the lazy path every caller takes —
+printed a check whose margin falls short in one sample in five exactly like one that never
+does. It now reads `[PASS] bending: safety factor 2.40 vs required minimum 2.00 — fragile:
+21.0% of samples fall short`, and the card summary counts them, because a card of passing
+checks with one fragile among them was a clean-looking card.
+
 **The label travels with the number.** A rendered annotation names the sampling method,
 the sample count *and* the screening label — the report says
 `P(below 2.00) = 3.1% over 4096 samples by monte_carlo` and prints

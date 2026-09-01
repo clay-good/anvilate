@@ -249,3 +249,48 @@ def test_sample_margin_refuses_a_non_finite_requirement():
                 seed=1,
                 samples=200,
             )
+
+
+def _fragile_entry(shortfall: float = 0.21):
+    from anvilate.scorecard import ScorecardEntry
+
+    annotation = MarginUncertainty(
+        samples=4096,
+        seed=1,
+        required=2.0,
+        mean=2.4,
+        std=0.5,
+        shortfall_probability=shortfall,
+        lower=1.5,
+        upper=3.3,
+        coverage=0.9,
+        sensitivities=(Sensitivity(name="load", variance_share=0.8),),
+    )
+    return ScorecardEntry.from_safety_factor("bending", computed=2.4, required=2.0).model_copy(
+        update={"uncertainty": annotation}
+    )
+
+
+def test_a_fragile_check_says_so_where_a_reader_reads_it():
+    """The entry knew and the line did not say.
+
+    `ScorecardEntry.is_fragile()` is public, the calculation report renders the annotation,
+    and the entry's own one-line rendering — the thing `print(entry)` gives you, and the
+    lazy path every caller takes — printed a check whose margin falls short in one sample in
+    five exactly like one that never does.
+    """
+    from anvilate.scorecard import Scorecard
+
+    entry = _fragile_entry()
+    assert entry.is_fragile()
+    assert "fragile: 21.0% of samples fall short" in str(entry)
+
+    solid = _fragile_entry(shortfall=0.001)
+    assert not solid.is_fragile()
+    assert "fragile" not in str(solid)
+
+    # And one level up: a card of passing checks, one of which fails under its own asserted
+    # scatter, read as a clean card.
+    card = Scorecard(entries=(entry, solid))
+    assert "1 fragile" in str(card)
+    assert "fragile" not in str(Scorecard(entries=(solid,)))

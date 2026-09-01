@@ -365,7 +365,16 @@ class ScorecardEntry(BaseModel):
 
     def __str__(self) -> str:
         cite = f" [{self.reference}]" if self.reference else ""
-        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{cite}"
+        # A nominal pass that input scatter would fail materially often is the one thing on
+        # this entry that changes what a reader should do about it, and the line dropped it:
+        # a check whose margin falls short in one sample in five printed exactly like one
+        # that never does. The threshold is `is_fragile`'s own, so the sentence and the
+        # method cannot disagree about what fragile means.
+        fragile = ""
+        if self.is_fragile():
+            shortfall = self.uncertainty.shortfall_probability * 100.0  # type: ignore[union-attr]
+            fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
+        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{cite}"
 
 
 class Scorecard(BaseModel):
@@ -491,6 +500,11 @@ class Scorecard(BaseModel):
         unrun = len(self.not_evaluated())
         if unrun:
             counts += f", {unrun} not evaluated"
+        # And the same reasoning one level up: a card of passing checks, one of which fails
+        # under its own asserted scatter, read as a clean card.
+        fragile = sum(1 for entry in self.entries if entry.is_fragile())
+        if fragile:
+            counts += f", {fragile} fragile"
         governing = self.governing()
         # Named on a passing card too: there it is the tightest check, which is the one a
         # reader is about to ask about anyway.
