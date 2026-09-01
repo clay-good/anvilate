@@ -1497,7 +1497,15 @@ def deflection_scorecard(
     return ScorecardEntry(
         name=name,
         status=status,
-        detail=f"deflection {measured:.3f} mm vs limit {allowed:.3f} mm",
+        # Widened to keep the two figures apart, as `beam_deflection_scorecard` above
+        # already does. At three fixed places a 15.0004 mm deflection against a 15 mm limit
+        # printed "deflection 15.000 mm vs limit 15.000 mm" on a FAIL — the verdict and the
+        # numbers beside it saying opposite things, on one of the two checks the README's
+        # own quickstart shows.
+        detail=(
+            f"deflection {measured:.{decimals_distinguishing(measured, allowed, minimum=3)}f} "
+            f"mm vs limit {allowed:.{decimals_distinguishing(measured, allowed, minimum=3)}f} mm"
+        ),
     )
 
 

@@ -732,3 +732,77 @@ def test_every_verdict_the_examples_print_agrees_with_its_own_numbers():
     assert not wrong, "printed verdicts contradicted by their own figures:\n  " + "\n  ".join(
         wrong[:20]
     )
+
+
+def test_no_scorecard_detail_that_argues_from_a_comparison_rounds_past_it():
+    """The same defect, swept across every detail in the library that renders a comparison.
+
+    Three had it. `from_safety_factor`'s failing branch, `deflection_scorecard` — one of the
+    two checks the README's own quickstart shows — and the junction-rise screen, which
+    printed at *one* fixed place and so hid a shortfall anywhere inside 0.05 K.
+
+    Each is swept across its own boundary, because a corpus never lands in the band: 217
+    verdict lines across 490 examples are all consistent, and all three of these were wrong.
+    """
+    import re
+
+    from anvilate.analysis import deflection_scorecard, junction_temperature_scorecard
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+    from anvilate.units import Quantity
+
+    def _pair(detail: str) -> tuple[float, float]:
+        """The two figures a detail states, in the order it states them."""
+        found = re.findall(r"(-?\d+(?:\.\d+)?)", detail)
+        assert len(found) >= 2, detail
+        return float(found[0]), float(found[1])
+
+    deltas = (-0.5, -1e-2, -1e-3, -1e-4, -5e-5, -1e-9, 1e-9, 5e-5, 1e-3, 0.5)
+    checked = 0
+
+    for required in (1.0, 1.5, 2.0):
+        for delta in deltas:
+            entry = ScorecardEntry.from_safety_factor(
+                "bending", computed=required + delta, required=required
+            )
+            if "vs required minimum" not in entry.detail:
+                continue
+            shown, minimum = _pair(entry.detail)
+            checked += 1
+            assert (entry.status is not CheckStatus.FAIL) == (shown >= minimum), entry.detail
+
+    for limit in (4.0, 15.0):
+        for delta in deltas:
+            entry = deflection_scorecard(
+                "tip",
+                deflection=Quantity(magnitude=limit + delta, unit="mm"),
+                limit=Quantity(magnitude=limit, unit="mm"),
+            )
+            shown, allowed = _pair(entry.detail)
+            checked += 1
+            assert (entry.status is not CheckStatus.FAIL) == (shown <= allowed), entry.detail
+
+    for allowable in (40.0, 85.0):
+        for delta in deltas:
+            entry = junction_temperature_scorecard(
+                name="die",
+                power=Quantity(magnitude=(allowable + delta) / 10.0, unit="W"),
+                thermal_resistance=Quantity(magnitude=10.0, unit="K/W"),
+                allowable_temperature_rise=Quantity(magnitude=allowable, unit="K"),
+                required=1.0,
+            )
+            shown, allowed = _pair(entry.detail)
+            checked += 1
+            assert (entry.status is not CheckStatus.FAIL) == (shown <= allowed), entry.detail
+
+    assert checked > 50, f"only {checked} details were rendered; the sweep found too few"
+
+    # And an ordinary margin still reads at conventional precision, or the repair for the
+    # near-miss is a different rendering defect applied to every line.
+    assert (
+        deflection_scorecard(
+            "tip",
+            deflection=Quantity(magnitude=4.8, unit="mm"),
+            limit=Quantity(magnitude=15.0, unit="mm"),
+        ).detail
+        == "deflection 4.800 mm vs limit 15.000 mm"
+    )

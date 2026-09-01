@@ -24,7 +24,7 @@ from math import erf, exp, log, pi, sqrt, tanh
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import ScorecardEntry
-from ..units import Quantity, require_finite
+from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
@@ -1215,7 +1215,10 @@ def junction_temperature_scorecard(
     # PASS; `None` -> NOT_EVALUATED says what actually happened.
     computed = None if rise == 0 else allowable / rise
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
-    detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
+    # One fixed place is a wide band to hide a shortfall in: an 85.04 K rise against an
+    # 85 K allowable printed "junction rise 85.0 K vs 85.0 K allowable" on a FAIL.
+    places = decimals_distinguishing(rise, allowable, minimum=1)
+    detail = f"junction rise {rise:.{places}f} K vs {allowable:.{places}f} K allowable"
     return entry.model_copy(update={"detail": detail})
 
 
