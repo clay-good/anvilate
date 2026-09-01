@@ -2600,3 +2600,28 @@ def test_every_repository_path_the_source_names_exists():
                 missing.append(f"{path.relative_to(_REPO)} names {target}")
     assert named >= 10, f"only {named} repository paths found in src/; the pattern has moved"
     assert not missing, "the source names paths that do not exist:\n  " + "\n  ".join(missing)
+
+
+def test_every_repository_path_the_specs_name_exists():
+    """The same rule for `openspec/`, where ninety-odd paths name modules, tests and examples.
+
+    A proposal that argues from `src/anvilate/screening.py` and a spec whose scenario names an
+    example are both claims about this tree, and a rename leaves them reading as right as
+    ever. The archive is included on purpose: a completed change is the record of why the code
+    looks like this, and a record pointing at files that moved is worth less than one that
+    does not.
+    """
+    import re
+
+    pattern = re.compile(
+        r"(src/anvilate/[a-z_/]+\.py|tests/[a-z0-9_]+\.py|examples/[a-z0-9_]+\.py"
+        r"|docs/[a-z0-9-]+\.md)"
+    )
+    named, missing = 0, []
+    for path in sorted((_REPO / "openspec").rglob("*.md")):
+        for target in sorted(set(pattern.findall(path.read_text(encoding="utf-8")))):
+            named += 1
+            if not (_REPO / target).exists():
+                missing.append(f"{path.relative_to(_REPO)} names {target}")
+    assert named >= 50, f"only {named} repository paths found in openspec/; the pattern moved"
+    assert not missing, "the specs name paths that do not exist:\n  " + "\n  ".join(missing)
