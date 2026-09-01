@@ -640,3 +640,31 @@ def test_a_consistent_basis_passes_and_says_what_it_checked():
     )
     assert sections.status is CheckStatus.PASS
     assert "all 2 references name an edition" in sections.render()
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected"),
+    [
+        ("base_material", "   ", "a blank base material"),
+        ("known_materials", ("",), "a blank entry in known_materials"),
+        ("assumptions", ("",), "a blank modelling assumption"),
+    ],
+)
+def test_a_blank_section_is_refused_the_way_the_neighbouring_ones_are(field, value, expected):
+    """`assumptions` and `design_basis` already refused a blank; the two material fields did
+    not, and they are the ones a reader follows.
+
+    A bundle naming its base material as three spaces renders a material line nobody can
+    resolve — worse than the `None` that means "this bundle does not say", because the None
+    is reported by `missing()` and the blank reads as an answer.
+    """
+    with pytest.raises(ValidationError, match=expected):
+        BundleSections(scorecard=_card(), **{field: value})
+
+
+def test_the_material_fields_are_still_optional():
+    """The refusal is about a blank, not about an absence: a bundle that names no base
+    material is an ordinary bundle, and `missing()` is where that is reported."""
+    sections = BundleSections(scorecard=_card())
+    assert sections.base_material is None
+    assert sections.known_materials == ()
