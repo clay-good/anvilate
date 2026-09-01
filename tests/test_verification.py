@@ -234,3 +234,23 @@ def test_an_item_names_the_checks_it_stands_behind_when_it_renders():
     # An item with no driving check says so, rather than trailing off into nothing.
     orphan = one.model_copy(update={"driving_checks": ()})
     assert "no driving check" in str(orphan)
+
+
+def test_a_plan_item_renders_the_accuracy_its_instrument_must_meet():
+    """The plan is a document somebody performs from, and the rendering dropped the accuracy
+    requirement.
+
+    A 0.05 mm tolerance measured with a 0.05 mm instrument verifies nothing, so "instrument
+    uncertainty within 0.005 mm" is the difference between an inspection that means something
+    and one that does not. It was on the item and in no sentence.
+    """
+    plan = plan_verification(
+        _lifter_card(), parameters={"tolerance": _q("0.05 mm"), "rated_load": _q("50 kN")}
+    )
+    inspection = next(i for i in plan.items if i.archetype.key == "dimensional")
+    assert inspection.required_accuracy is not None
+    assert inspection.required_accuracy in str(inspection)
+
+    # An item with no stated accuracy renders exactly as it did.
+    bare = inspection.model_copy(update={"required_accuracy": None})
+    assert str(bare) == str(inspection).replace(f" ({inspection.required_accuracy})", "")

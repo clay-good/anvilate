@@ -182,7 +182,12 @@ class VerificationItem(BaseModel):
         # exists to make, so it is rendered: an item standing behind one check and an item
         # standing behind three are different rows of the matrix.
         behind = ", ".join(self.driving_checks) or "no driving check"
-        return f"{self.name} [{state}]: {self.acceptance} — for {behind}"
+        # And the accuracy the *instrument* has to meet, which the rendering dropped. It is
+        # the difference between an inspection that means something and one that does not —
+        # a 0.05 mm tolerance measured with a 0.05 mm instrument verifies nothing — and the
+        # plan is a document somebody performs from.
+        accuracy = f" ({self.required_accuracy})" if self.required_accuracy else ""
+        return f"{self.name} [{state}]: {self.acceptance}{accuracy} — for {behind}"
 
 
 DEFAULT_ARCHETYPES: tuple[VerificationArchetype, ...] = (

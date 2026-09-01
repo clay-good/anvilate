@@ -1182,3 +1182,34 @@ def test_a_value_element_outside_si_real_cannot_take_a_measurements_line():
     cited = text.split("\n")[shaft.source.line_number - 1]
     assert "25.0004" in cited
     assert "99.9" not in cited
+
+
+def test_a_value_says_why_it_carries_no_distribution():
+    """ "no distribution" was two different facts printed as one: a certificate that stated no
+    uncertainty, and one that stated an uncertainty this module will not map.
+
+    `uncertainty_note` says which — its own field docstring says it says which — and nothing
+    rendered it, so a reader could not tell an absent claim from an unread one.
+    """
+    from anvilate.dcc import CalibratedValue
+    from anvilate.ingest import CertificateProvenance, SignatureStatus, SourceLocation
+    from anvilate.units import Quantity
+
+    provenance = CertificateProvenance(
+        identifier="PTB-2026-1", laboratory="PTB", signature_status=SignatureStatus.ABSENT
+    )
+    location = SourceLocation(document="cert.xml", line_number=1, excerpt="d = 25 mm")
+    value = CalibratedValue(
+        label="shaft diameter",
+        quantity=Quantity.parse("25 mm"),
+        source=location,
+        certificate=provenance,
+    )
+    assert "[no distribution]" in str(value)
+
+    unread = value.model_copy(
+        update={
+            "uncertainty_note": "the certificate states a coverage factor this module does not map"
+        }
+    )
+    assert "no distribution: the certificate states a coverage factor" in str(unread)

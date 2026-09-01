@@ -590,7 +590,16 @@ class CalibratedValue(RevalidatedModel):
         )
 
     def __str__(self) -> str:
-        spread = "no distribution" if self.distribution is None else "distribution available"
+        # "no distribution" was two different facts printed as one: a certificate that stated
+        # no uncertainty, and one that stated an uncertainty this module will not map. The
+        # note says which, and the field docstring says it says which — and nothing rendered
+        # it, so a reader could not tell an absent claim from an unread one.
+        if self.distribution is None:
+            spread = "no distribution"
+            if self.uncertainty_note:
+                spread += f": {self.uncertainty_note}"
+        else:
+            spread = "distribution available"
         return f"{self.label} = {self.quantity} [{spread}] {self.certificate}"
 
 
