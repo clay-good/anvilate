@@ -49,8 +49,15 @@ the screen reports `NOT_EVALUATED` and says how many were missing and which.
 
 The outstanding ones are enumerated in
 [`docs/api/editionless-citations.txt`](api/editionless-citations.txt) and held as a
-ratchet by `tests/test_contract.py`: a new editionless citation fails, and a listed one
-that has since been versioned must be struck off. The list can only shrink.
+ratchet by `tests/conftest.py`: a new editionless citation fails, and a listed one that
+has since been versioned must be struck off. The list can only shrink.
+
+It went from six lines to twenty-two the day the gate started reading the whole library.
+The ratchet had been building its own reference set — the structural pack's entries plus
+a hand-written sample — so every other pack's citations were outside it. Sixteen of the
+twenty-two had been editionless since the day their pack shipped. A ratchet is only as
+honest as its census, which is why this one now runs off the same session-wide collector
+the derivation-coverage gate uses and cannot be narrower than the library it audits.
 
 ## Textbooks are not debt
 

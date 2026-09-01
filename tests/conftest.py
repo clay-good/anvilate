@@ -158,6 +158,18 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    citations = _observed_citations()
+    unversioned = sorted(_editionless_citations(citations) - _editionless_manifest())
+    if unversioned:
+        print(
+            "\nEDITIONLESS CITATIONS: these name a normative standard and not its edition. "
+            "Add the edition exactly as the standard spells it (AISC 360-16, ACI 318-19, "
+            "EN 1993-1-9:2005) — do NOT add the reference to "
+            "docs/api/editionless-citations.txt:\n  " + "\n  ".join(unversioned)
+        )
+        session.exitstatus = 1
+        return
+
     coverage = _observed_coverage()
     registry = _read_registry()
     uncovered = _coverage_failures(coverage, registry)
@@ -190,6 +202,31 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "list stays honest:\n  " + "\n  ".join(armed)
         )
         session.exitstatus = 1
+
+    # The discoverer has to keep discovering. A parser that stopped RECOGNISING standards
+    # would make the editionless set empty and both directions of that ratchet would go
+    # green for ever.
+    from anvilate.standards.effectivity import names_a_standard
+
+    recognised = sum(1 for text in citations if names_a_standard(text) is not None)
+    if recognised < 10:
+        print(
+            f"\nEDITIONLESS CITATIONS: names_a_standard recognises only {recognised} of "
+            f"the {len(citations)} references this suite builds, so the effectivity gate "
+            f"is passing on an all but empty set"
+        )
+        session.exitstatus = 1
+        return
+
+    versioned = sorted(_editionless_manifest() - _editionless_citations(citations))
+    if versioned:
+        print(
+            "\nEDITIONLESS CITATIONS: these are recorded as editionless but no longer are, "
+            "or are no longer cited. Strike them from "
+            "docs/api/editionless-citations.txt:\n  " + "\n  ".join(versioned)
+        )
+        session.exitstatus = 1
+        return
 
     paid = _paid_off_debts(coverage, registry)
     if paid:
@@ -391,3 +428,52 @@ def _stale_registry_lines(
 def _derivation_coverage_ratio(coverage: dict[str, tuple[int, int, int]]) -> tuple[int, int]:
     """Clauses every entry of which is derived, over clauses cited."""
     return sum(1 for derived, total, _ in coverage.values() if derived == total), len(coverage)
+
+
+# ---------------------------------------------------------------------------
+# The effectivity ratchet, moved here from tests/test_contract.py.
+#
+# It held the same property it holds now — a reference naming a standards body must name
+# an edition or be listed — over a much smaller set: the structural pack's entries plus
+# whatever the render-truth sample happened to reach. Every other pack's citations were
+# outside it, and the debt read as six references when the library actually builds
+# twenty-two. It now reads the same collector the derivation ratchet does, so it cannot
+# again be narrower than the library it is auditing.
+# ---------------------------------------------------------------------------
+
+_EDITIONLESS = _REPO / "docs" / "api" / "editionless-citations.txt"
+
+
+def _observed_citations() -> set[str]:
+    """Every citation string the library put on an entry or into a derivation.
+
+    These are the references the evidence bundle carries — the ones a reviewer reads —
+    rather than the prose in a docstring. Effectivity is a claim about the bundle, so this
+    is the surface that has to carry an edition.
+    """
+    citations: set[str] = set()
+    for entry in _library_entries.values():
+        if entry.reference:
+            citations.add(str(entry.reference))
+        if entry.derivation is not None and entry.derivation.citation:
+            citations.add(str(entry.derivation.citation))
+    return citations
+
+
+def _editionless_manifest() -> set[str]:
+    return {
+        line.strip()
+        for line in _EDITIONLESS.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def _editionless_citations(citations: set[str]) -> set[str]:
+    """Those naming a normative standards body and no edition."""
+    from anvilate.standards.effectivity import names_a_standard, parse_citation
+
+    return {
+        text
+        for text in citations
+        if names_a_standard(text) is not None and parse_citation(text) is None
+    }

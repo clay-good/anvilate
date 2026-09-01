@@ -1487,9 +1487,10 @@ def test_the_pack_magnitude_guard_actually_rejects_what_it_claims_to():
 def _evidence_references() -> set[str]:
     """Every reference string the packs put into a scorecard entry or a derivation.
 
-    These are the citations the evidence bundle actually carries — the ones a reviewer
-    reads — rather than the prose in a docstring. Effectivity is about what the bundle
-    claims, so this is the surface that has to carry an edition.
+    Built here rather than read off the session collector, because a test cannot know how
+    much of the suite has run before it. The RATCHET reads the collector (tests/conftest.py)
+    and so sees the whole library; this deterministic set is what other tests compare
+    against.
     """
     refs: set[str] = set()
     for entry in _structural_entries():
@@ -1503,54 +1504,48 @@ def _evidence_references() -> set[str]:
     return refs
 
 
-def _editionless_manifest() -> set[str]:
-    path = _REPO / "docs" / "api" / "editionless-citations.txt"
-    return {
-        line.strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
-    }
+def test_the_effectivity_ratchet_reads_the_whole_library():
+    """The gate this replaced built its own reference set, and the set was too small.
 
-
-def test_every_cited_standard_names_its_edition():
-    """The effectivity gate, held as a ratchet: the debt can only go down.
-
-    A clause without an edition identifies a paragraph in a book nobody named, and the
-    evidence bundle's entire claim rests on those clauses. Most of the pack references
-    already carry one; the outstanding few are enumerated, and this holds the line in
-    both directions so neither the list nor the silence can drift.
+    It reached the structural pack plus whatever the render-truth sample happened to
+    include, so the debt read as six references while the library was building
+    twenty-two — and every one of the sixteen it could not see was a real editionless
+    citation. The ratchet now runs off the session collector in tests/conftest.py; what
+    is held here is its rule, and the fact that the collector records what the packs
+    attach. The two directions of the ratchet itself need the whole suite and are
+    asserted there.
     """
-    from anvilate.standards.effectivity import names_a_standard, parse_citation
+    import conftest
 
-    references = _evidence_references()
-    editionless = {
-        ref
-        for ref in references
-        if names_a_standard(ref) is not None and parse_citation(ref) is None
+    # Act first, then observe: how much of the suite has already run is not knowable, so
+    # the probe supplies its own citations rather than assuming somebody else's.
+    produced = _evidence_references()
+    assert len(produced) >= 10
+    observed = conftest._observed_citations()
+    unseen = sorted(produced - observed)
+    assert not unseen, (
+        "these references were just produced by the packs and the collector did not "
+        "record them:\n  " + "\n  ".join(unseen)
+    )
+
+    # The rule itself, on data rather than on the library: a body with an edition is not
+    # debt, a body without one is, and a textbook is neither.
+    probes = {
+        "AISC 360-16 Ch. F": False,
+        "ACI 318-19 §22.8.3": False,
+        "EN 1993-1-9:2005 Table 8.1": False,
+        "ASME BTH-1 §3-3": True,
+        "NEC 310.16 — conductor ampacity": True,
+        "BS 7910 / R6 Option 1 failure assessment diagram": True,
+        "Roark's Formulas, Table 11.4": False,
+        "Timoshenko plate theory": False,
     }
-    recorded = _editionless_manifest()
-
-    new = sorted(editionless - recorded)
-    assert not new, (
-        "these references name a normative standard and not its edition. Add the edition "
-        "exactly as the standard spells it (AISC 360-16, ACI 318-19, EN 1993-1-9:2005) — "
-        "do NOT add the reference to docs/api/editionless-citations.txt:\n  " + "\n  ".join(new)
-    )
-
-    versioned = sorted(recorded - editionless)
-    assert not versioned, (
-        "these references are recorded as editionless but now name an edition. Strike "
-        "them from docs/api/editionless-citations.txt so the debt stays honest:\n  "
-        + "\n  ".join(versioned)
-    )
-
-    # The discoverer has to keep discovering. A parser that stopped parsing would make
-    # `editionless` the whole reference set (caught above), but one that stopped
-    # RECOGNISING standards would make it empty and the gate would go green for ever.
-    assert sum(1 for r in references if names_a_standard(r) is not None) >= 10, (
-        "names_a_standard has stopped recognising the references this suite builds, so "
-        "the effectivity gate is passing on an empty set"
-    )
+    assert conftest._editionless_citations(set(probes)) == {
+        text for text, debt in probes.items() if debt
+    }
+    # And the manifest is the shape the ratchet reads: one clause per non-comment line.
+    manifest = conftest._editionless_manifest()
+    assert "NDS" in manifest and all(not text.startswith("#") for text in manifest)
 
 
 def test_the_effectivity_parser_knows_a_eurocode_number_from_a_year():

@@ -58,6 +58,17 @@ __all__ = [
 # is incomplete; a citation naming Roark, Timoshenko or Shigley is not, because a textbook
 # is cited by author and its printing is not a normative parameter. Keeping the two apart
 # is the whole reason this is a curated list rather than "anything capitalised".
+#
+# NEC is listed beside NFPA because that is the name the electrical pack cites it by, and
+# the National Electrical Code is issued in editions (2020, 2023) whose ampacity tables and
+# voltage-drop guidance are not identical. BS is listed for BS 7910, whose editions carry
+# different failure-assessment options.
+#
+# Two kinds of source are deliberately NOT here. OSHA 29 CFR 1910.95 is a REGULATION: its
+# "edition" is a CFR revision date, an editionless citation of it is not the same defect,
+# and listing it would fill the effectivity debt with lines whose fix is a different one.
+# The IES Lighting Handbook is a handbook, cited the way Roark is — the illuminance
+# recommendations are a reference table, and its printing is not a normative parameter.
 STANDARDS_BODIES: frozenset[str] = frozenset(
     {
         "AASHTO",
@@ -74,11 +85,13 @@ STANDARDS_BODIES: frozenset[str] = frozenset(
         "ASTM",
         "AWS",
         "AWWA",
+        "BS",
         "DIN",
         "EN",
         "IEC",
         "IEEE",
         "ISO",
+        "NEC",
         "NEMA",
         "NFPA",
         "NDS",

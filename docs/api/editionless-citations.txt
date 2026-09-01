@@ -20,6 +20,24 @@
 # spells it (AISC 360-16, ACI 318-19, EN 1993-1-9:2005), then delete the line. Do NOT add
 # a line to silence a failure on a new check — a new check cites an edition.
 #
+# THIS LIST GREW FROM SIX TO TWENTY-TWO, and none of that is the ratchet slipping. The
+# gate used to build its own reference set — the structural pack's entries plus whatever
+# the render-truth sample happened to reach — so every other pack's citations were outside
+# it. It now reads the session-wide collector in tests/conftest.py, the same one the
+# derivation ratchet uses, and cannot be narrower than the library it audits. Sixteen of
+# these were editionless the day their pack shipped; the seventeenth reason they were not
+# listed is that nothing was looking.
+#
+# Two additions to STANDARDS_BODIES came with the widening: NEC, because that is the name
+# the electrical pack cites the National Electrical Code by, and BS for BS 7910. OSHA's
+# 29 CFR 1910.95 is deliberately not a body — a regulation's "edition" is a CFR revision
+# date and that is a different fix — and neither is the IES Lighting Handbook, which is
+# cited the way Roark is.
+#
+# To pay a line off: add the edition to the reference string, exactly as the standard
+# spells it (AISC 360-16, ACI 318-19, EN 1993-1-9:2005), then delete the line. Do NOT add
+# a line to silence a failure on a new check — a new check cites an edition.
+#
 # The two ASHRAE lines are older than their appearance here. They were carried by the
 # ventilation and lighting packs from the day those packs shipped; nothing rendered
 # their derivations, so nothing put them in front of this gate until the derivation
@@ -34,8 +52,24 @@
 # every other pack's citations were outside it. Widening the harvest is what found
 # these; the list is longer because it is now closer to complete.
 AISC Design Guide 1
+AISI S100 Appendix 1 (Direct Strength Method)
 ASHRAE 62.1 ventilation-rate procedure (Voz)
 ASHRAE 90.1 / IECC — lighting power density allowance
+ASME B30.20
+ASME B31.3 §304.1.2 straight-pipe pressure design
+ASME B31.3 §304.3.3 (reinforcement of welded branch connections)
+ASME BTH-1 §3-1.3 (Design Category)
+ASME BTH-1 §3-1.4 (Service Class)
+ASME BTH-1 §3-2/§3-3 (allowable stresses)
 ASME BTH-1 §3-3
+ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections)
+ASME VIII Div 1 UG-37 (reinforcement of openings)
+BS 7910 / R6 Option 1 failure assessment diagram
+EN 15978 life-cycle modules; ISO 14040 cradle-to-gate boundary
+EN 1993-1-9
+EN 1993-1-9 §8
+NDS
+NEC 210.19(A)/215.2 informational note — feeder voltage drop
+NEC 310.16 — conductor ampacity
 TMS 402 §8.2.4 allowable axial stress
 TMS 402 §8.2.4.2 combined axial + flexure unity
