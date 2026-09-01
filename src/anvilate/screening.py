@@ -245,7 +245,29 @@ def _screen_element(
                     ),
                 )
             ]
-    card = screen(element, **keywords)
+    try:
+        card = screen(element, **keywords)
+    except (ValueError, LookupError) as refused:
+        # A pack screen's own refusals are facts about the document: an identifier the
+        # databases do not carry, a quantity outside the standard's range, a guard the
+        # element trips. They were uncaught, so `element_params` naming an alloy the
+        # database does not have raised out of `screen_spec` and `anvilate check` printed a
+        # traceback where it owed a card — the material entry that says exactly what is
+        # wrong was two lines further down the same call.
+        #
+        # `ValueError` and `LookupError` only: a TypeError or an AttributeError out of a
+        # screen is this library's bug, not the document's, and must not be reported as a
+        # tri-state result.
+        return [
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the {tag} screen refused the element it was given — "
+                    f"{type(refused).__name__}: {refused}"
+                ),
+            )
+        ]
     if not card.entries:  # pragma: no cover - every pack screen returns at least one check
         return [
             ScorecardEntry(

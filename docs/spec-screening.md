@@ -182,6 +182,14 @@ ToleranceClass` out of `anvilate export`: two surfaces disagreeing about one doc
 the one a user runs first said nothing. It is a FAIL on the card now, with the near misses
 named. `min_wall` is a bound on built geometry and is reported unscreened.
 
+**A pack screen's own refusal is a fact about the document too.** The screens raise for what
+they cannot work with — an alloy the database does not carry, a quantity outside a standard's
+range — and those raises were uncaught, so `element_params` naming a bad alloy took the whole
+card with it and printed a traceback where a scorecard was owed. They are `NOT_EVALUATED`
+entries quoting the pack's own message now. Only `ValueError` and `LookupError`: a `TypeError`
+out of a screen is this library's bug rather than the document's, and filing our own defect
+under "not evaluated" on somebody's card would be the worst kind of silence.
+
 **Two more declarations the card used to be silent about.** A geometric tolerance is
 carried into the provenance record and screened by nothing — a spec's `GeometricTolerance`
 is a different type from `anvilate.gdt.FeatureControlFrame`, the semantic layer that could

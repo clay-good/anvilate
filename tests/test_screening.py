@@ -1346,3 +1346,42 @@ def test_the_screen_answers_a_hostile_document_rather_than_raising(label):
     assert card.status is not CheckStatus.PASS, f"{label}: this document must not pass"
     # Whatever went wrong, the checks that had nothing to do with it still ran.
     assert any(e.name == "material resolution" for e in card.entries), label
+
+
+def test_a_pack_screen_that_refuses_the_document_lands_on_the_card():
+    """A pack screen's own refusals are facts about the document, and they were uncaught.
+
+    `element_params` naming an alloy the database does not carry raised `UnknownMaterialError`
+    out of `screen_spec`, so `anvilate check` printed a traceback where it owed a card — and
+    the material entry that says exactly what is wrong, with the near misses, was two lines
+    further down the same call.
+    """
+    spec = _lug_spec(
+        material=MaterialRef(ref="NOT-A-REAL-ALLOY"),
+        element_params={**_lug_spec().element_params, "material": "NOT-A-REAL-ALLOY"},
+    )
+    card = screen_spec(spec)
+    refused = next(e for e in card.entries if e.name == "T1 analytical")
+    assert refused.status is CheckStatus.NOT_EVALUATED
+    assert "UnknownMaterialError" in refused.detail and "NOT-A-REAL-ALLOY" in refused.detail
+    resolution = next(e for e in card.entries if e.name == "material resolution")
+    assert resolution.status is CheckStatus.FAIL
+    assert "did you mean" in resolution.detail or "nothing among" in resolution.detail
+
+
+def test_a_screen_that_is_simply_broken_still_raises(monkeypatch):
+    """The other half of that catch, and the reason it names two exception types rather than
+    catching everything: a TypeError out of a pack screen is this library's bug, not the
+    document's, and reporting it as a tri-state result would file our own defect under
+    'not evaluated' on the user's card."""
+    from anvilate.screening import element_registry
+
+    registry = element_registry()
+    model, _screen = registry["lifting_lug"]
+
+    def broken(element, **keywords):
+        raise TypeError("screen_lifting_lug() got an unexpected keyword argument")
+
+    monkeypatch.setitem(registry, "lifting_lug", (model, broken))
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        screen_spec(_lug_spec())
