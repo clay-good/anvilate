@@ -392,6 +392,50 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     ]
 
 
+# What a declared bound would take to check, said once because the entry quotes it and the
+# test pins it. `min_safety_factor` is absent on purpose: it is the one constraint this
+# module already consumes, and it is consumed by the pack screen the element selects.
+_UNSCREENED_CONSTRAINTS = {
+    "max_mass": (
+        "a mass is a property of a built solid, and no geometry is generated from a spec today"
+    ),
+    "envelope": (
+        "an envelope is checked against a built solid's bounding box, and no geometry is "
+        "generated from a spec today"
+    ),
+    "max_cost": (
+        "a cost needs a cost model — process, setup, material and quantity — and this "
+        "library ships none"
+    ),
+}
+
+
+def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """One entry per bound the document declares and nothing screens.
+
+    A constraint is the plainest declaration a spec makes: it is the requirement, written
+    down by the person the card is for. Three of the four were read by nothing — a spec
+    stating `max_mass: 150 g` screened to PASS with the mass never computed and never
+    mentioned, which is the same silence the tier gaps above exist to break.
+
+    They are NOT_EVALUATED rather than absent, and each says what checking it would take.
+    """
+    entries = []
+    for field, reason in _UNSCREENED_CONSTRAINTS.items():
+        declared = getattr(spec.constraints, field)
+        if declared is None:
+            continue
+        stated = getattr(declared, "value", declared)
+        entries.append(
+            ScorecardEntry(
+                name=f"constraint {field}",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=f"the spec declares {field} {stated}, and nothing screened it: {reason}",
+            )
+        )
+    return entries
+
+
 def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
     """Whether every force-carrying load case declares the nature a combination needs.
 
@@ -580,6 +624,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # declares, and a spec that declares them has asked for them to be looked at whatever
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
+    entries.extend(_constraint_entries(spec))
     entries.extend(_chain_entries(spec))
     load = _load_entry(spec)
     if load is not None:

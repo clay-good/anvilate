@@ -156,6 +156,15 @@ carries a `NOT_EVALUATED` entry naming what was declared and the tier that would
 screened it. The tier is still not forced: the acceptance criteria remain the contract, and
 the answer to something nobody screened is "not evaluated", never a pass.
 
+**The same goes for a bound the document sets.** `constraints` is the plainest declaration a
+spec makes — it is the requirement, written down by the person the card is for — and three of
+its four fields were read by nothing. A spec stating `max_mass: 150 g` screened to PASS with
+the mass never computed and never mentioned. Each declared bound the library cannot screen
+now gets an entry saying so and what checking it would take: a mass and an envelope need a
+built solid, and a cost needs a cost model this library does not ship. `min_safety_factor` is
+the one it consumes, and it is consumed by the pack screen the element selects. A census test
+holds that split, so a fifth bound cannot land and be quietly ignored.
+
 ## References resolve, and the answer is a verdict
 
 A spec names its material and its standard components as *identifiers* — `AA-6061-T6`,

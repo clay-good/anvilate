@@ -886,3 +886,54 @@ def test_a_spec_with_no_dimensions_and_no_t2_says_nothing_about_tolerances():
     )
     assert "tolerance achievability" not in [entry.name for entry in card.entries]
     assert card.status is CheckStatus.PASS
+
+
+def test_a_declared_bound_nothing_screens_is_reported():
+    """A constraint is the plainest declaration a spec makes: it is the requirement, written
+    down by the person the card is for.
+
+    Three of the four were read by nothing. A spec stating `max_mass: 150 g` screened to PASS
+    with the mass never computed and never mentioned — and the golden bracket spec in this
+    repository declares exactly that.
+    """
+    from anvilate.units import Quantity
+
+    spec = _lug_spec(
+        constraints=Constraints(
+            min_safety_factor=Provenanced.stated(2.0),
+            max_mass=Provenanced.stated(Quantity.parse("150 g")),
+            max_cost=Provenanced.stated(40.0),
+        )
+    )
+    card = screen_spec(spec)
+    reported = {e.name: e for e in card.entries if e.name.startswith("constraint ")}
+    assert set(reported) == {"constraint max_mass", "constraint max_cost"}
+    assert all(e.status is CheckStatus.NOT_EVALUATED for e in reported.values())
+    assert "150 g" in reported["constraint max_mass"].detail
+    assert "no geometry is generated" in reported["constraint max_mass"].detail
+    assert card.status is CheckStatus.NOT_EVALUATED, "the card passed with the bounds unchecked"
+    # The one constraint this library does consume is not reported as unscreened: it is the
+    # figure the pack screen was judged against, two entries up the same card.
+    assert "constraint min_safety_factor" not in reported
+
+
+def test_every_constraint_is_either_screened_or_named_as_unscreened():
+    """The census, so a fifth bound cannot land and be silently ignored.
+
+    `min_safety_factor` is the one exemption and it is a real one: it is consumed, by the
+    pack screen the element selects. Every other field of `Constraints` must appear in the
+    unscreened table with a reason, or it is a requirement a user states and nothing answers.
+    """
+    from anvilate.screening import _UNSCREENED_CONSTRAINTS
+
+    declared = set(Constraints.model_fields)
+    assert len(declared) >= 4, f"the census is looking at {len(declared)} constraint fields"
+    unaccounted = declared - set(_UNSCREENED_CONSTRAINTS) - {"min_safety_factor"}
+    assert not unaccounted, (
+        f"these bounds are declared by a spec and neither screened nor reported: "
+        f"{sorted(unaccounted)}"
+    )
+    stale = set(_UNSCREENED_CONSTRAINTS) - declared
+    assert not stale, f"the unscreened table names fields Constraints does not have: {stale}"
+    for field, reason in _UNSCREENED_CONSTRAINTS.items():
+        assert reason.strip(), f"{field} is listed as unscreened with no reason"
