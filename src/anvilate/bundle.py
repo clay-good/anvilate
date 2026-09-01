@@ -72,6 +72,7 @@ from .loads import CombinationEvidence
 from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard
+from .spec import DesignSpec, dump_spec_yaml
 from .standards.effectivity import DesignBasis, design_basis_scorecard
 from .units import Quantity
 from .verification import VerificationPlan
@@ -177,6 +178,17 @@ class BundleSections(RevalidatedModel):
     # basis and one whose citations check out are different documents, and without this
     # field a reader could not tell which they were holding — the concept did not appear.
     design_basis: DesignBasis | None = None
+    # The document these verdicts were computed from. `artifact-export` asks the bundle to
+    # carry "the spec, the scorecard ... sufficient for an independent engineer to reproduce
+    # the run", and its scenario is a reviewer holding **only the bundle**. Without this the
+    # bundle named what passed and not the load, the thickness or the material it passed on,
+    # so the scenario was not merely untested — it was false.
+    #
+    # Optional, and its absence is *named* by `render_document` rather than left out: a
+    # bundle that cannot be re-run and one whose author forgot the section must not read the
+    # same. It stays out of the roll-up — `to_json_dict` is hashed into signed attestations,
+    # and a spec is not a layer with a verdict — so adding it moves no existing digest.
+    spec: DesignSpec | None = None
 
     @model_validator(mode="after")
     def _an_assumption_says_something(self) -> BundleSections:
@@ -459,9 +471,14 @@ class BundleSections(RevalidatedModel):
 
         So the roll-up stays exactly as it is — the predicate's canonical form must not move
         under an attestation somebody already signed — and the exported document is this,
-        which is the roll-up plus every check the card carries. ``ScorecardEntry.__str__``
-        does the per-check line, so the bundle and ``anvilate check`` cannot describe one
-        check two ways.
+        which is the roll-up, every check the card carries, and the spec they were computed
+        from. ``ScorecardEntry.__str__`` does the per-check line, so the bundle and
+        ``anvilate check`` cannot describe one check two ways.
+
+        The spec is rendered as the YAML a reader can paste back into ``anvilate check``,
+        which is what "reproduce the run" has to mean in a tool with a text front door: the
+        document round-trips, so the bundle is not a description of the inputs but the
+        inputs. A bundle carrying none says so in a line of its own.
         """
         # No empty-card branch: `_a_bundle_is_evidence_of_something` refuses a bundle over a
         # scorecard with no entries, so "checks:" is never a heading over nothing.
@@ -470,9 +487,24 @@ class BundleSections(RevalidatedModel):
                 self.render_rollup(),
                 "checks:",
                 *(f"  {entry}" for entry in self.scorecard.entries),
+                *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def spec_block(self) -> tuple[str, ...]:
+        """The spec as rendered lines — never empty, so the heading never vanishes.
+
+        The same rule :meth:`assumptions_block` follows one field along. A bundle with no
+        spec in it cannot be re-run from, and that is a fact about the bundle a reader is
+        owed in the document rather than by noticing an absence.
+        """
+        if self.spec is None:
+            return (
+                "spec: not carried — this bundle names its verdicts and not the inputs they "
+                "were computed from, so the run cannot be reproduced from it alone",
+            )
+        return ("spec:", *(f"  {line}" for line in dump_spec_yaml(self.spec).splitlines()))
 
     def to_document_dict(self) -> dict[str, object]:
         """The exported bundle as JSON: the roll-up, and the whole card under ``scorecard``.
@@ -481,9 +513,15 @@ class BundleSections(RevalidatedModel):
         :meth:`to_json_dict` rather than folded into it because that one is hashed into an
         attested predicate that already carries the card in its own field — folding it in
         would move every existing attestation's digest and put two copies of one card inside
-        one signed document.
+        one signed document. The spec is here for the same reason and on the same terms:
+        ``null`` rather than absent, so a consumer reading this document can tell "no spec"
+        from "a key I forgot to look for".
         """
-        return {**self.to_json_dict(), "scorecard": self.scorecard.model_dump(mode="json")}
+        return {
+            **self.to_json_dict(),
+            "scorecard": self.scorecard.model_dump(mode="json"),
+            "spec": None if self.spec is None else self.spec.model_dump(mode="json"),
+        }
 
     def to_json_dict(self) -> dict[str, object]:
         """The sections as JSON-safe primitives, for the attestation predicate.

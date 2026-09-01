@@ -36,19 +36,42 @@ the analysis. So there are two renderings, and which one you want depends on who
 | | who reads it | what it carries |
 | --- | --- | --- |
 | `render()` / `to_json_dict()` | the attestation predicate | the roll-up over layers, the assumptions, the disclaimer |
-| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail and its clause |
+| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail and its clause, plus the spec they were computed from |
 
 The split is not tidiness. Folding the card into `to_json_dict()` would move the canonical
 form hashed into every predicate — invalidating attestations already signed — and put two
 copies of one scorecard inside one signed document, which is two chances for them to
 disagree. A test asserts the predicate still carries the roll-up and not the document.
 
-**What the requirement asks for and this still does not carry: the spec itself.** The
-bundle names the part's verdicts and not the dimensions, loads and materials they were
-computed from, so "re-run the identical analysis" is not yet reachable from the bundle
-alone. At the shell the spec is in hand; over MCP the tool holds a scorecard handle and
-would need a second one. That is a contract decision rather than an oversight, and it is
-written down as one rather than left as a silence.
+## The bundle carries the spec, so the scenario is performable
+
+`artifact-export` asks for "the spec, the scorecard with thresholds and measured values ...
+sufficient for an independent engineer to reproduce the run", and its scenario is a reviewer
+who receives **only the bundle** and obtains the same scorecard. Carrying the checks made
+half of that true. The other half was still false: a bundle named what passed and not the
+load, the thickness or the material it passed on, so there was nothing to re-run.
+
+`BundleSections.spec` is that half. It renders as the YAML a reader can paste straight back
+into `anvilate check` — which is what "reproduce the run" has to mean in a tool with a text
+front door, because then the bundle does not *describe* the inputs, it **is** them. A bundle
+carrying none says so in a line of its own rather than leaving a reader to notice an absence.
+
+The scenario is now a test rather than a sentence: screen a spec, export it through each
+surface, discard the original, rebuild the spec out of the bundle, re-screen it, and require
+the card to come back identical. A second test asks the question that matters for a text-first
+tool — can the parser read back what the renderer wrote? — by pulling the YAML out of the
+rendered bundle and screening it.
+
+**Over MCP the handle names the pair.** At the shell the spec is in hand, but the export tool
+receives only a subject handle, so `run_validation` publishes `{spec, scorecard}` together and
+that is what the handle names. The alternative was an optional second `spec` handle on the
+export call, which would make a bundle reproducible or not depending on how a client happened
+to be written — and a bundle that is *sometimes* reproducible is one a reviewer cannot rely
+on. This way there is no call sequence that produces the lesser bundle.
+
+What the requirement asks for and the bundle still does not carry is everything downstream of
+geometry: FEA assumptions, stress-field imagery, mesh statistics and convergence history,
+solver input decks. None of it exists to carry.
 
 ## Five rules, and each is a judgement
 

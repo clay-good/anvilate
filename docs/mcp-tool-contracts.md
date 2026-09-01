@@ -232,11 +232,14 @@ names the bytes the client was handed and two calls for the same card agree.
 
 Three things about it are decisions rather than details:
 
-- **The subject is a scorecard handle, not a spec handle.** A bundle is a document about a
-  screening result and that is what `BundleSections` takes. Re-screening from a spec would
-  be a second answer to a question the client already holds an answer to, and against tables
-  that have moved it can disagree with the card in hand. A spec handle is refused by name —
-  the store carries each record's kind precisely so that mistake is caught at the door.
+- **The subject is a screening-result handle, not a spec handle.** What `run_validation`
+  publishes is `{spec, scorecard}` — the document and the verdicts it produced — and the
+  bundle is built from both, so it carries the inputs a reviewer needs to re-run it.
+  Re-screening from a spec handle instead would be a second answer to a question the client
+  already holds an answer to, and against tables that have moved it can disagree with the
+  card in hand. A spec handle is refused by name — the store carries each record's kind
+  precisely so that mistake is caught at the door — and so is a handle from a build before
+  the record became a pair, with what changed rather than only that the kinds differ.
 - **A card that does not pass still gets a bundle.** `artifact-export` gates the CAD
   artifacts — a DXF somebody cuts from. The evidence bundle is the evidence, including the
   evidence that a part failed, and it carries the screening disclaimer and its own status in

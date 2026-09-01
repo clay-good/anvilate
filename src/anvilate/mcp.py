@@ -1001,6 +1001,44 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
+# What `run_validation` publishes and what the two tools that read a screening result ask
+# for. Spelled once, because a publisher and a resolver that name the kind separately are two
+# strings that can disagree — and the store's whole job is to refuse the wrong sort of
+# document by name rather than fail three layers down in a schema nobody sent.
+#
+# It is *not* `"scorecard"`, and the rename is deliberate rather than cosmetic: the record
+# stopped being a card the day it started carrying the spec beside it, and a handle whose
+# kind still said `scorecard` would resolve for a caller expecting only a card and hand them
+# a document with a different shape. A handle published by a build before this change is
+# refused by the store naming both kinds, which is the honest answer — see `_screening`.
+_SCREENING = "screening"
+
+
+def _screening(handle: str) -> Mapping[str, Any]:
+    """The ``{spec, scorecard}`` record a handle names, or :class:`UnknownSubject`.
+
+    One reader for both tools that take a screening result, so ``read_scorecard`` and
+    ``export_artifact`` cannot come to differ about what a handle is allowed to be.
+
+    The store's own kind mismatch already says "names a 'scorecard', and a 'screening' was
+    asked for", which is exactly right for a handle from an older build and says nothing
+    about *why*. This adds the why, because that message is the only thing a client holding
+    a stale handle receives.
+    """
+    try:
+        return subject_store().resolve(handle, kind=_SCREENING)
+    except UnknownSubject as unknown:
+        message = str(unknown.args[0])
+        if "'scorecard'" in message:
+            raise UnknownSubject(
+                f"{message}. A handle used to name the scorecard alone; it names the spec "
+                f"and the scorecard together now, so that an exported evidence bundle "
+                f"carries the inputs its verdicts were computed from. Call run_validation "
+                f"again to publish a handle of the current shape"
+            ) from unknown
+        raise
+
+
 def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``compile_spec``, dispatched to :func:`anvilate.spec.parse_spec`.
 
@@ -1078,7 +1116,19 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
     # for it that is not "the last thing you asked me".
-    return {"scorecard": card, "subject": subject_store().publish("scorecard", card)}
+    #
+    # **The record is the pair, not the card.** `artifact-export` asks the evidence bundle to
+    # carry the spec as well as the scorecard, for a reviewer holding only the bundle. At the
+    # shell the spec is in hand; here the only thing `export_artifact` is given is a handle,
+    # so what the handle names has to be both. The alternative — a second, optional spec
+    # handle on the export call — would make a bundle reproducible or not depending on how a
+    # client happened to be written, and a bundle that is *sometimes* reproducible is one a
+    # reviewer cannot rely on. This way the screen that produced the verdicts publishes the
+    # document that produced them, together, and neither surface can emit the lesser bundle.
+    handle = subject_store().publish(
+        _SCREENING, {"spec": spec.model_dump(mode="json"), "scorecard": card}
+    )
+    return {"scorecard": card, "subject": handle}
 
 
 def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -1091,7 +1141,7 @@ def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """
     handle = arguments["subject"]
     try:
-        return {"scorecard": subject_store().resolve(handle, kind="scorecard")}
+        return {"scorecard": _screening(handle)["scorecard"]}
     except UnknownSubject as unknown:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
@@ -1130,6 +1180,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     # tool's enum publishes.
     from .cli import _UNBUILT_ARTIFACTS
     from .scorecard import Scorecard
+    from .spec import parse_spec
 
     artifact = arguments["format"]
     if artifact in _UNBUILT_ARTIFACTS:
@@ -1140,11 +1191,17 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
 
     handle = arguments["subject"]
     try:
-        card = subject_store().resolve(handle, kind="scorecard")
+        record = _screening(handle)
     except UnknownSubject as unknown:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
-    document = BundleSections(scorecard=Scorecard.model_validate(card)).to_document_dict()
+    document = BundleSections(
+        scorecard=Scorecard.model_validate(record["scorecard"]),
+        # Never `None` on this path. The record holds the pair, so the bundle a client gets
+        # over MCP carries its inputs exactly as the one `anvilate export` prints does — the
+        # parity is by construction rather than by both surfaces remembering.
+        spec=parse_spec(record["spec"]),
+    ).to_document_dict()
     # The digest of the bundle's own canonical JSON, which is the same content addressing
     # the store and the attestation layer use — so the sha256 a client is handed names the
     # bytes it was handed, and two calls that produce the same bundle produce the same

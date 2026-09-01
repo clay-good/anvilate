@@ -732,12 +732,16 @@ def test_the_exported_json_carries_the_card_and_the_predicates_form_does_not():
     document = sections.to_document_dict()
 
     assert "scorecard" not in rollup
+    assert "spec" not in rollup
     assert document["scorecard"] == sections.scorecard.model_dump(mode="json")
     # The document is a superset: every key of the roll-up survives with its value, so a
     # client reading the roll-up's keys off the exported bundle is not reading a different
     # document that happens to share a name.
     assert all(document[key] == value for key, value in rollup.items())
-    assert set(document) - set(rollup) == {"scorecard"}
+    assert set(document) - set(rollup) == {"scorecard", "spec"}
+    # `spec` is present and null rather than absent, so a consumer can tell "this bundle
+    # carries no spec" from "a key I did not think to look for".
+    assert document["spec"] is None
 
 
 def test_a_bundle_over_an_empty_card_cannot_be_constructed_to_be_rendered():

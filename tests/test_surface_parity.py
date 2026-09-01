@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import io
 import json
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -292,3 +294,92 @@ def test_a_hostile_document_exports_the_same_bundle_on_both_surfaces(label, tmp_
     assert over_mcp["status"] != CheckStatus.PASS.value, f"{label}: this must not pass"
     assert over_mcp["disclaimer"], label
     assert code == EXIT_CODES[CheckStatus(over_mcp["status"])], label
+
+
+def test_a_reviewer_holding_only_the_bundle_can_reproduce_the_card():
+    """`artifact-export`'s own scenario, which nothing in this repo could make until now.
+
+    "**WHEN** a senior engineer receives only the evidence bundle and the Anvilate release
+    named in it, **THEN** they can re-run the identical analysis and obtain the same
+    scorecard." That was quoted in the spec and untestable, because a bundle carried its
+    verdicts and not the inputs they were computed from: there was nothing to re-run.
+
+    So this is the scenario performed rather than described. The spec is written to a file,
+    exported through each surface, and then **dropped** — everything after that line works
+    from the bundle document alone: rebuild the spec out of it, screen the rebuilt spec, and
+    require the card to come back identical to the one the bundle carries.
+
+    The equality is the whole assertion. A spec that round-trips into something *similar*
+    reproduces a similar analysis, which is the failure this test exists to catch and the
+    one a "does it parse" check would pass.
+    """
+    from anvilate.screening import screen_spec
+    from anvilate.spec import parse_spec
+
+    document = _document()
+
+    # --- at the shell
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "deck.yaml"
+        path.write_text(_SPEC, encoding="utf-8")
+        _code, out, _err = _cli(
+            "export", "--artifact", "evidence-bundle", "--format", "json", str(path)
+        )
+    at_the_shell = json.loads(out)["bundles"][0]["bundle"]
+
+    # --- over MCP
+    handle = _mcp("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]
+    over_mcp = _mcp("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"][
+        "structuredContent"
+    ]["bundle"]
+
+    del document  # only the bundle from here down
+
+    for label, bundle in (("shell", at_the_shell), ("mcp", over_mcp)):
+        assert bundle["spec"] is not None, f"{label}: the bundle carries no spec to re-run"
+        reproduced = screen_spec(parse_spec(bundle["spec"])).model_dump(mode="json")
+        assert reproduced == bundle["scorecard"], (
+            f"{label}: re-running the analysis from the bundle alone produced a different "
+            f"card than the bundle reports"
+        )
+
+
+def test_the_spec_the_rendered_bundle_prints_is_one_the_parser_reads_back():
+    """The text bundle's spec block, round-tripped through the front door.
+
+    The JSON bundle above hands a machine `model_dump(mode="json")`, which pydantic is
+    always going to rebuild. The rendered bundle is what a person receives, and it prints
+    YAML — so the question is the one that matters for a text-first tool: can
+    `anvilate check` read back what `anvilate export` wrote? A spec block that renders
+    beautifully and does not parse is a reproducibility claim that fails the first time
+    somebody acts on it.
+    """
+    import textwrap
+
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "deck.yaml"
+        path.write_text(_SPEC, encoding="utf-8")
+        _code, rendered, _err = _cli("export", "--artifact", "evidence-bundle", str(path))
+
+    assert "spec:" in rendered, "the rendered bundle prints no spec block"
+    block = rendered.split("spec:\n", 1)[1].rsplit("These are closed-form", 1)[0]
+
+    # Every line of it is nested under the heading. That is what makes the block a block:
+    # unindented, the spec's own top-level keys sit at column 0 beside `checks:` and
+    # `assumptions:`, and there is no longer anything in the text saying where the spec
+    # starts and the bundle resumes. Asserted because dedent-then-parse cannot see it —
+    # dedenting an already-flush block is a no-op, so the round-trip below passed happily
+    # on a rendering that had lost the indent entirely.
+    indented = [line for line in block.splitlines() if line.strip()]
+    assert indented, "the spec block is empty"
+    assert all(line.startswith("  ") for line in indented), (
+        "the rendered spec block is not nested under its heading, so nothing in the "
+        "document marks where the spec ends"
+    )
+    recovered = load_spec_yaml(textwrap.dedent(block))
+
+    original = screen_spec(load_spec_yaml(_SPEC)).model_dump(mode="json")
+    assert screen_spec(recovered).model_dump(mode="json") == original

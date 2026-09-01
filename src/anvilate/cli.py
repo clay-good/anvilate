@@ -596,7 +596,10 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
         spec = _load(path, err=err, command="export")
         if isinstance(spec, int):
             return spec
-        results.append((path, spec, BundleSections(scorecard=screen_spec(spec))))
+        # The spec goes in the bundle, not only through it. `artifact-export`'s scenario is
+        # a reviewer holding only this document and re-running the analysis, and until the
+        # spec was carried they were holding verdicts with no inputs behind them.
+        results.append((path, spec, BundleSections(scorecard=screen_spec(spec), spec=spec)))
 
     # One roll-up, read by the exit code and by both renderings. `check` prints its
     # run-level verdict in each; this printed it in neither, so a CI job publishing bundles

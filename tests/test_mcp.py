@@ -1299,7 +1299,7 @@ def test_export_artifact_refuses_a_handle_to_the_wrong_kind_of_document():
     error = _call("export_artifact", {"subject": spec_handle, "format": "evidence_bundle"})["error"]
     assert error["code"] == -32602
     assert "names a 'design-spec'" in error["message"]
-    assert "'scorecard' was asked for" in error["message"]
+    assert "'screening' was asked for" in error["message"]
 
 
 def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
@@ -1326,3 +1326,64 @@ def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
     monkeypatch.setattr(anvilate.bundle, "BundleSections", _raise)
     with pytest.raises(_Reached):
         _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})
+
+
+def test_the_handle_run_validation_publishes_names_the_spec_and_the_card_together():
+    """The shape of the record, and why it is a pair rather than a card.
+
+    `artifact-export` asks the evidence bundle to carry the spec beside the scorecard, for a
+    reviewer holding only the bundle. At the shell the spec is in hand; over MCP the only
+    thing `export_artifact` receives is a handle, so the handle has to name both.
+
+    The alternative — an optional second `spec` subject on the export call — was rejected
+    because it makes a bundle reproducible or not depending on how a client happened to be
+    written, and a bundle that is *sometimes* reproducible is one a reviewer cannot rely on.
+    This asserts the property that choice buys: there is no call sequence that produces the
+    lesser bundle, because the screen that computed the verdicts published the document they
+    were computed from.
+    """
+    from anvilate.store import subject_store
+
+    handle = _scorecard_handle()
+    record = subject_store().resolve(handle, kind="screening")
+    assert set(record) == {"spec", "scorecard"}
+    # Every field the caller sent survives into the record with its value. Written this way
+    # rather than as one equality because the stored spec is the *parsed* document and
+    # carries defaults the caller never sent — comparing the whole thing would assert the
+    # defaults rather than the fidelity, and would move every time one of them changed.
+    sent = _spec_document()
+    assert sent, "the fixture sends nothing, so this compares two empty things"
+    for field, value in sent.items():
+        assert record["spec"][field] == value, (
+            f"{field} was sent as {value!r} and stored as {record['spec'][field]!r}"
+        )
+
+    bundle = _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"][
+        "structuredContent"
+    ]["bundle"]
+    assert bundle["spec"] == record["spec"]
+    assert bundle["scorecard"] == record["scorecard"]
+
+
+def test_a_handle_of_the_older_shape_is_refused_with_what_changed():
+    """A handle published before the record became a pair, and what its holder is told.
+
+    Nothing in the store evicts anything, so a handle written by an earlier build is still
+    on disk and still resolves — as a `scorecard`, which is no longer what either tool that
+    reads a screening result asks for. The store's own message says the kinds disagree and
+    says nothing about why, and that message is the *only* thing that client receives.
+
+    So the reason is added, and it is added in one place: both tools go through `_screening`,
+    so neither can grow its own account of what happened.
+    """
+    from anvilate.store import subject_store
+
+    stale = subject_store().publish("scorecard", {"entries": [], "status": "pass"})
+    for tool, arguments in (
+        ("read_scorecard", {"subject": stale}),
+        ("export_artifact", {"subject": stale, "format": "evidence_bundle"}),
+    ):
+        error = _call(tool, arguments)["error"]
+        assert error["code"] == -32602, tool
+        assert "names a 'scorecard', and a 'screening' was asked for" in error["message"], tool
+        assert "run_validation again" in error["message"], tool

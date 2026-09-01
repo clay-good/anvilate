@@ -292,10 +292,17 @@ task-dispatched: build_part, run_fea_validation
 
 Four tools take a **subject** — `render_viewport`, `measure_geometry`, `read_scorecard` and
 `export_artifact`. It is a handle: `sha256:` and the digest of the document it names, returned
-by an earlier call. `read_scorecard` and `export_artifact` both want the *scorecard* handle
+by an earlier call. `read_scorecard` and `export_artifact` both want the handle
 `run_validation` returns, not the spec handle `compile_spec` returns; the store records each
 document's kind, so handing over the wrong one is refused by name rather than failing three
 layers down in a schema you did not send.
+
+That handle names a **screening result** — the spec and the scorecard together — rather than
+the card alone. `read_scorecard` gives you the card out of it; `export_artifact` builds a
+bundle from both, so the evidence bundle you receive carries the inputs its verdicts were
+computed from and can be re-run from on its own. A handle from a build before that change
+resolves as a `scorecard` and is refused with what changed and what to do: call
+`run_validation` again.
 
 ```python
 from anvilate.mcp import handle_request

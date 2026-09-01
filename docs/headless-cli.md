@@ -194,7 +194,10 @@ code is the bundle's own roll-up, which is never better than its worst section.
 `BundleSections.render()` — the layer summary, whose checks line says `3 run, 1 failing`
 and names none of them. A reviewer holding that output could not tell which check failed,
 at what margin, or against which clause. It prints `render_document()` now: the same
-roll-up, then every check with its detail and its citation, then the disclaimer. See
+roll-up, then every check with its detail and its citation, then the spec those verdicts
+were computed from, then the disclaimer. The spec block is the YAML you can paste back into
+`anvilate check`: a reviewer holding only this output can re-run the analysis and get the
+same card, which is the scenario `artifact-export` asks for and a test now performs. See
 [the evidence bundle](evidence-bundle.md) for why the roll-up still exists. A DXF or a
 QIF results file does need a built part, and each is refused by name:
 
