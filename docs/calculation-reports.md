@@ -52,7 +52,7 @@ FAIL  padeye pin bearing
     t = 12.00 mm  (lug plate thickness)
     σ_p = 166.7 MPa  (pin bearing stress)
   safety factor 1.50 vs required minimum 2.00
-  repair: increase thickness to 16 mm
+  repair: increase thickness to 16 mm — from the lug thickness inverse (σ ∝ 1/t, so SF ∝ t)
   source: ASME BTH-1 §3-3
 ```
 

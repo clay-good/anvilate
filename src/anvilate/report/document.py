@@ -90,6 +90,18 @@ _NONFINITE_TOKENS: dict[str, float] = {
 _NONFINITE_SPELLING = {"inf": "__nonfinite:inf__", "-inf": "__nonfinite:-inf__"}
 
 
+def _repair_source(section) -> str:
+    """Where a repair hint's number came from, as a clause to append to it.
+
+    Empty when the hint declares no provenance, so a hint without one renders exactly as it
+    did. The packs populate it with the inverse or the monotonicity argument behind the
+    value, and both renderings dropped it.
+    """
+    hint = section.entry.repair_hint
+    source = (hint.provenance or "").strip() if hint is not None else ""
+    return f" — from the {source}" if source else ""
+
+
 def _json_safe(value: object) -> object:
     """Encode non-finite floats as string tokens so the record is strict-JSON valid.
 
@@ -242,7 +254,12 @@ class CalculationReport(BaseModel):
                     )
             out.append(f"  {section.entry.detail}")
             if section.entry.repair_hint is not None:
-                out.append(f"  repair: {section.entry.repair_hint}")
+                # With its provenance, which nothing rendered. The packs write a real
+                # sentence into it — "lug thickness inverse (σ ∝ 1/t, so SF ∝ t)" — and it
+                # is the difference between a value that solves the check exactly and a
+                # direction taken from a monotonicity declaration. This is the document a
+                # reviewer signs, so it is where that difference has to be legible.
+                out.append(f"  repair: {section.entry.repair_hint}{_repair_source(section)}")
             unc = section.entry.uncertainty
             if unc is not None:
                 flag = " — FRAGILE" if section.entry.is_fragile() else ""
@@ -433,7 +450,10 @@ class CalculationReport(BaseModel):
                 out.append("</table>")
         out.append(f'<p class="detail">{escape(section.entry.detail)}</p>')
         if section.entry.repair_hint is not None:
-            out.append(f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}</p>')
+            out.append(
+                f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}'
+                f"{escape(_repair_source(section))}</p>"
+            )
         unc = section.entry.uncertainty
         if unc is not None:
             fragile = section.entry.is_fragile()

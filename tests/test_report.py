@@ -1201,3 +1201,42 @@ def test_a_derivation_with_no_inputs_is_refused():
             ),
             citation="AISC 360-22 §F2",
         )
+
+
+def test_a_repair_hint_carries_where_its_number_came_from():
+    """The packs write a real sentence into `RepairHint.provenance` — "lug thickness inverse
+    (σ ∝ 1/t, so SF ∝ t)" — and no rendering showed it.
+
+    It is the difference between a value that solves the check exactly and a direction taken
+    from a monotonicity declaration, and this is the document a reviewer signs. A hint with no
+    provenance renders exactly as it did, which the second half holds.
+    """
+    from anvilate.report.document import _repair_source
+
+    class _Section:
+        def __init__(self, entry):
+            self.entry = entry
+
+    solved = ScorecardEntry.from_safety_factor(
+        "lug tension",
+        computed=1.0,
+        required=2.0,
+        repair_hint=RepairHint(
+            parameter="thickness",
+            direction=Direction.INCREASE,
+            corrective_value=16.0,
+            unit="mm",
+            provenance="lug thickness inverse (σ ∝ 1/t, so SF ∝ t)",
+        ),
+    )
+    assert _repair_source(_Section(solved)) == (
+        " — from the lug thickness inverse (σ ∝ 1/t, so SF ∝ t)"
+    )
+
+    bare = ScorecardEntry.from_safety_factor(
+        "lug tension",
+        computed=1.0,
+        required=2.0,
+        repair_hint=RepairHint.directional("thickness", direction=Direction.INCREASE),
+    )
+    assert _repair_source(_Section(bare)) == ""
