@@ -335,7 +335,22 @@ def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         ]
     entries: list[ScorecardEntry] = []
     for dimension in spec.dimensions:
-        band = dimension.resolve().width
+        try:
+            # Resolving is where a fit designation is looked up, and it was outside the
+            # try below — so a dimension declaring `H77` raised out of `screen_spec` and
+            # took the whole card with it, including the checks that had nothing to do
+            # with tolerances. A designation the table does not carry is a fact about the
+            # document, which is an entry.
+            band = dimension.resolve().width
+        except ToleranceRangeError as unknown:
+            entries.append(
+                ScorecardEntry(
+                    name=f"tolerance achievability: {dimension.tag}",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=f"the declared tolerance does not resolve — {unknown}",
+                )
+            )
+            continue
         try:
             check = tolerance_is_achievable(process, band)
         except ToleranceRangeError as unknown:
@@ -380,6 +395,16 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 name="stack-up chains",
                 status=CheckStatus.NOT_EVALUATED,
                 detail=f"a declared chain references an undeclared dimension tag: {unknown}",
+            )
+        ]
+    except ToleranceRangeError as unresolved:
+        # The same reasoning one layer along: analysing a chain resolves the dimensions it
+        # links, so a fit designation the table does not carry raised out of here too.
+        return [
+            ScorecardEntry(
+                name="stack-up chains",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=f"a linked dimension's tolerance does not resolve — {unresolved}",
             )
         ]
     return [

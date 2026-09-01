@@ -1210,3 +1210,55 @@ def test_every_bound_a_document_states_outside_constraints_is_accounted_for():
         )
         for field, reason in accounted.items():
             assert reason.strip(), f"{model.__name__}.{field} is accounted for with no reason"
+
+
+def _bad_fit_dimension():
+    from anvilate.tolerance.explicit import FitTolerance
+
+    return ToleranceDimension(
+        tag="bore", nominal=_q("35 mm"), tolerance=FitTolerance(designation="H77")
+    )
+
+
+def test_a_fit_designation_the_table_does_not_carry_is_an_entry_not_a_crash():
+    """`dimension.resolve()` is where a fit designation is looked up, and it sat outside the
+    try that catches exactly this error two lines below it.
+
+    So a spec declaring `H77` raised `ToleranceRangeError` out of `screen_spec` and took the
+    whole card with it — the material check, the element's verdicts, everything. A
+    designation the table does not carry is a fact about the document.
+    """
+    card = screen_spec(
+        _lug_spec(
+            dimensions=[_bad_fit_dimension()],
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T2_DFM]),
+        )
+    )
+    entry = next(e for e in card.entries if e.name == "tolerance achievability: bore")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "IT77" in entry.detail
+    # The rest of the card survived, which is the whole point of catching it here.
+    assert any(e.name == "material resolution" for e in card.entries)
+
+
+def test_a_chain_over_an_unresolvable_dimension_is_an_entry_not_a_crash():
+    """The same error one layer along: analysing a chain resolves the dimensions it links."""
+    from anvilate.spec.ir import ChainLink, DimensionChain
+
+    chain = DimensionChain(
+        name="gap",
+        links=[ChainLink(dimension="bore", direction=1)],
+        required_min=_q("0.1 mm"),
+        required_max=_q("0.3 mm"),
+    )
+    card = screen_spec(
+        _lug_spec(
+            dimensions=[_bad_fit_dimension()],
+            chains=[chain],
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+        )
+    )
+    entry = next(e for e in card.entries if e.name == "stack-up chains")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "IT77" in entry.detail
+    assert any(e.name.startswith("padeye") for e in card.entries), "the element still screened"
