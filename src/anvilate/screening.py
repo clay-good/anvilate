@@ -253,12 +253,8 @@ def _screen_element(
     # only from a `target_safety_factor` argument no document could set. A spec that states
     # the band and an element whose screen cannot use it is the silent-drop shape this module
     # spends its length refusing, so it is an entry rather than a quietly ignored field.
-    unusable_band = False
-    if max_safety_factor is not None:
-        if "target_safety_factor" in parameters:
-            keywords["target_safety_factor"] = max_safety_factor
-        else:
-            unusable_band = True
+    if max_safety_factor is not None and "target_safety_factor" in parameters:
+        keywords["target_safety_factor"] = max_safety_factor
     try:
         card = screen(element, **keywords)
     except (ValueError, LookupError) as refused:
@@ -291,18 +287,15 @@ def _screen_element(
             )
         ]
     entries = list(card.entries)
-    if unusable_band:
-        entries.append(
-            ScorecardEntry(
-                name="over-margin band",
-                status=CheckStatus.NOT_EVALUATED,
-                detail=(
-                    f"the spec declares constraints.max_safety_factor "
-                    f"{max_safety_factor:g} and the {tag} screen is not judged against an "
-                    "upper bound, so no check here can report OVER_MARGIN"
-                ),
-            )
-        )
+    if max_safety_factor is not None:
+        # Every safety-factor check is judged against the band the document declared, not
+        # only the checks whose screen happens to take a `target_safety_factor` argument.
+        # One of the twenty-four did when the field shipped, and a spec asking to be told
+        # where it is over-engineered was answered "this screen cannot" for the other
+        # twenty-three. The entry carries both numbers the judgement needs, so the band is
+        # applied there — and a screen that took the argument itself has already produced
+        # the same verdict, which re-judging leaves untouched.
+        entries = [entry.with_upper_band(max_safety_factor) for entry in entries]
     return entries
 
 

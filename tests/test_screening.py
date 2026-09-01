@@ -1421,11 +1421,15 @@ def test_a_declared_band_makes_an_over_engineered_check_say_so():
     )
 
 
-def test_a_band_an_element_cannot_use_is_reported_rather_than_ignored():
-    """One of the twenty-four screens takes an upper bound today. A spec that states the band
-    and an element whose screen cannot use it is the silent-drop shape this module spends its
-    length refusing, so it is an entry naming the element rather than a field quietly
-    dropped."""
+def test_the_band_reaches_an_element_whose_screen_takes_no_such_argument():
+    """One of the twenty-four screens takes a `target_safety_factor`. A document asking to be
+    told where it is over-engineered must not be answered "this screen cannot" for the other
+    twenty-three.
+
+    The band is applied to the *entry*, which every screen produces and which carries both
+    numbers the judgement needs — so it reaches a bolted connection exactly as it reaches the
+    lug whose screen takes the argument itself.
+    """
     band = Constraints(
         min_safety_factor=Provenanced.stated(2.0), max_safety_factor=Provenanced.stated(3.0)
     )
@@ -1443,9 +1447,12 @@ def test_a_band_an_element_cannot_use_is_reported_rather_than_ignored():
             constraints=band,
         )
     )
-    entry = next(e for e in card.entries if e.name == "over-margin band")
-    assert entry.status is CheckStatus.NOT_EVALUATED
-    assert "bolted_connection" in entry.detail and "OVER_MARGIN" in entry.detail
-    assert card.status is CheckStatus.NOT_EVALUATED
-    # The checks that could run still did.
-    assert any(e.name == "splice bolt shear" for e in card.entries)
+    bearing = next(e for e in card.entries if e.name == "splice plate bearing")
+    assert bearing.status is CheckStatus.OVER_MARGIN
+    assert bearing.upper_safety_factor == 3.0
+    assert "exceeds target band 2.00–3.00" in bearing.detail
+    assert card.status is CheckStatus.OVER_MARGIN
+    # A check that is not a safety-factor check is left alone by the band.
+    material = next(e for e in card.entries if e.name == "material resolution")
+    assert material.status is CheckStatus.PASS
+    assert material.upper_safety_factor is None

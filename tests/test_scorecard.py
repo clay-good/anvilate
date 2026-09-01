@@ -806,3 +806,43 @@ def test_no_scorecard_detail_that_argues_from_a_comparison_rounds_past_it():
         ).detail
         == "deflection 4.800 mm vs limit 15.000 mm"
     )
+
+
+def test_an_entry_can_be_re_judged_against_a_band_it_was_not_built_with():
+    """A document declares the band once and the packs take it one screen at a time — one of
+    the twenty-four did when the field shipped.
+
+    So the band is applied to the entry, which every screen produces. What has to hold is that
+    re-judging goes through the same funnel as building: the over-margin sentence, the
+    precision that keeps the figures apart, and the NaN traps all live in
+    `from_safety_factor`, and a second copy of them here would be a second place to drift.
+    """
+    cited = ScorecardEntry.from_safety_factor("bending", computed=9.0, required=2.0).model_copy(
+        update={"reference": "AISC 360-22 F2"}
+    )
+
+    over = cited.with_upper_band(4.0)
+    assert over.status is CheckStatus.OVER_MARGIN
+    assert (
+        over.detail == "safety factor 9.00 exceeds target band 2.00–4.00 by 5.00 — over-engineered"
+    )
+    assert over.upper_safety_factor == 4.0
+    # The things the funnel does not take are carried across rather than lost.
+    assert over.reference == "AISC 360-22 F2"
+
+    # A check inside the band keeps the words its screen chose, and only gains the band.
+    inside = ScorecardEntry.from_safety_factor("shear", computed=3.0, required=2.0).model_copy(
+        update={"detail": "shear governs at the coped end"}
+    )
+    banded = inside.with_upper_band(4.0)
+    assert banded.status is CheckStatus.PASS
+    assert banded.detail == "shear governs at the coped end"
+    assert banded.upper_safety_factor == 4.0
+
+    # An entry that is not a safety-factor check is returned unchanged.
+    material = ScorecardEntry(name="material resolution", status=CheckStatus.PASS, detail="ok")
+    assert material.with_upper_band(4.0) is material
+
+    # And a screen that built the band in itself gets the same verdict either way.
+    built_in = ScorecardEntry.from_safety_factor("bending", computed=9.0, required=2.0, upper=4.0)
+    assert built_in.status is over.status and built_in.detail == over.detail

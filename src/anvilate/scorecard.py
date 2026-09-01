@@ -363,6 +363,43 @@ class ScorecardEntry(BaseModel):
             repair_hint=repair_hint if status is CheckStatus.FAIL else None,
         )
 
+    def with_upper_band(self, upper: float) -> ScorecardEntry:
+        """This entry re-judged against an upper safety-factor band.
+
+        A document declares the band once, in `constraints.max_safety_factor`, and the packs
+        take it one screen at a time — one of the twenty-four did when the field shipped. So
+        the band is applied *here*, to the entry, which every screen produces and which
+        already carries both numbers the judgement needs.
+
+        Rebuilt through :meth:`from_safety_factor` rather than by re-deriving the rule: the
+        NaN traps, the precision that keeps the two figures apart and the over-margin sentence
+        are all in that one funnel, and a second copy of them here would be a second place for
+        them to drift. What the funnel does not take — the clause, the derivation, the
+        uncertainty annotation — is carried across, and the screen's own detail line is kept
+        whenever the verdict does not change, because a band that changes nothing should not
+        rewrite the words a pack chose.
+
+        An entry that is not a safety-factor check is returned unchanged: a band means nothing
+        to a material resolving or a tier that could not run.
+        """
+        if self.safety_factor is None or self.required_safety_factor is None:
+            return self
+        rebuilt = ScorecardEntry.from_safety_factor(
+            self.name,
+            computed=self.safety_factor,
+            required=self.required_safety_factor,
+            upper=upper,
+            repair_hint=self.repair_hint,
+        )
+        return rebuilt.model_copy(
+            update={
+                "detail": self.detail if rebuilt.status is self.status else rebuilt.detail,
+                "reference": self.reference,
+                "derivation": self.derivation,
+                "uncertainty": self.uncertainty,
+            }
+        )
+
     def __str__(self) -> str:
         cite = f" [{self.reference}]" if self.reference else ""
         # A nominal pass that input scatter would fail materially often is the one thing on

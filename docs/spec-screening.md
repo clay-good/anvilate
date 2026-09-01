@@ -212,8 +212,10 @@ flagged as more margin than the design asked for — has been first-class in the
 exit codes and the QIF export since they were written, and reachable only from a
 `target_safety_factor` argument no document could set. `constraints.max_safety_factor` is the
 top of that band, and a check running above it says so with the figure. One of the
-twenty-four screens takes an upper bound today; a spec that declares the band for an element
-whose screen cannot use it gets an entry saying that, rather than a field quietly dropped.
+twenty-four screens takes an upper bound as an argument; the band reaches the other
+twenty-three anyway, because it is applied to the *entry* — which every screen produces and
+which already carries both numbers the judgement needs. A check that is not a safety-factor
+check, a material resolving or a tier that could not run, is left alone by it.
 
 **The same goes for a bound the document sets.** `constraints` is the plainest declaration a
 spec makes — it is the requirement, written down by the person the card is for — and three of
