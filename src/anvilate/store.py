@@ -32,6 +32,15 @@ same content addressing the evidence bundles already use, so a handle is a name 
 bytes and not a key into a table. Two calls that produce the same document produce the same
 handle, and a store that already holds it is left alone.
 
+**What lands in it, which is the part worth saying out loud.** The documents themselves — a
+compiled Design Spec, a screened scorecard. A spec is somebody's design: dimensions, loads,
+materials, the part's name. Publishing a handle writes that document to disk under the cache
+root, where it stays until the directory is removed. Nothing leaves the machine and nothing
+is sent anywhere, but "the server remembers nothing" is a claim about the *protocol*, not
+about the filesystem, and a reader is owed the difference. Point
+``$ANVILATE_SUBJECT_STORE`` somewhere deliberate to keep the documents where you want them,
+and delete the directory to clear them.
+
 **Retention.** Nothing here evicts anything. The directory may be deleted at any time,
 whole or in part, and the only consequence is that a handle stops resolving: `resolve`
 raises :class:`UnknownSubject` naming it. There is no path by which a missing entry becomes a

@@ -138,6 +138,13 @@ instead of needing an edit.
 | `read_scorecard` | `subject` | yes, and dispatched |
 | `export_artifact` | `subject` | yes — waiting on the bundle inputs a call does not carry |
 
+**The documents land on disk, and that is worth knowing.** Publishing a handle writes the
+document it names — a compiled spec, a screened scorecard — under the store root. A spec is
+somebody's design, so "the server remembers nothing between calls" is a claim about the
+protocol and not about the filesystem. Nothing leaves the machine; point
+`$ANVILATE_SUBJECT_STORE` somewhere deliberate to choose where they sit, and delete the
+directory to clear them.
+
 **What a client pinned to the old surface is owed.** The four schemas gained a *required*
 property, and `compile_spec` and `run_validation` gained one in their output, so this is a
 breaking change to the tool surface — which is exactly why the contracts shipped before the
