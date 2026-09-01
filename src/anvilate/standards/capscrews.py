@@ -11,6 +11,7 @@ body" rule the bearing and dowel tables follow.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -133,6 +134,7 @@ def _load_screws(text: str) -> dict[str, SocketHeadCapScrew]:
     return screws
 
 
+@cache
 def default_cap_screw_table() -> CapScrewTable:
     """The bundled ISO 4762 socket-head cap screw head-geometry table."""
     from importlib.resources import files

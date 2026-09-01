@@ -21,6 +21,7 @@ large.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -239,6 +240,7 @@ def _load_pipes(text: str) -> dict[str, PipeDimensions]:
     return pipes
 
 
+@cache
 def default_pipe_schedule_table() -> PipeScheduleTable:
     """The bundled ASME B36.10M pipe dimension table."""
     from importlib.resources import files

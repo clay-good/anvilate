@@ -2139,3 +2139,43 @@ def test_each_separator_convention_survives_the_round_trip(text):
     citation = parse_citation(text)
     assert citation is not None, f"{text!r} names an edition"
     assert str(citation) == text
+
+
+def test_the_bundled_tables_are_read_once_and_shared():
+    """Every bundled table was re-read and re-parsed on every call.
+
+    A screen asks for the materials database each time it runs, so screening a structure of
+    2,000 members parsed `materials.yaml` 2,000 times: 93% of that run's time was YAML, and
+    the whole screen was 13x slower than the arithmetic in it. `anvilate.screening` already
+    caches the *resolver* it builds from these tables, with a comment saying rebuilding the
+    databases per document is work nobody asked for — the same insight, one layer above the
+    tables that needed it.
+
+    The tables are immutable through their public API, which is what makes sharing them safe,
+    and the test below holds the one operation that could betray that.
+    """
+    from anvilate.standards import (
+        default_bearing_table,
+        default_components_db,
+        default_hex_bolt_table,
+        default_materials_db,
+    )
+
+    for factory in (
+        default_materials_db,
+        default_components_db,
+        default_bearing_table,
+        default_hex_bolt_table,
+    ):
+        assert factory() is factory(), f"{factory.__name__} rebuilds its table per call"
+
+
+def test_extending_a_shared_database_leaves_the_shared_one_alone():
+    """The risk the cache introduces, held directly: `extended` must build a new database
+    rather than reach into the one every other caller now holds."""
+    from anvilate.standards import default_materials_db
+
+    extended = default_materials_db().extended(_EXTENSION_YAML)
+    assert extended.has_material("ACME-BRACKET-STOCK")
+    assert extended is not default_materials_db()
+    assert not default_materials_db().has_material("ACME-BRACKET-STOCK")

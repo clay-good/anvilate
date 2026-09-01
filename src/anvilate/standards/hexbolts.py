@@ -11,6 +11,7 @@ hex-nut tables follow.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -130,6 +131,7 @@ def _load_bolts(text: str) -> dict[str, HexBolt]:
     return bolts
 
 
+@cache
 def default_hex_bolt_table() -> HexBoltTable:
     """The bundled ISO 4014/4017 hexagon-head bolt head-geometry table."""
     from importlib.resources import files

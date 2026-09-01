@@ -11,6 +11,7 @@ here, the same "mount, not body" rule the NEMA frame and bearing tables follow.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -140,6 +141,7 @@ def _load_pins(text: str) -> dict[str, DowelPin]:
     return pins
 
 
+@cache
 def default_dowel_pin_table() -> DowelPinTable:
     """The bundled ISO 2338 parallel dowel-pin dimension table."""
     from importlib.resources import files

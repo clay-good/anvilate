@@ -14,6 +14,7 @@ manufacturer-specific body length.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -154,6 +155,7 @@ def _load_frames(text: str, *, bundled: bool = True) -> dict[str, NemaFrame]:
     return frames
 
 
+@cache
 def default_components_db() -> ComponentsDatabase:
     """The bundled seed NEMA frame database."""
     from importlib.resources import files

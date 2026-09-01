@@ -11,6 +11,7 @@ frame table follows); a mating part sizes to the boundary, not the catalogue.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -149,6 +150,7 @@ def _load_bearings(text: str, *, bundled: bool = True) -> dict[str, Bearing]:
     return bearings
 
 
+@cache
 def default_bearing_table() -> BearingTable:
     """The bundled ISO 15 deep-groove ball bearing boundary-dimension table."""
     from importlib.resources import files

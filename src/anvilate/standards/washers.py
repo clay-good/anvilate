@@ -10,6 +10,7 @@ looked up here, not recalled, keyed by the nominal thread size the washer serves
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -131,6 +132,7 @@ def _load_washers(text: str) -> dict[str, PlainWasher]:
     return washers
 
 
+@cache
 def default_washer_table() -> WasherTable:
     """The bundled ISO 7089 plain washer dimension table."""
     from importlib.resources import files

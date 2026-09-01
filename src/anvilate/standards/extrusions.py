@@ -14,6 +14,7 @@ convention, tagged as such in the provenance. See ``data/extrusions.yaml``.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -140,6 +141,7 @@ def _load_profiles(text: str) -> dict[str, ExtrusionProfile]:
     return profiles
 
 
+@cache
 def default_extrusion_table() -> ExtrusionTable:
     """The bundled T-slot extrusion profile table (common metric convention)."""
     from importlib.resources import files

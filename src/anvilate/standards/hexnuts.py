@@ -11,6 +11,7 @@ DIN 934 at M10/M12; these are the ISO 4032 values.
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -129,6 +130,7 @@ def _load_nuts(text: str) -> dict[str, HexNut]:
     return nuts
 
 
+@cache
 def default_hex_nut_table() -> HexNutTable:
     """The bundled ISO 4032 hexagon nut dimension table."""
     from importlib.resources import files

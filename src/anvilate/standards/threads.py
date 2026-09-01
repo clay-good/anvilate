@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import difflib
 from enum import StrEnum
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -105,6 +106,7 @@ def _load_table(text: str) -> dict[str, dict[Fit, QuantityProperty]]:
     return rows
 
 
+@cache
 def default_clearance_table() -> ClearanceHoleTable:
     """The bundled ISO 273 metric clearance-hole table."""
     from importlib.resources import files
@@ -187,6 +189,7 @@ def _load_threads(text: str) -> dict[str, MetricThread]:
     return threads
 
 
+@cache
 def default_thread_table() -> MetricThreadTable:
     """The bundled ISO 261/724 metric-thread pitch and tap-drill table (coarse
     threads and common fine-pitch threads)."""

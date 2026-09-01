@@ -11,6 +11,7 @@ record lacks is *absent*, never substituted — a check that needs it reports
 from __future__ import annotations
 
 import difflib
+from functools import cache
 from typing import Annotated
 
 import yaml
@@ -213,6 +214,7 @@ def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     return materials
 
 
+@cache
 def default_materials_db() -> MaterialsDatabase:
     """The bundled seed materials database."""
     from importlib.resources import files
