@@ -21,6 +21,7 @@ from ..analysis import (
     permissible_exposure_time,
     sound_level_sum,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -82,7 +83,37 @@ def screen_noise_exposure(
         f"OSHA 29 CFR 1910.95 / NIOSH REL — {criterion_level:.0f} dBA criterion, "
         f"{exchange_rate:.0f} dB exchange rate"
     )
+    # T is carried in already evaluated: T = T₀ / 2^((L − L_c)/q) is an exponential, and
+    # the substituter resolves symbols rather than evaluating expressions, so expanding it
+    # would render a formula that stops short of its own number. What the dose *is* — the
+    # time spent over the time allowed — is the line a reviewer checks.
+    dose_derivation = Derivation(
+        symbolic="D = C / T",
+        inputs=(
+            SymbolValue(
+                symbol="C",
+                description="time actually spent at the combined level",
+                value=exposure.exposure_duration,
+                unit="hour",
+            ),
+            SymbolValue(
+                symbol="T",
+                description=(
+                    f"permissible time at the combined {combined:.1f} dBA, "
+                    f"T₀ / 2^((L − {criterion_level:.0f})/{exchange_rate:.0f})"
+                ),
+                value=permissible,
+                unit="hour",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="D",
+            description="noise dose as a fraction of the permissible exposure",
+            value=dose,
+        ),
+        citation=reference,
+    )
     entry = ScorecardEntry.from_safety_factor(
         "noise dose", computed=dose_sf, required=required_safety_factor
-    ).model_copy(update={"reference": reference})
+    ).model_copy(update={"reference": reference, "derivation": dose_derivation})
     return Scorecard(entries=(entry,))

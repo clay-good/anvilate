@@ -987,7 +987,241 @@ def _sample_derivations() -> list[tuple[str, object]]:
         ).entries:
             if entry.derivation is not None:
                 out.append((f"bearing {label} {entry.name}", entry.derivation))
+    out.extend(_discipline_pack_derivations())
     return out
+
+
+def _discipline_pack_derivations() -> list[tuple[str, object]]:
+    """One screen from every other pack that writes a derivation.
+
+    The render-truth gate is only as wide as what it renders, and the sample above reached
+    the structural and industrial packs only — so the hydraulics, geotechnical, electrical,
+    lighting, ventilation and noise formulas were rendered by nothing and checked by
+    nothing. `test_every_pack_that_writes_a_derivation_is_in_the_render_truth_sample`
+    holds this list against the packs that actually build one.
+    """
+    from anvilate.packs import (
+        electrical,
+        geotechnical,
+        hydraulics,
+        lighting,
+        noise_exposure,
+        ventilation,
+    )
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    cards = [
+        (
+            "hydraulics pump",
+            hydraulics.screen_pump_duty(
+                hydraulics.PumpDuty(
+                    flow_rate=q("0.05 m**3/s"),
+                    total_head=q("20 m"),
+                    fluid_density=q("1000 kg/m**3"),
+                    efficiency=0.70,
+                    motor_rating=q("18.5 kW"),
+                    npsh_available=q("5.6 m"),
+                    npsh_required=q("4 m"),
+                )
+            ),
+        ),
+        (
+            "hydraulics pipe",
+            hydraulics.screen_pipe_run(
+                hydraulics.PipeRun(
+                    flow_rate=q("0.05 m**3/s"),
+                    diameter=q("0.15 m"),
+                    length=q("100 m"),
+                    roughness=q("0.045 mm"),
+                    fitting_loss_coefficient=5.0,
+                    kinematic_viscosity=q("1e-6 m**2/s"),
+                    available_head=q("10 m"),
+                )
+            ),
+        ),
+        (
+            "footing",
+            geotechnical.screen_shallow_footing(
+                geotechnical.ShallowFooting(
+                    width=q("2 m"),
+                    length=q("3 m"),
+                    embedment_depth=q("1.2 m"),
+                    applied_load=q("900 kN"),
+                    cohesion=q("20 kPa"),
+                    friction_angle=28.0,
+                    unit_weight=q("18 kN/m**3"),
+                )
+            ),
+        ),
+        (
+            "wall",
+            geotechnical.screen_retaining_wall(
+                geotechnical.RetainingWall(
+                    retained_height=q("4 m"),
+                    backfill_unit_weight=q("19 kN/m**3"),
+                    backfill_friction_angle=32.0,
+                    vertical_load=q("180 kN/m"),
+                    load_arm=q("1.4 m"),
+                    base_friction_coefficient=0.5,
+                )
+            ),
+        ),
+        # Both sides of the effective-stress floor: dry, and drowned so the clamp binds.
+        (
+            "slope dry",
+            geotechnical.screen_infinite_slope(
+                geotechnical.InfiniteSlope(
+                    cohesion=q("20 kPa"),
+                    friction_angle=30.0,
+                    unit_weight=q("19 kN/m**3"),
+                    depth=q("2.5 m"),
+                    slope_angle=35.0,
+                )
+            ),
+        ),
+        (
+            "slope drowned",
+            geotechnical.screen_infinite_slope(
+                geotechnical.InfiniteSlope(
+                    cohesion=q("20 kPa"),
+                    friction_angle=30.0,
+                    unit_weight=q("19 kN/m**3"),
+                    depth=q("2.5 m"),
+                    slope_angle=35.0,
+                    pore_pressure=q("500 kPa"),
+                )
+            ),
+        ),
+        (
+            "pile",
+            geotechnical.screen_driven_pile(
+                geotechnical.DrivenPile(
+                    diameter=q("450 mm"),
+                    length=q("14 m"),
+                    undrained_shear_strength=q("60 kPa"),
+                    adhesion_factor=0.55,
+                    applied_load=q("300 kN"),
+                    factor_of_safety=2.5,
+                )
+            ),
+        ),
+        # Both sides of the reactance branch: the reactive term renders as zero without one.
+        (
+            "feeder resistive",
+            electrical.screen_feeder(
+                electrical.Feeder(
+                    load_power=q("75 kW"),
+                    power_factor=0.85,
+                    line_voltage=q("400 V"),
+                    resistivity=q("1.72e-8 ohm*m"),
+                    one_way_length=q("80 m"),
+                    conductor_area=q("70 mm**2"),
+                    conductor_ampacity=q("180 A"),
+                )
+            ),
+        ),
+        (
+            "feeder reactive",
+            electrical.screen_feeder(
+                electrical.Feeder(
+                    load_power=q("75 kW"),
+                    power_factor=0.85,
+                    line_voltage=q("400 V"),
+                    resistivity=q("1.72e-8 ohm*m"),
+                    one_way_length=q("80 m"),
+                    conductor_area=q("70 mm**2"),
+                    conductor_ampacity=q("180 A"),
+                    reactance=q("0.008 ohm"),
+                )
+            ),
+        ),
+        (
+            "lighting",
+            lighting.screen_lighting(
+                lighting.LightingInstallation(
+                    luminaire_count=24,
+                    lumens_per_luminaire=q("4800 lumen"),
+                    input_watts_per_luminaire=q("36 W"),
+                    coefficient_of_utilization=0.62,
+                    light_loss_factor=0.8,
+                    floor_area=q("300 m**2"),
+                    required_illuminance=q("300 lux"),
+                    allowable_power_density=q("9 W/m**2"),
+                )
+            ),
+        ),
+        (
+            "ventilation",
+            ventilation.screen_ventilation(
+                ventilation.VentilationZone(
+                    people_outdoor_rate=q("2.5 L/s"),
+                    occupancy=40,
+                    area_outdoor_rate=q("0.3 L/s/m**2"),
+                    floor_area=q("300 m**2"),
+                    zone_air_distribution_effectiveness=0.8,
+                    provided_outdoor_airflow=q("300 L/s"),
+                    room_volume=q("900 m**3"),
+                    required_air_changes=1.0,
+                )
+            ),
+        ),
+        (
+            "noise",
+            noise_exposure.screen_noise_exposure(
+                noise_exposure.WorkerNoiseExposure(
+                    machine_levels=(88.0, 84.0), exposure_duration=q("6 hour")
+                )
+            ),
+        ),
+    ]
+    return [
+        (f"{label} {entry.name}", entry.derivation)
+        for label, card in cards
+        for entry in card.entries
+        if entry.derivation is not None
+    ]
+
+
+def test_every_pack_that_writes_a_derivation_is_in_the_render_truth_sample():
+    """A pack that builds a formula nothing renders is a formula nothing checks.
+
+    The sample was hand-written, so a new pack's derivations joined the library without
+    joining the gate that evaluates them. This reads the packages rather than a list of
+    names: any pack module whose source constructs a `Derivation` has to turn up in the
+    sample, and the sample has to be non-trivial for each.
+    """
+    import anvilate.packs as packs_pkg
+
+    writing = {
+        name
+        for _, name, _ in pkgutil.iter_modules(packs_pkg.__path__)
+        if not name.startswith("_")
+        and "Derivation(" in (Path(packs_pkg.__path__[0]) / f"{name}.py").read_text("utf-8")
+    }
+    assert len(writing) >= 6, f"only {len(writing)} packs write a derivation; the pattern moved"
+
+    sampled = {
+        derivation.citation
+        for _, derivation in _sample_derivations()
+        if derivation.citation is not None
+    }
+    missing: list[str] = []
+    for name in sorted(writing):
+        module = importlib.import_module(f"anvilate.packs.{name}")
+        cited = {
+            value
+            for attribute, value in vars(module).items()
+            if attribute.endswith("_REFERENCE") and isinstance(value, str)
+        }
+        if cited and not (cited & sampled):
+            missing.append(f"{name} (cites {sorted(cited)[0]!r} and renders in no sample)")
+    assert not missing, (
+        "these packs build derivations the render-truth gate never evaluates. Add a screen "
+        "to _discipline_pack_derivations:\n  " + "\n  ".join(missing)
+    )
 
 
 def _expand_roots(expression: str) -> str:

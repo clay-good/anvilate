@@ -16,6 +16,7 @@ from __future__ import annotations
 from pydantic import ConfigDict
 
 from ..analysis import air_changes_per_hour, breathing_zone_outdoor_airflow
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -74,13 +75,64 @@ def screen_ventilation(
     provided = zone.provided_outdoor_airflow.to("L/s").magnitude
     required_ls = required.to("L/s").magnitude
     oa_sf = provided / required_ls if required_ls > 0 else None
+    oa_derivation = Derivation(
+        symbolic="V_oz = (R_p · P_z + R_a · A_z) / E_z",
+        inputs=(
+            SymbolValue(
+                symbol="R_p",
+                description="outdoor airflow required per person",
+                value=zone.people_outdoor_rate,
+                unit="L/s",
+            ),
+            SymbolValue(symbol="P_z", description="zone occupancy", value=zone.occupancy),
+            SymbolValue(
+                symbol="R_a",
+                description="outdoor airflow required per unit of floor area",
+                value=zone.area_outdoor_rate,
+            ),
+            SymbolValue(
+                symbol="A_z", description="zone floor area", value=zone.floor_area, unit="m**2"
+            ),
+            SymbolValue(
+                symbol="E_z",
+                description="zone air distribution effectiveness — 1.0 for good mixing, less "
+                "where supply air short-circuits to the return",
+                value=zone.zone_air_distribution_effectiveness,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="V_oz",
+            description="outdoor airflow the zone must be supplied",
+            value=required,
+            unit="L/s",
+        ),
+        citation=_OUTDOOR_AIR_REFERENCE,
+    )
     oa_entry = ScorecardEntry.from_safety_factor(
         "outdoor air", computed=oa_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _OUTDOOR_AIR_REFERENCE})
+    ).model_copy(update={"reference": _OUTDOOR_AIR_REFERENCE, "derivation": oa_derivation})
 
     ach = air_changes_per_hour(airflow=zone.provided_outdoor_airflow, room_volume=zone.room_volume)
     ach_sf = ach / zone.required_air_changes if zone.required_air_changes > 0 else None
+    ach_derivation = Derivation(
+        symbolic="ACH = Q / V",
+        inputs=(
+            SymbolValue(
+                symbol="Q",
+                description="outdoor airflow delivered to the zone",
+                value=zone.provided_outdoor_airflow,
+                unit="m**3/hour",
+            ),
+            SymbolValue(symbol="V", description="room volume", value=zone.room_volume, unit="m**3"),
+        ),
+        result=SymbolValue(
+            symbol="ACH",
+            description="air changes per hour the delivered airflow achieves",
+            value=ach,
+        ),
+        citation=_AIR_CHANGE_REFERENCE,
+    )
     ach_entry = ScorecardEntry.from_safety_factor(
         "air changes per hour", computed=ach_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _AIR_CHANGE_REFERENCE})
+    ).model_copy(update={"reference": _AIR_CHANGE_REFERENCE, "derivation": ach_derivation})
     return Scorecard(entries=(oa_entry, ach_entry))

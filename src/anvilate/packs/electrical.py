@@ -20,6 +20,7 @@ from ..analysis import (
     line_current_for_power,
     voltage_drop_three_phase,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -88,14 +89,87 @@ def screen_feeder(
     )
     drop_percent = drop.to("V").magnitude / feeder.line_voltage.to("V").magnitude * 100.0
     drop_sf = feeder.drop_limit_percent / drop_percent if drop_percent > 0 else None
+    # cosφ and sinφ are declared rather than written as functions of the power factor: the
+    # substituter resolves symbols, not calls, so `cos φ` would render with a bare `cos`
+    # where a number belongs. The reactive term is present even on a resistance-only run,
+    # where X is zero — a term shown as zero is read; a term left out is not.
+    reactance = (
+        feeder.reactance if feeder.reactance is not None else Quantity(magnitude=0.0, unit="ohm")
+    )
+    sin_phi = (1.0 - feeder.power_factor**2) ** 0.5
+    drop_derivation = Derivation(
+        symbolic="ΔV = √(3) · I · (R · cosφ + X · sinφ)",
+        inputs=(
+            SymbolValue(symbol="I", description="line current", value=current, unit="A"),
+            SymbolValue(
+                symbol="R",
+                description="conductor resistance over the one-way run, ρ · L / A",
+                value=resistance,
+                unit="ohm",
+            ),
+            SymbolValue(
+                symbol="cosφ",
+                description="load power factor",
+                value=feeder.power_factor,
+            ),
+            SymbolValue(
+                symbol="X",
+                description="conductor reactance over the run",
+                value=reactance,
+                unit="ohm",
+            ),
+            SymbolValue(
+                symbol="sinφ",
+                description="reactive component of the load, √(1 − cos²φ)",
+                value=sin_phi,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="ΔV",
+            description=(
+                f"line-to-line voltage drop over the run — {drop_percent:.3g}% of the "
+                f"{feeder.line_voltage.to('V').magnitude:.0f} V supply"
+            ),
+            value=drop,
+            unit="V",
+        ),
+        citation=_DROP_REFERENCE,
+    )
     drop_entry = ScorecardEntry.from_safety_factor(
         "voltage drop", computed=drop_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _DROP_REFERENCE})
+    ).model_copy(update={"reference": _DROP_REFERENCE, "derivation": drop_derivation})
 
     amps = current.to("A").magnitude
     ampacity = feeder.conductor_ampacity.to("A").magnitude
     ampacity_sf = ampacity / amps if amps > 0 else None
+    # The ampacity itself is the caller's, off NEC 310.16 for their conductor and
+    # installation; the current it is screened against is the part this pack computes.
+    ampacity_derivation = Derivation(
+        symbolic="I = P / (√(3) · V_L · cosφ)",
+        inputs=(
+            SymbolValue(
+                symbol="P",
+                description="three-phase load power",
+                value=feeder.load_power,
+                unit="kW",
+            ),
+            SymbolValue(
+                symbol="V_L",
+                description="line-to-line voltage",
+                value=feeder.line_voltage,
+                unit="V",
+            ),
+            SymbolValue(symbol="cosφ", description="load power factor", value=feeder.power_factor),
+        ),
+        result=SymbolValue(
+            symbol="I",
+            description="line current the conductor must carry",
+            value=current,
+            unit="A",
+        ),
+        citation=_AMPACITY_REFERENCE,
+    )
     ampacity_entry = ScorecardEntry.from_safety_factor(
         "conductor ampacity", computed=ampacity_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _AMPACITY_REFERENCE})
+    ).model_copy(update={"reference": _AMPACITY_REFERENCE, "derivation": ampacity_derivation})
     return Scorecard(entries=(drop_entry, ampacity_entry))

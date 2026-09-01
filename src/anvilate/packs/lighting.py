@@ -16,6 +16,7 @@ from __future__ import annotations
 from pydantic import ConfigDict
 
 from ..analysis import lighting_power_density, lumen_method_illuminance
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -74,9 +75,44 @@ def screen_lighting(
     )
     required = installation.required_illuminance.to("lux").magnitude
     illuminance_sf = achieved.to("lux").magnitude / required if required > 0 else None
+    illuminance_derivation = Derivation(
+        symbolic="E = n · Φ · CU · LLF / A",
+        inputs=(
+            SymbolValue(
+                symbol="n", description="luminaire count", value=float(installation.luminaire_count)
+            ),
+            SymbolValue(
+                symbol="Φ",
+                description="rated output per luminaire",
+                value=installation.lumens_per_luminaire,
+                unit="lumen",
+            ),
+            SymbolValue(
+                symbol="CU",
+                description="coefficient of utilization — the fraction of emitted lumens "
+                "reaching the work plane",
+                value=installation.coefficient_of_utilization,
+            ),
+            SymbolValue(
+                symbol="LLF",
+                description="light loss factor for dirt and lamp depreciation",
+                value=installation.light_loss_factor,
+            ),
+            SymbolValue(
+                symbol="A", description="floor area", value=installation.floor_area, unit="m**2"
+            ),
+        ),
+        result=SymbolValue(
+            symbol="E",
+            description="average maintained illuminance on the work plane",
+            value=achieved,
+            unit="lux",
+        ),
+        citation=_ILLUMINANCE_REFERENCE,
+    )
     illuminance_entry = ScorecardEntry.from_safety_factor(
         "task illuminance", computed=illuminance_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _ILLUMINANCE_REFERENCE})
+    ).model_copy(update={"reference": _ILLUMINANCE_REFERENCE, "derivation": illuminance_derivation})
 
     lpd = lighting_power_density(
         luminaire_count=installation.luminaire_count,
@@ -86,7 +122,33 @@ def screen_lighting(
     actual_lpd = lpd.to("W/m**2").magnitude
     allowable_lpd = installation.allowable_power_density.to("W/m**2").magnitude
     lpd_sf = allowable_lpd / actual_lpd if actual_lpd > 0 else None
+    # The allowance is tabular — ASHRAE 90.1 or the IECC by space type, the caller's to
+    # cite. The installed density it is screened against is this pack's arithmetic.
+    lpd_derivation = Derivation(
+        symbolic="LPD = n · W / A",
+        inputs=(
+            SymbolValue(
+                symbol="n", description="luminaire count", value=float(installation.luminaire_count)
+            ),
+            SymbolValue(
+                symbol="W",
+                description="input power per luminaire, driver losses included",
+                value=installation.input_watts_per_luminaire,
+                unit="W",
+            ),
+            SymbolValue(
+                symbol="A", description="floor area", value=installation.floor_area, unit="m**2"
+            ),
+        ),
+        result=SymbolValue(
+            symbol="LPD",
+            description="installed lighting power density",
+            value=lpd,
+            unit="W/m**2",
+        ),
+        citation=_LPD_REFERENCE,
+    )
     lpd_entry = ScorecardEntry.from_safety_factor(
         "lighting power density", computed=lpd_sf, required=required_safety_factor
-    ).model_copy(update={"reference": _LPD_REFERENCE})
+    ).model_copy(update={"reference": _LPD_REFERENCE, "derivation": lpd_derivation})
     return Scorecard(entries=(illuminance_entry, lpd_entry))
