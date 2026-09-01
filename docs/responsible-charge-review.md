@@ -29,6 +29,15 @@ The ordering is fixed and documented rather than tuned, so two runs over the sam
 produce the same dossier and a diff between them means something. Ties keep the
 scorecard's own order, so it is total.
 
+## What a model proposed is on the first line
+
+`ReviewerDossier.summary()` is the line at the top of a review pane, and it listed the
+counts, the verdict and whether a review had happened. It said nothing about which values a
+language model proposed — priority 4 in the table above, collected by the dossier, and
+visible only to a reader who walked the items. The case where that mattered most is the one
+it hid: a model-origin check that is *also* failing sorts as failing, so its involvement
+disappeared from the counts entirely. The summary now names them.
+
 ## A check with no recorded origin is unattributed, never routine
 
 `build_dossier` defaults a missing origin to `UNATTRIBUTED`, which sorts third. Defaulting

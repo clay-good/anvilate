@@ -287,7 +287,15 @@ class ReviewerDossier(BaseModel):
             state = f"reviewed by {self.record.reviewer} on {self.record.reviewed_on.isoformat()}"
         else:
             state = "not yet reviewed"
-        return f"{head}. For attention: {needing}. {state}."
+        # Which decisions a model proposed, on the line a reviewer reads first. The dossier
+        # collects them — it is priority 4 in the published ordering — and the summary said
+        # nothing about them, so a value a language model suggested was visible only to a
+        # reader who walked the items. A check that is *also* failing sorts as failing, which
+        # is how the involvement disappeared from the counts entirely.
+        involvement = ""
+        if self.model_involvement:
+            involvement = f" Proposed by a model: {'; '.join(self.model_involvement)}."
+        return f"{head}. For attention: {needing}.{involvement} {state}."
 
 
 def build_dossier(

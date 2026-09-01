@@ -239,3 +239,28 @@ def test_review_priority_is_decided_by_status_then_attribution_then_margin():
     # Margin decides among well-sourced passes.
     assert review_priority(thin, origin=DecisionOrigin.USER) is ReviewPriority.THIN_MARGIN
     assert review_priority(ample, origin=DecisionOrigin.USER) is ReviewPriority.ROUTINE
+
+
+def test_the_summary_names_what_a_model_proposed():
+    """Priority 4 in the published ordering is "a value a language model proposed", the
+    dossier collects those, and the line a reviewer reads first said nothing about them.
+
+    A model-origin check that is *also* failing sorts as failing, so the involvement vanished
+    from the counts entirely — which is the case where it matters most.
+    """
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bending", computed=1.0, required=2.0),
+            ScorecardEntry.from_safety_factor("shear", computed=3.0, required=2.0),
+        )
+    )
+    dossier = build_dossier(
+        card,
+        toolchain="anvilate 0.0.1",
+        origins={"bending": DecisionOrigin.MODEL},
+        origin_details={"bending": "gpt-x proposed the load factor"},
+    )
+    assert dossier.model_involvement == ("gpt-x proposed the load factor",)
+    assert "Proposed by a model: gpt-x proposed the load factor." in dossier.summary()
+    # A dossier with no model involvement says nothing about models.
+    assert "Proposed by a model" not in build_dossier(card, toolchain="anvilate 0.0.1").summary()
