@@ -663,18 +663,28 @@ def test_an_element_declaration_survives_being_written_down():
     ]
 
 
-def test_the_docs_page_element_block_is_a_document_that_screens():
-    """The page prints the two fields a reader copies. They are loaded and screened rather
-    than read, because a block nobody runs is prose that looks like code."""
+def _docs_page_element_blocks() -> list[dict]:
+    """Every YAML block on the screening page that a reader would paste into a document."""
     import re
     from pathlib import Path
 
     import yaml
 
     page = (Path(__file__).resolve().parent.parent / "docs" / "spec-screening.md").read_text()
-    block = re.search(r"```yaml\n(element_type:.*?)```", page, re.S)
-    assert block is not None, "the element block on spec-screening.md has moved"
-    shown = yaml.safe_load(block.group(1))
+    blocks = re.findall(r"```yaml\n(element_type:.*?)```", page, re.S)
+    assert len(blocks) >= 2, f"the element blocks on spec-screening.md have moved: {len(blocks)}"
+    return [yaml.safe_load(block) for block in blocks]
+
+
+@pytest.mark.parametrize("shown", _docs_page_element_blocks())
+def test_the_docs_page_element_blocks_are_documents_that_screen(shown):
+    """The page prints what a reader copies. Every such block is loaded and screened rather
+    than read, because a block nobody runs is prose that looks like code — and the second one
+    was written with `...` in it, which is prose that looks like code and is not even YAML.
+
+    Parametrised over the blocks the page actually carries, so a third one is gated by
+    existing rather than by somebody remembering to add a test.
+    """
     assert set(shown) == {"element_type", "element_params", "constraints"}, shown
 
     card = screen_spec(
@@ -689,14 +699,30 @@ def test_the_docs_page_element_block_is_a_document_that_screens():
             acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
         )
     )
-    named = [entry.name for entry in card.entries if entry.name.startswith("padeye")]
-    assert named, f"the page's element screened nothing: {[e.name for e in card.entries]}"
+    screened = [entry for entry in card.entries if entry.name != "material resolution"]
+    assert screened, f"the page's element screened nothing: {[e.name for e in card.entries]}"
     assert "T1 analytical" not in [entry.name for entry in card.entries]
-    # The page says two cited ASME BTH-1 checks come back; that is the claim, so it is held.
+    # Every check the page's own document produces cites the clause it came from.
+    for entry in screened:
+        assert entry.reference, f"{entry.name} came back with no citation"
+
+
+def test_the_docs_page_lug_block_returns_the_two_checks_the_page_claims():
+    """The page says two cited ASME BTH-1 checks come back from the lug; that is the claim,
+    so it is held on the lug block specifically rather than on whichever block comes first."""
+    shown = next(b for b in _docs_page_element_blocks() if b["element_type"] == "lifting_lug")
+    card = screen_spec(
+        _spec(
+            element_type=shown["element_type"],
+            element_params=shown["element_params"],
+            constraints=Constraints(min_safety_factor=Provenanced.stated(2.0)),
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+        )
+    )
+    named = [entry for entry in card.entries if entry.name.startswith("padeye")]
     assert len(named) == 2
-    for entry in card.entries:
-        if entry.name in named:
-            assert entry.reference and "BTH-1" in entry.reference, entry.reference
+    for entry in named:
+        assert entry.reference and "BTH-1" in entry.reference, entry.reference
 
 
 def _structure_spec(members, **overrides) -> DesignSpec:

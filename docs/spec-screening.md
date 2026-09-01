@@ -87,9 +87,21 @@ element_type: structure
 element_params:
   members:
     - element_type: lifting_lug
-      element_params: {name: front, material: ASTM-A36, ...}
+      element_params:
+        name: front eye
+        material: ASTM-A36
+        width: {magnitude: 120.0, unit: mm}
+        hole_diameter: {magnitude: 40.0, unit: mm}
+        thickness: {magnitude: 20.0, unit: mm}
+        load: {magnitude: 60.0, unit: kN}
     - element_type: bolted_connection
-      element_params: {name: splice, ...}
+      element_params:
+        name: splice
+        bolt_diameter: {magnitude: 20.0, unit: mm}
+        plate_thickness: {magnitude: 10.0, unit: mm}
+        load: {magnitude: 15.0, unit: kN}
+        bolt_material: ASTM-A36
+        plate_material: ASTM-A36
 constraints:
   min_safety_factor: {value: 2.0, origin: user_stated}
 ```
