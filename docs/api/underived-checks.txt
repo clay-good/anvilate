@@ -1,0 +1,85 @@
+# Checks that ship without a worked derivation (the derivation-coverage ratchet).
+#
+# `calculation-report`'s "Derivation metadata is part of the check contract" says CI SHALL
+# report the coverage ratio and fail when a newly added check ships without metadata. This
+# file is the registry that requirement's scenario refers to, and the gate lives in
+# tests/conftest.py.
+#
+# WHAT A LINE IS. A check is keyed by the clause it cites — the same key the effectivity
+# ratchet in docs/api/editionless-citations.txt uses, and the same thing a reviewer reads.
+# A clause is COVERED only when every library-produced scorecard entry citing it carries a
+# Derivation. One entry short and the clause is not covered: a clause half-derived renders
+# a worked formula for some parts and a bare table for others, which reads as though the
+# whole thing was derived.
+#
+# THE TWO SECTIONS ARE NOT INTERCHANGEABLE.
+#
+#   [lookup]  The check has no formula to render. A process-capability table, a
+#             classification, a consistency verdict. It is finished as it stands and will
+#             never acquire a derivation.
+#
+#   [debt]    The check is a formula whose derivation has not been written yet. It is
+#             unfinished work, and the list is downward-only.
+#
+# Filing a debt as a lookup converts an unfinished piece of work into a decision, which is
+# a worse silence than the one this registry replaces. The gate enforces the distinction
+# mechanically rather than on the honesty of the reason: a clause whose entries carry a
+# COMPUTED SAFETY FACTOR cannot be a lookup, because a safety factor is a quotient and a
+# quotient is a formula. So a debt cannot be retired by being relabelled.
+#
+# TO PAY A LINE OFF: attach a Derivation to every entry the check produces, then delete the
+# line from [debt]. Do NOT add a line to silence a failure on a new check — a new check
+# ships with its derivation. Do NOT move a line to [lookup] to make it stop failing.
+#
+# Format: one clause per line, then " :: ", then the reason.
+
+[lookup]
+ASME BTH-1 §3-1.3 (Design Category) :: the entry is the lifter's identification line — rated load, design load, Category, Service Class. §3-1.3 classifies a device into Category A or B and hands the resulting design factor to every check below it; it computes no margin of its own.
+DFM screening estimates (typical finest achievable tolerances) :: the demanded tolerance band is compared with the process floor the capability table records. The table is the whole check; there is no formula between the two numbers.
+ASME B30.20 :: a verification-plan item crossed into the characteristic list — a physical proof test with an acceptance criterion and a recorded outcome, not a calculation the library performs.
+standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
+
+[debt]
+AISC 360-16 §L3 :: the serviceability deflection limit δ vs L/n. Derived on 23 of 135 entries; the rest render the limit without the span it came from.
+AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
+ASCE 7-22 §2.3.1 :: the LRFD strength combinations are weighted sums of the declared loads, and the sum is the work a reviewer checks.
+ASCE 7-22 §2.3.6 :: the load combinations with overstrength, same shape as §2.3.1.
+ASCE 7-22 §2.4.1 :: the ASD basic combinations, same shape as the strength set.
+ASHRAE 62.1 ventilation-rate procedure (Voz) :: V_bz = R_p·P_z + R_a·A_z and V_oz = V_bz/E_z. The rates are looked up; the two formulas around them are not.
+ASHRAE 90.1 / IECC — lighting power density allowance :: the allowance is tabular, but the installed density W/A the check compares against it is computed.
+ASME B31.3 §304.1.2 straight-pipe pressure design :: t = P·D/(2·(S·E·W + P·Y)) and the margin the wall has over it.
+ASME B31.3 §304.3.3 (reinforcement of welded branch connections) :: the area-replacement balance around the branch opening.
+ASME BTH-1 §3-1.4 (Service Class) :: the stress range against the §3-4 allowable for the declared Service Class.
+ASME BTH-1 §3-2/§3-3 (allowable stresses) :: the allowables are coefficients on S_y/N_d and S_u/N_d, and the coefficient that applies is the part a reviewer needs to see.
+ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: the flange moments and the longitudinal, radial and tangential hub stresses.
+ASME VIII Div 1 UG-37 (reinforcement of openings) :: the area-replacement balance A_required vs A_available.
+Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
+BS 7910 / R6 Option 1 failure assessment diagram :: K_r = K_I/K_mat, L_r = σ_ref/σ_y, and the Option 1 envelope the point is assessed against.
+Darcy-Weisbach friction + fitting minor losses :: h_f = f·(L/D)·v²/2g plus ΣK·v²/2g.
+EN 15978 life-cycle modules; ISO 14040 cradle-to-gate boundary :: the embodied carbon is the material mass over the process yield times the cited factor.
+EN 1993-1-9 :: the S-N endurance N = 2·10⁶·(Δσ_c/Δσ)^m and the Miner damage sum over the spectrum.
+IES Lighting Handbook — recommended task illuminance :: the recommended illuminance is tabular, but the delivered illuminance the check compares against it is computed.
+Infinite-slope limit equilibrium :: FS = (c' + σ'·tanφ')/(γ·H·sinβ·cosβ).
+Kirchhoff plate theory (Bessel eigenvalue) :: f = (λ²/2πa²)·√(D/ρh) with λ from the clamped-circular Bessel root.
+Kirchhoff plate theory (FD-verified eigenvalue table) :: the same frequency formula with a tabulated eigenvalue; the eigenvalue is an input to the derivation, not a substitute for it.
+Kirchhoff plate theory (Navier eigenvalue) :: the simply-supported rectangular plate fundamental frequency.
+Kirchhoff plate theory (Navier series) :: the Navier double-sine series for the deflection of a simply-supported plate under pressure.
+Kirchhoff plate theory (axisymmetric closed form) :: the clamped and simply-supported circular-plate deflection and stress in closed form.
+NDS :: the adjusted design values F'_b, F'_c, F'_v — the reference value times the applicable adjustment factors, which is exactly what a reviewer recomputes.
+NEC 210.19(A)/215.2 informational note — feeder voltage drop :: the drop V_d = √3·I·(R·cosφ + X·sinφ)·L and the percentage it is of the line voltage.
+NEC 310.16 — conductor ampacity :: the table supplies the ampacity, but the load current I = P/(√3·V·pf) the check compares against it is computed.
+NPSH available vs required (cavitation margin) :: NPSH_a = (p_a − p_v)/ρg + z − h_f.
+OSHA 29 CFR 1910.95 / NIOSH REL — 85 dBA criterion, 3 dB exchange rate :: the dose D = Σ C_i/T_i with T = 8/2^((L−85)/3).
+OSHA 29 CFR 1910.95 / NIOSH REL — 90 dBA criterion, 5 dB exchange rate :: the same dose sum with the 90 dBA criterion and the 5 dB exchange rate.
+Pump shaft power P = ρgQH/η :: the citation is the formula, and the formula is not rendered.
+Rankine active thrust, base friction resistance :: P_a = ½·K_a·γ·H² and the base friction μ·N it is resisted by.
+Rankine active thrust, moment balance about the toe :: the same thrust, taken as a moment about the toe against the restoring moment.
+Roark's Formulas, Table 11.4 :: the table supplies the coefficient; the deflection and stress formulas it feeds are closed form.
+Shigley's Mechanical Engineering Design, Marin surface factor k_a = a·S_u^b (surface-finish table, S_u in MPa); screening estimate, not a measured factor :: the citation states the formula; a and b are tabular and S_u is not.
+TMS 402 §8.2.4 allowable axial stress :: the allowable axial stress with its slenderness reduction.
+TMS 402 §8.2.4.2 combined axial + flexure unity :: f_a/F_a + f_b/F_b.
+Terzaghi bearing capacity with Vesić shape/depth factors :: q_ult = c·N_c·s_c·d_c + q·N_q·s_q·d_q + ½·γ·B·N_γ·s_γ·d_γ.
+Timoshenko plate theory :: derived for the plate-bending half; the flatness half renders the limit without the deflection formula behind it.
+application minimum air changes per hour :: ACH = 3600·Q/V. The minimum is the application's; the rate compared against it is computed.
+half-sine shock response spectrum :: the SRS amplification as a function of the pulse duration times the natural frequency.
+α-method pile capacity (shaft friction + end bearing) :: Q_s = α·s_u·A_s and Q_b = N_c·s_u·A_b.

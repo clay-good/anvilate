@@ -1,4 +1,10 @@
-"""Session-wide hooks. Currently one: catching assertions pytest.approx has disarmed.
+"""Session-wide hooks: two ratchets that only a running suite can measure.
+
+The first catches assertions ``pytest.approx`` has disarmed. The second — at the foot of
+this file — is the derivation-coverage ratchet, which records which cited clauses ship a
+worked calculation and which do not.
+
+THE DISARMED-APPROX RATCHET.
 
 ``pytest.approx`` applies a DEFAULT ``abs=1e-12`` alongside whatever ``rel=`` is written,
 and takes whichever tolerance is *looser*. On a sub-nanoscale quantity that floor is
@@ -116,6 +122,7 @@ def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
 
 def pytest_configure(config: pytest.Config) -> None:
     pytest.approx = _recording_approx
+    _install_the_coverage_collector()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -151,6 +158,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    coverage = _observed_coverage()
+    registry = _read_registry()
+    uncovered = _coverage_failures(coverage, registry)
+    if uncovered:
+        print(
+            "\nDERIVATION COVERAGE: these checks do not agree with "
+            "docs/api/underived-checks.txt:\n  " + "\n  ".join(uncovered)
+        )
+        session.exitstatus = 1
+        return
+
     # The other direction of the ratchet: a site that has since been armed must come off
     # the list, or the list drifts and stops meaning anything. Only checked on a FULL
     # run — a filtered, path-restricted or failed run simply did not reach the rest of
@@ -172,3 +190,204 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "list stays honest:\n  " + "\n  ".join(armed)
         )
         session.exitstatus = 1
+
+    paid = _paid_off_debts(coverage, registry)
+    if paid:
+        print(
+            "\nDERIVATION COVERAGE: every entry of these now carries a derivation, so "
+            "they are no longer debt. Strike them from [debt] in "
+            "docs/api/underived-checks.txt:\n  " + "\n  ".join(paid)
+        )
+        session.exitstatus = 1
+
+    worked, cited = _derivation_coverage_ratio(coverage)
+    print(f"\nderivation coverage: {worked}/{cited} cited clauses fully worked")
+
+    # A registered clause nothing produces any more is a line that can never be paid off
+    # and can never fail, which is how a ratchet stops meaning anything. Only a full run
+    # can tell a retired check from one this selection did not reach.
+    stale = _stale_registry_lines(coverage, registry)
+    if stale:
+        print(
+            "\nDERIVATION COVERAGE: these clauses are registered in "
+            "docs/api/underived-checks.txt but no check cites them any more. Strike "
+            "them:\n  " + "\n  ".join(stale)
+        )
+        session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# The derivation-coverage ratchet.
+#
+# `calculation-report` requires CI to report the worked/total ratio and to fail when a new
+# check ships without derivation metadata. A check is keyed by the clause it cites — the
+# same key docs/api/editionless-citations.txt uses, and the thing a reviewer reads — and a
+# clause counts as covered only when EVERY library-produced entry citing it carries a
+# Derivation. Half a clause renders a worked formula for some parts and a bare table for
+# others, which reads as though all of it was derived.
+#
+# The registry has two sections and they are not interchangeable; see the header of
+# docs/api/underived-checks.txt. The gate enforces the distinction from the data rather
+# than from the honesty of the reason: an entry carrying a computed safety factor is a
+# quotient, a quotient is a formula, and a formula is not a lookup. So a debt cannot be
+# retired by being relabelled.
+# ---------------------------------------------------------------------------
+
+_REGISTRY = _REPO / "docs" / "api" / "underived-checks.txt"
+
+# The entry and derivation machinery is never the check that produced an entry — every
+# pack reaches ScorecardEntry through `from_safety_factor`, so the nearest source frame is
+# scorecard.py for library and test callers alike, and reading it would count every entry a
+# test hand-builds as one of the library's own checks.
+_ENTRY_MACHINERY = frozenset({"scorecard.py", "derivation.py", "_models.py"})
+
+_SRC = _REPO / "src" / "anvilate"
+
+# Surviving library-built entries, by id. Kept as strong references for the whole run so no
+# id is reused, and superseded when the library copies an entry to attach its citation or
+# its derivation — the pre-copy value is a half-built entry, not a check that shipped.
+_library_entries: dict[int, object] = {}
+
+
+def _built_by_the_library() -> bool:
+    """Whether the call being made now comes from a check inside ``src/anvilate``."""
+    frame = inspect.currentframe()
+    while frame is not None:
+        path = Path(frame.f_code.co_filename)
+        if path.name not in _ENTRY_MACHINERY:
+            try:
+                path.relative_to(_SRC)
+            except ValueError:
+                pass
+            else:
+                return True
+        frame = frame.f_back
+    return False
+
+
+def _install_the_coverage_collector() -> None:
+    from anvilate.scorecard import ScorecardEntry
+
+    original_init = ScorecardEntry.__init__
+    original_copy = ScorecardEntry.model_copy
+
+    def recording_init(self, **data):
+        original_init(self, **data)
+        if _built_by_the_library():
+            _library_entries[id(self)] = self
+
+    def recording_copy(self, **kwargs):
+        copied = original_copy(self, **kwargs)
+        if _built_by_the_library():
+            _library_entries.pop(id(self), None)
+            _library_entries[id(copied)] = copied
+        return copied
+
+    ScorecardEntry.__init__ = recording_init
+    ScorecardEntry.model_copy = recording_copy
+
+
+def _observed_coverage() -> dict[str, tuple[int, int, int]]:
+    """Per cited clause: how many entries carry a derivation, how many were evaluated, and
+    how many carry a computed safety factor."""
+    from anvilate.scorecard import CheckStatus
+
+    coverage: dict[str, list[int]] = {}
+    for entry in _library_entries.values():
+        if not entry.reference:
+            continue
+        # A check that could not run has no result, so it has no worked calculation to
+        # render and asking it for one is asking it to invent the number it just refused
+        # to produce. NOT_EVALUATED entries are outside the denominator; a clause that
+        # only ever refuses leaves the census altogether.
+        if entry.status is CheckStatus.NOT_EVALUATED:
+            continue
+        counts = coverage.setdefault(str(entry.reference), [0, 0, 0])
+        counts[1] += 1
+        if entry.derivation is not None:
+            counts[0] += 1
+        if entry.safety_factor is not None:
+            counts[2] += 1
+    return {clause: tuple(counts) for clause, counts in coverage.items()}
+
+
+def _read_registry() -> dict[str, tuple[str, str]]:
+    """The registry as ``clause -> (section, reason)``."""
+    registry: dict[str, tuple[str, str]] = {}
+    section = ""
+    for line in _REGISTRY.read_text(encoding="utf-8").splitlines():
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        if text.startswith("[") and text.endswith("]"):
+            section = text[1:-1]
+            continue
+        clause, separator, reason = text.partition(" :: ")
+        registry[clause] = (section, reason if separator else "")
+    return registry
+
+
+def _coverage_failures(
+    coverage: dict[str, tuple[int, int, int]],
+    registry: dict[str, tuple[str, str]],
+) -> list[str]:
+    """Everything the ratchet can conclude from the clauses this run actually observed.
+
+    Every rule here fires on positive evidence — an underived entry that exists, a
+    derivation that exists, a safety factor that exists — so it is correct on a filtered
+    run too: a subset of the suite observes a subset of the clauses and never a clause
+    that is not there.
+
+    The two rules that read an ABSENCE need the whole suite and live below: a debt with no
+    underived entry left, and a registered clause nothing produced at all. On a filtered
+    run both are indistinguishable from a test that simply did not run — `pytest
+    tests/test_contract.py` alone reaches the derived half of the plate checks and none of
+    the rest, and reported the plate clause as paid off.
+    """
+    failures: list[str] = []
+    for clause in sorted(coverage):
+        derived, total, safety_factors = coverage[clause]
+        section, reason = registry.get(clause, ("", ""))
+        if derived < total and clause not in registry:
+            failures.append(
+                f"{clause}: {total - derived} of {total} entries carry no derivation, and "
+                f"the clause is on neither list in docs/api/underived-checks.txt. Attach a "
+                f"Derivation to the check — a new check ships with one"
+            )
+        elif section == "lookup" and derived:
+            failures.append(
+                f"{clause}: registered as a lookup — {reason} — but {derived} of its "
+                f"entries carry a derivation, so it had a formula to render after all"
+            )
+        elif section == "lookup" and safety_factors:
+            failures.append(
+                f"{clause}: registered as a lookup, but {safety_factors} of its entries "
+                f"carry a computed safety factor. A safety factor is a quotient and a "
+                f"quotient is a formula; this is debt filed as a lookup"
+            )
+    return failures
+
+
+def _paid_off_debts(
+    coverage: dict[str, tuple[int, int, int]],
+    registry: dict[str, tuple[str, str]],
+) -> list[str]:
+    """Debts whose every evaluated entry now carries a derivation — only on a full run."""
+    return sorted(
+        clause
+        for clause, (derived, total, _) in coverage.items()
+        if registry.get(clause, ("", ""))[0] == "debt" and derived == total
+    )
+
+
+def _stale_registry_lines(
+    coverage: dict[str, tuple[int, int, int]],
+    registry: dict[str, tuple[str, str]],
+) -> list[str]:
+    """Registered clauses no check produced at all — only meaningful on a full run."""
+    return sorted(set(registry) - set(coverage))
+
+
+def _derivation_coverage_ratio(coverage: dict[str, tuple[int, int, int]]) -> tuple[int, int]:
+    """Clauses every entry of which is derived, over clauses cited."""
+    return sum(1 for derived, total, _ in coverage.values() if derived == total), len(coverage)

@@ -108,11 +108,31 @@ otherwise show a bare symbol where a number belongs. The report never invents a
 formula to fill the space — an honest gap is worth more to a reviewer than a
 plausible fabrication.
 
-Today the structural pack declares derivations for bending, shear and deflection;
-the beam resonance check does not, and the industrial pack's cover-plate bending
-declares one only for the circular closed-form cases — the rectangular, patch and
-annular cases are series or numeric solutions, and they render an inputs table
-rather than a tidy expression that is not what was computed.
+Which checks those are is not left to prose. Every clause the library cites is
+counted on each test run, and the run prints the ratio: **15 of 62 cited clauses are
+fully worked** as of this writing. A clause counts as worked only when *every* entry
+citing it carries a derivation — half a clause renders a formula for some parts and a
+bare table for others, which reads as though all of it was derived.
+
+The rest are enumerated in
+[`docs/api/underived-checks.txt`](api/underived-checks.txt), under two headings that
+are not interchangeable:
+
+| Section | What it means | Lines |
+| --- | --- | --- |
+| `[lookup]` | No formula to render. A capability table, a classification, a consistency verdict. Finished as it stands. | 4 |
+| `[debt]` | A formula whose derivation has not been written yet. Downward-only. | 43 |
+
+Filing a debt as a lookup would convert unfinished work into a decision, so the gate
+does not take the reason on trust: a clause whose entries carry a computed **safety
+factor** cannot be a lookup, because a safety factor is a quotient and a quotient is a
+formula. Relabelling a debt fails CI on the data, not on the wording.
+
+The gate is in `tests/conftest.py`. A new check that ships without a derivation and
+without a line fails the run by name; a debt that acquires one has to come off the
+list; a listed clause nothing cites any more has to come off too. Checks that report
+`NOT_EVALUATED` are outside the count — a check that could not run has no result to
+show the work for.
 
 ## Handing it to a reviewer
 

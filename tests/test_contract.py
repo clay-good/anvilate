@@ -2636,3 +2636,157 @@ def test_every_repository_path_the_specs_name_exists():
                 missing.append(f"{path.relative_to(_REPO)} names {target}")
     assert named >= 50, f"only {named} repository paths found in openspec/; the pattern moved"
     assert not missing, "the specs name paths that do not exist:\n  " + "\n  ".join(missing)
+
+
+# --- the derivation-coverage ratchet ---------------------------------------------------
+#
+# The gate itself lives in tests/conftest.py, because only a running suite can see which
+# checks build a derivation. These hold the gate: that the registry is well formed, that
+# each of the four rules fires on the case it exists for, and that the collector is
+# actually collecting — a ratchet whose collector silently stopped would report perfect
+# agreement with a registry it never looked at.
+
+
+def _registry():
+    import conftest
+
+    return conftest._read_registry()
+
+
+def test_the_underived_registry_is_well_formed():
+    """Both sections populated, every line reasoned, no clause filed twice.
+
+    A clause on both lists would be read as whichever the parser saw last, which is the
+    collapse of the two categories that the requirement forbids — arrived at by accident
+    rather than by decision.
+    """
+    import conftest
+
+    text = conftest._REGISTRY.read_text(encoding="utf-8")
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    sections = [line for line in lines if line.startswith("[")]
+    assert sections == ["[lookup]", "[debt]"], sections
+
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    section = ""
+    for line in lines:
+        if line.startswith("["):
+            section = line[1:-1]
+            continue
+        clause, separator, reason = line.partition(" :: ")
+        assert separator and reason.strip(), f"no stated reason: {line}"
+        if clause in seen:
+            duplicates.append(f"{clause} (in {seen[clause]} and {section})")
+        seen[clause] = section
+    assert not duplicates, "clauses filed twice:\n  " + "\n  ".join(duplicates)
+
+    registry = _registry()
+    assert sum(1 for s, _ in registry.values() if s == "lookup") >= 1
+    assert sum(1 for s, _ in registry.values() if s == "debt") >= 10, (
+        "the debt list has emptied out; either the derivations were written or the "
+        "collector stopped seeing the checks that need them"
+    )
+
+
+def test_each_coverage_rule_fires_on_the_case_it_exists_for():
+    """The probe table. Every rule is exercised against the shape it is meant to catch,
+    and against the neighbouring shape it must not.
+
+    Written as data rather than as a list of clause names, because a gate that is a set of
+    names is satisfied by adding a name.
+    """
+    import conftest
+
+    registry = {
+        "Cited Std §1": ("debt", "the formula is unwritten"),
+        "Cited Std §2": ("lookup", "a table, no formula"),
+    }
+    # (coverage, how many failures, a fragment of the message)
+    probes = [
+        # derived, evaluated, safety-factor-carrying
+        ({"Cited Std §1": (0, 4, 4)}, 0, ""),  # debt, still owed: quiet
+        ({"Cited Std §1": (3, 4, 4)}, 0, ""),  # debt, part paid: still quiet
+        ({"Cited Std §1": (4, 4, 4)}, 0, ""),  # paid off — but that reads an absence
+        ({"Cited Std §2": (0, 4, 0)}, 0, ""),  # a lookup as declared: quiet
+        ({"Cited Std §2": (1, 4, 0)}, 1, "formula to render after all"),
+        ({"Cited Std §2": (0, 4, 2)}, 1, "quotient is a formula"),
+        ({"Unlisted §9": (0, 3, 3)}, 1, "on neither list"),
+        ({"Unlisted §9": (3, 3, 3)}, 0, ""),  # fully derived: never needs a line
+    ]
+    for coverage, expected, fragment in probes:
+        failures = conftest._coverage_failures(coverage, registry)
+        assert len(failures) == expected, f"{coverage} gave {failures}"
+        if fragment:
+            assert fragment in failures[0], failures[0]
+
+    # The two rules that read an ABSENCE are held apart, because only a full run may act
+    # on them: on a filtered run "no underived entry left" and "that test did not run"
+    # look exactly alike.
+    assert conftest._paid_off_debts({"Cited Std §1": (4, 4, 4)}, registry) == ["Cited Std §1"]
+    assert conftest._paid_off_debts({"Cited Std §1": (3, 4, 4)}, registry) == []
+    assert conftest._paid_off_debts({"Cited Std §2": (0, 4, 0)}, registry) == []
+    assert conftest._stale_registry_lines({"Cited Std §1": (0, 1, 1)}, registry) == ["Cited Std §2"]
+    assert conftest._derivation_coverage_ratio(
+        {"a": (2, 2, 0), "b": (1, 2, 0), "c": (0, 2, 0)}
+    ) == (1, 3)
+
+
+def test_the_coverage_collector_is_collecting():
+    """A live probe: run a real screen, and look for its clause in the census.
+
+    The failure this exists to catch is the quiet one — the collector uninstalled, or the
+    library building entries by a route it does not watch — which leaves the registry
+    agreeing perfectly with an empty observation.
+    """
+    import conftest
+
+    entries = _structural_entries()
+    assert entries, "the structural pack produced no entries to observe"
+
+    coverage = conftest._observed_coverage()
+    cited = {entry.reference for entry in entries if entry.reference}
+    # Self-calibrating rather than a threshold: what the pack just cited is what the
+    # collector has to have. The count below only keeps the probe itself from going
+    # vacuous if the pack stops citing anything.
+    assert len(cited) >= 5, f"the structural pack cited only {len(cited)} clauses"
+    unseen = sorted(cited - set(coverage))
+    assert not unseen, (
+        "these clauses were just produced by the structural pack and the collector did "
+        "not record them:\n  " + "\n  ".join(unseen)
+    )
+
+    # And it is recording the derivation, not just the citation: the structural pack
+    # writes worked calculations, so some clause it just cited has to come back covered.
+    # (How many clauses are *un*covered depends on which tests ran, so it is not asserted
+    # here — the probe table above is what holds the uncovered rules.)
+    assert any(coverage[clause][0] == coverage[clause][1] for clause in cited)
+
+
+def test_the_calculation_report_page_counts_the_registry_it_describes():
+    """The three numbers docs/calculation-reports.md quotes, held against the file.
+
+    A count in prose expires silently: the page said which packs declared derivations and
+    which did not, and nothing checked it. These are tied to the registry instead — the
+    section sizes directly, and the ratio through the identity that every cited clause is
+    either fully worked or has a line.
+    """
+    registry = _registry()
+    page = (_REPO / "docs" / "calculation-reports.md").read_text(encoding="utf-8")
+
+    worked, cited = (int(n) for n in re.search(r"\*\*(\d+) of (\d+) cited clauses", page).groups())
+    assert cited - worked == len(registry), (
+        f"the page claims {worked} of {cited} clauses worked, which leaves "
+        f"{cited - worked} needing a line; the registry has {len(registry)}"
+    )
+
+    for section, claimed in re.findall(r"\| `\[(\w+)\]` \|[^|]+\| (\d+) \|", page):
+        actual = sum(1 for listed, _ in registry.values() if listed == section)
+        assert actual == int(claimed), (
+            f"the page says [{section}] has {claimed} lines; it has {actual}"
+        )
+    assert len(re.findall(r"\| `\[(\w+)\]` \|", page)) == 2, "the section table moved"
