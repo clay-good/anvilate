@@ -1213,3 +1213,35 @@ def test_a_value_says_why_it_carries_no_distribution():
         }
     )
     assert "no distribution: the certificate states a coverage factor" in str(unread)
+
+
+@pytest.mark.parametrize(
+    ("label", "text"),
+    [
+        ("not XML at all", "{}"),
+        ("a truncated document", "<dcc:digitalCalibrationCertificate"),
+        (
+            "an external entity reference",
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE dcc [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\n'
+            '<dcc:digitalCalibrationCertificate xmlns:dcc="https://ptb.de/dcc">'
+            "<x>&xxe;</x></dcc:digitalCalibrationCertificate>",
+        ),
+    ],
+)
+def test_a_malformed_certificate_is_refused_by_the_documented_exception(label, text):
+    """`ParseError` is a `SyntaxError`, not a `ValueError`.
+
+    `parse_dcc`'s docstring says it raises `ValueError` when the document is not a DCC, and a
+    malformed one raised the parser's own exception straight through a caller's handler. A
+    certificate arrives from a calibration laboratory by email or portal, so malformed is the
+    ordinary case rather than the exotic one — and `qif_schema_issues`, the library's other
+    reader of somebody else's XML, has always treated a document it cannot parse as a
+    complaint about the document.
+
+    The external-entity case is here because it is the one an attacker sends: ElementTree
+    refuses to resolve it, and that refusal now arrives as this module's own error with the
+    file named.
+    """
+    with pytest.raises(ValueError, match="not well-formed XML"):
+        parse_dcc(text, document="cert.xml")

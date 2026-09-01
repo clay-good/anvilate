@@ -789,7 +789,19 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
     """
     if not document.strip():
         raise ValueError("a parsed certificate must name the document it came from")
-    root = ET.fromstring(text)
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as malformed:
+        # `ParseError` is a `SyntaxError`, not a `ValueError`, so a caller following this
+        # function's documented contract — "raises ValueError when the document is not a DCC
+        # at all" — missed the likeliest bad input entirely and got the parser's exception
+        # through the middle of their handler. A certificate arrives from a calibration
+        # laboratory by email or portal; malformed is the ordinary case, not the exotic one.
+        # `qif_schema_issues` already treats a document it cannot parse as a complaint about
+        # the document; this is the same rule at the other reader.
+        raise ValueError(
+            f"{document} is not well-formed XML and cannot be a DCC: {malformed}"
+        ) from malformed
     if root.tag != f"{{{DCC_NAMESPACE}}}digitalCalibrationCertificate":
         raise ValueError(
             f"root element is {root.tag!r}, not a DCC "
