@@ -166,6 +166,14 @@ carries a force and no nature makes it `NOT_EVALUATED`, because the demand was t
 from part of the declared loads; and a seismic basis with no `seismic_design_acceleration`
 lands on the card rather than raising out of the screen.
 
+**Two more declarations the card used to be silent about.** A geometric tolerance is
+carried into the provenance record and screened by nothing — a spec's `GeometricTolerance`
+is a different type from `anvilate.gdt.FeatureControlFrame`, the semantic layer that could
+check it, and nothing converts one to the other — so it is reported as unscreened with that
+reason. And an *imported* interface, which names another spec's published contract, was
+skipped by a `continue`: a screen of one document cannot fetch another, so it is
+`NOT_EVALUATED` saying which contract went unread rather than absent from the card.
+
 **The same goes for a bound the document sets.** `constraints` is the plainest declaration a
 spec makes — it is the requirement, written down by the person the card is for — and three of
 its four fields were read by nothing. A spec stating `max_mass: 150 g` screened to PASS with

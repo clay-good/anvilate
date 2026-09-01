@@ -471,6 +471,32 @@ def _combination_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
+def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
+    """The declared GD&T frames, and the fact that nothing screens them yet.
+
+    ``None`` when the spec declares none. Otherwise NOT_EVALUATED: a spec's
+    `GeometricTolerance` is a different type from the semantic layer's
+    `anvilate.gdt.FeatureControlFrame` that could check it, and nothing converts one to the
+    other, so a declared position control is carried into the evidence record and screened by
+    nothing. Counting them in the provenance roll-up is not looking at them.
+    """
+    if not spec.geometric_tolerances:
+        return None
+    controls = ", ".join(
+        sorted({control.characteristic.value for control in spec.geometric_tolerances})
+    )
+    return ScorecardEntry(
+        name="geometric tolerance",
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"the spec declares {len(spec.geometric_tolerances)} geometric tolerance(s) "
+            f"({controls}), and nothing screened them: a declared control is not bound to "
+            "the semantic GD&T layer that could check it, and a zone is checked against "
+            "built geometry this package does not generate"
+        ),
+    )
+
+
 def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
     """Whether every force-carrying load case declares the nature a combination needs.
 
@@ -527,11 +553,14 @@ def _near_misses(ref: str, known: list[str]) -> str:
 
 
 def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[ScorecardEntry]:
-    """One entry for the material, one per standard-component interface.
+    """One entry for the material, one per declared interface.
 
-    A spec with no standard-component interface gets no interface entry — there is nothing
-    to resolve, and an entry saying so would read as a check that ran. The material is
-    different: every spec declares one, so its entry is always present.
+    A spec with no interfaces gets no interface entry — there is nothing to resolve, and an
+    entry saying so would read as a check that ran. The material is different: every spec
+    declares one, so its entry is always present.
+
+    An *imported* interface is NOT_EVALUATED rather than skipped: resolving it needs the
+    document it names, which a screen of one spec does not have.
     """
     entries = [
         ScorecardEntry(
@@ -552,7 +581,22 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
         )
     ]
     for interface in spec.interfaces:
-        if interface.type != "standard_component":
+        if interface.type == "imported":
+            # An imported interface names another spec's published contract, and resolving
+            # it needs that document — which a single-document screen does not have. It was
+            # skipped silently, so a spec whose geometry is designed against a contract
+            # nobody fetched screened exactly like one that imports nothing.
+            entries.append(
+                ScorecardEntry(
+                    name=f"interface resolution: {interface.tag}",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"{interface.tag} imports contract {interface.contract!r} from spec "
+                        f"{interface.source_spec!r}, and a screen of one document cannot "
+                        "fetch another; the contract it designs against was not checked"
+                    ),
+                )
+            )
             continue
         resolved = resolver.has_component(interface.ref)
         entries.append(
@@ -660,6 +704,9 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
+    geometric = _geometric_tolerance_entry(spec)
+    if geometric is not None:
+        entries.append(geometric)
     entries.extend(_chain_entries(spec))
     load = _load_entry(spec)
     if load is not None:

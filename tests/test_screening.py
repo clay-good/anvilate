@@ -1006,3 +1006,85 @@ def test_an_unclassified_case_makes_the_combination_not_evaluated():
 def test_a_spec_with_no_combination_basis_gets_no_combination_entry():
     card = screen_spec(_lug_spec(load_cases=_classified_cases()))
     assert "load combination" not in [e.name for e in card.entries]
+
+
+def test_a_declared_geometric_tolerance_is_reported_as_unscreened():
+    """Counting them in the provenance roll-up is not looking at them.
+
+    A spec's `GeometricTolerance` is a different type from `anvilate.gdt.FeatureControlFrame`
+    — the semantic layer that could check it — and nothing converts one to the other. So a
+    declared position control was carried into the evidence record and screened by nothing.
+    """
+    from anvilate.spec import GeometricCharacteristic, GeometricTolerance
+
+    control = GeometricTolerance(
+        characteristic=GeometricCharacteristic.POSITION,
+        tolerance=_q("0.1 mm"),
+        feature="bore",
+        datums=["A"],
+        diametral=True,
+    )
+    card = screen_spec(_lug_spec(geometric_tolerances=[control]))
+    entry = next(e for e in card.entries if e.name == "geometric tolerance")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "position" in entry.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+    assert "geometric tolerance" not in [e.name for e in screen_spec(_lug_spec()).entries]
+
+
+def test_an_imported_interface_is_not_evaluated_rather_than_skipped():
+    """It names another spec's published contract, and a screen of one document cannot fetch
+    another — so it was skipped by a `continue` and a spec whose geometry is designed against
+    a contract nobody read screened exactly like one that imports nothing."""
+    from anvilate.spec.ir import ImportedInterface
+
+    imported = ImportedInterface(source_spec="gearbox", contract="mounting_face", tag="pilot")
+    card = screen_spec(_lug_spec(interfaces=[imported]))
+    entry = next(e for e in card.entries if e.name == "interface resolution: pilot")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "mounting_face" in entry.detail and "gearbox" in entry.detail
+    assert card.status is CheckStatus.NOT_EVALUATED
+
+
+# Every field a spec can declare, and what answers it. The point of the census below is that
+# a field added to `DesignSpec` cannot land and be quietly ignored — the failure this file has
+# now found five times in one form or another.
+_ANSWERED_BY_A_CHECK = {
+    "material": "material resolution",
+    "interfaces": "interface resolution",
+    "dimensions": "tolerance achievability",
+    "chains": "stack-up",
+    "geometric_tolerances": "geometric tolerance",
+    "load_cases": "load classification",
+    "combination_basis": "load combination",
+    "seismic_design_acceleration": "read by combination_set for a seismic basis",
+    "seismic_redundancy_factor": "read by combination_set for a seismic basis",
+    "element_type": "the pack screen it selects, or the T1 gap naming it",
+    "element_params": "the pack screen it selects, or the T1 gap naming it",
+    "constraints": "min_safety_factor is consumed; the rest are reported as unscreened",
+    "acceptance": "the tiers it demands are what produce the entries",
+}
+_NOT_A_CLAIM_ABOUT_THE_PART = {
+    "anvilate_spec": "the schema version the document was written against",
+    "name": "an identifier for the part",
+    "description": "prose for a reader",
+    "units": "the system the quantities are rendered in",
+    "manufacturing": "the process, which the tolerance floor is read from",
+    "exports": "contracts this part publishes for others, not a property of this one",
+}
+
+
+def test_every_field_a_spec_declares_is_answered_or_named():
+    """The census. A field that is neither screened nor reported is a claim the document
+    makes and the card is silent about — which is how `max_mass`, a declared element under
+    the wrong tier, an unscreened tolerance band, an imported interface and a combination
+    basis all came to be missing at once."""
+    declared = set(DesignSpec.model_fields)
+    assert len(declared) >= 15, f"the census is looking at {len(declared)} spec fields"
+    unaccounted = declared - set(_ANSWERED_BY_A_CHECK) - set(_NOT_A_CLAIM_ABOUT_THE_PART)
+    assert not unaccounted, (
+        f"these are declarable and neither answered on the card nor listed as not being a "
+        f"claim about the part: {sorted(unaccounted)}"
+    )
+    stale = (set(_ANSWERED_BY_A_CHECK) | set(_NOT_A_CLAIM_ABOUT_THE_PART)) - declared
+    assert not stale, f"the census names fields DesignSpec does not have: {sorted(stale)}"
