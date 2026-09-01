@@ -17,6 +17,7 @@ dimension system, so a guess would be wrong 2π-fold half the time.
 
 from __future__ import annotations
 
+from functools import cache
 from math import pi
 
 from .quantity import Quantity, UnitError
@@ -31,22 +32,40 @@ __all__ = [
     "revolutions_per_second",
 ]
 
-# Unit-name fragments that mark a quantity as carrying a genuine angle. Pint spells
-# rpm as "revolutions_per_minute" and rev/min as "turn / minute", so matching on
-# fragments covers every spelling of the same physical unit.
-# Matched against pint's CANONICAL spelling of the unit, which is not always the one written:
-# "gradian" canonicalises to "grade" and "rpm" to "revolutions_per_minute", so the fragments have
-# to cover what pint prints, not what the caller typed.
-_ANGLE_TOKENS = (
-    "radian",
-    "degree",
-    "grade",
-    "turn",
-    "revolution",
-    "cycle",
-    "arcminute",
-    "arcsecond",
-)
+
+@cache
+def _names_an_angle(name: str) -> bool:
+    """Whether ``name`` is a unit pint defines, eventually, in terms of the radian.
+
+    This used to be a list of eight substrings matched against the rendered unit text, and a
+    list of names is satisfied by being on the list. It missed pint's **angular mil** —
+    ``str(UREG.Unit("mil/s"))`` is ``"mil / second"``, which contains none of the eight — so a
+    turret slew rate in mil/s was refused as a bare inverse time by one guard and *accepted*
+    as a plain event count by the other, which is the silent half.
+
+    Adding ``"mil"`` to the substrings would have been worse than the gap: ``"mil"`` is a
+    substring of ``"milli"``, so ``millimole / second`` would have started reading as an
+    angle. What pint actually knows is the definition — ``mil``, ``turn`` and ``degree`` are
+    each *π · radian*, while ``percent``, ``decibel`` and ``tansec`` are dimensionless — so
+    the chain is walked instead of the spelling matched. Prefixes are stripped first, or
+    ``milliradian`` resolves to nothing.
+    """
+    for prefix, base, _suffix in UREG.parse_unit_name(name) or ():
+        if base == "radian":
+            return True
+        definition = UREG._units.get(base)
+        reference = getattr(definition, "reference", None)
+        if reference is None:
+            continue
+        if any(_names_an_angle(component) for component in dict(reference) if component != base):
+            return True
+        del prefix
+    return False
+
+
+def _unit_names_an_angle(unit: object) -> bool:
+    """Whether any component of a compound unit names an angle."""
+    return any(_names_an_angle(component) for component in dict(UREG.Unit(unit)._units))
 
 
 class AmbiguousRotationalSpeedError(UnitError):
@@ -62,8 +81,7 @@ def angular_speed_rad_per_s(speed: Quantity, *, name: str) -> float:
     so accepting either spelling would silently return one of them 2π-fold wrong. ``name``
     is the caller's parameter name, echoed in the error so the fix is obvious.
     """
-    unit_text = str(UREG.Unit(speed.unit))
-    if not any(token in unit_text for token in _ANGLE_TOKENS):
+    if not _unit_names_an_angle(speed.unit):
         raise AmbiguousRotationalSpeedError(
             f"{name} was given as {speed} — a bare inverse time, which pint cannot tell "
             f"apart from rad/s (they differ by 2*pi and share a dimensionality). State "
@@ -110,8 +128,7 @@ def count_rate_per_second(rate: Quantity, *, name: str) -> float:
     angle-carrying unit is therefore refused here exactly as a bare inverse time is refused for a
     rotational speed. Use ``1/min``, ``1/s``, or ``Hz``.
     """
-    unit_text = str(UREG.Unit(rate.unit))
-    if any(token in unit_text for token in _ANGLE_TOKENS):
+    if _unit_names_an_angle(rate.unit):
         raise AmbiguousCountRateError(
             f"{name} counts events per unit time, but was given as {rate} — a unit that names an "
             f"angle. Pint treats one cycle/turn/revolution as 2*pi radian, so this would be read "

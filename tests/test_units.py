@@ -679,3 +679,97 @@ def test_the_front_door_takes_the_offset_temperatures_and_angles_it_writes():
     # As does the refusal that keeps a range from multiplying itself out.
     with pytest.raises(UnitError):
         Quantity.parse("45-50 kN")
+
+
+def test_every_angle_unit_pint_defines_is_one_the_rotation_guards_see():
+    """The corpus is pint's registry, not a list somebody typed.
+
+    The guards used to match eight substrings against the rendered unit text, and a list of
+    names is satisfied by being on the list. It missed the **angular mil**:
+    ``str(UREG.Unit("mil/s"))`` is ``"mil / second"``, which contains none of the eight, so a
+    slew rate in mil/s was refused as a bare inverse time by one guard and *accepted as a
+    plain event count* by the other — 9.8e-5 per second for a rate that names an angle, which
+    is the silent half of the pair.
+
+    Adding ``"mil"`` to the substrings would have been worse than the gap, because ``"mil"``
+    is a substring of ``"milli"`` and ``millimole / second`` would have started reading as an
+    angle. So the classification is pint's own definition chain, and this holds it against
+    every dimensionless unit the registry defines rather than against a fixture.
+    """
+    from anvilate.units.registry import UREG
+    from anvilate.units.rotation import (
+        AmbiguousCountRateError,
+        AmbiguousRotationalSpeedError,
+        angular_speed_rad_per_s,
+        count_rate_per_second,
+    )
+
+    dimensionless = []
+    for name in dir(UREG):
+        try:
+            unit = UREG.Unit(name)
+        except Exception:  # noqa: BLE001 - `dir` yields plenty that is not a unit
+            continue
+        if unit.dimensionality == {}:
+            dimensionless.append((name, unit))
+    assert len(dimensionless) > 50, f"only {len(dimensionless)} dimensionless units were found"
+
+    angles, scalars = [], []
+    for name, _unit in dimensionless:
+        try:
+            rate = Quantity(magnitude=1.0, unit=f"{name}/second")
+        except Exception:  # noqa: BLE001 - a few registry names do not compose
+            continue
+        try:
+            angular_speed_rad_per_s(rate, name="probe")
+            names_angle = True
+        except AmbiguousRotationalSpeedError:
+            names_angle = False
+        # The two guards are mirror images and must never both accept, or both refuse, the
+        # same unit: every rate is either turns or events, and one of them has to own it.
+        try:
+            count_rate_per_second(rate, name="probe")
+            counts_events = True
+        except AmbiguousCountRateError:
+            counts_events = False
+        except Exception:  # noqa: BLE001 - logarithmic units refuse the conversion itself
+            continue
+        assert names_angle != counts_events, (
+            f"{name}/second is {'accepted' if names_angle else 'refused'} by both guards; "
+            "a rate is either turns or events and exactly one of them owns it"
+        )
+        (angles if names_angle else scalars).append(name)
+
+    # The classification itself, spot-checked in both directions against units whose nature
+    # is not in question — the point being that `mil` is on the angle side and `percent`,
+    # `decibel` and `tansec` are not, which the substring list got wrong for the first.
+    for angle in ("radian", "degree", "turn", "revolution", "grade", "arcminute", "mil"):
+        assert angle in angles, f"{angle} is an angle and the guards do not see one"
+    for scalar in ("percent", "ppm", "permille", "byte"):
+        assert scalar in scalars, f"{scalar} is not an angle and the guards think it is"
+    assert len(angles) > 8, f"only {len(angles)} angle units were classified: {angles}"
+
+
+def test_the_angular_mil_is_a_rotation_and_not_a_count():
+    """The unit the substring list missed, in both directions.
+
+    Pint defines `mil` as a multiple of the radian, and that -- not its numeric value, and
+    not how it is spelled -- is what decides which of the two guards owns it. The conversion
+    is read from pint rather than restated here, because restating it would make this test
+    agree with whatever pint currently says.
+    """
+    from anvilate.units.rotation import (
+        AmbiguousCountRateError,
+        angular_speed_rad_per_s,
+        count_rate_per_second,
+    )
+
+    slew = Quantity(magnitude=1000.0, unit="mil/s")
+    omega = angular_speed_rad_per_s(slew, name="slew_rate")
+    assert omega == pytest.approx(Quantity(magnitude=1000.0, unit="mil").to("rad").magnitude)
+    assert omega > 0
+    with pytest.raises(AmbiguousCountRateError, match="names an"):
+        count_rate_per_second(slew, name="cycles")
+    # And the near-miss the substring fix would have created: a millimole rate is not an
+    # angle, and "mil" is a substring of "milli".
+    assert count_rate_per_second(Quantity(magnitude=5.0, unit="mmol/s/mol"), name="rate") > 0
