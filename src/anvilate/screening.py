@@ -499,6 +499,10 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     run. The card is never empty: every spec declares at least one tier, and every tier
     produces at least one entry.
 
+    **A declared element that no demanded tier screens is reported, not dropped.** A spec
+    naming its element and demanding only T2 would otherwise pass on a tolerance band with
+    nothing saying the part itself was never screened.
+
     ``resolver`` is where the material and component identifiers are looked up; the default
     is the bundled standards databases. Pass one built from
     :meth:`~anvilate.standards.MaterialsDatabase.extended` to screen a spec that names a
@@ -523,6 +527,24 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
         )
     if ValidationTier.T1_ANALYTICAL in tiers:
         entries.extend(_element_entries(spec))
+    elif spec.element_type is not None:
+        # An element is a declaration the *document* makes, like a reference or a chain, and
+        # the note below says what this library does with those. Before the tag existed this
+        # case could not arise; with it, a spec that states its element and its load and
+        # demands only T2 screened to PASS on a tolerance band, with nothing anywhere saying
+        # the lug had not been looked at. A part screened on none of the checks it asked for
+        # must not be indistinguishable from a part that passed them.
+        entries.append(
+            ScorecardEntry(
+                name="T1 analytical",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares element_type {spec.element_type!r} and "
+                    f"acceptance.tiers does not demand {ValidationTier.T1_ANALYTICAL.value}, "
+                    "so no pack screen ran against it"
+                ),
+            )
+        )
     if ValidationTier.T2_DFM in tiers:
         entries.extend(_dfm_entries(spec))
     if ValidationTier.T3_FEA in tiers:

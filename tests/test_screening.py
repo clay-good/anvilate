@@ -819,3 +819,39 @@ def test_a_structure_survives_being_written_down():
     assert [(e.name, e.status) for e in screen_spec(reloaded).entries] == [
         (e.name, e.status) for e in screen_spec(spec).entries
     ]
+
+
+def test_a_declared_element_no_tier_screens_is_reported_rather_than_dropped():
+    """The silent green the element tag made reachable.
+
+    A spec that names its element, its material and its load — and demands only T2 — screened
+    to PASS on a tolerance band, with nothing on the card saying the lug had never been
+    looked at. The acceptance criteria are the contract for which tiers run, so this is not a
+    FAIL and T1 is not forced; but a part screened on none of the checks it describes must
+    not be indistinguishable from a part that passed them.
+    """
+    spec = _lug_spec(
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T2_DFM]),
+        dimensions=[_dimension("w", "120 mm", "0.2 mm")],
+    )
+    card = screen_spec(spec)
+    gap = next(entry for entry in card.entries if entry.name == "T1 analytical")
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert "lifting_lug" in gap.detail and "T1_analytical" in gap.detail
+    assert card.status is CheckStatus.NOT_EVALUATED, "the card passed with the element unscreened"
+    # And the tier that was demanded still ran, so this does not swallow the rest of the card.
+    assert any(entry.name.startswith("tolerance achievability") for entry in card.entries)
+
+
+def test_a_spec_with_no_element_and_no_t1_says_nothing_about_elements():
+    """The other side: the entry is about a declaration the document made. A spec that
+    declares no element and demands no T1 has nothing unscreened, and an entry there would
+    be a gap reported against a part that never claimed to be one."""
+    card = screen_spec(
+        _spec(
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T2_DFM]),
+            dimensions=[_dimension("w", "120 mm", "0.2 mm")],
+        )
+    )
+    assert "T1 analytical" not in [entry.name for entry in card.entries]
+    assert card.status is CheckStatus.PASS

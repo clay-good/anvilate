@@ -144,6 +144,15 @@ passed. Every tier the caller asked about is answered, and a tier the spec did n
 not screened and not reported — the acceptance criteria are the contract for which tiers
 must run.
 
+**A declared element is the exception, and it is the same rule seen from the other side.** A
+spec that names its element, its material and its load and demands only T2 used to screen to
+PASS on a tolerance band, with nothing on the card saying the lug had never been looked at.
+The element is a declaration the *document* makes, like a reference or a stack-up chain, and
+this library answers those whatever tiers are named. So the card carries a `NOT_EVALUATED`
+entry saying the element was declared and no demanded tier screened it. T1 is still not
+forced: the acceptance criteria remain the contract, and the answer to a part nobody screened
+is "not evaluated", never a pass.
+
 ## References resolve, and the answer is a verdict
 
 A spec names its material and its standard components as *identifiers* — `AA-6061-T6`,
