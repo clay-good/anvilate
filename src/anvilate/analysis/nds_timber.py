@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from math import isfinite, prod, sqrt
 
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -128,6 +129,53 @@ def nds_adjusted_design_value(
     return Quantity(magnitude=ref * prod(factors.values(), start=1.0), unit="MPa")
 
 
+def _nds_margin_derivation(
+    *,
+    applied: Quantity,
+    allowable: Quantity,
+    computed: float | None,
+    applied_symbol: str,
+    allowable_symbol: str,
+    what: str,
+) -> Derivation:
+    """The margin an NDS check is: the adjusted design value over the applied stress.
+
+    Both figures reach these checks already formed — the stress from the member analysis,
+    the adjusted value from :func:`nds_adjusted_value`, which is where the reference value
+    meets its C factors. The quotient is the work done here, and the product behind the
+    allowable is named in that symbol's gloss rather than shown as a term of a sum it is
+    not part of.
+    """
+    return Derivation(
+        symbolic=f"n = {allowable_symbol} / {applied_symbol}",
+        inputs=(
+            SymbolValue(
+                symbol=allowable_symbol,
+                description=(
+                    f"adjusted {what} design value — the NDS reference value times the "
+                    f"applicable adjustment factors"
+                ),
+                value=allowable,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol=applied_symbol,
+                description=f"applied {what}",
+                value=applied,
+                unit="MPa",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="n",
+            description=(
+                "margin against the adjusted design value; 1.0 is exactly the NDS allowable"
+            ),
+            value=0.0 if computed is None else computed,
+        ),
+        citation="NDS",
+    )
+
+
 def nds_bending_scorecard(
     name: str,
     *,
@@ -162,7 +210,17 @@ def nds_bending_scorecard(
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fb == 0 else fb_allow / fb
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
-        update={"reference": "NDS"}
+        update={
+            "reference": "NDS",
+            "derivation": _nds_margin_derivation(
+                applied=bending_stress,
+                allowable=adjusted_bending_value,
+                computed=computed,
+                applied_symbol="f_b",
+                allowable_symbol="F'_b",
+                what="bending",
+            ),
+        }
     )
 
 
@@ -228,7 +286,17 @@ def nds_shear_scorecard(
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fv == 0 else fv_allow / fv
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
-        update={"reference": "NDS"}
+        update={
+            "reference": "NDS",
+            "derivation": _nds_margin_derivation(
+                applied=shear_stress,
+                allowable=adjusted_shear_value,
+                computed=computed,
+                applied_symbol="f_v",
+                allowable_symbol="F'_v",
+                what="shear",
+            ),
+        }
     )
 
 
@@ -346,7 +414,17 @@ def nds_bearing_scorecard(
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
-        update={"reference": "NDS"}
+        update={
+            "reference": "NDS",
+            "derivation": _nds_margin_derivation(
+                applied=bearing_stress,
+                allowable=adjusted_bearing_value,
+                computed=computed,
+                applied_symbol="f_c⊥",
+                allowable_symbol="F'_c⊥",
+                what="compression perpendicular to grain",
+            ),
+        }
     )
 
 
@@ -570,7 +648,17 @@ def nds_compression_scorecard(
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
-        update={"reference": "NDS"}
+        update={
+            "reference": "NDS",
+            "derivation": _nds_margin_derivation(
+                applied=compression_stress,
+                allowable=adjusted_compression_value,
+                computed=computed,
+                applied_symbol="f_c",
+                allowable_symbol="F'_c",
+                what="compression parallel to grain",
+            ),
+        }
     )
 
 

@@ -1290,7 +1290,97 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
     out.extend(_load_combination_derivations())
     out.extend(_pressure_vessel_derivations())
     out.extend(_spectrum_and_lifter_derivations())
+    out.extend(_material_and_carbon_derivations())
     return out
+
+
+def _material_and_carbon_derivations() -> list[tuple[str, object]]:
+    """The four NDS margins and an itemised embodied-carbon estimate.
+
+    The bearing value is here for its symbol as much as its formula: NDS writes it F'_c⊥,
+    and the perpendicular sign has to be a name character in both the substituter and the
+    MathML grammar or the line substitutes correctly and then falls back to plain text.
+    """
+    from anvilate.analysis.nds_timber import (
+        nds_bearing_scorecard,
+        nds_bending_scorecard,
+        nds_compression_scorecard,
+        nds_shear_scorecard,
+    )
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    entries = [
+        (
+            "nds bending",
+            nds_bending_scorecard(
+                "header bending", bending_stress=q("8 MPa"), adjusted_bending_value=q("12.4 MPa")
+            ),
+        ),
+        (
+            "nds shear",
+            nds_shear_scorecard(
+                "header shear", shear_stress=q("0.7 MPa"), adjusted_shear_value=q("1.2 MPa")
+            ),
+        ),
+        (
+            "nds bearing",
+            nds_bearing_scorecard(
+                "end bearing", bearing_stress=q("2 MPa"), adjusted_bearing_value=q("4 MPa")
+            ),
+        ),
+        (
+            "nds compression",
+            nds_compression_scorecard(
+                "post compression",
+                compression_stress=q("5 MPa"),
+                adjusted_compression_value=q("9.5 MPa"),
+            ),
+        ),
+    ]
+    from anvilate.analysis import (
+        CarbonFactor,
+        ModuleScope,
+        carbon_contribution,
+        embodied_carbon_estimate,
+        embodied_carbon_scorecard,
+    )
+
+    # More than one contribution, because the sum is written out term by term and a
+    # one-item estimate would render a "sum" with nothing to add.
+    factors = {
+        "steel, hot-rolled section": 1.55,
+        "aluminium, extruded": 8.60,
+        "polymer, injection moulded": 3.10,
+    }
+    contributions = [
+        carbon_contribution(
+            label=material.split(",")[0],
+            mass=q(f"{10.0 * index} kg"),
+            factor=CarbonFactor(
+                material=material,
+                value=value,
+                scope=ModuleScope.A1_A3,
+                source="generic federal dataset, cited by the engineer of record",
+                band_low=0.75,
+                band_high=1.50,
+            ),
+        )
+        for index, (material, value) in enumerate(factors.items(), start=1)
+    ]
+    entries.append(
+        (
+            "embodied carbon",
+            embodied_carbon_scorecard(
+                "assembly",
+                estimate=embodied_carbon_estimate(contributions),
+                budget=q("500 kg"),
+            ),
+        )
+    )
+    return [(label, entry.derivation) for label, entry in entries if entry.derivation is not None]
 
 
 def _spectrum_and_lifter_derivations() -> list[tuple[str, object]]:

@@ -39,6 +39,7 @@ from math import isfinite
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel, cited
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -354,9 +355,41 @@ def embodied_carbon_scorecard(
         raise ValueError(f"budget must be positive; got {budget}")
     computed = None if total == 0 else allowed / total
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    # The sum written out line by line rather than as a Σ, because embodied carbon is
+    # almost always concentrated in one material and a Σ hides which. Each term is one
+    # contribution's mass times its factor, already evaluated — the factor's own units
+    # (kgCO2e per kg, per m², per m) differ line to line, so multiplying them out here
+    # would render a sum of quantities that do not share a dimension.
+    derivation = Derivation(
+        symbolic="E = "
+        + " + ".join(f"e_{index}" for index in range(1, len(estimate.contributions) + 1)),
+        inputs=tuple(
+            SymbolValue(
+                symbol=f"e_{index}",
+                description=(
+                    f"{contribution.label}: {contribution.mass} at "
+                    f"{contribution.factor.value} ({contribution.factor.source})"
+                ),
+                value=contribution.emissions,
+                unit="kg",
+            )
+            for index, contribution in enumerate(estimate.contributions, start=1)
+        ),
+        result=SymbolValue(
+            symbol="E",
+            description=(
+                f"cradle-to-gate embodied carbon over {estimate.scope.value}, "
+                f"against a {allowed:.4g} kgCO2e budget"
+            ),
+            value=estimate.total,
+            unit="kg",
+        ),
+        citation=_CLAUSE_EN15978,
+    )
     return entry.model_copy(
         update={
             "detail": f"{detail} Budget {allowed:.4g} kgCO2e.",
             "reference": _CLAUSE_EN15978,
+            "derivation": derivation,
         }
     )

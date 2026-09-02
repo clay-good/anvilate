@@ -42,12 +42,14 @@ _SUPERSCRIPTS = frozenset("⁰¹²³⁴⁵⁶⁷⁸⁹")
 def _is_symbol_char(char: str) -> bool:
     """Whether ``char`` can be part of a symbol name (so a match needs a boundary).
 
-    Covers Latin and Greek letters, digits, underscores, subscript digits, and both
-    prime marks — the alphabet handbook symbols are written in (σ_b, τ, d₁, r', f′c).
+    Covers Latin and Greek letters, digits, underscores, subscript digits, both prime
+    marks, and the perpendicular sign — the alphabet handbook symbols are written in
+    (σ_b, τ, d₁, r', f′c, and the NDS bearing value F'_c⊥, where ⊥ is part of the name
+    and not an operator).
     """
     if char in _SUPERSCRIPTS:
         return False
-    return char.isalnum() or char in "_'′₀₁₂₃₄₅₆₇₈₉"
+    return char.isalnum() or char in "_'′⊥₀₁₂₃₄₅₆₇₈₉"
 
 
 # Mathematical constants a formula may name without them being inputs: they carry

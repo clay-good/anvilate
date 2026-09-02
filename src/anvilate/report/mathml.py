@@ -69,12 +69,15 @@ def _is_name_char(char: str) -> bool:
     """Whether ``char`` continues a symbol name.
 
     The same alphabet :mod:`anvilate.derivation` substitutes over — Latin and Greek
-    letters, digits, underscores, subscript digits and both prime marks — minus the
-    superscript digits, which exponentiate a name rather than belong to it.
+    letters, digits, underscores, subscript digits, both prime marks and the
+    perpendicular sign — minus the superscript digits, which exponentiate a name rather
+    than belong to it. The two have to agree: a character the substituter treats as part
+    of a name and this grammar does not is a formula that substitutes correctly and then
+    falls back to plain text, which is how NDS's F'_c⊥ was found.
     """
     if char in _SUPERSCRIPT_DIGITS:
         return False
-    return char.isalnum() or char in "_'′₀₁₂₃₄₅₆₇₈₉"
+    return char.isalnum() or char in "_'′⊥₀₁₂₃₄₅₆₇₈₉"
 
 
 @dataclass(frozen=True)
