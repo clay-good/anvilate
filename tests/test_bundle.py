@@ -904,6 +904,10 @@ def test_the_bundle_headline_is_the_entrys_own_line():
     )
     assert ReportSection(entry=plain).headline() == str(plain)
 
+    # Through the BUNDLE, not through `headline` alone. The first version of this test
+    # asserted the helper and passed while `render_document` still built the line by hand
+    # and still dropped the warning — a gate on the fix rather than on the thing fixed.
+
     fragile = plain.model_copy(
         update={
             "uncertainty": MarginUncertainty(
@@ -922,3 +926,6 @@ def test_the_bundle_headline_is_the_entrys_own_line():
     )
     assert "fragile" in ReportSection(entry=fragile).headline()
     assert ReportSection(entry=fragile).headline() == str(fragile)
+
+    rendered = BundleSections(scorecard=Scorecard(entries=(fragile,))).render_document()
+    assert "fragile: 20.0% of samples fall short" in rendered, rendered

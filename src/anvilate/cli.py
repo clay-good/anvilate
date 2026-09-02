@@ -750,11 +750,19 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     # Every blocking check on stderr, which is what the requirement asks for and what a CI
     # log actually shows. A check that could not run is listed too, labelled as such: it
     # blocks exactly as hard and calling it a failure would be a different claim.
-    for path, _spec, card in results:
+    from .report import ReportSection
+
+    for path, spec, card in results:
+        system = spec.units.value if spec.units else None
         for entry in card.entries:
             if entry.status in (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED):
+                # The spec's units here too. This line is what a CI log shows, and it is
+                # the one place a failing check is reported to somebody who never opens the
+                # card — so it printing millimetres for a US document is the same defect
+                # with the widest reach.
+                verdict = ReportSection(entry=entry).verdict(system=system)
                 print(
-                    f"anvilate check: {path}: {entry.status.value}: {entry.name} — {entry.detail}",
+                    f"anvilate check: {path}: {entry.status.value}: {entry.name} — {verdict}",
                     file=err,
                 )
     return max(

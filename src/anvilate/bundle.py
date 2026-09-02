@@ -517,11 +517,7 @@ class BundleSections(RevalidatedModel):
         lines: list[str] = []
         for entry in self.scorecard.entries:
             section = ReportSection(entry=entry)
-            lines.append(
-                f"  [{entry.status.value.upper()}] {entry.name}: {section.verdict(system=system)}"
-            )
-            if entry.reference:
-                lines[-1] += f" [{entry.reference}]"
+            lines.append(f"  {section.headline(system=system)}")
             lines.extend(f"  {line}" for line in section.worked_lines(system=system))
         return tuple(lines)
 
