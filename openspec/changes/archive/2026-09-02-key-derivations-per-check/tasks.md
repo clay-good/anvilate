@@ -37,15 +37,21 @@
       uses. It was debt, not a lookup: the demand was already on the evidence record.
 - [x] 4.1b `ASME BTH-1 §3-1.4` — the Class 0 entry declares itself a `lookup`. It states
       the standard's own exemption and computes nothing.
-- [ ] 4.1c `AISC 360-16 §L3` — twenty-three beam load cases need a `deflection_formula`
-      written down, and the pack needs to supply the case-specific symbols (offset,
-      patch length, peak intensity, end moment) that those formulas name. The three
-      fixed-pinned and fixed-fixed triangular maxima declare `numeric_result`.
+- [x] 4.1c `AISC 360-16 §L3` — twenty of the twenty-six load cases had a closed form and
+      now state it; six have a peak at a position that is solved for rather than written,
+      and they declare `numeric_result`. The symbols moved onto `BeamBendingResult`,
+      because the pack's fixed F/L/E/I set could not name an offset, a patch length, a
+      peak intensity or an end couple. The count in the proposal was three, from reading
+      the two bisections and the couple; it was six once every branch was read.
 
 ## Status
 
-Sections 1–3 shipped, and two of the three blocked clauses came off the list with them —
-derivation coverage went 42/62 worked to 43/62 worked and 44/62 answered, and the two
-figures can now differ, which is the whole point. 4.1c is the remaining work: it is
-twenty-three closed forms plus a widening of the deflection derivation's symbol set, and
-it is now payable, which it was not before.
+Shipped. Derivation coverage went from 42/62 worked to 43/62 worked and 45/62 answered,
+and all three clauses this change was written to unblock are off the debt list.
+
+Two things were found on the way and are worth keeping. `ASCE 7-22 §2.3.1` was filed as
+needing a declaration and was ordinary debt: the factored sum was already on the evidence
+record and the spec-driven screen simply never rendered it. And the eight deflection
+formulas that already existed were checked by nothing — they are strings beside a number
+computed from the code, printed into a signed document, and a transposed coefficient would
+have shipped. `tests/test_beam_deflection_formulas.py` reads every one of them back.

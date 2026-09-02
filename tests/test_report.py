@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET
 import pytest
 from pydantic import ValidationError
 
+from anvilate.derivation import DerivationAbsence
 from anvilate.report import (
     CALC_RECORD_SCHEMA_VERSION,
     SCREENING_DISCLAIMER,
@@ -653,14 +654,27 @@ def test_beam_deflection_derivation_only_where_a_closed_form_exists():
     assert standard.derivation.unresolved_symbols() == ()
     assert "2.96 mm" in standard.derivation.lines(system=UnitSystem.SI)[2]
 
-    # An offset point load solves for the peak position rather than evaluating a
-    # one-line formula, so it declares none and the report falls back honestly.
+    # An offset point load has a closed form of its own, and it names the offset — which
+    # is why the symbols moved onto the case: the pack's old fixed F/L/E/I set left an `a`
+    # standing where a number belongs, and the report refused to show it as worked.
     offset = deflection_entry(
         load_type=LoadType.POINT,
         load=Quantity.parse("10 kN"),
         load_position=Quantity.parse("1 m"),
     )
-    assert offset.derivation is None
+    assert offset.derivation.symbolic == "δ = F·b·√((L² − b²)³)/(9·√3·L·E·I)"
+    assert offset.derivation.unresolved_symbols() == ()
+
+    # A partial patch does not. Its peak is the elastic curve evaluated at a solved
+    # position, and the entry says so rather than saying nothing.
+    patch = deflection_entry(
+        load_type=LoadType.DISTRIBUTED,
+        load=Quantity.parse("5 kN/m"),
+        loaded_length=Quantity.parse("1.5 m"),
+    )
+    assert patch.derivation is None
+    assert patch.underived.kind is DerivationAbsence.NUMERIC_RESULT
+    assert "slope vanishes" in patch.underived.reason
 
 
 def test_cover_plate_derivation_only_for_the_closed_form_cases():

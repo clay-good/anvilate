@@ -18,7 +18,7 @@ from math import degrees, pi, sqrt
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 
@@ -1584,20 +1584,35 @@ class BeamBendingResult(RevalidatedModel):
     # set renders a bare `a` wherever an offset appears, and calls the load `w` on a
     # case whose load is a couple.
     deflection_inputs: tuple[SymbolValue, ...] = ()
+    # Why there is no formula, for the cases that have none. Every load case here answers
+    # one way or the other: the peak of a partial patch on a propped cantilever is located
+    # by bisecting the slope of the elastic curve, and there is no substitutable line for
+    # it — which is a different thing from nobody having written one down, and the
+    # scorecard entry the pack builds says so in those words.
+    deflection_underived: Underived | None = None
 
     @model_validator(mode="after")
-    def _formula_and_its_symbols_travel_together(self) -> BeamBendingResult:
-        """Neither half of the deflection derivation is usable without the other.
+    def _every_case_answers_for_its_deflection(self) -> BeamBendingResult:
+        """A formula with its symbols, or a stated reason there is none. Exactly one.
 
         A formula with no values renders as itself with nothing substituted, which is the
-        reconstruction `Derivation` exists to replace. Values with no formula are a symbol
-        table for an expression nobody wrote.
+        reconstruction `Derivation` exists to replace; values with no formula are a symbol
+        table for an expression nobody wrote. And a case that declares neither is the
+        silence this module used to ship twenty-six of — a deflection in a signed document
+        with nothing behind it and no word about why.
         """
         if (self.deflection_formula is None) != (not self.deflection_inputs):
             raise ValueError(
                 "a deflection formula and the symbols it names travel together; got "
                 f"formula={self.deflection_formula!r} with "
                 f"{len(self.deflection_inputs)} declared symbol(s)"
+            )
+        if (self.deflection_formula is None) == (self.deflection_underived is None):
+            raise ValueError(
+                "a load case states its deflection formula or states why it has none, "
+                "never both and never neither; got "
+                f"formula={self.deflection_formula!r}, "
+                f"underived={self.deflection_underived!r}"
             )
         return self
 
@@ -1735,6 +1750,18 @@ def cantilever_offset_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·a²·(3·L − a)/(6·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied load", value=force),
+            SymbolValue(
+                symbol="a",
+                description="distance from the fixed end to the load",
+                value=load_position,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -1831,6 +1858,22 @@ def cantilever_partial_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·a³·(4·L − a)/(24·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w",
+                description="uniformly distributed load over the loaded part",
+                value=distributed_load,
+            ),
+            SymbolValue(
+                symbol="a",
+                description="loaded length, measured from the fixed end",
+                value=loaded_length,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -1884,6 +1927,20 @@ def cantilever_center_patch_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·L·a·(5·L² + a²)/(48·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w",
+                description="uniformly distributed load over the patch",
+                value=distributed_load,
+            ),
+            SymbolValue(
+                symbol="a", description="patch length, centred on the span", value=loaded_length
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -1923,6 +1980,17 @@ def cantilever_triangular_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w₀·L⁴/(30·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w₀",
+                description="peak intensity of the triangular load, at the fixed end",
+                value=peak_distributed_load,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -1969,6 +2037,17 @@ def cantilever_triangular_load_peak_at_tip(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = 11·w₀·L⁴/(120·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w₀",
+                description="peak intensity of the triangular load, at the free end",
+                value=peak_distributed_load,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2013,6 +2092,13 @@ def cantilever_end_moment(
         max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = M·L²/(2·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="M", description="applied end couple", value=moment),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2067,6 +2153,18 @@ def cantilever_offset_moment(
         max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = M·a·(2·L − a)/(2·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="M", description="applied couple", value=moment),
+            SymbolValue(
+                symbol="a",
+                description="distance from the fixed end to the couple",
+                value=load_position,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2164,6 +2262,18 @@ def simply_supported_offset_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·b·√((L² − b²)³)/(9·√3·L·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied load", value=force),
+            SymbolValue(
+                symbol="b",
+                description="distance from the load to the nearer support",
+                value=_as_quantity(near, "mm"),
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2217,6 +2327,16 @@ def simply_supported_symmetric_point_loads(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·a·(3·L² − 4·a²)/(24·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="one of the two equal loads", value=force),
+            SymbolValue(
+                symbol="a", description="distance from each support to its load", value=load_offset
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2351,6 +2471,16 @@ def simply_supported_partial_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the reported deflection is the elastic curve evaluated where its slope vanishes. "
+                "That position is solved for — a closed root of the unloaded-region slope where "
+                "the patch is short enough, and a bisection of the loaded-region cubic where it is "
+                "not — so there is no one substitutable line, and the inputs table is the correct "
+                "rendering rather than a shortfall"
+            ),
+        ),
     )
 
 
@@ -2404,6 +2534,20 @@ def simply_supported_center_patch_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·a·(8·L³ − 4·a²·L + a³)/(384·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w",
+                description="uniformly distributed load over the patch",
+                value=distributed_load,
+            ),
+            SymbolValue(
+                symbol="a", description="patch length, centred on the span", value=loaded_length
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2452,6 +2596,25 @@ def simply_supported_triangular_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w₀·x·(7·L⁴ − 10·L²·x² + 3·x⁴)/(360·L·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w₀",
+                description="peak intensity of the triangular load",
+                value=peak_distributed_load,
+            ),
+            SymbolValue(
+                symbol="x",
+                description=(
+                    "position of the peak deflection from the zero-intensity end, "
+                    "L·√((30 − √480)/30), where the slope of the elastic curve vanishes"
+                ),
+                value=_as_quantity(x, "mm"),
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2497,6 +2660,13 @@ def simply_supported_end_moment(
         max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = M·L²/(9·√3·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="M", description="applied end couple", value=moment),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2573,6 +2743,15 @@ def simply_supported_offset_moment(
         max_moment=_as_quantity(m0 * max(a, b) / length_p, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "a couple inside a simple span makes a stationary point either side of it, and "
+                "which of them is the larger depends on where the couple sits. The reported "
+                "deflection is the greater of two evaluations of the elastic curve rather than one "
+                "expression, so the inputs table is its correct rendering"
+            ),
+        ),
     )
 
 
@@ -2672,16 +2851,36 @@ def fixed_pinned_offset_load(
     at_wall = f * a * b * (a + length_p) / (2 * length_p**2)
     moment = max(under_load, at_wall)
     stress = moment * c / inertia
+    # Two expressions, and which of them the peak comes from depends on where the load
+    # sits. The formula declared below is the branch that ran: a case that rendered the
+    # other one would be showing a reviewer arithmetic nobody performed.
     if a.magnitude < (2**0.5 - 1) * length_p.magnitude:
         deflection = (
             f * a * (length_p**2 - a**2) ** 3 / (3 * e * inertia * (3 * length_p**2 - a**2) ** 2)
         )
+        formula = "δ = F·a·(L² − a²)³/(3·E·I·(3·L² − a²)²)"
     else:
         deflection = f * a * b**2 / (6 * e * inertia) * (a / (2 * length_p + a)) ** 0.5
+        formula = "δ = F·a·b²·√(a/(2·L + a))/(6·E·I)"
     return BeamBendingResult(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula=formula,
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied load", value=force),
+            SymbolValue(
+                symbol="a", description="distance from the wall to the load", value=load_position
+            ),
+            SymbolValue(
+                symbol="b",
+                description="distance from the load to the prop",
+                value=_as_quantity(b, "mm"),
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2803,6 +3002,15 @@ def fixed_pinned_partial_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the reported deflection is the elastic curve evaluated where its slope vanishes, "
+                "and that position is a root of the curve's own polynomial — solved for, and "
+                "different in form either side of the patch edge. There is no substitutable line "
+                "for the deflection, so the inputs table is its correct rendering"
+            ),
+        ),
     )
 
 
@@ -2893,6 +3101,15 @@ def fixed_pinned_center_patch_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the reported deflection is the elastic curve evaluated where its slope vanishes, "
+                "which under a centred patch is found by bisecting between the patch edges or by a "
+                "root beyond the far one. There is no substitutable line for the deflection, so "
+                "the inputs table is its correct rendering"
+            ),
+        ),
     )
 
 
@@ -2940,6 +3157,25 @@ def fixed_pinned_triangular_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = (ξ − 2·ξ³ + ξ⁵)·w₀·L⁴/(120·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w₀",
+                description="peak intensity of the triangular load, at the wall",
+                value=peak_distributed_load,
+            ),
+            SymbolValue(
+                symbol="ξ",
+                description=(
+                    "position of the peak deflection as a fraction of the span, 1/√5, "
+                    "where the slope of the elastic curve vanishes"
+                ),
+                value=xi,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3002,6 +3238,14 @@ def fixed_pinned_triangular_load_peak_at_prop(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the peak sits at the interior root of 10·ξ³ − 27·ξ + 14, which is bisected for "
+                "rather than written down. The deflection is a solved result rather than an "
+                "evaluated expression, so the inputs table is its correct rendering"
+            ),
+        ),
     )
 
 
@@ -3051,6 +3295,13 @@ def fixed_pinned_end_moment(
         max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = M·L²/(27·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="M", description="applied couple at the prop", value=moment),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3097,11 +3348,35 @@ def overhang_tip_load(
     stress = f * c_len * c / inertia
     tip = f * c_len**2 * (span + c_len) / (3 * e * inertia)
     uplift = f * c_len * span**2 / (9 * sqrt(3) * e * inertia)
-    deflection = max(tip, uplift)
+    # The governing deflection is whichever of the two is larger — the overhang dropping,
+    # or the back span lifting — and the formula declared is the one that won. A short
+    # overhang on a long back span lifts more than it drops, and a report showing the tip
+    # expression there would be arithmetic for a movement that did not govern.
+    if tip >= uplift:
+        deflection = tip
+        formula = "δ = F·c²·(L + c)/(3·E·I)"
+    else:
+        deflection = uplift
+        formula = "δ = F·c·L²/(9·√3·E·I)"
     return BeamBendingResult(
         max_moment=_as_quantity(f * c_len, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula=formula,
+        deflection_inputs=(
+            SymbolValue(symbol="F", description="load at the tip of the overhang", value=force),
+            SymbolValue(symbol="c", description="overhang length", value=overhang),
+            SymbolValue(symbol="L", description="back span, between the supports", value=back_span),
+            SymbolValue(
+                symbol="E", description="elastic modulus", value=elastic_modulus, unit="GPa"
+            ),
+            SymbolValue(
+                symbol="I",
+                description="second moment of area about the bending axis",
+                value=second_moment,
+                unit="mm^4",
+            ),
+        ),
     )
 
 
@@ -3148,11 +3423,37 @@ def overhang_uniform_load(
     stress = moment * c / inertia
     tip = w * c_len**3 * (4 * span + 3 * c_len) / (24 * e * inertia)
     uplift = moment * span**2 / (9 * sqrt(3) * e * inertia)
-    deflection = max(tip, uplift)
+    # As for the tip-load case: the larger of the drop and the lift governs, and the
+    # declared formula is the branch that produced the reported number.
+    if tip >= uplift:
+        deflection = tip
+        formula = "δ = w·c³·(4·L + 3·c)/(24·E·I)"
+    else:
+        deflection = uplift
+        formula = "δ = w·c²·L²/(18·√3·E·I)"
     return BeamBendingResult(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula=formula,
+        deflection_inputs=(
+            SymbolValue(
+                symbol="w",
+                description="uniformly distributed load on the overhang",
+                value=distributed_load,
+            ),
+            SymbolValue(symbol="c", description="overhang length", value=overhang),
+            SymbolValue(symbol="L", description="back span, between the supports", value=back_span),
+            SymbolValue(
+                symbol="E", description="elastic modulus", value=elastic_modulus, unit="GPa"
+            ),
+            SymbolValue(
+                symbol="I",
+                description="second moment of area about the bending axis",
+                value=second_moment,
+                unit="mm^4",
+            ),
+        ),
     )
 
 
@@ -3252,6 +3553,23 @@ def fixed_fixed_offset_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = 2·F·b³·a²/(3·E·I·(3·b + a)²)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied load", value=force),
+            SymbolValue(
+                symbol="a",
+                description="distance from the load to the nearer wall",
+                value=_as_quantity(near, "mm"),
+            ),
+            SymbolValue(
+                symbol="b",
+                description="distance from the load to the farther wall",
+                value=_as_quantity(far, "mm"),
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3375,6 +3693,15 @@ def fixed_fixed_partial_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the reported deflection is the elastic curve evaluated where its slope vanishes, "
+                "and that position is a root of the curve's own polynomial rather than an "
+                "expression in the span and the load. There is no substitutable line for the "
+                "deflection, so the inputs table is its correct rendering"
+            ),
+        ),
     )
 
 
@@ -3433,6 +3760,20 @@ def fixed_fixed_center_patch_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·a·(2·L³ − 2·L·a² + a³)/(384·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w",
+                description="uniformly distributed load over the patch",
+                value=distributed_load,
+            ),
+            SymbolValue(
+                symbol="a", description="patch length, centred on the span", value=loaded_length
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3479,4 +3820,23 @@ def fixed_fixed_triangular_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = (2·ξ² − 3·ξ³ + ξ⁵)·w₀·L⁴/(120·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w₀",
+                description="peak intensity of the triangular load",
+                value=peak_distributed_load,
+            ),
+            SymbolValue(
+                symbol="ξ",
+                description=(
+                    "position of the peak deflection as a fraction of the span, "
+                    "(√105 − 5)/10, where the slope of the elastic curve vanishes"
+                ),
+                value=xi,
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )

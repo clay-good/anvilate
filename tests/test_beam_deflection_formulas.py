@@ -62,10 +62,34 @@ def _arithmetic(symbolic: str, values: dict[str, float]) -> float:
     expression = re.sub(r"(?:@(\d))+", lambda m: "**" + m.group(0).replace("@", ""), expression)
     expression = expression.replace("·", "*").replace("−", "-").replace("–", "-")
     expression = re.sub(r"√(\d+)", r"(\1**0.5)", expression)
+    expression = _radicals_over_groups(expression)
 
     unreadable = sorted(set(expression) - set("0123456789.+-*/() e"))
     assert not unreadable, f"the evaluator cannot read {unreadable} in {symbolic!r}"
     return eval(expression, {"__builtins__": {}}, {})  # noqa: S307 - a closed arithmetic string
+
+
+def _radicals_over_groups(expression: str) -> str:
+    """``√(...)`` rewritten as ``(...)**0.5``, matching the bracket the radical covers.
+
+    A regex cannot do this: the group a radical covers may hold brackets of its own, and
+    `√((L**2 - b**2)**3)` is the shape the three-halves powers in this module are written
+    in. Scanning for the balance point is the whole of it.
+    """
+    while (start := expression.find("√(")) != -1:
+        depth = 0
+        for index in range(start + 1, len(expression)):
+            if expression[index] == "(":
+                depth += 1
+            elif expression[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    inner = expression[start + 1 : index + 1]
+                    expression = f"{expression[:start]}({inner}**0.5){expression[index + 1 :]}"
+                    break
+        else:  # pragma: no cover - an unbalanced formula is a typo, not a case
+            raise AssertionError(f"unbalanced √( in {expression!r}")
+    return expression
 
 
 def _si(value) -> float:
@@ -152,6 +176,52 @@ _CASES = [
     (beam.fixed_fixed_triangular_load, {**_TRIANGLE, **_SPAN, **_SECTION}),
 ]
 
+# Cases whose declared formula depends on which branch ran. The table above reaches one
+# branch of each; these reach the other, because a formula chosen by an `if` is two
+# formulas and checking one of them checks half the code.
+_CASES += [
+    # a > (√2 − 1)·L puts the propped cantilever's peak past the load rather than short of it.
+    (
+        beam.fixed_pinned_offset_load,
+        {**_FORCE, "load_position": Quantity.parse("2.5 m"), **_SPAN, **_SECTION},
+    ),
+    # A short overhang on a long back span lifts more than it drops, so the governing
+    # movement — and the formula — is the uplift rather than the tip.
+    (
+        beam.overhang_tip_load,
+        {
+            **_FORCE,
+            "back_span": Quantity.parse("4 m"),
+            "overhang": Quantity.parse("0.5 m"),
+            **_SECTION,
+        },
+    ),
+    (
+        beam.overhang_uniform_load,
+        {
+            **_UDL,
+            "back_span": Quantity.parse("4 m"),
+            "overhang": Quantity.parse("0.5 m"),
+            **_SECTION,
+        },
+    ),
+]
+
+
+def test_both_branches_of_a_branching_case_are_actually_reached():
+    """The extra rows above are only worth their space if they take the other branch.
+
+    A geometry that happened to land on the same side would leave the second formula
+    unexercised while the file looked as though it covered it.
+    """
+    seen: dict[str, set[str]] = {}
+    for function, arguments in _CASES:
+        result = function(**arguments)
+        seen.setdefault(function.__name__, set()).add(result.deflection_formula)
+    branching = ["fixed_pinned_offset_load", "overhang_tip_load", "overhang_uniform_load"]
+    for name in branching:
+        assert len(seen[name]) == 2, f"{name} declared one formula for both rows: {seen[name]}"
+
 
 def test_the_case_table_covers_every_load_case_in_the_module():
     """Without this the file proves whatever the table happens to list.
@@ -174,7 +244,8 @@ def test_the_case_table_covers_every_load_case_in_the_module():
         "these load cases return a BeamBendingResult and are not in the table: "
         f"{sorted(returns_a_result - listed)}"
     )
-    assert len(listed) == len(_CASES), "a load case is listed twice"
+    # Not one row per case: a branching case is listed twice on purpose, once per branch.
+    assert len(_CASES) == len(listed) + 3, "the branch rows changed without this count"
 
 
 @pytest.mark.parametrize(
@@ -205,6 +276,11 @@ def test_the_evaluator_notices_a_formula_that_is_merely_plausible():
     assert _arithmetic("δ = F·L⁴/(3·E·I)", values) != pytest.approx(right)
     # And a coefficient off by one.
     assert _arithmetic("δ = F·L³/(4·E·I)", values) != pytest.approx(right)
+
+    # The three-halves power, which is written as the square root of a cube.
+    assert _arithmetic("δ = F·√((L² − I)³)/(3·E·I)", values) == pytest.approx(
+        12000.0 * (4.0**2 - 2.4e-5) ** 1.5 / (3 * 2e11 * 2.4e-5)
+    )
 
     with pytest.raises(AssertionError, match="names symbols nothing declared"):
         _arithmetic("δ = F·a·L³/(3·E·I)", values)

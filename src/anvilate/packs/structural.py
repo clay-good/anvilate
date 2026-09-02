@@ -630,6 +630,11 @@ def screen_beam_member(
         derivation = result.deflection_derivation(_CLAUSE_DEFLECTION)
         if derivation is not None:
             update["derivation"] = derivation
+        else:
+            # Every load case answers for its deflection one way or the other, so this is
+            # never a silence: the six whose peak sits at a solved position say that on the
+            # entry, and the report prints the reason beside the fallback table.
+            update["underived"] = result.deflection_underived
         entries.append(
             deflection_scorecard(
                 f"{member.name} deflection",

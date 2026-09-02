@@ -55,7 +55,6 @@ ASME B30.20 :: a verification-plan item crossed into the characteristic list —
 standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
 
 [debt]
-AISC 360-16 §L3 :: §L3 covers every beam load case the pack screens. The eight support-and-load combinations whose closed form `BeamBendingResult.deflection_formula` declares are derived; the offset, patch, overhang, triangular and end-moment cases are not — twenty-six load cases in anvilate.analysis.beam carry a deflection and no formula string. Twenty-three of those have a closed form somebody has to write down. The other three — the fixed-pinned and fixed-fixed triangular maxima — are a numeric root of the elastic curve and will never have one; they are what `numeric_result` is for, and the clause clears when the twenty-three are written and the three declare themselves.
 AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
 ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: S_T = Y · M / (t² · B). LooseRingFlangeStress carries the shape factor and both stresses but not the moment, the thickness or B, so the scorecard cannot render the formula without those three being carried on it first.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
