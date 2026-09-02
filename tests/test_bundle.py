@@ -780,3 +780,87 @@ def test_the_attested_predicate_still_carries_the_rollup_and_not_the_document():
     assert "scorecard" not in carried
     # It is carried once, in the field that exists for it.
     assert bundle.predicate.scorecard == sections.scorecard
+
+
+def test_the_exported_bundle_shows_the_work_not_only_the_verdict():
+    """The reader this document is for receives only the bundle and re-runs the analysis.
+
+    A verdict and a clause cannot be re-run: the formula, the values put into it and the
+    result are what a checker recomputes, and the library carries them for most of the
+    clauses it cites. Leaving them out made the exported bundle a document that names its
+    conclusions and withholds their arithmetic — the same shape as the defect this
+    rendering already fixed once, when both export surfaces were handing a reviewer the
+    roll-up and calling it evidence.
+    """
+    from anvilate.packs.structural import LiftingLug, screen_lifting_lug
+    from anvilate.report import ReportSection
+    from anvilate.units import Quantity
+
+    card = screen_lifting_lug(
+        LiftingLug(
+            name="padeye",
+            width=Quantity.parse("80 mm"),
+            hole_diameter=Quantity.parse("25 mm"),
+            thickness=Quantity.parse("12 mm"),
+            load=Quantity.parse("50 kN"),
+            material="ASTM-A36",
+        ),
+        required_safety_factor=2.0,
+    )
+    document = BundleSections(scorecard=card).render_document()
+
+    worked = [entry for entry in card.entries if ReportSection(entry=entry).is_worked]
+    assert worked, "the lug screen stopped writing derivations; this test sees nothing"
+    for entry in worked:
+        for line in ReportSection(entry=entry).worked_lines():
+            assert line.strip() in document, f"the bundle dropped a line of the work: {line!r}"
+
+    # The roll-up is untouched: its canonical form is hashed into signed attestations.
+    rollup = BundleSections(scorecard=card).render_rollup()
+    assert "where:" not in rollup
+    assert "where:" in document
+
+    # And every check still has its own line, worked or not.
+    for entry in card.entries:
+        assert f"  {entry}" in document
+
+
+def test_the_evidence_bundle_pages_worked_block_is_what_the_bundle_prints():
+    """The block on `docs/evidence-bundle.md`, held against the document it claims to show.
+
+    The page now argues from numbers — a safety factor, a stress, four dimensions — and a
+    number quoted only in prose has no gate on it. These are not typed into the page from
+    a run somebody remembers; every line of the block has to appear in the bundle the
+    library renders for the lug the block names.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.packs.structural import LiftingLug, screen_lifting_lug
+    from anvilate.units import Quantity
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "evidence-bundle.md").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(r"```text\nchecks:\n(.*?)```", page, re.S)
+    assert block is not None, "the worked block on docs/evidence-bundle.md has moved"
+
+    # The lug the block shows: the padeye of examples/padeye.spec.yaml.
+    card = screen_lifting_lug(
+        LiftingLug(
+            name="padeye",
+            width=Quantity.parse("120 mm"),
+            hole_diameter=Quantity.parse("40 mm"),
+            thickness=Quantity.parse("20 mm"),
+            load=Quantity.parse("60 kN"),
+            material="ASTM-A36",
+        ),
+        required_safety_factor=2.0,
+    )
+    document = BundleSections(scorecard=card).render_document()
+    missing = [
+        line for line in block.group(1).splitlines() if line.strip() and line not in document
+    ]
+    assert not missing, (
+        "these lines are on the page and not in the rendered bundle:\n  " + "\n  ".join(missing)
+    )

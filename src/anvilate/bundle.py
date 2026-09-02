@@ -486,11 +486,33 @@ class BundleSections(RevalidatedModel):
             [
                 self.render_rollup(),
                 "checks:",
-                *(f"  {entry}" for entry in self.scorecard.entries),
+                *self._check_lines(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def _check_lines(self) -> tuple[str, ...]:
+        """One line per check, and under it the work, where the check did any.
+
+        The reader this document is for receives **only the bundle** and re-runs the
+        analysis. A verdict and a clause is not enough to re-run anything: the formula, the
+        values put into it and the result are what a checker recomputes, and the library
+        carries them for most of the clauses it cites. Leaving them out made the exported
+        bundle a document that names its conclusions and withholds their arithmetic, which
+        is the shape of the defect this method's own history already fixed once.
+
+        The block comes from :meth:`anvilate.report.ReportSection.worked_lines`, which is
+        also what the calculation report and ``anvilate check --show-work`` print, so one
+        derivation cannot be described three ways.
+        """
+        from .report import ReportSection
+
+        lines: list[str] = []
+        for entry in self.scorecard.entries:
+            lines.append(f"  {entry}")
+            lines.extend(f"  {line}" for line in ReportSection(entry=entry).worked_lines())
+        return tuple(lines)
 
     def spec_block(self) -> tuple[str, ...]:
         """The spec as rendered lines — never empty, so the heading never vanishes.

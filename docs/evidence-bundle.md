@@ -36,7 +36,32 @@ the analysis. So there are two renderings, and which one you want depends on who
 | | who reads it | what it carries |
 | --- | --- | --- |
 | `render()` / `to_json_dict()` | the attestation predicate | the roll-up over layers, the assumptions, the disclaimer |
-| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail and its clause, plus the spec they were computed from |
+| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail, its clause and its worked calculation, plus the spec they were computed from |
+
+### The work, not just the verdict
+
+A check that carries a derivation renders it under its line — the formula, the values put
+into it, the result, and a line per symbol:
+
+```text
+checks:
+  [PASS] padeye net tension: safety factor 6.67 vs required minimum 2.00 [ASME BTH-1 §3-3]
+      σ_t = P / ((W − d) · t)
+      σ_t = 60.0 kN / ((120.00 mm − 40.00 mm) · 20.00 mm)
+      σ_t = 37.5 MPa
+    where:
+      P = 60.0 kN  (lifted load)
+      W = 120.00 mm  (lug width across the hole)
+      d = 40.00 mm  (pin hole diameter)
+      t = 20.00 mm  (lug plate thickness)
+      σ_t = 37.5 MPa  (net-section tensile stress)
+```
+
+A verdict and a clause are not enough to re-run anything, and re-running it is what this
+document is for. The block is the one [the calculation report](calculation-reports.md)
+prints and the one `anvilate check --show-work` prints, from the same renderer, so a
+derivation cannot be described three ways. Checks that carry none — a material lookup, an
+exemption — show their line and nothing under it.
 
 The split is not tidiness. Folding the card into `to_json_dict()` would move the canonical
 form hashed into every predicate — invalidating attestations already signed — and put two
