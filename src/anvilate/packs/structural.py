@@ -622,38 +622,14 @@ def screen_beam_member(
     ]
     if max_deflection is not None:
         update: dict = {"reference": _CLAUSE_DEFLECTION}
-        if result.deflection_formula is not None:
-            update["derivation"] = Derivation(
-                symbolic=result.deflection_formula,
-                inputs=(
-                    SymbolValue(
-                        symbol="F" if member.load_type is LoadType.POINT else "w",
-                        description=(
-                            "applied load"
-                            if member.load_type is LoadType.POINT
-                            else "distributed load"
-                        ),
-                        value=member.load,
-                    ),
-                    SymbolValue(symbol="L", description="span", value=member.length),
-                    SymbolValue(
-                        symbol="E",
-                        description="elastic modulus",
-                        value=record.elastic_modulus.quantity,
-                        unit="GPa",
-                    ),
-                    SymbolValue(
-                        symbol="I",
-                        description="second moment of area",
-                        value=member.section.second_moment,
-                        unit="mm^4",
-                    ),
-                ),
-                result=SymbolValue(
-                    symbol="δ", description="peak deflection", value=result.max_deflection
-                ),
-                citation=_CLAUSE_DEFLECTION,
-            )
+        # Assembled by the case, not here. This block used to name the symbols itself, from
+        # a fixed F/w, L, E, I set — which is right for the eight full-span cases and for
+        # nothing else: an offset load's formula names an `a` nobody declared, and an
+        # applied couple was going to be glossed as a distributed load. The case knows
+        # which symbols its own formula uses; this only supplies the clause.
+        derivation = result.deflection_derivation(_CLAUSE_DEFLECTION)
+        if derivation is not None:
+            update["derivation"] = derivation
         entries.append(
             deflection_scorecard(
                 f"{member.name} deflection",

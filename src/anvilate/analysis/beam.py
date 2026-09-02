@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from math import degrees, pi, sqrt
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 
@@ -1528,7 +1530,33 @@ def span_deflection_limit(*, span: Quantity, ratio: float) -> Quantity:
     return Quantity(magnitude=length / ratio, unit="mm")
 
 
-class BeamBendingResult(BaseModel):
+def _deflection_inputs(
+    *load: SymbolValue,
+    length: Quantity,
+    elastic_modulus: Quantity,
+    second_moment: Quantity,
+) -> tuple[SymbolValue, ...]:
+    """The three symbols every deflection formula here names, after the case's own.
+
+    L, E and I appear in all of them; the load and whatever geometry the case puts beside
+    it — an offset, a loaded length, a peak intensity, an applied couple — is what differs,
+    and is what the caller passes. Written once so a reviewer reading two cases side by
+    side sees the same gloss on the same symbol.
+    """
+    return (
+        *load,
+        SymbolValue(symbol="L", description="span", value=length),
+        SymbolValue(symbol="E", description="elastic modulus", value=elastic_modulus, unit="GPa"),
+        SymbolValue(
+            symbol="I",
+            description="second moment of area about the bending axis",
+            value=second_moment,
+            unit="mm^4",
+        ),
+    )
+
+
+class BeamBendingResult(RevalidatedModel):
     """The result of a closed-form beam bending check.
 
     ``max_moment`` is the peak bending moment the load case makes — the number a
@@ -1550,6 +1578,47 @@ class BeamBendingResult(BaseModel):
     # position numerically or through a series, so it declares no formula rather
     # than a tidy one that is not what was computed.
     deflection_formula: str | None = None
+    # Every symbol on the right of that expression, with the value this call put into
+    # it. Declared here rather than assembled by the caller because the case is what
+    # knows which symbols its own formula names: a caller supplying a fixed F/L/E/I
+    # set renders a bare `a` wherever an offset appears, and calls the load `w` on a
+    # case whose load is a couple.
+    deflection_inputs: tuple[SymbolValue, ...] = ()
+
+    @model_validator(mode="after")
+    def _formula_and_its_symbols_travel_together(self) -> BeamBendingResult:
+        """Neither half of the deflection derivation is usable without the other.
+
+        A formula with no values renders as itself with nothing substituted, which is the
+        reconstruction `Derivation` exists to replace. Values with no formula are a symbol
+        table for an expression nobody wrote.
+        """
+        if (self.deflection_formula is None) != (not self.deflection_inputs):
+            raise ValueError(
+                "a deflection formula and the symbols it names travel together; got "
+                f"formula={self.deflection_formula!r} with "
+                f"{len(self.deflection_inputs)} declared symbol(s)"
+            )
+        return self
+
+    def deflection_derivation(self, citation: str) -> Derivation | None:
+        """The deflection formula as a worked calculation, under the caller's clause.
+
+        ``None`` where this case declares no closed form. The citation is the caller's
+        because the formula is a fact about the elastic curve and the *clause* is a fact
+        about the code being screened to — the same cantilever expression is cited as
+        AISC 360-16 §L3 by the structural pack and would be cited otherwise elsewhere.
+        """
+        if self.deflection_formula is None:
+            return None
+        return Derivation(
+            symbolic=self.deflection_formula,
+            inputs=self.deflection_inputs,
+            result=SymbolValue(
+                symbol="δ", description="peak deflection", value=self.max_deflection
+            ),
+            citation=citation,
+        )
 
     def bending_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against yielding: yield strength / peak stress.
@@ -1610,6 +1679,12 @@ def cantilever_end_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = F·L³/(3·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied end load", value=force),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -1698,6 +1773,14 @@ def cantilever_uniform_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = w·L⁴/(8·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w", description="uniformly distributed load", value=distributed_load
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2023,6 +2106,12 @@ def simply_supported_center_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = F·L³/(48·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied mid-span load", value=force),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2167,6 +2256,14 @@ def simply_supported_uniform_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = 5·w·L⁴/(384·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w", description="uniformly distributed load", value=distributed_load
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2518,6 +2615,12 @@ def fixed_pinned_center_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = F·L³/(48·√5·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied mid-span load", value=force),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -2619,6 +2722,14 @@ def fixed_pinned_uniform_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = w·L⁴/(185·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w", description="uniformly distributed load", value=distributed_load
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3081,6 +3192,12 @@ def fixed_fixed_center_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = F·L³/(192·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(symbol="F", description="applied mid-span load", value=force),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
@@ -3173,6 +3290,14 @@ def fixed_fixed_uniform_load(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
         deflection_formula="δ = w·L⁴/(384·E·I)",
+        deflection_inputs=_deflection_inputs(
+            SymbolValue(
+                symbol="w", description="uniformly distributed load", value=distributed_load
+            ),
+            length=length,
+            elastic_modulus=elastic_modulus,
+            second_moment=second_moment,
+        ),
     )
 
 
