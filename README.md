@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,819 public symbols, each dimension-checked and
-hand-verified, 4,687 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 4,688 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -290,6 +290,14 @@ The screens above are the trustworthy core. The end goal is to wrap them so a pl
 The LLM is a replaceable component that only writes the spec and proposes edits; the geometry and validation pipeline is deterministic and runs identically with or without any AI. Nothing unvalidated leaves the tool.
 
 The behavioral contract for every subsystem is specified up front in [`openspec/specs/`](openspec/specs/) — that's the authoritative design reference, including the roadmap, non-goals, and risk analysis.
+
+## Security
+
+Anvilate reads documents that arrived from somebody else and is built for it: safe YAML
+loading, no `eval`/`exec`/`subprocess` anywhere in the package, one module allowed to open
+a network connection and only with stated consent, and hostile XML refused at both doors.
+[SECURITY.md](SECURITY.md) states each property with the test that holds it, and is where
+to report a vulnerability.
 
 ## License
 

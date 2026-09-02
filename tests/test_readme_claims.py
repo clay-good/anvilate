@@ -686,3 +686,33 @@ def test_every_gate_the_security_page_names_is_a_gate_that_exists():
     assert files, "SECURITY.md names no test file, so the sweeps it cites cannot be found"
     absent = [name for name in files if not (_REPO / name).exists()]
     assert not absent, f"SECURITY.md names test files that are gone: {absent}"
+
+
+def test_the_root_community_files_point_at_pages_that_exist():
+    """`CONTRIBUTING.md` and `SECURITY.md` are the two files GitHub surfaces by itself.
+
+    Neither is reachable from `docs/`, so the docs ratchet above cannot see them, and both
+    exist to send a first-time reader somewhere else — which makes a dead link in them the
+    one failure that matters. The commands they tell a contributor to run are checked too:
+    a contributing guide naming a lint that is no longer the project's lint teaches the
+    wrong thing to exactly the reader with no other source.
+    """
+    import re
+
+    for name in ("CONTRIBUTING.md", "SECURITY.md"):
+        page = _REPO / name
+        assert page.exists(), f"{name} is gone; GitHub surfaces it and a reader will meet it"
+        text = page.read_text(encoding="utf-8")
+        targets = re.findall(r"\]\((?!https?:)([^)#]+)\)", text)
+        assert targets, f"{name} links nothing, so it sends its reader nowhere"
+        broken = [target for target in targets if not (_REPO / target.rstrip("/")).exists()]
+        assert not broken, f"{name} links paths that do not exist: {broken}"
+
+    guide = (_REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    workflow = (_REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    for command in ("ruff check src tests examples", "ruff format --check src tests examples"):
+        assert command in guide, f"CONTRIBUTING.md no longer tells a contributor to run {command!r}"
+        assert command in workflow, (
+            f"CONTRIBUTING.md tells a contributor to run {command!r} and CI does not, so the "
+            "guide and the gate have parted company"
+        )

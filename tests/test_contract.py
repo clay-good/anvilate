@@ -2843,6 +2843,12 @@ def test_the_repository_root_holds_only_files_that_belong_there():
         ".gitignore",
         "AGENTS.md",
         "CLAUDE.md",
+        # The two files GitHub surfaces on its own — a contributor meets CONTRIBUTING.md in
+        # the pull-request form and SECURITY.md in the advisory flow, and neither works from
+        # anywhere but the root. Their contents are held by
+        # `test_the_root_community_files_point_at_pages_that_exist`.
+        "CONTRIBUTING.md",
+        "SECURITY.md",
         "LICENSE",
         "README.md",
         "package-lock.json",
