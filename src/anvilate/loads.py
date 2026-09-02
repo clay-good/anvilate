@@ -65,6 +65,12 @@ class LoadNature(StrEnum):
 _ROOF_COMPANIONS = (LoadNature.ROOF_LIVE, LoadNature.SNOW, LoadNature.RAIN)
 
 
+def _written_factor(factor: float) -> str:
+    """A load factor as ASCE writes it: at least one decimal place, so 1.0 is not "1"."""
+    written = f"{factor:g}"
+    return written if "." in written else f"{written}.0"
+
+
 class LoadCombination(BaseModel):
     """One factored sum over load natures, with the clause it comes from.
 
@@ -114,7 +120,12 @@ class LoadCombination(BaseModel):
         return sum(factor * loads.get(nature, 0.0) for nature, factor in self.factors.items())
 
     def __str__(self) -> str:
-        terms = " + ".join(f"{factor:g}{nature.value}" for nature, factor in self.factors.items())
+        # ASCE writes every factor to at least one decimal — 1.0W, not 1W. A bare "1"
+        # beside a "1.2" in the same expression reads as a typo rather than as the unit
+        # factor it is, and this string is what the scorecard detail line quotes.
+        terms = " + ".join(
+            f"{_written_factor(factor)}{nature.value}" for nature, factor in self.factors.items()
+        )
         return f"{self.name}: {terms}"
 
 
@@ -319,10 +330,7 @@ def _combination_derivation(
     inputs: list[SymbolValue] = []
     for nature, factor in governing.factors.items():
         sign = " − " if factor < 0 else (" + " if terms else "")
-        # ASCE writes its factors to at least one decimal — 1.0W, not 1W — and a bare "1"
-        # beside a "1.2" reads as a typo rather than as the unit factor it is.
-        written = f"{abs(factor):g}"
-        terms.append(f"{sign}{written if '.' in written else written + '.0'} · {nature.value}")
+        terms.append(f"{sign}{_written_factor(abs(factor))} · {nature.value}")
         inputs.append(
             SymbolValue(
                 symbol=nature.value,

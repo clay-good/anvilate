@@ -852,3 +852,42 @@ def test_a_unit_spelling_is_parsed_once_and_the_answers_do_not_move():
     # offset unit and a compound spelling.
     assert Quantity(magnitude=20.0, unit="degC").to("K").magnitude == pytest.approx(293.15)
     assert Quantity.parse("1 m**2").to("mm ** 2").magnitude == pytest.approx(1e6)
+
+
+def test_the_litre_is_displayed_as_a_capital_L():
+    """The one unit whose lowercase symbol is a glyph away from a digit.
+
+    BIPM and NIST both allow "L" for exactly this reason: "1 l/s" and "11/s" are hard to
+    tell apart in a printed submittal. Pint normalises every litre to the lowercase form
+    on the way in, so a ventilation spec written "300 L/s" was read back to its author as
+    "300.00 l / s" — a different symbol from the one they typed, in the document they are
+    asked to check. It was found by rendering a report and looking at it; no test saw it,
+    because no test compared a rendered unit against the way the spec spells it.
+    """
+    from anvilate.units import Quantity, render
+    from anvilate.units.quantity import display_unit
+
+    for text in ("50 L/s", "1 L", "2.5 mL", "3 kL", "1 dL", "0.3 L/m**2/s"):
+        quantity = Quantity.parse(text)
+        assert " l" not in f" {quantity}", str(quantity)
+        assert " l" not in f" {render(quantity)}", render(quantity)
+        assert "l/" not in render(quantity, pretty=True), render(quantity, pretty=True)
+        # And what is displayed is still what parses, in the same dimension: the display
+        # spelling is not a spelling the library cannot read back.
+        echoed = Quantity.parse(str(quantity))
+        assert echoed.pint.dimensionality == quantity.pint.dimensionality
+        assert echoed.magnitude == quantity.magnitude
+
+    # The stored unit keeps Pint's spelling, because that is what a machine record
+    # round-trips through — the capital is a display decision, not a data change.
+    assert Quantity.parse("50 L/s").unit == "l / s"
+
+    # Every other unit with an l in it is left alone. Each of these would be corrupted by
+    # a rule that simply uppercased the letter.
+    for label in ("mol", "cal", "lm", "lx", "lbf", "mil", "lumen", "gal", "mil / s"):
+        assert display_unit(label) == label
+
+    # Including the ones that are litres, spelled the way Pint spells them.
+    assert display_unit("l") == "L"
+    assert display_unit("ml / s") == "mL / s"
+    assert display_unit("dal") == "daL"

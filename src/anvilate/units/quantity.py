@@ -110,6 +110,29 @@ def _friendly_dimension(dimensionality: Any) -> str:
     return str(dimensionality)
 
 
+# BIPM and NIST both allow "L" for the litre, and for one reason: the lowercase "l" is a
+# glyph away from the digit 1, so "1 l/s" and "11/s" are hard to tell apart in a printed
+# submittal. Pint normalises every litre to the lowercase spelling on the way in, so a
+# spec written "50 L/s" was read back to its author as "50.00 l / s" — a different symbol
+# from the one they typed, in the document they are asked to check.
+#
+# The stored `unit` keeps Pint's spelling, which is what a machine record wants and what
+# every serialiser round-trips through. This is the DISPLAY spelling, applied by
+# `Quantity.__str__` and by `anvilate.units.render`, and what it produces parses back.
+#
+# The prefix alternatives are what keep it off other units: "mol", "cal", "lm", "lx" and
+# "mil" all contain an l and none of them is a litre. Only a bare l, optionally behind an
+# SI prefix and bounded on both sides, is one.
+_LITRE = re.compile(
+    r"(?<![A-Za-z0-9_])(Y|Z|E|P|T|G|M|k|h|da|d|c|m|µ|μ|u|n|p|f|a|z|y)?l(?![A-Za-z0-9_])"
+)
+
+
+def display_unit(label: str) -> str:
+    """A unit label as a document writes it. Currently: the litre in its capital form."""
+    return _LITRE.sub(lambda match: f"{match.group(1) or ''}L", label)
+
+
 @lru_cache(maxsize=8192)
 def _unit_object(unit: str) -> pint.Unit:
     """``UREG.Unit(unit)``, parsed once per spelling.
@@ -251,7 +274,7 @@ class Quantity(RevalidatedModel):
         return self.pint.dimensionality == _dimensionality_of(expected)
 
     def __str__(self) -> str:
-        return f"{self.magnitude:g} {self.unit}"
+        return f"{self.magnitude:g} {display_unit(self.unit)}"
 
     # --- The operations this type deliberately does not support, saying which ----------
     #

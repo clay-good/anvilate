@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from math import isfinite
 
-from .quantity import Quantity
+from .quantity import Quantity, display_unit
 from .registry import UREG
 from .system import UnitSystem
 
@@ -137,6 +137,7 @@ def render(
     shown = quantity if target is None else quantity.to(target)
     places = decimals_for(shown.unit, shown.magnitude)
     label = _engineering_order(f"{shown.pint.units:~P}") if pretty else shown.unit
+    label = display_unit(label)
     return f"{shown.magnitude:.{places}f} {label}"
 
 
