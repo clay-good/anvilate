@@ -22,20 +22,15 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import Named
 from ..analysis import (
-    clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
-    clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
-    clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
     deflection_scorecard,
     frequency_scorecard,
-    simply_supported_annular_plate_fundamental_frequency,
+    plate_fundamental_frequency_derivation,
     simply_supported_annular_plate_uniform_load,
-    simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
     simply_supported_plate_center_patch_load,
-    simply_supported_plate_fundamental_frequency,
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
@@ -77,29 +72,6 @@ _PLATE_CHECKS = {
     (True, PlateEdge.CLAMPED): (
         clamped_circular_plate_uniform_load,
         "Timoshenko plate theory",
-    ),
-}
-
-# (is_circular, edge) -> the fundamental-frequency check for the resonance
-# screen; frequency is load-independent, so every shape/edge combination has
-# one (the plate's own mass per area comes from its material density and
-# thickness — nothing extra to declare).
-_PLATE_MODAL_CHECKS = {
-    (False, PlateEdge.SIMPLY_SUPPORTED): (
-        simply_supported_plate_fundamental_frequency,
-        "Kirchhoff plate theory (Navier eigenvalue)",
-    ),
-    (False, PlateEdge.CLAMPED): (
-        clamped_plate_fundamental_frequency,
-        "Kirchhoff plate theory (FD-verified eigenvalue table)",
-    ),
-    (True, PlateEdge.SIMPLY_SUPPORTED): (
-        simply_supported_circular_plate_fundamental_frequency,
-        "Kirchhoff plate theory (Bessel eigenvalue)",
-    ),
-    (True, PlateEdge.CLAMPED): (
-        clamped_circular_plate_fundamental_frequency,
-        "Kirchhoff plate theory (Bessel eigenvalue)",
     ),
 }
 
@@ -273,37 +245,33 @@ def screen_cover_plate(
             ).model_copy(update=flatness_update)
         )
     if plate.min_frequency is not None:
-        modal_check, modal_reference = _PLATE_MODAL_CHECKS[(circular, plate.edge)]
         mass_per_area = Quantity(
             magnitude=record.density.quantity.to("kg/m**3").magnitude
             * plate.thickness.to("m").magnitude,
             unit="kg/m**2",
         )
-        modal = {
-            "mass_per_area": mass_per_area,
-            "thickness": plate.thickness,
-            "elastic_modulus": record.elastic_modulus.quantity,
-        }
-        if plate.hole_diameter is not None:
-            annular_modal = (
-                clamped_annular_plate_fundamental_frequency
-                if plate.edge is PlateEdge.CLAMPED
-                else simply_supported_annular_plate_fundamental_frequency
-            )
-            fundamental = annular_modal(
-                diameter=plate.diameter, hole_diameter=plate.hole_diameter, **modal
-            )
-            modal_reference = "Kirchhoff plate theory (FD-verified eigenvalue table)"
-        elif circular:
-            fundamental = modal_check(diameter=plate.diameter, **modal)
-        else:
-            fundamental = modal_check(length=plate.length, width=plate.width, **modal)
+        # One call, and it does the dispatching. This block used to hold a second copy of
+        # the case table and a third of the theory names, pick a check from one and a
+        # citation from the other, and then patch the citation by hand for a holed cover —
+        # four places to keep in step for a screen that has one answer. The frequency now
+        # comes out of the same record that carries the expression which produced it, so
+        # the resonance entry cannot cite a theory it did not use.
+        modal_work = plate_fundamental_frequency_derivation(
+            mass_per_area=mass_per_area,
+            thickness=plate.thickness,
+            elastic_modulus=record.elastic_modulus.quantity,
+            length=plate.length,
+            width=plate.width,
+            diameter=plate.diameter,
+            hole_diameter=plate.hole_diameter,
+            clamped=plate.edge is PlateEdge.CLAMPED,
+        )
         entries.append(
             frequency_scorecard(
                 f"{plate.name} resonance",
-                frequency=fundamental,
+                frequency=modal_work.result.value,
                 min_frequency=plate.min_frequency,
-            ).model_copy(update={"reference": modal_reference})
+            ).model_copy(update={"reference": modal_work.citation, "derivation": modal_work})
         )
     return disclosed(
         Scorecard(entries=tuple(entries)),

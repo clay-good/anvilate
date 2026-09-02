@@ -107,3 +107,83 @@ def test_the_roark_coefficients_are_the_interpolated_ones_and_are_glossed_as_suc
     # Interpolated, not a tabulated row: the values sit strictly between two of them.
     assert 0 < glossary["α"].value < 0.0284
     assert 0.4 < glossary["β"].value < 0.5
+
+
+# --- the modal half ----------------------------------------------------------------------
+#
+# `plate_fundamental_frequency_derivation` is the only dispatch over the six plate modal
+# cases, so it is also the only place a case could be paired with the wrong expression or
+# the wrong eigenvalue. Every case is called through it and the formula read back.
+
+_MODAL_COMMON = {
+    "mass_per_area": Quantity.parse("94.2 kg/m**2"),
+    "thickness": Quantity.parse("12 mm"),
+    "elastic_modulus": Quantity.parse("200 GPa"),
+}
+_MODAL_CASES = [
+    ("rectangle simply supported", {**_RECTANGLE}),
+    ("rectangle clamped", {**_RECTANGLE, "clamped": True}),
+    ("circle simply supported", {**_CIRCLE}),
+    ("circle clamped", {**_CIRCLE, "clamped": True}),
+    ("annulus simply supported", {**_CIRCLE, **_HOLE}),
+    ("annulus clamped", {**_CIRCLE, **_HOLE, "clamped": True}),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "geometry"),
+    [pytest.param(label, geometry, id=label) for label, geometry in _MODAL_CASES],
+)
+def test_a_plate_modal_formula_evaluates_to_the_frequency_it_ships_with(label, geometry):
+    from anvilate.analysis import plate_fundamental_frequency_derivation
+
+    work = plate_fundamental_frequency_derivation(**_MODAL_COMMON, **geometry)
+    assert work.unresolved_symbols() == ()
+    values = {item.symbol: _si(item.value) for item in work.inputs}
+    computed = _arithmetic(work.symbolic, values)
+    expected = work.result.value.pint.to_base_units().magnitude
+    assert computed == pytest.approx(expected, rel=1e-9), (
+        f"{label} declares {work.symbolic!r}, which evaluates to {computed:.6g} Hz; "
+        f"it returned {expected:.6g} Hz"
+    )
+
+
+def test_the_modal_derivation_returns_the_frequency_the_public_check_returns():
+    """It has to be the same number, or the report shows work for a different plate.
+
+    The derivation calls the public function rather than re-deriving, and this is the
+    assertion that says so: a second implementation of `(λ²/2π)·√(D/(μ·R⁴))` inside the
+    derivation builder would agree with itself and drift from the check everyone else uses.
+    """
+    from anvilate.analysis import (
+        clamped_circular_plate_fundamental_frequency,
+        plate_fundamental_frequency_derivation,
+        simply_supported_plate_fundamental_frequency,
+    )
+
+    round_work = plate_fundamental_frequency_derivation(**_MODAL_COMMON, **_CIRCLE, clamped=True)
+    assert round_work.result.value == clamped_circular_plate_fundamental_frequency(
+        **_MODAL_COMMON, **_CIRCLE
+    )
+    rect_work = plate_fundamental_frequency_derivation(**_MODAL_COMMON, **_RECTANGLE)
+    assert rect_work.result.value == simply_supported_plate_fundamental_frequency(
+        **_MODAL_COMMON, **_RECTANGLE
+    )
+
+
+def test_each_modal_case_cites_the_theory_its_eigenvalue_actually_came_from():
+    """Three theories over six cases, and the pack used to pick from its own copy of the
+    table — then patch the citation by hand for a holed cover, which is where a mismatch
+    would have lived.
+    """
+    from anvilate.analysis import plate_fundamental_frequency_derivation
+
+    cited = {
+        label: plate_fundamental_frequency_derivation(**_MODAL_COMMON, **geometry).citation
+        for label, geometry in _MODAL_CASES
+    }
+    assert cited["rectangle simply supported"] == "Kirchhoff plate theory (Navier eigenvalue)"
+    assert cited["circle simply supported"] == "Kirchhoff plate theory (Bessel eigenvalue)"
+    assert cited["circle clamped"] == "Kirchhoff plate theory (Bessel eigenvalue)"
+    for tabulated in ("rectangle clamped", "annulus simply supported", "annulus clamped"):
+        assert cited[tabulated] == "Kirchhoff plate theory (FD-verified eigenvalue table)"

@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
@@ -81,6 +82,7 @@ __all__ = [
     "clamped_circular_plate_fundamental_frequency",
     "simply_supported_annular_plate_fundamental_frequency",
     "clamped_annular_plate_fundamental_frequency",
+    "plate_fundamental_frequency_derivation",
     "torsional_natural_frequency",
     "two_rotor_torsional_natural_frequency",
     "angular_acceleration_from_torque",
@@ -1481,14 +1483,8 @@ def clamped_plate_fundamental_frequency(
     mu, rigidity = _plate_mass_and_rigidity(
         mass_per_area, thickness, elastic_modulus, poisson_ratio
     )
-    a, b = _rect_plate_sides(length, width)
-    ratio = b / a
-    for (r_lo, g_lo), (r_hi, g_hi) in zip(
-        _CLAMPED_PLATE_GAMMA, _CLAMPED_PLATE_GAMMA[1:], strict=False
-    ):
-        if ratio <= r_hi:
-            gamma = g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
-            break
+    _, b = _rect_plate_sides(length, width)
+    gamma = _clamped_plate_gamma(length, width)
     return Quantity(magnitude=gamma / (2 * pi) * sqrt(rigidity / (mu * b**4)), unit="Hz")
 
 
@@ -1617,19 +1613,55 @@ def _annular_plate_fundamental(
         mass_per_area, thickness, elastic_modulus, DEFAULT_POISSON_RATIO
     )
     radius = _positive_radius(diameter)
-    _require(hole_diameter, "[length]", "hole_diameter")
-    hole_radius = hole_diameter.to("m").magnitude / 2
-    ratio = hole_radius / radius
-    if not 0 < ratio <= table[-1][0]:
-        raise ValueError(
-            f"the hole ratio {ratio:.2f} must lie in (0, {table[-1][0]}] — "
-            "the encoded eigenvalue range"
-        )
+    gamma = _annular_plate_gamma(table, diameter=diameter, hole_diameter=hole_diameter)
+    return Quantity(magnitude=gamma / (2 * pi) * sqrt(rigidity / (mu * radius**4)), unit="Hz")
+
+
+def _interpolated_gamma(table: tuple[tuple[float, float], ...], ratio: float) -> float:
+    """A tabulated eigenvalue at ``ratio``, interpolated linearly between its rows."""
     for (r_lo, g_lo), (r_hi, g_hi) in zip(table, table[1:], strict=False):
         if ratio <= r_hi:
-            gamma = g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
-            break
-    return Quantity(magnitude=gamma / (2 * pi) * sqrt(rigidity / (mu * radius**4)), unit="Hz")
+            return g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
+    raise ValueError(f"the ratio {ratio:.3f} is past the end of the eigenvalue table")
+
+
+def _clamped_plate_gamma(length: Quantity, width: Quantity) -> float:
+    """The clamped-rectangle eigenvalue γ for a plan, from the FD-verified table.
+
+    Read out here rather than inline in the frequency function, because the derivation
+    declares γ as an input and the two must be the same number: an eigenvalue looked up
+    twice is an eigenvalue that can be looked up two ways.
+    """
+    long_side, short_side = _rect_plate_sides(length, width)
+    return _interpolated_gamma(_CLAMPED_PLATE_GAMMA, short_side / long_side)
+
+
+def _short_side(length: Quantity, width: Quantity) -> Quantity:
+    """The shorter plan side, as a quantity for a derivation's glossary."""
+    return Quantity(magnitude=_rect_plate_sides(length, width)[1], unit="m")
+
+
+def _annular_hole_ratio(diameter: Quantity, hole_diameter: Quantity) -> float:
+    """b/a for an annular plate, validated against the encoded eigenvalue range."""
+    radius = _positive_radius(diameter)
+    _require(hole_diameter, "[length]", "hole_diameter")
+    ratio = (hole_diameter.to("m").magnitude / 2) / radius
+    if not 0 < ratio <= _ANNULAR_PLATE_GAMMA_SS[-1][0]:
+        raise ValueError(
+            f"the hole ratio {ratio:.2f} must lie in (0, {_ANNULAR_PLATE_GAMMA_SS[-1][0]}] — "
+            "the encoded eigenvalue range"
+        )
+    return ratio
+
+
+def _annular_plate_gamma(
+    table: tuple[tuple[float, float], ...],
+    *,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+) -> float:
+    """The annular eigenvalue γ for a hole ratio, from the FD-verified table."""
+    return _interpolated_gamma(table, _annular_hole_ratio(diameter, hole_diameter))
 
 
 def simply_supported_annular_plate_fundamental_frequency(
@@ -1686,6 +1718,151 @@ def clamped_annular_plate_fundamental_frequency(
         hole_diameter=hole_diameter,
         thickness=thickness,
         elastic_modulus=elastic_modulus,
+    )
+
+
+# The theory each plate modal case rests on, as the scorecard cites it. These lived in
+# `anvilate.packs.industrial` beside a second copy of the case dispatch; they are facts
+# about the eigenvalue, not about covers, and a pack that had to know which of them to
+# quote was a pack that could quote the wrong one.
+_MODAL_CITATION_RECTANGULAR_SS = "Kirchhoff plate theory (Navier eigenvalue)"
+_MODAL_CITATION_TABULATED = "Kirchhoff plate theory (FD-verified eigenvalue table)"
+_MODAL_CITATION_BESSEL = "Kirchhoff plate theory (Bessel eigenvalue)"
+
+
+def plate_fundamental_frequency_derivation(
+    *,
+    mass_per_area: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    length: Quantity | None = None,
+    width: Quantity | None = None,
+    diameter: Quantity | None = None,
+    hole_diameter: Quantity | None = None,
+    clamped: bool = False,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Derivation:
+    """The fundamental frequency of a plate, worked, with its eigenvalue declared.
+
+    One entry point for all six plate modal cases, and the *only* dispatch over them: it
+    picks the case from the geometry it is given — ``length``/``width`` for a rectangle,
+    ``diameter`` for a round plate, plus ``hole_diameter`` for an annulus — calls the same
+    public function a caller would call, and writes the expression that produced the
+    number beside it. The result carries the frequency and the citation, so a caller needs
+    neither a second table of checks nor a table of theory names to quote.
+
+    Kirchhoff plate theory throughout: the Navier eigenvalue for the simply-supported
+    rectangle, the Bessel characteristic equation for the round plates, and our own
+    finite-difference-verified eigenvalue tables for the clamped rectangle and the annulus.
+
+    **The eigenvalue is an input, not a substitute for the derivation.** λ² and γ are
+    exactly what a reviewer wants named: one is solved at runtime from a Bessel
+    characteristic equation, one is interpolated out of a finite-difference-verified table,
+    and the gloss says which. Folding the number into the coefficient would hide the only
+    part of these results that is not arithmetic.
+    """
+    rigidity = _plate_mass_and_rigidity(mass_per_area, thickness, elastic_modulus, poisson_ratio)[1]
+    shared = {
+        "mass_per_area": mass_per_area,
+        "thickness": thickness,
+        "elastic_modulus": elastic_modulus,
+    }
+    common = (
+        SymbolValue(symbol="μ", description="mass per unit area of the plate", value=mass_per_area),
+        SymbolValue(
+            symbol="D",
+            description="flexural rigidity of the plate, D = E·t³/(12·(1 − ν²))",
+            value=Quantity(magnitude=rigidity, unit="N*m"),
+        ),
+    )
+    if diameter is None:
+        if clamped:
+            frequency = clamped_plate_fundamental_frequency(
+                length=length, width=width, poisson_ratio=poisson_ratio, **shared
+            )
+            gamma = _clamped_plate_gamma(length, width)
+            symbolic = "f₁ = (γ/(2·π))·√(D/(μ·b⁴))"
+            inputs = (
+                SymbolValue(
+                    symbol="γ",
+                    description=(
+                        "eigenvalue interpolated from the finite-difference-verified table "
+                        "at ν = 0.3, in the plan side ratio"
+                    ),
+                    value=gamma,
+                ),
+                SymbolValue(
+                    symbol="b",
+                    description="short side of the plan rectangle",
+                    value=_short_side(length, width),
+                ),
+                *common,
+            )
+            citation = _MODAL_CITATION_TABULATED
+        else:
+            frequency = simply_supported_plate_fundamental_frequency(
+                length=length, width=width, poisson_ratio=poisson_ratio, **shared
+            )
+            long_side, short_side = _rect_plate_sides(length, width)
+            symbolic = "f₁ = (π/2)·(1/a² + 1/b²)·√(D/μ)"
+            inputs = (
+                SymbolValue(
+                    symbol="a",
+                    description="long side of the plan rectangle",
+                    value=Quantity(magnitude=long_side, unit="m"),
+                ),
+                SymbolValue(
+                    symbol="b",
+                    description="short side of the plan rectangle",
+                    value=Quantity(magnitude=short_side, unit="m"),
+                ),
+                *common,
+            )
+            citation = _MODAL_CITATION_RECTANGULAR_SS
+    else:
+        radius = Quantity(magnitude=_positive_radius(diameter), unit="m")
+        symbolic = "f₁ = (λ²/(2·π))·√(D/(μ·R⁴))"
+        if hole_diameter is None:
+            check = (
+                clamped_circular_plate_fundamental_frequency
+                if clamped
+                else simply_supported_circular_plate_fundamental_frequency
+            )
+            frequency = check(diameter=diameter, poisson_ratio=poisson_ratio, **shared)
+            eigenvalue = _circular_plate_lambda_sq(clamped=clamped, poisson_ratio=poisson_ratio)
+            description = "eigenvalue solved at runtime from the exact Bessel characteristic " + (
+                "equation J₀·I₁ + I₀·J₁ = 0" if clamped else "equation J₁/J₀ + I₁/I₀ = 2λ/(1 − ν)"
+            )
+            citation = _MODAL_CITATION_BESSEL
+        else:
+            check = (
+                clamped_annular_plate_fundamental_frequency
+                if clamped
+                else simply_supported_annular_plate_fundamental_frequency
+            )
+            frequency = check(diameter=diameter, hole_diameter=hole_diameter, **shared)
+            eigenvalue = _annular_plate_gamma(
+                _ANNULAR_PLATE_GAMMA_CLAMPED if clamped else _ANNULAR_PLATE_GAMMA_SS,
+                diameter=diameter,
+                hole_diameter=hole_diameter,
+            )
+            description = (
+                "eigenvalue interpolated from the finite-difference-verified table at "
+                "ν = 0.3, in the hole ratio"
+            )
+            citation = _MODAL_CITATION_TABULATED
+        inputs = (
+            SymbolValue(symbol="λ²", description=description, value=eigenvalue),
+            SymbolValue(symbol="R", description="outer radius of the plate", value=radius),
+            *common,
+        )
+    return Derivation(
+        symbolic=symbolic,
+        inputs=inputs,
+        result=SymbolValue(
+            symbol="f₁", description="fundamental frequency of the plate", value=frequency
+        ),
+        citation=citation,
     )
 
 

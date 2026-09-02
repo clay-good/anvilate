@@ -11,9 +11,10 @@ rather than skipping it. A lenient one passes every formula for ever.
 
 from __future__ import annotations
 
+import math
 import re
 
-from anvilate.derivation import _scan
+from anvilate.derivation import _CONSTANTS, _OPERATORS, _scan
 from anvilate.units import Quantity
 
 _SUPERSCRIPT_DIGITS = {
@@ -41,7 +42,12 @@ def _arithmetic(symbolic: str, values: dict[str, float]) -> float:
     _, _, rhs = symbolic.partition("=")
     assert rhs, f"{symbolic!r} has no right-hand side"
     substituted, leftover = _scan(rhs, {name: f"({value!r})" for name, value in values.items()})
-    assert not leftover, f"{symbolic!r} names symbols nothing declared: {leftover}"
+    # Constants and word-operators are excused for exactly the reasons
+    # `Derivation.unresolved_symbols` excuses them, and by reading its own sets rather than
+    # a second copy: an evaluator that excused more than the renderer does would pass a
+    # formula the report refuses to show as worked.
+    missing = sorted(set(leftover) - _CONSTANTS - _OPERATORS)
+    assert not missing, f"{symbolic!r} names symbols nothing declared: {missing}"
 
     expression = substituted
     for glyph, digit in _SUPERSCRIPT_DIGITS.items():
@@ -51,6 +57,10 @@ def _arithmetic(symbolic: str, values: dict[str, float]) -> float:
     expression = expression.replace("·", "*").replace("−", "-").replace("–", "-")
     expression = re.sub(r"√(\d+)", r"(\1**0.5)", expression)
     expression = _radicals_over_groups(expression)
+    # π is a constant a formula may name without declaring, exactly as
+    # `Derivation.unresolved_symbols` treats it — so the evaluator has to know its value
+    # or it would report the one symbol the renderer deliberately leaves standing.
+    expression = expression.replace("π", repr(math.pi))
 
     unreadable = sorted(set(expression) - set("0123456789.+-*/() e"))
     assert not unreadable, f"the evaluator cannot read {unreadable} in {symbolic!r}"
