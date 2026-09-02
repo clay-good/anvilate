@@ -23,6 +23,7 @@ from math import sqrt
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, Provenance, RevalidatedModel
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -231,6 +232,25 @@ class DSMStrength(BaseModel):
     nominal: Quantity
     governing: DSMLimitState
     distortional_strength: Quantity | None = None
+    # The governing mode's curve, and only its curve. Three modes are computed and one
+    # decides the answer; rendering all three would put two calculations in front of a
+    # reviewer that changed nothing, and rendering a fixed one would sometimes render the
+    # mode that lost. Each DSM curve is piecewise, so this is the branch that ran too.
+    governing_formula: str
+    governing_inputs: tuple[SymbolValue, ...]
+
+    def derivation(self, citation: str) -> Derivation:
+        """The governing curve as a worked calculation, under the caller's clause."""
+        return Derivation(
+            symbolic=self.governing_formula,
+            inputs=self.governing_inputs,
+            result=SymbolValue(
+                symbol=self.governing_formula.partition(" =")[0],
+                description=f"nominal strength, {self.governing.value} buckling governing",
+                value=self.nominal,
+            ),
+            citation=citation,
+        )
 
     def __str__(self) -> str:
         return f"DSM nominal {self.nominal} governed by {self.governing.value} buckling"
@@ -309,6 +329,128 @@ def _dsm_reduced(anchor: float, elastic: float, limit: float, coeff: float, expo
     return (1.0 - coeff * ratio) * ratio * anchor
 
 
+def _number(value: float) -> str:
+    """A curve constant as the standard prints it: 0.15, not 0.15000000000000002."""
+    return f"{value:g}"
+
+
+def _reduction_work(
+    *,
+    result_symbol: str,
+    anchor_symbol: str,
+    anchor_description: str,
+    anchor: float,
+    elastic_symbol: str,
+    elastic_description: str,
+    elastic: float,
+    limit: float,
+    coeff: float,
+    expo: float,
+    unit: str,
+) -> tuple[str, tuple[SymbolValue, ...]]:
+    """The shared DSM reduction curve written out, for whichever branch ran.
+
+    Below the slenderness limit the mode takes nothing off, and the honest line says so —
+    the strength IS the anchor. Rendering the reduced expression there would show a
+    reviewer arithmetic the check did not perform, and the coefficient would not be the
+    one in front of them.
+
+    That branch is, as it happens, never the one a report shows: this is only called for
+    the mode that GOVERNS, an unreduced local curve returns P_ne exactly and ties with the
+    global mode, and an unreduced distortional curve returns the anchor P_y, which is at
+    least P_ne for every λ_c. It is written anyway rather than assumed away — the
+    alternative is a helper that silently renders the wrong branch if the tie-break or the
+    curve constants ever move — and `tests/test_dsm_formulas.py` sweeps for its
+    reachability rather than restating the argument.
+    """
+    slenderness = sqrt(anchor / elastic)
+    anchor_value = SymbolValue(
+        symbol=anchor_symbol,
+        description=anchor_description,
+        value=Quantity(magnitude=anchor, unit=unit),
+    )
+    if slenderness <= limit:
+        return (
+            f"{result_symbol} = {anchor_symbol}",
+            (
+                SymbolValue(
+                    symbol=anchor_symbol,
+                    description=(
+                        f"{anchor_description} — slenderness λ = {slenderness:.3g} is at or "
+                        f"below the {_number(limit)} limit, so this mode takes nothing off"
+                    ),
+                    value=anchor_value.value,
+                ),
+            ),
+        )
+    ratio = f"({elastic_symbol}/{anchor_symbol})^{_number(expo)}"
+    return (
+        f"{result_symbol} = (1 − {_number(coeff)}·{ratio})·{ratio}·{anchor_symbol}",
+        (
+            SymbolValue(
+                symbol=elastic_symbol,
+                description=elastic_description,
+                value=Quantity(magnitude=elastic, unit=unit),
+            ),
+            anchor_value,
+        ),
+    )
+
+
+def _global_compression_work(
+    yield_load: float, elastic_global: float
+) -> tuple[str, tuple[SymbolValue, ...]]:
+    """The column curve for whichever of its two branches ran, with λ_c declared.
+
+    λ_c is an input rather than a number folded into the coefficient: it is what decides
+    the branch, and a reviewer checking this against AISI reads the slenderness first.
+    """
+    lambda_c = sqrt(yield_load / elastic_global)
+    slenderness = SymbolValue(
+        symbol="λ_c",
+        description="column slenderness √(P_y/P_cre)",
+        value=lambda_c,
+    )
+    squash = SymbolValue(
+        symbol="P_y",
+        description="squash load, A_g·F_y on the gross section",
+        value=Quantity(magnitude=yield_load, unit="kN"),
+    )
+    if lambda_c <= _DSM_GLOBAL_SLENDERNESS_SPLIT:
+        return "P_ne = 0.658^(λ_c²)·P_y", (slenderness, squash)
+    return "P_ne = (0.877/λ_c²)·P_y", (slenderness, squash)
+
+
+def _global_flexure_work(
+    yield_moment: float, elastic_global: float
+) -> tuple[str, tuple[SymbolValue, ...]]:
+    """The lateral-torsional curve for whichever of its three branches ran.
+
+    Written in M_cre/M_y rather than through a slenderness, which is how AISI writes it,
+    and the branch points are stated in the gloss so a reviewer can see which of the three
+    the member fell in without recomputing the ratio.
+    """
+    ratio = elastic_global / yield_moment
+    yield_symbol = SymbolValue(
+        symbol="M_y",
+        description=f"yield moment S_f·F_y — M_cre/M_y = {ratio:.3g} here",
+        value=Quantity(magnitude=yield_moment, unit="kN*m"),
+    )
+    elastic_symbol = SymbolValue(
+        symbol="M_cre",
+        description="elastic lateral-torsional buckling moment, from the finite-strip analysis",
+        value=Quantity(magnitude=elastic_global, unit="kN*m"),
+    )
+    if elastic_global < _DSM_FLEXURE_ELASTIC_LIMIT * yield_moment:
+        return "M_ne = M_cre", (elastic_symbol,)
+    if elastic_global > _DSM_FLEXURE_PLASTIC_LIMIT * yield_moment:
+        return "M_ne = M_y", (yield_symbol,)
+    return (
+        "M_ne = (10/9)·M_y·(1 − 10·M_y/(36·M_cre))",
+        (yield_symbol, elastic_symbol),
+    )
+
+
 def _governing(candidates: dict[DSMLimitState, float]) -> tuple[DSMLimitState, float]:
     state = min(candidates, key=lambda k: candidates[k])
     return state, candidates[state]
@@ -372,12 +514,53 @@ def dsm_compression_strength(
         )
         candidates[DSMLimitState.DISTORTIONAL] = p_nd
     state, nominal = _governing(candidates)
+    p_cre = elastic_buckling.global_.to("kN").magnitude
+    if state is DSMLimitState.GLOBAL:
+        formula, inputs = _global_compression_work(py, p_cre)
+    elif state is DSMLimitState.LOCAL:
+        formula, inputs = _reduction_work(
+            result_symbol="P_nl",
+            anchor_symbol="P_ne",
+            anchor_description=(
+                "global (flexural-torsional) strength, which the local curve is anchored "
+                "on because the two modes interact"
+            ),
+            anchor=p_ne,
+            elastic_symbol="P_crl",
+            elastic_description="elastic local buckling load, from the finite-strip analysis",
+            elastic=elastic_buckling.local.to("kN").magnitude,
+            limit=_DSM_LOCAL_SLENDERNESS_LIMIT,
+            coeff=_DSM_LOCAL_COEFFICIENT,
+            expo=_DSM_LOCAL_EXPONENT,
+            unit="kN",
+        )
+    else:
+        formula, inputs = _reduction_work(
+            result_symbol="P_nd",
+            anchor_symbol="P_y",
+            anchor_description=(
+                "squash load, which the distortional curve is anchored on because that mode "
+                "does not interact with the global one"
+            ),
+            anchor=py,
+            elastic_symbol="P_crd",
+            elastic_description=(
+                "elastic distortional buckling load, from the finite-strip analysis"
+            ),
+            elastic=elastic_buckling.distortional.to("kN").magnitude,
+            limit=_DSM_DIST_COMPRESSION_LIMIT,
+            coeff=_DSM_DIST_COMPRESSION_COEFFICIENT,
+            expo=_DSM_DIST_COMPRESSION_EXPONENT,
+            unit="kN",
+        )
     return DSMStrength(
         global_strength=Quantity(magnitude=p_ne, unit="kN"),
         local_strength=Quantity(magnitude=p_nl, unit="kN"),
         distortional_strength=None if p_nd is None else Quantity(magnitude=p_nd, unit="kN"),
         nominal=Quantity(magnitude=nominal, unit="kN"),
         governing=state,
+        governing_formula=formula,
+        governing_inputs=inputs,
     )
 
 
@@ -446,12 +629,52 @@ def dsm_flexural_strength(
         )
         candidates[DSMLimitState.DISTORTIONAL] = m_nd
     state, nominal = _governing(candidates)
+    if state is DSMLimitState.GLOBAL:
+        formula, inputs = _global_flexure_work(my, m_cre)
+    elif state is DSMLimitState.LOCAL:
+        formula, inputs = _reduction_work(
+            result_symbol="M_nl",
+            anchor_symbol="M_ne",
+            anchor_description=(
+                "lateral-torsional strength, which the local curve is anchored on because "
+                "the two modes interact"
+            ),
+            anchor=m_ne,
+            elastic_symbol="M_crl",
+            elastic_description="elastic local buckling moment, from the finite-strip analysis",
+            elastic=elastic_buckling.local.to("kN*m").magnitude,
+            limit=_DSM_LOCAL_SLENDERNESS_LIMIT,
+            coeff=_DSM_LOCAL_COEFFICIENT,
+            expo=_DSM_LOCAL_EXPONENT,
+            unit="kN*m",
+        )
+    else:
+        formula, inputs = _reduction_work(
+            result_symbol="M_nd",
+            anchor_symbol="M_y",
+            anchor_description=(
+                "yield moment, which the distortional curve is anchored on because that mode "
+                "does not interact with the lateral-torsional one"
+            ),
+            anchor=my,
+            elastic_symbol="M_crd",
+            elastic_description=(
+                "elastic distortional buckling moment, from the finite-strip analysis"
+            ),
+            elastic=elastic_buckling.distortional.to("kN*m").magnitude,
+            limit=_DSM_DIST_FLEXURE_LIMIT,
+            coeff=_DSM_DIST_FLEXURE_COEFFICIENT,
+            expo=_DSM_DIST_FLEXURE_EXPONENT,
+            unit="kN*m",
+        )
     return DSMStrength(
         global_strength=Quantity(magnitude=m_ne, unit="kN*m"),
         local_strength=Quantity(magnitude=m_nl, unit="kN*m"),
         distortional_strength=None if m_nd is None else Quantity(magnitude=m_nd, unit="kN*m"),
         nominal=Quantity(magnitude=nominal, unit="kN*m"),
         governing=state,
+        governing_formula=formula,
+        governing_inputs=inputs,
     )
 
 
@@ -515,4 +738,10 @@ def dsm_scorecard(
                     "safety_factor": None,
                 }
             )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_DSM})
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_DSM,
+            "derivation": strength.derivation(_CLAUSE_DSM),
+        }
+    )

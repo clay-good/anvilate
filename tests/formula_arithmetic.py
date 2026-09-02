@@ -55,6 +55,9 @@ def _arithmetic(symbolic: str, values: dict[str, float]) -> float:
     # "(4.0)@3" -> "(4.0)**3"; consecutive superscript digits are one exponent.
     expression = re.sub(r"(?:@(\d))+", lambda m: "**" + m.group(0).replace("@", ""), expression)
     expression = expression.replace("·", "*").replace("−", "-").replace("–", "-")
+    # A caret exponent, which is how the AISI and Marin fits are written: an exponent that
+    # is not a whole number cannot be a superscript glyph.
+    expression = expression.replace("^", "**")
     expression = re.sub(r"√(\d+)", r"(\1**0.5)", expression)
     expression = _radicals_over_groups(expression)
     # π is a constant a formula may name without declaring, exactly as

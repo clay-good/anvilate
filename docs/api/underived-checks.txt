@@ -60,5 +60,4 @@ ASME B30.20 :: a verification-plan item crossed into the characteristic list —
 standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
 
 [debt]
-AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
