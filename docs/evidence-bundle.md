@@ -41,7 +41,9 @@ the analysis. So there are two renderings, and which one you want depends on who
 ### The work, not just the verdict
 
 A check that carries a derivation renders it under its line — the formula, the values put
-into it, the result, and a line per symbol:
+into it, the result, and a line per symbol — **in the units the spec declares**, which this
+bundle carries. A document saying `units: US` prints its work in kip, inches and ksi; the
+example below is an SI spec:
 
 ```text
 checks:

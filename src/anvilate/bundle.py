@@ -505,13 +505,24 @@ class BundleSections(RevalidatedModel):
         The block comes from :meth:`anvilate.report.ReportSection.worked_lines`, which is
         also what the calculation report and ``anvilate check --show-work`` print, so one
         derivation cannot be described three ways.
+
+        **In the units the spec declares**, which this bundle carries. It did not, so a
+        document stating `units: US` was handed to its reviewer with every formula
+        substituted in millimetres and megapascals — and the spec saying otherwise printed
+        forty lines further down the same file.
         """
         from .report import ReportSection
 
+        system = self.spec.units.value if self.spec is not None and self.spec.units else None
         lines: list[str] = []
         for entry in self.scorecard.entries:
-            lines.append(f"  {entry}")
-            lines.extend(f"  {line}" for line in ReportSection(entry=entry).worked_lines())
+            section = ReportSection(entry=entry)
+            lines.append(
+                f"  [{entry.status.value.upper()}] {entry.name}: {section.verdict(system=system)}"
+            )
+            if entry.reference:
+                lines[-1] += f" [{entry.reference}]"
+            lines.extend(f"  {line}" for line in section.worked_lines(system=system))
         return tuple(lines)
 
     def spec_block(self) -> tuple[str, ...]:

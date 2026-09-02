@@ -194,6 +194,25 @@ class ReportSection(BaseModel):
             return self.entry.detail
         return self.entry.comparison.sentence(system=system)
 
+    def headline(self, *, system: UnitSystem | None = None) -> str:
+        """The entry's one-line form, with its verdict in ``system``'s units.
+
+        `ScorecardEntry.__str__` builds the same line and cannot take a system, because an
+        entry does not know what document it will be read in. This is that line with the
+        verdict restated — and it is a method here rather than a second copy at the call
+        site, which is where the fragility warning got lost once: a hand-built version
+        dropped it, and a nominal pass that input scatter would fail one time in five
+        printed exactly like one that never does.
+        """
+        entry = self.entry
+        fragile = ""
+        if entry.is_fragile():
+            shortfall = entry.uncertainty.shortfall_probability * 100.0  # type: ignore[union-attr]
+            fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
+        cite = f" [{entry.reference}]" if entry.reference else ""
+        status = entry.status.value.upper()
+        return f"[{status}] {entry.name}: {self.verdict(system=system)}{fragile}{cite}"
+
     @property
     def fallback_label(self) -> str:
         """The label over the inputs table, with the check's own reason when it states one.

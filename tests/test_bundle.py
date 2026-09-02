@@ -864,3 +864,61 @@ def test_the_evidence_bundle_pages_worked_block_is_what_the_bundle_prints():
     assert not missing, (
         "these lines are on the page and not in the rendered bundle:\n  " + "\n  ".join(missing)
     )
+
+
+def test_the_bundle_shows_its_work_in_the_units_the_spec_it_carries_declares():
+    """The reader of a bundle receives only the bundle, and it carries the spec.
+
+    So the one line of that spec saying what units its reader works in is *in the same
+    file*, forty lines below a formula substituted in the other system. A document stating
+    `units: US` was handed to its reviewer in millimetres and megapascals.
+    """
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    source = (Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml").read_text()
+    assert "units: {value: SI" in source, "the fixture spec no longer declares SI"
+
+    for declared, wanted, unwanted in (("SI", " mm", "kip"), ("US", "kip", " mm")):
+        spec = load_spec_yaml(source.replace("units: {value: SI", f"units: {{value: {declared}"))
+        sections = BundleSections(scorecard=screen_spec(spec), spec=spec)
+        # Only the checks block: the spec is echoed below it in the units it was written in,
+        # which is the document rather than a rendering of it.
+        checks = sections.render_document().split("spec:")[0]
+        assert wanted in checks, checks
+        assert unwanted not in checks, checks
+
+
+def test_the_bundle_headline_is_the_entrys_own_line():
+    """The check line is `ScorecardEntry.__str__` with its verdict restated, not a copy.
+
+    A hand-built version at this call site dropped the fragility warning — a nominal pass
+    that input scatter would fail one time in five printed exactly like one that never
+    does, in the document a reviewer receives instead of the analysis.
+    """
+    from anvilate.report import ReportSection
+    from anvilate.uncertainty import MarginUncertainty, Sensitivity
+
+    plain = ScorecardEntry.from_safety_factor("bending", computed=1.9, required=1.5).model_copy(
+        update={"reference": "AISC 360-16 §F2"}
+    )
+    assert ReportSection(entry=plain).headline() == str(plain)
+
+    fragile = plain.model_copy(
+        update={
+            "uncertainty": MarginUncertainty(
+                samples=1000,
+                seed=1,
+                required=1.5,
+                mean=1.9,
+                std=0.4,
+                shortfall_probability=0.2,
+                lower=1.2,
+                upper=2.6,
+                coverage=0.9,
+                sensitivities=(Sensitivity(name="load", variance_share=1.0),),
+            )
+        }
+    )
+    assert "fragile" in ReportSection(entry=fragile).headline()
+    assert ReportSection(entry=fragile).headline() == str(fragile)
