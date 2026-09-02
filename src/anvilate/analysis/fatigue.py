@@ -28,6 +28,7 @@ from math import inf, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -1149,5 +1150,65 @@ def weld_fatigue_scorecard(
     damage = miner_cumulative_damage(applied_cycles=applied_cycles, cycles_to_failure=lives)
     computed = inf if damage == 0 else 1.0 / damage
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
-        update={"reference": "EN 1993-1-9"}
+        update={
+            "reference": "EN 1993-1-9",
+            "derivation": _miner_derivation(
+                applied_cycles=applied_cycles,
+                stress_ranges=stress_ranges,
+                lives=lives,
+                category=category,
+                damage=damage,
+            ),
+        }
+    )
+
+
+def _miner_derivation(
+    *,
+    applied_cycles: Sequence[float],
+    stress_ranges: Sequence[float],
+    lives: Sequence[float],
+    category: Quantity,
+    damage: float,
+) -> Derivation:
+    """The Palmgren-Miner sum, one term per block of the spectrum.
+
+    Written out block by block rather than as a Σ, because the sum is the thing a reviewer
+    recomputes and a Σ hides which block did the damage. A block whose stress range sits
+    below the cutoff has an infinite endurance and its term is a finite count over ``inf``
+    — which is zero, and reads as the "this block does no damage" that EN 1993-1-9 means,
+    rather than being dropped from a sum it was part of.
+    """
+    terms: list[str] = []
+    inputs: list[SymbolValue] = []
+    for index, (applied, life, stress_range) in enumerate(
+        zip(applied_cycles, lives, stress_ranges, strict=True), start=1
+    ):
+        terms.append(f"{'' if index == 1 else ' + '}n_{index} / N_{index}")
+        inputs.append(
+            SymbolValue(
+                symbol=f"n_{index}",
+                description=f"cycles applied at a stress range of {stress_range}",
+                value=float(applied),
+            )
+        )
+        inputs.append(
+            SymbolValue(
+                symbol=f"N_{index}",
+                description=(
+                    f"endurance at {stress_range} on the {category} curve"
+                    + (" — below the cutoff, so infinite" if life == inf else "")
+                ),
+                value=float(life),
+            )
+        )
+    return Derivation(
+        symbolic="D = " + "".join(terms),
+        inputs=tuple(inputs),
+        result=SymbolValue(
+            symbol="D",
+            description="Palmgren-Miner cumulative damage; 1.0 is the design life",
+            value=damage,
+        ),
+        citation="EN 1993-1-9",
     )

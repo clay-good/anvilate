@@ -40,6 +40,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from .._models import Named
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -263,7 +264,40 @@ def bth1_member_scorecard(
         f"{limit:.4g} MPa (N_d = {category.design_factor:.2f}, already inside the "
         f"allowable)"
     )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_ALLOWABLES})
+    # Both figures reach this check already formed — the applied stress from the member
+    # analysis, the allowable from BTH1Allowables — so the quotient IS the work done here.
+    # What N_d did to the allowable happened upstream and is named in the gloss rather
+    # than shown as a term, because it is not one.
+    derivation = Derivation(
+        symbolic="n = F / f",
+        inputs=(
+            SymbolValue(
+                symbol="F",
+                description=(
+                    f"Category {category.value} allowable stress, with the design factor "
+                    f"N_d = {category.design_factor:.2f} already inside it"
+                ),
+                value=allowable,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="f", description="applied stress in the member", value=stress, unit="MPa"
+            ),
+        ),
+        result=SymbolValue(
+            symbol="n",
+            description="margin against the BTH-1 allowable; 1.0 is exactly the allowable",
+            value=computed if computed is not None else 0.0,
+        ),
+        citation=_CLAUSE_ALLOWABLES,
+    )
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_ALLOWABLES,
+            "derivation": derivation,
+        }
+    )
 
 
 def bth1_fatigue_scorecard(
@@ -333,7 +367,39 @@ def bth1_fatigue_scorecard(
         f"Service Class {service_class.value} ({band} load cycles): a stress range of "
         f"{applied:.4g} MPa against an allowable {limit:.4g} MPa"
     )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_SERVICE})
+    fatigue_derivation = Derivation(
+        symbolic="n = Δσ_a / Δσ",
+        inputs=(
+            SymbolValue(
+                symbol="Δσ_a",
+                description=(
+                    f"allowable stress range for Service Class {service_class.value} "
+                    f"({band} load cycles)"
+                ),
+                value=allowable_stress_range,
+                unit="MPa",
+            ),
+            SymbolValue(
+                symbol="Δσ",
+                description="applied stress range",
+                value=stress_range,
+                unit="MPa",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="n",
+            description="margin against the §3-4 allowable stress range",
+            value=computed if computed is not None else 0.0,
+        ),
+        citation=_CLAUSE_SERVICE,
+    )
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_SERVICE,
+            "derivation": fatigue_derivation,
+        }
+    )
 
 
 class BTH1LimitState(StrEnum):

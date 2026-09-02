@@ -1209,7 +1209,59 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
     ]
     out.extend(_load_combination_derivations())
     out.extend(_pressure_vessel_derivations())
+    out.extend(_spectrum_and_lifter_derivations())
     return out
+
+
+def _spectrum_and_lifter_derivations() -> list[tuple[str, object]]:
+    """The Miner sum and the two BTH-1 margins.
+
+    The spectrum includes a block below the cutoff, whose endurance is infinite: its term
+    is a finite count over `inf`, which is zero, and rendering it is how the report says
+    "this block does no damage" rather than dropping a block from a sum it was part of.
+    """
+    from anvilate.analysis.fatigue import weld_fatigue_scorecard
+    from anvilate.analysis.lifting_device import (
+        DesignCategory,
+        ServiceClass,
+        bth1_fatigue_scorecard,
+        bth1_member_scorecard,
+    )
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    entries = [
+        (
+            "weld spectrum",
+            weld_fatigue_scorecard(
+                "weld fatigue",
+                stress_ranges=[q("80 MPa"), q("45 MPa"), q("15 MPa")],
+                applied_cycles=[2.0e5, 1.0e6, 5.0e6],
+                detail_category=q("90 MPa"),
+            ),
+        ),
+        (
+            "bth1 member",
+            bth1_member_scorecard(
+                "lug net tension",
+                stress=q("96 MPa"),
+                allowable=q("124 MPa"),
+                category=DesignCategory.B,
+            ),
+        ),
+        (
+            "bth1 fatigue",
+            bth1_fatigue_scorecard(
+                "lug fatigue",
+                service_class=ServiceClass.CLASS_2,
+                stress_range=q("48 MPa"),
+                allowable_stress_range=q("69 MPa"),
+            ),
+        ),
+    ]
+    return [(label, entry.derivation) for label, entry in entries if entry.derivation is not None]
 
 
 def _pressure_vessel_derivations() -> list[tuple[str, object]]:
