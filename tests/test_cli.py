@@ -1485,3 +1485,66 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
     assert stale is not None, "the pyproject comment no longer states the split"
     assert words[stale.group(1).lower()] == len(backed)
     assert words[stale.group(2).lower()] == len(commands)
+
+
+def test_show_work_prints_the_worked_calculation_the_json_already_carried():
+    """The shell could not show the formula the library had already computed.
+
+    `--format json` has always carried the whole derivation; the text rendering printed a
+    safety factor and left a reader at the terminal to open Python to see where it came
+    from. This is the same gap the clause, the repair hint and the governing check were
+    each found in, and the same fix: print what the calculation report prints, through the
+    report's own renderer, so the two cannot drift.
+    """
+    padeye = Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml"
+    plain_code, plain, _err = _run("check", str(padeye))
+    worked_code, worked, _err = _run("check", "--show-work", str(padeye))
+    assert plain_code == worked_code == EXIT_OK
+
+    # The default is unchanged: a flag that quietly reformats the ordinary output is a
+    # flag that broke every script reading it.
+    assert "σ_t = P / ((W − d) · t)" not in plain
+    for line in plain.splitlines():
+        assert line in worked, f"--show-work dropped a line the plain rendering had: {line!r}"
+
+    # The three lines and the glossary, for a check that has them.
+    assert "σ_t = P / ((W − d) · t)" in worked
+    assert "σ_t = 60.0 kN / ((120.00 mm − 40.00 mm) · 20.00 mm)" in worked
+    assert "where:" in worked
+    assert "P = 60.0 kN  (lifted load)" in worked
+
+    # And a check with no derivation says so, rather than being left out — a check missing
+    # from the listing reads as one whose formula was not worth showing.
+    assert "material resolution" in worked
+    assert "[derivation not rendered]" in worked
+
+
+def test_the_shell_and_the_report_render_one_derivation_through_one_renderer():
+    """Two renderings of a derivation are two things to keep in step.
+
+    The shell's block is the report's, indented. Held by comparing the stripped lines, so
+    a change to either surface that is not a change to both fails here.
+    """
+    from anvilate.packs.structural import LiftingLug, screen_lifting_lug
+    from anvilate.report import ReportSection
+    from anvilate.units import Quantity
+
+    lug = LiftingLug(
+        name="padeye",
+        width=Quantity.parse("80 mm"),
+        hole_diameter=Quantity.parse("25 mm"),
+        thickness=Quantity.parse("12 mm"),
+        load=Quantity.parse("50 kN"),
+        material="ASTM-A36",
+    )
+    card = screen_lifting_lug(lug, required_safety_factor=2.0)
+    from anvilate.cli import _render
+
+    shell = [line.strip() for line in _render("padeye", card, show_work=True).splitlines()]
+    for entry in card.entries:
+        for line in ReportSection(entry=entry).worked_lines():
+            assert line.strip() in shell, line
+
+    # And the flag is what turns it on.
+    plain = _render("padeye", card)
+    assert "where:" not in plain

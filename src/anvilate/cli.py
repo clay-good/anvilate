@@ -199,6 +199,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="text for a person, json for a script that wants the whole card",
     )
+    check.add_argument(
+        "--show-work",
+        action="store_true",
+        help="print each check's worked calculation — the formula, the values put into "
+        "it, the result, and the symbol glossary. A check with no derivation says so "
+        "rather than being left out",
+    )
     verify = commands.add_parser(
         "verify",
         help="verify an attestation envelope and report what was checked",
@@ -713,7 +720,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             if index:
                 print("", file=out)
             heading = spec.name if len(results) == 1 else f"{spec.name}  ({path})"
-            print(_render(heading, card), file=out)
+            print(_render(heading, card, show_work=args.show_work), file=out)
         if len(results) > 1:
             worst = _worst_status(card for _p, _s, card in results)
             print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
@@ -775,7 +782,7 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
     return found
 
 
-def _render(name: str, card: Scorecard) -> str:
+def _render(name: str, card: Scorecard, *, show_work: bool = False) -> str:
     """The card as a person reads it, with the governing check named at the end.
 
     **The governing check is the line a reviewer reads first and the card did not carry
@@ -789,6 +796,8 @@ def _render(name: str, card: Scorecard) -> str:
     card of passing deflection checks rather than an error. A missing line and a card with
     nothing to govern must not look the same.
     """
+    from .report import ReportSection
+
     lines = [f"{name}: {card.status.value.upper()}"]
     for entry in card.entries:
         lines.append(f"  {entry.status.value:<14} {entry.name}")
@@ -805,6 +814,19 @@ def _render(name: str, card: Scorecard) -> str:
         # was told the check failed and left to solve the inverse themselves.
         if entry.repair_hint is not None:
             lines.append(f"                 → {entry.repair_hint}")
+        # The library computes a worked calculation for most cited checks and the shell
+        # could not show it: a reader at the terminal saw a safety factor and had to open
+        # Python, or read the JSON, to find the formula behind it. `--show-work` prints the
+        # block the calculation report prints, through the report's own renderer, indented
+        # to sit under the entry it belongs to.
+        if show_work:
+            worked = ReportSection(entry=entry).worked_lines()
+            if worked:
+                lines.extend(f"{' ' * 15}{line}" for line in worked)
+            else:
+                # Said out loud. A check silently missing from a --show-work listing reads
+                # as one whose formula was not worth showing, and those are different.
+                lines.append("                 [derivation not rendered]")
     governing = card.governing()
     if governing is None:
         lines.append("  governing:     none — nothing blocks and no check carries a margin")

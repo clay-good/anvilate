@@ -162,6 +162,25 @@ class ReportSection(BaseModel):
         derivation = self.worked
         return derivation is not None and not derivation.unresolved_symbols()
 
+    def worked_lines(self, *, system: UnitSystem | None = None) -> tuple[str, ...]:
+        """The worked calculation as text: the three lines, then the symbol glossary.
+
+        Empty when the section has no derivation it can show as worked, so a caller cannot
+        print a heading over nothing. It is a method rather than inline text because the
+        shell renders the same block: two renderings of one derivation are two things to
+        keep in step, and the one that drifts is the one nobody is reading.
+        """
+        derivation = self.worked
+        if derivation is None or not self.is_worked:
+            return ()
+        lines = [f"    {line}" for line in derivation.lines(system=system)]
+        lines.append("  where:")
+        lines.extend(
+            f"    {symbol} = {value}  ({description})"
+            for symbol, description, value in derivation.glossary(system=system)
+        )
+        return tuple(lines)
+
     @property
     def citation(self) -> str | None:
         """The clause behind the check, from the derivation or the entry."""
@@ -238,13 +257,7 @@ class CalculationReport(BaseModel):
             out.append(heading)
             out.append("-" * len(heading))
             if section.is_worked:
-                derivation = section.worked
-                assert derivation is not None  # guaranteed by is_worked
-                for line in derivation.lines(system=self.unit_system):
-                    out.append(f"    {line}")
-                out.append("  where:")
-                for symbol, description, value in derivation.glossary(system=self.unit_system):
-                    out.append(f"    {symbol} = {value}  ({description})")
+                out.extend(section.worked_lines(system=self.unit_system))
             else:
                 out.append(f"  [{_FALLBACK_LABEL}]")
                 for item in section.inputs:

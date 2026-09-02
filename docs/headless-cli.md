@@ -6,7 +6,7 @@ what it is waiting on.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
-| `check` | one or more specs, or a directory | `--format` | every check passed, or passed with margin to spare |
+| `check` | one or more specs, or a directory | `--format`, `--show-work` | every check passed, or passed with margin to spare |
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | — | nothing got worse |
@@ -76,6 +76,32 @@ asking a tool its version is asking what it is running, and a module constant an
 somebody last typed — the same defect as a hand-written bill of materials, one file over.
 The two are kept equal by a gate over all three places the version is written:
 `pyproject.toml`, the module constant, and the installed distribution.
+
+### `--show-work` prints the formula behind the number
+
+The text rendering shows a safety factor; `--show-work` shows where it came from — the
+governing formula, the values put into it, the result, and a line per symbol:
+
+```text
+  pass           padeye net tension
+                 safety factor 6.67 vs required minimum 2.00
+                 [ASME BTH-1 §3-3]
+                   σ_t = P / ((W − d) · t)
+                   σ_t = 60.0 kN / ((120.00 mm − 40.00 mm) · 20.00 mm)
+                   σ_t = 37.5 MPa
+                 where:
+                   P = 60.0 kN  (lifted load)
+                   W = 120.00 mm  (lug width across the hole)
+                   d = 40.00 mm  (pin hole diameter)
+                   t = 20.00 mm  (lug plate thickness)
+                   σ_t = 37.5 MPa  (net-section tensile stress)
+```
+
+It is the same block [the calculation report](calculation-reports.md) prints, through the
+same renderer, so the two cannot drift. `--format json` has always carried the derivation;
+this is the half a person reads. A check with no derivation prints
+`[derivation not rendered]` rather than being left out — a check missing from the listing
+reads as one whose formula was not worth showing, and those are different things.
 
 ## The exit code is the interface
 
