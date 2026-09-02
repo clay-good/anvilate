@@ -566,3 +566,90 @@ def test_every_file_and_symbol_the_readme_names_still_exists():
     assert fields, "the README no longer names a constraints field"
     unknown = [name for name in fields if name not in Constraints.model_fields]
     assert not unknown, f"the README names constraints fields the model does not have: {unknown}"
+
+
+def test_the_demo_tapes_narration_is_what_its_commands_print():
+    """The README's hero image is a recording, and nothing checked what it says.
+
+    `docs/demo.gif` is the first thing on the front page and it is generated from
+    `docs/demo.tape` — a script of typed commands and typed prose. The prose makes claims
+    about the output ("the deflection screen fails", "checks pass (ASME BTH-1)"), and an
+    example whose verdict changed would leave the GIF asserting a result the library no
+    longer produces, with no test between the two. The GIF cannot be regenerated here — it
+    needs `vhs` — but everything it records can be run.
+
+    The binding is two-way, and the second direction is the one that matters. Asserting
+    only that a failing example prints `[FAIL]` leaves the narration free to say it passed:
+    the first version of this test did exactly that, and changing "the deflection screen
+    fails" to "passes" did not fail it. So every verdict the output shows has to be
+    accounted for in the words beside it, and every verdict the words claim has to be in
+    the output.
+    """
+    import subprocess
+    import sys
+
+    from anvilate.standards.effectivity import STANDARDS_BODIES
+
+    tape = (_REPO / "docs" / "demo.tape").read_text(encoding="utf-8")
+    typed = re.findall(r'^Type "(.*)"$', tape, re.M)
+    assert typed, "the demo tape types nothing; its format has moved"
+
+    def run(script: str) -> str:
+        path = _REPO / script
+        assert path.exists(), f"the demo tape runs {script}, which does not exist"
+        return subprocess.run(  # noqa: S603 - our own examples, fixed argv, no shell
+            [sys.executable, str(path)],
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            env={"PYTHONPATH": str(_REPO / "src"), "PATH": "/usr/bin:/bin"},
+            check=True,
+        ).stdout
+
+    # The narration that follows a command is about that command. Walking in order is how
+    # the two are paired, because the tape has no other link between them.
+    printed: dict[str, str] = {}
+    current: str | None = None
+    narration: dict[str, list[str]] = {}
+    for line in typed:
+        if line.startswith("python "):
+            current = line.split(" ", 1)[1]
+            printed[current] = run(current)
+            narration.setdefault(current, [])
+        elif line.startswith("#") and current is not None:
+            narration[current].append(line)
+
+    assert len(printed) >= 2, f"the tape runs {len(printed)} examples; it used to run two"
+    assert any(narration.values()), "no narration follows any command; the pairing broke"
+
+    for script, output in printed.items():
+        words = " ".join(narration[script]).lower()
+        if not words:
+            continue
+        failed = "[FAIL]" in output
+        claims_failure = "fail" in words
+        assert failed == claims_failure, (
+            f"the tape says {'a check fails' if claims_failure else 'nothing fails'} after "
+            f"{script}, and the run says otherwise:\n{output}"
+        )
+        if "pass" in words:
+            assert "[PASS]" in output, f"the tape claims a pass after {script}; there is none"
+        # A standard the narration names has to be one the output actually cites. Matched
+        # whole-word and case-sensitively: these are short uppercase acronyms, and a
+        # lowercased substring test read the EN in "No silent green" as a Eurocode.
+        spoken = " ".join(narration[script])
+        for body in STANDARDS_BODIES:
+            if re.search(rf"\b{re.escape(body)}\b", spoken):
+                assert body in output, (
+                    f"the tape names {body} after {script} and the output cites no such "
+                    f"clause:\n{output}"
+                )
+
+    # And the file the tape then lists is the one an example says it wrote.
+    listed = [line.split(" ", 1)[1] for line in typed if line.startswith("ls ")]
+    assert listed, "the tape stopped listing the artifact; the last claim is unchecked"
+    for name in listed:
+        assert any(f"written to {name}" in text for text in printed.values()), (
+            f"the tape lists {name}, which no example in it says it wrote"
+        )
+        assert (_REPO / name).exists(), f"{name} was listed but the run did not produce it"
