@@ -29,7 +29,7 @@ from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
@@ -2170,11 +2170,22 @@ def frequency_scorecard(
             detail="not evaluated — minimum frequency unavailable",
         )
     _require(min_frequency, "[frequency]", "min_frequency")
+    # Through `count_rate_per_second` on both, because a frequency and an angular speed are
+    # the same dimension and only that function knows which this is. The comparison then
+    # carries hertz on both sides, so the sentence cannot compare a Hz against a rad/s.
     fn = count_rate_per_second(frequency, name="frequency")
     floor = count_rate_per_second(min_frequency, name="min_frequency")
-    status = CheckStatus.PASS if fn >= floor else CheckStatus.FAIL
+    comparison = Comparison(
+        measured=Quantity(magnitude=fn, unit="Hz"),
+        limit=Quantity(magnitude=floor, unit="Hz"),
+        sense=LimitSense.AT_LEAST,
+        measured_label="fundamental",
+        limit_label="required minimum",
+        minimum_decimals=1,
+    )
     return ScorecardEntry(
         name=name,
-        status=status,
-        detail=f"fundamental {fn:.1f} Hz vs required minimum {floor:.1f} Hz",
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=comparison.sentence(),
+        comparison=comparison,
     )

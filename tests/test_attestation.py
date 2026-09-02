@@ -237,11 +237,16 @@ def test_a_changed_spec_changes_the_digest():
 # something new *is* a different bundle, and a content address that had not moved would
 # have meant the verdict was not covered by it.
 #
+# It moved a third time, from 85fecef9..., when `ScorecardEntry.comparison` shipped — the
+# two quantities behind a comparison verdict, so a report can state the comparison in its
+# own units rather than in the ones it happened to be screened in. The same reasoning: what
+# a check compared is part of what the document says.
+#
 # It moved again, from 75e70720..., when `ScorecardEntry.underived` shipped — the field on
 # which a check states that it has no formula to show and why. Same reasoning: whether a
 # reviewer is owed a derivation is part of what the document says, so a bundle carrying
 # that statement is a different bundle from one that does not.
-_GOLDEN_DIGEST = "85fecef9e1fecaa7ff46427465cf91e4ef735c8f2d0b1e94a59722b447d49554"
+_GOLDEN_DIGEST = "986709d5139ef8e1c3e8e16f3a8a247d5e8827000b04430a212afddf5b5e10e8"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

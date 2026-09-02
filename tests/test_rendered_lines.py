@@ -30,8 +30,8 @@ from anvilate.units import Quantity, UnitSystem
 from formula_arithmetic import evaluates_as_rendered
 
 
-def _derivations():
-    """Every distinct derivation the discipline packs build, by running their screens."""
+def _screens():
+    """The cards the corpus is built from, so both halves read the same screens."""
     from anvilate.analysis import CrossSection
     from anvilate.packs.industrial import CoverPlate, PlateEdge, screen_cover_plate
     from anvilate.packs.structural import (
@@ -98,8 +98,13 @@ def _derivations():
         )
     )
 
+    return cards
+
+
+def _derivations():
+    """Every distinct derivation those screens build."""
     found = {}
-    for card in cards:
+    for card in _screens():
         for entry in card.entries:
             if entry.derivation is not None:
                 found.setdefault(entry.derivation.symbolic, entry.derivation)
@@ -138,3 +143,86 @@ def test_a_rendered_line_evaluates_to_the_result_printed_under_it(symbolic, deri
         f"{symbolic!r} under {system}: the printed line comes to {left:.6g} and the result "
         f"printed under it is {right:.6g}"
     )
+
+
+def test_no_verdict_line_carries_a_unit_the_document_did_not_declare():
+    """The other half of the same property, and the half a fix to the derivation cannot reach.
+
+    A verdict is a sentence written at screening time, and a screen does not know what
+    system its result will be read in. A US-customary report printed
+
+        δ = 5·0.0286 kip/in·(157.480 in)⁴/(384·29007.5 ksi·67.57 in⁴)
+        δ = 0.117 in
+      deflection 2.963 mm vs limit 16.000 mm
+
+    — the work in inches and the verdict beneath it in millimetres, on the line a reviewer
+    reads first. A check that compares two quantities carries them now, and the report
+    states the comparison in its own units.
+    """
+    from anvilate.report import CalculationReport, ReportSection
+
+    si_only = ("mm", "MPa", "GPa", "kPa", "kN·m", "N·mm")
+    us_only = (" in", " ft", "kip", "ksi", "psi")
+    cards = _screens()
+    compared = [entry for card in cards for entry in card.entries if entry.comparison is not None]
+    assert len(compared) >= 3, (
+        f"only {len(compared)} comparison verdicts in the corpus, so this proves little"
+    )
+
+    for system, forbidden in ((UnitSystem.US, si_only), (UnitSystem.SI, us_only)):
+        report = CalculationReport(
+            title="unit fidelity",
+            unit_system=system,
+            sections=tuple(ReportSection(entry=entry) for card in cards for entry in card.entries),
+        )
+        for section in report.sections:
+            if section.entry.comparison is None:
+                continue
+            line = section.verdict(system=system)
+            stray = [unit for unit in forbidden if unit in line]
+            assert not stray, f"under {system.value} the verdict {line!r} carries {stray}"
+
+
+def test_a_comparison_between_unlike_quantities_is_refused():
+    """A length judged against a frequency is not a comparison, and a rendered sentence
+    would give it the appearance of one — two numbers, a "vs", and a unit that changed
+    between them.
+    """
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    from anvilate.scorecard import Comparison, LimitSense
+
+    with _pytest.raises(ValidationError, match="same dimension"):
+        Comparison(
+            measured=Quantity.parse("15 mm"),
+            limit=Quantity.parse("60 Hz"),
+            sense=LimitSense.AT_MOST,
+            measured_label="deflection",
+            limit_label="limit",
+        )
+
+
+def test_the_verdict_sentence_is_the_one_the_screens_have_always_written():
+    """`detail` is written from the comparison now, and must not have moved.
+
+    Every surface that reads a scorecard — the CLI, the evidence bundle, the QIF export —
+    reads that sentence, and it is quoted in the README's own quickstart output. Deriving
+    it from the numbers is only safe if it derives the same words.
+    """
+    from anvilate.analysis import deflection_scorecard
+
+    entry = deflection_scorecard(
+        "tip deflection",
+        deflection=Quantity.parse("36.284 mm"),
+        limit=Quantity.parse("15 mm"),
+    )
+    assert entry.detail == "deflection 36.284 mm vs limit 15.000 mm"
+    # And the widening that keeps a FAIL from printing two identical figures still works.
+    close = deflection_scorecard(
+        "tip deflection",
+        deflection=Quantity.parse("15.0004 mm"),
+        limit=Quantity.parse("15 mm"),
+    )
+    assert close.status.value == "fail"
+    assert "15.0004" in close.detail and "15.0000" in close.detail

@@ -19,7 +19,7 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 
 __all__ = [
@@ -1493,21 +1493,27 @@ def deflection_scorecard(
             detail="not evaluated — deflection limit unavailable",
         )
     _require(limit, "[length]", "limit")
-    measured = abs(deflection.to("mm").magnitude)
-    allowed = limit.to("mm").magnitude
-    status = CheckStatus.PASS if measured <= allowed else CheckStatus.FAIL
+    # The two quantities travel, and the sentence is written from them. A screen does not
+    # know what unit system its result will be read in, and this one used to state the
+    # comparison in millimetres for ever — under a US-customary report that put the verdict
+    # in mm directly beneath a worked derivation in inches.
+    #
+    # The precision floor is three places and widens from there until the figures are
+    # distinguishable: a 15.0004 mm deflection against a 15 mm limit printed "deflection
+    # 15.000 mm vs limit 15.000 mm" on a FAIL, the verdict and the numbers beside it saying
+    # opposite things, on one of the two checks the README's own quickstart shows.
+    comparison = Comparison(
+        measured=deflection,
+        limit=limit,
+        sense=LimitSense.AT_MOST,
+        measured_label="deflection",
+        limit_label="limit",
+    )
     return ScorecardEntry(
         name=name,
-        status=status,
-        # Widened to keep the two figures apart, as `beam_deflection_scorecard` above
-        # already does. At three fixed places a 15.0004 mm deflection against a 15 mm limit
-        # printed "deflection 15.000 mm vs limit 15.000 mm" on a FAIL — the verdict and the
-        # numbers beside it saying opposite things, on one of the two checks the README's
-        # own quickstart shows.
-        detail=(
-            f"deflection {measured:.{decimals_distinguishing(measured, allowed, minimum=3)}f} "
-            f"mm vs limit {allowed:.{decimals_distinguishing(measured, allowed, minimum=3)}f} mm"
-        ),
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=comparison.sentence(),
+        comparison=comparison,
     )
 
 

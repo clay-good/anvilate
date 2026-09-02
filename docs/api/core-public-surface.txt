@@ -191,6 +191,8 @@ review.review_priority
 review.artifact_digest
 review.build_dossier
 scorecard.CheckStatus
+scorecard.LimitSense
+scorecard.Comparison
 scorecard.Direction
 scorecard.RepairHint
 scorecard.GoverningChange

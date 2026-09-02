@@ -130,6 +130,10 @@ REQUIRED_OPERATIONS = frozenset(
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
 _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
+# Moved to 1.6.0 when a check that compares two quantities gained `comparison`, so a
+# report can state the comparison in its own units instead of the ones it was screened
+# in. Additive; `detail` is still written from it and still says what it always said.
+#
 # Moved to 1.5.0 when a symbol gained `unit_is_required` — the one case where a display
 # unit is arithmetic rather than taste. An added optional property, so a 1.4.0 client reads
 # a 1.5.0 document; the version moves because a changed artifact carries a moved version.
@@ -146,7 +150,7 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
 # document. Nothing a 1.2.0 client already reads has changed — the addition is one optional
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
-_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.5.0.json"
+_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session

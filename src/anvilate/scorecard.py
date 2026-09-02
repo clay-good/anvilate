@@ -22,10 +22,12 @@ from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 from ._models import Named, Provenance, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, Underived
 from .uncertainty import MarginUncertainty
-from .units import decimals_distinguishing
+from .units import Quantity, UnitSystem, decimals_distinguishing, render
 
 __all__ = [
     "CheckStatus",
+    "LimitSense",
+    "Comparison",
     "Direction",
     "RepairHint",
     "GoverningChange",
@@ -165,6 +167,75 @@ class GoverningChange(BaseModel):
         )
 
 
+class LimitSense(StrEnum):
+    """Which side of its limit a measured value has to be on to pass."""
+
+    AT_MOST = "at_most"
+    AT_LEAST = "at_least"
+
+
+class Comparison(RevalidatedModel):
+    """What a check measured, what it was judged against, and which way passes.
+
+    A check that compares two quantities used to state the comparison as a *sentence*,
+    written at screening time. A screen does not know what unit system its result will be
+    read in, so a US-customary report printed a deflection verdict in millimetres directly
+    beneath a worked derivation in inches — same check, same page, two systems.
+
+    The numbers travel instead, and the sentence is rendered by whoever is showing it. That
+    is the shape :meth:`ScorecardEntry.from_safety_factor` has always had: it writes its
+    line from the two factors rather than taking one from its caller, which is why the
+    safety-factor half of the library never had this defect.
+
+    ``minimum_decimals`` is the precision floor the sentence starts from; it widens from
+    there until the two figures are distinguishable, because a FAIL reading "15.000 mm vs
+    limit 15.000 mm" states the opposite of its own verdict.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    measured: Quantity
+    limit: Quantity
+    sense: LimitSense
+    measured_label: str
+    limit_label: str
+    minimum_decimals: int = 3
+
+    @model_validator(mode="after")
+    def _the_two_are_comparable(self) -> Comparison:
+        if self.measured.pint.dimensionality != self.limit.pint.dimensionality:
+            raise ValueError(
+                f"a comparison needs two quantities of the same dimension; got "
+                f"{self.measured.dimensionality} against {self.limit.dimensionality}. A "
+                f"length judged against a frequency is not a comparison, and a rendered "
+                f"sentence would give it the appearance of one"
+            )
+        return self
+
+    def passes(self) -> bool:
+        """Whether the measured value is on the passing side of its limit."""
+        limit = self.limit.to(self.measured.unit).magnitude
+        if self.sense is LimitSense.AT_MOST:
+            return abs(self.measured.magnitude) <= limit
+        return self.measured.magnitude >= limit
+
+    def sentence(self, *, system: UnitSystem | None = None) -> str:
+        """The comparison as a line, in ``system``'s units or the quantities' own.
+
+        Both sides are converted to ONE unit before the figures are written, so the two
+        numbers a reviewer is asked to compare are in the same units — which is the whole
+        of what the line is for.
+        """
+        unit = render(self.measured, system=system).rsplit(" ", 1)[1]
+        measured = abs(self.measured.to(unit).magnitude)
+        limit = self.limit.to(unit).magnitude
+        places = decimals_distinguishing(measured, limit, minimum=self.minimum_decimals)
+        return (
+            f"{self.measured_label} {measured:.{places}f} {unit} vs "
+            f"{self.limit_label} {limit:.{places}f} {unit}"
+        )
+
+
 class ScorecardEntry(RevalidatedModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
@@ -200,6 +271,12 @@ class ScorecardEntry(RevalidatedModel):
     # present, lets a nominal pass carry a fragility warning. ``None`` leaves the
     # check purely deterministic.
     uncertainty: MarginUncertainty | None = None
+    # The two quantities behind a comparison verdict, so a report can state the comparison
+    # in its OWN units. `detail` is written from this at build time and is what every
+    # surface without a declared system still reads; the numbers are what a surface with
+    # one re-renders. ``None`` on a check that compares nothing, and on a safety-factor
+    # check, which already carries its two numbers as factors.
+    comparison: Comparison | None = None
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:

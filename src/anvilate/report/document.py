@@ -181,6 +181,19 @@ class ReportSection(BaseModel):
         )
         return tuple(lines)
 
+    def verdict(self, *, system: UnitSystem | None = None) -> str:
+        """The check's detail line, in ``system``'s units where the check carries them.
+
+        `ScorecardEntry.detail` is a sentence written at screening time, and a screen does
+        not know what system its result will be read in. A check that compares two
+        quantities carries them, so this restates the comparison in the document's own
+        units; everything else — a safety-factor line, a refusal, an identification line —
+        falls through to the sentence it was given.
+        """
+        if self.entry.comparison is None:
+            return self.entry.detail
+        return self.entry.comparison.sentence(system=system)
+
     @property
     def fallback_label(self) -> str:
         """The label over the inputs table, with the check's own reason when it states one.
@@ -279,7 +292,7 @@ class CalculationReport(BaseModel):
                         f"    {item.symbol} = {item.rendered(system=self.unit_system)}"
                         f"  ({item.description})"
                     )
-            out.append(f"  {section.entry.detail}")
+            out.append(f"  {section.verdict(system=self.unit_system)}")
             if section.entry.repair_hint is not None:
                 # With its provenance, which nothing rendered. The packs write a real
                 # sentence into it — "lug thickness inverse (σ ∝ 1/t, so SF ∝ t)" — and it
@@ -475,7 +488,7 @@ class CalculationReport(BaseModel):
                         f"<td>{escape(item.rendered(system=self.unit_system))}</td></tr>"
                     )
                 out.append("</table>")
-        out.append(f'<p class="detail">{escape(section.entry.detail)}</p>')
+        out.append(f'<p class="detail">{escape(section.verdict(system=self.unit_system))}</p>')
         if section.entry.repair_hint is not None:
             out.append(
                 f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}'
