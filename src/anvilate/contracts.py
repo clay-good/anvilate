@@ -68,7 +68,7 @@ SPEC_SCHEMA_VERSION = SCHEMA_VERSION
 # The scorecard had no versioned contract before it had a published one. Bump this when the
 # generated schema changes; the gate in tests/test_contracts.py refuses a changed schema
 # under an unchanged version and says so by name.
-SCORECARD_SCHEMA_VERSION = "1.3.0"
+SCORECARD_SCHEMA_VERSION = "1.4.0"
 
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:

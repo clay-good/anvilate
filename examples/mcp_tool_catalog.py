@@ -5,7 +5,7 @@ Eight operations, two dispatch modes, and one rule that decides between them.
 An agent driving Anvilate over MCP needs to know two things about every call it can make:
 what document it will get back, and whether it will get it in the reply. The first is
 answered by ``$ref``-ing the published contract instead of describing it — the tool schema
-points at ``https://anvilate.dev/schemas/scorecard/1.3.0.json``, so the tool surface and
+points at ``https://anvilate.dev/schemas/scorecard/1.4.0.json``, so the tool surface and
 the structured-output constraint a compiler is decoded under resolve to the same artifact
 and cannot drift apart. The second is answered by cost:
 
@@ -67,7 +67,7 @@ def main() -> None:
     print(json.dumps(validation["outputSchema"], indent=2))
     assert (
         validation["outputSchema"]["properties"]["scorecard"]["$ref"]
-        == "https://anvilate.dev/schemas/scorecard/1.3.0.json"
+        == "https://anvilate.dev/schemas/scorecard/1.4.0.json"
     )
     assert validation["_meta"]["dev.anvilate/dispatch"] == "synchronous"
 

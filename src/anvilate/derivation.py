@@ -136,8 +136,8 @@ class SymbolValue(BaseModel):
     ``"σ_b"``), ``description`` the plain-language gloss a reviewer unfamiliar with
     the source text needs, and ``value`` either a :class:`~anvilate.units.Quantity`
     or a bare float for a genuinely dimensionless number (a friction coefficient, a
-    count). ``unit`` forces a display unit; without it the value renders in the
-    report's unit system.
+    count). ``unit`` is a *preferred* display unit, used only when the document declares
+    no unit system; a document that declares one gets that system.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -145,12 +145,26 @@ class SymbolValue(BaseModel):
     symbol: str
     description: str
     value: Quantity | float
+    # A preference, not a pin — the system is the reader's stated choice and this is the
+    # library's taste. It used to win either way, and eighty-seven of these across the
+    # packs meant a US-customary report rendered
+    #     σ_b = 10.00 kN·m · 2.953 in / 28125000.00 mm⁴
+    # — three unit systems in one substituted line, arriving at ksi by conversions the
+    # document does not show. A reviewer cannot check that line by hand, which is the only
+    # thing the line is for.
+    #
+    # Nothing in the arithmetic wanted it: every formula in this library is dimensionally
+    # homogeneous, and `anvilate.units.render` already picks units that COMPOSE within a
+    # system — N·mm, mm, mm⁴, MPa for SI; kip·in, in, in⁴, ksi for US. The preference was
+    # destroying exactly that property. It is kept for the document that declares nothing,
+    # where the packs' per-discipline choices (kPa for a soil pressure, m for a pump head)
+    # are what a reader of that discipline expects and SI's canonical units are not.
     unit: str | None = None
 
     def rendered(self, *, system: UnitSystem | None = None) -> str:
         """The value as it appears in a substituted formula, with its unit."""
         if isinstance(self.value, Quantity):
-            if self.unit is not None:
+            if system is None and self.unit is not None:
                 return render(self.value, unit=self.unit, pretty=True)
             return render(self.value, system=system, pretty=True)
         # A dimensionless number: %g keeps 0.3 as "0.3" and 12.0 as "12", and is

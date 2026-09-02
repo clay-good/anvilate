@@ -163,22 +163,83 @@ def test_derivation_renders_in_the_projects_unit_system():
     assert us != si
 
 
-def test_symbol_can_pin_its_own_display_unit():
-    # Dimensions the unit system has no convention for (a moment, a second moment
-    # of area) keep their authored unit, and an author can pin any symbol's unit
-    # explicitly — the report never silently converts to something it guessed.
+def test_a_declared_unit_system_beats_the_librarys_preferred_unit():
+    """A preferred unit is the library's taste; the system is the reader's stated choice.
+
+    It used to be the other way round, and eighty-seven preferred units across the packs
+    meant a US-customary report rendered
+
+        σ_b = 10.00 kN·m · 2.953 in / 28125000.00 mm⁴
+
+    — three unit systems in one substituted line, arriving at ksi by conversions the
+    document does not show. A reviewer cannot check that by hand, which is the only thing
+    a substituted line is for. Nothing in the arithmetic wanted it: `render` already picks
+    units that compose within a system, and the preference was destroying that.
+
+    The preference still governs a document that declares no system, where a pack's
+    per-discipline choice — kPa for a soil pressure, m for a pump head — is what a reader
+    of that discipline expects and SI's canonical N·mm is not.
+    """
     moment = SymbolValue(symbol="M", description="bending moment", value=Quantity.parse("1500 N*m"))
-    # A moment now follows the project's unit system like everything else — N·mm in SI,
-    # kip·in in US — so a US derivation no longer mixes systems inside one line.
+    # A moment follows the project's unit system like everything else — N·mm in SI,
+    # kip·in in US — so a derivation never mixes systems inside one line.
     assert moment.rendered(system=UnitSystem.SI) == "1500000.00 N·mm"
     assert moment.rendered(system=UnitSystem.US) == "13.28 kip·in"
-    pinned = SymbolValue(
-        symbol="M", description="bending moment", value=Quantity.parse("1500 N*m"), unit="kip*in"
+
+    preferred = SymbolValue(
+        symbol="M", description="bending moment", value=Quantity.parse("1500 N*m"), unit="kN*m"
     )
-    # 1500 N·m is 13.28 kip·in, and the compound label reads force-first the way every
-    # engineering document writes it — Pint's own alphabetical "in·kip" is correct and
-    # unreadable.
-    assert pinned.rendered(system=UnitSystem.SI) == "13.28 kip·in"
+    # With nothing declared, the preference is what shows — and the compound label reads
+    # force-first the way every engineering document writes it, because Pint's own
+    # alphabetical ordering is correct and unreadable.
+    assert preferred.rendered() == "1.50 kN·m"
+    # With a system declared, it does not.
+    assert preferred.rendered(system=UnitSystem.SI) == "1500000.00 N·mm"
+    assert preferred.rendered(system=UnitSystem.US) == "13.28 kip·in"
+
+
+def test_no_substituted_line_mixes_unit_systems():
+    """The defect stated as a property, over every derivation the packs build.
+
+    A line that mixes systems is not a rendering nit: it is arithmetic a reviewer cannot
+    follow, in the one part of the document that exists to be followed. This renders the
+    structural pack's derivations under each system and requires every unit in the
+    substituted line to belong to that system.
+    """
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import (
+        BeamMember,
+        LoadType,
+        Support,
+        screen_beam_member,
+    )
+
+    si_only = ("mm", "N", "kN", "MPa", "GPa", "kPa", "Pa", "m", "kg", "N·mm", "kN·m")
+    us_only = ("in", "ft", "kip", "ksi", "psi", "lbf", "lb")
+    section = CrossSection.rectangular(
+        width=Quantity.parse("100 mm"), height=Quantity.parse("150 mm")
+    )
+    card = screen_beam_member(
+        BeamMember(
+            name="rafter",
+            section=section,
+            length=Quantity.parse("4 m"),
+            support=Support.SIMPLY_SUPPORTED,
+            load_type=LoadType.DISTRIBUTED,
+            load=Quantity.parse("5 kN/m"),
+            material="ASTM-A36",
+            deflection_limit=Quantity.parse("16 mm"),
+        ),
+        required_safety_factor=1.5,
+    )
+    worked = [entry.derivation for entry in card.entries if entry.derivation is not None]
+    assert len(worked) >= 3, f"the pack rendered only {len(worked)} derivations to check"
+
+    for system, forbidden in ((UnitSystem.US, si_only), (UnitSystem.SI, us_only)):
+        for derivation in worked:
+            line = derivation.substituted(system=system)
+            stray = [unit for unit in forbidden if f" {unit}" in line or f"{unit} " in line]
+            assert not stray, f"under {system.value} the line {line!r} carries {stray}"
 
 
 # -- document --------------------------------------------------------------
