@@ -38,6 +38,7 @@ from math import isfinite, pi, sqrt
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, RevalidatedModel, cited
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -683,10 +684,148 @@ class AluminumCompressionStrength(BaseModel):
     local_member_interaction: bool = False
     weld_affected_governs: bool = False
     weld_affected_nominal: Quantity | None = None
+    # The governing state's curve, on the branch that ran, for the property set that
+    # governed. Three states are computed and one decides; a welded member's answer comes
+    # from the heat-affected metal, and every one of these curves is piecewise.
+    governing_formula: str
+    governing_inputs: tuple[SymbolValue, ...]
+
+    def derivation(self, citation: str) -> Derivation:
+        """The governing curve as a worked calculation, under the caller's clause."""
+        where = " in the weld-affected zone" if self.weld_affected_governs else ""
+        return Derivation(
+            symbolic=self.governing_formula,
+            inputs=self.governing_inputs,
+            result=SymbolValue(
+                symbol=self.governing_formula.partition(" =")[0],
+                description=(
+                    f"nominal compressive stress, {self.governing.value} governing{where}"
+                ),
+                value=self.nominal,
+                unit="MPa",
+            ),
+            citation=citation,
+        )
 
     def __str__(self) -> str:
         where = " in the weld-affected zone" if self.weld_affected_governs else ""
         return f"ADM nominal {self.nominal} governed by {self.governing.value}{where}"
+
+
+def _stress(symbol: str, description: str, value: Quantity | float) -> SymbolValue:
+    """One symbol of an ADM curve, rendered in the MPa the constants are quoted in."""
+    if isinstance(value, Quantity):
+        return SymbolValue(symbol=symbol, description=description, value=value, unit="MPa")
+    return SymbolValue(symbol=symbol, description=description, value=value)
+
+
+def _member_buckling_work(
+    properties: AlloyProperties,
+    *,
+    slenderness: float,
+    constants: BucklingConstants,
+) -> tuple[str, tuple[SymbolValue, ...]]:
+    """The §E.3 column curve on the branch this slenderness selected.
+
+    λ₁ and C_c are declared as inputs, not folded away: they are the two numbers that say
+    which branch a member fell in, and a reviewer opening the ADM checks them first.
+    """
+    fcy = properties.compressive_yield.to("MPa").magnitude
+    bc = constants.intercept_member.to("MPa").magnitude
+    dc = constants.slope_member.to("MPa").magnitude
+    cc = constants.intersection_member
+    lambda_1 = (bc - fcy) / dc
+    lam = _stress("λ", "column slenderness kL/r", slenderness)
+    if slenderness <= lambda_1:
+        return (
+            "F_c = F_cy",
+            (
+                _stress(
+                    "F_cy",
+                    f"compressive yield strength — λ = {slenderness:.4g} is at or below "
+                    f"λ₁ = {lambda_1:.4g}, so the column is too stocky to buckle",
+                    properties.compressive_yield,
+                ),
+            ),
+        )
+    if slenderness <= cc:
+        return (
+            "F_c = (B_c − D_c·λ)·(0.85 + 0.15·(C_c − λ)/(C_c − λ₁))",
+            (
+                _stress("B_c", "§B.4 member buckling intercept", constants.intercept_member),
+                _stress("D_c", "§B.4 member buckling slope", constants.slope_member),
+                lam,
+                _stress("C_c", "slenderness at which the curve hands over to Euler", cc),
+                _stress(
+                    "λ₁",
+                    "slenderness below which the column squashes rather than buckles, "
+                    "(B_c − F_cy)/D_c",
+                    lambda_1,
+                ),
+            ),
+        )
+    return (
+        "F_c = 0.85·π²·E/λ²",
+        (
+            _stress("E", "elastic modulus", properties.elastic_modulus),
+            lam,
+        ),
+    )
+
+
+def _local_buckling_work(
+    properties: AlloyProperties,
+    *,
+    flat_width: Quantity,
+    thickness: Quantity,
+    constants: BucklingConstants,
+    edge_support: EdgeSupport,
+) -> tuple[str, tuple[SymbolValue, ...]]:
+    """The §B.5.4 element curve on the branch this element slenderness selected."""
+    fcy = properties.compressive_yield.to("MPa").magnitude
+    bp = constants.intercept_plate.to("MPa").magnitude
+    dp = constants.slope_plate.to("MPa").magnitude
+    k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
+    ratio = flat_width.to("mm").magnitude / thickness.to("mm").magnitude
+    lambda_1 = (bp - fcy) / (k * dp)
+    lambda_2 = _K1_AGED * bp / (k * dp)
+    slenderness = _stress("b/t", "element slenderness, on the flat width", ratio)
+    edge = _stress(
+        "k",
+        f"edge-support coefficient ({edge_support.value})",
+        k,
+    )
+    if ratio <= lambda_1:
+        return (
+            "F_c = F_cy",
+            (
+                _stress(
+                    "F_cy",
+                    f"compressive yield strength — b/t = {ratio:.4g} is at or below "
+                    f"λ₁ = {lambda_1:.4g}, so the element is fully effective",
+                    properties.compressive_yield,
+                ),
+            ),
+        )
+    if ratio < lambda_2:
+        return (
+            "F_c = B_p − k·D_p·(b/t)",
+            (
+                _stress("B_p", "§B.4 plate buckling intercept", constants.intercept_plate),
+                edge,
+                _stress("D_p", "§B.4 plate buckling slope", constants.slope_plate),
+                slenderness,
+            ),
+        )
+    return (
+        f"F_c = {_K2_AGED:g}·√(B_p·E)/(k·(b/t))",
+        (
+            _stress("B_p", "§B.4 plate buckling intercept", constants.intercept_plate),
+            _stress("E", "elastic modulus", properties.elastic_modulus),
+            edge,
+            slenderness,
+        ),
+    )
 
 
 def _compression_limit_states(
@@ -832,6 +971,70 @@ def aluminum_compression_strength(
             temper_group=properties.temper_group,
         ),
     )
+    # The governing limit state's curve, on the branch that ran, for the property set that
+    # governed — a welded member's answer comes from the heat-affected metal, and rendering
+    # the parent alloy's constants beside it would be the wrong alloy's arithmetic.
+    governing_properties = properties.weld_affected if governed_by_haz else properties
+    assert governing_properties is not None  # noqa: S101 - `welded` already refused None
+    governing_constants = aluminum_buckling_constants(
+        compressive_yield=governing_properties.compressive_yield,
+        elastic_modulus=governing_properties.elastic_modulus,
+        temper_group=governing_properties.temper_group,
+    )
+    if governing is AluminumLimitState.YIELDING:
+        formula, inputs = (
+            "F_c = F_cy",
+            (
+                _stress(
+                    "F_cy",
+                    "compressive yield strength — neither buckling state reduces below it",
+                    governing_properties.compressive_yield,
+                ),
+            ),
+        )
+    elif governing is AluminumLimitState.LOCAL_BUCKLING:
+        formula, inputs = _local_buckling_work(
+            governing_properties,
+            flat_width=flat_width,
+            thickness=thickness,
+            constants=governing_constants,
+            edge_support=edge_support,
+        )
+    else:
+        formula, inputs = _member_buckling_work(
+            governing_properties, slenderness=slenderness, constants=governing_constants
+        )
+        governing_elastic_local = aluminum_elastic_local_buckling_stress(
+            flat_width=flat_width,
+            thickness=thickness,
+            elastic_modulus=governing_properties.elastic_modulus,
+            edge_support=edge_support,
+        )
+        unreduced_member = aluminum_member_buckling_stress(
+            slenderness=slenderness,
+            compressive_yield=governing_properties.compressive_yield,
+            elastic_modulus=governing_properties.elastic_modulus,
+            constants=governing_constants,
+        )
+        if governing_elastic_local.magnitude < unreduced_member.magnitude:
+            # §E.4 composes ON TOP of the column curve, so the rendered line is the
+            # interaction, not the curve underneath it — that curve produced F_c, which
+            # appears here as an input with the branch it came from named in its gloss.
+            underneath = formula
+            formula = "F_rc = F_c^(1/3)·F_e^(2/3)"
+            inputs = (
+                _stress(
+                    "F_c",
+                    f"§E.3 member buckling strength, from {underneath}",
+                    unreduced_member,
+                ),
+                _stress(
+                    "F_e",
+                    "§B.5.6 elastic local buckling stress of the element, which falls below "
+                    "F_c, so §E.4 requires the interaction reduction",
+                    governing_elastic_local,
+                ),
+            )
     return AluminumCompressionStrength(
         yielding=states[AluminumLimitState.YIELDING],
         local_buckling=states[AluminumLimitState.LOCAL_BUCKLING],
@@ -843,6 +1046,8 @@ def aluminum_compression_strength(
         local_member_interaction=elastic_local.magnitude < unreduced.magnitude,
         weld_affected_governs=governed_by_haz,
         weld_affected_nominal=haz_nominal,
+        governing_formula=formula,
+        governing_inputs=inputs,
     )
 
 
@@ -910,4 +1115,10 @@ def aluminum_compression_scorecard(
             f"member buckling strength, so the ADM §E.4 local/member interaction "
             f"reduction F_rc = F_c^(1/3)·F_e^(2/3) has been applied"
         )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_ADM})
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_ADM,
+            "derivation": strength.derivation(_CLAUSE_ADM),
+        }
+    )

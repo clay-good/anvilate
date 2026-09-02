@@ -60,4 +60,8 @@ ASME B30.20 :: a verification-plan item crossed into the characteristic list —
 standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
 
 [debt]
-Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
+# Empty, and that is not an oversight. Every clause this library cites is either fully
+# worked or answered by every entry that cites it. A new check that ships without a
+# derivation and without an `Underived` fails the run by name and belongs on a line here —
+# the section is kept so there is somewhere obvious for that line to go, and so the rule
+# above it is still in front of whoever writes it.
