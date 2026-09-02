@@ -1200,6 +1200,86 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
                 )
             ),
         ),
+        # Boundary cases, from a sweep of the new derivations across their extremes. Each
+        # is a branch or a term that the ordinary case above leaves at a value where an
+        # error would not show: a reactive term that is zero, an occupancy that is zero, a
+        # single-source noise level that never enters the logarithmic sum, an efficiency
+        # at the top of its range.
+        (
+            "feeder unity power factor",
+            electrical.screen_feeder(
+                electrical.Feeder(
+                    load_power=q("75 kW"),
+                    power_factor=1.0,
+                    line_voltage=q("400 V"),
+                    resistivity=q("1.72e-8 ohm*m"),
+                    one_way_length=q("80 m"),
+                    conductor_area=q("70 mm**2"),
+                    conductor_ampacity=q("180 A"),
+                    reactance=q("0.05 ohm"),
+                )
+            ),
+        ),
+        (
+            "ventilation unoccupied",
+            ventilation.screen_ventilation(
+                ventilation.VentilationZone(
+                    people_outdoor_rate=q("2.5 L/s"),
+                    occupancy=0,
+                    area_outdoor_rate=q("0.3 L/s/m**2"),
+                    floor_area=q("300 m**2"),
+                    zone_air_distribution_effectiveness=1.0,
+                    provided_outdoor_airflow=q("300 L/s"),
+                    room_volume=q("900 m**3"),
+                    required_air_changes=1.0,
+                )
+            ),
+        ),
+        (
+            "noise single source",
+            noise_exposure.screen_noise_exposure(
+                noise_exposure.WorkerNoiseExposure(
+                    machine_levels=(85.0,), exposure_duration=q("8 hour")
+                )
+            ),
+        ),
+        (
+            "pump near-ideal",
+            hydraulics.screen_pump_duty(
+                hydraulics.PumpDuty(
+                    flow_rate=q("0.05 m**3/s"),
+                    total_head=q("20 m"),
+                    fluid_density=q("1000 kg/m**3"),
+                    efficiency=0.99,
+                    motor_rating=q("18.5 kW"),
+                    npsh_available=q("4.4 m"),
+                    npsh_required=q("4 m"),
+                )
+            ),
+        ),
+        # Both sides of the §8.2.4 crossover, one step apart, where the two curves meet.
+        (
+            "masonry at the crossover",
+            masonry.screen_masonry_wall(
+                masonry.MasonryWall(
+                    masonry_strength=q("13.8 MPa"),
+                    slenderness_ratio=98.999,
+                    axial_stress=q("1.2 MPa"),
+                    flexural_stress=q("0.9 MPa"),
+                )
+            ),
+        ),
+        (
+            "masonry past the crossover",
+            masonry.screen_masonry_wall(
+                masonry.MasonryWall(
+                    masonry_strength=q("13.8 MPa"),
+                    slenderness_ratio=99.001,
+                    axial_stress=q("1.2 MPa"),
+                    flexural_stress=q("0.9 MPa"),
+                )
+            ),
+        ),
     ]
     out = [
         (f"{label} {entry.name}", entry.derivation)
