@@ -40,7 +40,7 @@ ASME B30.20 :: a verification-plan item crossed into the characteristic list —
 standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
 
 [debt]
-AISC 360-16 §L3 :: the serviceability deflection limit δ vs L/n. Derived on 23 of 135 entries; the rest render the limit without the span it came from.
+AISC 360-16 §L3 :: the clause is the wrong key for this one, and it is the imperfection this registry was warned about. §L3 covers every beam load case the pack screens: the eight support-and-load combinations whose closed form `BeamResult.deflection_formula` declares are derived, and the offset, patch, overhang, triangular and end-moment cases are not — twenty-six load cases in anvilate.analysis.beam carry a deflection and no formula string. Three of those have no symbolic form to declare at all: the fixed-pinned and fixed-fixed triangular maxima come from a numeric root of the elastic curve. Splitting them needs a key finer than the clause, which is a change to the gate and not a derivation to write.
 AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
 ASCE 7-22 §2.3.1 :: derived where a capacity is screened against the combination; the spec-screening entry that only reports which combination governs re-resolves the set from its name and does not carry the factored sum.
 ASME BTH-1 §3-1.4 (Service Class) :: the computed entry renders n = Δσ_a / Δσ; the Class 0 exemption entry beside it is a PASS that states an exemption and computes nothing, so it has no work to show and the clause cannot clear until a stated exemption is something other than a check.

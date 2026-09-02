@@ -324,6 +324,18 @@ def _install_the_coverage_collector() -> None:
     ScorecardEntry.model_copy = recording_copy
 
 
+def _counts_as_worked(entry) -> bool:
+    """Whether ``entry`` carries a derivation the report will actually render as worked.
+
+    The same condition :meth:`anvilate.report.ReportSection.is_worked` applies, and it has
+    to be the same one: a derivation whose formula names a symbol it never declares renders
+    with a bare symbol where a number belongs, so the document falls back to the inputs
+    table. Counting it here would report a coverage the document does not deliver.
+    """
+    derivation = getattr(entry, "derivation", None)
+    return derivation is not None and not derivation.unresolved_symbols()
+
+
 def _observed_coverage() -> dict[str, tuple[int, int, int]]:
     """Per cited clause: how many entries carry a derivation, how many were evaluated, and
     how many carry a computed safety factor."""
@@ -341,7 +353,12 @@ def _observed_coverage() -> dict[str, tuple[int, int, int]]:
             continue
         counts = coverage.setdefault(str(entry.reference), [0, 0, 0])
         counts[1] += 1
-        if entry.derivation is not None:
+        # WORKED, not merely present. A derivation whose formula names a symbol it never
+        # declares renders with a bare symbol where a number belongs, so `Report` refuses
+        # to show it as worked and falls back to the inputs table. Counting it as covered
+        # here would report a coverage the document does not deliver — the hidden gap
+        # `Derivation.unresolved_symbols` exists to prevent, arrived at from the other side.
+        if _counts_as_worked(entry):
             counts[0] += 1
         if entry.safety_factor is not None:
             counts[2] += 1

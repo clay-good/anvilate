@@ -3386,3 +3386,50 @@ def test_the_calculation_report_page_counts_the_registry_it_describes():
             f"the page says [{section}] has {claimed} lines; it has {actual}"
         )
     assert len(re.findall(r"\| `\[(\w+)\]` \|", page)) == 2, "the section table moved"
+
+
+def test_the_coverage_gate_counts_what_the_report_would_render():
+    """A derivation the document refuses to show as worked is not coverage.
+
+    `Derivation.unresolved_symbols` exists because a formula naming a symbol it never
+    declares renders with a bare symbol where a number belongs; `ReportSection.is_worked`
+    is where the report acts on it and falls back to the inputs table. The coverage gate
+    counted the derivation's *presence*, so such a check would have been reported as
+    covered while every rendering of it showed a table — the hidden gap, arrived at from
+    the other side.
+    """
+    import conftest
+    from anvilate.derivation import Derivation, SymbolValue
+    from anvilate.report import ReportSection
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+    from anvilate.units import Quantity
+
+    def entry_with(symbolic: str) -> ScorecardEntry:
+        return ScorecardEntry(
+            name="probe",
+            status=CheckStatus.PASS,
+            detail="",
+            reference="Probe Std §1",
+            derivation=Derivation(
+                symbolic=symbolic,
+                inputs=(
+                    SymbolValue(symbol="P", description="declared", value=Quantity.parse("1 kN")),
+                ),
+                result=SymbolValue(symbol="σ", description="out", value=Quantity.parse("1 MPa")),
+                citation="Probe Std §1",
+            ),
+        )
+
+    complete = entry_with("σ = P")
+    incomplete = entry_with("σ = P / A")  # A is never declared
+
+    assert conftest._counts_as_worked(complete)
+    assert not conftest._counts_as_worked(incomplete)
+    # No derivation at all is the third case, and it is not worked either.
+    assert not conftest._counts_as_worked(
+        ScorecardEntry(name="probe", status=CheckStatus.PASS, detail="")
+    )
+
+    # And the condition is the report's own, not a second opinion about it.
+    for entry in (complete, incomplete):
+        assert conftest._counts_as_worked(entry) is ReportSection(entry=entry).is_worked
