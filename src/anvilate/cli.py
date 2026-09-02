@@ -57,6 +57,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TextIO
 
 from .scorecard import CheckStatus, Scorecard
 
@@ -285,7 +286,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
+def run(
+    argv: list[str] | None = None,
+    *,
+    stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
+) -> int:
     """Run one command and return its exit code, writing nothing to the real streams.
 
     Split from :func:`main` so the whole surface is exercised in-process: a CLI tested only

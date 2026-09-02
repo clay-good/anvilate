@@ -184,3 +184,65 @@ def test_the_python_classifiers_are_the_versions_ci_actually_proves():
 
 def _version_key(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
+
+
+def test_the_package_ships_the_marker_that_makes_its_annotations_visible():
+    """Without `py.typed`, every consumer of the installed package sees `Any`.
+
+    PEP 561: a type checker ignores inline annotations in an *installed* package unless the
+    package ships the marker. This library annotates 1,899 public functions and shipped
+    none of them — `mypy` on a two-line consumer script reported "module is installed, but
+    missing library stubs or py.typed marker" and revealed `Any` for a call whose argument
+    was the wrong type. Nothing in this repository could see that, because the suite runs
+    against `src/` where the annotations are simply there.
+
+    The file is empty on purpose: its presence is the whole signal, and content in it means
+    something else (a partial-stub declaration).
+    """
+    marker = _REPO / "src" / "anvilate" / "py.typed"
+    assert marker.is_file(), (
+        "src/anvilate/py.typed is gone. Every downstream type checker will silently fall "
+        "back to Any for this library, which is a failure only its users can see"
+    )
+    assert marker.read_bytes() == b"", (
+        "py.typed is not empty. A non-empty marker declares partial stubs, which is a "
+        "different claim from the one this package makes"
+    )
+
+
+def test_the_typed_marker_is_not_a_promise_the_package_breaks():
+    """A `py.typed` on an unannotated package is worse than no marker at all.
+
+    It tells a consumer's checker to trust what it finds, so a missing annotation stops
+    being an unknown and becomes an implicit `Any` the checker will not warn about. The
+    marker is therefore gated on the annotations being there — over the *public* surface,
+    which is the only part a consumer can reach.
+    """
+    import importlib
+    import inspect
+
+    src = _REPO / "src" / "anvilate"
+    unannotated: list[str] = []
+    total = 0
+    for path in sorted(src.rglob("*.py")):
+        name = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
+        name = name.removesuffix(".__init__")
+        module = importlib.import_module(name)
+        for exported in getattr(module, "__all__", ()):
+            function = getattr(module, exported, None)
+            if not inspect.isfunction(function) or function.__module__ != name:
+                continue
+            total += 1
+            signature = inspect.signature(function)
+            complete = signature.return_annotation is not inspect.Signature.empty and all(
+                parameter.annotation is not inspect.Parameter.empty
+                for parameter in signature.parameters.values()
+            )
+            if not complete:
+                unannotated.append(f"{name}.{exported}")
+
+    assert total > 1000, f"the sweep found only {total} public functions, so it proves little"
+    assert not unannotated, (
+        "these public functions ship an incomplete signature under a py.typed marker, so a "
+        f"consumer's checker will infer Any for them without saying so: {unannotated}"
+    )

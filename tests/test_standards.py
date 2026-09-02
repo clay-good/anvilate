@@ -1654,6 +1654,11 @@ _NOT_A_DATASET = {
         "the agent skill — instructions this project wrote about its own library, "
         "under the project's own licence, not third-party data"
     ),
+    "py.typed": (
+        "the PEP 561 marker — an empty file whose presence tells a consumer's type checker "
+        "that this package's inline annotations are meant to be read, carrying no content "
+        "and no third-party data at all"
+    ),
 }
 
 
