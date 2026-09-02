@@ -713,15 +713,19 @@ def test_cover_plate_derivation_only_for_the_closed_form_cases():
     coefficient = next(item for item in rectangular.derivation.inputs if item.symbol == "β")
     assert "Table 11.4" in coefficient.description
 
-    # A simply-supported rectangle sums a Navier series; there is no one-line formula
-    # that is what was computed, so it declares none.
+    # A simply-supported rectangle sums a Navier series, so there is no one-line formula
+    # for its stress. What the entry decides is still a quotient, and it shows that — with
+    # the series named in the gloss, which is the part that is not arithmetic.
     navier = bending(
         diameter=None,
         length=Quantity.parse("600 mm"),
         width=Quantity.parse("400 mm"),
         edge=PlateEdge.SIMPLY_SUPPORTED,
     )
-    assert navier.derivation is None
+    assert navier.derivation.symbolic == "n = σ_allow/σ"
+    assert navier.derivation.unresolved_symbols() == ()
+    stress_symbol = next(item for item in navier.derivation.inputs if item.symbol == "σ")
+    assert "double sine series" in stress_symbol.description
 
     # The flatness half is worked wherever the bending half is. It rendered its limit
     # with nothing behind it on every cover, including the ones whose centre deflection

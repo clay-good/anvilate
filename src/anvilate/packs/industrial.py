@@ -34,6 +34,7 @@ from ..analysis import (
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard
 from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
@@ -215,12 +216,41 @@ def screen_cover_plate(
     stress_work = result.stress_derivation(reference)
     if stress_work is not None:
         bending_update["derivation"] = stress_work
-    # A bending entry whose stress has no closed form is NOT declared here, and the
-    # scorecard would refuse it if it were: the entry carries a computed safety factor,
-    # and a safety factor is a quotient. What that check still owes a reviewer is the
-    # margin line n = σ_allow/σ, with the series-summed stress as its input — which is a
-    # formula somebody has to write, not an absence to declare. The two Kirchhoff clauses
-    # stay on the debt list saying exactly that.
+    elif plate_allowable.quantity is not None:
+        # A bending entry whose stress is a series sum or a radius scan cannot show that
+        # stress as a line — but what this entry decides is a quotient, and the quotient
+        # is worth showing with the stress declared as an input that says where it came
+        # from. Written for these two cases rather than folded into `strength_scorecard`
+        # on purpose: a margin line added to every strength check in the library would
+        # raise the derivation-coverage ratio without a reviewer learning anything, which
+        # is the meter measuring itself. Here the gloss carries the part that is not
+        # arithmetic.
+        bending_update["derivation"] = Derivation(
+            symbolic="n = σ_allow/σ",
+            inputs=(
+                SymbolValue(
+                    symbol="σ_allow",
+                    description="allowable stress for the cover material",
+                    value=plate_allowable.quantity,
+                    unit="MPa",
+                ),
+                SymbolValue(
+                    symbol="σ",
+                    description=(
+                        f"peak surface bending stress in the cover — {result.underived.reason}"
+                    ),
+                    value=result.max_bending_stress,
+                    unit="MPa",
+                ),
+            ),
+            result=SymbolValue(
+                symbol="n",
+                description="margin of the allowable over the peak bending stress",
+                value=plate_allowable.quantity.to("MPa").magnitude
+                / result.max_bending_stress.to("MPa").magnitude,
+            ),
+            citation=reference,
+        )
     entries = [
         strength_scorecard(
             f"{plate.name} plate bending",

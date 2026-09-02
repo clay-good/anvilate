@@ -943,6 +943,46 @@ def half_sine_shock_scorecard(
                 f"{allowable / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g"
             ),
             "reference": "half-sine shock response spectrum",
+            # The MARGIN, not the spectrum. A is the larger of the residual and primary
+            # branches of the Duhamel solution, and the primary branch is a maximum over
+            # the integer stationary points inside the pulse — there is no substitutable
+            # line for it. What this entry decides, though, is a quotient, and its one
+            # non-obvious input is A: declared here with the ratio it was read at, so a
+            # reviewer can take the amplification back to the spectrum and check it.
+            "derivation": Derivation(
+                symbolic="n = a_allow/(A·a₀)",
+                inputs=(
+                    SymbolValue(
+                        symbol="a_allow",
+                        description="allowable shock acceleration for the mounted equipment",
+                        value=allowable_acceleration,
+                        unit="m/s**2",
+                    ),
+                    SymbolValue(
+                        symbol="A",
+                        description=(
+                            f"undamped maximax amplification from the half-sine shock "
+                            f"response spectrum at τ/T = {ratio:.3g} ({regime.value}); the "
+                            f"larger of the residual and primary Duhamel branches, the "
+                            f"second of which is a maximum over the stationary points "
+                            f"inside the pulse"
+                        ),
+                        value=amplification,
+                    ),
+                    SymbolValue(
+                        symbol="a₀",
+                        description="peak acceleration of the half-sine pulse",
+                        value=peak_acceleration,
+                        unit="m/s**2",
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="n",
+                    description="margin of the allowable over the peak response",
+                    value=computed if computed is not None else 0.0,
+                ),
+                citation="half-sine shock response spectrum",
+            ),
         }
     )
 
