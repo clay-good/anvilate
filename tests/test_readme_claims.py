@@ -653,3 +653,36 @@ def test_the_demo_tapes_narration_is_what_its_commands_print():
             f"the tape lists {name}, which no example in it says it wrote"
         )
         assert (_REPO / name).exists(), f"{name} was listed but the run did not produce it"
+
+
+def test_every_gate_the_security_page_names_is_a_gate_that_exists():
+    """`SECURITY.md` is a table of properties, each with the test that holds it.
+
+    That shape is only worth anything if the names resolve. A security page naming a test
+    nobody wrote is worse than a page with no table at all: it reads as evidence, and the
+    reader has no way to tell. The first draft of that page named two sweeps that did not
+    exist — this is the gate that found them, and they were written rather than the claims
+    dropped.
+
+    Both halves. A named test that has gone tells the reader a property is held when it is
+    not; a test file named in the table that has moved is the same failure one level up.
+    """
+    import re
+
+    page = (_REPO / "SECURITY.md").read_text(encoding="utf-8")
+    suite = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((_REPO / "tests").glob("*.py"))
+    )
+
+    named = sorted(set(re.findall(r"`(test_[a-z0-9_]+)`", page)))
+    assert len(named) >= 5, f"SECURITY.md names only {named}; the table has lost its citations"
+    missing = [name for name in named if f"def {name}(" not in suite]
+    assert not missing, (
+        f"SECURITY.md says these tests hold its security properties and they do not exist: "
+        f"{missing}"
+    )
+
+    files = sorted(set(re.findall(r"`(tests/[a-z0-9_]+\.py)`", page)))
+    assert files, "SECURITY.md names no test file, so the sweeps it cites cannot be found"
+    absent = [name for name in files if not (_REPO / name).exists()]
+    assert not absent, f"SECURITY.md names test files that are gone: {absent}"

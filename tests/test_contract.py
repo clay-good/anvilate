@@ -3473,3 +3473,79 @@ def test_the_coverage_gate_counts_what_the_report_would_render():
     # And the condition is the report's own, not a second opinion about it.
     for entry in (complete, incomplete):
         assert conftest._counts_as_worked(entry) is ReportSection(entry=entry).is_worked
+
+
+def test_no_yaml_document_can_construct_a_python_object():
+    """`yaml.load` without a safe loader executes constructors named in the document.
+
+    This library reads YAML from two places that matter: the bundled datasets, and a spec
+    file that arrived from somebody else. `yaml.safe_load` is the whole defence, and it is
+    one keystroke away from `yaml.load` — which is why it is swept rather than trusted. The
+    count is asserted first, because a sweep that stopped finding call sites would report
+    clean on a package that had switched every one of them.
+    """
+    import ast
+
+    src = _REPO / "src" / "anvilate"
+    safe = 0
+    unsafe: list[str] = []
+    for path in sorted(src.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = ast.unparse(node.func)
+            if name in ("yaml.safe_load", "yaml.safe_load_all"):
+                safe += 1
+            elif name in ("yaml.load", "yaml.load_all", "yaml.unsafe_load", "yaml.full_load"):
+                unsafe.append(f"{path.relative_to(_REPO)}:{node.lineno} calls {name}")
+
+    assert safe >= 15, f"the sweep found only {safe} safe_load calls, so it is looking wrong"
+    assert not unsafe, (
+        "these load YAML with a constructing loader, so a document can build arbitrary "
+        f"Python objects on the way in: {unsafe}"
+    )
+
+
+def test_the_library_runs_nothing_it_reads():
+    """No `eval`, `exec`, `pickle`, `subprocess` or `os.system` anywhere in the package.
+
+    Not a style rule. Anvilate is meant to be pointed at documents that arrived from
+    somebody else, and every one of these turns "read a file" into "run what it says" if it
+    is ever handed something derived from that file. The point of a sweep is that it fails
+    at the moment the call is *added*, when the author still has the reason in front of
+    them, rather than at the moment somebody finds a way to reach it.
+
+    `subprocess` is on the list even though a future FEA driver will need it — GPL solvers
+    are invoked out of process by design. That is a decision to make in a diff with the
+    sandboxing spec open, not one to arrive at by nobody noticing.
+    """
+    import ast
+
+    forbidden_calls = {"eval", "exec", "compile", "os.system", "os.popen", "__import__"}
+    forbidden_imports = {"pickle", "subprocess", "shelve", "marshal", "dill"}
+    src = _REPO / "src" / "anvilate"
+    offenders: list[str] = []
+    modules = 0
+    for path in sorted(src.rglob("*.py")):
+        modules += 1
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call | ast.Import | ast.ImportFrom):
+                continue
+            where = f"{path.relative_to(_REPO)}:{node.lineno}"
+            if isinstance(node, ast.Call) and ast.unparse(node.func) in forbidden_calls:
+                offenders.append(f"{where} calls {ast.unparse(node.func)}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] in forbidden_imports:
+                        offenders.append(f"{where} imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                if node.module.split(".")[0] in forbidden_imports:
+                    offenders.append(f"{where} imports from {node.module}")
+
+    assert modules > 100, f"the sweep walked only {modules} modules, so it proves little"
+    assert not offenders, (
+        "these give the package a way to run what it reads. If one of them is deliberate, "
+        f"it belongs in a diff with SECURITY.md updated in the same commit: {offenders}"
+    )
