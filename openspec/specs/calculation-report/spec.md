@@ -27,7 +27,7 @@ The two **complete** kinds SHALL be declared where the check is and travel with 
 
 A check SHALL be counted as having answered when it carries a derivation or declares one of the two complete kinds, and a clause SHALL clear the list when every entry citing it has answered.
 
-The debt list SHALL be downward-only: a check may leave it by acquiring a derivation, and SHALL NOT leave it by being reclassified unless the stated reason changes accordingly. A check carrying a computed safety factor SHALL NOT be able to declare that it has no formula, in any kind: a safety factor is a quotient and a quotient is a formula, so the relabelling is refused on the data rather than on the wording.
+The debt list SHALL be downward-only: a check may leave it by acquiring a derivation, and SHALL NOT leave it by being reclassified unless the stated reason changes accordingly. A check carrying a computed safety factor SHALL NOT be able to declare itself a **lookup**: a lookup asserts that there is no arithmetic between its two numbers, and a computed factor sitting between them disproves that from the data rather than from the wording. The rule SHALL NOT extend to a numerically solved result, whose factor may itself be solved — a load-line margin found by bisecting where a ray meets a bent envelope is a safety factor with no quotient in it — so that kind rests on its stated reason alone.
 
 #### Scenario: New check without metadata is caught
 

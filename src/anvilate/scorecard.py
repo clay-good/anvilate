@@ -20,7 +20,7 @@ from math import isnan
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from ._models import Named, Provenance, RevalidatedModel
-from .derivation import Derivation, Underived
+from .derivation import Derivation, DerivationAbsence, Underived
 from .uncertainty import MarginUncertainty
 from .units import decimals_distinguishing
 
@@ -443,12 +443,28 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
             f"'{entry.name}' declares both a derivation and a reason it has none. "
             f"One of them is wrong, and a reader cannot tell which"
         )
-    if entry.underived is not None and entry.safety_factor is not None:
+    # A LOOKUP claims there is no arithmetic between its two numbers. A computed safety
+    # factor disproves that claim on its face, so this is the anti-relabelling rule and it
+    # is enforced on the data rather than on the honesty of the reason.
+    #
+    # It applies to LOOKUP only, and the wider version was wrong. It said "a safety factor
+    # is a quotient", which is true of capacity/demand and false of a factor that is itself
+    # solved: the BS 7910 load-line margin is the scale at which a ray crosses the Option 1
+    # curve, found by bisection, and there is no quotient anywhere in it. The wide rule
+    # refused that check the one declaration that describes it, while a plate bending check
+    # whose factor really is σ_allow/σ is still refused — correctly, because it owes that
+    # line. NUMERIC_RESULT has no mechanical test of its own; its claim is that the value
+    # was solved rather than evaluated, and only the stated reason can say so.
+    if (
+        entry.underived is not None
+        and entry.underived.kind is DerivationAbsence.LOOKUP
+        and entry.safety_factor is not None
+    ):
         raise ValueError(
-            f"'{entry.name}' declares itself {entry.underived.kind.value} — "
-            f"{entry.underived.reason} — but carries a computed safety factor of "
-            f"{entry.safety_factor:.4g}. A safety factor is a quotient and a quotient is a "
-            f"formula, so this check has work to show. Debt is not retired by describing it"
+            f"'{entry.name}' declares itself a lookup — {entry.underived.reason} — but "
+            f"carries a computed safety factor of {entry.safety_factor:.4g}. A lookup has "
+            f"no arithmetic between its two numbers, and this one has a factor between "
+            f"them. Debt is not retired by describing it"
         )
 
 

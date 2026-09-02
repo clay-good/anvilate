@@ -36,10 +36,15 @@
 # the check is. A clause cited by one computing check and one exempt check cannot be
 # answered once, and answering it once here was wrong for every check but the first.
 #
-# The gate enforces the distinction mechanically rather than on the honesty of the reason:
-# an entry carrying a COMPUTED SAFETY FACTOR may not declare an absence of derivation at
-# all, because a safety factor is a quotient and a quotient is a formula. So a debt cannot
-# be retired by being relabelled — the type refuses to hold the label.
+# The lookup half is enforced mechanically rather than on the honesty of the reason: an
+# entry carrying a COMPUTED SAFETY FACTOR may not call itself a lookup, because a lookup
+# asserts there is no arithmetic between its two numbers and a factor sitting between them
+# disproves it. The type refuses to hold the label, so that debt cannot be relabelled.
+#
+# `numeric_result` has no such test, and deliberately not: a safety factor can itself be a
+# solved quantity — the BS 7910 load-line margin is where a ray meets a bent envelope,
+# bisected for — so refusing every declaration beside a factor would refuse real ones. That
+# kind rests on its stated reason, and the reason has to say what was solved.
 #
 # TO PAY A LINE OFF: give every entry the check produces a Derivation, or an Underived
 # where it genuinely has no formula, then delete the line from [debt]. Do NOT add a line to
@@ -57,10 +62,9 @@ standards effectivity :: a consistency verdict over the citations a bundle carri
 [debt]
 AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
-BS 7910 / R6 Option 1 failure assessment diagram :: K_r = K_I/K_mat, L_r = σ_ref/σ_y, and the Option 1 envelope the point is assessed against.
 Kirchhoff plate theory (Bessel eigenvalue) :: f = (λ²/2πa²)·√(D/ρh) with λ from the clamped-circular Bessel root.
 Kirchhoff plate theory (FD-verified eigenvalue table) :: the same frequency formula with a tabulated eigenvalue; the eigenvalue is an input to the derivation, not a substitute for it.
 Kirchhoff plate theory (Navier eigenvalue) :: the simply-supported rectangular plate fundamental frequency.
-Kirchhoff plate theory (Navier series) :: the FLATNESS half now states that its deflection is a converged double sine series and has no substitutable line. What is still owed is the bending entry's margin line, n = σ_allow/σ, with the series-summed stress as its input — that entry carries a computed safety factor, so it may not declare an absence, and a quotient is a formula somebody has to write.
+Kirchhoff plate theory (Navier series) :: the FLATNESS half now states that its deflection is a converged double sine series and has no substitutable line. What is still owed is the bending entry's margin line, n = σ_allow/σ, with the series-summed stress as its input — that entry's factor really is capacity over demand, so it has a line to write rather than an absence to declare.
 Kirchhoff plate theory (axisymmetric closed form) :: the annular cases. The flatness half now states that both peaks are found by scanning the radius after a 2x2 solve for the boundary constants. What is still owed is the bending entry's margin line, n = σ_allow/σ — the same debt as the Navier clause, and payable the same way.
 half-sine shock response spectrum :: the SRS amplification as a function of the pulse duration times the natural frequency.

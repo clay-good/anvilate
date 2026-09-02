@@ -894,19 +894,39 @@ def test_an_entry_may_not_both_show_its_work_and_say_it_has_none():
         stated.model_copy(update={"derivation": derivation})
 
 
-def test_a_computed_safety_factor_may_not_declare_that_it_has_no_formula():
-    """The anti-relabelling rule, and it is mechanical rather than a matter of wording.
+def test_a_computed_safety_factor_may_not_declare_itself_a_lookup():
+    """The anti-relabelling rule, mechanical rather than a matter of wording — and it
+    applies to LOOKUP alone, which is the half that is provable from the data.
 
-    A safety factor is a quotient, a quotient is a formula, and a check that has one has
-    work to show. Both kinds are refused: neither an exemption nor a numerically solved
-    result explains away an arithmetic the entry is already carrying the answer to.
+    A lookup claims there is no arithmetic between its two numbers, and a computed safety
+    factor sitting between them disproves that on its face.
+
+    The wider version of this rule was wrong, and the case that showed it is real: the
+    BS 7910 load-line margin is the scale at which a ray crosses the Option 1 curve, found
+    by bisection because the curve bends. It is a safety factor with no quotient anywhere
+    in it, and the wide rule refused it the one declaration that describes it. NUMERIC_RESULT
+    therefore has no mechanical test — only its stated reason can say the value was solved
+    rather than evaluated — and a check whose factor really is capacity over demand is
+    still refused, because it owes that line.
     """
     entry = ScorecardEntry.from_safety_factor("fatigue", computed=2.0, required=1.0)
-    for kind in DerivationAbsence:
-        with pytest.raises(ValidationError, match="quotient is a formula"):
-            entry.model_copy(
-                update={"underived": Underived(kind=kind, reason="the standard exempts it")}
+    with pytest.raises(ValidationError, match="no arithmetic between its two numbers"):
+        entry.model_copy(
+            update={
+                "underived": Underived(
+                    kind=DerivationAbsence.LOOKUP, reason="the standard exempts it"
+                )
+            }
+        )
+    solved = entry.model_copy(
+        update={
+            "underived": Underived(
+                kind=DerivationAbsence.NUMERIC_RESULT,
+                reason="the margin is where a ray crosses a bent curve, solved by bisection",
             )
+        }
+    )
+    assert solved.underived.kind is DerivationAbsence.NUMERIC_RESULT
 
 
 def test_a_stated_reason_survives_being_re_judged_against_a_band():

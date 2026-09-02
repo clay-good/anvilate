@@ -126,7 +126,7 @@ answered once.
 
 What is left is **debt**: a closed form nobody has written down yet. Which clauses
 those are is not left to prose. Every clause the library cites is counted on each test
-run, and the run prints both ratios: **46 of 62 cited clauses fully worked, 49 of 62
+run, and the run prints both ratios: **46 of 62 cited clauses fully worked, 50 of 62
 fully answered** as of this writing. *Answered* means every entry citing the clause
 either carries a derivation or states why it has none; a clause is not answered while
 one entry is silent, because half a clause renders a formula for some parts and a bare
@@ -137,15 +137,19 @@ The clauses still owing an answer are enumerated in
 
 | Section | What it means | Lines |
 | --- | --- | --- |
-| `[debt]` | A closed form nobody has written down yet. The list is downward-only. | 9 |
+| `[debt]` | A closed form nobody has written down yet. The list is downward-only. | 8 |
 | `[lookup]` | What remains of the earlier design, in which every kind was keyed by clause. It does the same job for checks not yet given their own declaration; new ones go on the entry. | 4 |
 
 Retiring a debt by calling it a lookup would convert unfinished work into a decision,
-so the gate does not take the reason on trust. An entry carrying a computed **safety
-factor** may not declare an absence of derivation at all — a safety factor is a
-quotient and a quotient is a formula — and `ScorecardEntry` refuses to be constructed
-that way, on a `model_copy` as well as on a call. Relabelling fails on the data, not on
-the wording.
+so the gate does not take that reason on trust. An entry carrying a computed **safety
+factor** may not call itself a lookup — a lookup asserts there is no arithmetic between
+its two numbers, and a factor sitting between them disproves it — and `ScorecardEntry`
+refuses to be constructed that way, on a `model_copy` as well as on a call.
+
+`numeric_result` has no mechanical test, and deliberately not: a safety factor can itself
+be solved rather than divided. A BS 7910 load-line margin is the scale at which a ray
+crosses the Option 1 envelope, bisected for because the curve bends, and refusing every
+declaration that sits beside a factor would refuse the one description that fits it.
 
 The gate is in `tests/conftest.py`. A new check that ships with neither a derivation nor
 a stated reason fails the run by name; a debt that acquires one has to come off the

@@ -44,6 +44,7 @@ from math import cos, exp, pi, sin, sqrt
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel
+from ..derivation import DerivationAbsence, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -954,4 +955,26 @@ def fad_scorecard(
                     "safety_factor": None,
                 }
             )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_FAD})
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_FAD,
+            # The entry's number is the load-line margin, and there is no line to write for
+            # it: both ratios are linear in the primary load, so the point rides a ray from
+            # the origin, and the margin is the scale at which that ray meets the Option 1
+            # curve — found by bisection, because the curve bends. K_r and L_r are the two
+            # quotients that place the point and they are in the detail line above; the
+            # margin is not 1/K_r and is not a quotient of anything.
+            "underived": Underived(
+                kind=DerivationAbsence.NUMERIC_RESULT,
+                reason=(
+                    "the reported factor is the load-line margin: K_r = K_I/K_mat and "
+                    "L_r = σ_ref/σ_y place the point, both are linear in the primary load "
+                    "so it rides a ray from the origin, and the margin is the scale at "
+                    "which that ray meets the Option 1 curve or the L_r cutoff. The curve "
+                    "bends, so the crossing is solved for rather than evaluated and there "
+                    "is no substitutable line — the margin is emphatically not 1/K_r"
+                ),
+            ),
+        }
+    )
