@@ -246,3 +246,55 @@ def test_the_typed_marker_is_not_a_promise_the_package_breaks():
         "these public functions ship an incomplete signature under a py.typed marker, so a "
         f"consumer's checker will infer Any for them without saying so: {unannotated}"
     )
+
+
+def test_no_message_a_user_reads_names_a_path_their_install_does_not_have():
+    """`anvilate build` told the caller to "See openspec/specs/geometry-generation".
+
+    That directory is in the repository and in no installation of the package. Somebody who
+    ran `pip install anvilate` and hit the refusal was pointed at a local file that was not
+    there, by a message written by people for whom it always is — the same blind spot that
+    let the `py.typed` marker go missing, arrived at from the other side.
+
+    Docstrings and comments are exempt: they are read in the source, where the path
+    resolves. This reads the *runtime strings* — what a caller can be handed.
+    """
+    import ast
+    import re
+
+    repo_path = re.compile(
+        r"(?<![\w/.-])(docs|examples|openspec|tests|src)/[A-Za-z0-9_./-]+(?![\w-])"
+    )
+    src = _REPO / "src" / "anvilate"
+    offenders: list[str] = []
+    strings = 0
+    for path in sorted(src.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        docstrings = {
+            text
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+            for text in [ast.get_docstring(node, clean=False)]
+            if text
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            if node.value in docstrings:
+                continue
+            strings += 1
+            for match in repo_path.finditer(node.value):
+                # A path inside a URL is a reference somebody can follow from anywhere.
+                start = max(0, match.start() - 8)
+                if "://" in node.value[start : match.start()]:
+                    continue
+                offenders.append(
+                    f"{path.relative_to(_REPO)}:{node.lineno} names {match.group(0)!r}"
+                )
+
+    assert strings > 500, f"the sweep read only {strings} runtime strings, so it proves little"
+    assert not offenders, (
+        "these runtime strings name a repository path that an installed package does not "
+        "contain, so a user is pointed at a file they do not have. Give the full URL "
+        f"instead: {offenders}"
+    )

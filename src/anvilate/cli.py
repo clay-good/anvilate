@@ -90,20 +90,27 @@ _BLOCKING_ORDER = [
 ]
 _EXIT_SEVERITY = [EXIT_OK, EXIT_NOT_EVALUATED, EXIT_FAILED]
 
+# Where the specification for the missing half lives. A URL rather than `openspec/specs/…`:
+# the refusals below are read by somebody who ran `pip install anvilate`, and a bare
+# repository path names a directory their environment does not contain. It read as a local
+# file that was not there.
+_GEOMETRY_SPEC = (
+    "https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation"
+)
+
 # What each unbuilt command is waiting on. Named individually because "not implemented" is
 # not an answer a script author can act on, and because the three are waiting on the same
 # thing for three different reasons.
 _UNBUILT = {
     "build": (
         "build runs the part's generating program, which needs a geometry kernel this "
-        "package does not ship. See openspec/specs/geometry-generation."
+        "package does not ship. See " + _GEOMETRY_SPEC + "."
     ),
 }
 
 # The half of `diff` that needs a built part, named where the output would have shown it.
 _DIFF_NEEDS_GEOMETRY = (
-    "mass, volume and centre-of-gravity deltas need two built parts. "
-    "See openspec/specs/geometry-generation."
+    "mass, volume and centre-of-gravity deltas need two built parts. See " + _GEOMETRY_SPEC + "."
 )
 
 # The artifacts `export` knows about, and which of them a spec file alone can produce. The
@@ -112,11 +119,11 @@ _DIFF_NEEDS_GEOMETRY = (
 _UNBUILT_ARTIFACTS = {
     "dxf": (
         "a DXF is drawn from built geometry, and there is no built part to draw. "
-        "See openspec/specs/geometry-generation."
+        "See " + _GEOMETRY_SPEC + "."
     ),
     "qif": (
         "QIF results carry measured characteristics against a built part. "
-        "See openspec/specs/geometry-generation."
+        "See " + _GEOMETRY_SPEC + "."
     ),
 }
 _ARTIFACTS = ("evidence-bundle", *sorted(_UNBUILT_ARTIFACTS))

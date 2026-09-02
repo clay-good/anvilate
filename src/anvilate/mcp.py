@@ -1226,11 +1226,11 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
 _UNBUILT: dict[str, str] = {
     "render_viewport": (
         "rendering an image needs built geometry, and no geometry is generated from a spec "
-        "today (see openspec/specs/geometry-generation)"
+        "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
     ),
     "measure_geometry": (
         "measuring a feature needs built geometry, and no geometry is generated from a spec "
-        "today (see openspec/specs/geometry-generation)"
+        "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
     ),
 }
 
