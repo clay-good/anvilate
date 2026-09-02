@@ -98,7 +98,10 @@ governing formula, the values put into it, the result, and a line per symbol:
 ```
 
 It is the same block [the calculation report](calculation-reports.md) prints, through the
-same renderer, so the two cannot drift. `--format json` has always carried the derivation;
+same renderer, so the two cannot drift — **and in the units the spec declares.** A document
+saying `units: US` prints its work in kip, inches and ksi; one saying `SI` prints mm and
+MPa. That line of the document says what its reader works in, and `check` used to read past
+it. `--format json` has always carried the derivation;
 this is the half a person reads. A check with no derivation prints
 `[derivation not rendered]` rather than being left out — a check missing from the listing
 reads as one whose formula was not worth showing, and those are different things. Where the

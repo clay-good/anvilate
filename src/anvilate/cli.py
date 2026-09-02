@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import TextIO
 
 from .scorecard import CheckStatus, Scorecard
+from .units import UnitSystem
 
 __all__ = ["EXIT_CODES", "main", "run"]
 
@@ -733,7 +734,15 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             if index:
                 print("", file=out)
             heading = spec.name if len(results) == 1 else f"{spec.name}  ({path})"
-            print(_render(heading, card, show_work=args.show_work), file=out)
+            print(
+                _render(
+                    heading,
+                    card,
+                    show_work=args.show_work,
+                    system=spec.units.value if spec.units else None,
+                ),
+                file=out,
+            )
         if len(results) > 1:
             worst = _worst_status(card for _p, _s, card in results)
             print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
@@ -795,7 +804,13 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
     return found
 
 
-def _render(name: str, card: Scorecard, *, show_work: bool = False) -> str:
+def _render(
+    name: str,
+    card: Scorecard,
+    *,
+    show_work: bool = False,
+    system: UnitSystem | None = None,
+) -> str:
     """The card as a person reads it, with the governing check named at the end.
 
     **The governing check is the line a reviewer reads first and the card did not carry
@@ -808,14 +823,22 @@ def _render(name: str, card: Scorecard, *, show_work: bool = False) -> str:
     None when nothing blocks *and* no check carries a safety factor, which is an ordinary
     card of passing deflection checks rather than an error. A missing line and a card with
     nothing to govern must not look the same.
+
+    ``system`` is the spec's own declared unit system, and it was not read. A document
+    saying `units: US` had every worked calculation and every comparison printed back to it
+    in millimetres and megapascals — the tool ignoring the one line of the document that
+    says what the reader works in.
     """
     from .report import ReportSection
 
     lines = [f"{name}: {card.status.value.upper()}"]
     for entry in card.entries:
         lines.append(f"  {entry.status.value:<14} {entry.name}")
-        if entry.detail:
-            lines.append(f"                 {entry.detail}")
+        # Through the report's own renderer, so a comparison verdict is restated in the
+        # spec's units rather than the ones it was screened in.
+        verdict = ReportSection(entry=entry).verdict(system=system)
+        if verdict:
+            lines.append(f"                 {verdict}")
         # The clause is what separates this from a spreadsheet, and the shell dropped it.
         # `ScorecardEntry.__str__` has always appended it; this renderer builds its own lines
         # and printed the detail alone, so every cited check read as an uncited one.
@@ -834,7 +857,7 @@ def _render(name: str, card: Scorecard, *, show_work: bool = False) -> str:
         # to sit under the entry it belongs to.
         if show_work:
             section = ReportSection(entry=entry)
-            worked = section.worked_lines()
+            worked = section.worked_lines(system=system)
             if worked:
                 lines.extend(f"{' ' * 15}{line}" for line in worked)
             else:

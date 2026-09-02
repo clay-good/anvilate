@@ -1548,3 +1548,31 @@ def test_the_shell_and_the_report_render_one_derivation_through_one_renderer():
     # And the flag is what turns it on.
     plain = _render("padeye", card)
     assert "where:" not in plain
+
+
+def test_check_prints_the_work_in_the_units_the_spec_declares(tmp_path, capsys):
+    """A Design Spec states the unit system its reader works in, and `check` ignored it.
+
+    A document saying `units: US` had every worked calculation and every comparison printed
+    back to it in millimetres and megapascals — the tool disregarding the one line of the
+    document that says what the reader works in, on the surface most people meet first.
+
+    Both directions, because a fix that converted everything would be the same defect with
+    the systems swapped.
+    """
+    source = (Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml").read_text()
+    assert "units: {value: SI" in source, "the fixture spec no longer declares SI"
+
+    us = tmp_path / "padeye_us.spec.yaml"
+    us.write_text(source.replace("units: {value: SI", "units: {value: US"), encoding="utf-8")
+    assert run(["check", str(us), "--show-work"]) == EXIT_OK
+    printed = capsys.readouterr().out
+    assert "kip" in printed and "ksi" in printed, printed
+    assert " mm" not in printed and "MPa" not in printed, printed
+
+    si = tmp_path / "padeye_si.spec.yaml"
+    si.write_text(source, encoding="utf-8")
+    assert run(["check", str(si), "--show-work"]) == EXIT_OK
+    printed = capsys.readouterr().out
+    assert " mm" in printed and "MPa" in printed, printed
+    assert "kip" not in printed and "ksi" not in printed, printed
