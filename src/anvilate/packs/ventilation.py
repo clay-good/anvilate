@@ -122,13 +122,29 @@ def screen_ventilation(
                 description="outdoor airflow delivered to the zone",
                 value=zone.provided_outdoor_airflow,
                 unit="m**3/hour",
+                # Both halves keep their unit under every system, because the pair has to
+                # divide to a per-hour rate and the system's table has no unit for a
+                # volumetric flow and reads a volume as a section modulus.
+                unit_is_required=True,
             ),
-            SymbolValue(symbol="V", description="room volume", value=zone.room_volume, unit="m**3"),
+            SymbolValue(
+                symbol="V",
+                description="room volume",
+                value=zone.room_volume,
+                unit="m**3",
+                unit_is_required=True,
+            ),
         ),
         result=SymbolValue(
             symbol="ACH",
             description="air changes per hour the delivered airflow achieves",
-            value=ach,
+            # A rate, with its unit, because that is what Q/V comes to. It was a bare
+            # 0.94 while the line above it divided a flow by a volume and gave 0.94 per
+            # hour — a reviewer doing the division on the page arrives at a rate and reads
+            # a pure number, and only the gloss said which.
+            value=Quantity(magnitude=ach, unit="1/hour"),
+            unit="1/hour",
+            unit_is_required=True,
         ),
         citation=_AIR_CHANGE_REFERENCE,
     )

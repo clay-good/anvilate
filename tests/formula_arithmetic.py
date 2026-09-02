@@ -103,3 +103,69 @@ def _si(value) -> float:
     if isinstance(value, Quantity):
         return float(value.pint.to_base_units().magnitude)
     return float(value)
+
+
+def rendered_value(text: str) -> object | None:
+    """A rendered value parsed back into something arithmetic, or ``None``.
+
+    The round trip is the point: what the reader sees has to be readable *as* a quantity,
+    or the line in front of them is not arithmetic they can follow.
+    """
+    from anvilate.units import Quantity
+
+    cleaned = text.replace("·", "*").replace("²", "**2").replace("³", "**3").replace("⁴", "**4")
+    try:
+        return Quantity.parse(cleaned).pint
+    except Exception:
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
+
+def evaluates_as_rendered(derivation, system=None) -> tuple[str | None, object, object]:
+    """Evaluate a derivation's substituted line *as the reader sees it*.
+
+    `_arithmetic` above reduces every symbol to SI base units, which answers "is the
+    formula right". This answers the different question a reviewer asks: does the line
+    printed in this document, in the units printed beside each symbol, come to the number
+    printed as the result. A unit the report converts for one symbol and not another is
+    invisible to the first check and is the whole of the second.
+
+    Returns ``(why_it_could_not_be_checked, got, want)``.
+    """
+    import math
+
+    _, separator, rhs = derivation.symbolic.partition("=")
+    rhs = rhs if separator else derivation.symbolic
+    values: dict[str, object] = {}
+    by_symbol: dict[str, str] = {}
+    for index, item in enumerate(derivation.inputs):
+        value = rendered_value(item.rendered(system=system))
+        if value is None:
+            return f"{item.symbol!r} renders as something no parser reads", None, None
+        name = f"_v{index}"
+        values[name] = value
+        by_symbol[item.symbol] = f"({name})"
+    substituted, leftover = _scan(rhs, by_symbol)
+    if set(leftover) - _CONSTANTS - _OPERATORS:
+        return "the formula names an undeclared symbol", None, None
+
+    expression = substituted
+    for glyph, digit in _SUPERSCRIPT_DIGITS.items():
+        expression = expression.replace(glyph, f"@{digit}")
+    expression = re.sub(r"(?:@(\d))+", lambda m: "**" + m.group(0).replace("@", ""), expression)
+    expression = expression.replace("·", "*").replace("−", "-").replace("^", "**")
+    expression = re.sub(r"√(\d+)", r"(\1**0.5)", expression)
+    expression = _radicals_over_groups(expression)
+    expression = expression.replace("π", repr(math.pi))
+    try:
+        got = eval(  # noqa: S307 - a closed arithmetic string over parsed quantities
+            expression, {"__builtins__": {"min": min, "max": max}}, values
+        )
+    except Exception as exc:  # pragma: no cover - a shape the corpus does not contain
+        return f"the line does not evaluate: {type(exc).__name__}", None, None
+    want = rendered_value(derivation.result.rendered(system=system))
+    if want is None:
+        return "the result renders as something no parser reads", None, None
+    return None, got, want

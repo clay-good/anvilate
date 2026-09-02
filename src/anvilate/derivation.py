@@ -137,7 +137,8 @@ class SymbolValue(BaseModel):
     the source text needs, and ``value`` either a :class:`~anvilate.units.Quantity`
     or a bare float for a genuinely dimensionless number (a friction coefficient, a
     count). ``unit`` is a *preferred* display unit, used only when the document declares
-    no unit system; a document that declares one gets that system.
+    no unit system; a document that declares one gets that system. Set ``unit_is_required``
+    where the preference is arithmetic rather than taste — see the field.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -160,11 +161,18 @@ class SymbolValue(BaseModel):
     # where the packs' per-discipline choices (kPa for a soil pressure, m for a pump head)
     # are what a reader of that discipline expects and SI's canonical units are not.
     unit: str | None = None
+    # Set where the preferred unit is not taste but arithmetic: the system's table maps one
+    # unit per DIMENSION, and a dimension can mean two things. `[length]³` is a section
+    # modulus in nine derivations out of ten and the table says so — which renders a room's
+    # volume as 1,415,842,329,600.00 mm³ beside an airflow in ft³/min, a line off by nine
+    # orders of magnitude. A symbol the table would mangle keeps its unit under every
+    # system; everything else yields to the reader's.
+    unit_is_required: bool = False
 
     def rendered(self, *, system: UnitSystem | None = None) -> str:
         """The value as it appears in a substituted formula, with its unit."""
         if isinstance(self.value, Quantity):
-            if system is None and self.unit is not None:
+            if self.unit is not None and (system is None or self.unit_is_required):
                 return render(self.value, unit=self.unit, pretty=True)
             return render(self.value, system=system, pretty=True)
         # A dimensionless number: %g keeps 0.3 as "0.3" and 12.0 as "12", and is
