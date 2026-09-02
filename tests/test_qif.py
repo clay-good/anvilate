@@ -391,6 +391,50 @@ def test_the_self_check_catches_an_understated_idmax():
 
 
 @pytest.mark.parametrize(
+    ("label", "doctype"),
+    [
+        ("an external entity reference", '<!DOCTYPE q [<!ENTITY x SYSTEM "file:///etc/passwd">]>'),
+        (
+            "an entity expansion bomb",
+            "<!DOCTYPE q [\n"
+            ' <!ENTITY a "aaaaaaaaaa">\n'
+            ' <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">\n'
+            ' <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">\n'
+            ' <!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">\n'
+            ' <!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;">\n'
+            ' <!ENTITY f "&e;&e;&e;&e;&e;&e;&e;&e;&e;&e;">\n'
+            ' <!ENTITY g "&f;&f;&f;&f;&f;&f;&f;&f;&f;&f;">\n'
+            "]>",
+        ),
+    ],
+)
+def test_a_hostile_document_is_a_complaint_rather_than_a_read_or_a_hang(label, doctype):
+    """`qif_schema_issues` reads somebody else's QIF, so it reads hostile input.
+
+    The same two payloads `parse_dcc` is held against, because this is the library's other
+    door for a document that arrived from outside. Neither may succeed: an external entity
+    would make the checker read a file off the host, and seven nested entities expand to a
+    hundred million characters from under a kilobyte, which is a hang rather than an error.
+
+    Both come back as an *issue* rather than an exception, because that is this function's
+    contract — a self-check that throws on the malformed input it exists to detect moves
+    the failure to its caller.
+    """
+    from anvilate.export.qif import QIF_NAMESPACE
+
+    # The entity has to be REFERENCED, not merely declared: a DOCTYPE nothing uses is
+    # inert, and the first version of this test asserted against a document that parsed
+    # perfectly well and reported no issues at all.
+    document = (
+        f"<?xml version='1.0'?>\n{doctype}\n"
+        f'<QIFDocument xmlns="{QIF_NAMESPACE}"><Version><ThisInstanceQPId>&g;'
+        "</ThisInstanceQPId></Version></QIFDocument>"
+    ).replace("&g;", "&x;" if "SYSTEM" in doctype else "&g;")
+    issues = qif_schema_issues(document)
+    assert any("not well-formed XML" in issue for issue in issues), issues
+
+
+@pytest.mark.parametrize(
     ("part_name", "spec_digest"),
     [("", "sha256:abc"), ("   ", "sha256:abc"), ("lug", ""), ("lug", "  ")],
 )

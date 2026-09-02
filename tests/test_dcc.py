@@ -1227,6 +1227,21 @@ def test_a_value_says_why_it_carries_no_distribution():
             '<dcc:digitalCalibrationCertificate xmlns:dcc="https://ptb.de/dcc">'
             "<x>&xxe;</x></dcc:digitalCalibrationCertificate>",
         ),
+        (
+            "an entity expansion bomb",
+            '<?xml version="1.0"?>\n'
+            "<!DOCTYPE dcc [\n"
+            ' <!ENTITY a "aaaaaaaaaa">\n'
+            ' <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">\n'
+            ' <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">\n'
+            ' <!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">\n'
+            ' <!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;">\n'
+            ' <!ENTITY f "&e;&e;&e;&e;&e;&e;&e;&e;&e;&e;">\n'
+            ' <!ENTITY g "&f;&f;&f;&f;&f;&f;&f;&f;&f;&f;">\n'
+            "]>\n"
+            '<dcc:digitalCalibrationCertificate xmlns:dcc="https://ptb.de/dcc">'
+            "<x>&g;</x></dcc:digitalCalibrationCertificate>",
+        ),
     ],
 )
 def test_a_malformed_certificate_is_refused_by_the_documented_exception(label, text):
@@ -1242,6 +1257,36 @@ def test_a_malformed_certificate_is_refused_by_the_documented_exception(label, t
     The external-entity case is here because it is the one an attacker sends: ElementTree
     refuses to resolve it, and that refusal now arrives as this module's own error with the
     file named.
+
+    The expansion bomb is the other one. Seven nested entities expand to a hundred million
+    characters from a document under a kilobyte, and a reader that expands them is a hang
+    rather than an error. CPython's expat caps the amplification factor and refuses it — a
+    property of the interpreter rather than of this code, which is exactly why it is
+    asserted here: an interpreter without that cap turns a mailed certificate into a denial
+    of service, and this fails rather than letting it through quietly.
     """
     with pytest.raises(ValueError, match="not well-formed XML"):
         parse_dcc(text, document="cert.xml")
+
+
+def test_the_bomb_is_refused_for_its_size_rather_than_because_entities_are_inert():
+    """The positive control, without which the test above proves much less than it looks.
+
+    "The parser refused a document containing entities" has two explanations: the expansion
+    limit caught it, or the parser does not process internal entities at all and the
+    reference was simply undefined. Only the first is the protection this rests on — a
+    parser of the second kind would still refuse the bomb and would refuse every legitimate
+    certificate that uses an entity too.
+
+    So: a small internal entity has to expand and be read. It does, which is what makes the
+    refusal above a statement about amplification.
+    """
+    from xml.etree import ElementTree as ET
+
+    document = (
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE r [<!ENTITY lab "Physikalisch-Technische Bundesanstalt">]>\n'
+        "<r><name>&lab;</name></r>"
+    )
+    root = ET.fromstring(document)
+    assert root.findtext("name") == "Physikalisch-Technische Bundesanstalt"
