@@ -126,7 +126,7 @@ answered once.
 
 What is left is **debt**: a closed form nobody has written down yet. Which clauses
 those are is not left to prose. Every clause the library cites is counted on each test
-run, and the run prints both ratios: **45 of 62 cited clauses fully worked, 47 of 62
+run, and the run prints both ratios: **46 of 62 cited clauses fully worked, 49 of 62
 fully answered** as of this writing. *Answered* means every entry citing the clause
 either carries a derivation or states why it has none; a clause is not answered while
 one entry is silent, because half a clause renders a formula for some parts and a bare
@@ -137,7 +137,7 @@ The clauses still owing an answer are enumerated in
 
 | Section | What it means | Lines |
 | --- | --- | --- |
-| `[debt]` | A closed form nobody has written down yet. The list is downward-only. | 11 |
+| `[debt]` | A closed form nobody has written down yet. The list is downward-only. | 9 |
 | `[lookup]` | What remains of the earlier design, in which every kind was keyed by clause. It does the same job for checks not yet given their own declaration; new ones go on the entry. | 4 |
 
 Retiring a debt by calling it a lookup would convert unfinished work into a decision,

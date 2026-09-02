@@ -597,3 +597,56 @@ def test_the_typed_callouts_page_quotes_the_verdicts_the_example_computes():
     # satisfy every equality above.
     required = entries["ignored"].required_safety_factor
     assert computed["as_drawn"] < required < computed["ignored"]
+
+
+def test_the_marin_factor_shows_the_cap_that_is_part_of_it():
+    """`k_a = a·S_u^b` alone is not what this check computes, and that mattered.
+
+    The fit crosses one for a ground surface on low-strength steel, and the code takes
+    min(1, ·) — so a derivation written without the cap would disagree with the printed
+    value exactly where the cap binds. Writing the cap into the symbolic line is what let
+    this clause come off the derivation debt list.
+    """
+    from anvilate.derivation import DerivationAbsence
+
+    def entry_for(method: ProductionMethod, ultimate: str, roughness: str):
+        card = callout_scorecard(
+            CalloutSet(
+                callouts=(
+                    SurfaceFinish(
+                        where="bore",
+                        method=method,
+                        roughness=Quantity.parse(roughness),
+                    ),
+                )
+            ),
+            ultimate_strength=Quantity.parse(ultimate),
+        )
+        return card.entries[0]
+
+    machined = entry_for(ProductionMethod.MACHINED, "1200 MPa", "1.6 um")
+    assert machined.derivation.symbolic == "k_a = min(1, a·S_u^b)"
+    assert machined.derivation.unresolved_symbols() == ()
+    assert machined.derivation.result.value == pytest.approx(
+        marin_surface_factor(
+            SurfaceFinish(
+                where="bore",
+                method=ProductionMethod.MACHINED,
+                roughness=Quantity.parse("1.6 um"),
+            ),
+            ultimate_strength=Quantity.parse("1200 MPa"),
+        )
+    )
+
+    # Where the cap binds, the rendered line still evaluates to the value used. A ground
+    # surface on a soft steel is the case the fit runs past 1.
+    ground = entry_for(ProductionMethod.GROUND, "150 MPa", "0.8 um")
+    assert ground.derivation.result.value == 1.0
+    assert "min(1," in ground.derivation.substituted()
+
+    # The polished specimen is the surface the fit is measured against, so its 1.0 is a
+    # definition rather than an evaluation, and the entry says which.
+    polished = entry_for(ProductionMethod.POLISHED, "1200 MPa", "0.1 um")
+    assert polished.derivation is None
+    assert polished.underived.kind is DerivationAbsence.LOOKUP
+    assert "measured against" in polished.underived.reason

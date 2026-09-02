@@ -3283,9 +3283,16 @@ def test_the_underived_registry_is_well_formed():
 
     registry = _registry()
     assert sum(1 for s, _ in registry.values() if s == "lookup") >= 1
-    assert sum(1 for s, _ in registry.values() if s == "debt") >= 10, (
-        "the debt list has emptied out; either the derivations were written or the "
-        "collector stopped seeing the checks that need them"
+    # A floor of one, not of ten. The number here was ten, and every debt genuinely paid
+    # off walked it closer to a failure that would have meant nothing — a ratchet pointing
+    # the wrong way, failing the run for the work it exists to encourage. What the floor
+    # was really guarding was "the collector stopped seeing the checks", and that is
+    # `test_the_coverage_collector_is_collecting`'s job: it runs a real screen and looks
+    # for its clauses in the census. When this reaches zero the list is finished, and
+    # retiring the file is a decision to make in a diff rather than a test failure.
+    assert sum(1 for s, _ in registry.values() if s == "debt") >= 1, (
+        "the debt list has emptied out; if that is real, retire the [debt] section "
+        "deliberately rather than leaving an empty heading"
     )
 
 

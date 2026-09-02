@@ -48,6 +48,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._models import EMPTY_MAP, FrozenMap, RevalidatedModel
+from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, require_finite
 
@@ -567,6 +568,67 @@ def marin_surface_factor(finish: SurfaceFinish, *, ultimate_strength: Quantity) 
     return min(1.0, a * su**b)
 
 
+def _marin_work(finish: SurfaceFinish, ultimate_strength: Quantity, factor: float) -> dict:
+    """The `ScorecardEntry` fields that show how k_a was arrived at, or why nothing does.
+
+    Two shapes, and they are not the same fact. A produced surface reads its two constants
+    out of the table and evaluates the capped fit; the polished specimen is the surface the
+    fit is *measured against*, so its factor is 1 by definition and there is no arithmetic
+    behind it.
+
+    The cap is inside the symbolic line rather than applied after it. `k_a = a·S_u^b`
+    alone crosses one for a ground surface on low-strength steel, so a derivation written
+    that way would disagree with the value used wherever the cap binds — which is the
+    reason this clause sat on the debt list rather than being written down.
+    """
+    if finish.method is ProductionMethod.POLISHED:
+        return {
+            "underived": Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "the polished specimen is the surface the Marin fit is measured "
+                    "against, so its factor is exactly 1 by definition; there is no "
+                    "arithmetic behind this number to show"
+                ),
+            )
+        }
+    a, b = MARIN_SURFACE_CONSTANTS_MPA[finish.method.value]
+    return {
+        "derivation": Derivation(
+            symbolic="k_a = min(1, a·S_u^b)",
+            inputs=(
+                SymbolValue(
+                    symbol="a",
+                    description=(
+                        f"Marin surface-finish coefficient for a {finish.method.value} "
+                        f"surface, S_u in MPa"
+                    ),
+                    value=a,
+                ),
+                SymbolValue(
+                    symbol="b",
+                    description=(
+                        f"Marin surface-finish exponent for a {finish.method.value} surface"
+                    ),
+                    value=b,
+                ),
+                SymbolValue(
+                    symbol="S_u",
+                    # A bare number, not a quantity: the fit's constants are quoted for
+                    # S_u in MPa and the exponent applies to that number, so rendering a
+                    # unit here would put MPa^-0.265 in front of a reader.
+                    description=(
+                        "ultimate tensile strength, in MPa (the unit the fit is quoted for)"
+                    ),
+                    value=ultimate_strength.to("MPa").magnitude,
+                ),
+            ),
+            result=SymbolValue(symbol="k_a", description="Marin surface factor", value=factor),
+            citation=MARIN_SURFACE_CITATION,
+        )
+    }
+
+
 def _roughness_contradiction(finish: SurfaceFinish) -> str | None:
     """The reason a declared roughness cannot come from the declared method, or ``None``."""
     low, high = TYPICAL_ROUGHNESS_UM[finish.method.value]
@@ -757,6 +819,7 @@ def callout_scorecard(
                             f"{callout.parameter.value}"
                         ),
                         reference=MARIN_SURFACE_CITATION,
+                        **_marin_work(callout, ultimate_strength, factor),
                     )
                 )
                 continue
@@ -767,6 +830,14 @@ def callout_scorecard(
                         status=CheckStatus.FAIL,
                         detail=f"{marker} {callout} contradicts itself: {contradiction}",
                         reference=MARIN_SURFACE_CITATION,
+                        underived=Underived(
+                            kind=DerivationAbsence.LOOKUP,
+                            reason=(
+                                "the declared roughness is compared with the band the "
+                                "production method can attain; the band is the whole check "
+                                "and there is no arithmetic between the two numbers"
+                            ),
+                        ),
                     )
                 )
             elif ultimate_strength is None:
@@ -792,6 +863,7 @@ def callout_scorecard(
                             f"at S_u = {ultimate_strength.to('MPa').magnitude:.0f} MPa"
                         ),
                         reference=MARIN_SURFACE_CITATION,
+                        **_marin_work(callout, ultimate_strength, factor),
                     )
                 )
         elif isinstance(callout, Coating):

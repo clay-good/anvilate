@@ -56,7 +56,6 @@ standards effectivity :: a consistency verdict over the citations a bundle carri
 
 [debt]
 AISI S100 Appendix 1 (Direct Strength Method) :: the DSM capacities from the elastic local, distortional and global buckling loads.
-ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections) :: S_T = Y · M / (t² · B). LooseRingFlangeStress carries the shape factor and both stresses but not the moment, the thickness or B, so the scorecard cannot render the formula without those three being carried on it first.
 Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2 :: the unwelded and heat-affected capacities and the slenderness limits that select between them.
 BS 7910 / R6 Option 1 failure assessment diagram :: K_r = K_I/K_mat, L_r = σ_ref/σ_y, and the Option 1 envelope the point is assessed against.
 Kirchhoff plate theory (Bessel eigenvalue) :: f = (λ²/2πa²)·√(D/ρh) with λ from the clamped-circular Bessel root.
@@ -64,5 +63,4 @@ Kirchhoff plate theory (FD-verified eigenvalue table) :: the same frequency form
 Kirchhoff plate theory (Navier eigenvalue) :: the simply-supported rectangular plate fundamental frequency.
 Kirchhoff plate theory (Navier series) :: the FLATNESS half now states that its deflection is a converged double sine series and has no substitutable line. What is still owed is the bending entry's margin line, n = σ_allow/σ, with the series-summed stress as its input — that entry carries a computed safety factor, so it may not declare an absence, and a quotient is a formula somebody has to write.
 Kirchhoff plate theory (axisymmetric closed form) :: the annular cases. The flatness half now states that both peaks are found by scanning the radius after a 2x2 solve for the boundary constants. What is still owed is the bending entry's margin line, n = σ_allow/σ — the same debt as the Navier clause, and payable the same way.
-Shigley's Mechanical Engineering Design, Marin surface factor k_a = a·S_u^b (surface-finish table, S_u in MPa); screening estimate, not a measured factor :: k_a = a · S_u^b is renderable, but the check applies min(1, a·S_u^b) and returns exactly 1.0 for a polished surface. A derivation of the formula alone would disagree with the value used wherever the cap binds, so the clause waits on a way to say a capped result in a symbolic line.
 half-sine shock response spectrum :: the SRS amplification as a function of the pulse duration times the natural frequency.

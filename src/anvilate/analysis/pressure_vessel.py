@@ -2593,6 +2593,56 @@ class LooseRingFlangeStress(BaseModel):
     governing_condition: str
     safety_factor: float
     adequate: bool
+    # The three quantities S_T = Y·M_o/(t²·B) is built from, beside the shape factor that
+    # was already here. Without them the scorecard could name the clause and print the
+    # answer and had nothing to put between the two: the flange check reported a stress
+    # with the moment that made it nowhere on the card.
+    governing_moment: Quantity
+    thickness: Quantity
+    inside_diameter: Quantity
+
+    def derivation(self, citation: str) -> Derivation:
+        """S_T for the governing condition, worked, under the caller's clause.
+
+        The *governing* moment rather than both: the entry's verdict rests on one of the
+        two conditions, and showing the arithmetic of the other beside it invites a reader
+        to check the number that did not decide anything. Which condition it is already
+        appears in the entry's detail line and in the result gloss here.
+        """
+        stress = (
+            self.operating_stress
+            if self.governing_condition == "operating"
+            else self.seating_stress
+        )
+        return Derivation(
+            symbolic="S_T = Y·M_o/(t²·B)",
+            inputs=(
+                SymbolValue(
+                    symbol="Y",
+                    description=(
+                        f"Appendix 2 shape factor at K = {self.shape_factors.ratio:.4g}, "
+                        "the flange outside/inside diameter ratio"
+                    ),
+                    value=self.shape_factors.y_factor,
+                ),
+                SymbolValue(
+                    symbol="M_o",
+                    description=f"flange moment in the {self.governing_condition} condition",
+                    value=self.governing_moment,
+                    unit="N*mm",
+                ),
+                SymbolValue(symbol="t", description="flange ring thickness", value=self.thickness),
+                SymbolValue(
+                    symbol="B", description="flange inside diameter", value=self.inside_diameter
+                ),
+            ),
+            result=SymbolValue(
+                symbol="S_T",
+                description=f"tangential flange stress, {self.governing_condition} condition",
+                value=stress,
+            ),
+            citation=citation,
+        )
 
     def __str__(self) -> str:
         verdict = "adequate" if self.adequate else "overstressed"
@@ -2670,6 +2720,11 @@ def asme_appendix_2_ring_flange_stress(
         governing_condition=condition,
         safety_factor=governing,
         adequate=governing >= 1.0,
+        governing_moment=(
+            moments.seating_moment if condition == "seating" else moments.operating_moment
+        ),
+        thickness=thickness,
+        inside_diameter=inside_diameter,
     )
 
 
@@ -2716,4 +2771,10 @@ def asme_appendix_2_flange_stress_scorecard(
         f"Y={stress.shape_factors.y_factor:.4g} (K="
         f"{stress.shape_factors.ratio:.4g})"
     )
-    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_APPENDIX_2})
+    return entry.model_copy(
+        update={
+            "detail": detail,
+            "reference": _CLAUSE_APPENDIX_2,
+            "derivation": stress.derivation(_CLAUSE_APPENDIX_2),
+        }
+    )

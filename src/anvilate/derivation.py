@@ -68,6 +68,14 @@ def _is_symbol_char(char: str) -> bool:
 # nuisance, a hidden one is the failure `is_worked` exists to prevent.
 _CONSTANTS = frozenset({"π"})
 
+# Operators a formula writes as a word rather than as a sign. `min` in
+# "k_a = min(1, a·S_u^b)" is not an input the caller forgot to declare — it is the cap
+# itself, and the cap is the part of that formula that matters: the fit crosses one for a
+# ground surface on low-strength steel, so a derivation of "k_a = a·S_u^b" alone would
+# disagree with the value used wherever the cap binds. Excusing the word is what lets the
+# capped form be written at all.
+_OPERATORS = frozenset({"min", "max"})
+
 
 class DerivationAbsence(StrEnum):
     """Why a check renders no worked calculation — the two kinds that are finished.
@@ -188,12 +196,12 @@ class Derivation(BaseModel):
         A non-empty result means the derivation declares fewer inputs than its
         formula uses, so the rendered work would show a bare symbol where a number
         belongs. Callers gate on this; the report refuses to render such a
-        derivation as worked. Mathematical constants (π, e) are not missing inputs
-        and never appear here.
+        derivation as worked. Mathematical constants (π, e) and word-operators
+        (``min``, ``max``) are not missing inputs and never appear here.
         """
         _, sep, rhs = self.symbolic.partition("=")
         _, leftover = _scan(rhs if sep else self.symbolic, self._by_symbol(None))
-        return tuple(sorted(set(leftover) - _CONSTANTS))
+        return tuple(sorted(set(leftover) - _CONSTANTS - _OPERATORS))
 
     def _by_symbol(self, system: UnitSystem | None) -> dict[str, str]:
         return {inp.symbol: inp.rendered(system=system) for inp in self.inputs}

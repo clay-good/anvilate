@@ -40985,6 +40985,21 @@ def test_the_ring_flange_that_passes_on_pressure_and_fails_on_bolt_up():
     assert thick.shape_factors.y_factor == pytest.approx(4.0521, rel=1e-3)
     assert "seating governs" in str(thick)
 
+    # And the card can now show that arithmetic. The result carried Y and both stresses
+    # and none of M_o, t or B, so the flange check named its clause, printed its answer,
+    # and had nothing to put between the two. The derivation renders the GOVERNING
+    # condition's moment, because the verdict rests on one of the two.
+    from anvilate.analysis import asme_appendix_2_flange_stress_scorecard
+
+    entry = asme_appendix_2_flange_stress_scorecard("flange", stress=thick)
+    assert entry.derivation.symbolic == "S_T = Y·M_o/(t²·B)"
+    assert entry.derivation.unresolved_symbols() == ()
+    declared = {item.symbol: item.value for item in entry.derivation.inputs}
+    assert declared["t"].to("mm").magnitude == pytest.approx(40.0)
+    assert declared["B"].to("mm").magnitude == pytest.approx(200.0)
+    assert declared["M_o"] == thick.governing_moment == moments.seating_moment
+    assert entry.derivation.result.value == thick.seating_stress
+
 
 def test_the_ring_flange_governing_condition_follows_the_allowables_not_the_moments():
     """A bigger moment can still win, because the two conditions are judged separately.
