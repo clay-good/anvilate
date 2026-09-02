@@ -266,6 +266,49 @@ def _name_element(text: str) -> str:
     return f"<msub><mi>{escape(base)}</mi><mi>{escape(subscript)}</mi></msub>"
 
 
+def _is_unit_only(node: _Node) -> bool:
+    """Whether ``node`` is a unit expression and nothing else.
+
+    A slash inside a VALUE belongs to its unit — "50.00 L/s" is one quantity, and the
+    slash is part of how the unit is spelled. A slash in the FORMULA is a division, and
+    that is what a stacked fraction is for. Telling them apart matters because the
+    renderer cannot stack both: a substituted line like
+
+        P_s = 1000.00 kg/m³ · 9.81 m/s² · 50.00 L/s · 20.000 m / 0.7
+
+    parses left-associatively into four nested divisions, and typeset as four nested
+    fractions it came out three font sizes down and unreadable — which only showed up
+    when somebody rendered the page and looked at it. The arithmetic was right the whole
+    time, so no gate could see it.
+
+    A unit expression is names, superscripted names, and products of those. One bare
+    number anywhere makes it a value, and a division by a value is a real fraction.
+
+    Being unit-shaped is necessary and not sufficient: in the SYMBOLIC line every operand
+    is a name, so "H / η" is unit-shaped and is a division. :func:`_carries_a_value` is
+    the other half — a unit slash always has a number on its left, because the thing being
+    given a unit is a number.
+    """
+    if node.kind == "name":
+        return True
+    if node.kind in {"superscript", "power"}:
+        return _is_unit_only(node.children[0])
+    if node.kind == "group":
+        return _is_unit_only(node.children[0])
+    if node.kind == "binary" and node.text in {"", "·", "*", "/"}:
+        return all(_is_unit_only(child) for child in node.children)
+    return False
+
+
+def _carries_a_value(node: _Node) -> bool:
+    """Whether ``node`` contains a bare number — the sign of a substituted quantity."""
+    if node.kind == "number":
+        return True
+    if node.kind in {"superscript", "power"}:
+        return _carries_a_value(node.children[0])
+    return any(_carries_a_value(child) for child in node.children)
+
+
 def _emit(node: _Node, *, unwrap: bool = False) -> str:
     """One node as MathML.
 
@@ -293,6 +336,9 @@ def _emit(node: _Node, *, unwrap: bool = False) -> str:
             f"<mrow>{_emit(node.children[1], unwrap=True)}</mrow></msup>"
         )
     left, right = node.children
+    if node.text == "/" and _is_unit_only(right) and _carries_a_value(left):
+        # A unit's own slash, written the way a unit is written.
+        return f"{_emit(left)}<mo>/</mo>{_emit(right)}"
     if node.text == "/":
         return (
             f"<mfrac><mrow>{_emit(left, unwrap=True)}</mrow>"

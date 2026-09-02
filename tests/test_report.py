@@ -1280,3 +1280,89 @@ def test_a_negative_value_does_not_drop_a_formula_out_of_the_grammar():
     assert formula_to_mathml("x = 3 · · 4") is None
     assert formula_to_mathml("x = (3") is None
     assert formula_to_mathml("ΔV% = 100 · I") is None
+
+
+def test_a_units_slash_is_not_a_stacked_fraction():
+    """A slash inside a value belongs to its unit; a slash in the formula is a division.
+
+    Found by rendering a report and looking at it. A substituted line whose values carry
+    compound units — the pump duty's ρ·g·Q·H/η is four of them — parses left-associatively
+    into four nested divisions, and typeset as four nested fractions it came out three font
+    sizes down and unreadable. The arithmetic was right the whole time, which is why the
+    render-truth gate could not see it: the numbers agreed and the page was illegible.
+
+    The test is the nesting depth, because that is the thing that was wrong.
+    """
+    from anvilate.report.mathml import formula_to_mathml
+
+    def depth(markup: str) -> int:
+        deepest = current = index = 0
+        while index < len(markup):
+            if markup.startswith("<mfrac>", index):
+                current += 1
+                deepest = max(deepest, current)
+                index += 7
+            elif markup.startswith("</mfrac>", index):
+                current -= 1
+                index += 8
+            else:
+                index += 1
+        return deepest
+
+    pump = formula_to_mathml("P_s = 1000.00 kg/m³ · 9.81 m/s² · 50.00 L/s · 20.000 m / 0.7")
+    assert pump is not None
+    assert depth(pump) == 1, "the unit slashes are being stacked again"
+    assert "<mo>/</mo>" in pump
+
+    # A value with nothing but a unit slash is not a fraction at all.
+    assert depth(formula_to_mathml("V_oz = 237.50 L/s")) == 0
+
+    # The formula's own divisions are still stacked, and being unit-SHAPED is not enough:
+    # in the symbolic line every operand is a name, so "H / η" would qualify on shape
+    # alone. A unit slash always has a number on its left.
+    assert depth(formula_to_mathml("P_s = ρ · g · Q · H / η")) == 1
+    assert depth(formula_to_mathml("σ_b = M · c / I")) == 1
+    # And a division BY a value stays a fraction even with units on both sides.
+    assert depth(formula_to_mathml("σ_b = 12.5 kN·m · 25.00 mm / 4166666.67 mm⁴")) == 1
+    assert depth(formula_to_mathml("n = 124.0 MPa / 96.0 MPa")) == 1
+
+
+def test_no_derivation_the_library_builds_typesets_more_than_two_fractions_deep():
+    """The corpus-wide version, because one formula proves one formula.
+
+    Two is the depth a genuinely nested division reaches — σ_t = P_t / (π · d² / 4) — and
+    anything past it is a unit slash being stacked. Held over every line of every
+    derivation the packs build, in the sample the render-truth gate uses.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from anvilate.report.mathml import formula_to_mathml
+    from test_contract import _sample_derivations
+
+    def depth(markup: str) -> int:
+        deepest = current = index = 0
+        while index < len(markup):
+            if markup.startswith("<mfrac>", index):
+                current += 1
+                deepest = max(deepest, current)
+                index += 7
+            elif markup.startswith("</mfrac>", index):
+                current -= 1
+                index += 8
+            else:
+                index += 1
+        return deepest
+
+    corpus = _sample_derivations()
+    assert len(corpus) >= 20
+    too_deep = []
+    for label, derivation in corpus:
+        for line in derivation.lines():
+            markup = formula_to_mathml(line)
+            if markup is not None and depth(markup) > 2:
+                too_deep.append(f"{label}: {line}")
+    assert not too_deep, "formulas typeset more than two fractions deep:\n  " + "\n  ".join(
+        too_deep
+    )
