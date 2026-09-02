@@ -702,12 +702,45 @@ def test_cover_plate_derivation_only_for_the_closed_form_cases():
     assert any(item.symbol == "ν" for item in supported.inputs)
     assert supported.unresolved_symbols() == ()
 
-    # A rectangular cover sums a Navier series; there is no one-line formula that
-    # is what was computed, so it declares none.
+    # A CLAMPED rectangle is a closed form too — two coefficients read out of Roark
+    # Table 11.4 — and the pack rendered it as a bare table for as long as the symbols
+    # were assembled here from a fixed q/R/t set that only a round cover fits.
     rectangular = bending(
         diameter=None, length=Quantity.parse("600 mm"), width=Quantity.parse("400 mm")
     )
-    assert rectangular.derivation is None
+    assert rectangular.derivation.symbolic == "σ = β·q·b²/t²"
+    assert rectangular.derivation.unresolved_symbols() == ()
+    coefficient = next(item for item in rectangular.derivation.inputs if item.symbol == "β")
+    assert "Table 11.4" in coefficient.description
+
+    # A simply-supported rectangle sums a Navier series; there is no one-line formula
+    # that is what was computed, so it declares none.
+    navier = bending(
+        diameter=None,
+        length=Quantity.parse("600 mm"),
+        width=Quantity.parse("400 mm"),
+        edge=PlateEdge.SIMPLY_SUPPORTED,
+    )
+    assert navier.derivation is None
+
+    # The flatness half is worked wherever the bending half is. It rendered its limit
+    # with nothing behind it on every cover, including the ones whose centre deflection
+    # is a single line.
+    flat = screen_cover_plate(
+        CoverPlate(
+            name="manway",
+            diameter=Quantity.parse("500 mm"),
+            thickness=Quantity.parse("12 mm"),
+            pressure=Quantity.parse("0.4 MPa"),
+            material="ASTM-A36",
+            edge=PlateEdge.CLAMPED,
+            deflection_limit=Quantity.parse("2 mm"),
+        ),
+        required_safety_factor=1.5,
+    )
+    flatness = next(entry for entry in flat.entries if "flatness" in entry.name)
+    assert flatness.derivation.symbolic == "w = q·R⁴/(64·D)"
+    assert flatness.derivation.unresolved_symbols() == ()
 
 
 def test_the_calc_record_is_strict_json_even_with_an_infinite_safety_factor():

@@ -22,7 +22,6 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import Named
 from ..analysis import (
-    DEFAULT_POISSON_RATIO,
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
@@ -40,7 +39,6 @@ from ..analysis import (
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
-from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard
 from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
@@ -236,38 +234,21 @@ def screen_cover_plate(
     else:
         result = check(length=plate.length, width=plate.width, **common)
 
+    # Assembled by the case, not here. This block used to name the symbols itself and only
+    # for a round cover, so the clamped rectangle — whose stress and deflection are as
+    # closed a form as any circular one, on two coefficients read out of Roark Table 11.4 —
+    # rendered a bare table. And the flatness entry below rendered its limit with nothing
+    # behind it on every case, including the four whose deflection is one line.
     bending_update: dict = {"reference": reference}
-    if result.stress_formula is not None and plate.diameter is not None:
-        # The circular uniform-pressure cases are one-line closed forms in the
-        # pressure, radius, and thickness. The rectangular, patch, and annular
-        # cases are series or numeric solutions and declare no formula, so they
-        # render as an inputs table instead of a tidy expression that is not what
-        # was computed.
-        symbols = [
-            SymbolValue(
-                symbol="q", description="uniform pressure on the cover", value=plate.pressure
-            ),
-            SymbolValue(
-                symbol="R",
-                description="cover radius",
-                value=Quantity(magnitude=plate.diameter.to("mm").magnitude / 2, unit="mm"),
-            ),
-            SymbolValue(symbol="t", description="cover thickness", value=plate.thickness),
-        ]
-        if "ν" in result.stress_formula:
-            symbols.append(
-                SymbolValue(symbol="ν", description="Poisson's ratio", value=DEFAULT_POISSON_RATIO)
-            )
-        bending_update["derivation"] = Derivation(
-            symbolic=result.stress_formula,
-            inputs=tuple(symbols),
-            result=SymbolValue(
-                symbol="σ",
-                description="peak bending stress in the cover",
-                value=result.max_bending_stress,
-            ),
-            citation=reference,
-        )
+    stress_work = result.stress_derivation(reference)
+    if stress_work is not None:
+        bending_update["derivation"] = stress_work
+    # A bending entry whose stress has no closed form is NOT declared here, and the
+    # scorecard would refuse it if it were: the entry carries a computed safety factor,
+    # and a safety factor is a quotient. What that check still owes a reviewer is the
+    # margin line n = σ_allow/σ, with the series-summed stress as its input — which is a
+    # formula somebody has to write, not an absence to declare. The two Kirchhoff clauses
+    # stay on the debt list saying exactly that.
     entries = [
         strength_scorecard(
             f"{plate.name} plate bending",
@@ -278,12 +259,18 @@ def screen_cover_plate(
         ).model_copy(update=bending_update)
     ]
     if plate.deflection_limit is not None:
+        flatness_update: dict = {"reference": reference}
+        deflection_work = result.deflection_derivation(reference)
+        if deflection_work is not None:
+            flatness_update["derivation"] = deflection_work
+        else:
+            flatness_update["underived"] = result.underived
         entries.append(
             deflection_scorecard(
                 f"{plate.name} flatness",
                 deflection=result.max_deflection,
                 limit=plate.deflection_limit,
-            ).model_copy(update={"reference": reference})
+            ).model_copy(update=flatness_update)
         )
     if plate.min_frequency is not None:
         modal_check, modal_reference = _PLATE_MODAL_CHECKS[(circular, plate.edge)]

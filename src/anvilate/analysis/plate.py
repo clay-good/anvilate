@@ -29,8 +29,10 @@ from __future__ import annotations
 
 from math import log, pi, sin, sqrt
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -99,7 +101,7 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 _SMALL_DEFLECTION_RATIO_LIMIT = 0.5
 
 
-class PlateBendingResult(BaseModel):
+class PlateBendingResult(RevalidatedModel):
     """The result of a closed-form plate bending check.
 
     ``max_bending_stress`` is the peak surface bending stress (6·M/t² from the
@@ -125,11 +127,79 @@ class PlateBendingResult(BaseModel):
     max_bending_stress: Quantity
     max_deflection: Quantity
     small_deflection_ratio: float | None = None
-    # The closed-form peak-stress expression for this case, when it has one a
-    # reviewer can follow in a line. The rectangular and patch cases sum a Navier
-    # series and the annular cases search the radius numerically, so they declare
-    # none rather than a tidy formula that is not what was computed.
+    # The closed-form expressions for this case, when it has them, each with the symbols
+    # it names and the values this call put into them. The symbols live here rather than
+    # with the caller because the case is what knows which ones its own formula uses — a
+    # tabulated Roark coefficient is not a quantity any pack could have supplied.
+    #
+    # A case declares both or neither: every one of them either has a line for the stress
+    # and a line for the deflection, or sums a Navier series / scans a radius and has
+    # neither. `underived` is the second half of that answer, and the validator below
+    # refuses a case that gives no answer at all.
     stress_formula: str | None = None
+    stress_inputs: tuple[SymbolValue, ...] = ()
+    deflection_formula: str | None = None
+    deflection_inputs: tuple[SymbolValue, ...] = ()
+    underived: Underived | None = None
+
+    @model_validator(mode="after")
+    def _every_case_answers_for_its_work(self) -> PlateBendingResult:
+        """Two closed forms with their symbols, or a stated reason there are none."""
+        declared = [
+            bool(self.stress_formula),
+            bool(self.stress_inputs),
+            bool(self.deflection_formula),
+            bool(self.deflection_inputs),
+        ]
+        if any(declared) and not all(declared):
+            raise ValueError(
+                "a plate case states the stress formula, the deflection formula and the "
+                f"symbols of both, or none of them; got {declared}"
+            )
+        if all(declared) == (self.underived is not None):
+            raise ValueError(
+                "a plate case states its formulas or states why it has none, never both "
+                f"and never neither; got formulas={all(declared)}, "
+                f"underived={self.underived!r}"
+            )
+        return self
+
+    def stress_derivation(self, citation: str) -> Derivation | None:
+        """The peak-stress formula as a worked calculation, under the caller's clause."""
+        return self._derivation(
+            self.stress_formula,
+            self.stress_inputs,
+            SymbolValue(
+                symbol="σ",
+                description="peak surface bending stress",
+                value=self.max_bending_stress,
+            ),
+            citation,
+        )
+
+    def deflection_derivation(self, citation: str) -> Derivation | None:
+        """The centre-deflection formula as a worked calculation, under the caller's clause.
+
+        The flatness half of a cover screen used to render its limit with nothing behind
+        it, on cases whose deflection is as closed a form as the stress beside it.
+        """
+        return self._derivation(
+            self.deflection_formula,
+            self.deflection_inputs,
+            SymbolValue(symbol="w", description="peak deflection", value=self.max_deflection),
+            citation,
+        )
+
+    @staticmethod
+    def _derivation(
+        symbolic: str | None,
+        inputs: tuple[SymbolValue, ...],
+        result: SymbolValue,
+        citation: str,
+    ) -> Derivation | None:
+        if symbolic is None:
+            return None
+        return Derivation(symbolic=symbolic, inputs=inputs, result=result, citation=citation)
 
     @property
     def is_small_deflection(self) -> bool | None:
@@ -237,6 +307,15 @@ def simply_supported_plate_center_patch_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
+        underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the centred-patch solution is a converged double sine series over the odd "
+                "harmonics — the deflection and the two centre moments are each a sum whose terms "
+                "carry the patch size — so there is no substitutable line, and the inputs table is "
+                "the correct rendering rather than a shortfall"
+            ),
+        ),
     )
 
 
@@ -280,6 +359,7 @@ def clamped_plate_uniform_load(
         raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
     if b > a:
         a, b = b, a  # b is the short side; the result is orientation-blind
+    short_side = Quantity(magnitude=b, unit="mm")
 
     ratio = b / a
     for (r_lo, alpha_lo, beta_lo), (r_hi, alpha_hi, beta_hi) in zip(
@@ -293,10 +373,46 @@ def clamped_plate_uniform_load(
 
     stress = beta * q * b**2 / t**2
     deflection = alpha * q * b**4 / (e * t**3)
+    # α and β are the table's, interpolated in the side ratio, and they are declared as
+    # inputs rather than folded into the formula: a reviewer checking this against Roark
+    # is looking up exactly those two numbers, and a rendered "0.0284·q·b⁴/(E·t³)" hides
+    # which row of the table it came from.
+    table = (
+        SymbolValue(symbol="q", description="uniform pressure on the plate", value=pressure),
+        SymbolValue(symbol="b", description="short side of the plan rectangle", value=short_side),
+        SymbolValue(symbol="t", description="plate thickness", value=thickness),
+    )
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
+        stress_formula="σ = β·q·b²/t²",
+        stress_inputs=(
+            SymbolValue(
+                symbol="β",
+                description=(
+                    f"Roark Table 11.4 stress coefficient at b/a = {ratio:.3f}, ν = 0.3, "
+                    "interpolated linearly in the side ratio"
+                ),
+                value=beta,
+            ),
+            *table,
+        ),
+        deflection_formula="w = α·q·b⁴/(E·t³)",
+        deflection_inputs=(
+            SymbolValue(
+                symbol="α",
+                description=(
+                    f"Roark Table 11.4 deflection coefficient at b/a = {ratio:.3f}, ν = 0.3, "
+                    "interpolated linearly in the side ratio"
+                ),
+                value=alpha,
+            ),
+            *table,
+            SymbolValue(
+                symbol="E", description="elastic modulus", value=elastic_modulus, unit="GPa"
+            ),
+        ),
     )
 
 
@@ -324,6 +440,39 @@ def _circular_plate_inputs(
     return q, radius, t, rigidity
 
 
+def _circular_plate_symbols(
+    pressure: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    poisson_ratio: float,
+) -> tuple[SymbolValue, ...]:
+    """q, R, t and ν as the circular-plate closed forms name them.
+
+    R rather than the declared diameter: every source writes these results on the radius,
+    and a substituted line showing the diameter where the formula says R is a reader's
+    error waiting to happen. ν is last so a case whose formula does not use it can drop it.
+    """
+    return (
+        SymbolValue(symbol="q", description="uniform pressure on the plate", value=pressure),
+        SymbolValue(
+            symbol="R",
+            description="plate radius (half the declared diameter)",
+            value=Quantity(magnitude=diameter.to("mm").magnitude / 2, unit="mm"),
+        ),
+        SymbolValue(symbol="t", description="plate thickness", value=thickness),
+        SymbolValue(symbol="ν", description="Poisson's ratio", value=poisson_ratio),
+    )
+
+
+def _rigidity_symbol(rigidity: float) -> SymbolValue:
+    """The flexural rigidity D, with the definition a reader needs to check it."""
+    return SymbolValue(
+        symbol="D",
+        description="flexural rigidity of the plate, D = E·t³/(12·(1 − ν²))",
+        value=Quantity(magnitude=rigidity, unit="MPa*mm**3"),
+    )
+
+
 def simply_supported_circular_plate_uniform_load(
     *,
     pressure: Quantity,
@@ -348,11 +497,18 @@ def simply_supported_circular_plate_uniform_load(
     )
     stress = 3 * (3 + poisson_ratio) * q * radius**2 / (8 * t**2)
     deflection = (5 + poisson_ratio) / (1 + poisson_ratio) * q * radius**4 / (64 * rigidity)
+    symbols = _circular_plate_symbols(pressure, diameter, thickness, poisson_ratio)
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
         stress_formula="σ = 3·(3 + ν)·q·R²/(8·t²)",
+        stress_inputs=symbols,
+        # Written on D rather than on E·t³ because D = E·t³/(12·(1 − ν²)) is the plate
+        # rigidity every source states this result in, and a reader checking Timoshenko is
+        # looking for that form. D is declared with its own definition in the gloss.
+        deflection_formula="w = (5 + ν)·q·R⁴/((1 + ν)·64·D)",
+        deflection_inputs=(*symbols, _rigidity_symbol(rigidity)),
     )
 
 
@@ -381,11 +537,18 @@ def clamped_circular_plate_uniform_load(
     )
     stress = 3 * q * radius**2 / (4 * t**2)
     deflection = q * radius**4 / (64 * rigidity)
+    symbols = _circular_plate_symbols(pressure, diameter, thickness, poisson_ratio)
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
         stress_formula="σ = 3·q·R²/(4·t²)",
+        # ν does not appear in the clamped peak stress — it is the rim radial bending —
+        # so it is not declared for it. A symbol with no place in the formula would
+        # render in the glossary as an input to arithmetic that never used it.
+        stress_inputs=symbols[:-1],
+        deflection_formula="w = q·R⁴/(64·D)",
+        deflection_inputs=(*symbols[:-1], _rigidity_symbol(rigidity)),
     )
 
 
@@ -617,6 +780,15 @@ def _annular_plate_uniform_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
+        underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the annular plate's general solution is closed, but its peak deflection and peak "
+                "moment are found by scanning the radius between the hole and the rim, after a 2x2 "
+                "solve for the boundary constants. Neither peak sits at a position a formula could "
+                "name, so the inputs table is the correct rendering rather than a shortfall"
+            ),
+        ),
     )
 
 
@@ -749,6 +921,16 @@ def simply_supported_plate_uniform_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
         small_deflection_ratio=deflection / t,
+        underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason=(
+                "the Navier solution is a converged double sine series over the odd harmonics, not "
+                "an expression: the deflection and the two centre moments are each a sum, and the "
+                "peak stress takes the larger moment. A one-line form would be a fitted "
+                "coefficient rather than what was computed, so the inputs table is the correct "
+                "rendering"
+            ),
+        ),
     )
 
 

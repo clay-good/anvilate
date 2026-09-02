@@ -38998,10 +38998,16 @@ def test_plate_results_report_whether_small_deflection_theory_applied():
     # The passing case reports its ratio too, without the warning.
     assert "w/t" in str(light) and "BEYOND" not in str(light)
 
-    # A result built without the ratio answers None, never a bare True.
+    # A result built without the ratio answers None, never a bare True. It still has to
+    # answer for its work: every plate case declares its formulas or says why it has none.
     from anvilate.analysis.plate import PlateBendingResult
+    from anvilate.derivation import DerivationAbsence, Underived
 
-    bare = PlateBendingResult(max_bending_stress=_q("100 MPa"), max_deflection=_q("1 mm"))
+    bare = PlateBendingResult(
+        max_bending_stress=_q("100 MPa"),
+        max_deflection=_q("1 mm"),
+        underived=Underived(kind=DerivationAbsence.NUMERIC_RESULT, reason="a hand-built probe"),
+    )
     assert bare.is_small_deflection is None
 
 

@@ -557,12 +557,15 @@ def test_the_pressure_scorecard_boundaries_sit_exactly_where_the_clamp_puts_them
 def test_the_small_deflection_limit_sits_at_a_half_not_merely_below_five():
     """0.5 -> 5.0 was killed; 0.5 -> 0.75 was not, so the constant was pinned only loosely."""
     from anvilate.analysis.plate import PlateBendingResult
+    from anvilate.derivation import DerivationAbsence, Underived
 
     for ratio, inside in ((0.49, True), (0.5, True), (0.51, False), (0.74, False)):
         result = PlateBendingResult(
             max_bending_stress=_q("100 MPa"),
             max_deflection=_q("1 mm"),
             small_deflection_ratio=ratio,
+            # Every plate case answers for its work; this probe is about the ratio.
+            underived=Underived(kind=DerivationAbsence.NUMERIC_RESULT, reason="a hand-built probe"),
         )
         assert result.is_small_deflection is inside, ratio
 
