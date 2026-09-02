@@ -23,7 +23,8 @@ import yaml
 
 from anvilate.cli import EXIT_CODES, EXIT_NOT_EVALUATED, EXIT_OK, _build_parser
 
-_ACTION = Path(__file__).resolve().parent.parent / ".github" / "actions" / "check" / "action.yml"
+_REPO = Path(__file__).resolve().parent.parent
+_ACTION = _REPO / ".github" / "actions" / "check" / "action.yml"
 
 
 @pytest.fixture(scope="module")
@@ -135,3 +136,51 @@ def test_each_optional_output_file_is_written_by_its_own_command(action):
     script = _script(action)
     assert 'anvilate check "$ANVILATE_PATH" --format json > "$ANVILATE_REPORT"' in script
     assert 'anvilate export "$ANVILATE_PATH" --format json > "$ANVILATE_BUNDLES"' in script
+
+
+def test_the_python_classifiers_are_the_versions_ci_actually_proves():
+    """PyPI's version filter reads the classifiers, and nothing here read them back.
+
+    They said 3.11 and only 3.11 while the CI matrix ran 3.11, 3.12 and 3.13 — so the
+    package told every installer it supported one version of Python and the suite proved
+    three. The direction is what makes it worth a gate: an *understated* claim fails no
+    test, breaks no build, and simply loses the package to anyone filtering on the version
+    they run.
+
+    Both directions are held. A version added to the matrix and not to the classifiers is
+    the drift that happened; a classifier added without a matrix row is a support claim
+    nothing backs, which is the worse of the two.
+    """
+    import tomllib
+
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "ci.yml").read_text())
+    matrix = {
+        str(version)
+        for job in workflow["jobs"].values()
+        for version in job.get("strategy", {}).get("matrix", {}).get("python-version", [])
+    }
+    assert len(matrix) >= 2, (
+        f"the CI matrix came back as {sorted(matrix)}; this gate reads the wrong key or "
+        "the matrix has collapsed to one version, and either way it proves nothing"
+    )
+
+    config = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    prefix = "Programming Language :: Python :: "
+    claimed = {
+        line.removeprefix(prefix)
+        for line in config["project"]["classifiers"]
+        if line.startswith(prefix)
+    }
+    assert claimed == matrix, (
+        f"the classifiers claim Python {sorted(claimed)} and CI proves {sorted(matrix)}. "
+        "PyPI filters on the classifiers, so an unclaimed version is a version nobody can "
+        "find the package for, and a claimed one CI does not run is a promise nothing keeps"
+    )
+
+    # And the floor has to agree with the lowest version proved, or `pip` refuses an
+    # interpreter the suite is green on — or accepts one it never sees.
+    assert config["project"]["requires-python"] == f">={min(matrix, key=_version_key)}"
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
