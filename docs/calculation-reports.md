@@ -233,6 +233,22 @@ a browser the caller already chose, not a rendering backend this library owns.
 
 ## Current limits
 
+**A declared unit system does not reach every discipline.** The mechanical and structural
+families follow it completely — lengths, forces, stresses, moments, second moments, areas,
+section moduli and line loads all convert, and every substituted line evaluates to its own
+printed result in both systems. Three families do not, and say so rather than mixing:
+a ventilation zone's outdoor-air requirement stays in L/s and m², and an air-change rate in
+m³/hour, whatever the document declares.
+
+The reason is that the system's table holds **one unit per dimension**, and two disciplines
+want different ones. `area_unit` is mm² because a structural section modulus divides by it;
+a flow per square millimetre is not a unit anybody writes. Where a pack's units are
+arithmetic rather than taste — the sum only adds up in that set — the symbol says so and
+keeps them, which is visible in the document rather than silent. A US-customary ventilation
+report is therefore in SI, and that is a gap rather than a decision: closing it means a
+per-system required unit, which nothing has asked for yet.
+
+
 Five limits that used to be listed here are closed, and the first mattered more than it
 read (the other two are the two sections above: formulas are typeset now, and the PDF
 question is answered rather than open):

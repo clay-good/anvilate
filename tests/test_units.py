@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import pathlib
 from typing import Annotated
 
 import pytest
@@ -891,3 +892,49 @@ def test_the_litre_is_displayed_as_a_capital_L():
     assert display_unit("l") == "L"
     assert display_unit("ml / s") == "mL / s"
     assert display_unit("dal") == "daL"
+
+
+def test_the_dimensions_the_system_does_not_convert_are_the_ones_the_page_names():
+    """`docs/calculation-reports.md` tells a reader which disciplines a declared system
+    reaches and which it does not. That is a claim about `_system_unit`'s table, and a
+    dimension added to the table would make the page wrong in the direction that matters —
+    telling a US engineer their ventilation report is in SI when it is no longer.
+
+    Held from the table rather than from a list of names, so adding a mapping fails here.
+    """
+    from anvilate.units import Quantity, UnitSystem
+    from anvilate.units.format import _system_unit
+
+    unconverted = {
+        "a volumetric flow": Quantity.parse("340 m**3/hour"),
+        "a flow per unit area": Quantity.parse("0.3 L/s/m**2"),
+        "a mass per unit area": Quantity.parse("94.2 kg/m**2"),
+        "a density": Quantity.parse("1000 kg/m**3"),
+        "a unit weight": Quantity.parse("18 kN/m**3"),
+    }
+    converted = {
+        "a length": Quantity.parse("4 m"),
+        "a force": Quantity.parse("10 kN"),
+        "a stress": Quantity.parse("250 MPa"),
+        "a moment": Quantity.parse("10 kN*m"),
+        "an area": Quantity.parse("15000 mm**2"),
+    }
+    page = (
+        pathlib.Path(__file__).resolve().parent.parent / "docs" / "calculation-reports.md"
+    ).read_text(encoding="utf-8")
+    assert "does not reach every discipline" in page, (
+        "the page no longer states the limit; either restore the sentence or delete this "
+        "gate with it — a gate on a claim nobody makes passes forever"
+    )
+
+    for system in UnitSystem:
+        for label, quantity in converted.items():
+            assert _system_unit(quantity, system) is not None, (
+                f"{label} stopped following a declared system, and the page says it does"
+            )
+        for label, quantity in unconverted.items():
+            assert _system_unit(quantity, system) is None, (
+                f"{label} now follows a declared system. That is an improvement, and "
+                "docs/calculation-reports.md still tells a reader it does not — update the "
+                "page, and check whether the pack that pinned its units still needs to"
+            )
