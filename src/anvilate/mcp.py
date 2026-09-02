@@ -130,7 +130,13 @@ REQUIRED_OPERATIONS = frozenset(
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
 _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
-_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.2.0.json"
+# Moved from 1.2.0 when `ScorecardEntry.underived` shipped. The tool surface has to move
+# with it: the server now emits entries carrying a field 1.2.0 does not describe, and a
+# client validating against the version this catalog names would be validating the wrong
+# document. Nothing a 1.2.0 client already reads has changed — the addition is one optional
+# property, and neither release closes `additionalProperties` — so an old client keeps
+# working; it simply cannot see whether a check is owed a derivation.
+_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.3.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session

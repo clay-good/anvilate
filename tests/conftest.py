@@ -231,14 +231,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     paid = _paid_off_debts(coverage, registry)
     if paid:
         print(
-            "\nDERIVATION COVERAGE: every entry of these now carries a derivation, so "
-            "they are no longer debt. Strike them from [debt] in "
+            "\nDERIVATION COVERAGE: every entry of these now carries a derivation or "
+            "states why it has none, so they are no longer debt. Strike them from [debt] in "
             "docs/api/underived-checks.txt:\n  " + "\n  ".join(paid)
         )
         session.exitstatus = 1
 
-    worked, cited = _derivation_coverage_ratio(coverage)
-    print(f"\nderivation coverage: {worked}/{cited} cited clauses fully worked")
+    worked, answered, cited = _derivation_coverage_ratio(coverage)
+    print(
+        f"\nderivation coverage: {worked}/{cited} cited clauses fully worked, "
+        f"{answered}/{cited} fully answered"
+    )
 
     # A registered clause nothing produces any more is a line that can never be paid off
     # and can never fail, which is how a ratchet stops meaning anything. Only a full run
@@ -259,15 +262,23 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 # `calculation-report` requires CI to report the worked/total ratio and to fail when a new
 # check ships without derivation metadata. A check is keyed by the clause it cites — the
 # same key docs/api/editionless-citations.txt uses, and the thing a reviewer reads — and a
-# clause counts as covered only when EVERY library-produced entry citing it carries a
-# Derivation. Half a clause renders a worked formula for some parts and a bare table for
-# others, which reads as though all of it was derived.
+# clause counts as covered only when EVERY library-produced entry citing it has ANSWERED.
+# Half a clause renders a worked formula for some parts and a bare table for others, which
+# reads as though all of it was derived.
 #
-# The registry has two sections and they are not interchangeable; see the header of
-# docs/api/underived-checks.txt. The gate enforces the distinction from the data rather
-# than from the honesty of the reason: an entry carrying a computed safety factor is a
-# quotient, a quotient is a formula, and a formula is not a lookup. So a debt cannot be
-# retired by being relabelled.
+# ANSWERED means the entry carries a Derivation, or carries an `Underived` — the check's
+# own statement that it has no formula and why. The second is what the clause key could
+# not express: a clause cited by a computing check and by an exempt one is one line in the
+# registry, and the line has to be right for both. Three debts were nothing but that
+# failure and could not be worked off at all — paying off the derivable half of one moved
+# the ratio by nothing, which is a meter that stops while the work happens.
+#
+# So the registry no longer decides the kind; the entry does, and what is left in the file
+# is debt. See the header of docs/api/underived-checks.txt. The distinction is still
+# enforced from the data rather than from the honesty of the reason: an entry carrying a
+# computed safety factor is a quotient, a quotient is a formula, and `ScorecardEntry`
+# refuses to let such an entry declare it has none. So a debt cannot be retired by being
+# relabelled.
 # ---------------------------------------------------------------------------
 
 _REGISTRY = _REPO / "docs" / "api" / "underived-checks.txt"
@@ -336,9 +347,15 @@ def _counts_as_worked(entry) -> bool:
     return derivation is not None and not derivation.unresolved_symbols()
 
 
-def _observed_coverage() -> dict[str, tuple[int, int, int]]:
-    """Per cited clause: how many entries carry a derivation, how many were evaluated, and
-    how many carry a computed safety factor."""
+def _observed_coverage() -> dict[str, tuple[int, int, int, int]]:
+    """Per cited clause: how many entries are worked, how many ANSWERED, how many were
+    evaluated, and how many carry a computed safety factor.
+
+    An entry is *answered* when it carries a worked derivation **or** declares, on itself,
+    why it has none. The two are the same fact to a reviewer — the check has said what its
+    arithmetic is, including when there is not any — and separating them is what made a
+    clause cited by one computing check and one exempt check impossible to work off.
+    """
     from anvilate.scorecard import CheckStatus
 
     coverage: dict[str, list[int]] = {}
@@ -351,8 +368,10 @@ def _observed_coverage() -> dict[str, tuple[int, int, int]]:
         # only ever refuses leaves the census altogether.
         if entry.status is CheckStatus.NOT_EVALUATED:
             continue
-        counts = coverage.setdefault(str(entry.reference), [0, 0, 0])
-        counts[1] += 1
+        counts = coverage.setdefault(str(entry.reference), [0, 0, 0, 0])
+        counts[2] += 1
+        if _counts_as_worked(entry) or getattr(entry, "underived", None) is not None:
+            counts[1] += 1
         # WORKED, not merely present. A derivation whose formula names a symbol it never
         # declares renders with a bare symbol where a number belongs, so `Report` refuses
         # to show it as worked and falls back to the inputs table. Counting it as covered
@@ -361,7 +380,7 @@ def _observed_coverage() -> dict[str, tuple[int, int, int]]:
         if _counts_as_worked(entry):
             counts[0] += 1
         if entry.safety_factor is not None:
-            counts[2] += 1
+            counts[3] += 1
     return {clause: tuple(counts) for clause, counts in coverage.items()}
 
 
@@ -382,7 +401,7 @@ def _read_registry() -> dict[str, tuple[str, str]]:
 
 
 def _coverage_failures(
-    coverage: dict[str, tuple[int, int, int]],
+    coverage: dict[str, tuple[int, int, int, int]],
     registry: dict[str, tuple[str, str]],
 ) -> list[str]:
     """Everything the ratchet can conclude from the clauses this run actually observed.
@@ -400,13 +419,14 @@ def _coverage_failures(
     """
     failures: list[str] = []
     for clause in sorted(coverage):
-        derived, total, safety_factors = coverage[clause]
+        derived, answered, total, safety_factors = coverage[clause]
         section, reason = registry.get(clause, ("", ""))
-        if derived < total and clause not in registry:
+        if answered < total and clause not in registry:
             failures.append(
-                f"{clause}: {total - derived} of {total} entries carry no derivation, and "
-                f"the clause is on neither list in docs/api/underived-checks.txt. Attach a "
-                f"Derivation to the check — a new check ships with one"
+                f"{clause}: {total - answered} of {total} entries neither carry a "
+                f"derivation nor declare why they have none, and the clause is on neither "
+                f"list in docs/api/underived-checks.txt. Attach a Derivation to the check "
+                f"— a new check ships with one — or, if it has no formula, an Underived"
             )
         elif section == "lookup" and derived:
             failures.append(
@@ -423,28 +443,47 @@ def _coverage_failures(
 
 
 def _paid_off_debts(
-    coverage: dict[str, tuple[int, int, int]],
+    coverage: dict[str, tuple[int, int, int, int]],
     registry: dict[str, tuple[str, str]],
 ) -> list[str]:
-    """Debts whose every evaluated entry now carries a derivation — only on a full run."""
+    """Debts whose every evaluated entry has now ANSWERED — only on a full run.
+
+    Answered, not derived: the three debts this rule could never clear were clauses whose
+    computing entries were fully worked and whose one non-computing entry had nothing to
+    render. Paying off the derivable half of such a clause moved the ratio by nothing,
+    which is a meter that stops while the work happens.
+    """
     return sorted(
         clause
-        for clause, (derived, total, _) in coverage.items()
-        if registry.get(clause, ("", ""))[0] == "debt" and derived == total
+        for clause, (_, answered, total, _sf) in coverage.items()
+        if registry.get(clause, ("", ""))[0] == "debt" and answered == total
     )
 
 
 def _stale_registry_lines(
-    coverage: dict[str, tuple[int, int, int]],
+    coverage: dict[str, tuple[int, int, int, int]],
     registry: dict[str, tuple[str, str]],
 ) -> list[str]:
     """Registered clauses no check produced at all — only meaningful on a full run."""
     return sorted(set(registry) - set(coverage))
 
 
-def _derivation_coverage_ratio(coverage: dict[str, tuple[int, int, int]]) -> tuple[int, int]:
-    """Clauses every entry of which is derived, over clauses cited."""
-    return sum(1 for derived, total, _ in coverage.values() if derived == total), len(coverage)
+def _derivation_coverage_ratio(
+    coverage: dict[str, tuple[int, int, int, int]],
+) -> tuple[int, int, int]:
+    """Clauses fully worked, clauses fully answered, and clauses cited.
+
+    Both numerators are reported because they measure different things. *Worked* is how
+    much of the library renders a substitutable formula. *Answered* is how much of it has
+    said anything at all about its arithmetic, and it is the one that reaches 100% — a
+    lifter's Class 0 exemption will never acquire a formula, and a clause carrying one is
+    finished, not short.
+    """
+    return (
+        sum(1 for derived, _, total, _sf in coverage.values() if derived == total),
+        sum(1 for _, answered, total, _sf in coverage.values() if answered == total),
+        len(coverage),
+    )
 
 
 # ---------------------------------------------------------------------------

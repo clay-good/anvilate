@@ -8,9 +8,11 @@ Analysis functions SHALL declare derivation metadata — symbolic form, symbol g
 
 A check that ships without derivation metadata SHALL be registered under one of **three** distinct kinds, and the registry SHALL NOT collapse them: a **lookup**, which has no formula to render and is complete as it stands; a **numeric result**, whose value comes from solving an equation rather than evaluating an expression, so there is no substitutable line to render and the fallback table is its correct rendering; and a **debt**, which is a closed form whose derivation has not been written. Filing a debt as either of the others converts an unfinished piece of work into a decision, which is a worse silence than the one the registry replaces.
 
-The declaration SHALL be made where the check is, not in a file addressed by citation: a clause cited by more than one check cannot be answered once, and a registry that answers it once is wrong for every check but the first.
+The two **complete** kinds SHALL be declared where the check is and travel with the entry, not in a file addressed by citation: a clause cited by more than one check cannot be answered once, and a registry that answers it once is wrong for every check but the first. A check SHALL NOT be able to declare itself a **debt**: debt is the absence of any declaration, recorded per clause in the ratchet's own list, and a check that could file its own debt would retire it by describing it.
 
-The debt list SHALL be downward-only: a check may leave it by acquiring a derivation, and SHALL NOT leave it by being reclassified unless the stated reason changes accordingly.
+A check SHALL be counted as having answered when it carries a derivation or declares one of the two complete kinds, and a clause SHALL clear the list when every entry citing it has answered.
+
+The debt list SHALL be downward-only: a check may leave it by acquiring a derivation, and SHALL NOT leave it by being reclassified unless the stated reason changes accordingly. A check carrying a computed safety factor SHALL NOT be able to declare that it has no formula, in any kind: a safety factor is a quotient and a quotient is a formula, so the relabelling is refused on the data rather than on the wording.
 
 #### Scenario: New check without metadata is caught
 
@@ -24,8 +26,13 @@ The debt list SHALL be downward-only: a check may leave it by acquiring a deriva
 
 #### Scenario: A debt cannot be retired by relabelling
 
-- **WHEN** a check on the debt list is moved to another kind without its stated reason changing to one that describes that kind
-- **THEN** CI fails, because a formula does not become a table by being filed as one
+- **WHEN** a check carrying a computed safety factor declares that it has no formula
+- **THEN** the entry is refused at construction, and on a copy, because a formula does not become a table by being filed as one
+
+#### Scenario: A declaration with no reason is refused
+
+- **WHEN** a check declares that it has no formula and states no reason
+- **THEN** the declaration is refused, because a reason that says nothing is the silence the declaration exists to replace
 
 #### Scenario: One clause, two checks, one of them worked
 

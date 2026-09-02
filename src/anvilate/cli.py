@@ -820,13 +820,16 @@ def _render(name: str, card: Scorecard, *, show_work: bool = False) -> str:
         # block the calculation report prints, through the report's own renderer, indented
         # to sit under the entry it belongs to.
         if show_work:
-            worked = ReportSection(entry=entry).worked_lines()
+            section = ReportSection(entry=entry)
+            worked = section.worked_lines()
             if worked:
                 lines.extend(f"{' ' * 15}{line}" for line in worked)
             else:
                 # Said out loud. A check silently missing from a --show-work listing reads
-                # as one whose formula was not worth showing, and those are different.
-                lines.append("                 [derivation not rendered]")
+                # as one whose formula was not worth showing, and those are different. The
+                # label comes from the section so this surface and the report cannot
+                # describe one absent derivation two ways.
+                lines.append(f"                 [{section.fallback_label}]")
     governing = card.governing()
     if governing is None:
         lines.append("  governing:     none — nothing blocks and no check carries a margin")

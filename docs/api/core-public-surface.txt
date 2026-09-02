@@ -103,6 +103,8 @@ dcc.d_si_quantity
 dcc.parse_dcc
 derivation.SymbolValue
 derivation.Derivation
+derivation.DerivationAbsence
+derivation.Underived
 evidence.SourceRecord
 evidence.collect_provenance
 fetch.ConsentRequired
@@ -164,6 +166,7 @@ loads.asce7_asd_seismic
 loads.combination_scorecard
 loads.CombinationEvidence
 loads.combination_evidence
+loads.combination_derivation
 mcp.Cost
 mcp.Dispatch
 mcp.Gate

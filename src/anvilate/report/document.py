@@ -182,6 +182,20 @@ class ReportSection(BaseModel):
         return tuple(lines)
 
     @property
+    def fallback_label(self) -> str:
+        """The label over the inputs table, with the check's own reason when it states one.
+
+        A bare "derivation not rendered" tells a reviewer that work is missing and not
+        whether anyone owes it. An exemption, a table comparison and an unwritten closed
+        form all print the same three words, and only the first two are finished. When
+        the check declares why it has no formula, the reason belongs here — it is the one
+        place a reader is already looking for it.
+        """
+        if self.entry.underived is None:
+            return _FALLBACK_LABEL
+        return f"{_FALLBACK_LABEL} — {self.entry.underived.reason}"
+
+    @property
     def citation(self) -> str | None:
         """The clause behind the check, from the derivation or the entry."""
         derivation = self.worked
@@ -259,7 +273,7 @@ class CalculationReport(BaseModel):
             if section.is_worked:
                 out.extend(section.worked_lines(system=self.unit_system))
             else:
-                out.append(f"  [{_FALLBACK_LABEL}]")
+                out.append(f"  [{section.fallback_label}]")
                 for item in section.inputs:
                     out.append(
                         f"    {item.symbol} = {item.rendered(system=self.unit_system)}"
@@ -450,7 +464,7 @@ class CalculationReport(BaseModel):
                 )
             out.append("</table>")
         else:
-            out.append(f'<p class="fallback">[{_FALLBACK_LABEL}]</p>')
+            out.append(f'<p class="fallback">[{escape(section.fallback_label)}]</p>')
             if section.inputs:
                 out.append('<table class="glossary">')
                 out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")

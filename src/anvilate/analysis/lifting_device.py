@@ -40,7 +40,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from .._models import Named
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -334,6 +334,14 @@ def bth1_fatigue_scorecard(
                 f"analysis requirement — the exemption, not a computed margin"
             ),
             reference=_CLAUSE_SERVICE,
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "Service Class 0 is the standard's own exemption from fatigue "
+                    "analysis; the check states it rather than computing a margin, so "
+                    "there is no formula behind this verdict"
+                ),
+            ),
         )
     low, high = service_class.cycle_range
     band = f"{low}–{high}" if high is not None else f"over {low - 1}"

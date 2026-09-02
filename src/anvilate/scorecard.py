@@ -17,10 +17,10 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isnan
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import Named, Provenance
-from .derivation import Derivation
+from ._models import Named, Provenance, RevalidatedModel
+from .derivation import Derivation, Underived
 from .uncertainty import MarginUncertainty
 from .units import decimals_distinguishing
 
@@ -165,7 +165,7 @@ class GoverningChange(BaseModel):
         )
 
 
-class ScorecardEntry(BaseModel):
+class ScorecardEntry(RevalidatedModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
     model_config = ConfigDict(frozen=True)
@@ -190,11 +190,21 @@ class ScorecardEntry(BaseModel):
     # travels with the entry so a report renders the real formula and values
     # rather than a reconstruction.
     derivation: Derivation | None = None
+    # The other half of the same contract: when there is no formula to render, the
+    # check says so itself instead of a side file guessing per citation. ``None``
+    # means neither a derivation nor a stated reason — which is debt, and the
+    # coverage ratchet is where debt is recorded.
+    underived: Underived | None = None
     # An opt-in probabilistic view of the same check: the margin distribution under
     # input scatter. The deterministic status stays primary; this annotation, when
     # present, lets a nominal pass carry a fragility warning. ``None`` leaves the
     # check purely deterministic.
     uncertainty: MarginUncertainty | None = None
+
+    @model_validator(mode="after")
+    def _check_derivation_declaration(self) -> ScorecardEntry:
+        _refuse_contradictions(self)
+        return self
 
     def is_fragile(self, threshold: float = 0.05) -> bool:
         """Whether an attached margin distribution shows a material shortfall.
@@ -396,6 +406,11 @@ class ScorecardEntry(BaseModel):
                 "detail": self.detail if rebuilt.status is self.status else rebuilt.detail,
                 "reference": self.reference,
                 "derivation": self.derivation,
+                # Rebuilt entries come out of `from_safety_factor` with neither, so a
+                # stated reason for having no formula has to be carried across with the
+                # derivation it stands in for. Dropped, it would turn a check that says
+                # why it has no work into one that silently has none.
+                "underived": self.underived,
                 "uncertainty": self.uncertainty,
             }
         )
@@ -412,6 +427,29 @@ class ScorecardEntry(BaseModel):
             shortfall = self.uncertainty.shortfall_probability * 100.0  # type: ignore[union-attr]
             fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
         return f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{cite}"
+
+
+def _refuse_contradictions(entry: ScorecardEntry) -> None:
+    """The two things an entry may not say at once about its own work.
+
+    The entry inherits :class:`~anvilate._models.RevalidatedModel` so this runs on a copy
+    too, and it has to: copying is how this library finishes an entry — the packs build a
+    verdict through :meth:`ScorecardEntry.from_safety_factor` and then copy the citation
+    and the derivation onto it. A rule the copy does not see is a rule the library's own
+    construction path walks straight past.
+    """
+    if entry.derivation is not None and entry.underived is not None:
+        raise ValueError(
+            f"'{entry.name}' declares both a derivation and a reason it has none. "
+            f"One of them is wrong, and a reader cannot tell which"
+        )
+    if entry.underived is not None and entry.safety_factor is not None:
+        raise ValueError(
+            f"'{entry.name}' declares itself {entry.underived.kind.value} — "
+            f"{entry.underived.reason} — but carries a computed safety factor of "
+            f"{entry.safety_factor:.4g}. A safety factor is a quotient and a quotient is a "
+            f"formula, so this check has work to show. Debt is not retired by describing it"
+        )
 
 
 class Scorecard(BaseModel):

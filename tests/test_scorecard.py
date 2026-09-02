@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
+from anvilate.derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from anvilate.scorecard import (
     CheckStatus,
     Direction,
@@ -12,6 +14,7 @@ from anvilate.scorecard import (
     Scorecard,
     ScorecardEntry,
 )
+from anvilate.units import Quantity
 
 
 def test_safety_factor_pass_and_fail():
@@ -846,3 +849,114 @@ def test_an_entry_can_be_re_judged_against_a_band_it_was_not_built_with():
     # And a screen that built the band in itself gets the same verdict either way.
     built_in = ScorecardEntry.from_safety_factor("bending", computed=9.0, required=2.0, upper=4.0)
     assert built_in.status is over.status and built_in.detail == over.detail
+
+
+# --- a check that has no formula says so itself -------------------------------------------
+#
+# The registry that recorded this was keyed by citation, and a clause cited by a computing
+# check and by an exempt one is one line there. The declaration is on the entry now, so the
+# two can differ; these pin what the entry will and will not let a check claim.
+
+
+def test_a_reason_that_says_nothing_is_refused():
+    """A blank reason is the silence the declaration replaces, dressed as a declaration."""
+    for blank in ("", "   ", "\n"):
+        with pytest.raises(ValidationError, match="needs a stated reason"):
+            Underived(kind=DerivationAbsence.LOOKUP, reason=blank)
+
+
+def test_an_entry_may_not_both_show_its_work_and_say_it_has_none():
+    derivation = Derivation(
+        symbolic="n = R / S",
+        inputs=(
+            SymbolValue(symbol="R", description="capacity", value=Quantity.parse("100 kN")),
+            SymbolValue(symbol="S", description="demand", value=Quantity.parse("50 kN")),
+        ),
+        result=SymbolValue(symbol="n", description="margin", value=2.0),
+        citation="ASME BTH-1 §3-1.4 (Service Class)",
+    )
+    declared = Underived(kind=DerivationAbsence.LOOKUP, reason="an exemption, not a margin")
+    with pytest.raises(ValidationError, match="both a derivation and a reason it has none"):
+        ScorecardEntry(
+            name="fatigue",
+            status=CheckStatus.PASS,
+            detail="",
+            derivation=derivation,
+            underived=declared,
+        )
+
+    # And on the path the library actually uses. Every pack finishes an entry by copying a
+    # citation and a derivation onto it, and `model_copy` runs no validator of its own — so
+    # without `RevalidatedModel` beneath the entry this rule would be enforced everywhere
+    # except where entries are really built.
+    stated = ScorecardEntry(name="fatigue", status=CheckStatus.PASS, detail="", underived=declared)
+    with pytest.raises(ValidationError, match="both a derivation and a reason it has none"):
+        stated.model_copy(update={"derivation": derivation})
+
+
+def test_a_computed_safety_factor_may_not_declare_that_it_has_no_formula():
+    """The anti-relabelling rule, and it is mechanical rather than a matter of wording.
+
+    A safety factor is a quotient, a quotient is a formula, and a check that has one has
+    work to show. Both kinds are refused: neither an exemption nor a numerically solved
+    result explains away an arithmetic the entry is already carrying the answer to.
+    """
+    entry = ScorecardEntry.from_safety_factor("fatigue", computed=2.0, required=1.0)
+    for kind in DerivationAbsence:
+        with pytest.raises(ValidationError, match="quotient is a formula"):
+            entry.model_copy(
+                update={"underived": Underived(kind=kind, reason="the standard exempts it")}
+            )
+
+
+def test_a_stated_reason_survives_being_re_judged_against_a_band():
+    """`with_upper_band` rebuilds through `from_safety_factor`, which knows none of this.
+
+    Whatever the funnel does not take has to be carried across explicitly, and a dropped
+    declaration turns a check that says why it has no work into one that silently has none.
+    Only a non-safety-factor entry can hold one, so the band leaves it alone — which is
+    exactly the case a `is self` shortcut would pass without carrying anything.
+    """
+    declared = Underived(
+        kind=DerivationAbsence.NUMERIC_RESULT,
+        reason="the peak is a root of the elastic curve, solved rather than evaluated",
+    )
+    entry = ScorecardEntry(
+        name="tip deflection",
+        status=CheckStatus.PASS,
+        detail="deflection 3.000 mm vs limit 5.000 mm",
+        reference="AISC 360-16 §L3",
+        underived=declared,
+    )
+    assert entry.with_upper_band(4.0).underived == declared
+
+    # The carrying path proper: an entry that IS a safety-factor check is rebuilt, and the
+    # rebuild has to bring the fields the funnel does not know about.
+    rebuilt = ScorecardEntry.from_safety_factor("bending", computed=9.0, required=2.0).model_copy(
+        update={"reference": "AISC 360-16 §F2"}
+    )
+    assert rebuilt.with_upper_band(4.0).reference == "AISC 360-16 §F2"
+
+
+def test_the_report_prints_the_stated_reason_beside_the_fallback_label():
+    """A reason nothing renders is a field, not an answer.
+
+    `derivation not rendered` alone tells a reviewer that work is missing and not whether
+    anyone owes it — an exemption and an unwritten closed form print the same three words.
+    """
+    from anvilate.report import ReportSection
+
+    exempt = ReportSection(
+        entry=ScorecardEntry(
+            name="fatigue",
+            status=CheckStatus.PASS,
+            detail="Service Class 0 carries no fatigue analysis requirement",
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP, reason="the standard's own exemption"
+            ),
+        )
+    )
+    assert exempt.fallback_label == "derivation not rendered — the standard's own exemption"
+
+    silent = ReportSection(entry=ScorecardEntry(name="fatigue", status=CheckStatus.PASS, detail=""))
+    assert silent.fallback_label == "derivation not rendered"

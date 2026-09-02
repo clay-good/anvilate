@@ -22,7 +22,9 @@ derivation renders character-identically on every rebuild.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ._models import Provenance
 from .units import Quantity, UnitSystem, render
@@ -30,6 +32,8 @@ from .units import Quantity, UnitSystem, render
 __all__ = [
     "SymbolValue",
     "Derivation",
+    "DerivationAbsence",
+    "Underived",
 ]
 
 
@@ -63,6 +67,58 @@ def _is_symbol_char(char: str) -> bool:
 # does use Euler's number declares it as an input like any other value; a false gap is a
 # nuisance, a hidden one is the failure `is_worked` exists to prevent.
 _CONSTANTS = frozenset({"π"})
+
+
+class DerivationAbsence(StrEnum):
+    """Why a check renders no worked calculation — the two kinds that are finished.
+
+    Neither is a shortfall. A ``LOOKUP`` has no arithmetic between its two numbers:
+    an exemption, an identification line, a table comparison, a consistency verdict.
+    A ``NUMERIC_RESULT`` has real mathematics behind it and no substitutable line —
+    its value is the root of an equation, solved rather than evaluated, so the
+    inputs/outputs table is the correct rendering for it rather than a shortfall.
+
+    The third kind a check can be in — **debt**, a closed form nobody has written
+    down yet — is deliberately not a member. Debt is the *absence* of a declaration,
+    recorded per clause in ``docs/api/underived-checks.txt`` where the ratchet keeps
+    the list downward-only. Making it declarable here would let a check retire its
+    own debt by describing it, which is the collapse this vocabulary exists to refuse.
+    """
+
+    LOOKUP = "lookup"
+    NUMERIC_RESULT = "numeric_result"
+
+
+class Underived(BaseModel):
+    """A check's own statement that it has no formula to show, and why.
+
+    It rides on the :class:`~anvilate.scorecard.ScorecardEntry` in the place the
+    :class:`Derivation` would have taken, so it travels into the evidence bundle and
+    the JSON alongside the verdict it explains. That is the point of putting it here
+    rather than in a file addressed by citation: a clause cited by two checks — one
+    that computes and one that does not — cannot be answered once.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: DerivationAbsence
+    # A reason that says nothing is the silence this declaration replaces, so a blank
+    # one is refused rather than stored. The requirement's own words are "registered
+    # as tabular-only WITH A STATED REASON".
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_must_say_something(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError(
+                "an Underived declaration needs a stated reason; a blank one is the "
+                "silence the declaration exists to replace"
+            )
+        return value
+
+    def __str__(self) -> str:
+        return f"{self.kind.value}: {self.reason}"
 
 
 class SymbolValue(BaseModel):

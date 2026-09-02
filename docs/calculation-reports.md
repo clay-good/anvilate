@@ -99,7 +99,7 @@ Where a formula needs a value from a copyrighted table — an allowable stress, 
 chart-read coefficient — you supply it, and the report records it as user-supplied
 alongside the clause that consumed it.
 
-## Checks that have no derivation yet
+## Checks that have no derivation
 
 A check that does not declare a derivation still appears. It renders its inputs,
 verdict, and citation under a `derivation not rendered` label. So does a derivation
@@ -108,28 +108,47 @@ otherwise show a bare symbol where a number belongs. The report never invents a
 formula to fill the space — an honest gap is worth more to a reviewer than a
 plausible fabrication.
 
-Which checks those are is not left to prose. Every clause the library cites is
-counted on each test run, and the run prints the ratio: **42 of 62 cited clauses are
-fully worked** as of this writing. A clause counts as worked only when *every* entry
-citing it carries a derivation — half a clause renders a formula for some parts and a
-bare table for others, which reads as though all of it was derived.
+Some checks have no formula and never will. A Service Class 0 lifter is *exempt* from
+fatigue analysis; the check states the exemption and computes nothing. Those say so on
+themselves, in an `Underived` on the scorecard entry, and the reason prints beside the
+label — `[derivation not rendered — Service Class 0 is the standard's own exemption…]`
+— so a reviewer can tell "nothing is owed here" from "somebody still has to write this
+down". Two kinds, and they are not the same:
 
-The rest are enumerated in
-[`docs/api/underived-checks.txt`](api/underived-checks.txt), under two headings that
-are not interchangeable:
+| Kind | What it means |
+| --- | --- |
+| `lookup` | No arithmetic between the two numbers. An exemption, an identification line, a table comparison, a consistency verdict. |
+| `numeric_result` | Real mathematics and no substitutable line: the value is the root of an equation, solved rather than evaluated, so the inputs table **is** its correct rendering. |
+
+The declaration lives on the entry rather than in a file keyed by clause, because a
+clause cited by two checks — one that computes and one that does not — cannot be
+answered once.
+
+What is left is **debt**: a closed form nobody has written down yet. Which clauses
+those are is not left to prose. Every clause the library cites is counted on each test
+run, and the run prints both ratios: **43 of 62 cited clauses fully worked, 44 of 62
+fully answered** as of this writing. *Answered* means every entry citing the clause
+either carries a derivation or states why it has none; a clause is not answered while
+one entry is silent, because half a clause renders a formula for some parts and a bare
+table for others, which reads as though all of it was derived.
+
+The clauses still owing an answer are enumerated in
+[`docs/api/underived-checks.txt`](api/underived-checks.txt):
 
 | Section | What it means | Lines |
 | --- | --- | --- |
-| `[lookup]` | No formula to render. A capability table, a classification, a consistency verdict. Finished as it stands. | 4 |
-| `[debt]` | A formula whose derivation has not been written yet. Downward-only. | 16 |
+| `[debt]` | A closed form nobody has written down yet. The list is downward-only. | 14 |
+| `[lookup]` | What remains of the earlier design, in which every kind was keyed by clause. It does the same job for checks not yet given their own declaration; new ones go on the entry. | 4 |
 
-Filing a debt as a lookup would convert unfinished work into a decision, so the gate
-does not take the reason on trust: a clause whose entries carry a computed **safety
-factor** cannot be a lookup, because a safety factor is a quotient and a quotient is a
-formula. Relabelling a debt fails CI on the data, not on the wording.
+Retiring a debt by calling it a lookup would convert unfinished work into a decision,
+so the gate does not take the reason on trust. An entry carrying a computed **safety
+factor** may not declare an absence of derivation at all — a safety factor is a
+quotient and a quotient is a formula — and `ScorecardEntry` refuses to be constructed
+that way, on a `model_copy` as well as on a call. Relabelling fails on the data, not on
+the wording.
 
-The gate is in `tests/conftest.py`. A new check that ships without a derivation and
-without a line fails the run by name; a debt that acquires one has to come off the
+The gate is in `tests/conftest.py`. A new check that ships with neither a derivation nor
+a stated reason fails the run by name; a debt that acquires one has to come off the
 list; a listed clause nothing cites any more has to come off too. Checks that report
 `NOT_EVALUATED` are outside the count — a check that could not run has no result to
 show the work for.

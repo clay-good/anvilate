@@ -236,7 +236,12 @@ def test_a_changed_spec_changes_the_digest():
 # is the pin working: the scorecard is inside the bundle, so a scorecard document that says
 # something new *is* a different bundle, and a content address that had not moved would
 # have meant the verdict was not covered by it.
-_GOLDEN_DIGEST = "75e7072053f5634383de3f22ae2b1cc9c15fb98492cf240580dc2aafd719d2e5"
+#
+# It moved again, from 75e70720..., when `ScorecardEntry.underived` shipped — the field on
+# which a check states that it has no formula to show and why. Same reasoning: whether a
+# reviewer is owed a derivation is part of what the document says, so a bundle carrying
+# that statement is a different bundle from one that does not.
+_GOLDEN_DIGEST = "85fecef9e1fecaa7ff46427465cf91e4ef735c8f2d0b1e94a59722b447d49554"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

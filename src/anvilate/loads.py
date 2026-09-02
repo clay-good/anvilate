@@ -39,6 +39,7 @@ __all__ = [
     "combination_scorecard",
     "CombinationEvidence",
     "combination_evidence",
+    "combination_derivation",
 ]
 
 
@@ -348,6 +349,24 @@ def _combination_derivation(
         ),
         citation=citation,
     )
+
+
+def combination_derivation(
+    combinations: CombinationSet,
+    loads: Mapping[LoadNature, float],
+    *,
+    minimize: bool = False,
+) -> Derivation:
+    """The governing combination's factored sum, worked, for a check that only names it.
+
+    :func:`combination_scorecard` already carries this on the entry it builds, because it
+    screens a capacity against the demand. The spec-driven screen does not screen anything
+    — it reports *which* combination governs — and it had no way to show the sum behind
+    that answer, so the clause was half worked wherever both checks ran. Same selection
+    rule, same rendering, so the two cannot name one combination and write out another.
+    """
+    governing, demand = _governing_for_check(combinations, loads, minimize=minimize)
+    return _combination_derivation(governing, loads, demand, governing.citation)
 
 
 _NATURE_NAMES = {

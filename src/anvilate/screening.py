@@ -60,6 +60,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ._models import EMPTY_MAP, FrozenMap, rebuilt_quantities
+from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
 from .standards import default_standards_resolver
@@ -536,11 +537,25 @@ def _combination_entry(spec: DesignSpec) -> ScorecardEntry | None:
         )
     if evidence is None:  # pragma: no cover - a declared basis always resolves to a set
         return None
+    if evidence.status is not CheckStatus.PASS:
+        return ScorecardEntry(
+            name="load combination",
+            status=evidence.status,
+            detail=evidence.detail(),
+        )
+    # The factored sum behind the name. Without it this entry cited §2.3.1 and showed a
+    # combination's title with no arithmetic under it, while `combination_scorecard` — the
+    # other check on the same clause — wrote the sum out in full. One clause rendered two
+    # ways, and the half that named the combination was the half a reviewer would have
+    # asked to see worked.
+    combinations = spec.combination_set()
+    assert combinations is not None  # a basis that resolved to evidence resolves to a set
     return ScorecardEntry(
         name="load combination",
         status=evidence.status,
         detail=evidence.detail(),
-        reference=evidence.citation if evidence.status is CheckStatus.PASS else None,
+        reference=evidence.citation,
+        derivation=combination_derivation(combinations, spec.combination_loads()),
     )
 
 

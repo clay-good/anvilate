@@ -101,7 +101,10 @@ It is the same block [the calculation report](calculation-reports.md) prints, th
 same renderer, so the two cannot drift. `--format json` has always carried the derivation;
 this is the half a person reads. A check with no derivation prints
 `[derivation not rendered]` rather than being left out — a check missing from the listing
-reads as one whose formula was not worth showing, and those are different things.
+reads as one whose formula was not worth showing, and those are different things. Where the
+check states *why* it has none, the reason prints on the same line:
+`[derivation not rendered — Service Class 0 is the standard's own exemption from fatigue
+analysis…]`. Nothing is owed there, and the label alone could not say so.
 
 ## The exit code is the interface
 

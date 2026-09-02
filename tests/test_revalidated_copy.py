@@ -132,14 +132,45 @@ def test_a_copy_with_no_update_does_not_revalidate():
 
 
 def test_the_base_is_not_paid_for_by_models_with_no_invariant():
-    """`ScorecardEntry` is copied per check in every pack, and declares no after-validator.
+    """Nothing inherits the re-validating copy without an invariant to protect.
 
-    Making every model in the library re-validate its copies would put a parse on that path
-    for nothing. The rule is opt-in by declaration, and this pins that it stayed opt-in.
+    Making every model in the library re-validate its copies would put a parse on paths used
+    in loops, for nothing. The rule is opt-in *by declaration*, and this is that property
+    stated over the whole package rather than over one example: the version before it named
+    `ScorecardEntry`, which was the hottest copy path in the library right up until the
+    entry acquired an invariant of its own, at which point a true statement about the rule
+    read as a failure of it.
     """
-    from anvilate.scorecard import ScorecardEntry
+    declaring = {name for _, name in _classes_with_an_after_validator()}
+    inheriting = _model_classes_inheriting_the_base()
+    assert len(inheriting) > 20, "the walk found almost nothing, so it proves almost nothing"
+    without = sorted(
+        f"{model.__module__}.{model.__qualname__}"
+        for model in inheriting
+        if not any(ancestor.__name__ in declaring for ancestor in model.__mro__)
+    )
+    assert not without, (
+        "these re-validate every copy and declare no invariant anywhere in their "
+        f"ancestry, so the parse buys nothing: {without}"
+    )
 
-    assert not issubclass(ScorecardEntry, RevalidatedModel)
+
+def _model_classes_inheriting_the_base() -> list[type]:
+    """Every ``RevalidatedModel`` subclass the package defines, by importing all of it."""
+    found: dict[str, type] = {}
+    for path in sorted(_SRC.rglob("*.py")):
+        module_name = ".".join(("anvilate", *path.relative_to(_SRC).with_suffix("").parts))
+        module_name = module_name.removesuffix(".__init__")
+        module = importlib.import_module(module_name)
+        for value in vars(module).values():
+            if (
+                isinstance(value, type)
+                and issubclass(value, RevalidatedModel)
+                and value is not RevalidatedModel
+                and value.__module__.startswith("anvilate")
+            ):
+                found[f"{value.__module__}.{value.__qualname__}"] = value
+    return list(found.values())
 
 
 # --- frozen means frozen ------------------------------------------------------------------

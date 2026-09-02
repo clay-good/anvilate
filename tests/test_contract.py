@@ -3303,16 +3303,26 @@ def test_each_coverage_rule_fires_on_the_case_it_exists_for():
         "Cited Std §2": ("lookup", "a table, no formula"),
     }
     # (coverage, how many failures, a fragment of the message)
+    #
+    # A coverage tuple is (worked, ANSWERED, evaluated, safety-factor-carrying), and the
+    # gap between the first two columns is the whole of this change: an entry that states
+    # why it has no formula is answered without being worked. Where they differ, the probe
+    # says which one the rule under it is reading.
     probes = [
-        # derived, evaluated, safety-factor-carrying
-        ({"Cited Std §1": (0, 4, 4)}, 0, ""),  # debt, still owed: quiet
-        ({"Cited Std §1": (3, 4, 4)}, 0, ""),  # debt, part paid: still quiet
-        ({"Cited Std §1": (4, 4, 4)}, 0, ""),  # paid off — but that reads an absence
-        ({"Cited Std §2": (0, 4, 0)}, 0, ""),  # a lookup as declared: quiet
-        ({"Cited Std §2": (1, 4, 0)}, 1, "formula to render after all"),
-        ({"Cited Std §2": (0, 4, 2)}, 1, "quotient is a formula"),
-        ({"Unlisted §9": (0, 3, 3)}, 1, "on neither list"),
-        ({"Unlisted §9": (3, 3, 3)}, 0, ""),  # fully derived: never needs a line
+        ({"Cited Std §1": (0, 0, 4, 4)}, 0, ""),  # debt, still owed: quiet
+        ({"Cited Std §1": (3, 3, 4, 4)}, 0, ""),  # debt, part paid: still quiet
+        ({"Cited Std §1": (4, 4, 4, 4)}, 0, ""),  # paid off — but that reads an absence
+        ({"Cited Std §2": (0, 0, 4, 0)}, 0, ""),  # a lookup as declared: quiet
+        ({"Cited Std §2": (1, 1, 4, 0)}, 1, "formula to render after all"),
+        ({"Cited Std §2": (0, 0, 4, 2)}, 1, "quotient is a formula"),
+        ({"Unlisted §9": (0, 0, 3, 3)}, 1, "on neither list"),
+        ({"Unlisted §9": (3, 3, 3, 3)}, 0, ""),  # fully derived: never needs a line
+        # The new shape, and the reason the fourth column exists. Three of four entries
+        # are worked and the fourth states that it has no formula — nothing is owed, and
+        # the clause needs no line in a side file even though it is not fully worked.
+        ({"Unlisted §9": (3, 4, 4, 0)}, 0, ""),
+        # Its neighbour: the fourth entry says nothing at all. Still owed.
+        ({"Unlisted §9": (3, 3, 4, 0)}, 1, "nor declare why they have none"),
     ]
     for coverage, expected, fragment in probes:
         failures = conftest._coverage_failures(coverage, registry)
@@ -3323,13 +3333,20 @@ def test_each_coverage_rule_fires_on_the_case_it_exists_for():
     # The two rules that read an ABSENCE are held apart, because only a full run may act
     # on them: on a filtered run "no underived entry left" and "that test did not run"
     # look exactly alike.
-    assert conftest._paid_off_debts({"Cited Std §1": (4, 4, 4)}, registry) == ["Cited Std §1"]
-    assert conftest._paid_off_debts({"Cited Std §1": (3, 4, 4)}, registry) == []
-    assert conftest._paid_off_debts({"Cited Std §2": (0, 4, 0)}, registry) == []
-    assert conftest._stale_registry_lines({"Cited Std §1": (0, 1, 1)}, registry) == ["Cited Std §2"]
+    assert conftest._paid_off_debts({"Cited Std §1": (4, 4, 4, 4)}, registry) == ["Cited Std §1"]
+    assert conftest._paid_off_debts({"Cited Std §1": (3, 3, 4, 4)}, registry) == []
+    assert conftest._paid_off_debts({"Cited Std §2": (0, 0, 4, 0)}, registry) == []
+    # The clause this change exists for: half of it worked, the other half declaring that
+    # it has nothing to work. Under the old rule it was owed for ever.
+    assert conftest._paid_off_debts({"Cited Std §1": (3, 4, 4, 0)}, registry) == ["Cited Std §1"]
+    assert conftest._stale_registry_lines({"Cited Std §1": (0, 0, 1, 1)}, registry) == [
+        "Cited Std §2"
+    ]
+    # Worked, answered, cited — and the two numerators must not be the same number, or
+    # only one of them is being read.
     assert conftest._derivation_coverage_ratio(
-        {"a": (2, 2, 0), "b": (1, 2, 0), "c": (0, 2, 0)}
-    ) == (1, 3)
+        {"a": (2, 2, 2, 0), "b": (1, 2, 2, 0), "c": (0, 0, 2, 0)}
+    ) == (1, 2, 3)
 
 
 def test_the_coverage_collector_is_collecting():
@@ -3364,20 +3381,36 @@ def test_the_coverage_collector_is_collecting():
 
 
 def test_the_calculation_report_page_counts_the_registry_it_describes():
-    """The three numbers docs/calculation-reports.md quotes, held against the file.
+    """The four numbers docs/calculation-reports.md quotes, held against the file.
 
     A count in prose expires silently: the page said which packs declared derivations and
     which did not, and nothing checked it. These are tied to the registry instead — the
     section sizes directly, and the ratio through the identity that every cited clause is
-    either fully worked or has a line.
+    either fully ANSWERED or has a line.
+
+    The identity moved from *worked* to *answered* when a check gained the ability to state
+    that it has no formula. A clause every entry of which has said what its arithmetic is —
+    including the ones that say there is none — needs no line here, whether or not a formula
+    was rendered. Reading the worked figure would now demand a line for clauses that owe
+    nothing.
     """
     registry = _registry()
     page = (_REPO / "docs" / "calculation-reports.md").read_text(encoding="utf-8")
 
-    worked, cited = (int(n) for n in re.search(r"\*\*(\d+) of (\d+) cited clauses", page).groups())
-    assert cited - worked == len(registry), (
-        f"the page claims {worked} of {cited} clauses worked, which leaves "
-        f"{cited - worked} needing a line; the registry has {len(registry)}"
+    quoted = re.search(
+        r"\*\*(\d+) of (\d+) cited clauses fully worked, (\d+) of (\d+)\s+fully answered\*\*",
+        page,
+    )
+    assert quoted is not None, "the page no longer quotes both coverage figures"
+    worked, cited, answered, cited_again = (int(n) for n in quoted.groups())
+    assert cited == cited_again, "the page quotes two different totals for one census"
+    assert worked <= answered, (
+        f"the page claims {worked} clauses worked and only {answered} answered; every "
+        f"worked clause is answered, so one of the two figures is stale"
+    )
+    assert cited - answered == len(registry), (
+        f"the page claims {answered} of {cited} clauses answered, which leaves "
+        f"{cited - answered} needing a line; the registry has {len(registry)}"
     )
 
     for section, claimed in re.findall(r"\| `\[(\w+)\]` \|[^|]+\| (\d+) \|", page):
