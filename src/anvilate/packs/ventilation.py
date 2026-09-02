@@ -78,20 +78,33 @@ def screen_ventilation(
     oa_derivation = Derivation(
         symbolic="V_oz = (R_p · P_z + R_a · A_z) / E_z",
         inputs=(
+            # The four units of this sum are required rather than preferred, because they
+            # only add up together: L/s per person, L/s per square metre, and an area in
+            # square metres. The system's table has no unit for a volumetric flow or for
+            # a flow per area, so a declared system converted the area alone and left the
+            # rates where they were — `5.00 ft³/min · 50 + 0.0600 ft/min · 464515200.00 mm²`,
+            # three units in one sum and no reader able to add it.
             SymbolValue(
                 symbol="R_p",
                 description="outdoor airflow required per person",
                 value=zone.people_outdoor_rate,
                 unit="L/s",
+                unit_is_required=True,
             ),
             SymbolValue(symbol="P_z", description="zone occupancy", value=zone.occupancy),
             SymbolValue(
                 symbol="R_a",
                 description="outdoor airflow required per unit of floor area",
                 value=zone.area_outdoor_rate,
+                unit="L/s/m**2",
+                unit_is_required=True,
             ),
             SymbolValue(
-                symbol="A_z", description="zone floor area", value=zone.floor_area, unit="m**2"
+                symbol="A_z",
+                description="zone floor area",
+                value=zone.floor_area,
+                unit="m**2",
+                unit_is_required=True,
             ),
             SymbolValue(
                 symbol="E_z",
@@ -105,6 +118,7 @@ def screen_ventilation(
             description="outdoor airflow the zone must be supplied",
             value=required,
             unit="L/s",
+            unit_is_required=True,
         ),
         citation=_OUTDOOR_AIR_REFERENCE,
     )

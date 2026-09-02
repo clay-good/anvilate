@@ -170,6 +170,19 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    # Unit fidelity, over every entry the suite built rather than over a corpus somebody
+    # listed. It fires on positive evidence — a line that carries a unit it should not — so
+    # a filtered run checks the subset it reached and is never wrong about it.
+    mixed = _mixed_unit_lines()
+    if mixed:
+        print(
+            "\nUNIT FIDELITY: these lines carry a unit from a system the document did not "
+            "declare, so a reviewer is asked to check arithmetic across two systems:\n  "
+            + "\n  ".join(mixed)
+        )
+        session.exitstatus = 1
+        return
+
     coverage = _observed_coverage()
     registry = _read_registry()
     uncovered = _coverage_failures(coverage, registry)
@@ -476,6 +489,57 @@ def _derivation_coverage_ratio(
         sum(1 for _, answered, total, _sf in coverage.values() if answered == total),
         len(coverage),
     )
+
+
+# ---------------------------------------------------------------------------
+# The unit-fidelity sweep.
+#
+# `calculation-report`'s "Unit-system fidelity in derivations" says nothing in a document
+# may carry a unit from a system the document did not declare. Two fixes made that true —
+# a display preference no longer overrides a declared system, and a comparison verdict is
+# restated by the report rather than baked by the screen — and both were found by rendering
+# a report and reading it, which is not a thing CI does.
+#
+# So it is swept here, over every entry the suite actually built, in the same way the
+# derivation ratchet is: a listed corpus checks the packs somebody remembered.
+# ---------------------------------------------------------------------------
+
+# Matched on a WORD boundary, not as a substring. The first version looked for " in" and
+# found it in "/ inf" — a Miner sum whose allowable life is infinite below the cutoff — and
+# reported two fatigue derivations as mixing unit systems. A gate's own false positive is
+# indistinguishable from the defect it hunts until somebody reads the line.
+_SI_ONLY = ("mm", "MPa", "GPa", "kPa", "kN·m", "N·mm")
+_US_ONLY = ("in", "ft", "kip", "ksi", "psi")
+
+
+def _mixed_unit_lines() -> list[str]:
+    """Every rendered line that carries a unit belonging to the other system."""
+    from anvilate.units import UnitSystem
+
+    offenders: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in _library_entries.values():
+        renderings = []
+        if entry.comparison is not None:
+            renderings.append(("verdict", entry.comparison.sentence))
+        if entry.derivation is not None:
+            renderings.append(("derivation", entry.derivation.substituted))
+        for what, render_line in renderings:
+            for system, forbidden in ((UnitSystem.US, _SI_ONLY), (UnitSystem.SI, _US_ONLY)):
+                line = render_line(system=system)
+                stray = sorted(
+                    {unit for unit in forbidden if re.search(rf"(?<![\w·]){unit}\b", line)}
+                )
+                if not stray:
+                    continue
+                key = (system.value, line)
+                if key in seen:
+                    continue
+                seen.add(key)
+                offenders.append(
+                    f"{entry.name} {what} under {system.value} carries {stray}: {line}"
+                )
+    return sorted(offenders)
 
 
 # ---------------------------------------------------------------------------
