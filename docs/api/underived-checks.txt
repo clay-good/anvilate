@@ -30,16 +30,19 @@
 # can declare about itself — a check that could file its own debt would retire it by
 # describing it.
 #
-# The [lookup] section below is what remains of an earlier design in which every kind was
-# keyed by clause. It is kept for clauses whose entries have not yet been given their own
-# `Underived`, and it does the same job for them; new declarations go on the entry, where
-# the check is. A clause cited by one computing check and one exempt check cannot be
-# answered once, and answering it once here was wrong for every check but the first.
+# THERE USED TO BE A [lookup] SECTION HERE. It was what remained of an earlier design in
+# which every kind was keyed by clause, and it is gone because every clause it held is now
+# answered by the checks themselves. A clause cited by one computing check and one exempt
+# check cannot be answered once, and answering it once here was wrong for every check but
+# the first — so a check with no formula declares it on its entry now, and there is nothing
+# left for that section to say. Do NOT bring it back for a new check: give the check an
+# `Underived`.
 #
-# The lookup half is enforced mechanically rather than on the honesty of the reason: an
+# The lookup kind is enforced mechanically rather than on the honesty of the reason: an
 # entry carrying a COMPUTED SAFETY FACTOR may not call itself a lookup, because a lookup
 # asserts there is no arithmetic between its two numbers and a factor sitting between them
-# disproves it. The type refuses to hold the label, so that debt cannot be relabelled.
+# disproves it. `ScorecardEntry` refuses to hold the label, on a `model_copy` as well as on
+# a call, so a debt cannot be relabelled.
 #
 # `numeric_result` has no such test, and deliberately not: a safety factor can itself be a
 # solved quantity — the BS 7910 load-line margin is where a ray meets a bent envelope,
@@ -49,15 +52,9 @@
 # TO PAY A LINE OFF: give every entry the check produces a Derivation, or an Underived
 # where it genuinely has no formula, then delete the line from [debt]. Do NOT add a line to
 # silence a failure on a new check — a new check ships with its derivation. Do NOT reach
-# for [lookup] or an Underived to make a formula stop failing.
+# for an Underived to make a formula stop failing.
 #
 # Format: one clause per line, then " :: ", then the reason.
-
-[lookup]
-ASME BTH-1 §3-1.3 (Design Category) :: the entry is the lifter's identification line — rated load, design load, Category, Service Class. §3-1.3 classifies a device into Category A or B and hands the resulting design factor to every check below it; it computes no margin of its own.
-DFM screening estimates (typical finest achievable tolerances) :: the demanded tolerance band is compared with the process floor the capability table records. The table is the whole check; there is no formula between the two numbers.
-ASME B30.20 :: a verification-plan item crossed into the characteristic list — a physical proof test with an acceptance criterion and a recorded outcome, not a calculation the library performs.
-standards effectivity :: a consistency verdict over the citations a bundle carries — every reference names an edition, and no standard appears at two. No quantity is calculated.
 
 [debt]
 # Empty, and that is not an oversight. Every clause this library cites is either fully

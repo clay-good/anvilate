@@ -419,25 +419,13 @@ def _coverage_failures(
     """
     failures: list[str] = []
     for clause in sorted(coverage):
-        derived, answered, total, safety_factors = coverage[clause]
-        section, reason = registry.get(clause, ("", ""))
+        _derived, answered, total, _safety_factors = coverage[clause]
         if answered < total and clause not in registry:
             failures.append(
                 f"{clause}: {total - answered} of {total} entries neither carry a "
-                f"derivation nor declare why they have none, and the clause is on neither "
-                f"list in docs/api/underived-checks.txt. Attach a Derivation to the check "
-                f"— a new check ships with one — or, if it has no formula, an Underived"
-            )
-        elif section == "lookup" and derived:
-            failures.append(
-                f"{clause}: registered as a lookup — {reason} — but {derived} of its "
-                f"entries carry a derivation, so it had a formula to render after all"
-            )
-        elif section == "lookup" and safety_factors:
-            failures.append(
-                f"{clause}: registered as a lookup, but {safety_factors} of its entries "
-                f"carry a computed safety factor. A safety factor is a quotient and a "
-                f"quotient is a formula; this is debt filed as a lookup"
+                f"derivation nor declare why they have none, and the clause is not in "
+                f"docs/api/underived-checks.txt. Attach a Derivation to the check — a new "
+                f"check ships with one — or, if it has no formula, an Underived"
             )
     return failures
 
@@ -446,17 +434,21 @@ def _paid_off_debts(
     coverage: dict[str, tuple[int, int, int, int]],
     registry: dict[str, tuple[str, str]],
 ) -> list[str]:
-    """Debts whose every evaluated entry has now ANSWERED — only on a full run.
+    """Registered clauses whose every evaluated entry has now ANSWERED — full runs only.
 
     Answered, not derived: the three debts this rule could never clear were clauses whose
     computing entries were fully worked and whose one non-computing entry had nothing to
     render. Paying off the derivable half of such a clause moved the ratio by nothing,
     which is a meter that stops while the work happens.
+
+    It reads an ABSENCE — no unanswered entry left — so a filtered run cannot act on it: a
+    selection that happens to reach only a clause's answering entries would report a line
+    as strikeable when it is not.
     """
     return sorted(
         clause
         for clause, (_, answered, total, _sf) in coverage.items()
-        if registry.get(clause, ("", ""))[0] == "debt" and answered == total
+        if clause in registry and answered == total
     )
 
 

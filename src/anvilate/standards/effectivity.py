@@ -40,6 +40,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .._models import EMPTY_MAP, FrozenMap, Provenance, RevalidatedModel
+from ..derivation import DerivationAbsence, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -375,6 +376,14 @@ def design_basis_scorecard(
                 "whose citations were not collected, not one that agrees"
             ),
             reference="standards effectivity",
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "a consistency verdict over the citations a bundle carries — every "
+                    "reference names an edition, and no standard appears at two. No quantity "
+                    "is calculated"
+                ),
+            ),
         )
     citations = [parse_citation(text) for text in references]
     editionless = [text for text, c in zip(references, citations, strict=True) if c is None]
@@ -406,6 +415,14 @@ def design_basis_scorecard(
             status=CheckStatus.FAIL,
             detail="; ".join([*conflicts, *detail_parts]),
             reference="standards effectivity",
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "a consistency verdict over the citations a bundle carries — every "
+                    "reference names an edition, and no standard appears at two. No quantity "
+                    "is calculated"
+                ),
+            ),
         )
     if editionless:
         shown = ", ".join(repr(t) for t in editionless[:3])
@@ -419,6 +436,14 @@ def design_basis_scorecard(
                 f"An unversioned clause identifies a paragraph in a book nobody named."
             ),
             reference="standards effectivity",
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "a consistency verdict over the citations a bundle carries — every "
+                    "reference names an edition, and no standard appears at two. No quantity "
+                    "is calculated"
+                ),
+            ),
         )
     return ScorecardEntry(
         name=name,
@@ -430,4 +455,12 @@ def design_basis_scorecard(
             ]
         ),
         reference="standards effectivity",
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "a consistency verdict over the citations a bundle carries — every "
+                "reference names an edition, and no standard appears at two. No quantity "
+                "is calculated"
+            ),
+        ),
     )

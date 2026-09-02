@@ -654,6 +654,15 @@ def screen_lifter_device(
             f"{device.service_class.value}"
         ),
         reference=_CLAUSE_CATEGORY,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "this is the lifter's identification line — rated load, design load, "
+                "Category, Service Class. §3-1.3 classifies the device and hands the "
+                "resulting design factor to every check below it; it computes no margin "
+                "of its own"
+            ),
+        ),
     )
     entries: list[ScorecardEntry] = [identification]
     for member in members:

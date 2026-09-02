@@ -126,19 +126,24 @@ answered once.
 
 What is left is **debt**: a closed form nobody has written down yet. Which clauses
 those are is not left to prose. Every clause the library cites is counted on each test
-run, and the run prints both ratios: **52 of 62 cited clauses fully worked, 58 of 62
+run, and the run prints both ratios: **52 of 62 cited clauses fully worked, 62 of 62
 fully answered** as of this writing. *Answered* means every entry citing the clause
 either carries a derivation or states why it has none; a clause is not answered while
 one entry is silent, because half a clause renders a formula for some parts and a bare
 table for others, which reads as though all of it was derived.
 
-The clauses still owing an answer are enumerated in
-[`docs/api/underived-checks.txt`](api/underived-checks.txt):
+Every clause is answered, so the debt list in
+[`docs/api/underived-checks.txt`](api/underived-checks.txt) is empty:
 
 | Section | What it means | Lines |
 | --- | --- | --- |
-| `[debt]` | A closed form nobody has written down yet. **Empty** — every clause the library cites is now worked or answered. The section is kept so a new one has somewhere obvious to go. | 0 |
-| `[lookup]` | What remains of the earlier design, in which every kind was keyed by clause. It does the same job for checks not yet given their own declaration; new ones go on the entry. | 4 |
+| `[debt]` | A closed form nobody has written down yet. The heading is kept so a new one has somewhere obvious to go, and so the rules above it are in front of whoever writes the line. | 0 |
+
+That file used to have a second section, `[lookup]`, which answered "this check has no
+formula" per *citation*. It is gone. A clause cited by two checks — one that computes and
+one that does not — cannot be answered once, and answering it once there was wrong for
+every check but the first; every clause it held now has its `Underived` on the check
+itself. A new check with no formula declares it on its entry, not in that file.
 
 Retiring a debt by calling it a lookup would convert unfinished work into a decision,
 so the gate does not take that reason on trust. An entry carrying a computed **safety
@@ -152,8 +157,8 @@ crosses the Option 1 envelope, bisected for because the curve bends, and refusin
 declaration that sits beside a factor would refuse the one description that fits it.
 
 The gate is in `tests/conftest.py`. A new check that ships with neither a derivation nor
-a stated reason fails the run by name; a debt that acquires one has to come off the
-list; a listed clause nothing cites any more has to come off too. Checks that report
+a stated reason fails the run by name; a listed clause whose every entry has since
+answered has to come off the list, and so does one nothing cites any more. Checks that report
 `NOT_EVALUATED` are outside the count — a check that could not run has no result to
 show the work for.
 

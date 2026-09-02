@@ -3250,11 +3250,13 @@ def _registry():
 
 
 def test_the_underived_registry_is_well_formed():
-    """Both sections populated, every line reasoned, no clause filed twice.
+    """One section, every line reasoned, no clause filed twice.
 
-    A clause on both lists would be read as whichever the parser saw last, which is the
-    collapse of the two categories that the requirement forbids — arrived at by accident
-    rather than by decision.
+    There were two, and the second — `[lookup]` — is gone. It answered "this check has no
+    formula" per CITATION, which is wrong for every check but the first whenever a clause
+    is cited by more than one; a check with no formula declares it on its own entry now.
+    Every clause that section held is answered that way, so it was struck rather than left
+    as an empty heading somebody would refill.
     """
     import conftest
 
@@ -3265,7 +3267,7 @@ def test_the_underived_registry_is_well_formed():
         if line.strip() and not line.strip().startswith("#")
     ]
     sections = [line for line in lines if line.startswith("[")]
-    assert sections == ["[lookup]", "[debt]"], sections
+    assert sections == ["[debt]"], sections
 
     seen: dict[str, str] = {}
     duplicates: list[str] = []
@@ -3281,8 +3283,6 @@ def test_the_underived_registry_is_well_formed():
         seen[clause] = section
     assert not duplicates, "clauses filed twice:\n  " + "\n  ".join(duplicates)
 
-    registry = _registry()
-    assert sum(1 for s, _ in registry.values() if s == "lookup") >= 1
     # No floor on [debt]. There was one, at ten, and every debt genuinely paid off walked
     # it closer to a failure that would have meant nothing — a ratchet pointing the wrong
     # way, failing the run for the work it exists to encourage. It is now empty, which is
@@ -3310,28 +3310,20 @@ def test_each_coverage_rule_fires_on_the_case_it_exists_for():
     """
     import conftest
 
-    registry = {
-        "Cited Std §1": ("debt", "the formula is unwritten"),
-        "Cited Std §2": ("lookup", "a table, no formula"),
-    }
+    registry = {"Cited Std §1": ("debt", "the formula is unwritten")}
     # (coverage, how many failures, a fragment of the message)
     #
     # A coverage tuple is (worked, ANSWERED, evaluated, safety-factor-carrying), and the
-    # gap between the first two columns is the whole of this change: an entry that states
-    # why it has no formula is answered without being worked. Where they differ, the probe
-    # says which one the rule under it is reading.
+    # gap between the first two columns is what the per-entry declaration bought: an entry
+    # that states why it has no formula is answered without being worked.
     probes = [
         ({"Cited Std §1": (0, 0, 4, 4)}, 0, ""),  # debt, still owed: quiet
         ({"Cited Std §1": (3, 3, 4, 4)}, 0, ""),  # debt, part paid: still quiet
         ({"Cited Std §1": (4, 4, 4, 4)}, 0, ""),  # paid off — but that reads an absence
-        ({"Cited Std §2": (0, 0, 4, 0)}, 0, ""),  # a lookup as declared: quiet
-        ({"Cited Std §2": (1, 1, 4, 0)}, 1, "formula to render after all"),
-        ({"Cited Std §2": (0, 0, 4, 2)}, 1, "quotient is a formula"),
-        ({"Unlisted §9": (0, 0, 3, 3)}, 1, "on neither list"),
+        ({"Unlisted §9": (0, 0, 3, 3)}, 1, "not in docs/api/underived-checks.txt"),
         ({"Unlisted §9": (3, 3, 3, 3)}, 0, ""),  # fully derived: never needs a line
-        # The new shape, and the reason the fourth column exists. Three of four entries
-        # are worked and the fourth states that it has no formula — nothing is owed, and
-        # the clause needs no line in a side file even though it is not fully worked.
+        # Three of four entries are worked and the fourth states that it has no formula.
+        # Nothing is owed, and the clause needs no line even though it is not fully worked.
         ({"Unlisted §9": (3, 4, 4, 0)}, 0, ""),
         # Its neighbour: the fourth entry says nothing at all. Still owed.
         ({"Unlisted §9": (3, 3, 4, 0)}, 1, "nor declare why they have none"),
@@ -3343,17 +3335,16 @@ def test_each_coverage_rule_fires_on_the_case_it_exists_for():
             assert fragment in failures[0], failures[0]
 
     # The two rules that read an ABSENCE are held apart, because only a full run may act
-    # on them: on a filtered run "no underived entry left" and "that test did not run"
-    # look exactly alike.
+    # on them: on a filtered run "no unanswered entry left" and "that test did not run"
+    # look exactly alike, and a selection reaching only a clause's answering entries would
+    # report a line as strikeable when it is not.
     assert conftest._paid_off_debts({"Cited Std §1": (4, 4, 4, 4)}, registry) == ["Cited Std §1"]
     assert conftest._paid_off_debts({"Cited Std §1": (3, 3, 4, 4)}, registry) == []
-    assert conftest._paid_off_debts({"Cited Std §2": (0, 0, 4, 0)}, registry) == []
-    # The clause this change exists for: half of it worked, the other half declaring that
-    # it has nothing to work. Under the old rule it was owed for ever.
+    assert conftest._paid_off_debts({"Unlisted §9": (4, 4, 4, 4)}, registry) == []
+    # The clause shape the per-entry declaration exists for: half of it worked, the other
+    # half declaring that it has nothing to work. Under the old rule it was owed for ever.
     assert conftest._paid_off_debts({"Cited Std §1": (3, 4, 4, 0)}, registry) == ["Cited Std §1"]
-    assert conftest._stale_registry_lines({"Cited Std §1": (0, 0, 1, 1)}, registry) == [
-        "Cited Std §2"
-    ]
+    assert conftest._stale_registry_lines({"Other §2": (0, 0, 1, 1)}, registry) == ["Cited Std §1"]
     # Worked, answered, cited — and the two numerators must not be the same number, or
     # only one of them is being read.
     assert conftest._derivation_coverage_ratio(
@@ -3430,7 +3421,11 @@ def test_the_calculation_report_page_counts_the_registry_it_describes():
         assert actual == int(claimed), (
             f"the page says [{section}] has {claimed} lines; it has {actual}"
         )
-    assert len(re.findall(r"\| `\[(\w+)\]` \|", page)) == 2, "the section table moved"
+    assert len(re.findall(r"\| `\[(\w+)\]` \|", page)) == 1, (
+        "the section table moved. It listed two rows until `[lookup]` was retired — the "
+        "registry answers per clause and a clause cited twice cannot be answered once — "
+        "so a second row here means either the page or the file has grown one back"
+    )
 
 
 def test_the_coverage_gate_counts_what_the_report_would_render():

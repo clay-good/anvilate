@@ -60,6 +60,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ._models import EMPTY_MAP, FrozenMap, rebuilt_quantities
+from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
@@ -418,6 +419,14 @@ def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 status=CheckStatus.PASS if check.achievable else CheckStatus.FAIL,
                 detail=str(check),
                 reference=check.source,
+                underived=Underived(
+                    kind=DerivationAbsence.LOOKUP,
+                    reason=(
+                        "the demanded tolerance band is compared with the floor the "
+                        "process-capability table records for this process. The table is "
+                        "the whole check; there is no formula between the two numbers"
+                    ),
+                ),
             )
         )
     return entries

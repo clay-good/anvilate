@@ -65,6 +65,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..attestation import EnvironmentBOM
 from ..bundle import BundleSections
+from ..derivation import DerivationAbsence, Underived
 from ..evidence import SourceRecord
 from ..gdt import (
     Characteristic,
@@ -678,6 +679,18 @@ def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
                 + ("" if item.outcome is None else f"; recorded: {item.outcome.measured}")
             ),
             reference=item.archetype.citation,
+            # A verification item crossed into the characteristic list: a physical test
+            # with an acceptance criterion and a recorded outcome, not a calculation this
+            # library performs. It carries a clause because the test is required by one,
+            # and it will never carry a formula.
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    f"a {item.archetype.method.value} item from the verification plan — "
+                    f"an acceptance criterion and a recorded outcome, not a quantity this "
+                    f"library calculates"
+                ),
+            ),
         )
         for item in plan.items
     )
