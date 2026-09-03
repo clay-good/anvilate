@@ -1674,3 +1674,46 @@ def test_the_citations_page_substituted_line_multiplies_out_to_its_own_result():
         "the line the page tells a reader to check by hand is not a stress"
     )
     assert composed.to("MPa").magnitude == pytest.approx(stress, abs=0.05)
+
+
+def test_the_effectivity_change_states_the_debt_the_ratchet_actually_holds():
+    """The change's own scope note counts the outstanding editionless citations.
+
+    A planning artifact is user-facing here, and this one is the record of *why* the number
+    it quotes is the number — the gate that produced the original "two entries" was
+    measuring a corpus it had built itself. A count written to correct a wrong count is the
+    worst possible place for a second wrong count, so it is read back out of the file it
+    describes.
+    """
+    root = Path(__file__).resolve().parents[1]
+    listed = [
+        line.strip()
+        for line in (root / "docs" / "api" / "editionless-citations.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    notes = (root / "openspec" / "changes" / "add-standards-effectivity" / "tasks.md").read_text(
+        encoding="utf-8"
+    )
+
+    words = {
+        16: "Sixteen",
+        17: "Seventeen",
+        18: "Eighteen",
+        19: "Nineteen",
+        20: "Twenty",
+        21: "Twenty-one",
+        22: "Twenty-two",
+    }
+    claimed = re.search(r"\*\*(\d+) remain\.\*\*", notes)
+    assert claimed is not None, "the outstanding-debt sentence on the effectivity change has moved"
+    assert int(claimed.group(1)) == len(listed), (
+        f"the change says {claimed.group(1)} editionless citations remain and "
+        f"docs/api/editionless-citations.txt lists {len(listed)}"
+    )
+    # The same number is spelled out a sentence later, and the two have to agree with each
+    # other as well as with the file — a mismatch there reads as two different debts.
+    assert f"other {words[len(listed)].lower()} are" in notes, (
+        f"the spelled-out count no longer says {words[len(listed)].lower()}"
+    )
