@@ -336,6 +336,20 @@ Two behaviours a client depends on:
 - **A line that is not JSON does not take the stream down.** A stream is not a session: one
   client sending rubbish must not stop the server answering the message after it. The bad
   line gets a `-32700` with a null id and the loop continues.
+- **Nor does a defect in a handler.** That rule used to cover only the JSON parse, which is
+  the failure it was written about. Anything a handler did not anticipate escaped
+  `handle_request`, ended the read loop, and **stopped the server** — with no reply to the
+  request that raised and every message queued behind it lost, so a client reading one
+  response per request waited forever. Strictly worse than rubbish JSON, which at least gets
+  an answer. Such a failure is now a `-32603` naming the exception type, because every firing
+  of it is a bug in Anvilate and a guard that hid which one would trade a dead server for an
+  undiagnosable one. It never reports the call as having succeeded.
+
+  A malformed record in the subject store reached it: `export_artifact` rebuilt the scorecard
+  and spec from what a handle resolved to, and an entry an older release published — the store
+  is a directory that outlives a release — failed validation outside any guard. That one is a
+  `-32602` naming the handle and what to do about it, because the handle is the thing that is
+  wrong; the last-resort guard is what catches whatever nobody has thought of yet.
 
 [The headless CLI](headless-cli.md) follows the same rule at the shell — one backed command, three refused by name — and its exit codes are the interface a CI job reads.
 

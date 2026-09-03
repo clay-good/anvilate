@@ -916,25 +916,55 @@ def _released_registry():
     )
 
 
-@pytest.mark.parametrize(
-    ("tool_name", "arguments"),
-    [
-        ("compile_spec", {"document": None}),
-        ("run_validation", {"spec": None}),
-    ],
-)
-def test_a_dispatched_result_validates_against_the_released_schemas(tool_name, arguments):
+def _dispatched_tool_names() -> list[str]:
+    """The tools with a handler, read from the dispatch table at collection time."""
+    import anvilate.mcp as mcp
+
+    return sorted(mcp._DISPATCH)
+
+
+def _dispatched_arguments(tool_name: str) -> dict:
+    """Real arguments for one dispatched tool, including the ones that need a live handle.
+
+    The two handle-taking tools were left out of the check below while its own docstring —
+    and `result_issues`, which points at it as the half it deliberately is not — claimed
+    every dispatched tool. `read_scorecard` is the tool that most needed it: its whole
+    result is one `$ref` to the published scorecard schema, so the envelope check the
+    runtime does see verifies nothing about it at all.
+    """
+    document = _spec_document()
+    if tool_name == "compile_spec":
+        return {"document": document}
+    if tool_name == "run_validation":
+        return {"spec": document}
+    handle = _call("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]
+    if tool_name == "read_scorecard":
+        return {"subject": handle}
+    if tool_name == "export_artifact":
+        return {"subject": handle, "format": "evidence_bundle"}
+    raise AssertionError(
+        f"{tool_name} is dispatched and this helper does not know how to call it; the check "
+        f"below is documented to cover every dispatched tool"
+    )
+
+
+@pytest.mark.parametrize("tool_name", sorted(_dispatched_tool_names()))
+def test_a_dispatched_result_validates_against_the_released_schemas(tool_name):
     """The full check the runtime gate deliberately is not: ``$ref``s resolved.
 
     :func:`result_issues` stops at the envelope, so a scorecard that had drifted from the
     published document would cross an in-process check untouched and be rejected by the
     first client that validated it. Here the references are resolved against the released
     artifacts and a real result of every dispatched tool is validated whole.
+
+    **Parametrized off `_DISPATCH`, not off a list of two.** It was a list of two, and it
+    named `compile_spec` and `run_validation` while the two handle-taking tools went
+    unchecked — so a tool could be dispatched without ever reaching the only check that
+    follows its `$ref`s. A new one now fails `_dispatched_arguments` by name rather than
+    quietly not being covered.
     """
     jsonschema = pytest.importorskip("jsonschema")
-    document = _spec_document()
-    arguments = dict.fromkeys(arguments, document)
-    result = _call(tool_name, arguments)["result"]
+    result = _call(tool_name, _dispatched_arguments(tool_name))["result"]
     tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
     registry = _released_registry()
     validator = jsonschema.Draft202012Validator(tool.output_schema, registry=registry)
@@ -943,8 +973,17 @@ def test_a_dispatched_result_validates_against_the_released_schemas(tool_name, a
         for error in validator.iter_errors(result["structuredContent"])
     ]
     assert not errors, errors
-    # The reference has to actually be followed, or this passes on an envelope check.
-    assert "$ref" in json.dumps(tool.output_schema)
+    # The reference has to actually be followed, or this passes on an envelope check — for the
+    # tools that publish one. Which ones do is held as a ratchet rather than assumed, because
+    # "no `$ref`" is the difference between a validated result and an envelope check, and it
+    # must not be a thing a reader has to notice. `export_artifact` declares its `bundle` as a
+    # bare object: the evidence bundle has no published schema to point at, so for that tool
+    # this test checks the envelope and nothing more. Publish one and tighten this.
+    follows_a_reference = "$ref" in json.dumps(tool.output_schema)
+    assert follows_a_reference == (tool_name != "export_artifact"), (
+        f"{tool_name}: whether this check resolves a reference or only checks the envelope "
+        f"has changed; if the bundle contract is now published, validate against it"
+    )
 
 
 def test_the_result_gate_refuses_what_the_published_output_schema_rejects(monkeypatch):
@@ -998,7 +1037,15 @@ def test_a_dispatched_tool_calls_the_symbol_it_names(
     `run_validation` named `anvilate.bundle:assemble_evidence_bundle` for as long as
     nothing was dispatched, and went on resolving after the handler was wired to
     `anvilate.screening:screen_spec` — the import check cannot see the difference. So the
-    named symbol is replaced with one that raises, and the call has to raise through it.
+    named symbol is replaced with one that raises, and the call has to come back carrying it.
+
+    **Read off the response rather than the exception**, because an exception no longer
+    escapes: `handle_request` turns anything a handler did not anticipate into an
+    INTERNAL_ERROR, since the alternative was that it ended `serve_stdio`'s read loop and took
+    the server down for every message queued behind it. The guard names the exception type
+    precisely so an unexpected failure stays diagnosable, and that is what this reads. The
+    signal is the same one — the sentinel ran, so the named symbol was called — and it now
+    travels the path a client actually sees.
     """
 
     class _Reached(Exception):
@@ -1010,8 +1057,10 @@ def test_a_dispatched_tool_calls_the_symbol_it_names(
     tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
     assert tool.backing == f"{module_name}:{attribute}"
     monkeypatch.setattr(importlib.import_module(module_name), attribute, _raise)
-    with pytest.raises(_Reached):
-        _call(tool_name, {arguments: _spec_document()})
+    reply = _call(tool_name, {arguments: _spec_document()})
+    assert "result" not in reply, "a handler that raised must not report a result"
+    assert reply["error"]["code"] == -32603, reply["error"]
+    assert "_Reached" in reply["error"]["message"], reply["error"]["message"]
 
 
 def test_the_result_gate_enforces_the_digest_pattern_on_the_real_schema():
@@ -1310,6 +1359,9 @@ def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
     `BundleSections` and the call has to raise through it. It is a separate test from the
     parametrized one above because that helper sends a single argument and this tool takes
     a handle it cannot invent.
+
+    Read off the response, for the reason the parametrized version says: nothing escapes
+    `handle_request` any more, because an escaping exception ended the stdio read loop.
     """
 
     class _Reached(Exception):
@@ -1324,8 +1376,12 @@ def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
     assert tool.backing == "anvilate.bundle:BundleSections"
     handle = _scorecard_handle()
     monkeypatch.setattr(anvilate.bundle, "BundleSections", _raise)
-    with pytest.raises(_Reached):
-        _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})
+    reply = _call("export_artifact", {"subject": handle, "format": "evidence_bundle"})
+    assert "result" not in reply
+    assert reply["error"]["code"] == -32603, reply["error"]
+    # Not the record-unreadable refusal this handler raises for a record it cannot parse:
+    # that one is INVALID_PARAMS, and confusing the two would let this pass on the wrong path.
+    assert "_Reached" in reply["error"]["message"], reply["error"]["message"]
 
 
 def test_the_handle_run_validation_publishes_names_the_spec_and_the_card_together():
@@ -1429,3 +1485,112 @@ def test_the_page_names_the_store_location_a_reader_is_told_to_delete():
         "the page no longer offers the one-liner that asks, so a reader with a customised "
         "cache has to reconstruct the path from the table"
     )
+
+
+def test_a_record_this_build_cannot_read_is_refused_and_the_server_stays_up(monkeypatch, tmp_path):
+    """A store entry that resolves and does not validate took the whole server down.
+
+    `store.resolve` guards the read and the JSON parse, and `_export_artifact` then rebuilt
+    the models from what came back — outside any guard. Pydantic's `ValidationError` is not
+    `_InvalidArguments` and the dispatch caught nothing else, so it left `handle_request`
+    entirely, ended `serve_stdio`'s `for line in source`, and **stopped the server**: the
+    request that raised got no reply, and every message queued behind it was lost, so a client
+    reading one response per request waits forever.
+
+    Reachable without anything hostile. `run_validation` writes these records, and the store
+    is a directory on disk that outlives a release — an entry an older version published, or
+    one something outside this library wrote, is the shape that arrives.
+    """
+    import json as _json
+
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    from anvilate.store import SubjectStore, subject_store_root
+
+    store = SubjectStore(subject_store_root())
+    handle = store.publish("screening", {"scorecard": {"entries": [{"name": "x"}]}, "spec": {}})
+
+    call = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "export_artifact",
+            "arguments": {"subject": handle, "format": "evidence_bundle"},
+        },
+    }
+    reply = handle_request(call)
+    assert "result" not in reply
+    # INVALID_PARAMS, not INTERNAL_ERROR: the handle is the thing that is wrong, and the
+    # last-resort guard reporting a defect in anvilate would send the client to the wrong
+    # place. The remedy has to be actionable, so it names what to do about it.
+    assert reply["error"]["code"] == -32602, reply["error"]
+    assert "cannot read" in reply["error"]["message"]
+    assert "Publish the screening again" in reply["error"]["message"]
+
+    # And the loop keeps reading: the request behind it is answered.
+    stream = io.StringIO(
+        _json.dumps(call)
+        + "\n"
+        + _json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        + "\n"
+    )
+    sink = io.StringIO()
+    serve_stdio(stream, sink)
+    answered = [_json.loads(line) for line in sink.getvalue().strip().splitlines()]
+    assert [reply.get("id") for reply in answered] == [1, 2], (
+        "the queued request got no answer; an exception ended the read loop"
+    )
+    assert "tools" in answered[1]["result"]
+
+
+def test_nothing_a_handler_raises_can_end_the_read_loop(monkeypatch):
+    """The structural half, independent of any one handler's bug.
+
+    `serve_stdio`'s docstring rules this out already — "a stream is not a session: one client
+    sending rubbish must not take the server down for the message after it" — and the
+    reasoning was written about the JSON parse error, which was the only failure it covered.
+    An exception out of a handler is strictly worse than rubbish JSON: rubbish gets an answer
+    and the loop continues, while this got no answer and the loop stopped.
+
+    The guard is in `handle_request` rather than in the loop, for the reason the
+    is-this-an-object check is: that function is documented as the one place every transport
+    drives, so a guard in one caller is one the next transport does not get.
+    """
+    import json as _json
+
+    import anvilate.mcp as mcp
+
+    class _Unforeseen(Exception):
+        pass
+
+    def _explode(_arguments):
+        raise _Unforeseen("something nobody wrote a branch for")
+
+    monkeypatch.setitem(mcp._DISPATCH, "compile_spec", _explode)
+
+    call = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "compile_spec", "arguments": {"document": _spec_document()}},
+    }
+    reply = handle_request(call)
+    assert "result" not in reply, "a handler that raised must never report a result"
+    assert reply["error"]["code"] == -32603, reply["error"]
+    message = reply["error"]["message"]
+    # Diagnosable: a guard that hid which exception fired would trade a dead server for an
+    # undebuggable one, and every firing of it is a defect in this package.
+    assert "_Unforeseen" in message and "something nobody wrote a branch for" in message
+    assert "defect in anvilate" in message
+    assert "did not complete" in message, "it must not read as though the call succeeded"
+
+    stream = io.StringIO(
+        _json.dumps(call)
+        + "\n"
+        + _json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        + "\n"
+    )
+    sink = io.StringIO()
+    serve_stdio(stream, sink)
+    answered = [_json.loads(line) for line in sink.getvalue().strip().splitlines()]
+    assert [reply.get("id") for reply in answered] == [1, 2]

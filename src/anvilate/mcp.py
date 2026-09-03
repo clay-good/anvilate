@@ -1002,6 +1002,33 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         return _error(request_id, INVALID_PARAMS, str(refusal))
     except _Unavailable as refusal:
         return _error(request_id, TOOL_UNAVAILABLE, str(refusal))
+    except Exception as unexpected:  # noqa: BLE001 - the last resort, argued below
+        # Anything a handler did not anticipate becomes a response rather than an exception,
+        # because the alternative is not "the client sees a traceback" — it is that
+        # `serve_stdio`'s `for line in source` ends and **the server stops**. The request that
+        # raised gets no reply at all and every message queued behind it is lost, so a client
+        # reading one response per request blocks forever. A malformed record in the subject
+        # store did exactly that.
+        #
+        # That is the outcome this loop's own docstring rules out — "a stream is not a
+        # session: one client sending rubbish must not take the server down for the message
+        # after it" — and the reasoning stopped at the JSON parse error, which is the only
+        # failure it was written about.
+        #
+        # It is here rather than in the stdio loop for the reason the object check above is:
+        # this function is the one place every transport drives, so a guard in one caller is
+        # a guard the next transport does not get.
+        #
+        # INTERNAL_ERROR, and the type is named: this is a bug in this package every time it
+        # fires, and a message that hid which one would trade a dead server for an
+        # undiagnosable one. It never reports the operation as having succeeded.
+        return _error(
+            request_id,
+            INTERNAL_ERROR,
+            f"{tool.name} raised {type(unexpected).__name__}: {unexpected}. That is a defect "
+            f"in anvilate rather than a problem with the request; the server is still up and "
+            f"the call did not complete",
+        )
     wrong = result_issues(tool, structured)
     if wrong:
         return _error(
@@ -1215,13 +1242,29 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     except UnknownSubject as unknown:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
-    document = BundleSections(
-        scorecard=Scorecard.model_validate(record["scorecard"]),
-        # Never `None` on this path. The record holds the pair, so the bundle a client gets
-        # over MCP carries its inputs exactly as the one `anvilate export` prints does — the
-        # parity is by construction rather than by both surfaces remembering.
-        spec=parse_spec(record["spec"]),
-    ).to_document_dict()
+    try:
+        document = BundleSections(
+            scorecard=Scorecard.model_validate(record["scorecard"]),
+            # Never `None` on this path. The record holds the pair, so the bundle a client
+            # gets over MCP carries its inputs exactly as the one `anvilate export` prints
+            # does — the parity is by construction rather than by both surfaces remembering.
+            spec=parse_spec(record["spec"]),
+        ).to_document_dict()
+    except (ValueError, TypeError, KeyError) as unreadable:
+        # A handle that resolves to a record this build cannot read is the same fact as one
+        # the store does not hold — the client gets no bundle either way — and it is the
+        # third layer of the trap `store.resolve` guards at the first two. `run_validation`
+        # writes these records, so the shapes that reach here are a store an *older* release
+        # populated, or an entry something outside this library wrote. Unguarded, pydantic's
+        # `ValidationError` left the tool dispatch entirely: it is not `_InvalidArguments`,
+        # and nothing above catches a plain `ValueError`.
+        raise _InvalidArguments(
+            [
+                f"subject: {handle} resolves to a screening record this build cannot read "
+                f"({unreadable}). Publish the screening again with this release and export "
+                f"the handle it returns"
+            ]
+        ) from unreadable
     # The digest of the bundle's own canonical JSON, which is the same content addressing
     # the store and the attestation layer use — so the sha256 a client is handed names the
     # bytes it was handed, and two calls that produce the same bundle produce the same
