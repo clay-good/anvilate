@@ -155,9 +155,25 @@ instead of needing an edit.
 **The documents land on disk, and that is worth knowing.** Publishing a handle writes the
 document it names — a compiled spec, a screened scorecard — under the store root. A spec is
 somebody's design, so "the server remembers nothing between calls" is a claim about the
-protocol and not about the filesystem. Nothing leaves the machine; point
-`$ANVILATE_SUBJECT_STORE` somewhere deliberate to choose where they sit, and delete the
-directory to clear them.
+protocol and not about the filesystem. Nothing leaves the machine.
+
+**Where the directory is**, because "delete the directory to clear them" is not an
+instruction anyone can follow without it:
+
+| | |
+| --- | --- |
+| `$ANVILATE_SUBJECT_STORE` | used as-is when set — point it somewhere deliberate |
+| else `$ANVILATE_DATA_HOME` | `<that>/subjects` |
+| else | `~/.cache/anvilate/datasets/subjects` |
+
+Or ask, rather than reconstruct it:
+
+```bash
+python -c "from anvilate.store import subject_store_root; print(subject_store_root())"
+```
+
+Deleting it, whole or in part, is safe at any time: nothing evicts anything, and a handle
+that no longer resolves is refused by name rather than answered wrongly.
 
 **What a client pinned to the old surface is owed.** The four schemas gained a *required*
 property, and `compile_spec` and `run_validation` gained one in their output, so this is a

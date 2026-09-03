@@ -1387,3 +1387,45 @@ def test_a_handle_of_the_older_shape_is_refused_with_what_changed():
         assert error["code"] == -32602, tool
         assert "names a 'scorecard', and a 'screening' was asked for" in error["message"], tool
         assert "run_validation again" in error["message"], tool
+
+
+def test_the_page_names_the_store_location_a_reader_is_told_to_delete():
+    """`docs/mcp-tool-contracts.md` tells a reader to delete the subject store to clear the
+    designs it holds. That is only an instruction if the page says where it is.
+
+    The three-way resolution is `store.subject_store_root`, and the page's table is held
+    against it here — a default that moves and a page that does not is a reader deleting
+    somebody else's directory, or nothing at all.
+    """
+    import os
+    import pathlib
+    import re
+
+    from anvilate.store import subject_store_root
+
+    docs = pathlib.Path(__file__).resolve().parents[1] / "docs"
+    page = (docs / "mcp-tool-contracts.md").read_text(encoding="utf-8")
+    quoted = re.search(r"\| else \| `([^`]+)` \|", page)
+    assert quoted is not None, "the store-location table on the page has moved"
+
+    environment = dict(os.environ)
+    for name in ("ANVILATE_SUBJECT_STORE", "ANVILATE_DATA_HOME"):
+        os.environ.pop(name, None)
+    try:
+        default = subject_store_root()
+        assert quoted.group(1) == "~/.cache/anvilate/datasets/subjects", quoted.group(1)
+        assert default == pathlib.Path.home() / ".cache/anvilate/datasets/subjects", default
+        # And each override the table names actually overrides.
+        os.environ["ANVILATE_DATA_HOME"] = "/tmp/anvilate-probe"
+        assert subject_store_root() == pathlib.Path("/tmp/anvilate-probe/subjects")
+        os.environ["ANVILATE_SUBJECT_STORE"] = "/tmp/anvilate-probe-direct"
+        assert subject_store_root() == pathlib.Path("/tmp/anvilate-probe-direct")
+    finally:
+        os.environ.clear()
+        os.environ.update(environment)
+
+    assert "$ANVILATE_SUBJECT_STORE" in page and "$ANVILATE_DATA_HOME" in page
+    assert "subject_store_root" in page, (
+        "the page no longer offers the one-liner that asks, so a reader with a customised "
+        "cache has to reconstruct the path from the table"
+    )
