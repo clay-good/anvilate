@@ -668,6 +668,41 @@ _BOMS: tuple[tuple[bytes, str], ...] = (
 )
 
 
+def _is_a_spec(document: dict) -> bool:
+    """Is a document found by searching a Design Spec?
+
+    Two surfaces used to disagree about what one is. A file the caller *names* is a spec if
+    :class:`~anvilate.spec.DesignSpec` validates it, and ``anvilate_spec`` is optional there
+    on purpose — `spec-screening` calls it "a record, not an assertion", the version a
+    document actually reached, so a document that declares none is a current one. The sweep
+    recognised a spec by that key alone. So a spec written without it was screened when named
+    and reported ``not a Design Spec, skipped`` when found, and ``anvilate check specs/`` —
+    the merge-gate form — exited over a part nobody screened. The repository's own
+    ``examples/padeye.spec.yaml``, the document the README tells a reader to run, is one.
+
+    So the sweep asks the loader. The key is still enough on its own, because a document that
+    claims to be a spec is treated as one whatever its state; validating is what recognises
+    the rest. Nothing else is at risk of being mistaken for a spec: ``DesignSpec`` forbids
+    unknown keys and requires five, so a CI config or a lockfile fails it. What remains, and
+    is documented rather than papered over, is that a *broken* spec declaring no version is
+    still indistinguishable from a stray file — declaring ``anvilate_spec`` is what makes a
+    sweep's refusal unconditional.
+    """
+    if "anvilate_spec" in document:
+        return True
+    from .spec import parse_spec
+
+    try:
+        parse_spec(document)
+    except Exception:
+        # `except Exception`, not `SpecValidationError`: the question here is only whether
+        # this file is somebody's part, and anything at all going wrong answers "no". A file
+        # that *is* a spec and fails to load is the named-file case, and `_load` reports it
+        # with every path in the document.
+        return False
+    return True
+
+
 def _claims_a_spec(path: Path) -> bool:
     """Does an undecodable file still say ``anvilate_spec`` somewhere in its bytes?
 
@@ -845,9 +880,10 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
     """The spec documents behind the arguments, in a stable order.
 
     A directory is searched; a file named on the command line is taken at its word. The
-    difference matters: a document *found* by searching that carries no ``anvilate_spec`` key
-    is some other YAML file and is skipped — reported, never silently — while one the caller
-    *named* is an error, because they said it was a spec and it is not.
+    difference matters: a document *found* by searching that is not a Design Spec is some
+    other YAML file and is skipped — reported, never silently — while one the caller *named*
+    is an error, because they said it was a spec and it is not. :func:`_is_a_spec` is what
+    that recognition rests on, and it used to be the ``anvilate_spec`` key alone.
     """
     import yaml
 
@@ -899,7 +935,7 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                         )
                         return EXIT_BAD_REQUEST
                     document = None
-                if isinstance(document, dict) and "anvilate_spec" in document:
+                if isinstance(document, dict) and _is_a_spec(document):
                     found.append(candidate)
                 else:
                     print(

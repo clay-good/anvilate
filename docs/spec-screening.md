@@ -79,6 +79,14 @@ this release's version, which left a reviewer no trace that it had ever been new
 
 A different **major** version is refused as it always was.
 
+Because the field is optional, **nothing may recognise a Design Spec by it alone**, and
+`anvilate check <directory>` did — so a spec written without one screened when named and was
+reported `not a Design Spec, skipped` when found, and the merge-gate form of the command
+exited over a part nobody screened. The sweep asks the loader now; see
+[`anvilate` on the command line](headless-cli.md) for what that
+leaves. Declaring the version is still the way to make a sweep's refusal unconditional, since
+a document that *claims* to be a spec is treated as one whatever state it is in.
+
 **A tag and a parameter map, not a typed union**, and the trade is worth stating. A union of
 every pack element would validate a document completely at parse time and would make
 `spec-ir` depend on all twenty-odd packs, so every new element became a bump to this

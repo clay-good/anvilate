@@ -1844,3 +1844,82 @@ def test_a_non_utf8_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_path
     assert "not a Design Spec, skipped" not in err.split("windows.yaml")[-1], (
         "the UTF-16 spec is still being described as some other YAML file"
     )
+
+
+def test_every_spec_document_this_repository_ships_is_found_by_a_directory_sweep(tmp_path):
+    """Two surfaces disagreed about what a Design Spec is, and one of them is the merge gate.
+
+    A file the caller *names* is a spec if `DesignSpec` validates it, and `anvilate_spec` is
+    optional there deliberately: `spec-screening` calls it "a record, not an assertion", so a
+    document declaring no version is a current one. The sweep recognised a spec by that key
+    alone — so a spec written without it screened when named and came back
+    `not a Design Spec, skipped` when found.
+
+    `examples/padeye.spec.yaml` is one, and it is the document the README tells a reader to
+    run. `anvilate check examples/` reported it skipped and went on. Worse than the skip is
+    what it did to the roll-up: over a directory of a passing spec, a failing spec and an
+    unevaluated one, all three written this way, the sweep found one and the run exited 2 —
+    a merge gate blocking on 1 would have let a failed part through, and the failure never
+    appeared in the output at all.
+
+    So this is held over the repository's own specs, which is where the counterexample was.
+    """
+    shipped = sorted((_REPO / "examples").glob("*.spec.yaml"))
+    assert shipped, "no shipped spec documents found; this gate has stopped matching"
+
+    code, out, err = _run("check", str(_REPO / "examples"))
+    assert "not a Design Spec, skipped" not in err, err
+    # The sweep's own count, which is the one thing that says every one of them was screened
+    # rather than merely not complained about.
+    assert f"{len(shipped)} specs:" in out, (
+        f"the sweep screened fewer than the {len(shipped)} specs this repository ships: {out}"
+    )
+    # And the sweep's roll-up is never better than the worst verdict those specs reach alone.
+    from anvilate.cli import _EXIT_SEVERITY
+
+    worst = max(
+        (_run("check", str(spec))[0] for spec in shipped),
+        key=_EXIT_SEVERITY.index,
+    )
+    assert code == worst, f"the sweep answered {code}; the specs it swept are worst {worst}"
+
+
+def test_a_spec_that_declares_no_version_is_screened_by_a_sweep_and_a_stray_file_is_not(
+    tmp_path,
+):
+    """The recognition rule in both directions, on documents built for it.
+
+    The sweep asks the loader now, so the risk moves from missing a spec to claiming a file
+    that is not one. `DesignSpec` forbids unknown keys and requires five, so a CI config and a
+    lockfile fail it — and a *broken* spec that declares no version is still indistinguishable
+    from a stray file, which is the residual the docs state rather than paper over.
+    """
+    versionless = (_REPO / "examples" / "padeye.spec.yaml").read_text(encoding="utf-8")
+    assert "anvilate_spec" not in versionless, (
+        "the counterexample now declares a version; pick another versionless spec or this "
+        "test no longer exercises the rule it was written for"
+    )
+    (tmp_path / "part.yaml").write_text(versionless, encoding="utf-8")
+    (tmp_path / "ci-config.yaml").write_text(
+        "name: ci\non: {push: {branches: [main]}}\n", encoding="utf-8"
+    )
+    (tmp_path / "lock.yaml").write_text("packages:\n  - name: pyyaml\n", encoding="utf-8")
+
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_OK, err
+    assert "padeye" in out
+    assert "part.yaml: not a Design Spec, skipped" not in err
+    for stray in ("ci-config.yaml", "lock.yaml"):
+        assert f"{stray}: not a Design Spec, skipped" in err, f"{stray} was taken for a spec"
+
+    # And a directory of a passing, a failing and an unevaluated spec rolls up to the worst,
+    # which is what the sweep could not see when it found only the one declaring a version.
+    (tmp_path / "over.yaml").write_text(
+        versionless.replace("magnitude: 60.0, unit: kN", "magnitude: 600.0, unit: kN").replace(
+            "name: padeye", "name: overloaded", 1
+        ),
+        encoding="utf-8",
+    )
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_FAILED, f"a failing spec in the sweep answered {code}: {err}"
+    assert "2 specs: FAIL" in out, out

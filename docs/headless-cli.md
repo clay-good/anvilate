@@ -46,11 +46,25 @@ carries a margin, which is an ordinary card of passing deflection checks rather 
 error, and a missing line and a card with nothing to govern must not look the same.
 
 **A directory is searched; a file you name is taken at your word.** The difference
-matters. A document *found* by searching that carries no `anvilate_spec` key is some other
-YAML file — a CI config, a lockfile — and is skipped, with a line saying so rather than
-silently. One you *named* is an error: you said it was a spec and it is not. An empty
-search is a bad request rather than a pass, because "nothing found, nothing failed, exit 0"
-is the silent green this command exists to avoid.
+matters. A document *found* by searching that is not a Design Spec is some other YAML file —
+a CI config, a lockfile — and is skipped, with a line saying so rather than silently. One you
+*named* is an error: you said it was a spec and it is not. An empty search is a bad request
+rather than a pass, because "nothing found, nothing failed, exit 0" is the silent green this
+command exists to avoid.
+
+**The sweep asks the loader what a spec is**, and it used to ask the `anvilate_spec` key
+instead. That key is optional on purpose — see [`anvilate_spec` is a record, not an
+assertion](spec-screening.md#anvilate_spec-is-a-record-not-an-assertion) — so a spec written
+without one screened when you named it and came back `not a Design Spec, skipped` when the
+sweep found it. `examples/padeye.spec.yaml`, the document the README tells you to run, is one.
+Over a directory of a passing, a failing and an unevaluated spec all written that way, the
+sweep found one of the three and exited 2: a merge gate blocking on exit 1 would have let the
+failed part through, and the failure was nowhere in the output.
+
+Declaring `anvilate_spec` is still worth doing, and it is what makes a sweep's refusal
+unconditional: a document that *claims* to be a spec is treated as one whatever state it is
+in, while a **broken** spec that declares no version is indistinguishable from a stray file
+and is skipped like one.
 
 **A file that will not parse is the third case, and it used to fall into the second.** A
 document cannot be recognised by its keys if it cannot be read at all — parsing is what
