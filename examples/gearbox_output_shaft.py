@@ -105,7 +105,7 @@ def screen_output_shaft() -> Scorecard:
 
 def main() -> None:
     print(f"resultant tooth load: {_gear_resultant_load():.0f} N")
-    print(screen_output_shaft())
+    print(screen_output_shaft().report())
 
 
 if __name__ == "__main__":

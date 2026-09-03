@@ -84,7 +84,7 @@ def main() -> None:
     for label, cone_height, working_deflection in CANDIDATES:
         variation = force_variation(cone_height, working_deflection)
         print(f"{label}: {variation:.1%} force loss over {SETTLEMENT} mm settling")
-    print(screen_clamp_washers())
+    print(screen_clamp_washers().report())
 
 
 if __name__ == "__main__":

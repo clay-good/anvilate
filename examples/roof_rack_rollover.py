@@ -61,9 +61,9 @@ def screen_empty() -> Scorecard:
 
 def main() -> None:
     print("roof box loaded (CG 0.90 m):")
-    print(screen_roof_loaded())
+    print(screen_roof_loaded().report())
     print("\nempty (CG 0.65 m):")
-    print(screen_empty())
+    print(screen_empty().report())
 
 
 if __name__ == "__main__":

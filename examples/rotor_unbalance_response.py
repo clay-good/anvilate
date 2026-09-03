@@ -67,7 +67,7 @@ def main() -> None:
         print(
             f"{name}: magnification {magnification:.2f}, amplitude {static * magnification:.3f} mm"
         )
-    print(screen_rotor_vibration())
+    print(screen_rotor_vibration().report())
 
 
 if __name__ == "__main__":

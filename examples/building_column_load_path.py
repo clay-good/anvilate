@@ -113,7 +113,7 @@ def screen_column() -> Scorecard:
 
 def main() -> None:
     print(f"column design strength phi*Pn : {_design_strength_kn():.0f} kN")
-    print(screen_column())
+    print(screen_column().report())
     print("  -> the code live-load reduction is the difference between pass and fail here")
 
 

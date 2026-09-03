@@ -91,9 +91,9 @@ def screen_stiffer_shaft() -> Scorecard:
 
 def main() -> None:
     print("as drawn (25 mm shaft):")
-    print(screen_fan_shaft())
+    print(screen_fan_shaft().report())
     print("\nstiffer (38 mm shaft):")
-    print(screen_stiffer_shaft())
+    print(screen_stiffer_shaft().report())
 
 
 if __name__ == "__main__":

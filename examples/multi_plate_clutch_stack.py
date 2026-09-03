@@ -75,9 +75,9 @@ def screen_stacked_clutch() -> Scorecard:
 def main() -> None:
     print(f"design torque: {ENGINE_TORQUE.to('N*m').magnitude * SERVICE_FACTOR:.0f} N*m")
     print("single plate (2 surfaces):")
-    print(screen_single_plate_clutch())
+    print(screen_single_plate_clutch().report())
     print("\nthree-plate stack (6 surfaces):")
-    print(screen_stacked_clutch())
+    print(screen_stacked_clutch().report())
 
 
 if __name__ == "__main__":

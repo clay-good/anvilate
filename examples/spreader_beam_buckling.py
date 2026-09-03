@@ -92,9 +92,9 @@ def screen_stubbier_spreader() -> Scorecard:
 
 def main() -> None:
     print("as drawn (48 mm tube):")
-    print(screen_spreader())
+    print(screen_spreader().report())
     print("\nstubbier (60 mm tube):")
-    print(screen_stubbier_spreader())
+    print(screen_stubbier_spreader().report())
 
 
 if __name__ == "__main__":

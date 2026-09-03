@@ -75,7 +75,7 @@ def main() -> None:
     for name, foundation_modulus in FOUNDATIONS.items():
         stress = _rail_bending_stress(foundation_modulus)
         print(f"{name}: peak rail bending stress {stress.to('MPa').magnitude:.0f} MPa")
-    print(screen_crane_rail())
+    print(screen_crane_rail().report())
 
 
 if __name__ == "__main__":

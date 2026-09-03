@@ -100,7 +100,7 @@ def main() -> None:
         normal_arm=NORMAL_ARM, friction_arm=FRICTION_ARM, friction_coefficient=FRICTION
     )
     print(f"self-locking geometry: {locking}")
-    print(screen_cart_brake())
+    print(screen_cart_brake().report())
 
 
 if __name__ == "__main__":

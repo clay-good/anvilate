@@ -57,9 +57,9 @@ def screen_long_hull() -> Scorecard:
 
 def main() -> None:
     print("short waterline (25 ft):")
-    print(screen_short_hull())
+    print(screen_short_hull().report())
     print("\nlong waterline (40 ft):")
-    print(screen_long_hull())
+    print(screen_long_hull().report())
 
 
 if __name__ == "__main__":

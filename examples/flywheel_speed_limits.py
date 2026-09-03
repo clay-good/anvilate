@@ -104,7 +104,7 @@ def screen_flywheel() -> Scorecard:
 
 def main() -> None:
     print(f"disc mass: {_disc_mass():.0f} kg")
-    print(screen_flywheel())
+    print(screen_flywheel().report())
 
 
 if __name__ == "__main__":

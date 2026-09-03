@@ -68,7 +68,7 @@ def screen_shrink_fit() -> Scorecard:
 def main() -> None:
     for name, speed in SPEEDS.items():
         print(f"{name}: {remaining_interference(speed):.4f} mm interference left")
-    print(screen_shrink_fit())
+    print(screen_shrink_fit().report())
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ def screen_fatigue_criteria() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_fatigue_criteria())
+    print(screen_fatigue_criteria().report())
 
 
 if __name__ == "__main__":

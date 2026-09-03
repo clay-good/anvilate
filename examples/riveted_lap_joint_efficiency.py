@@ -74,9 +74,9 @@ def screen_double_riveted_seam() -> Scorecard:
 
 def main() -> None:
     print("single-riveted:")
-    print(screen_single_riveted_seam())
+    print(screen_single_riveted_seam().report())
     print("\ndouble-riveted:")
-    print(screen_double_riveted_seam())
+    print(screen_double_riveted_seam().report())
 
 
 if __name__ == "__main__":

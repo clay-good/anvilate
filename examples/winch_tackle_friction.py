@@ -86,9 +86,9 @@ def main() -> None:
         )
         print(f"{name} (eta {eta}): actual MA {advantage:.2f} of {SUPPORTING_PARTS} parts")
     print("\nplain-bushing blocks:")
-    print(screen_plain_bushing_tackle())
+    print(screen_plain_bushing_tackle().report())
     print("\nrolling-bearing sheaves:")
-    print(screen_rolling_bearing_tackle())
+    print(screen_rolling_bearing_tackle().report())
 
 
 if __name__ == "__main__":

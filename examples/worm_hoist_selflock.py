@@ -88,7 +88,7 @@ def screen_worm_hoist() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_worm_hoist())
+    print(screen_worm_hoist().report())
 
 
 if __name__ == "__main__":

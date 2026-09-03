@@ -114,9 +114,9 @@ def main() -> None:
     print(f"minimum film: {_film_thickness().to('um').magnitude:.1f} um")
     print(f"Petroff friction loss: {friction.to('W').magnitude:.0f} W")
     print("\nground journal / honed bush:")
-    print(screen_ground_journal())
+    print(screen_ground_journal().report())
     print("\nturned finishes (cost proposal):")
-    print(screen_turned_finishes())
+    print(screen_turned_finishes().report())
 
 
 if __name__ == "__main__":

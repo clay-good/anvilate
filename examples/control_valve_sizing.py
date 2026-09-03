@@ -64,9 +64,9 @@ def screen_selected_valve() -> Scorecard:
 
 def main() -> None:
     print("undersized valve (Cv 50):")
-    print(screen_undersized_valve())
+    print(screen_undersized_valve().report())
     print("\nselected valve (Cv 80):")
-    print(screen_selected_valve())
+    print(screen_selected_valve().report())
 
 
 if __name__ == "__main__":

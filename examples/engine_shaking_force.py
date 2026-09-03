@@ -78,7 +78,7 @@ def screen_shaking_force() -> Scorecard:
 def main() -> None:
     for name, rod_length in ROD_LENGTHS.items():
         print(f"{name}: peak shaking force {peak_shaking_force(rod_length):.0f} N")
-    print(screen_shaking_force())
+    print(screen_shaking_force().report())
 
 
 if __name__ == "__main__":

@@ -144,7 +144,7 @@ def screen_station() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_station())
+    print(screen_station().report())
     print("  -> the pump is fine; the 6 mm2 feeder over 120 m is the binding constraint")
 
 

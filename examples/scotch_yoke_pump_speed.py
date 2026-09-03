@@ -68,9 +68,9 @@ def screen_uprated_speed() -> Scorecard:
 
 def main() -> None:
     print("design speed, 300 rpm:")
-    print(screen_design_speed())
+    print(screen_design_speed().report())
     print("\nuprated speed, 900 rpm:")
-    print(screen_uprated_speed())
+    print(screen_uprated_speed().report())
 
 
 if __name__ == "__main__":

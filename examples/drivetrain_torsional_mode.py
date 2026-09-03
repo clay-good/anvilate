@@ -72,7 +72,7 @@ def main() -> None:
         )
         print(f"{name}: torsional mode {mode.to('Hz').magnitude:.1f} Hz")
     print(f"firing frequency: {FIRING_FREQUENCY.to('Hz').magnitude:.0f} Hz")
-    print(screen_drivetrain_mode())
+    print(screen_drivetrain_mode().report())
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ def main() -> None:
     print(f"fundamental, beam mass ignored:   {ignored.to('Hz').magnitude:.1f} Hz")
     print(f"fundamental, beam mass included:  {included.to('Hz').magnitude:.1f} Hz")
     print(f"running speed:                    {RUNNING_SPEED.to('Hz').magnitude:.1f} Hz")
-    print(screen_support_resonance())
+    print(screen_support_resonance().report())
 
 
 if __name__ == "__main__":

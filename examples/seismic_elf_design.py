@@ -115,7 +115,7 @@ def screen_seismic_design() -> Scorecard:
 
 def main() -> None:
     print(f"governing seismic coefficient Cs : {_governing_cs():.3f} (long-period cap governs)")
-    print(screen_seismic_design())
+    print(screen_seismic_design().report())
     print(
         "  -> strength is generous and P-delta is a non-issue; the story drift governs the design"
     )

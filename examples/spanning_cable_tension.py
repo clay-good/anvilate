@@ -83,7 +83,7 @@ def main() -> None:
             f"{name}: sag {sag.to('m').magnitude:.2f} m, "
             f"peak tension {tmax.to('N').magnitude:.0f} N"
         )
-    print(screen_cable_span())
+    print(screen_cable_span().report())
 
 
 if __name__ == "__main__":

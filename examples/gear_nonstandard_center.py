@@ -68,7 +68,7 @@ def main() -> None:
             f"{center.to('mm').magnitude:.0f} mm centre: operating pressure angle "
             f"{phi_w:.1f} deg, total profile shift {shift:.2f}"
         )
-    print(screen_gear_centers())
+    print(screen_gear_centers().report())
 
 
 if __name__ == "__main__":

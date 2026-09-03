@@ -79,9 +79,9 @@ def screen_stouter_rod() -> Scorecard:
 
 def main() -> None:
     print("as drawn (28 mm rod):")
-    print(screen_cylinder())
+    print(screen_cylinder().report())
     print("\nstouter (32 mm rod):")
-    print(screen_stouter_rod())
+    print(screen_stouter_rod().report())
 
 
 if __name__ == "__main__":

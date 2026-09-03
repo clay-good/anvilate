@@ -71,7 +71,7 @@ def screen_column_capacity() -> Scorecard:
 def main() -> None:
     print(f"perfect-column capacity: {_capacity(0.0):.0f} MPa")
     print(f"Perry-Robertson capacity: {_capacity(IMPERFECTION_FACTOR):.0f} MPa")
-    print(screen_column_capacity())
+    print(screen_column_capacity().report())
 
 
 if __name__ == "__main__":

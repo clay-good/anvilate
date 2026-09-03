@@ -96,9 +96,9 @@ def main() -> None:
         )
         print(f"  {label}: {torque.to('N*m').magnitude:.2f} N*m at the motor")
     print("\ndirect drive:")
-    print(screen_direct_drive())
+    print(screen_direct_drive().report())
     print("\ninertia-matched drive:")
-    print(screen_matched_drive())
+    print(screen_matched_drive().report())
 
 
 if __name__ == "__main__":

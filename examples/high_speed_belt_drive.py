@@ -100,7 +100,7 @@ def main() -> None:
             f"{rpm:.0f} rpm -> {v.to('m/s').magnitude:.1f} m/s, "
             f"{_power_watts(RATED_TENSION, v) / 1000.0:.2f} kW"
         )
-    print(screen_belt_drive())
+    print(screen_belt_drive().report())
 
 
 if __name__ == "__main__":

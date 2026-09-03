@@ -60,7 +60,7 @@ def screen_indexing_table() -> Scorecard:
 def main() -> None:
     for name, slots in STATION_COUNTS.items():
         print(f"{name}: dwell {dwell_time(slots):.3f} s per station")
-    print(screen_indexing_table())
+    print(screen_indexing_table().report())
 
 
 if __name__ == "__main__":

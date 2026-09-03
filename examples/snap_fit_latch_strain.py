@@ -84,9 +84,9 @@ def screen_redesigned_latch() -> Scorecard:
 
 def main() -> None:
     print("as drawn (8 mm finger):")
-    print(screen_latch())
+    print(screen_latch().report())
     print("\nredesigned (15 mm finger):")
-    print(screen_redesigned_latch())
+    print(screen_redesigned_latch().report())
 
 
 if __name__ == "__main__":

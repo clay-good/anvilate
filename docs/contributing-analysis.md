@@ -894,3 +894,33 @@ come from `anvilate.units` and none from `anvilate.packs` itself — a pack is a
 submodule. So a namespace package must publish **nothing**, which is what keeps the
 exemption from becoming a half-aggregating package where some symbols are re-exported and
 the rest are invisible.
+
+## A summary line is not a scorecard
+
+`examples/README.md` is a curated index of 183 of the examples, and its entries quote the
+numbers that make each one worth reading: "collapses the margin to 3.28", "runs 7.38 MPa
+past the 6.5 MPa allowable". Nothing checked those numbers against anything, so the obvious
+sweep is to run each named example and look for its claimed figures — matched at the
+precision the entry itself states, since `11.6 mm` is a correct rendering of `11.574`.
+
+**249 of 414 decimal claims were nowhere in the example's own output.** Not because they
+were wrong. Because of this:
+
+    scorecard FAIL (3 checks); governing: tension plus sheave bending vs breaking strength
+
+That is the whole of what `hoist_sheave_bending.py` printed, and the index for that file
+quotes five safety factors — every one of them on an entry the example computed and threw
+away. `Scorecard.__str__` is one line on purpose and its docstring says why; `print(card)`
+is the lazy path straight to it, and **100 of the 158 examples that print a card took it**.
+A reader who ran one was told something failed and not which check.
+
+`Scorecard.report()` is the other call — the entries' own renderings above the summary's
+own, nothing computed — and those hundred sites now use it. Unmatched claims fell from 249
+to **62**, and the residue is a different thing: intermediate quantities (`7.38 MPa`, a
+groove pressure) that the example computes and no entry carries. Those are per-example work,
+not one fix.
+
+The gate is in `test_examples.py` and reads the *printed text*, not the objects, because the
+objects were always right: a summary claiming three checks must have three entry lines above
+it. It also asserts that at least 150 examples print a card at all, so a change to the
+summary's wording fails loudly instead of quietly gating nothing.

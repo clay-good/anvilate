@@ -85,7 +85,7 @@ def main() -> None:
     )
     print(f"direct-shear estimate: {direct.to('MPa').magnitude:.1f} MPa")
     print(f"true peak (eccentric): {peak.to('MPa').magnitude:.1f} MPa")
-    print(screen_bracket_welds())
+    print(screen_bracket_welds().report())
 
 
 if __name__ == "__main__":

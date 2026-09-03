@@ -93,7 +93,7 @@ def screen_fatigue_link() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_fatigue_link())
+    print(screen_fatigue_link().report())
 
 
 if __name__ == "__main__":

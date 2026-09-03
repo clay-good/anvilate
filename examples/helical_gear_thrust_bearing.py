@@ -59,7 +59,7 @@ def main() -> None:
     for name, helix_angle in HELIX_ANGLES.items():
         thrust = helical_gear_axial_thrust(tangential_load=TANGENTIAL_LOAD, helix_angle=helix_angle)
         print(f"{name}: axial thrust {thrust.to('N').magnitude:.0f} N")
-    print(screen_helical_thrust())
+    print(screen_helical_thrust().report())
 
 
 if __name__ == "__main__":

@@ -84,9 +84,9 @@ def main() -> None:
         )
         print(f"{label}: module {module.to('mm').magnitude:.2f} mm")
     print("\ncoarse 12-tooth pinion:")
-    print(screen_pinion())
+    print(screen_pinion().report())
     print("\nfiner 20-tooth pinion:")
-    print(screen_finer_pinion())
+    print(screen_finer_pinion().report())
 
 
 if __name__ == "__main__":

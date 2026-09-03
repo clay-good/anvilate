@@ -80,7 +80,7 @@ def screen_connection() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_connection())
+    print(screen_connection().report())
 
 
 if __name__ == "__main__":

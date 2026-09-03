@@ -86,7 +86,7 @@ def main() -> None:
     tension = working_tension()
     torque = REQUIRED_TORQUE.to("N*m").magnitude
     print(f"tight-side tension to hold {torque:.0f} N*m: {tension.to('N').magnitude:.0f} N")
-    print(screen_winch_brake())
+    print(screen_winch_brake().report())
 
 
 if __name__ == "__main__":

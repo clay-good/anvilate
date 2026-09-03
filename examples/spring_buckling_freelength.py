@@ -84,7 +84,7 @@ def main() -> None:
             print(f"{name}: absolutely stable")
         else:
             print(f"{name}: buckles past {result.critical_deflection.to('mm').magnitude:.0f} mm")
-    print(screen_spring_buckling())
+    print(screen_spring_buckling().report())
 
 
 if __name__ == "__main__":

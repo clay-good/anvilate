@@ -123,7 +123,7 @@ def main() -> None:
     print(
         f"chosen set: sun {sun_teeth} / ring {ring_teeth} -> drum {speed:.1f} rpm, {torque:.0f} N*m"
     )
-    print(screen_winch_reducer())
+    print(screen_winch_reducer().report())
 
 
 if __name__ == "__main__":

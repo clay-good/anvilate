@@ -89,9 +89,9 @@ def screen_wide_drum() -> Scorecard:
 
 def main() -> None:
     print(f"narrow drum ({NARROW_WRAPS} wraps x {NARROW_LAYERS} layers):")
-    print(screen_narrow_drum())
+    print(screen_narrow_drum().report())
     print(f"\nwide drum ({WIDE_WRAPS} wraps x {WIDE_LAYERS} layers):")
-    print(screen_wide_drum())
+    print(screen_wide_drum().report())
 
 
 if __name__ == "__main__":

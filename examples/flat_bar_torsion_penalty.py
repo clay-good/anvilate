@@ -72,7 +72,7 @@ def main() -> None:
             shear_modulus=SHEAR_MODULUS,
         )
         print(f"{name}: twist {twist.to('degree').magnitude:.2f} deg")
-    print(screen_torsion_sections())
+    print(screen_torsion_sections().report())
 
 
 if __name__ == "__main__":

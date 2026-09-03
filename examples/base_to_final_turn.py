@@ -65,9 +65,9 @@ def screen_disciplined_turn() -> Scorecard:
 
 def main() -> None:
     print("steep 60-degree bank:")
-    print(screen_base_to_final_turn())
+    print(screen_base_to_final_turn().report())
     print("\ndisciplined 30-degree bank:")
-    print(screen_disciplined_turn())
+    print(screen_disciplined_turn().report())
 
 
 if __name__ == "__main__":

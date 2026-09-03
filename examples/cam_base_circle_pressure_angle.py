@@ -94,7 +94,7 @@ def main() -> None:
             f"{base_circle.to('mm').magnitude:.0f} mm base circle: "
             f"pressure angle {phi.to('degree').magnitude:.1f} deg"
         )
-    print(screen_cam_pressure_angle())
+    print(screen_cam_pressure_angle().report())
 
 
 if __name__ == "__main__":

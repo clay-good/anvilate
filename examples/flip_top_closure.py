@@ -97,7 +97,7 @@ def screen_closure() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_closure())
+    print(screen_closure().report())
 
 
 if __name__ == "__main__":

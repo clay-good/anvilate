@@ -73,7 +73,7 @@ def main() -> None:
     for reliability in RELIABILITIES:
         a1 = bearing_reliability_life_factor(reliability=reliability)
         print(f"life at {reliability:.0%}: {a1 * l10:,.0f} hours (a1 = {a1:.2f})")
-    print(screen_bearing_reliability())
+    print(screen_bearing_reliability().report())
 
 
 if __name__ == "__main__":

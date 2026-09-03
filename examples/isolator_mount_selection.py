@@ -74,9 +74,9 @@ def main() -> None:
     )
     print(f"static deflection needed for 90% isolation: {needed.to('mm').magnitude:.2f} mm")
     print("firm mount (1 mm):")
-    print(screen_mount())
+    print(screen_mount().report())
     print("\nsoft mount (4.4 mm):")
-    print(screen_soft_mount())
+    print(screen_soft_mount().report())
 
 
 if __name__ == "__main__":

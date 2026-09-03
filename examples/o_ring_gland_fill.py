@@ -72,9 +72,9 @@ def screen_widened_gland() -> Scorecard:
 
 def main() -> None:
     print("narrow groove (3.8 mm):")
-    print(screen_gland())
+    print(screen_gland().report())
     print("\nwidened groove (4.7 mm):")
-    print(screen_widened_gland())
+    print(screen_widened_gland().report())
 
 
 if __name__ == "__main__":

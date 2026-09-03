@@ -94,7 +94,7 @@ def main() -> None:
             f"h={h:.0f} mm: straight-beam bore {_bore_stress_straight(depth):.1f} MPa, "
             f"Winkler bore {_bore_stress_winkler(depth):.1f} MPa"
         )
-    print(screen_crane_hook())
+    print(screen_crane_hook().report())
 
 
 if __name__ == "__main__":

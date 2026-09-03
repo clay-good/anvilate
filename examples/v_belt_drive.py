@@ -133,9 +133,9 @@ def screen_two_belt_drive() -> Scorecard:
 
 def main() -> None:
     print("single belt:")
-    print(screen_drive())
+    print(screen_drive().report())
     print("\ntwo belts:")
-    print(screen_two_belt_drive())
+    print(screen_two_belt_drive().report())
 
 
 if __name__ == "__main__":

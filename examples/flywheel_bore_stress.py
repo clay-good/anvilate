@@ -80,7 +80,7 @@ def main() -> None:
     )
     print(f"solid-disc centre stress: {solid.to('MPa').magnitude:.0f} MPa")
     print(f"bored-disc bore stress:   {bored.to('MPa').magnitude:.0f} MPa")
-    print(screen_flywheel_bore())
+    print(screen_flywheel_bore().report())
 
 
 if __name__ == "__main__":

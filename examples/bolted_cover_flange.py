@@ -76,7 +76,7 @@ def screen_cover_bolts() -> Scorecard:
 
 def main() -> None:
     print(f"pressure end-force: {end_force() / 1000:.0f} kN")
-    print(screen_cover_bolts())
+    print(screen_cover_bolts().report())
 
 
 if __name__ == "__main__":

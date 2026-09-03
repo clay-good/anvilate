@@ -167,7 +167,7 @@ def main() -> None:
         print(f"  {nature.value}: {magnitude:+.0f}")
     print()
     card = screen_deck()
-    print(card)
+    print(card.report())
     for entry in card.entries:
         print(f"  {entry}")
     print(f"\ngoverning check: {card.governing().name}")

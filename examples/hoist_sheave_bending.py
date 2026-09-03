@@ -107,9 +107,9 @@ def main() -> None:
         )
         print(f"{name} {sheave} sheave: bending load {bending.to('kN').magnitude:.1f} kN")
     print("\ncompact 250 mm sheave (19 rope diameters):")
-    print(screen_hoist())
+    print(screen_hoist().report())
     print("\ngenerous 600 mm sheave (46 rope diameters):")
-    print(screen_generous_sheave())
+    print(screen_generous_sheave().report())
 
 
 if __name__ == "__main__":

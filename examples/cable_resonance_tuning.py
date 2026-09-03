@@ -63,7 +63,7 @@ def screen_cable_resonance() -> Scorecard:
 def main() -> None:
     for name, tension in TENSIONS.items():
         print(f"{name}: fundamental {fundamental(tension).to('Hz').magnitude:.2f} Hz")
-    print(screen_cable_resonance())
+    print(screen_cable_resonance().report())
 
 
 if __name__ == "__main__":

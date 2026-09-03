@@ -61,9 +61,9 @@ def screen_hot_batch() -> Scorecard:
 
 def main() -> None:
     print("base temperature (k = 0.5 /hr):")
-    print(screen_slow_batch())
+    print(screen_slow_batch().report())
     print("\nraised temperature (k = 2.0 /hr):")
-    print(screen_hot_batch())
+    print(screen_hot_batch().report())
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ def screen_shape_factors() -> Scorecard:
 def main() -> None:
     for name, factor in _sections().items():
         print(f"{name}: shape factor {factor:.3f}")
-    print(screen_shape_factors())
+    print(screen_shape_factors().report())
 
 
 if __name__ == "__main__":

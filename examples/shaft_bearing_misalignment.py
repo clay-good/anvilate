@@ -87,7 +87,7 @@ def screen_shaft() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_shaft())
+    print(screen_shaft().report())
 
 
 if __name__ == "__main__":

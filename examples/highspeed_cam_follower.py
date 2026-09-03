@@ -81,7 +81,7 @@ def main() -> None:
         print(
             f"{name}: peak {peak_acceleration(profile, speed):.0f} m/s² (limit {ACCEL_LIMIT:.0f})"
         )
-    print(screen_cam_follower())
+    print(screen_cam_follower().report())
 
 
 if __name__ == "__main__":

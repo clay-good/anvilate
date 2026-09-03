@@ -116,7 +116,7 @@ def screen_cap() -> Scorecard:
 
 def main() -> None:
     print(f"hydrostatic end force: {_hydrostatic_end_force() / 1000:.1f} kN")
-    print(screen_cap())
+    print(screen_cap().report())
 
 
 if __name__ == "__main__":

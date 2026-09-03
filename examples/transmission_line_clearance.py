@@ -84,7 +84,7 @@ def main() -> None:
         print(f"parabolic sag: refused — {refusal}")
     print(f"catenary sag:  {catenary_sag(**kw).to('m').magnitude:.1f} m")
     print(f"max allowed:   {MAX_ALLOWED_SAG.to('m').magnitude:.1f} m")
-    print(screen_line_clearance())
+    print(screen_line_clearance().report())
 
 
 if __name__ == "__main__":

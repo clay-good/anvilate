@@ -69,7 +69,7 @@ def main() -> None:
         chain_pitch=CHAIN_PITCH,
     )
     print(f"17-tooth driver: {speed.to('m/s').magnitude:.2f} m/s, {pitches:.1f} pitches")
-    print(screen_conveyor_chain())
+    print(screen_conveyor_chain().report())
 
 
 if __name__ == "__main__":

@@ -89,9 +89,9 @@ def screen_better_lubricated_bushing() -> Scorecard:
 def main() -> None:
     print(f"bearing pressure: {_bearing_pressure().to('MPa').magnitude:.2f} MPa")
     print("marginal lubrication (K = 1e-7):")
-    print(screen_bushing())
+    print(screen_bushing().report())
     print("\nbetter film (K = 5e-8):")
-    print(screen_better_lubricated_bushing())
+    print(screen_better_lubricated_bushing().report())
 
 
 if __name__ == "__main__":

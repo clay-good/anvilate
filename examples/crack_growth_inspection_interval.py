@@ -78,7 +78,7 @@ def main() -> None:
             paris_exponent=PARIS_EXPONENT,
         )
         print(f"{name}: propagation life {cycles:,.0f} cycles")
-    print(screen_inspection_interval())
+    print(screen_inspection_interval().report())
 
 
 if __name__ == "__main__":

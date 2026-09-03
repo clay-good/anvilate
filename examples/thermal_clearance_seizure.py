@@ -81,9 +81,9 @@ def screen_opened_clearance() -> Scorecard:
 def main() -> None:
     print(f"thermal closure at temperature: {_thermal_closure():.3f} mm")
     print("tight cold fit (0.10 mm):")
-    print(screen_clearance())
+    print(screen_clearance().report())
     print("\nopened cold fit (0.20 mm):")
-    print(screen_opened_clearance())
+    print(screen_opened_clearance().report())
 
 
 if __name__ == "__main__":

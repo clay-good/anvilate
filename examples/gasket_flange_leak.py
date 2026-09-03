@@ -84,7 +84,7 @@ def screen_flange() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_flange())
+    print(screen_flange().report())
 
 
 if __name__ == "__main__":

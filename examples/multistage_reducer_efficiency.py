@@ -62,7 +62,7 @@ def screen_reducer() -> Scorecard:
 def main() -> None:
     ideal, real = output_torques()
     print(f"ideal {ideal:.0f} N*m, real {real:.0f} N*m (train efficiency {real / ideal:.1%})")
-    print(screen_reducer())
+    print(screen_reducer().report())
 
 
 if __name__ == "__main__":

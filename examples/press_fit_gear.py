@@ -101,9 +101,9 @@ def screen_longer_engagement() -> Scorecard:
 
 def main() -> None:
     print("as drawn (40 mm engagement):")
-    print(screen_press_fit())
+    print(screen_press_fit().report())
     print("\nlonger engagement (60 mm):")
-    print(screen_longer_engagement())
+    print(screen_longer_engagement().report())
 
 
 if __name__ == "__main__":

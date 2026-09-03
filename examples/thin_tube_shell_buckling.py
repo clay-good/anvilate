@@ -93,7 +93,7 @@ def screen_tube_strut() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_tube_strut())
+    print(screen_tube_strut().report())
 
 
 if __name__ == "__main__":

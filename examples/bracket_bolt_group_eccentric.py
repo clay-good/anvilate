@@ -71,7 +71,7 @@ def main() -> None:
     )
     print(f"direct-shear estimate P/n: {direct_shear:.1f} kN")
     print(f"true peak corner bolt:     {peak.to('kN').magnitude:.1f} kN")
-    print(screen_bracket_bolts())
+    print(screen_bracket_bolts().report())
 
 
 if __name__ == "__main__":

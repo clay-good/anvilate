@@ -128,7 +128,7 @@ def repaired_scorecard() -> Scorecard:
 def main() -> None:
     print("On the compact 250 mm sheave:")
     before = screen_on_compact_sheave()
-    print(before)
+    print(before.report())
     for entry in before.entries:
         print(f"  {entry}")
         if entry.repair_hint is not None:
@@ -138,7 +138,7 @@ def main() -> None:
 
     print("\nApplying the repair hint (one solve, no iteration):")
     after = repaired_scorecard()
-    print(after)
+    print(after.report())
     for entry in after.entries:
         print(f"  {entry}")
     shift = after.governing_shift(before)

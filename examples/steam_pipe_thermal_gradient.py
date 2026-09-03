@@ -88,7 +88,7 @@ def main() -> None:
     )
     print(f"pressure hoop stress:        {hoop.to('MPa').magnitude:.0f} MPa")
     print(f"through-wall thermal stress: {thermal.to('MPa').magnitude:.0f} MPa")
-    print(screen_steam_pipe())
+    print(screen_steam_pipe().report())
 
 
 if __name__ == "__main__":

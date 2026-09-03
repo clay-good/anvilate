@@ -110,9 +110,9 @@ def screen_undersized_flywheel() -> Scorecard:
 def main() -> None:
     print(f"energy fluctuation ΔE: {energy_fluctuation().to('J').magnitude:.0f} J")
     print("adequate flywheel (6.0 kg*m^2):")
-    print(screen_flywheel())
+    print(screen_flywheel().report())
     print("\nundersized flywheel (4.0 kg*m^2):")
-    print(screen_undersized_flywheel())
+    print(screen_undersized_flywheel().report())
 
 
 if __name__ == "__main__":

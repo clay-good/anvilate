@@ -60,7 +60,7 @@ def screen_isolation() -> Scorecard:
 def main() -> None:
     for name, freq in MOUNTS.items():
         print(f"{name}: transmits {transmission(freq) * 100:.0f}% of the forcing")
-    print(screen_isolation())
+    print(screen_isolation().report())
 
 
 if __name__ == "__main__":

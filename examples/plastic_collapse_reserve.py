@@ -84,7 +84,7 @@ def screen_collapse_reserve() -> Scorecard:
 def main() -> None:
     print(f"elastic first-yield load: {_elastic_first_yield_udl().to('kN/m').magnitude:.0f} kN/m")
     print(f"plastic collapse load:    {_plastic_collapse_udl().to('kN/m').magnitude:.0f} kN/m")
-    print(screen_collapse_reserve())
+    print(screen_collapse_reserve().report())
 
 
 if __name__ == "__main__":

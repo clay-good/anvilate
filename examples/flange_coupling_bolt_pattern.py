@@ -71,10 +71,10 @@ def minimum_bolt_count() -> int:
 
 def main() -> None:
     print("four-bolt pattern:")
-    print(screen_four_bolt_coupling())
+    print(screen_four_bolt_coupling().report())
     print(f"\nminimum bolts for the torque: {minimum_bolt_count()}")
     print("\nsix-bolt pattern (next even count):")
-    print(screen_six_bolt_coupling())
+    print(screen_six_bolt_coupling().report())
 
 
 if __name__ == "__main__":

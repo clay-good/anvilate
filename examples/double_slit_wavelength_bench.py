@@ -64,9 +64,9 @@ def screen_long_bench() -> Scorecard:
 
 def main() -> None:
     print("1 m screen distance:")
-    print(screen_short_bench())
+    print(screen_short_bench().report())
     print("\n2 m screen distance:")
-    print(screen_long_bench())
+    print(screen_long_bench().report())
 
 
 if __name__ == "__main__":

@@ -83,7 +83,7 @@ def flat_blank_length() -> Quantity:
 
 
 def main() -> None:
-    print(screen_bend())
+    print(screen_bend().report())
     print(f"flat blank length: {flat_blank_length().to('mm').magnitude:.1f} mm")
 
 

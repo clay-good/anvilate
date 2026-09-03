@@ -75,7 +75,7 @@ def main() -> None:
     clamped = clamped_circular_plate_center_load_deflection(**kw)
     print(f"simply-supported centre deflection: {ss.to('mm').magnitude:.2f} mm")
     print(f"clamped centre deflection:          {clamped.to('mm').magnitude:.2f} mm")
-    print(screen_cover_plate())
+    print(screen_cover_plate().report())
 
 
 if __name__ == "__main__":

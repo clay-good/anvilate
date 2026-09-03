@@ -679,6 +679,18 @@ class Scorecard(BaseModel):
         """
         return tuple(e for e in self.entries if e.is_fragile(threshold))
 
+    def report(self) -> str:
+        """Every entry, then the summary line — the whole card as a reader reads it.
+
+        :meth:`__str__` is one line on purpose, and that decision left a gap the examples
+        fell into: a hundred of them printed a card and a reader ran one to see
+        ``scorecard FAIL (3 checks)`` — which check, and by how much, nowhere on the
+        screen, while the curated index quoted exactly those numbers. Summarising and
+        reporting are two different asks, and now there are two calls. Nothing here is
+        computed: it is the entries' own renderings above the summary's own.
+        """
+        return "\n".join([*(str(entry) for entry in self.entries), str(self)])
+
     def __str__(self) -> str:
         """One line, carrying the two facts this library asks a reader to report.
 

@@ -9032,3 +9032,53 @@ def test_the_readme_does_not_promise_a_scorecard_from_every_example():
         f"only {without} examples print something other than a scorecard — if that has "
         "genuinely become a handful, the README can go back to the simpler sentence"
     )
+
+
+def test_an_example_that_prints_a_card_prints_the_checks_on_it():
+    """A summary line is not a scorecard, and a hundred examples printed only the summary.
+
+    `Scorecard.__str__` is one line on purpose — its docstring says why — and `print(card)`
+    is the lazy path straight to it. So a reader who ran `hoist_sheave_bending.py` saw
+
+        scorecard FAIL (3 checks); governing: tension plus sheave bending vs breaking...
+
+    and not which check failed or by how much, while the curated index for that very file
+    quotes `8.83`, `3.28`, `0.88`, `5.18` and `2.11` — every one of them a number on an
+    entry the example computed and threw away. `Scorecard.report()` is the other call, and
+    the hundred `print(card)` sites are now `print(card.report())`.
+
+    The gate is the summary's own count against the entries on the screen: a card claiming
+    three checks must show three. It reads the printed text rather than the objects, which
+    is the point — the objects were always right.
+    """
+    import contextlib
+    import io
+    import re
+
+    summary = re.compile(r"^scorecard \w+ \((\d+) checks?[^)]*\)", re.M)
+    entry = re.compile(r"^\[(?:PASS|FAIL|NOT_EVALUATED|OVER_MARGIN)\]", re.M)
+
+    cards = 0
+    hidden: list[str] = []
+    for path in sorted(_EXAMPLES.glob("*.py")):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            namespace = runpy.run_path(str(path))
+            namespace["main"]()
+        printed = buffer.getvalue()
+        claimed = [int(n) for n in summary.findall(printed)]
+        if not claimed:
+            continue
+        cards += 1
+        shown = len(entry.findall(printed))
+        if shown < sum(claimed):
+            hidden.append(f"{path.name}: summaries count {sum(claimed)} checks, {shown} printed")
+
+    assert cards >= 150, (
+        f"only {cards} examples printed a scorecard summary; the pattern this reads has "
+        "moved and the gate is looking at almost nothing"
+    )
+    assert not hidden, (
+        "these print a card's verdict and hide the checks behind it, so a reader is told "
+        "something failed and not which:\n  " + "\n  ".join(hidden)
+    )

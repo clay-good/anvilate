@@ -88,9 +88,9 @@ def main() -> None:
     print(f"friction offers mu*p = {friction_shear:.1f} MPa of interface shear")
     print(f"the bond offers tau  = {BOND_DESIGN_STRENGTH.to('MPa').magnitude:.1f} MPa")
     print("\npress fit at the hub's 12 MPa limit:")
-    print(screen_press_fit())
+    print(screen_press_fit().report())
     print("\nretaining compound on a slip fit:")
-    print(screen_bonded_hub())
+    print(screen_bonded_hub().report())
 
 
 if __name__ == "__main__":

@@ -67,9 +67,9 @@ def screen_thinner_rod() -> Scorecard:
 
 def main() -> None:
     print("fat rod (45 mm):")
-    print(screen_rodside())
+    print(screen_rodside().report())
     print("\nthinner rod (36 mm):")
-    print(screen_thinner_rod())
+    print(screen_thinner_rod().report())
 
 
 if __name__ == "__main__":

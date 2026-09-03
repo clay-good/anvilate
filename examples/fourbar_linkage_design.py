@@ -99,7 +99,7 @@ def screen_fourbar_linkage() -> Scorecard:
 def main() -> None:
     for name, links in CANDIDATES.items():
         print(f"{name}: worst transmission angle {worst_transmission_angle(links):.0f} deg")
-    print(screen_fourbar_linkage())
+    print(screen_fourbar_linkage().report())
 
 
 if __name__ == "__main__":

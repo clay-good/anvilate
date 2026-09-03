@@ -61,7 +61,7 @@ def main() -> None:
     for name, toughness in MATERIALS.items():
         a_c = critical_crack_length(fracture_toughness=toughness, remote_stress=OPERATING_STRESS)
         print(f"{name}: critical crack {a_c.to('mm').magnitude:.2f} mm")
-    print(screen_fracture_toughness())
+    print(screen_fracture_toughness().report())
 
 
 if __name__ == "__main__":

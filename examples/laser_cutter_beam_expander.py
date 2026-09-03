@@ -64,9 +64,9 @@ def screen_expanded_beam() -> Scorecard:
 
 def main() -> None:
     print("raw 2 mm beam:")
-    print(screen_raw_beam())
+    print(screen_raw_beam().report())
     print("\nexpanded 4 mm beam:")
-    print(screen_expanded_beam())
+    print(screen_expanded_beam().report())
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ def screen_column() -> Scorecard:
 
 def main() -> None:
     card = screen_column()
-    print(card)
+    print(card.report())
     for entry in card.entries:
         print(f"  {entry}")
     governing = card.governing()

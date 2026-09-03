@@ -69,7 +69,7 @@ def main() -> None:
     for name, (member_teeth, mate_teeth) in MEMBERS.items():
         thrust = member_thrust(member_teeth, mate_teeth).to("N").magnitude
         print(f"{name}: axial thrust {thrust:.0f} N")
-    print(screen_bevel_thrust())
+    print(screen_bevel_thrust().report())
 
 
 if __name__ == "__main__":

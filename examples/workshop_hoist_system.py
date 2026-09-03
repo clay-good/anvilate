@@ -153,9 +153,9 @@ def main() -> None:
     print(f"naive lead line W/n: {naive:.2f} kN")
     print(f"actual lead line:    {lead.to('kN').magnitude:.2f} kN")
     print("\nnaive 500 N*m winch:")
-    print(screen_hoist_system())
+    print(screen_hoist_system().report())
     print("\nupgraded 700 N*m winch:")
-    print(screen_upgraded_winch())
+    print(screen_upgraded_winch().report())
 
 
 if __name__ == "__main__":

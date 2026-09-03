@@ -69,14 +69,14 @@ def governing_shift() -> GoverningChange | None:
 def main() -> None:
     before = thin_plate()
     print("Thin 8 mm plate:")
-    print(before)
+    print(before.report())
     for entry in before.entries:
         print(f"  {entry}")
     print(f"  governing: {before.governing().name}")
 
     after = thick_plate()
     print("\nRevised 40 mm plate:")
-    print(after)
+    print(after.report())
     for entry in after.entries:
         print(f"  {entry}")
     print(f"  governing: {after.governing().name}")

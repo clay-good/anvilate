@@ -115,7 +115,7 @@ def screen_floor_beam() -> Scorecard:
 
 
 def main() -> None:
-    print(screen_floor_beam())
+    print(screen_floor_beam().report())
     print("  -> strength and deflection are comfortable; the floor fails on vibration alone")
 
 

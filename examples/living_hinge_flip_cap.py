@@ -62,9 +62,9 @@ def screen_redesigned_hinge() -> Scorecard:
 
 def main() -> None:
     print("as drawn (1.2 mm web):")
-    print(screen_hinge())
+    print(screen_hinge().report())
     print("\nredesigned (2.2 mm web):")
-    print(screen_redesigned_hinge())
+    print(screen_redesigned_hinge().report())
 
 
 if __name__ == "__main__":

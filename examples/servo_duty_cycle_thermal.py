@@ -77,9 +77,9 @@ def main() -> None:
         )
         print(f"{label}: RMS torque {rms.to('N*m').magnitude:.2f} N*m")
     print("\nfast cycle:")
-    print(screen_fast_cycle())
+    print(screen_fast_cycle().report())
     print("\nrelaxed cycle:")
-    print(screen_relaxed_cycle())
+    print(screen_relaxed_cycle().report())
 
 
 if __name__ == "__main__":

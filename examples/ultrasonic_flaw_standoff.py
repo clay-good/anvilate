@@ -65,9 +65,9 @@ def screen_small_probe() -> Scorecard:
 
 def main() -> None:
     print("10 mm probe:")
-    print(screen_large_probe())
+    print(screen_large_probe().report())
     print("\n6 mm probe:")
-    print(screen_small_probe())
+    print(screen_small_probe().report())
 
 
 if __name__ == "__main__":

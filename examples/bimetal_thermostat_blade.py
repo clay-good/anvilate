@@ -65,7 +65,7 @@ def main() -> None:
     for length in BLADE_LENGTHS:
         tip = abs(bimetallic_strip_tip_deflection(length=length, **LAYERS).to("mm").magnitude)
         print(f"{length.to('mm').magnitude:.0f} mm blade: tip sweep {tip:.2f} mm")
-    print(screen_thermostat_blades())
+    print(screen_thermostat_blades().report())
 
 
 if __name__ == "__main__":

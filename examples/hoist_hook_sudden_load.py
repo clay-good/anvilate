@@ -83,11 +83,11 @@ def screen_snatch_drop() -> Scorecard:
 
 def main() -> None:
     print("placed gently:")
-    print(screen_gentle_placement())
+    print(screen_gentle_placement().report())
     print("\nsuddenly applied (h = 0):")
-    print(screen_sudden_application())
+    print(screen_sudden_application().report())
     print("\n20 mm snatch drop:")
-    print(screen_snatch_drop())
+    print(screen_snatch_drop().report())
 
 
 if __name__ == "__main__":

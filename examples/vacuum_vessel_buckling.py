@@ -65,7 +65,7 @@ def main() -> None:
             elastic_modulus=ELASTIC_MODULUS, wall_thickness=thickness, mean_radius=MEAN_RADIUS
         )
         print(f"{name}: collapse pressure {p_cr.to('MPa').magnitude:.4f} MPa")
-    print(screen_vacuum_vessel())
+    print(screen_vacuum_vessel().report())
 
 
 if __name__ == "__main__":

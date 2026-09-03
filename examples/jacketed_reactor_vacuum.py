@@ -80,7 +80,7 @@ def main() -> None:
             elastic_modulus=ELASTIC_MODULUS, wall_thickness=thickness, mean_radius=MEAN_RADIUS
         )
         print(f"{name}: vacuum collapse pressure {collapse.to('MPa').magnitude:.4f} MPa")
-    print(screen_reactor_shell())
+    print(screen_reactor_shell().report())
 
 
 if __name__ == "__main__":

@@ -72,7 +72,7 @@ def screen_thermal_shock() -> Scorecard:
 def main() -> None:
     for name, props in GLASSES.items():
         print(f"{name}: shock stress {shock_stress(props).to('MPa').magnitude:.0f} MPa")
-    print(screen_thermal_shock())
+    print(screen_thermal_shock().report())
 
 
 if __name__ == "__main__":

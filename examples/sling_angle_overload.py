@@ -63,9 +63,9 @@ def screen_steep_sling() -> Scorecard:
 
 def main() -> None:
     print("as rigged (30 degrees from horizontal):")
-    print(screen_sling())
+    print(screen_sling().report())
     print("\nsteeper rig (60 degrees):")
-    print(screen_steep_sling())
+    print(screen_steep_sling().report())
 
 
 if __name__ == "__main__":
