@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TextIO
 
@@ -645,7 +646,8 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
                 print(f"# {path}", file=out)
             print(sections.render_document(), file=out)
         if len(results) > 1:
-            print(f"\n{len(results)} bundles: {worst.value.upper()}", file=out)
+            statuses = [sections.status for _p, _s, sections in results]
+            print("\n" + _run_summary("bundles", statuses, worst), file=out)
     return EXIT_CODES[worst]
 
 
@@ -745,7 +747,8 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             )
         if len(results) > 1:
             worst = _worst_status(card for _p, _s, card in results)
-            print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
+            statuses = [card.status for _p, _s, card in results]
+            print("\n" + _run_summary("specs", statuses, worst), file=out)
 
     # Every blocking check on stderr, which is what the requirement asks for and what a CI
     # log actually shows. A check that could not run is listed too, labelled as such: it
@@ -899,6 +902,34 @@ def _render(
     else:
         lines.append(f"  governing:     {governing.name} ({governing.status.value})")
     return "\n".join(lines)
+
+
+def _run_summary(noun: str, statuses: list[CheckStatus], worst: CheckStatus) -> str:
+    """The one line a reader takes away from a multi-spec run, with its counts.
+
+    `Scorecard.__str__` already argues this one level down: "a reader who sees
+    `scorecard FAIL (2 checks)` knows something failed and not which check to fix". The run
+    summary had the same shape — `60 specs: FAIL` over a run where 58 passed reads as a run
+    that failed wholesale, and a reviewer scanning a CI log cannot tell two broken parts
+    from sixty.
+
+    The blocking counts are named only when non-zero, like the card's, so an all-passing run
+    stays short. The `N specs: WORST` prefix is unchanged, because it is what the page
+    documents and what a log filter greps for.
+    """
+    tally = Counter(statuses)
+    parts = []
+    for status, word in (
+        (CheckStatus.FAIL, "failed"),
+        (CheckStatus.NOT_EVALUATED, "not evaluated"),
+        (CheckStatus.OVER_MARGIN, "over margin"),
+    ):
+        if tally[status]:
+            parts.append(f"{tally[status]} {word}")
+    if tally[CheckStatus.PASS]:
+        parts.append(f"{tally[CheckStatus.PASS]} passed")
+    counts = f" — {', '.join(parts)}" if parts else ""
+    return f"{len(statuses)} {noun}: {worst.value.upper()}{counts}"
 
 
 def _worst_status(cards):

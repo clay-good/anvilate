@@ -65,6 +65,14 @@ A file you **name** that will not parse is a bad request with the position in it
 any token`. It used to be a stack trace through PyYAML and exit 1, the code that means a
 part failed.
 
+**The last line says how much of the run was affected**, not just the worst verdict:
+`60 specs: FAIL — 2 failed, 58 passed`. The `N specs: WORST` prefix is unchanged, because a
+log filter greps for it, and the counts come after — `60 specs: FAIL` over a run where 58
+passed reads as sixty parts that failed, and a reviewer scanning a CI log could not tell two
+broken parts from sixty. Blocking counts appear only when non-zero, so an all-passing run
+stays `4 specs: PASS — 4 passed` rather than three zeroes to read past. It is the same
+argument `Scorecard.__str__` makes one level down about `scorecard FAIL (2 checks)`.
+
 Over many specs each block carries its path as well as its name — two parts in a repository can share one, and a run that printed the name alone gave two identical blocks and no way to tell which was which. A single named spec keeps the bare name, since the caller supplied the path. Over many specs the exit code is the worst verdict found, so one failing part fails the
 run — what a merge gate needs.
 

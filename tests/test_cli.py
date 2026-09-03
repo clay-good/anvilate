@@ -49,6 +49,28 @@ acceptance: {tiers: [T1_analytical]}
 """
 
 
+# A spec that reaches a pack screen, so a run summary has real verdicts to count.
+_LUG_SPEC = """
+anvilate_spec: "1.3.0"
+name: padeye
+description: A lifting lug.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+element_type: lifting_lug
+element_params:
+  name: padeye
+  material: ASTM-A36
+  width: {magnitude: 120.0, unit: mm}
+  hole_diameter: {magnitude: 40.0, unit: mm}
+  thickness: {magnitude: 20.0, unit: mm}
+  load: {magnitude: 60.0, unit: kN}
+constraints:
+  min_safety_factor: {value: 2.0, origin: user_stated}
+"""
+
+
 def _hostile_documents():
     """Documents that are valid per the schema and hostile to the screen, from the screening
     tests — one corpus, exercised at both surfaces."""
@@ -148,7 +170,11 @@ def test_the_json_says_everything_the_text_says(tmp_path):
     payload = json.loads(raw)
 
     # The run-level verdict, which the text prints as its last line.
-    assert text.splitlines()[-1] == f"2 specs: {payload['status'].upper()}"
+    # The prefix is the contract a log filter greps for; the counts after it say how much
+    # of the run was affected, which `60 specs: FAIL` over 58 passing parts did not.
+    summary = text.splitlines()[-1]
+    assert summary.startswith(f"2 specs: {payload['status'].upper()}")
+    assert summary.endswith("passed") or "failed" in summary or "not evaluated" in summary
 
     assert len(payload["specs"]) == 2
     for entry in payload["specs"]:
@@ -196,7 +222,8 @@ def test_the_export_roll_up_is_in_both_renderings_and_is_the_exit_code(tmp_path)
         "fail",
     }, "the two bundles agree, so a worst-of and a best-of are indistinguishable here"
     assert payload["status"] == "fail"
-    assert text.splitlines()[-1] == "2 bundles: FAIL"
+    assert text.splitlines()[-1].startswith("2 bundles: FAIL")
+    assert "1 failed" in text.splitlines()[-1], "the roll-up line no longer says how many"
     assert code == json_code == EXIT_FAILED
 
 
@@ -1702,3 +1729,39 @@ def test_every_documented_invocation_names_a_real_command_and_real_flags():
         "these documented commands do not parse, so a reader who copies one is told it is a "
         "bad request:\n  " + "\n  ".join(broken)
     )
+
+
+def test_the_run_summary_says_how_much_of_the_run_was_affected(tmp_path):
+    """`Scorecard.__str__` argues this one level down and the run summary had the same gap.
+
+    Its docstring: "a reader who sees `scorecard FAIL (2 checks)` knows something failed and
+    not which check to fix". `60 specs: FAIL` over a run where 58 passed is the same
+    sentence one level up — a reviewer scanning a CI log cannot tell two broken parts from
+    sixty, and "60 specs" reads as sixty parts that failed.
+
+    The `N specs: WORST` prefix is unchanged, because `docs/headless-cli.md` documents it and
+    a log filter greps for it. The counts come after.
+    """
+    good = _LUG_SPEC
+    for index in range(4):
+        (tmp_path / f"p{index}.yaml").write_text(good.replace("padeye", f"p{index}"))
+    # One part thinned until it fails.
+    (tmp_path / "bad.yaml").write_text(
+        good.replace("padeye", "bad").replace(
+            "thickness: {magnitude: 20.0, unit: mm}", "thickness: {magnitude: 5.0, unit: mm}"
+        )
+    )
+
+    code, out, _err = _run("check", str(tmp_path))
+    summary = out.strip().splitlines()[-1]
+    assert code == EXIT_FAILED
+    assert summary.startswith("5 specs: FAIL"), summary
+    assert "1 failed" in summary and "4 passed" in summary, summary
+
+    # An all-passing run stays short: no zero counts to read past.
+    (tmp_path / "bad.yaml").unlink()
+    code, out, _err = _run("check", str(tmp_path))
+    clean = out.strip().splitlines()[-1]
+    assert code == EXIT_OK
+    assert clean == "4 specs: PASS — 4 passed", clean
+    assert "failed" not in clean and "not evaluated" not in clean
