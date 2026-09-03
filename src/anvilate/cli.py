@@ -668,6 +668,44 @@ _BOMS: tuple[tuple[bytes, str], ...] = (
 )
 
 
+def _candidates(directory: Path, *, err, command: str) -> list[Path] | int:
+    """Every document under ``directory`` that could be a spec, or the code saying why not.
+
+    This was ``rglob``, and ``rglob`` swallows the error from a directory it cannot look
+    inside: a specs subdirectory the sweep had no permission to read yielded nothing, with no
+    line anywhere in the output, and the run went green over every part in it. That is the
+    worst version of the silent green this command exists to refuse — not a misdescription
+    but silence — and it is invisible from the outside, because a directory that is empty and
+    one that cannot be opened look identical in the result.
+
+    So the walk is this function's own, and ``onerror`` is the whole reason for it: a
+    directory the sweep could not enter is a bad request naming it, because the caller asked
+    for every part under here and the answer would not be about all of them.
+    """
+    import os
+
+    unreadable: list[str] = []
+
+    def _cannot_enter(failure: OSError) -> None:
+        unreadable.append(
+            f"{failure.filename}: could not be searched "
+            f"({failure.strerror or failure}), so the parts in it were not screened"
+        )
+
+    found: list[Path] = []
+    # `followlinks` stays off, which is what `rglob` did: a `latest -> .` symlink inside a
+    # specs directory is an ordinary thing to find and must not be walked into forever.
+    for parent, _dirs, files in os.walk(directory, onerror=_cannot_enter):
+        for name in files:
+            if name.endswith((".yaml", ".yml", ".json")):
+                found.append(Path(parent) / name)
+    if unreadable:
+        for problem in sorted(unreadable):
+            print(f"anvilate {command}: {problem}", file=err)
+        return EXIT_BAD_REQUEST
+    return sorted(found)
+
+
 def _is_a_spec(document: dict) -> bool:
     """Is a document found by searching a Design Spec?
 
@@ -890,16 +928,26 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
     found: list[Path] = []
     for path in paths:
         if path.is_dir():
-            candidates = sorted(
-                candidate
-                for pattern in ("*.yaml", "*.yml", "*.json")
-                for candidate in path.rglob(pattern)
-            )
+            candidates = _candidates(path, err=err, command=command)
+            if isinstance(candidates, int):
+                return candidates
             for candidate in candidates:
                 try:
                     text = candidate.read_text(encoding="utf-8")
-                except OSError:
-                    text = ""
+                except OSError as failure:
+                    # Not "not a Design Spec": the sweep does not know what this file is, and
+                    # saying it is something else is the misdescription the YAML case above
+                    # settled. A `*.yaml` the tool cannot open is either somebody's part or a
+                    # broken symlink where one used to be, and `text = ""` reported both as
+                    # a stray file and let the run exit 0 over a part nobody screened — with
+                    # a spec that *declares* `anvilate_spec` among them, since the byte probe
+                    # cannot read an unreadable file either.
+                    print(
+                        f"anvilate {command}: {candidate}: could not be read "
+                        f"({failure.strerror or failure}), so it was not screened",
+                        file=err,
+                    )
+                    return EXIT_BAD_REQUEST
                 except UnicodeDecodeError:
                     # A candidate that is not UTF-8 text gets the same treatment as one that
                     # will not parse, and for the same reason: whether it is somebody's spec

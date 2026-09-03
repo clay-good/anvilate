@@ -1923,3 +1923,78 @@ def test_a_spec_that_declares_no_version_is_screened_by_a_sweep_and_a_stray_file
     code, out, err = _run("check", str(tmp_path))
     assert code == EXIT_FAILED, f"a failing spec in the sweep answered {code}: {err}"
     assert "2 specs: FAIL" in out, out
+
+
+def test_a_file_the_sweep_cannot_read_stops_the_run_rather_than_reading_as_a_stray(tmp_path):
+    """The third arm of the same silent green, and the one left behind twice.
+
+    A candidate the sweep cannot open used to become `text = ""` and be reported
+    `not a Design Spec, skipped` — so `anvilate check specs/` exited 0 over a part nobody
+    screened, and it did so for a spec that *declares* `anvilate_spec`, because the byte probe
+    that rescues an undecodable file cannot read an unreadable one either. Two ordinary ways
+    to arrive here: a file mode nobody meant to set, and a symlink whose target was deleted.
+
+    The sweep does not know what the file is, so it must not say it is something else. The
+    caller asked for every part under the directory, and the answer would not be about all of
+    them.
+    """
+    (tmp_path / "ok.yaml").write_text(_SPEC, encoding="utf-8")
+
+    unreadable = tmp_path / "declared.yaml"
+    unreadable.write_text(_SPEC, encoding="utf-8")
+    assert "anvilate_spec" in _SPEC, "the point is a file that claims to be a spec"
+    unreadable.chmod(0o000)
+    try:
+        code, out, err = _run("check", str(tmp_path))
+    finally:
+        unreadable.chmod(0o644)
+    assert code == EXIT_BAD_REQUEST, f"an unreadable spec in the sweep answered {code}"
+    assert "declared.yaml: could not be read" in err, err
+    assert "not a Design Spec" not in err, "an unreadable file is not some other YAML file"
+    assert "Permission denied" in err, "the refusal does not say what went wrong"
+
+    # A symlink whose target is gone reads the same way, and is how a spec goes missing.
+    (tmp_path / "declared.yaml").unlink()
+    (tmp_path / "dangling.yaml").symlink_to("deleted.yaml")
+    code, _out, err = _run("check", str(tmp_path))
+    assert code == EXIT_BAD_REQUEST, f"a broken symlink in the sweep answered {code}"
+    assert "dangling.yaml: could not be read" in err, err
+    assert "No such file or directory" in err, err
+
+
+def test_a_directory_the_sweep_cannot_enter_is_named_rather_than_yielding_nothing(tmp_path):
+    """`rglob` swallows the error, so this one was not even a misdescription — it was silence.
+
+    A specs subdirectory the sweep had no permission to read yielded no candidates and no line
+    anywhere in the output, and the run went green over every part in it. From the outside a
+    directory that is empty and one that cannot be opened are indistinguishable in the result,
+    which is what made this invisible. The sweep does its own walk now so that `onerror` has
+    somewhere to report to.
+    """
+    (tmp_path / "ok.yaml").write_text(_SPEC, encoding="utf-8")
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "hidden.yaml").write_text(_SPEC, encoding="utf-8")
+    private.chmod(0o000)
+    try:
+        code, out, err = _run("check", str(tmp_path))
+    finally:
+        private.chmod(0o755)
+    assert code == EXIT_BAD_REQUEST, f"an unsearchable directory answered {code}"
+    assert "private: could not be searched" in err, err
+    assert "hidden.yaml" not in out, "the hidden spec cannot have been screened"
+    # Readable again, the part inside is found — the refusal was about access, not about it.
+    code, out, _err = _run("check", str(tmp_path))
+    assert code != EXIT_BAD_REQUEST
+    assert "2 specs:" in out, out
+
+
+def test_a_self_referential_symlink_in_a_swept_directory_terminates(tmp_path):
+    """`latest -> .` is an ordinary thing to find in a versioned directory, and the walk must
+    not follow it forever. `rglob` did not follow directory symlinks and neither does this."""
+    (tmp_path / "part.yaml").write_text(_SPEC, encoding="utf-8")
+    (tmp_path / "latest").symlink_to(tmp_path)
+    code, out, err = _run("check", str(tmp_path))
+    assert code != EXIT_BAD_REQUEST, err
+    # One part, counted once: the same file reached twice is not two parts.
+    assert out.startswith("deck_plate: "), out

@@ -66,6 +66,25 @@ unconditional: a document that *claims* to be a spec is treated as one whatever 
 in, while a **broken** spec that declares no version is indistinguishable from a stray file
 and is skipped like one.
 
+**A file or directory the sweep cannot open is a bad request, not a stray file.** `skipped`
+says "this is some other YAML file", and the sweep cannot know that about a file it never
+read — so a `*.yaml` it has no permission to open, or a symlink whose target was deleted,
+stops the run and names the reason:
+
+```text
+anvilate check: specs/bracket.spec.yaml: could not be read (Permission denied), so it was
+not screened
+anvilate check: specs/private: could not be searched (Permission denied), so the parts in it
+were not screened
+```
+
+Both used to go green. The file read as a stray one and was reported as such, even when it
+declared `anvilate_spec` — the raw-bytes probe cannot read a file it cannot open. The
+directory was worse: the search swallowed the error, so a subdirectory of parts produced no
+candidates and *no line anywhere in the output*, and from the outside a directory that is
+empty and one that cannot be opened look the same. A `latest -> .` symlink is still fine: the
+search does not follow directory symlinks, so one part reached twice is counted once.
+
 **A file that will not parse is the third case, and it used to fall into the second.** A
 document cannot be recognised by its keys if it cannot be read at all — parsing is what
 reveals them — so a broken spec in a searched directory was reported as `not a Design Spec,
