@@ -70,7 +70,9 @@ entry.over_margin   # True — it ran past the band
 ```
 
 Omit `upper` and high margins pass silently, exactly as before — the band is
-strictly opt-in. A scorecard whose only blemish is over-margin checks rolls up to
+strictly opt-in. [`examples/over_margin_target_band.py`](../examples/over_margin_target_band.py)
+walks one padeye through all three verdicts against a 2.00–4.00 band, by pack argument and by
+document. A scorecard whose only blemish is over-margin checks rolls up to
 `OVER_MARGIN` and stays `passed`; a single failure still dominates.
 
 The discipline packs expose the band the same way. `screen_lifting_lug(lug,

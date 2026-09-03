@@ -259,6 +259,47 @@ def _names_reaching_an_execution_call() -> set[str]:
     return found
 
 
+def test_the_target_band_example_shows_all_three_verdicts_and_both_routes():
+    """The capability that shipped with no worked example, and cost four defects for it.
+
+    `constraints.max_safety_factor` is a published 1.3.0 schema field, `OVER_MARGIN` is a
+    published enum member, and the status is rendered specially by `governing()`, the bundle
+    roll-up, the calculation report and the QIF exporter. Nothing in 491 examples exercised
+    the flow end to end, and each of those four surfaces was wrong about it.
+
+    Three thicknesses of one padeye against a 2.00-4.00 band give all three verdicts, and
+    the middle one is the point: at 12 mm net tension lands on 4.00 and pin bearing on 2.00,
+    so both limit states sit exactly on a bound. Without the ceiling, 20 mm and 12 mm are
+    both "pass" and nothing tells a reviewer one of them is 8 mm of wasted plate.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "over_margin_target_band.py"))
+
+    oversized = namespace["screen_the_oversized_plate"]()
+    assert oversized.status is CheckStatus.OVER_MARGIN
+    assert [e.name for e in oversized.over_margin()] == ["padeye net tension"]
+    # The governing check follows the band rather than the tightest passing number.
+    governing = oversized.governing()
+    assert governing.status is CheckStatus.OVER_MARGIN
+    assert governing.name == "padeye net tension"
+    # A pass needs no repair hint, and an over-margin entry is a pass.
+    assert governing.repair_hint is None
+
+    right = namespace["screen_the_right_plate"]()
+    assert right.status is CheckStatus.PASS
+    assert right.over_margin() == ()
+    factors = {e.name: e.safety_factor for e in right.entries if e.safety_factor is not None}
+    assert factors["padeye net tension"] == pytest.approx(4.0, abs=0.01)
+    assert factors["padeye pin bearing"] == pytest.approx(2.0, abs=0.01)
+
+    assert namespace["screen_the_thin_plate"]().status is CheckStatus.FAIL
+
+    # The document route asks for the same band and reaches the same verdict.
+    assert namespace["screen_the_document"]("20 mm").status is CheckStatus.OVER_MARGIN
+    assert namespace["screen_the_document"]("12 mm").status is CheckStatus.PASS
+
+    _assert_narrates_rendered("over_margin_target_band.py", namespace)
+
+
 def test_every_example_is_executed_by_this_file():
     """An example nobody runs is an example nobody notices breaking.
 
