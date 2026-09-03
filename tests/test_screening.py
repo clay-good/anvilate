@@ -1524,3 +1524,45 @@ def test_the_screening_pages_table_is_the_models_own_fields():
         assert f"`constraints.{field}`" in table or f"`{field}`" in table, (
             f"{field} is reported as unscreened and the page's table does not mention it"
         )
+
+
+def test_every_screened_card_serialises_to_strict_json():
+    """The payload `anvilate check --format json` and the MCP result are made of.
+
+    Both surfaces serialise a scorecard with `model_dump(mode="json")`, and that keeps a
+    non-finite float as the bare token `Infinity` or `NaN`. Neither is in the JSON grammar:
+    Python writes and reads them, and a JavaScript, Go or schema-validating consumer rejects
+    the whole payload.
+
+    The calculation report already solved this for its own surface — `report/document.py`
+    spells non-finite floats as `__nonfinite:inf__` tokens that round-trip, and
+    `test_the_calc_record_is_strict_json_even_with_an_infinite_safety_factor` says why
+    nulling them instead was rejected: it made the archived evidence for exactly the
+    strongest-passing checks unloadable.
+
+    The scorecard payload has the same exposure and no such encoding. **What keeps the two
+    machine surfaces parseable is that no pack screen produces a non-finite safety factor.**
+    An infinite one is reachable through the public `weld_fatigue_scorecard` and the three
+    Goodman-family helpers — a weld range below the fatigue cutoff does no damage, so its
+    factor is genuinely infinite — and no pack calls them. That is a property, not a
+    guarantee, so it is held here over every spec the suite can hand the screen. The day a
+    pack screens fatigue this fails, and the fix is to give the payload the report's token
+    encoding, not to drop the value.
+    """
+    import json
+
+    specs = dict(_adversarial_specs())
+    specs["the ordinary golden spec"] = _spec()
+    unparseable = []
+    for label, spec in sorted(specs.items()):
+        payload = screen_spec(spec).model_dump(mode="json")
+        try:
+            json.dumps(payload, allow_nan=False)
+        except ValueError as error:
+            unparseable.append(f"{label}: {error}")
+    assert len(specs) >= 10, f"only {len(specs)} specs were screened; the corpus shrank"
+    assert not unparseable, (
+        "these screened cards serialise to a payload that is not strict JSON, so the CLI's "
+        "`--format json` and the MCP result are unreadable to a consumer that is not "
+        "Python:\n  " + "\n  ".join(unparseable)
+    )
