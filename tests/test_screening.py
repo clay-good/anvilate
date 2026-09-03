@@ -1566,3 +1566,75 @@ def test_every_screened_card_serialises_to_strict_json():
         "`--format json` and the MCP result are unreadable to a consumer that is not "
         "Python:\n  " + "\n  ".join(unparseable)
     )
+
+
+def test_seismic_parameters_declared_without_a_seismic_basis_are_reported():
+    """S_DS and rho are parameters *of* the ASCE 7 seismic combination sets.
+
+    `DesignSpec.combination_set` reads them only for `asce7_lrfd_seismic` and
+    `asce7_asd_seismic`, so a document that states them without declaring the basis has
+    stated a seismic design and had it dropped — a clean PASS with no mention. That is the
+    same silent green `acceptance.max_displacement` and `manufacturing.min_wall` already
+    report, reachable through a field the published schema advertises.
+
+    Found by asking which published spec fields no example demonstrates: five, of which
+    `max_cost` and `max_displacement` were already answered and these were not.
+    """
+    for override, quoted in (
+        ({"seismic_design_acceleration": 0.4}, "seismic_design_acceleration 0.4"),
+        ({"seismic_redundancy_factor": 1.3}, "seismic_redundancy_factor 1.3"),
+    ):
+        card = screen_spec(_lug_spec(**override))
+        entry = next(e for e in card.entries if e.name == "seismic parameters")
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        assert quoted in entry.detail
+        assert "asce7_lrfd_seismic" in entry.detail, "the detail does not say what would read it"
+        assert not card.passed, "a declared seismic parameter nothing read is not a pass"
+
+    # Both at once are one entry, not two.
+    both = screen_spec(_lug_spec(seismic_design_acceleration=0.4, seismic_redundancy_factor=1.3))
+    seismic = [e for e in both.entries if e.name == "seismic parameters"]
+    assert len(seismic) == 1
+    assert "and seismic_redundancy_factor 1.3" in seismic[0].detail
+
+    # And declaring the basis that reads them takes the entry away.
+    applied = screen_spec(
+        _lug_spec(
+            combination_basis="asce7_lrfd_seismic",
+            seismic_design_acceleration=0.4,
+            seismic_redundancy_factor=1.3,
+        )
+    )
+    assert not [e for e in applied.entries if e.name == "seismic parameters"]
+
+    # The default rho is not a declaration.
+    plain = screen_spec(_lug_spec())
+    assert not [e for e in plain.entries if e.name == "seismic parameters"]
+
+
+def test_an_fea_tolerance_without_the_tier_that_consumes_it_is_reported():
+    """Asking for `T3_fea` already reports the tier unbuilt. Declaring the tolerance and
+    *not* asking for the tier said nothing at all."""
+    declared = screen_spec(
+        _lug_spec(
+            acceptance=AcceptanceCriteria(
+                tiers=[ValidationTier.T1_ANALYTICAL], fea_convergence_tol=0.01
+            )
+        )
+    )
+    entry = next(e for e in declared.entries if e.name == "FEA convergence tolerance")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "fea_convergence_tol 0.01" in entry.detail
+    assert "T3_fea" in entry.detail, "the detail does not say what to add to hear about it"
+
+    # With the tier requested, the tier's own entry covers it and this one steps aside.
+    requested = screen_spec(
+        _lug_spec(
+            acceptance=AcceptanceCriteria(
+                tiers=[ValidationTier.T1_ANALYTICAL, ValidationTier.T3_FEA],
+                fea_convergence_tol=0.01,
+            )
+        )
+    )
+    assert not [e for e in requested.entries if e.name == "FEA convergence tolerance"]
+    assert [e for e in requested.entries if e.name.startswith("T3")]

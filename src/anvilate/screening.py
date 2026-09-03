@@ -669,6 +669,54 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 ),
             )
         )
+    # The seismic pair, when no seismic basis reads them. S_DS and rho are parameters *of*
+    # the ASCE 7 seismic combination sets — `DesignSpec.combination_set` reads them only for
+    # `asce7_lrfd_seismic` and `asce7_asd_seismic` — so a document that states them without
+    # declaring the basis has stated a seismic design and had it dropped. Which is the same
+    # silent green as `max_displacement`, and was reachable the same way: through a field the
+    # published schema advertises.
+    seismic_basis = (spec.combination_basis or "").endswith("_seismic")
+    stated_seismic = [
+        f"seismic_design_acceleration {spec.seismic_design_acceleration}"
+        if spec.seismic_design_acceleration is not None
+        else "",
+        f"seismic_redundancy_factor {spec.seismic_redundancy_factor}"
+        if spec.seismic_redundancy_factor != 1.0
+        else "",
+    ]
+    stated_seismic = [part for part in stated_seismic if part]
+    if stated_seismic and not seismic_basis:
+        entries.append(
+            ScorecardEntry(
+                name="seismic parameters",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares {' and '.join(stated_seismic)}, and nothing screened "
+                    f"{'them' if len(stated_seismic) > 1 else 'it'}: S_DS and rho are read by "
+                    "the ASCE 7 seismic combination sets, so they need "
+                    "combination_basis: asce7_lrfd_seismic or asce7_asd_seismic to reach "
+                    "anything. Declared without one, a seismic design is stated and not applied"
+                ),
+            )
+        )
+    # The FEA convergence tolerance, when the tier that would consume it was not requested.
+    # Asking for T3_fea already reports the tier unbuilt; declaring the tolerance and *not*
+    # asking for the tier said nothing at all.
+    if spec.acceptance.fea_convergence_tol is not None and ValidationTier.T3_FEA not in (
+        spec.acceptance.tiers
+    ):
+        entries.append(
+            ScorecardEntry(
+                name="FEA convergence tolerance",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec declares acceptance.fea_convergence_tol "
+                    f"{spec.acceptance.fea_convergence_tol}, and nothing screened it: the "
+                    "tolerance bounds a T3 FEA run, and no T3_fea tier was requested. Add "
+                    "T3_fea to acceptance.tiers to hear what that tier reports"
+                ),
+            )
+        )
     if spec.manufacturing.min_wall is not None:
         entries.append(
             ScorecardEntry(
