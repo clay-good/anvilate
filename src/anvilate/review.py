@@ -59,9 +59,19 @@ __all__ = [
     "build_dossier",
 ]
 
-# The words a screening tool must never use about its own output. Checked over every
-# rendering this module produces, by a gate in the test suite, because the failure mode
-# is not a bug that shows up in a number — it is a sentence someone forwards.
+# The words a screening tool must never use about its own output. Checked over every entry
+# the suite builds, by a gate in tests/conftest.py, because the failure mode is not a bug
+# that shows up in a number — it is a sentence someone forwards.
+#
+# THREE OF THESE USED TO BE BARE WORDS, and bare words are the wrong shape for this list.
+# `sealed`, `stamped` and `warrants` each have an ordinary mechanical-engineering sense
+# that has nothing to do with assurance: a sealed bearing, a *near-net stamping*, a margin
+# that warrants a reviewer's attention. The library-wide sweep found the second of those in
+# the embodied-carbon pack — "stamped finished part carries 88% of it" — which is a forming
+# process, correctly described. A gate that fires on correct prose is one somebody disarms
+# rather than obeys, and a list that cannot be enforced library-wide is enforcing nothing
+# library-wide. So the three are spelled in their assurance sense, which takes a person or
+# a document as its object: nothing describing a press operation says "stamped by".
 PROHIBITED_ASSURANCE_LANGUAGE: frozenset[str] = frozenset(
     {
         "certified",
@@ -73,10 +83,13 @@ PROHIBITED_ASSURANCE_LANGUAGE: frozenset[str] = frozenset(
         "code compliant",
         "code-compliant",
         "meets all requirements",
-        "sealed",
-        "stamped",
+        "sealed by",
+        "signed and sealed",
+        "under seal",
+        "stamped by",
+        "bears a stamp",
         "guaranteed",
-        "warrants",
+        "warrants that",
     }
 )
 

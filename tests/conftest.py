@@ -173,6 +173,20 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Unit fidelity, over every entry the suite built rather than over a corpus somebody
     # listed. It fires on positive evidence — a line that carries a unit it should not — so
     # a filtered run checks the subset it reached and is never wrong about it.
+    # Positive evidence — it reports the lines that DO say a forbidden thing — so a
+    # filtered run checks the subset it reached and is never wrong about it. The floor
+    # that keeps it from passing on an empty set reads an absence, so it waits for a full
+    # run, below.
+    assurance, assurance_swept = _assurance_language_lines()
+    if assurance:
+        print(
+            "\nASSURANCE LANGUAGE: a screening tool must never use the vocabulary of "
+            "certification about a user's design, and these renderings do:\n  "
+            + "\n  ".join(assurance)
+        )
+        session.exitstatus = 1
+        return
+
     mixed = _mixed_unit_lines()
     if mixed:
         print(
@@ -215,6 +229,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "list stays honest:\n  " + "\n  ".join(armed)
         )
         session.exitstatus = 1
+
+    # The same, for the assurance sweep: a renderer that started returning blank would
+    # empty it without failing anything. The library builds thousands of entries on a full
+    # run, so a few hundred texts is a floor no honest run comes near.
+    if assurance_swept < 500:
+        print(
+            f"\nASSURANCE LANGUAGE: only {assurance_swept} rendered texts were swept, so "
+            f"this gate is passing on an all but empty set"
+        )
+        session.exitstatus = 1
+        return
 
     # The discoverer has to keep discovering. A parser that stopped RECOGNISING standards
     # would make the editionless set empty and both directions of that ratchet would go
@@ -570,6 +595,61 @@ def _observed_citations() -> set[str]:
         if entry.derivation is not None and entry.derivation.citation:
             citations.add(str(entry.derivation.citation))
     return citations
+
+
+# ---------------------------------------------------------------------------
+# Assurance language, over every entry the suite builds.
+#
+# `test_no_pack_ever_says_certified_about_a_user_s_design` calls itself "the library-wide
+# half" and swept the structural pack plus a hand-reached derivation sample — the same
+# narrowness the effectivity ratchet carried until it moved here. The risk it names is not
+# confined to one pack: every detail line, verdict sentence and derivation the library
+# builds is a statement about the user's design, and any one of them can be pasted into an
+# email and read as assurance. So it runs off the same collector.
+#
+# Docstrings stay out of scope, for the reason the review suite gives: prose about the
+# policy has to be able to name the thing it prohibits.
+# ---------------------------------------------------------------------------
+
+
+def _assurance_language_lines() -> tuple[list[str], int]:
+    """Offending renderings, and how many texts were swept to find them.
+
+    The count comes back because this rule fires on POSITIVE evidence: it reports the
+    lines that say a forbidden thing, so a sweep over nothing finds nothing and passes.
+    The caller holds it to a floor for the same reason the effectivity ratchet holds
+    ``names_a_standard`` to one — a renderer that started returning blank would empty this
+    gate and it would go green for ever.
+    """
+    from anvilate.review import PROHIBITED_ASSURANCE_LANGUAGE
+
+    swept = 0
+    offenders: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in _library_entries.values():
+        texts: list[tuple[str, str]] = [("name", entry.name), ("detail", entry.detail)]
+        if entry.reference:
+            texts.append(("reference", str(entry.reference)))
+        if entry.comparison is not None:
+            texts.append(("verdict", entry.comparison.sentence()))
+        if entry.derivation is not None:
+            texts.append(("derivation", entry.derivation.substituted()))
+            if entry.derivation.citation:
+                texts.append(("derivation citation", str(entry.derivation.citation)))
+        for what, text in texts:
+            if not text.strip():
+                continue
+            swept += 1
+            lowered = text.lower()
+            for phrase in sorted(PROHIBITED_ASSURANCE_LANGUAGE):
+                if phrase not in lowered:
+                    continue
+                key = (phrase, text)
+                if key in seen:
+                    continue
+                seen.add(key)
+                offenders.append(f"{entry.name} {what} says {phrase!r}: {text}")
+    return sorted(offenders), swept
 
 
 def _editionless_manifest() -> set[str]:

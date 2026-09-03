@@ -1929,10 +1929,15 @@ def test_the_effectivity_parser_knows_a_eurocode_number_from_a_year():
 def test_no_pack_ever_says_certified_about_a_user_s_design():
     """A screening tool must not use the vocabulary of certification about its output.
 
-    This is the library-wide half of the check in tests/test_review.py, and it is here
-    rather than there because the risk is not confined to the review module: every
-    scorecard detail and every reference string is a statement about the user's design,
-    and any one of them can be pasted into an email and read as assurance.
+    This called itself "the library-wide half" and was not: it sweeps the structural
+    pack's entries plus a hand-reached derivation sample, about thirty renderings, and
+    every other pack was outside it. The library-wide sweep is in tests/conftest.py, over
+    every entry the suite builds, and widening this one into it is what found `stamped`
+    firing on a near-net *stamping*.
+
+    This stays as the fast subset a `pytest tests/test_contract.py` still runs. It fires
+    on positive evidence, so checking a subset is honest; what it may not do is claim to
+    be the whole library.
 
     Docstrings are out of scope for the same reason as in the review suite — prose about
     the policy has to be able to name the thing it prohibits.

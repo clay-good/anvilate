@@ -74,10 +74,21 @@ laundering the engineer's judgement into an appearance of analysis.
 
 Anvilate has no "approved" state and does not certify. `PROHIBITED_ASSURANCE_LANGUAGE`
 lists the vocabulary a screening tool must never use about its own output — *certified*,
-*fit for service*, *code compliant*, *sealed*, *guaranteed* — and two gates sweep for it:
-one over every rendering this module produces, and one in `tests/test_contract.py` over
-every scorecard detail and reference string the packs emit. The failure mode here is not
-a wrong number. It is a sentence someone forwards.
+*fit for service*, *code compliant*, *sealed by*, *guaranteed* — and the sweep in
+`tests/conftest.py` runs it over **every entry the suite builds** — each name, detail,
+reference, verdict sentence and substituted derivation — rather than over a corpus
+somebody listed. The failure mode here is not a wrong number. It is a sentence someone
+forwards.
+
+Three of the phrases used to be bare words, and bare words are the wrong shape for this
+list. *Sealed*, *stamped* and *warrants* each have an ordinary mechanical-engineering
+sense with nothing to do with assurance — a sealed bearing, a **near-net stamping**, a
+margin that *warrants* a reviewer's attention — and the library-wide sweep caught the
+second one in the embodied-carbon pack, describing a forming process correctly. A gate
+that fires on correct prose gets disarmed rather than obeyed. They are spelled in their
+assurance sense now (*sealed by*, *signed and sealed*, *under seal*, *stamped by*, *bears
+a stamp*, *warrants that*), which takes a person or a document as its object: no
+description of a press operation says "stamped by".
 
 Docstrings are deliberately out of scope. Prose about the policy has to be able to name
 the thing it prohibits, and gating that is how a language gate becomes unusable and then
