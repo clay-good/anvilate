@@ -94,7 +94,13 @@ than described. `export_artifact` declares validation and watermark, and the par
 `qif` are the CAD artifacts `artifact-export` gates on the checks passing, they are not served
 here, and the exporters that will serve them each take a mandatory `authorization`;
 `evidence_bundle` is served whatever the verdict and carries the screening disclaimer
-unconditionally — see [the export gate](export-gating.md). A single `backing` symbol used to
+unconditionally — see [the export gate](export-gating.md). The **spelling differs from the
+shell's on purpose**: `anvilate export --artifact evidence-bundle` is kebab-case because a
+shell flag is, and `{"format": "evidence_bundle"}` is snake_case because a JSON enum member
+is. The two vocabularies name the same artifacts and a parity test in
+`tests/test_surface_parity.py` compares them with the separator normalised away, so an
+artifact reachable from one door and not the other is a failure and not a discovery. A
+client that sends the shell's spelling gets `-32602` naming the three valid values. A single `backing` symbol used to
 answer for all three, which stopped being a question with one answer. The sandbox gate
 is the honest exception: `build_part` declares it, names no backing symbol because the
 operation is unbuilt, and a test asserts it stays that way, so the day an implementation

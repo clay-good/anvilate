@@ -383,3 +383,39 @@ def test_the_spec_the_rendered_bundle_prints_is_one_the_parser_reads_back():
 
     original = screen_spec(load_spec_yaml(_SPEC)).model_dump(mode="json")
     assert screen_spec(recovered).model_dump(mode="json") == original
+
+
+def test_the_two_surfaces_name_the_same_artifacts_in_their_own_spelling():
+    """The vocabularies differ by a separator, and that is a decision, not an accident.
+
+    The CLI takes `--artifact evidence-bundle`; the MCP tool takes
+    `{"format": "evidence_bundle"}`. Each is idiomatic for its surface — a shell flag is
+    kebab-case, a JSON enum member is snake_case — and the MCP refusal names the valid
+    values, so a client that guesses wrong is told exactly what to send.
+
+    What was missing is any statement that the split is intentional. It lived as two string
+    literals in the test above, and two literals are indistinguishable from one of them
+    being a typo. So the sets are compared here, normalised, which also catches the case a
+    separator convention cannot excuse: an artifact added to one surface and not the other,
+    or added to both under names that are not the same word.
+    """
+    from anvilate.cli import _ARTIFACTS
+
+    tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
+    over_mcp = set(tool.input_schema["properties"]["format"]["enum"])
+    at_the_shell = set(_ARTIFACTS)
+    assert over_mcp and at_the_shell, "one surface offers no artifacts at all"
+
+    def normalised(names: set[str]) -> set[str]:
+        return {name.replace("-", "_") for name in names}
+
+    assert normalised(over_mcp) == normalised(at_the_shell), (
+        f"the surfaces offer different artifacts: only at the shell "
+        f"{sorted(normalised(at_the_shell) - normalised(over_mcp))}, only over MCP "
+        f"{sorted(normalised(over_mcp) - normalised(at_the_shell))}. Adding one to a single "
+        "surface is how a capability becomes reachable from one door and not the other"
+    )
+    # And each keeps its own spelling, so this is a parity check and not a rename waiting
+    # to happen: `evidence-bundle` at the shell, `evidence_bundle` over MCP.
+    assert "evidence-bundle" in at_the_shell and "evidence-bundle" not in over_mcp
+    assert "evidence_bundle" in over_mcp and "evidence_bundle" not in at_the_shell
