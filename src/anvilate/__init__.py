@@ -1,8 +1,11 @@
-"""Anvilate: a local-first design agent for mechanical engineers.
+"""Anvilate: local-first analytical screening for mechanical engineers.
 
-Plain-English part descriptions compile into a typed Design Spec, which drives a
-deterministic parametric-geometry and physics-validation pipeline. The
-implemented layers everything else builds on:
+A part described as a typed Design Spec is screened by closed-form checks that each cite the
+clause they came from, and the results roll up into one scorecard that never reports a silent
+green. The natural-language front end and the geometry pipeline the Design Spec is meant to
+drive are still being built; see "Where this is going" in the README.
+
+The implemented layers everything else builds on:
 
 - :mod:`anvilate.units` — SI and US customary as first-class citizens.
 - :mod:`anvilate.spec` — the typed, versioned, diffable Design Spec IR.
@@ -11,8 +14,10 @@ implemented layers everything else builds on:
 - :mod:`anvilate.tolerance` — ISO 2768 general tolerances and ISO 286 fits.
 - :mod:`anvilate.analysis` — T1 closed-form analytical checks (beam, column,
   torsion, pressure vessel, bolted joint, von Mises).
-- :mod:`anvilate.scorecard` — the tri-state check-result vocabulary
-  (pass / fail / not-evaluated).
+- :mod:`anvilate.scorecard` — the check-result vocabulary: ``pass``, ``fail``,
+  ``not_evaluated`` and ``over_margin``. Called tri-state throughout, because those are
+  three *answers* and ``over_margin`` is a qualified pass — but it is a fourth value a
+  caller will see, and this line used to enumerate only three of them.
 - :mod:`anvilate.specbench` — an external structured-spec suite read case by case,
   with the cases nothing could compile named rather than counted as failures.
 - :mod:`anvilate.store` — the content-addressed store an MCP tool resolves its

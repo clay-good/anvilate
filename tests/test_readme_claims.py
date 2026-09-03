@@ -977,3 +977,30 @@ def test_every_command_contributing_gives_is_run_by_ci_or_declared_local():
         assert len(reason.split()) >= 8, f"{command!r} is excused without a stated reason"
     # The guide has to say that some of it is not enforced, or a reader assumes all of it is.
     assert "local check rather than a CI one" in guide
+
+
+def test_the_package_docstring_enumerates_every_check_status():
+    """`help(anvilate)` is the API's front page and it listed three of four statuses.
+
+    It read "the tri-state check-result vocabulary (pass / fail / not-evaluated)". "Tri-state"
+    is a deliberate term of art here and stays — those are three *answers*, and `over_margin`
+    is a qualified pass, which is how the QIF exporter maps it. Enumerating three of four is a
+    different thing: `over_margin` is a value a caller sees in output, and a reader of
+    `help()` met it for the first time in a scorecard.
+
+    Derived from `CheckStatus`, so a fifth status has to be added here or this fails. That is
+    the whole gate — deliberately. The other fault in this docstring, that it described the
+    unbuilt front end as what the package does, is *not* checked here: it is a judgment about
+    sixty lines of prose, and the keyword table that works on `pyproject.toml`'s one-line
+    description reported "feature control frame" as a promise of FEA when pointed at this.
+    """
+    import anvilate
+    from anvilate.scorecard import CheckStatus
+
+    doc = anvilate.__doc__ or ""
+    assert doc, "the package lost its docstring, which is what help(anvilate) shows"
+    listed = {status.value for status in CheckStatus if f"``{status.value}``" in doc}
+    assert listed == {status.value for status in CheckStatus}, (
+        f"the package docstring enumerates {sorted(listed)}; CheckStatus carries "
+        f"{sorted(s.value for s in CheckStatus)}"
+    )
