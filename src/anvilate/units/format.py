@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from math import isfinite
 
-from .quantity import Quantity, display_unit
+from .quantity import Quantity, _unit_object, display_unit
 from .registry import UREG
 from .system import UnitSystem
 
@@ -62,7 +62,7 @@ def _is_written_as_energy(quantity: Quantity) -> bool:
     times a length (``newton * meter``, ``kip * inch``, ``force_pound * foot``). One
     component means energy; two mean a moment.
     """
-    components = dict(UREG.Unit(quantity.unit)._units)
+    components = dict(_unit_object(quantity.unit)._units)
     return len(components) == 1 and next(iter(components.values())) == 1
 
 
@@ -75,7 +75,11 @@ def decimals_for(unit: str, magnitude: float | None = None) -> int:
     if unit in _UNIT_DECIMALS:
         places = _UNIT_DECIMALS[unit]
     else:
-        dim = str(UREG.Unit(unit).dimensionality)
+        # Through the memoised choke point, not `UREG.Unit` directly: that is where an
+        # unreadable spelling becomes this library's `UnitError` instead of pint's
+        # `UndefinedUnitError` (an AttributeError), and it is also the cache every other
+        # unit lookup already shares.
+        dim = str(_unit_object(unit).dimensionality)
         places = _DIM_DECIMALS.get(dim, 2)
     if magnitude is None:
         return places

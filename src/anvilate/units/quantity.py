@@ -15,6 +15,7 @@ from math import isfinite
 from typing import Any
 
 import pint
+from pint.errors import PintError
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
@@ -141,8 +142,19 @@ def _unit_object(unit: str) -> pint.Unit:
     both parsed the unit *string* again each time — 310 pint unit parses per lifting lug
     screened. The registry's unit objects are immutable and the spelling is the whole of the
     key, so the parse is memoised here rather than repeated at each call site.
+
+    It is also the one place an unreadable spelling can become this library's own refusal.
+    `UREG.Unit` answers one with pint's `UndefinedUnitError`, which is an **AttributeError**
+    — the most misleading signal available, because it reads as a bug in the callee rather
+    than a typo in the argument, and it escapes every `except ValueError` guard in the
+    library and in its callers. `Quantity.parse` already raised `UnitError` for the same
+    mistake at the front door, while `Quantity.to("mm2")`, `render(unit="mm2")` and
+    `decimals_for("mm2")` all leaked pint's. `mm2` for `mm**2` is a spelling somebody types.
     """
-    return UREG.Unit(unit)
+    try:
+        return UREG.Unit(unit)
+    except PintError as failure:
+        raise UnitError(f"could not read the unit {unit!r}: {failure}") from failure
 
 
 @lru_cache(maxsize=8192)

@@ -1029,3 +1029,68 @@ def test_has_dimension_asks_about_the_unit_without_building_a_quantity():
         pint.Quantity.__new__ = original
 
     assert built == 0, f"has_dimension built {built} pint quantities to read a unit's dimension"
+
+
+def test_no_unit_taking_helper_answers_with_pints_own_exception():
+    """A bad unit string gets this library's refusal, not the unit library's.
+
+    `Quantity.parse("1 notaunit")` raises `UnitError`, which is a `ValueError`.
+    `decimals_for("notaunit")` raised pint's `UndefinedUnitError` — which is an
+    **AttributeError**, the most misleading signal available: it reads as a bug in the
+    callee rather than a typo in the argument, and it escapes every `except ValueError`
+    guard in the library and in its callers. `mm2` for `mm**2` is a spelling somebody types.
+
+    Swept over the module's public surface rather than fixed at the one site, so the next
+    helper that takes a unit string cannot reintroduce it.
+    """
+    import inspect
+
+    from pint.errors import PintError
+
+    import anvilate.units as units
+    from anvilate.units import UnitError
+
+    # The one site, both directions.
+    with pytest.raises(UnitError, match="could not read the unit 'mm2'"):
+        units.decimals_for("mm2")
+    assert units.decimals_for("MPa") == 1
+    assert units.decimals_for("mm") == 2
+
+    leaked: list[str] = []
+    probed = 0
+    for name in units.__all__:
+        function = getattr(units, name, None)
+        if not callable(function) or inspect.isclass(function):
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):  # pragma: no cover - a builtin without one
+            continue
+        takes_a_unit = [
+            parameter
+            for parameter, spec in signature.parameters.items()
+            if "str" in str(spec.annotation) and "unit" in parameter
+        ]
+        if not takes_a_unit:
+            continue
+        for parameter in takes_a_unit:
+            keywords: dict[str, object] = {parameter: "notaunit"}
+            for other, spec in signature.parameters.items():
+                if other == parameter or spec.default is not inspect.Parameter.empty:
+                    continue
+                keywords[other] = (
+                    Quantity.parse("1 mm") if "Quantity" in str(spec.annotation) else 1.0
+                )
+            probed += 1
+            try:
+                function(**keywords)
+            except PintError as failure:
+                leaked.append(f"{name}({parameter}=…): {type(failure).__name__}: {failure}")
+            except Exception:  # noqa: BLE001 — the library's own refusal is the point
+                pass
+
+    assert probed >= 1, "no public helper in anvilate.units takes a unit string any more"
+    assert not leaked, (
+        "these answer a bad unit with pint's exception rather than this library's "
+        "UnitError:\n  " + "\n  ".join(leaked)
+    )
