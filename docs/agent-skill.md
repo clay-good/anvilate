@@ -99,6 +99,15 @@ factor, which makes the copyable `card.governing().name` an `AttributeError` on 
 passing deflection checks. Both are now stated in the skill and demonstrated by its example,
 which carries two entries instead of one.
 
+**A third correction, from the other direction.** The sentence that replaced it said blocking
+status outranks "every passing check however close to its limit", and `OVER_MARGIN` joining
+the enumeration made that half wrong too: an over-margin check *is* a passing check and it
+outranks an ordinary one. The skill now names all four rungs in the card's own roll-up order
+and states the one place the tie-break inverts — inside `over_margin` the limit being passed
+is the top of a band, so the most over-engineered check governs, not the least. Derived from
+`_STATUS_RANK` by a test rather than restated, so the sentence cannot drift from the ranking
+a third time.
+
 The skill targets the Python API, because that is the surface that exists today. When the
 CLI and the MCP server land ([`headless-automation`](../openspec/specs/headless-automation/spec.md)),
 the skill gains their workflows and the drift gate extends to their published schemas.

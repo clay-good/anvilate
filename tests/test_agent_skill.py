@@ -620,3 +620,40 @@ def test_the_agent_skill_pages_governing_claim_is_the_scorecards_own():
         )
     )
     assert repr(passing.governing()) == claim.group(2)
+
+
+def test_the_shipped_skill_states_the_ranking_the_scorecard_actually_uses():
+    """The skill is what an agent reads before quoting a verdict, and it ships in the wheel.
+
+    It said the ordering is "blocking status first, then highest utilization: a failing check
+    outranks one that could not run, which outranks every passing check". Two things were
+    wrong once `OVER_MARGIN` joined the enumeration. It is a *passing* status, and it
+    outranks an ordinary pass; and "highest utilization" inverts inside that rung, because
+    the limit being passed is the top of a band and furthest past it is the lowest
+    utilization.
+
+    Derived from `_STATUS_RANK` rather than restated, so the sentence cannot drift from the
+    ranking again.
+    """
+    from anvilate.scorecard import _STATUS_RANK, CheckStatus, Scorecard, ScorecardEntry
+
+    skill = " ".join(skill_text().split())
+    order = [status.value for status in sorted(_STATUS_RANK, key=_STATUS_RANK.get, reverse=True)]
+    assert order == ["fail", "not_evaluated", "over_margin", "pass"], order
+    # The rungs are named, in order, in one sentence.
+    quoted = ", then ".join(f"`{name}`" for name in order)
+    assert quoted in skill, f"the skill does not name the rungs in ranking order: {quoted}"
+
+    # And the inverted tie-break, demonstrated rather than trusted.
+    mild = ScorecardEntry.from_safety_factor("mild", computed=4.5, required=2.0, upper=4.0)
+    gross = ScorecardEntry.from_safety_factor("gross", computed=40.0, required=2.0, upper=4.0)
+    assert gross.utilization < mild.utilization
+    assert Scorecard(entries=(mild, gross)).governing().name == "gross"
+    assert "the most over-engineered check governs, not the least" in skill
+
+    # An over-margin check really does outrank an ordinary passing one, which is the half
+    # the old sentence denied.
+    ordinary = ScorecardEntry.from_safety_factor("ordinary", computed=2.1, required=2.0)
+    assert ordinary.status is CheckStatus.PASS
+    assert ordinary.utilization > mild.utilization
+    assert Scorecard(entries=(ordinary, mild)).governing().name == "mild"
