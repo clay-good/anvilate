@@ -3700,3 +3700,92 @@ def test_the_session_hook_survives_a_run_with_plugins_switched_off():
     assert "session.config.option.lf" not in conftest, (
         "the hook reads `option.lf` directly again; `pytest -p no:cacheprovider` raises"
     )
+
+
+# --- The same contract, for the remaining sub-packages --------------------------------
+#
+# The gates above cover `anvilate.analysis` and the top-level modules. The other eight
+# sub-packages had none, and four had drifted: `anvilate.units` published its unit-error
+# family and not the rotational-speed and offset-temperature ones — so a caller who wanted
+# to tell an ambiguous rpm from any other unit error had to import from a submodule with no
+# contract on it at all — `anvilate.standards` withheld the whole weld-detail-category
+# vocabulary, `anvilate.spec` withheld the `Interface` union, and two symbols were published
+# by a package while the module defining them called them private.
+
+_NAMESPACE_PACKAGES = {"export", "packs"}
+"""Sub-packages addressed by submodule (`from anvilate.packs.structural import ...`) rather
+than aggregated. 463 example imports come from `anvilate.units` and none from
+`anvilate.packs` itself, so this is how they are used, not an oversight. The rule below
+holds them to it: a namespace package publishes nothing, so it cannot drift into a
+half-aggregating one where some symbols are re-exported and the rest are invisible."""
+
+
+def _sub_packages() -> list[str]:
+    return sorted(m.name for m in pkgutil.iter_modules(anvilate_pkg.__path__) if m.ispkg)
+
+
+def _package_modules(name: str) -> list[str]:
+    package = importlib.import_module(f"anvilate.{name}")
+    return sorted(
+        m.name
+        for m in pkgutil.iter_modules(package.__path__)
+        if not m.ispkg and not m.name.startswith("_")
+    )
+
+
+def test_every_shipped_module_declares_its_public_surface():
+    for name in _sub_packages():
+        for module_name in _package_modules(name):
+            module = importlib.import_module(f"anvilate.{name}.{module_name}")
+            assert hasattr(module, "__all__"), (
+                f"anvilate.{name}.{module_name} has no __all__; every shipped module must "
+                "declare its public surface explicitly"
+            )
+
+
+def test_every_exported_name_resolves():
+    """`__all__` is checked by nothing at import time: a stale name breaks `import *` only."""
+    unresolved = []
+    for info in pkgutil.walk_packages(anvilate_pkg.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception as failure:  # noqa: BLE001 — an unimportable module is the finding
+            unresolved.append(f"{info.name} does not import: {failure!r}")
+            continue
+        for symbol in getattr(module, "__all__", []) or []:
+            if not hasattr(module, symbol):
+                unresolved.append(f"{info.name}.__all__ names {symbol!r} and it does not resolve")
+    assert not unresolved, "\n  ".join(["", *unresolved])
+
+
+def test_an_aggregating_package_publishes_every_symbol_its_modules_declare():
+    """A symbol public in a module and absent from its package is unreachable in practice.
+
+    Nobody imports `anvilate.units.rotation`; they import `anvilate.units`. Only the
+    forward direction is asserted — a package may legitimately re-export something from
+    outside its own modules, as `anvilate.report` does with `Derivation` from
+    `anvilate.derivation` — and `test_every_exported_name_resolves` covers the other half.
+    """
+    withheld = []
+    for name in _sub_packages():
+        package = importlib.import_module(f"anvilate.{name}")
+        aggregate = set(getattr(package, "__all__", []) or [])
+        if name in _NAMESPACE_PACKAGES:
+            assert not aggregate, (
+                f"anvilate.{name} is listed as a namespace package but publishes "
+                f"{sorted(aggregate)}; either aggregate all of it or none of it"
+            )
+            continue
+        assert aggregate, (
+            f"anvilate.{name} publishes nothing. If it is meant to be addressed by "
+            "submodule, say so in _NAMESPACE_PACKAGES above"
+        )
+        for module_name in _package_modules(name):
+            module = importlib.import_module(f"anvilate.{name}.{module_name}")
+            for symbol in module.__all__:
+                if symbol not in aggregate:
+                    withheld.append(f"anvilate.{name}.{module_name}.{symbol}")
+    assert not withheld, (
+        "these are public in a module and not published by their package, so the only way "
+        "to reach one is an import path under no contract:\n  " + "\n  ".join(withheld)
+    )

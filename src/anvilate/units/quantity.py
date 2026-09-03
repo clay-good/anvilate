@@ -26,6 +26,7 @@ __all__ = [
     "MissingUnitError",
     "DimensionError",
     "require_dimension",
+    "require_finite",
 ]
 
 

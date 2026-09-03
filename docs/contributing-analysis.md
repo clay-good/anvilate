@@ -867,3 +867,30 @@ the enum must be the expected mode of a row, and every row is a case that runs. 
 lateral-torsional buckling *is* screened — `aluminum_lateral_torsional_moment`, ADM §F.4.2 —
 it simply answers with a moment rather than a compressive stress, which is why it never
 belonged in this enum.
+
+## The gate that stopped at the package boundary
+
+Section 6 above says changing the public surface is a deliberate act with a diff, and the
+gates that enforce it covered `anvilate.analysis` and the top-level modules. Eight
+sub-packages had none — and asking the obvious question of each (does the package publish
+what its modules declare?) found four that had drifted:
+
+| Package | Withheld | Why it matters |
+| --- | --- | --- |
+| `units` | `AmbiguousRotationalSpeedError`, `AmbiguousCountRateError`, `OffsetTemperatureError`, and the five converters that close those traps, plus `build_registry` | The package published its unit-error family and not these. You cannot `except` what you cannot import, so telling an ambiguous rpm from any other unit error meant reaching into `anvilate.units.rotation` — a path under no contract at all. |
+| `standards` | `WeldDetailCategory`, `WeldStressKind`, `EN1993_NORMAL_DETAIL_CATEGORIES` | The whole EN 1993-1-9 detail-category vocabulary, while the curve function that consumes it was published. |
+| `spec` | `Interface` | The discriminated union a caller annotates with, next to both of its members. |
+| `spec`, `units` | `Envelope`, `require_finite` | The other direction: published by the package while the module defining them called them private. |
+
+Three gates now, and the shape of the third is the point. **Only the forward direction is
+asserted** — every symbol a module declares must be published by its package — because a
+package may legitimately re-export from outside its own modules, as `anvilate.report` does
+with `Derivation`. The reverse half is covered by a separate gate that every `__all__` name
+resolves, which is worth having on its own: `__all__` is checked by nothing at import time,
+so a stale name breaks `import *` and nothing else.
+
+`export` and `packs` are exempt, and the exemption is held to its story: 463 example imports
+come from `anvilate.units` and none from `anvilate.packs` itself — a pack is addressed by
+submodule. So a namespace package must publish **nothing**, which is what keeps the
+exemption from becoming a half-aggregating package where some symbols are re-exported and
+the rest are invisible.

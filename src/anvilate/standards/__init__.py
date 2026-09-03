@@ -58,6 +58,7 @@ from .extrusions import (
     default_extrusion_table,
 )
 from .fatigue import (
+    EN1993_NORMAL_DETAIL_CATEGORIES,
     CurveSurvival,
     DatasetProvenance,
     FatigueCurve,
@@ -66,6 +67,8 @@ from .fatigue import (
     LoadingMode,
     SpecimenGeometry,
     SpecimenMetadata,
+    WeldDetailCategory,
+    WeldStressKind,
     en1993_detail_category_curve,
 )
 from .hexbolts import (
@@ -99,6 +102,7 @@ from .records import (
     PropertyCitation,
     QuantityProperty,
     ScalarProperty,
+    dimensioned,
     require_basis,
 )
 from .resolver import StandardsResolver, default_standards_resolver
@@ -137,6 +141,9 @@ __all__ = [
     "LoadingMode",
     "SpecimenGeometry",
     "SpecimenMetadata",
+    "WeldDetailCategory",
+    "WeldStressKind",
+    "EN1993_NORMAL_DETAIL_CATEGORIES",
     "en1993_detail_category_curve",
     "require_basis",
     "InsufficientBasis",
@@ -155,6 +162,7 @@ __all__ = [
     "PropertyCitation",
     "QuantityProperty",
     "ScalarProperty",
+    "dimensioned",
     "UnknownMaterialError",
     "MaterialPropertyUnavailable",
     "default_materials_db",

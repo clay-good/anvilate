@@ -45,6 +45,7 @@ from .provenance import Provenanced
 
 __all__ = [
     "DesignSpec",
+    "Envelope",
     "MaterialRef",
     "ManufacturingProcess",
     "Manufacturing",
