@@ -132,7 +132,7 @@ which is the pin working: a scorecard document that says something new is a diff
 bundle, and a content address that had *not* moved would have meant the verdict was not
 covered by it.
 
-## The tri-state is in the contract
+## The whole status enum is in the contract
 
 `CheckStatus` publishes all four values — `pass`, `fail`, `over_margin`, `not_evaluated` —
 so a client reading the schema cannot model the result as a boolean without noticing what it

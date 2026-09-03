@@ -30,7 +30,7 @@ takes a new one — carries six things:
 | Field | What it is |
 | --- | --- |
 | `specDigest` | the digest of the spec that was screened |
-| `status` | the rolled-up verdict, in the scorecard's own tri-state |
+| `status` | the rolled-up verdict, in the scorecard's own four-valued status |
 | `scorecard` | every check: name, status, detail, margins, derivation |
 | `citations` | the standards records behind the numbers, from the provenance roll-up |
 | `bom` | a CycloneDX 1.6 inventory of the environment that computed it |
