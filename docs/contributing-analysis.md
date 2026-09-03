@@ -452,6 +452,27 @@ HEAD the lookup returns `ASTM A36 structural steel`, the twelve `standards/data`
 `tolerance/data` files are present in `site-packages`, a pack screen runs on the installed
 wheel, and the MCP server answers `initialize` with the 2026-07-28 revision.
 
+**Two traps if you run it without a network.** `pip install .` fetches the build backend and
+the runtime dependencies, so the offline substitute is to build the wheel once
+(`python -m build --wheel`) and install it with `--no-index --no-deps`, copying `pint`,
+`pydantic`, `pydantic_core`, `yaml`, `typing_extensions`, `typing_inspection`,
+`annotated_types` and `platformdirs` into the fresh `site-packages` by hand.
+
+Do **not** reach the dependencies by putting the repository's `site-packages` on
+`PYTHONPATH` instead. The editable install lives there, and `importlib.metadata` will find
+*its* `METADATA` rather than the wheel's — so `metadata("anvilate")["Summary"]` returns
+whatever `pyproject.toml` said when the editable install was made, and the half of this
+check that exists to catch stale packaging metadata silently verifies the artifact you were
+not testing. It reported the old `Summary` and the old `Keywords` for a wheel that carried
+the new ones. The unambiguous read is the zip itself:
+
+```bash
+python3 -c "
+import zipfile; z = zipfile.ZipFile('dist/anvilate-0.0.1-py3-none-any.whl')
+name = [n for n in z.namelist() if n.endswith('METADATA')][0]
+print(z.read(name).decode())"
+```
+
 Both console-script *targets* are resolved in the suite —
 `test_every_declared_console_script_resolves_to_a_callable` imports each module and requires
 the attribute to be callable — so a renamed entry point fails here rather than at a user's
