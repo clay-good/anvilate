@@ -236,18 +236,24 @@ class EdgeSupport(StrEnum):
 
 
 class AluminumLimitState(StrEnum):
-    """Which Aluminum Design Manual limit state governed an aluminum member check.
+    """Which Aluminum Design Manual limit state governed an aluminum compression check.
 
     Reported because the repair differs by state and two of them respond to opposite
     changes: local buckling wants thicker material or a narrower flat, member buckling
     wants a shorter unbraced length or a fatter radius of gyration, and yielding wants a
     stronger temper — which is the one repair a weld undoes.
+
+    These are the three states :class:`AluminumCompressionStrength` weighs, and the enum
+    holds exactly those: a member no screen can report is a capability the vocabulary
+    claims and the library does not have. Beam lateral-torsional buckling is screened —
+    it is :func:`aluminum_lateral_torsional_moment`, ADM §F.4.2 — but it answers with a
+    moment rather than a compressive stress, so it is not one of these, and it had no
+    producer for as long as it was listed here.
     """
 
     YIELDING = "yielding"
     LOCAL_BUCKLING = "local buckling"
     MEMBER_BUCKLING = "member buckling"
-    LATERAL_TORSIONAL_BUCKLING = "lateral-torsional buckling"
 
 
 class AlloyProperties(RevalidatedModel):

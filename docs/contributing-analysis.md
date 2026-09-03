@@ -843,3 +843,27 @@ it and a test pins it — the two ignore the count exactly while BPFO and BPFI s
 Note for the next run: `int` arguments need their own nudge. Scaling an `int` by 1.4 and
 rounding is what crosses a band; adding one almost never does, and a threshold parameter
 will report inert for that reason alone.
+
+### And once more, for outcomes nothing can produce
+
+Third question for the same recorded calls: **which declared outcomes can no input reach?**
+Sweep every numeric argument over 10⁻³ to 10³ around its recorded value, collect the enum
+members the functions actually return, and subtract from the members the enums declare.
+
+Read the report with one distinction in hand, because it decides which lines are work:
+
+- An enum that is an **input vocabulary** — `ModuleScope`, `ToleranceClass`, `ServiceClass`,
+  `CurveSurvival` — is chosen by the caller, not computed, so a numeric sweep can never
+  reach its members and reports them all. Not findings.
+- An enum that is an **output classification** is a claim about what the screen can tell
+  you, and a member nothing produces is a claim the library cannot honour.
+
+One of those came back. `AluminumLimitState.LATERAL_TORSIONAL_BUCKLING` had **no producer,
+no consumer, no test and no docs line** — `grep` over the whole tree found its declaration
+and nothing else. `aluminum_compression_strength` computes three states and returns the
+smallest, so no input could ever report it, and a caller matching on it wrote dead code. It
+is gone, and `_CASES` in `test_aluminum_formulas.py` is now a totality gate: every member of
+the enum must be the expected mode of a row, and every row is a case that runs. Beam
+lateral-torsional buckling *is* screened — `aluminum_lateral_torsional_moment`, ADM §F.4.2 —
+it simply answers with a moment rather than a compressive stress, which is why it never
+belonged in this enum.

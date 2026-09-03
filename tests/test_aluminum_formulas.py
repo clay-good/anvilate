@@ -191,3 +191,20 @@ def test_the_scorecard_carries_the_curve_onto_the_entry():
     )
     assert entry.derivation.symbolic == strength.governing_formula
     assert entry.derivation.unresolved_symbols() == ()
+
+
+def test_every_limit_state_the_enum_names_is_one_a_case_above_produces():
+    """A state nothing can report is a capability the vocabulary claims and we lack.
+
+    `LATERAL_TORSIONAL_BUCKLING` sat in this enum with no producer, no consumer, no test
+    and no docs line: `aluminum_compression_strength` computes three states and picks the
+    smallest, so no input could ever return it, and a caller branching on it wrote dead
+    code. Membership here costs a row in `_CASES`, and every row is a case that runs and
+    asserts the mode it claims — so a state added to the enum without a screen that
+    reports it fails rather than reads as coverage.
+    """
+    produced = {case[5] for case in _CASES}
+    assert produced == set(AluminumLimitState), (
+        "these limit states are named by AluminumLimitState and no case above produces "
+        f"one: {sorted(state.name for state in set(AluminumLimitState) - produced)}"
+    )
