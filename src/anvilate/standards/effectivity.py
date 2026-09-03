@@ -435,10 +435,19 @@ def design_basis_scorecard(
             "cited at an edition other than the pinned one: " + "; ".join(differing)
         )
     if basis.waivers:
+        # The rationale and the date, not only the name. `MixedEditionWaiver` requires
+        # `accepted_by` AND `rationale` for one stated reason — a waiver with nobody's name
+        # on it and no reason is a suppressed warning, not an accepted risk — and the entry
+        # carried the name alone, which is half of what the model says makes it a waiver.
+        # The reason a risk was accepted is the substance of the acceptance; a reviewer
+        # reading "AISC 360 16/22 by A. Engineer" cannot tell an assessed retrofit from a
+        # mistake somebody signed.
         detail_parts.append(
             "recorded waivers: "
             + "; ".join(
-                f"{w.standard} {'/'.join(w.editions)} by {w.accepted_by}" for w in basis.waivers
+                f"{w.standard} {'/'.join(w.editions)} by {w.accepted_by} "
+                f"on {w.accepted_on.isoformat()}: {w.rationale}"
+                for w in basis.waivers
             )
         )
 

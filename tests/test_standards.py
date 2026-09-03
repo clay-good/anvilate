@@ -1454,6 +1454,27 @@ def test_a_waiver_with_nobody_s_name_on_it_is_a_suppressed_warning():
         _waiver(editions=("16", "16"))
 
 
+def test_a_recorded_waiver_carries_its_reason_and_its_date_into_the_entry():
+    """The entry named who accepted the mixing and not why, nor when.
+
+    `MixedEditionWaiver` requires `accepted_by` **and** `rationale`, and says why in its own
+    docstring: a waiver with nobody's name on it and no reason is a suppressed warning, not
+    an accepted risk. The rendering carried the name alone — half of what the model says
+    distinguishes the two — so a reviewer reading "AISC 360 16/22 by A. Engineer" could not
+    tell a deliberately assessed retrofit from a mistake somebody signed, and could not tell
+    whether the acceptance predates the edition it waives.
+    """
+    from anvilate.standards import design_basis_scorecard
+
+    waiver = _waiver()
+    basis = _basis(waivers=(waiver,))
+    detail = design_basis_scorecard(
+        "bundle", basis=basis, references=["AISC 360-16 §D2", "AISC 360-22 §E3"]
+    ).detail
+    assert waiver.accepted_by in detail, "the entry does not say who accepted the mixing"
+    assert waiver.rationale in detail, "the entry does not say why the mixing was accepted"
+    assert waiver.accepted_on.isoformat() in detail, "the entry does not say when"
+
 def test_an_editionless_reference_is_not_evaluated_rather_than_passed():
     """A clause with no edition cannot be checked against a basis, and reporting only the
     ones that happen to carry editions would describe a bundle nobody assembled."""

@@ -30,11 +30,16 @@ new mezzanine only         pass   all 3 references name an edition and no standa
 whole bundle, unwaived     fail   AISC 360 appears at editions 16, 22 with no recorded
                                   waiver covering them
 whole bundle, waived       pass   ... recorded waivers: AISC 360 16/22 by
-                                  A. Engineer, P.E. (engineer of record)
+                                  A. Engineer, P.E. (engineer of record) on
+                                  2026-08-17: the existing frame is assessed
+                                  under the edition it was designed to; new
+                                  members follow the currently adopted edition
 ```
 
 A `MixedEditionWaiver` requires `accepted_by` and `rationale`, and refuses a blank one. A
-waiver with nobody's name on it is not an accepted risk, it is a suppressed warning. See
+waiver with nobody's name on it is not an accepted risk, it is a suppressed warning — so
+the entry carries the reason and the date as well as the name. Reading who signed without
+reading why does not distinguish an assessed retrofit from a mistake somebody signed. See
 [`examples/retrofit_two_code_editions.py`](../examples/retrofit_two_code_editions.py).
 
 A reference at an edition *other than the pinned one* is **reported, not failed** — a
