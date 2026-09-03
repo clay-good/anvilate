@@ -3649,3 +3649,28 @@ def test_a_dimension_guard_enforces_the_dimension_its_message_names():
         f"only {direct} direct and {paired} previewed dimension guards were read; the "
         "message wording moved and this gate is checking a fraction of the library"
     )
+
+
+def test_the_session_hook_survives_a_run_with_plugins_switched_off():
+    """`pytest -p no:cacheprovider` is a legal invocation and it crashed the ratchet.
+
+    `tests/conftest.py`'s session hook decides whether a run was *filtered* — a `-k`, a
+    `-m`, a `--lf`, or an explicit path — because the second direction of several ratchets
+    only means anything over a full run. It read `session.config.option.lf` directly, and
+    `--lf` belongs to the `cacheprovider` plugin: switch that off and the hook raised
+    `AttributeError: 'Namespace' object has no attribute 'lf'`, reporting a crash over a run
+    that had passed.
+
+    Asserted against the source rather than by launching a subprocess, because the failure is
+    an attribute access and a nested pytest run costs two minutes.
+    """
+    conftest = (Path(__file__).resolve().parent / "conftest.py").read_text(encoding="utf-8")
+    block = conftest[conftest.index("filtered = bool(") : conftest.index("filtered = bool(") + 400]
+    for option in ("keyword", "markexpr", "lf"):
+        assert f'"{option}"' in block, (
+            f"the filtered check no longer reads {option!r} through getattr, so a run with "
+            "the plugin that owns it switched off raises out of the session hook"
+        )
+    assert "session.config.option.lf" not in conftest, (
+        "the hook reads `option.lf` directly again; `pytest -p no:cacheprovider` raises"
+    )

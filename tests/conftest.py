@@ -223,10 +223,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # run — a filtered, path-restricted or failed run simply did not reach the rest of
     # the sites, and failing it would punish `pytest tests/test_contract.py`, which is a
     # thing people do all day.
+    # `getattr`, because these options belong to plugins that can be switched off. `--lf`
+    # comes from `cacheprovider`, so `pytest -p no:cacheprovider` — a legal invocation —
+    # raised `AttributeError: 'Namespace' object has no attribute 'lf'` out of this hook and
+    # reported a crash where the run had actually passed. A ratchet that crashes on a
+    # supported way of running the suite is worse than one that skips.
+    option = session.config.option
     filtered = bool(
-        session.config.option.keyword
-        or session.config.option.markexpr
-        or session.config.option.lf
+        getattr(option, "keyword", None)
+        or getattr(option, "markexpr", None)
+        or getattr(option, "lf", False)
         or list(session.config.args) != list(session.config.getini("testpaths"))
     )
     if exitstatus != 0 or filtered or session.testsfailed:

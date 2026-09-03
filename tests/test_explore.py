@@ -206,6 +206,16 @@ def test_an_infeasible_point_is_kept_labelled_and_never_on_the_front():
     assert all(p.governing_check == "strength" for p in infeasible)
     # The front is drawn over the feasible set only.
     assert all(p.feasible for p in result.front)
+    # And the other half of the same requirement, which was unasserted: "SHALL report for
+    # each point on the front which constraint is governing **and its margin**". A front
+    # point with no governing check is a trade-off a reader cannot act on — they know it is
+    # non-dominated and not what stops it moving further.
+    assert result.front, "the study produced no front, so the assertions below are vacuous"
+    for point in result.front:
+        assert point.governing_check, f"front point {point.index} names no governing check"
+        assert point.governing_safety_factor is not None, (
+            f"front point {point.index} names its governing check and not its margin"
+        )
     assert min(p.objectives["f"] for p in result.front) == 2.0
     # And best() answers "the lightest that works", not "the lightest".
     assert result.best("f").objectives["f"] == 2.0
