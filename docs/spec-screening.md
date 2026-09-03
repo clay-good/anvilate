@@ -177,6 +177,7 @@ That is the whole rule. What it means field by field:
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
 | `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take |
 | `seismic_design_acceleration`, `seismic_redundancy_factor` **without a seismic `combination_basis`** | `NOT_EVALUATED` — S_DS and ρ are read by the ASCE 7 seismic combination sets, so without `asce7_lrfd_seismic` or `asce7_asd_seismic` a seismic design is stated and not applied |
+| `exports` (a published interface contract) | `NOT_EVALUATED` — a contract states a mating plane and a hole pattern a downstream part designs against, and checking that the part offers them is measured on built geometry |
 | `acceptance.fea_convergence_tol` **without a `T3_fea` tier** | `NOT_EVALUATED` — the tolerance bounds a T3 run, and asking for the tier is what reports on it |
 
 A census test holds that table, in both directions. Every field of a `DesignSpec` is either

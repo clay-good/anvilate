@@ -1638,3 +1638,41 @@ def test_an_fea_tolerance_without_the_tier_that_consumes_it_is_reported():
     )
     assert not [e for e in requested.entries if e.name == "FEA convergence tolerance"]
     assert [e for e in requested.entries if e.name.startswith("T3")]
+
+
+def test_a_published_interface_contract_is_reported_rather_than_dropped():
+    """`exports` is a claim a downstream part designs against, and no screen read it.
+
+    `validation-gauntlet` requires that "a screen SHALL further answer **every claim the
+    document makes**". `DesignSpec.exports` publishes a mating plane and a hole pattern for
+    another part to mate to; it is validated, it is in the published JSON schema, and the
+    only `.exports` anything in `src/` reads is `BundleSections.exports` — a different field
+    holding records of artifacts already emitted. So a document could publish a contract and
+    have it reach no screen at all.
+
+    Found by taking the requirement literally: every `DesignSpec` field, declared in turn,
+    against what the card says about it.
+    """
+    from anvilate.spec.ir import HolePattern, InterfaceContract
+
+    contract = InterfaceContract(
+        name="mount_pattern",
+        mating_plane="face_a",
+        pattern=HolePattern(diameter=_q("40 mm"), hole_count=4, hole_size=_q("5 mm")),
+    )
+    plain = screen_spec(_lug_spec())
+    assert not [e for e in plain.entries if e.name == "published interface contracts"]
+
+    published = screen_spec(_lug_spec(exports=[contract]))
+    entry = next(e for e in published.entries if e.name == "published interface contracts")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "mount_pattern" in entry.detail, "the entry does not name what was published"
+    assert "built geometry" in entry.detail, "the entry does not say what checking it takes"
+    assert not published.passed, "a contract nobody screened is not a pass"
+
+    # Two contracts are one entry naming both, like the seismic pair.
+    second = contract.model_copy(update={"name": "pilot_bore"})
+    both = screen_spec(_lug_spec(exports=[contract, second]))
+    entries = [e for e in both.entries if e.name == "published interface contracts"]
+    assert len(entries) == 1
+    assert "mount_pattern" in entries[0].detail and "pilot_bore" in entries[0].detail

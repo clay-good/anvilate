@@ -717,6 +717,26 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 ),
             )
         )
+    # A published interface contract. `exports` says "this part offers this mating plane with
+    # this hole pattern", which is a claim a downstream part is meant to design against — and
+    # the only `.exports` anything in `src/` reads is `BundleSections.exports`, a different
+    # field holding records of artifacts already emitted. So a document could publish a
+    # contract, have it validated, appear in the published schema, and reach no screen at all.
+    if spec.exports:
+        published = ", ".join(contract.name for contract in spec.exports)
+        entries.append(
+            ScorecardEntry(
+                name="published interface contracts",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"the spec publishes {len(spec.exports)} interface contract(s) "
+                    f"({published}), and nothing screened them: a contract states a mating "
+                    "plane and a hole pattern a downstream part designs against, and checking "
+                    "that the part actually offers them is measured on built geometry, which "
+                    "no spec generates today"
+                ),
+            )
+        )
     if spec.manufacturing.min_wall is not None:
         entries.append(
             ScorecardEntry(
