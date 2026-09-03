@@ -65,6 +65,27 @@ A file you **name** that will not parse is a bad request with the position in it
 any token`. It used to be a stack trace through PyYAML and exit 1, the code that means a
 part failed.
 
+**A file that will not *decode* is the same case one layer earlier.** Every document these
+commands read is UTF-8, and a file that is not gets a bad request naming what wrote it:
+
+```text
+anvilate check: bracket.spec.yaml: is UTF-16 (little-endian), not UTF-8 — every document
+this tool reads is UTF-8. Re-save it as UTF-8 (in Notepad, 'UTF-8' rather than 'Unicode').
+```
+
+That is the ordinary way to arrive at one — Notepad's "Unicode" save writes UTF-16 with a
+byte-order mark — so the refusal names the encoding and the remedy. Without a mark there is
+nothing to name and it reports the offending byte and its offset instead, which is what a
+binary file named by mistake gets. This too used to be a stack trace, through
+`<frozen codecs>`, and exit 1: `UnicodeDecodeError` is raised on the way from bytes to text,
+before any parser sees a character, and it descends from `ValueError` rather than from
+`OSError` — so it fell through both the guard around the open and the guard around the parse.
+
+In a searched directory the decision is the same as for a broken one, and it is taken on the
+raw bytes: a file whose bytes say `anvilate_spec` in UTF-8 or UTF-16 is somebody's spec and
+stops the run by name, and anything else is a stray file and is skipped. A thumbnail that
+landed in a specs directory is not a part; a spec somebody saved from Notepad is.
+
 **The last line says how much of the run was affected**, not just the worst verdict:
 `60 specs: FAIL — 2 failed, 58 passed`. The `N specs: WORST` prefix is unchanged, because a
 log filter greps for it, and the counts come after — `60 specs: FAIL` over a run where 58

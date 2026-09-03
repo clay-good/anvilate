@@ -230,7 +230,19 @@ def cached_dataset(
             "where it came from or under what licence. Delete it and fetch again."
         )
     _verify(payload.read_bytes(), recipe, where="in the cache")
-    return payload, FetchProvenance.model_validate_json(sidecar.read_text(encoding="utf-8"))
+    try:
+        text = sidecar.read_text(encoding="utf-8")
+    except UnicodeDecodeError as unreadable:
+        # A sidecar that is present and undecodable is the same fact as one that is absent —
+        # nothing can say where the payload came from — so it gets the same exception and the
+        # same remedy. Unguarded, `UnicodeDecodeError` reached the caller as a `ValueError`
+        # from a function documented to refuse with `IntegrityError`.
+        raise IntegrityError(
+            f"{sidecar} is beside {payload.name} and is not UTF-8 text ({unreadable}), so "
+            "nothing can say where it came from or under what licence. Delete both and "
+            "fetch again."
+        ) from unreadable
+    return payload, FetchProvenance.model_validate_json(text)
 
 
 def fetch_dataset(

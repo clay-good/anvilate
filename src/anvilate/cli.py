@@ -457,6 +457,12 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     except OSError as failure:
         print(f"anvilate verify: {failure}", file=err)
         return EXIT_BAD_REQUEST
+    except UnicodeDecodeError as failure:
+        # Before `json.JSONDecodeError`, because it is not one: the decode fails on the way
+        # from bytes to text and never reaches the parser. An envelope arrives from somewhere
+        # else, so this is the input most likely to be the wrong file entirely.
+        print(f"anvilate verify: {_not_utf8(args.envelope, failure)}", file=err)
+        return EXIT_BAD_REQUEST
     except json.JSONDecodeError as failure:
         print(f"anvilate verify: {args.envelope}: not JSON: {failure}", file=err)
         return EXIT_BAD_REQUEST
@@ -651,6 +657,64 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     return EXIT_CODES[worst]
 
 
+# The byte-order marks a text editor writes ahead of a non-UTF-8 save. Named because the
+# remedy is the same for all of them and saying which one it is turns "invalid start byte"
+# into a sentence about what the caller did.
+_BOMS: tuple[tuple[bytes, str], ...] = (
+    (b"\xff\xfe\x00\x00", "UTF-32 (little-endian)"),
+    (b"\x00\x00\xfe\xff", "UTF-32 (big-endian)"),
+    (b"\xff\xfe", "UTF-16 (little-endian)"),
+    (b"\xfe\xff", "UTF-16 (big-endian)"),
+)
+
+
+def _claims_a_spec(path: Path) -> bool:
+    """Does an undecodable file still say ``anvilate_spec`` somewhere in its bytes?
+
+    The directory sweep decides "somebody's broken spec" from "a stray file" on whether the
+    document names the key, and a file that will not decode has no text to search. Decoding
+    with ``errors="replace"`` would not answer it either: UTF-16 interleaves a NUL after
+    every ASCII byte, so the token comes back as ``a?n?v?…`` and the substring never matches.
+    So the token is encoded instead — the three encodings a text editor actually writes — and
+    looked for in the raw bytes.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:  # pragma: no cover - the read that raised got this far
+        return False
+    return any(
+        "anvilate_spec".encode(encoding) in raw for encoding in ("utf-8", "utf-16-le", "utf-16-be")
+    )
+
+
+def _not_utf8(path: Path, failure: UnicodeDecodeError) -> str:
+    """Why a file that opened cannot be read, and what to do about it.
+
+    Every door here reads its input as UTF-8, and ``UnicodeDecodeError`` descends from
+    ``ValueError`` rather than from ``OSError`` — so it fell through the ``except OSError``
+    that guards the open and reached the top as a traceback with exit 1, the code that means
+    a part *failed*. The commonest way to arrive at one is not a hostile file: it is a spec
+    saved as "Unicode" from Notepad, which writes UTF-16 with a byte-order mark. So when the
+    first bytes are a mark, this says which encoding wrote it and what to re-save it as, and
+    otherwise it reports the offending byte and its offset.
+    """
+    try:
+        head = path.read_bytes()[:4]
+    except OSError:  # pragma: no cover - the read that raised got this far
+        head = b""
+    for mark, encoding in _BOMS:
+        if head.startswith(mark):
+            return (
+                f"{path}: is {encoding}, not UTF-8 — every document this tool reads is "
+                f"UTF-8. Re-save it as UTF-8 (in Notepad, 'UTF-8' rather than 'Unicode')."
+            )
+    return (
+        f"{path}: is not valid UTF-8 text — byte {failure.object[failure.start]:#04x} at "
+        f"offset {failure.start} cannot be decoded. Every document this tool reads is UTF-8; "
+        f"if this is a binary file, it is not the file you meant to name."
+    )
+
+
 def _load(path: Path, *, err, command: str):
     """The spec at ``path``, or the exit code that says why not.
 
@@ -663,6 +727,9 @@ def _load(path: Path, *, err, command: str):
         document = path.read_text(encoding="utf-8")
     except OSError as failure:
         print(f"anvilate {command}: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+    except UnicodeDecodeError as failure:
+        print(f"anvilate {command}: {_not_utf8(path, failure)}", file=err)
         return EXIT_BAD_REQUEST
     try:
         return load_spec_yaml(document)
@@ -796,6 +863,22 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                 try:
                     text = candidate.read_text(encoding="utf-8")
                 except OSError:
+                    text = ""
+                except UnicodeDecodeError:
+                    # A candidate that is not UTF-8 text gets the same treatment as one that
+                    # will not parse, and for the same reason: whether it is somebody's spec
+                    # or a stray file is decided on whether it *claims* to be one, and the
+                    # claim is still legible in the raw bytes even when the text is not.
+                    # `text = ""` alone would report a UTF-16 spec — what Notepad writes when
+                    # asked for "Unicode" — as "not a Design Spec, skipped", and the sweep
+                    # would exit 0 over a part nobody screened.
+                    if _claims_a_spec(candidate):
+                        print(
+                            f"anvilate {command}: {candidate}: names anvilate_spec and is "
+                            f"not valid UTF-8 text, so it was not screened",
+                            file=err,
+                        )
+                        return EXIT_BAD_REQUEST
                     text = ""
                 try:
                     document = yaml.safe_load(text)

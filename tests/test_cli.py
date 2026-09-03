@@ -1765,3 +1765,82 @@ def test_the_run_summary_says_how_much_of_the_run_was_affected(tmp_path):
     assert code == EXIT_OK
     assert clean == "4 specs: PASS — 4 passed", clean
     assert "failed" not in clean and "not evaluated" not in clean
+
+
+def test_a_file_that_is_not_utf8_is_a_bad_request_at_every_door(tmp_path):
+    """The bytes-to-text boundary, one layer above the YAML syntax error above.
+
+    `load_spec_yaml` catches everything `yaml.safe_load` can raise, and the guard around the
+    *read* catches `OSError`. `UnicodeDecodeError` is neither: it descends from `ValueError`
+    and is raised by `path.read_text` before any parser sees a character, so it fell through
+    both and `anvilate check` answered a non-UTF-8 file with a stack trace through
+    `<frozen codecs>` and exit 1 — the code that means a part FAILED. Four doors did it:
+    `check` on a file, `check` on a directory, `diff` on either side, and `verify`.
+
+    The commonest way to arrive at one is not a hostile file. It is a spec saved as "Unicode"
+    from Notepad, which writes UTF-16 with a byte-order mark, so the refusal names the
+    encoding that wrote it and what to re-save it as.
+    """
+    spec = tmp_path / "good.yaml"
+    spec.write_text(_SPEC, encoding="utf-8")
+
+    binary = tmp_path / "binary.yaml"
+    binary.write_bytes(b"\x00\xff\xfe not text \x80\x81")
+    utf16 = tmp_path / "utf16.yaml"
+    utf16.write_bytes(_SPEC.encode("utf-16"))
+
+    for label, argv, named in (
+        ("check, binary", ("check", str(binary)), binary),
+        ("check, utf-16", ("check", str(utf16)), utf16),
+        ("diff, second argument", ("diff", str(spec), str(binary)), binary),
+        ("diff, first argument", ("diff", str(binary), str(spec)), binary),
+        ("verify", ("verify", str(utf16)), utf16),
+    ):
+        code, out, err = _run(*argv)
+        assert code == EXIT_BAD_REQUEST, f"{label} answered {code}, not a bad request"
+        assert out == ""
+        assert "Traceback" not in err, f"{label} still answers with a stack trace"
+        assert "UTF-8" in err, f"{label} does not say what encoding it wanted: {err!r}"
+        # The file, not just the complaint: a sweep names several and "not UTF-8" alone
+        # would not say which one.
+        assert named.name in err, f"{label} names no file: {err!r}"
+
+    # A byte-order mark is a fact about the file, and saying which encoding wrote it is the
+    # difference between a remedy and a riddle.
+    _code, _out, err = _run("check", str(utf16))
+    assert "UTF-16 (little-endian)" in err, err
+    assert "Re-save it as UTF-8" in err, err
+    # Without one there is nothing to name, so the offending byte and its offset are.
+    _code, _out, err = _run("check", str(binary))
+    assert "0xff" in err and "offset 1" in err, err
+
+
+def test_a_non_utf8_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_path):
+    """The same merge-gate hole as the malformed-YAML one, through a different exception.
+
+    The sweep decides "somebody's broken spec" from "a stray file" on whether the raw text
+    says `anvilate_spec` — and a file that will not decode has no text to search. Falling
+    back to the empty string reports a UTF-16 spec as `not a Design Spec, skipped` and the
+    run exits 0 over a part nobody screened. Decoding with `errors="replace"` would not
+    answer it either: UTF-16 interleaves a NUL after every ASCII byte, so the token comes
+    back as `a?n?v?...`. The claim is looked for in the bytes instead.
+    """
+    (tmp_path / "good.yaml").write_text(_SPEC, encoding="utf-8")
+
+    # A stray binary file claims nothing: skipped, reported, and the run carries on.
+    stray = tmp_path / "thumbnail.yaml"
+    stray.write_bytes(b"\x89PNG\r\n\x1a\n\xff\xd8not a document")
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_CODES[CheckStatus.NOT_EVALUATED], err
+    assert "thumbnail.yaml: not a Design Spec, skipped" in err
+    assert "deck_plate" in out
+    assert "Traceback" not in err
+
+    # One that says so in UTF-16 is somebody's spec, and stops the run by name.
+    (tmp_path / "windows.yaml").write_bytes(_SPEC.encode("utf-16"))
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_BAD_REQUEST, "a UTF-16 spec in the sweep did not stop the run"
+    assert "windows.yaml: names anvilate_spec and is not valid UTF-8 text" in err
+    assert "not a Design Spec, skipped" not in err.split("windows.yaml")[-1], (
+        "the UTF-16 spec is still being described as some other YAML file"
+    )

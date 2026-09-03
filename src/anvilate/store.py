@@ -151,6 +151,18 @@ class SubjectStore:
         path = self._path(handle)
         try:
             text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as unreadable:
+            # The same fact as unreadable JSON, one layer earlier: an entry that is present
+            # and undecodable. `UnicodeDecodeError` is a `ValueError` and not an `OSError`, so
+            # it went past both guards below and out of `resolve` unwrapped — which is exactly
+            # the trap the comment below describes, and it would 500 an MCP tool call instead
+            # of refusing it.
+            raise UnknownSubject(
+                f"{handle} is in the subject store at {self._root} and is not UTF-8 text: "
+                f"{unreadable}. Publishing is atomic and writes UTF-8, so this is a file "
+                f"something outside this library wrote; delete it and publish the document "
+                f"again"
+            ) from unreadable
         except OSError as missing:
             raise UnknownSubject(
                 f"{handle} is not in the subject store at {self._root}. A handle resolves "

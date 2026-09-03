@@ -3789,3 +3789,88 @@ def test_an_aggregating_package_publishes_every_symbol_its_modules_declare():
         "these are public in a module and not published by their package, so the only way "
         "to reach one is an import path under no contract:\n  " + "\n  ".join(withheld)
     )
+
+
+def test_every_file_a_caller_names_is_read_inside_a_guard_that_catches_a_bad_encoding():
+    """`read_text` decodes, and a decode failure is not an `OSError`.
+
+    Five doors read a path a caller supplied — the spec loader shared by `check`, `diff` and
+    `export`, the directory sweep, the `verify` envelope, the subject store and the fetch
+    cache's provenance sidecar — and every one of them guarded the open against `OSError` and
+    the parse against `ValueError`. `UnicodeDecodeError` happens between the two: it is raised
+    by `read_text` itself and descends from `ValueError`, so it fell through both guards and
+    reached the top as a traceback. `anvilate check` answered a spec saved as "Unicode" from
+    Notepad with a stack trace through `<frozen codecs>` and exit 1, the code that means a
+    part failed.
+
+    So this holds every decoding read in the package to a guard that can see it. The bundled
+    data files are exempt because they are not caller input: they ship inside the wheel, and
+    the packaging tests are what say they arrive intact.
+
+    The floor is here because a gate that finds nothing to check passes: an `ast.walk` that
+    stopped matching — a rename of `read_text`, a refactor behind a helper — would report
+    every file clean.
+    """
+    guarded_by = {"UnicodeDecodeError", "ValueError", "Exception", "BareExcept"}
+    checked: list[str] = []
+    unguarded: list[str] = []
+
+    def receiver_is_bundled(call: ast.Call) -> bool:
+        """Is the thing being read an `importlib.resources` traversable, `files(...) / ...`?"""
+        node = call.func.value
+        while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            node = node.left
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "files"
+        )
+
+    def caught_by(handler: ast.ExceptHandler) -> set[str]:
+        if handler.type is None:
+            return {"BareExcept"}
+        raised = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+        return {name.id for name in raised if isinstance(name, ast.Name)}
+
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # Which calls sit inside which `try`. Keyed on `id`, because two structurally equal
+        # calls in one file are different sites.
+        cover: dict[int, set[str]] = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            caught = set().union(*(caught_by(h) for h in node.handlers)) if node.handlers else set()
+            for statement in node.body + node.orelse:
+                for inner in ast.walk(statement):
+                    if isinstance(inner, ast.Call):
+                        cover.setdefault(id(inner), set()).update(caught)
+
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            if node.func.attr != "read_text" or receiver_is_bundled(node):
+                continue
+            site = f"{path.relative_to(_REPO)}:{node.lineno}"
+            checked.append(site)
+            if not (cover.get(id(node), set()) & guarded_by):
+                unguarded.append(site)
+
+        # `open()` decodes too, and this gate cannot see it. There is none in the package
+        # today; if one arrives, the gate above is no longer the whole surface.
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if node.func.id == "open":
+                unguarded.append(
+                    f"{path.relative_to(_REPO)}:{node.lineno} uses open(), which decodes "
+                    f"too and which this gate does not read"
+                )
+
+    assert len(checked) >= 5, (
+        f"the gate found only {len(checked)} decoding reads; it has stopped matching"
+    )
+    assert not unguarded, (
+        "a file a caller names is decoded with nothing catching a bad encoding: "
+        + ", ".join(unguarded)
+    )

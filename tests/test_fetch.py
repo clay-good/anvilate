@@ -272,3 +272,14 @@ def test_the_default_transport_fetches_and_verifies_a_real_document(tmp_path):
         _D_SI_FORMAT, retrieved="2026-08-27", cache_dir=tmp_path, opener=_refuse
     )
     assert again == path
+
+
+def test_a_provenance_sidecar_that_is_not_utf8_text_is_refused_like_a_missing_one(tmp_path):
+    """A sidecar present and undecodable is the same fact as one absent: nothing can say
+    where the payload came from. `read_text` raises `UnicodeDecodeError` — a `ValueError`, not
+    an `IntegrityError` — out of a function documented to refuse with `IntegrityError`, so the
+    caller's guard did not see it."""
+    (tmp_path / "cases.csv").write_bytes(_PAYLOAD)
+    (tmp_path / "cases.csv.provenance.json").write_bytes(b"\xff\xfe{\x00}\x00")
+    with pytest.raises(IntegrityError, match="not UTF-8 text"):
+        cached_dataset(_recipe(), cache_dir=tmp_path)

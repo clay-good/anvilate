@@ -247,7 +247,15 @@ def freeze_release(directory: Path) -> list[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         serialized = _serialize(schema)
         if path.exists():
-            if path.read_text(encoding="utf-8") != serialized:
+            try:
+                frozen: str | None = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                # A frozen artifact that will not decode is a frozen artifact whose content
+                # cannot be confirmed to be this one, which is the same refusal — and this is
+                # the one place the answer to it must not be a traceback out of a function
+                # documented to raise `ValueError`.
+                frozen = None
+            if frozen != serialized:
                 raise ValueError(
                     f"{name} version {version} is already frozen with different content. "
                     "Bump the schema version instead — a released version whose meaning "

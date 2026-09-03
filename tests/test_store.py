@@ -104,3 +104,20 @@ def test_a_record_names_its_kind(tmp_path):
     """A handle to 'something' is a handle whose consumer cannot refuse the wrong document."""
     with pytest.raises(ValueError, match="must name its kind"):
         SubjectStore(tmp_path).publish("   ", {"a": 1})
+
+
+def test_an_entry_that_is_not_utf8_text_refuses_rather_than_raising_past_the_caller(tmp_path):
+    """One layer above the unreadable-JSON case, and the same trap its comment describes.
+
+    `resolve` guards the read against `OSError` and the parse against `ValueError`.
+    `UnicodeDecodeError` is raised in between — by `read_text`, on the way from bytes to text
+    — and descends from `ValueError` rather than `OSError`, so it went past both and out of
+    `resolve` unwrapped. A caller handling `UnknownSubject` is every MCP tool in this package,
+    and an entry some outside process truncated mid-write would have 500'd a tool call instead
+    of refusing it.
+    """
+    store = SubjectStore(tmp_path)
+    handle = store.publish("scorecard", {"status": "pass"})
+    next(Path(tmp_path).rglob("*.json")).write_bytes(b"\xff\xfe{\x00}\x00")
+    with pytest.raises(UnknownSubject, match="is not UTF-8 text"):
+        store.resolve(handle)
