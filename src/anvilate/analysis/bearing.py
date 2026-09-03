@@ -415,7 +415,11 @@ def bearing_fundamental_train_frequency(
     The rotation rate of the cage carrying the rolling elements: FTF = (f_r/2)·(1 − (d/D)·cos φ),
     a little under half the shaft speed. A peak at the FTF (or its sidebands around the ball-pass
     frequencies) points to a cage fault or looseness. It equals the BPFO divided by the number of
-    rolling elements. Returns the frequency in Hz.
+    rolling elements. The cage turns at one rate however many elements it carries, so
+    ``number_of_rolling_elements`` does *not* enter this formula: it is taken because the four
+    defect frequencies share one set of bearing inputs and one validation, and a caller reading
+    an answer back should know which of the numbers they supplied produced it. Returns the
+    frequency in Hz.
     """
     fr, _nb, ratio = _defect_frequency_inputs(
         rotational_frequency,
@@ -441,7 +445,10 @@ def bearing_ball_spin_frequency(
     (D/2d)·f_r·(1 − ((d/D)·cos φ)²), from the shaft ``rotational_frequency`` f_r, the
     ``rolling_element_diameter`` d, the ``pitch_diameter`` D, and the ``contact_angle`` φ. A defect
     on a rolling element strikes each race once per revolution, so 2·BSF (often modulated by the
-    cage frequency) is the tell-tale of a ball or roller fault. Returns the frequency in Hz.
+    cage frequency) is the tell-tale of a ball or roller fault. One element's spin is set by the
+    geometry it rolls on, so ``number_of_rolling_elements`` does *not* enter this formula — it is
+    taken and validated for the same reason as in :func:`bearing_fundamental_train_frequency`.
+    Returns the frequency in Hz.
     """
     _require(rolling_element_diameter, "[length]", "rolling_element_diameter")
     _require(pitch_diameter, "[length]", "pitch_diameter")

@@ -13209,6 +13209,25 @@ def test_bearing_defect_frequencies_and_the_bpfo_bpfi_identity():
     # BSF = (D/2d)*fr*(1 - (d/D)^2) = 2.5*30*0.96 = 72 Hz.
     assert bsf.to("Hz").magnitude == pytest.approx(72.0, rel=1e-9)
 
+    # The cage turns at one rate and an element spins at one rate however many elements the
+    # bearing carries, so FTF and BSF do not read the count while BPFO and BPFI scale with it
+    # exactly. The two that ignore it still take it — one set of bearing inputs, one
+    # validation — and their docstrings say so, which is the only thing that keeps a required
+    # parameter no formula reads from looking like an omission.
+    doubled = {**kw, "number_of_rolling_elements": 16}
+    assert bearing_fundamental_train_frequency(**doubled).to("Hz").magnitude == pytest.approx(
+        ftf.to("Hz").magnitude, rel=1e-12
+    )
+    assert bearing_ball_spin_frequency(**doubled).to("Hz").magnitude == pytest.approx(
+        bsf.to("Hz").magnitude, rel=1e-12
+    )
+    assert bearing_ball_pass_frequency_outer(**doubled).to("Hz").magnitude == pytest.approx(
+        2 * bpfo.to("Hz").magnitude, rel=1e-12
+    )
+    assert bearing_ball_pass_frequency_inner(**doubled).to("Hz").magnitude == pytest.approx(
+        2 * bpfi.to("Hz").magnitude, rel=1e-12
+    )
+
     # A revolutions-per-second input gives the same result (rpm/60 handling).
     bpfo_rev = bearing_ball_pass_frequency_outer(
         rotational_frequency=_q("30 turn/s"),

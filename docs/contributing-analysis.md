@@ -811,3 +811,35 @@ bound that is an integer whenever ρ is a half-integer — ρ = 2.5 computes it 
 2.9999999999999996 — but the dropped endpoint is `sin(2πρ)`, which is exactly zero at every
 ρ that makes the bound whole, so the term it loses never governs the maximum. Reach the
 survivor before writing the excuse; both of these were reached.
+
+### The same harness, pointed at inert arguments
+
+Once every function's real call is recorded, the cheap follow-up is to **nudge each argument
+and require the answer to move**. A parameter that is accepted, validated and then never
+read is a parameter a caller will believe went into the number.
+
+Run it as written and it reports 143 arguments. Almost all are the fixture's fault, not the
+code's, and two rules cut it to **11**:
+
+- **Record four *different* calls per function, and report a parameter only if it is inert
+  in every one.** One recorded call is often at a degenerate point — `slider_crank_
+  displacement` at top dead centre is zero for any crank radius, `sunset_hour_angle` at the
+  equinox is 90° at any latitude — and the parameter is read perfectly well a millimetre
+  away.
+- **Nudge by ±40%, not 1%.** A parameter that only matters in another branch (`web_thickness`
+  in `aisc_plate_girder_flange_stress` reaches the answer through k_c, which a *compact*
+  flange never consults) needs a nudge big enough to cross the branch. Take a refusal as a
+  reaction: an argument that a guard rejects is an argument that is read.
+
+Of the 11 survivors, ten are the same two shapes one layer down — a classification that a
+40% move does not reclassify, or a load combination the recorded case is not governed by.
+The one real finding: `bearing_fundamental_train_frequency` and `bearing_ball_spin_
+frequency` require a `number_of_rolling_elements` that neither formula contains. The cage
+turns at one rate and an element spins at one rate however many elements the bearing
+carries; the count is taken so that all four defect frequencies share one set of inputs and
+one validation. That is a good reason and it was written nowhere, so both docstrings now say
+it and a test pins it — the two ignore the count exactly while BPFO and BPFI scale with it.
+
+Note for the next run: `int` arguments need their own nudge. Scaling an `int` by 1.4 and
+rounding is what crosses a band; adding one almost never does, and a threshold parameter
+will report inert for that reason alone.
