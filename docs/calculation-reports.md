@@ -94,6 +94,11 @@ required-over-computed ratio, not simply the lowest safety factor. A check at 3.
 against a required 4.0 governs over one at 2.0 against a required 2.5, and the
 report says so, because that is the one that has to move first.
 
+Status comes first, though, in the card's own roll-up order: a failing check, then one that
+could not run, then an over-engineered one, then the ratio above. See
+[the governing check](repair-feedback.md#governing-check-and-governing-change) for the
+ordering in full, including the one rung where the tie-break inverts.
+
 ## What "screening" means
 
 Every number here comes from a closed-form handbook or code formula, evaluated

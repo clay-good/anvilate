@@ -615,13 +615,18 @@ class Scorecard(BaseModel):
     def governing(self) -> ScorecardEntry | None:
         """The check running closest to (or furthest past) its limit.
 
-        Blocking status outranks utilization, so the governing check honours the
-        same precedence as the roll-up in :attr:`status` — a failing check, then
-        one that could not run, then the largest
-        :attr:`ScorecardEntry.utilization`. Without that ordering a card can fail
-        on a check carrying no safety factor (every deflection and serviceability
-        check is built that way) and still name a *passing* check as governing,
-        pointing the reviewer away from the one thing that blocks.
+        Status outranks utilization, so the governing check honours the same
+        precedence as the roll-up in :attr:`status` — a failing check, then one that
+        could not run, then an over-engineered one, then the largest
+        :attr:`ScorecardEntry.utilization` among the ordinary passes. Without that
+        ordering a card can fail on a check carrying no safety factor (every
+        deflection and serviceability check is built that way) and still name a
+        *passing* check as governing, pointing the reviewer away from the one thing
+        that blocks.
+
+        Inside a rung it is the highest utilization, except on ``OVER_MARGIN``: the
+        limit being passed there is the top of a declared band, so furthest past it
+        is the *lowest* utilization and the most over-engineered check governs.
 
         ``None`` only when nothing blocks and no check carries a safety factor.
         """
