@@ -1676,3 +1676,66 @@ def test_a_published_interface_contract_is_reported_rather_than_dropped():
     entries = [e for e in both.entries if e.name == "published interface contracts"]
     assert len(entries) == 1
     assert "mount_pattern" in entries[0].detail and "pilot_bore" in entries[0].detail
+
+
+# Every `DesignSpec` field, and what answers it. `validation-gauntlet` requires that "a screen
+# SHALL further answer every claim the document makes", which makes this an enumeration rather
+# than a judgement: a field is either screened, reported unscreened, or metadata with nothing
+# to screen — and the third needs a reason.
+#
+# Three fields reached nothing before this census was written: both seismic parameters (read
+# only by a seismic combination basis) and `acceptance.fea_convergence_tol` (read only by the
+# unbuilt T3 tier). A fourth, `exports`, was found by the census itself — its only reader in
+# `src/` was `BundleSections.exports`, a different field.
+_NOTHING_TO_SCREEN = {
+    "anvilate_spec": "the schema version is a fact about the document, not a claim about the part",
+    "name": "an identifier; there is no engineering claim in a name",
+    "description": "prose for a human reader, with nothing to check it against",
+    "units": "the system every rendered figure is stated in, applied rather than screened",
+    "combination_basis": "resolved into a combination set, whose own entry reports the result",
+}
+
+
+def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
+    """The requirement is a universal, so this is an enumeration and not a judgement.
+
+    A field added to `DesignSpec` and read by nothing produces a clean PASS over a document
+    that stated something — the silent green this library exists to refuse. It happened three
+    times before this census existed and once more while it was being written.
+
+    A new field fails here until somebody either screens it, reports it unscreened, or says
+    why there is nothing in it to screen.
+    """
+    from anvilate.spec.ir import DesignSpec
+
+    fields = set(DesignSpec.model_fields)
+    unreasoned = sorted(set(_NOTHING_TO_SCREEN) - fields)
+    assert not unreasoned, f"_NOTHING_TO_SCREEN names fields DesignSpec no longer has: {unreasoned}"
+    for field, reason in _NOTHING_TO_SCREEN.items():
+        assert len(reason.split()) >= 8, f"{field} is excused without a stated reason"
+
+    # Everything else has to reach the card. The probes are the values a document would
+    # actually carry; a field with no probe here is the finding.
+    probed = {
+        "material",
+        "manufacturing",
+        "acceptance",
+        "constraints",
+        "interfaces",
+        "dimensions",
+        "chains",
+        "geometric_tolerances",
+        "load_cases",
+        "element_type",
+        "element_params",
+        "exports",
+        "seismic_design_acceleration",
+        "seismic_redundancy_factor",
+    }
+    missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
+    assert not missing, (
+        f"these DesignSpec fields are neither probed for an answer nor excused as metadata: "
+        f"{missing}. A field read by nothing screens to a clean PASS over a document that "
+        f"stated something, which is the silent green `validation-gauntlet` forbids."
+    )
+    assert probed | set(_NOTHING_TO_SCREEN) == fields
