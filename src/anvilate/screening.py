@@ -871,12 +871,26 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
             )
             continue
         resolved = resolver.has_component(interface.ref)
+        # The same provenance question the material entry asks, for the same reason: two of
+        # the eight tables behind `has_component` take extension records, and this line
+        # claimed "bundled" for anything any of them could find.
+        answer = getattr(resolver, "component_is_bundled", None)
+        source = answer(interface.ref) if callable(answer) else None
+        if source is True:
+            found = "resolves in the bundled component tables"
+        elif source is False:
+            found = (
+                "resolves as a team-local extension record, which overrides bundled data of "
+                "the same identifier — its dimensions are the team's, not this library's"
+            )
+        else:
+            found = "resolves in the component tables"
         entries.append(
             ScorecardEntry(
                 name=f"interface resolution: {interface.tag}",
                 status=CheckStatus.PASS if resolved else CheckStatus.FAIL,
                 detail=(
-                    f"{interface.ref} resolves in the bundled component tables"
+                    f"{interface.ref} {found}"
                     if resolved
                     else f"unknown standard component {interface.ref!r} — "
                     f"{_near_misses(interface.ref, resolver.known_components())}"

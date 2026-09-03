@@ -1815,3 +1815,57 @@ def test_a_team_local_material_is_not_reported_as_bundled_data():
     blind = material_line("WHATEVER", Blind())
     assert blind.endswith("resolves in the materials database"), blind
     assert "bundled" not in blind, blind
+
+
+def test_a_team_local_component_is_not_reported_as_bundled_data_either():
+    """The same false claim, one entry along, across eight tables.
+
+    `has_component` searches the components database, the bearing table and six others, and
+    the interface entry claimed "resolves in the bundled component tables" for anything any
+    of them could find. Two of the eight take extension records; the other six have no
+    extension mechanism, so a hit there is bundled by construction.
+    """
+    import yaml
+
+    from anvilate.spec.ir import StandardComponentInterface
+    from anvilate.standards.components import default_components_db
+    from anvilate.standards.resolver import StandardsResolver, default_standards_resolver
+
+    database = default_components_db()
+    record = database.get("NEMA23").model_dump(mode="json")
+    for derived in ("id", "bundled"):
+        record.pop(derived, None)
+    extended = database.extended(
+        yaml.safe_dump({"frames": {"ACME-INSERT-1": record}}, sort_keys=False)
+    )
+    base = default_standards_resolver()
+    resolver = StandardsResolver(
+        base._materials,
+        extended,
+        base._bearings,
+        base._dowels,
+        base._cap_screws,
+        base._washers,
+        base._hex_nuts,
+        base._hex_bolts,
+        base._extrusions,
+        base._extra_components,
+    )
+
+    # The question itself, over the three answers it has.
+    assert resolver.component_is_bundled("ACME-INSERT-1") is False
+    assert resolver.component_is_bundled("NEMA23") is True
+    assert resolver.component_is_bundled("6205") is True, "a bearing has no extension mechanism"
+    assert resolver.component_is_bundled("NOT-A-THING") is None
+
+    def interface_line(ref: str) -> str:
+        spec = _spec(
+            interfaces=[StandardComponentInterface(tag="motor", ref=ref)],
+        )
+        card = screen_spec(spec, resolver=resolver)
+        return next(e for e in card.entries if e.name.startswith("interface resolution")).detail
+
+    local = interface_line("ACME-INSERT-1")
+    assert "team-local extension record" in local, local
+    assert "bundled component tables" not in local, local
+    assert "resolves in the bundled component tables" in interface_line("NEMA23")

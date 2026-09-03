@@ -95,6 +95,23 @@ class StandardsResolver:
             or ref in self._extra_components
         )
 
+    def component_is_bundled(self, ref: str) -> bool | None:
+        """The same question for a component, across the eight tables that answer it.
+
+        Two of them take extension records — the components database and the bearing table —
+        and the interface entry claimed "resolves in the bundled component tables" for any
+        reference any of the eight could find, exactly as the material entry did. The other
+        six have no extension mechanism, so a hit there is bundled by construction, and a
+        reference known only to the seed set is too.
+        """
+        if self._components.has_component(ref):
+            return self._components.get(ref).bundled
+        if self._bearings.has_bearing(ref):
+            return self._bearings.get(ref).bundled
+        if not self.has_component(ref):
+            return None
+        return True
+
     def known_materials(self) -> list[str]:
         return self._materials.known_materials()
 
