@@ -82,8 +82,26 @@ band into any pack check.
 ## Governing check and governing change
 
 `Scorecard.governing()` returns the tightest check — the largest utilization
-(required ÷ computed), the one a reviewer reads first. Across a revalidation,
-`governing_shift(previous)` reports when the reference point moved:
+(required ÷ computed), the one a reviewer reads first.
+
+**It ranks by status before utilization, and the rungs are the card's own**: FAIL >
+NOT_EVALUATED > OVER_MARGIN > PASS. Over-margin used to sit on the passing rung, and it was
+the one rung that mattered, because an over-margin check has a *low* utilization by
+definition — that is what over-engineered means — so it lost the tie-break to every
+ordinary passing check. A card reading `OVER_MARGIN` named a `pass` check as governing:
+
+```text
+padeye: OVER_MARGIN
+  over_margin    padeye net tension ... exceeds target band 2.00–4.00 by 2.67
+  pass           padeye pin bearing
+  governing:     padeye pin bearing (pass)     # <- the one check that is not why
+```
+
+Inside the over-margin rung the tie-break inverts. The limit being passed there is the
+*top* of the band, so furthest past it is the lowest utilization: the most over-engineered
+check governs, not the least.
+
+Across a revalidation, `governing_shift(previous)` reports when the reference point moved:
 
 ```python
 shift = after.governing_shift(before)

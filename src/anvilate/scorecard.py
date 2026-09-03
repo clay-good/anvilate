@@ -51,15 +51,23 @@ class CheckStatus(StrEnum):
     NOT_EVALUATED = "not_evaluated"
 
 
-def _blocking_rank(status: CheckStatus) -> int:
-    """How much a status blocks, for ordering: failed > could-not-run > passed.
+def _status_rank(status: CheckStatus) -> int:
+    """A status's precedence, for ordering: failed > could-not-run > over-margin > passed.
 
-    Mirrors the precedence :attr:`Scorecard.status` rolls up with, so a ranking
-    built on it can never place a passing check above a blocking one.
+    Mirrors — completely — the precedence :attr:`Scorecard.status` rolls up with, so a
+    ranking built on it can never name a check whose status is milder than the card's.
+
+    ``OVER_MARGIN`` used to fall through to the passing rung, and it was the one rung that
+    mattered because an over-margin check has a LOW utilization by definition: it lost the
+    tie-break to every ordinary passing check, every time. A card reading `OVER_MARGIN`
+    named a `pass` check as governing and said nothing about the over-engineered one that
+    set its status.
     """
     if status is CheckStatus.FAIL:
-        return 2
+        return 3
     if status is CheckStatus.NOT_EVALUATED:
+        return 2
+    if status is CheckStatus.OVER_MARGIN:
         return 1
     return 0
 
@@ -613,10 +621,21 @@ class Scorecard(BaseModel):
 
         ``None`` only when nothing blocks and no check carries a safety factor.
         """
-        ranked = [e for e in self.entries if e.utilization is not None or _blocking_rank(e.status)]
+        ranked = [e for e in self.entries if e.utilization is not None or _status_rank(e.status)]
         if not ranked:
             return None
-        return max(ranked, key=lambda e: (_blocking_rank(e.status), e.utilization or 0.0))
+
+        def worst(entry: ScorecardEntry) -> tuple[int, float]:
+            # Within a rung, "closest to its limit" is the HIGHEST utilization — except on
+            # the over-margin rung, where the limit being passed is the top of the band and
+            # furthest past it is the LOWEST utilization. Ranks never mix under `max`, so
+            # inverting inside the one rung is safe.
+            utilization = entry.utilization or 0.0
+            if entry.status is CheckStatus.OVER_MARGIN:
+                return (_status_rank(entry.status), -utilization)
+            return (_status_rank(entry.status), utilization)
+
+        return max(ranked, key=worst)
 
     def governing_shift(self, previous: Scorecard) -> GoverningChange | None:
         """How the governing check moved since ``previous``, or ``None``.

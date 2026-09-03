@@ -361,6 +361,52 @@ def test_a_failing_check_outranks_a_check_that_could_not_run():
     assert with_pass.governing().name == "could not run"
 
 
+def test_an_over_margin_card_does_not_name_a_passing_check_as_governing():
+    """The rung that was missing, and the one that mattered.
+
+    `Scorecard.status` rolls up FAIL > NOT_EVALUATED > OVER_MARGIN > PASS. The ranking
+    behind `governing()` had three rungs, not four, so an over-margin check sat on the
+    passing rung and was separated from real passes by utilization alone — and an
+    over-margin check has a LOW utilization by definition, because that is what being
+    over-engineered means. It therefore lost to every ordinary passing check, every time.
+
+    Reachable from an ordinary document: a spec declaring `constraints.max_safety_factor`
+    has the band applied to every entry, and `anvilate check` printed
+
+        padeye: OVER_MARGIN
+          over_margin  padeye net tension ... over-engineered
+          pass         padeye pin bearing
+          governing:   padeye pin bearing (pass)
+
+    — a card naming, as the check to look at, the one check that is not why it says what
+    it says.
+    """
+    over = ScorecardEntry.from_safety_factor("net tension", computed=6.67, required=2.0, upper=4.0)
+    card = Scorecard(entries=(over, _sf("pin bearing", 2.4, 2.0)))
+    assert card.status is CheckStatus.OVER_MARGIN
+    assert card.governing().name == "net tension"
+    assert card.governing().status is CheckStatus.OVER_MARGIN
+
+    # And the rung sits BELOW the two blocking ones, not above them.
+    for blocking in (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED):
+        outranked = Scorecard(entries=(over, _entry("blocked", blocking)))
+        assert outranked.governing().name == "blocked"
+
+
+def test_the_most_over_engineered_check_governs_an_over_margin_card():
+    """Within the over-margin rung the tie-break inverts, because the limit being passed
+    is the top of the band: furthest past it is the LOWEST utilization, not the highest.
+
+    Taking the plain maximum would name the *least* over-engineered of the over-margin
+    checks — the one with the least to give back.
+    """
+    mild = ScorecardEntry.from_safety_factor("mild", computed=4.5, required=2.0, upper=4.0)
+    gross = ScorecardEntry.from_safety_factor("gross", computed=40.0, required=2.0, upper=4.0)
+    assert gross.utilization < mild.utilization
+    for entries in ((mild, gross), (gross, mild)):  # order must not decide it
+        assert Scorecard(entries=entries).governing().name == "gross"
+
+
 def test_governing_shift_reports_a_move_off_a_check_carrying_no_safety_factor():
     # governing() is deliberately widened so a blocking check with no safety factor can
     # govern; governing_shift fed that same None into a `float` field and raised a
