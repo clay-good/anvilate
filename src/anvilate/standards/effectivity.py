@@ -174,7 +174,7 @@ class EditionAgreement(StrEnum):
     MATCHES = "matches"
     DIFFERS = "differs"
     NOT_PINNED = "not pinned"
-    NOT_RECORDED = "not recorded"  # the library does not declare an edition for it
+    NOT_RECORDED = "not recorded"  # the citation itself names no edition to compare
 
 
 class Citation(BaseModel):
@@ -302,10 +302,15 @@ class DesignBasis(BaseModel):
     waivers: tuple[MixedEditionWaiver, ...] = ()
 
     def agreement(self, citation: Citation | None) -> EditionAgreement:
-        """How ``citation`` stands against this basis and against the library.
+        """How ``citation`` stands against this basis.
 
         ``None`` — a reference that names no edition — is :attr:`EditionAgreement.NOT_RECORDED`:
         there is nothing to agree or disagree with, which is precisely the problem.
+
+        This reads the project's pins only. What the *library* was written against is
+        :data:`WRITTEN_AGAINST`, and it is a different question with a different answer —
+        :func:`design_basis_scorecard` asks both, because a pin no citation in the bundle
+        matches is still a declaration the library can answer.
         """
         if citation is None:
             return EditionAgreement.NOT_RECORDED
@@ -388,6 +393,25 @@ def design_basis_scorecard(
     citations = [parse_citation(text) for text in references]
     editionless = [text for text, c in zip(references, citations, strict=True) if c is None]
     conflicts = basis.conflicts(citations)
+
+    # A pin is a declaration, and a declaration nothing reads is the silent green this
+    # library refuses. Two things can answer one: a citation this bundle carries, or the
+    # library's own WRITTEN_AGAINST. A pin no citation matched is NOT unanswerable — the
+    # library still knows which edition its checks were written to, and a project pinning
+    # ASCE 7-16 against load combinations written to ASCE 7-22 must hear about it whether
+    # or not this particular bundle happens to cite ASCE 7.
+    cited_standards = {c.standard for c in citations if c is not None}
+    uncited_pins = {s: e for s, e in basis.pins.items() if s not in cited_standards}
+    against_library = sorted(
+        f"{standard}-{edition} is pinned while this library's checks are written "
+        f"against {standard}-{WRITTEN_AGAINST[standard]}"
+        for standard, edition in uncited_pins.items()
+        if standard in WRITTEN_AGAINST and WRITTEN_AGAINST[standard] != edition
+    )
+    # What is left is a pin naming a designation nothing in this bundle cites and this
+    # library does not declare — most often a spelling that cannot match ("AISC-360" for
+    # "AISC 360"). It screens against nothing, so the card may not say it passed.
+    unread_pins = sorted(s for s in uncited_pins if s not in WRITTEN_AGAINST)
     differing = sorted(
         {
             f"{c.standard}-{c.edition} against the pinned {basis.pins[c.standard]}"
@@ -397,6 +421,8 @@ def design_basis_scorecard(
     )
 
     detail_parts: list[str] = []
+    if against_library:
+        detail_parts.append("; ".join(against_library))
     if differing:
         detail_parts.append(
             "cited at an edition other than the pinned one: " + "; ".join(differing)
@@ -434,6 +460,28 @@ def design_basis_scorecard(
                 f"not evaluated — {len(editionless)} of {len(references)} references name no "
                 f"edition, so they cannot be checked against a design basis: {shown}{more}. "
                 f"An unversioned clause identifies a paragraph in a book nobody named."
+            ),
+            reference="standards effectivity",
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "a consistency verdict over the citations a bundle carries — every "
+                    "reference names an edition, and no standard appears at two. No quantity "
+                    "is calculated"
+                ),
+            ),
+        )
+    if unread_pins:
+        known = sorted(cited_standards | set(WRITTEN_AGAINST))
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — {len(unread_pins)} pinned "
+                f"{'standard is' if len(unread_pins) == 1 else 'standards are'} named by no "
+                f"citation in this bundle and not declared by this library, so the basis was "
+                f"screened against nothing: {', '.join(repr(s) for s in unread_pins)}. "
+                f"Designations available to pin: {', '.join(known)}"
             ),
             reference="standards effectivity",
             underived=Underived(

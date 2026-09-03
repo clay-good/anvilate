@@ -41,6 +41,34 @@ A reference at an edition *other than the pinned one* is **reported, not failed*
 project may deliberately assess an existing structure under the code it was designed to,
 and the basis is what says which is which.
 
+## A pin nothing reads is not a pass
+
+The screen used to answer a pin only off the citations in front of it. So a project that
+pins `ASCE 7-16` — while this library's load combinations are written to ASCE 7-22 — got
+a clean `pass` and no mention of either edition, as long as the bundle in hand happened
+to carry no ASCE citation. The pin was accepted and read by nothing.
+
+Two things can answer a pin, and the screen now asks both:
+
+| The pin | Answered by | Result |
+| --- | --- | --- |
+| a designation this bundle cites | the citation | reported when the editions differ |
+| a designation `WRITTEN_AGAINST` declares | this repository | reported when the editions differ |
+| neither | nothing | `NOT_EVALUATED`, naming what *is* available to pin |
+
+```
+pins {"AISC 360": "16", "ASCE 7": "16"}   pass    ASCE 7-16 is pinned while this library's
+                                                  checks are written against ASCE 7-22
+pins {"AISC-360": "16"}                   n/e     not evaluated — 1 pinned standard is named
+                                                  by no citation in this bundle and not
+                                                  declared by this library ... Designations
+                                                  available to pin: ACI 318, AISC 360, ...
+```
+
+That third row is the misspelling case, and it is the likeliest one: `"AISC-360"` is an
+exact-match miss against `AISC 360`, and screening a basis against nothing must not read
+as agreement. The refusal names the near misses, the way every retrieval refusal here does.
+
 ## An editionless reference is NOT_EVALUATED, never a pass
 
 A clause with no edition cannot be checked against a basis at all. Reporting only the

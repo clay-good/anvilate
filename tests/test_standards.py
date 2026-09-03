@@ -1496,6 +1496,78 @@ def test_a_pinned_edition_the_library_did_not_write_against_is_reported_not_fail
     assert "AISC 360-16 against the pinned 22" in entry.detail
 
 
+def test_a_pin_no_citation_matches_is_still_answered_by_the_library():
+    """WRITTEN_AGAINST is the other half of the question, and it was wired to nothing.
+
+    A steel project that designs to ASCE 7-16 pins it. This library's load combinations
+    are written to ASCE 7-22. If the bundle in hand happens to carry no ASCE citation,
+    the old card said PASS and mentioned neither edition — the pin was accepted and read
+    by nothing, which is the silent green the whole library exists to refuse. The fact
+    that answers it is a fact about the repository, not about this bundle's references.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import WRITTEN_AGAINST, DesignBasis, design_basis_scorecard
+
+    assert WRITTEN_AGAINST["ASCE 7"] == "22"
+    steel_only = ["AISC 360-16 §F2.1", "AISC 360-16 §H1.1"]
+
+    entry = design_basis_scorecard(
+        "bundle",
+        basis=DesignBasis(pins={"AISC 360": "16", "ASCE 7": "16"}),
+        references=steel_only,
+    )
+    assert entry.status is CheckStatus.PASS
+    assert "ASCE 7-16 is pinned while this library's checks are written against ASCE 7-22" in (
+        entry.detail
+    )
+
+    # A pin that agrees with the library is answered too, and has nothing to report.
+    agrees = design_basis_scorecard(
+        "bundle",
+        basis=DesignBasis(pins={"AISC 360": "16", "ASCE 7": "22"}),
+        references=steel_only,
+    )
+    assert agrees.status is CheckStatus.PASS
+    assert "ASCE 7" not in agrees.detail
+
+    # And a pin the bundle DOES cite is reported once, off the citation, not twice.
+    cited = design_basis_scorecard(
+        "bundle",
+        basis=DesignBasis(pins={"AISC 360": "22"}),
+        references=steel_only,
+    )
+    assert cited.detail.count("AISC 360") == 1
+    assert "written against" not in cited.detail
+
+
+def test_a_pin_nothing_can_read_is_not_evaluated_and_names_the_near_misses():
+    """A designation no citation carries and this library does not declare screens against
+    nothing, and the commonest cause is a spelling that cannot match. Refusing it names
+    what is available, the way every other retrieval refusal here does."""
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import DesignBasis, design_basis_scorecard
+
+    entry = design_basis_scorecard(
+        "bundle",
+        basis=DesignBasis(pins={"AISC-360": "16"}),
+        references=["AISC 360-16 §F2.1"],
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "screened against nothing" in entry.detail
+    assert "'AISC-360'" in entry.detail
+    # The near misses: the designations this bundle cites plus the ones the library declares.
+    assert "AISC 360" in entry.detail
+    assert "Aluminum Design Manual" in entry.detail
+
+    # A pin naming a standard the bundle cites is read, and does not reach this branch.
+    read = design_basis_scorecard(
+        "bundle",
+        basis=DesignBasis(pins={"AISC 360": "16"}),
+        references=["AISC 360-16 §F2.1"],
+    )
+    assert read.status is CheckStatus.PASS
+
+
 def test_the_library_declares_the_editions_it_was_actually_written_against():
     """WRITTEN_AGAINST is a fact about this repository, and the source has to agree.
 
