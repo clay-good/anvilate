@@ -173,6 +173,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Unit fidelity, over every entry the suite built rather than over a corpus somebody
     # listed. It fires on positive evidence — a line that carries a unit it should not — so
     # a filtered run checks the subset it reached and is never wrong about it.
+    unglossed, glossed = _derivations_with_an_unglossed_symbol()
+    if unglossed:
+        print(
+            "\nSYMBOL GLOSSARY: these derivations use a symbol they do not define, so the "
+            "report renders them as a table of inputs instead of the worked calculation "
+            "`calculation-report` requires:\n  " + "\n  ".join(unglossed[:20])
+        )
+        session.exitstatus = 1
+        return
+
     # Positive evidence — it reports the lines that DO say a forbidden thing — so a
     # filtered run checks the subset it reached and is never wrong about it. The floor
     # that keeps it from passing on an empty set reads an absence, so it waits for a full
@@ -673,6 +683,37 @@ def _assurance_language_lines() -> tuple[list[str], int]:
                 seen.add(key)
                 offenders.append(f"{entry.name} {what} says {phrase!r}: {text}")
     return sorted(offenders), swept
+
+
+# ---------------------------------------------------------------------------
+# The symbol glossary, over every derivation the suite builds.
+#
+# `calculation-report` requires that a derivation "carry the check's citation … and a glossary
+# line for **every symbol used**". `Derivation.unresolved_symbols` is the library's own
+# scanner for that, and its docstring says what happens when it is non-empty: "the report
+# refuses to render such a derivation as worked". So an unglossed symbol does not fail — the
+# worked calculation quietly degrades to a table of inputs and outputs, which is the
+# derivation-shaped version of a check that reports without saying it could not run.
+#
+# One hand-built derivation was gated for a universal requirement. This is the corpus.
+# ---------------------------------------------------------------------------
+
+
+def _derivations_with_an_unglossed_symbol() -> tuple[list[str], int]:
+    """Offending derivations, and how many carried a formula to check."""
+    offenders: list[str] = []
+    checked = 0
+    for entry in _library_entries.values():
+        derivation = entry.derivation
+        if derivation is None or not derivation.symbolic:
+            continue
+        checked += 1
+        missing = derivation.unresolved_symbols()
+        if missing:
+            offenders.append(
+                f"{entry.name}: {derivation.symbolic} leaves {list(missing)} unglossed"
+            )
+    return sorted(set(offenders)), checked
 
 
 def _editionless_manifest() -> set[str]:
