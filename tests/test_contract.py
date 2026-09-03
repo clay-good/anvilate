@@ -3560,3 +3560,92 @@ def test_the_library_runs_nothing_it_reads():
         "these give the package a way to run what it reads. If one of them is deliberate, "
         f"it belongs in a diff with SECURITY.md updated in the same commit: {offenders}"
     )
+
+
+def test_a_dimension_guard_enforces_the_dimension_its_message_names():
+    """The refusal and the comparison behind it name the same dimension.
+
+    Sibling of the interval gate in `tests/test_fraction_guards.py`, and the severity is
+    different in a way worth stating: a wrong *bound* accepts bad input silently, while a
+    wrong dimension *message* still refuses — it just sends the caller to fix the wrong
+    thing. In a library whose refusals are a feature ("a refusal names the near misses"),
+    `flow_rate must be a [pressure] quantity` over a check enforcing volumetric flow is a
+    dead end for the person reading it.
+
+    Two shapes are checked. Where the condition names a dimension it must be the one the
+    message names. Where the condition is an `isinstance(x, Quantity)` test whose message
+    *previews* the dimension — 178 of them, and a legitimate pattern, because "not a
+    Quantity at all" and "a Quantity of the wrong dimension" deserve different sentences —
+    the preview is paired with the `has_dimension` check on the same variable in the same
+    function, and those must agree too.
+    """
+    import ast
+
+    # Spacing is not meaning: the library writes `[length] ** 3` in a `has_dimension` call
+    # and `[length]**3` in the sentence beside it, and both are the same dimension. The
+    # pattern therefore allows the spaces and `flat()` removes them before comparing —
+    # without that, every exponent read as a bare `[length]` and this gate reported its own
+    # spacing as a library defect.
+    dimension = re.compile(
+        r"\[[a-z_]+\](?:\s*\*\*\s*\d+)?(?:\s*[/*]\s*\[[a-z_]+\](?:\s*\*\*\s*\d+)?)?"
+    )
+    src_root = Path(__file__).resolve().parent.parent / "src" / "anvilate"
+
+    def flat(text: str) -> str:
+        return re.sub(r"\s+", "", text)
+
+    direct = 0
+    paired = 0
+    wrong: list[str] = []
+    for path in sorted(src_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        where = str(path.relative_to(src_root))
+        for function in ast.walk(tree):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            nodes = [n for n in ast.walk(function) if isinstance(n, ast.If)]
+            for node in nodes:
+                raises = [s for s in node.body if isinstance(s, ast.Raise)]
+                if not raises:
+                    continue
+                message = " ".join((ast.get_source_segment(source, raises[0]) or "").split())
+                stated = dimension.findall(message)
+                if not stated:
+                    continue
+                condition = " ".join((ast.get_source_segment(source, node.test) or "").split())
+                enforced = dimension.findall(condition)
+                if enforced:
+                    direct += 1
+                    if flat(stated[0]) not in {flat(found) for found in enforced}:
+                        wrong.append(
+                            f"{where}:{raises[0].lineno} says {stated[0]!r} and its condition "
+                            f"tests {enforced}"
+                        )
+                    continue
+                guarded = re.search(r"isinstance\(\s*([\w.]+)", condition)
+                if guarded is None:
+                    continue
+                variable = guarded.group(1)
+                elsewhere: list[str] = []
+                for other in nodes:
+                    text = " ".join((ast.get_source_segment(source, other.test) or "").split())
+                    if variable in text and ("has_dimension" in text or "dimensionality" in text):
+                        elsewhere += dimension.findall(text)
+                if not elsewhere:
+                    continue
+                paired += 1
+                if flat(stated[0]) not in {flat(found) for found in elsewhere}:
+                    wrong.append(
+                        f"{where}:{raises[0].lineno} previews {stated[0]!r} for {variable} and "
+                        f"the dimension check on it enforces {elsewhere}"
+                    )
+
+    assert not wrong, (
+        "these refusals name a dimension their own guard does not enforce, so a caller "
+        "reading one is told to fix something else:\n  " + "\n  ".join(wrong)
+    )
+    assert direct >= 150 and paired >= 150, (
+        f"only {direct} direct and {paired} previewed dimension guards were read; the "
+        "message wording moved and this gate is checking a fraction of the library"
+    )
