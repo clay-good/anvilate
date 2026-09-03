@@ -53,6 +53,15 @@ to notice missing.) No-silent-green is a property of the interchange file too, o
 never a property at all — and it does not stop being a silent green because it happened
 during a format conversion.
 
+This is checked over the corpus rather than over one example. The suite collects every
+scorecard entry the library builds on a full run — 5,980 of them — and sorts them into the
+32 shapes this mapping distinguishes: the status, whether there is a value and whether it
+is finite, whether there is a requirement and a band to write it against, and which of the
+optional records the entry carries. One representative of each is exported as a single
+document, and every one has to come back with its own name and its own status. What it
+replaced checked that five hand-written entries crossed, which is true of those five and
+says nothing about the shapes a check actually produces.
+
 **A verdict-only check gets QIF's attribute gauge, not an invented number.** Tip deflection
 has no safety factor behind it, so there is no numeric nominal to write. It crosses as a
 `UserDefinedAttributeCharacteristicNominal` (with its matching `…Definition`, `…Item`, and

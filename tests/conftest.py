@@ -228,6 +228,18 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # raised `AttributeError: 'Namespace' object has no attribute 'lf'` out of this hook and
     # reported a crash where the run had actually passed. A ratchet that crashes on a
     # supported way of running the suite is worse than one that skips.
+    # Every entry shape this run collected has to survive the QIF export as itself. A
+    # positive fact about what was reached, so a filtered run checks its own subset.
+    uncrossed = _uncrossed_shapes()
+    if uncrossed:
+        print(
+            "\nQIF CROSSING: an entry shape the library builds did not cross the export as "
+            "itself, so a check a reader is owed is missing from the document or is under "
+            "the wrong status:\n  " + "\n  ".join(uncrossed)
+        )
+        session.exitstatus = 1
+        return
+
     option = session.config.option
     filtered = bool(
         getattr(option, "keyword", None)
@@ -253,6 +265,18 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         print(
             f"\nASSURANCE LANGUAGE: only {assurance_swept} rendered texts were swept, so "
             f"this gate is passing on an all but empty set"
+        )
+        session.exitstatus = 1
+        return
+
+    # And the floor under it: the shape key is what makes one document stand for 5,980
+    # entries, so a key that stopped distinguishing anything would collapse the sweep to a
+    # handful of representatives without failing. A full run reaches 32.
+    shapes = len(_export_shapes())
+    if shapes < 25:
+        print(
+            f"\nQIF CROSSING: the library's entries fell into only {shapes} export shapes, "
+            f"so this sweep is standing for the corpus on an all but empty set"
         )
         session.exitstatus = 1
         return
@@ -308,6 +332,127 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "them:\n  " + "\n  ".join(stale)
         )
         session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# The QIF crossing sweep.
+#
+# `artifact-export` requires that checks which were not evaluated "SHALL be represented as
+# unevaluated characteristics, never omitted". What enforced it was a set-equality over the
+# five entries one fixture hand-builds — which proves those five cross, and cannot see an
+# entry shape the library actually produces going missing or crossing with the wrong word.
+#
+# The library builds 5,980 entries on a full run and they fall into 32 shapes the export
+# distinguishes, so exporting one representative of each is the whole corpus at the cost of
+# a single document — seven milliseconds, measured. The sweep reads a POSITIVE fact —
+# every shape collected crossed — so a
+# filtered run checks the subset it reached and is never wrong about it. The floor on the
+# shape count is the absence-reading half, and only a full run may act on it.
+# ---------------------------------------------------------------------------
+
+
+def _export_shapes() -> dict[tuple[object, ...], object]:
+    """One representative library entry per shape the QIF mapping distinguishes.
+
+    The key is what the export branches on: the status it maps, whether there is a value to
+    write and whether it is finite, whether there is a requirement and a band to write it
+    against, how it compares, and which of the optional records the mapping carries across
+    the entry is holding.
+    """
+    from math import isfinite
+
+    shapes: dict[tuple[object, ...], object] = {}
+    for entry in _library_entries.values():
+        factor = entry.safety_factor
+        key = (
+            entry.status,
+            factor is None,
+            factor is not None and not isfinite(factor),
+            entry.required_safety_factor is None,
+            entry.upper_safety_factor is None,
+            entry.comparison is None,
+            not entry.detail,
+            entry.uncertainty is None,
+            entry.repair_hint is None,
+            entry.derivation is None,
+            entry.underived is None,
+            bool(entry.reference),
+        )
+        shapes.setdefault(key, entry)
+    return shapes
+
+
+def _uncrossed_shapes() -> list[str]:
+    """Shapes whose representative did not cross the export as itself.
+
+    Returns a complaint per shape that was dropped from the characteristic list or landed
+    under a status other than the one the mapping declares for it.
+    """
+    import xml.etree.ElementTree as ET
+
+    from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
+    from anvilate.bundle import BundleSections
+    from anvilate.export.gate import authorize_export
+    from anvilate.export.qif import QIF_NAMESPACE, export_qif_results
+    from anvilate.scorecard import CheckStatus, Scorecard
+
+    # Spelled out here rather than read from the export's own `_CHARACTERISTIC_STATUS`. A
+    # gate that computes what it expects from the constant it is checking moves both sides
+    # of its own comparison: mapping NOT_EVALUATED to PASS — the precise thing this
+    # requirement forbids — passed such a gate silently. This is the reference, so drift
+    # against it is a failure and not a coincidence.
+    in_qif = {
+        CheckStatus.PASS: "PASS",
+        CheckStatus.OVER_MARGIN: "PASS",  # QIF has no "passed too well"; the finding is prose
+        CheckStatus.FAIL: "FAIL",
+        CheckStatus.NOT_EVALUATED: "NOT_ANALYZED",
+    }
+
+    shapes = _export_shapes()
+    if not shapes:
+        return []
+    entries = tuple(shapes.values())
+    card = Scorecard(entries=entries)
+    sections = BundleSections(scorecard=card)
+    document = export_qif_results(
+        sections,
+        part_name="every-shape-the-library-builds",
+        spec_digest="sha256:" + "0" * 64,
+        bom=EnvironmentBOM(
+            application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
+            components=(),
+        ),
+        authorization=authorize_export(card, override=not card.passed),
+    )
+    ns = {"q": QIF_NAMESPACE}
+    root = ET.fromstring(document)
+    # Read it back the way a quality package would: from the measurement, which is where
+    # the status lives, keyed to its characteristic item by id.
+    names = {
+        item.get("id"): item.findtext("q:Name", namespaces=ns)
+        for item in root.findall("./q:Characteristics/q:CharacteristicItems/*", ns)
+    }
+    crossed: list[tuple[str | None, str | None]] = [
+        (
+            names.get(measurement.findtext("q:CharacteristicItemId", namespaces=ns)),
+            measurement.findtext("q:Status/q:CharacteristicStatusEnum", namespaces=ns),
+        )
+        for measurement in root.findall(
+            "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+            "/q:MeasuredCharacteristics/q:CharacteristicMeasurements/*",
+            ns,
+        )
+    ]
+    # Names are disambiguated on collision, so counting statuses is what compares: two
+    # entries of one shape must not become one characteristic.
+    wanted = sorted(in_qif[entry.status] for entry in entries)
+    got = sorted(status for _, status in crossed if status is not None)
+    if wanted == got and len(crossed) == len(entries):
+        return []
+    return [
+        f"{len(entries)} shapes exported as {len(crossed)} characteristics; "
+        f"expected statuses {wanted} but the document carries {got}"
+    ]
 
 
 # ---------------------------------------------------------------------------
