@@ -401,7 +401,15 @@ called with a bad value, and the radiation case passed its slip as `emissivity_1
 `emissivity_2` guard two lines down returned before it could refuse anything. All eight were
 correct. They are cases now, because an unrun guard is an unevaluated comparison and an
 inverted one reads exactly like a correct one. If you add a bounded parameter to a function
-that already has a sibling guard, add the case too: the census will not tell you. **5 parameters are exempt**, each with
+that already has a sibling guard, add the case too: the census will not tell you.
+
+**And the message has to enforce what it says.** A refusal test cannot see the difference
+between `(0, 1]` and `[0, 1]`: both refuse 85, and only one refuses a zero efficiency. So a
+third gate reads every guard whose message names a closed interval — 240 of them — and
+requires the comparison above it to accept exactly that set. It needs no fixture, it covers
+the 32 interval guards no test reaches, and it is the check that catches an off-by-one bound
+or an inverted chain, neither of which a call-and-refuse test can distinguish from a correct
+guard. Two guards are compound rather than bare chains and are exempt with their reasons. **5 parameters are exempt**, each with
 the reason its name lies about its range: a spectral efficiency is bits per second per
 hertz, a molar absorptivity (in two functions) is tens of thousands, a heat pump's
 seasonal efficiency is its COP of 3 to 4, and excess air routinely runs past 100%. An exemption that turns out to be

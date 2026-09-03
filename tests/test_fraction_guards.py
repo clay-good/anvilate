@@ -698,3 +698,165 @@ def test_the_contributing_page_states_this_files_own_counts() -> None:
         "the page counts the parameters whose name lies about its range; the duty-cycle "
         "entry is a sequence rather than a name that lies, and the page says so separately"
     )
+
+
+# --------------------------------------------------------------------------------------
+# The bound a guard STATES, against the bound it ENFORCES.
+#
+# The cases above trip 40 guards one at a time, and a line-trace says the library has 240
+# whose message names a closed interval. Writing a case for each is not the answer — most
+# would need a fixture just to reach the guard, and the risk they carry is not "does it
+# refuse" but "does it refuse the right set". An inverted comparison and an off-by-one
+# bound both read exactly like a correct one, and both would sail past a refusal test.
+#
+# So the property is checked directly and totally: `must be in (0, 1]` has to sit above
+# `if not 0 < x <= 1`. It covers every interval guard including the 32 no test reaches, it
+# needs no fixtures, and it is the check that would have caught the AISC J2.4 weld-shear
+# bound that was guarded below and not above.
+# --------------------------------------------------------------------------------------
+
+_INTERVAL_IN_A_MESSAGE = re.compile(
+    r"must (?:lie in|be in)\s*([\[(])\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*([\])])"
+)
+_INCLUSIVE = {ast.LtE: True, ast.Lt: False}
+
+# Guards whose condition is not a bare `not lo < x < hi` chain, each with the reason. Two,
+# and both are compound rather than wrong.
+_NOT_A_BARE_CHAIN = {
+    ("analysis/embodied_carbon.py", "band_low"): (
+        "one condition orders three values — band_low, the central 1.0 and band_high — so "
+        "the interval is half of a wider well-formedness check"
+    ),
+    ("analysis/fracture.py", "poisson_ratio"): (
+        "the bound applies only under plane strain, so the chain is behind an `and` and the "
+        "guard is deliberately not reached in plane stress"
+    ),
+}
+
+
+def _stated_interval(message: str) -> tuple[float, bool, float, bool] | None:
+    found = _INTERVAL_IN_A_MESSAGE.search(message)
+    if found is None:
+        return None
+    return (
+        float(found.group(2)),
+        found.group(1) == "[",
+        float(found.group(3)),
+        found.group(4) == "]",
+    )
+
+
+def _literal(node: ast.expr) -> float | None:
+    """A float constant, including a negated one — `-1.0` is a UnaryOp, not a Constant."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = _literal(node.operand)
+        return None if inner is None else -inner
+    return None
+
+
+def _enforced_interval(test: ast.expr) -> tuple[float, bool, float, bool] | None:
+    """The interval a `if not lo < x <= hi:` guard ACCEPTS, or None if it is not that shape."""
+    if not (isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)):
+        return None
+    chain = test.operand
+    if not isinstance(chain, ast.Compare) or len(chain.ops) != 2:
+        return None
+    if not all(isinstance(op, (ast.Lt, ast.LtE)) for op in chain.ops):
+        return None
+    low, high = _literal(chain.left), _literal(chain.comparators[1])
+    if low is None or high is None:
+        return None
+    return (low, _INCLUSIVE[type(chain.ops[0])], high, _INCLUSIVE[type(chain.ops[1])])
+
+
+def _interval_guards() -> list[tuple[str, int, str, ast.If, ast.Raise]]:
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "anvilate"
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for parent in ast.walk(tree):
+            for node in ast.iter_child_nodes(parent):
+                if not isinstance(node, ast.If):
+                    continue
+                for statement in node.body:
+                    if not isinstance(statement, ast.Raise):
+                        continue
+                    message = " ".join((ast.get_source_segment(source, statement) or "").split())
+                    if _INTERVAL_IN_A_MESSAGE.search(message) is None:
+                        continue
+                    found.append(
+                        (str(path.relative_to(root)), statement.lineno, message, node, statement)
+                    )
+    return found
+
+
+def test_every_guard_enforces_the_interval_its_own_message_states() -> None:
+    """`must be in (0, 1]` sits above `if not 0 < x <= 1`, and nothing else.
+
+    A refusal test cannot see this. A guard written `not 0 <= x <= 1` under a message
+    saying `(0, 1]` refuses 85 exactly as well as the correct one does, and accepts 0 —
+    a zero efficiency, a zero joint efficiency, a zero discharge coefficient — which is
+    the case the open bound exists to exclude. Same for an inverted chain: it refuses
+    everything, which passes a refusal test and fails every real call.
+    """
+    guards = _interval_guards()
+    assert len(guards) >= 200, (
+        f"only {len(guards)} interval guards were found; the message wording moved and this "
+        "gate is reading a fraction of the library"
+    )
+
+    wrong: list[str] = []
+    unparsed: list[str] = []
+    for module, line, message, node, _statement in guards:
+        stated = _stated_interval(message)
+        enforced = _enforced_interval(node.test)
+        if enforced is None:
+            unparsed.append(f"{module}:{line} — {message[:90]}")
+            continue
+        if enforced != stated:
+            wrong.append(
+                f"{module}:{line} states {message[:70]!r} and its condition accepts "
+                f"{enforced} rather than {stated}"
+            )
+
+    assert not wrong, (
+        "these guards do not enforce the interval they name. The message and the "
+        "comparison have to say the same thing — a reader trusts the message and the "
+        "caller gets the comparison:\n  " + "\n  ".join(wrong)
+    )
+    excused = {
+        f"{module}"
+        for module, _line, message, _node, _statement in guards
+        for (excused_module, parameter), _reason in _NOT_A_BARE_CHAIN.items()
+        if module == excused_module and parameter in message
+    }
+    for entry in unparsed:
+        module = entry.split(":", 1)[0]
+        assert module in excused, (
+            f"{entry} names an interval and its condition is not a bare comparison chain, "
+            "so nothing here checks that the two agree. Rewrite it as `if not lo < x <= hi:` "
+            "or add it to _NOT_A_BARE_CHAIN with the reason it cannot be."
+        )
+
+
+def test_the_compound_guard_exemptions_are_current_and_reasoned() -> None:
+    """An exemption whose guard has since become a bare chain is a stale line."""
+    guards = _interval_guards()
+    for (module, parameter), reason in _NOT_A_BARE_CHAIN.items():
+        assert len(reason.split()) >= 8, f"{module}/{parameter} is exempt for no stated reason"
+        matching = [
+            node
+            for found_module, _line, message, node, _statement in guards
+            if found_module == module and parameter in message
+        ]
+        assert matching, (
+            f"_NOT_A_BARE_CHAIN names {module}/{parameter}, which no longer has an interval "
+            "guard; strike the exemption"
+        )
+        assert all(_enforced_interval(node.test) is None for node in matching), (
+            f"{module}/{parameter} is a bare comparison chain now and the gate can read it; "
+            "strike the exemption so it is checked like the rest"
+        )
