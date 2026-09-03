@@ -716,3 +716,128 @@ def test_the_root_community_files_point_at_pages_that_exist():
             f"CONTRIBUTING.md tells a contributor to run {command!r} and CI does not, so the "
             "guide and the gate have parted company"
         )
+
+
+# Figures a README example row quotes that the example does not print, each with the
+# derivation that makes it a fact about the run rather than a number somebody typed. A row
+# may cite an input or a one-step consequence — that is good writing, not a gap — but it may
+# not do so silently, which is the whole reason this file exists.
+#
+# Add a line ONLY after computing the figure. Do not add one to silence a failure: the
+# failure means the front page states a result the example does not produce, and that is the
+# defect this gate was written to find. It found one on its first run — a row calling a
+# measurement "consistent with an in-tolerance shaft" where the screen reports 74.8% of
+# samples falling short and 25% consistent, which is the opposite emphasis.
+_DERIVED_IN_A_README_ROW: dict[tuple[str, str], str] = {
+    ("aluminum_ladder_rail.py", "0.85"): "the ADM §E.3 out-of-straightness factor itself",
+    ("aluminum_ladder_rail.py", "17.6"): "1/0.85 - 1 = 17.6%, the overstatement if it is dropped",
+    ("spreader_beam_bth1_category.py", "124.0"): "F_y/N_d = 248 MPa / 2.00, Category A bending",
+    ("spreader_beam_bth1_category.py", "82.7"): "F_y/N_d = 248 MPa / 3.00 = 82.67, Category B",
+    ("bracket_reviewer_dossier.py", "3.0"): "the bending entry's computed safety factor",
+    ("bracket_redesign_embodied_carbon.py", "34.3"): "12 kg / 0.35 yield = 34.29 kg of billet",
+}
+
+
+def _readme_example_rows() -> list[tuple[str, str]]:
+    """Each README table row that names an example, as (example filename, description)."""
+    rows = []
+    for line in (_REPO / "README.md").read_text(encoding="utf-8").splitlines():
+        if not line.startswith("| `") or ".py`" not in line:
+            continue
+        match = re.search(r"`([\w./]+\.py)`", line)
+        if match is None:  # pragma: no cover - every row of this shape names a file
+            continue
+        rows.append((Path(match.group(1)).name, line.split("|", 2)[2]))
+    return rows
+
+
+def test_every_number_the_readme_quotes_from_an_example_is_one_the_example_produces():
+    """The front page describes 59 examples, and it described them from memory.
+
+    `tests/test_examples.py` already holds an example's own docstring to what the example
+    computes — a figure that appears only in prose is a result with no gate. The README rows
+    are the same prose about the same runs, living in another file, and nothing read them:
+    of the figures quoted there, exactly one was covered by any test.
+
+    Matched with the rounding the figure itself declares, so a row may quote 87.4 for a
+    printed 87.38. A figure the example does not print at all must be in
+    `_DERIVED_IN_A_README_ROW` with its derivation.
+    """
+    import contextlib
+    import io
+    import runpy
+
+    examples = _REPO / "examples"
+    quoted = re.compile(r"(?<![\w.§])(\d+\.\d+)(?![\w.])")
+    rows = _readme_example_rows()
+    assert len(rows) >= 50, (
+        f"only {len(rows)} example rows were found; the table's shape changed and this gate "
+        "is reading almost nothing"
+    )
+
+    unbacked: list[str] = []
+    checked: set[tuple[str, str]] = set()
+    for name, description in rows:
+        path = examples / name
+        assert path.exists(), f"the README names {name}, which is not in examples/"
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            namespace = runpy.run_path(str(path))
+            # `runpy` leaves an `if __name__ == "__main__"` guard unfired, so the figures
+            # printed inside `main()` — which is most of them — never reach the buffer
+            # unless it is called. Getting this wrong makes the gate pass on empty output.
+            if callable(namespace.get("main")):
+                namespace["main"]()
+        printed = [
+            float(token)
+            for token in re.findall(r"-?\d+(?:\.\d+)?", buffer.getvalue().replace(",", ""))
+        ]
+        assert printed, f"{name} printed no numbers, so this row is checked against nothing"
+        for figure in quoted.findall(description):
+            checked.add((name, figure))
+            tolerance = 0.5 * 10 ** -len(figure.partition(".")[2])
+            if any(abs(float(figure) - value) <= tolerance * (1 + 1e-9) for value in printed):
+                continue
+            if (name, figure) in _DERIVED_IN_A_README_ROW:
+                continue
+            unbacked.append(
+                f"{name}: the README quotes {figure} and the run produces no such value"
+            )
+
+    assert not unbacked, (
+        "these front-page figures are not what the examples produce. Correct the README, or "
+        "— if the figure is an input or a one-step consequence — record its derivation in "
+        "_DERIVED_IN_A_README_ROW:\n  " + "\n  ".join(unbacked)
+    )
+    # Named members rather than a floor, because a floor absorbs exactly the drift it was
+    # written to catch. These three rows quote a figure each in a different shape — a
+    # governing load, an allowable stress, a probability — so a pattern that stops matching
+    # one of them fails here instead of quietly checking less.
+    canaries = {
+        ("lipped_channel_dsm.py", "150.8"),
+        ("welded_aluminum_platform_beam.py", "178.5"),
+        ("measured_shaft_from_certificate.py", "74.8"),
+    }
+    assert canaries <= checked, (
+        f"these README figures stopped being read: {sorted(canaries - checked)}. The rows "
+        "were reworded, or the pattern stopped matching them, and the gate is now checking "
+        f"less than it did ({len(checked)} figures over {len(rows)} rows)"
+    )
+
+
+def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
+    """The other direction, so the list can only shrink.
+
+    A recorded derivation whose row no longer quotes the figure is a line that stops meaning
+    anything and starts hiding the next one.
+    """
+    rows = dict(_readme_example_rows())
+    for (name, figure), derivation in _DERIVED_IN_A_README_ROW.items():
+        assert derivation.strip(), f"{name}'s {figure} is listed with no derivation"
+        assert name in rows, (
+            f"_DERIVED_IN_A_README_ROW names {name}, which the README no longer describes"
+        )
+        assert figure in rows[name], (
+            f"the README row for {name} no longer quotes {figure}; strike it from "
+            "_DERIVED_IN_A_README_ROW so the list stays honest"
+        )
