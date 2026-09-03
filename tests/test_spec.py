@@ -491,11 +491,41 @@ def test_unsupported_major_version_refused():
         parse_spec(data)
 
 
-def test_older_minor_version_loads():
+def test_an_older_minor_loads_and_still_says_which_version_it_is():
+    """The version field is a record of what the document is, not an assertion that it
+    is current.
+
+    It used to be overwritten with SCHEMA_VERSION unconditionally after the migration
+    walk, so a 1.0.0 document came back claiming 1.3.0 with nothing having transformed
+    it — and that claim travelled into the evidence bundle, whose spec section is the
+    reproducibility record a reviewer reads against the author's own file. The same line
+    would have relabelled a migration chain that stalled halfway as fully migrated.
+    """
     data = dump_and_load_dict(golden_bracket())
-    data["anvilate_spec"] = "1.0.0"  # same major; loads and re-stamps current
+    data["anvilate_spec"] = "1.0.0"  # same major, no migration registered: loads as-is
     spec = parse_spec(data)
-    assert spec.anvilate_spec == SCHEMA_VERSION
+    assert spec.anvilate_spec == "1.0.0"
+
+
+def test_a_minor_version_later_than_this_release_is_refused():
+    """A minor bump is backward compatible, not forward.
+
+    A 1.3.0 reader is promised nothing about a document written to a later minor. Its new
+    *fields* would be caught by `extra="forbid"` — but only if the document used them, so
+    one that happens not to slipped straight through, and nothing here can tell whether a
+    later minor changed the MEANING of a field this build already reads. It used to load
+    and be relabelled with this release's version, which left a reviewer no trace at all.
+    """
+    from anvilate.spec import UnsupportedSchemaVersion
+
+    data = dump_and_load_dict(golden_bracket())
+    data["anvilate_spec"] = "1.9.0"
+    with pytest.raises(UnsupportedSchemaVersion, match="later than this release knows"):
+        parse_spec(data)
+
+    # Refused for being later, not for being unequal: the current version still loads.
+    data["anvilate_spec"] = SCHEMA_VERSION
+    assert parse_spec(data).anvilate_spec == SCHEMA_VERSION
 
 
 # --- JSON Schema surface ---
@@ -1082,7 +1112,9 @@ def test_example_spec_file_loads_and_resolves():
     spec = load_spec_yaml(path.read_text())
     validate_references(spec)
     assert spec.name == "nema23_bracket"
-    assert spec.anvilate_spec == SCHEMA_VERSION
+    # The shipped example is a 1.0.0 document, and it comes back saying so — see
+    # test_an_older_minor_loads_and_still_says_which_version_it_is.
+    assert spec.anvilate_spec == "1.0.0"
 
 
 # --- helpers ---

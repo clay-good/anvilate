@@ -59,6 +59,26 @@ constraints:
 
 `anvilate check` on that document returns two cited ASME BTH-1 checks rather than a gap.
 
+## `anvilate_spec` is a record, not an assertion
+
+The version a document comes back at is the version it **actually reached**. A document
+declaring an older minor loads as-is — a minor bump is additive, so no migration is
+registered for it — and it still says `1.0.0` afterwards. It used to be overwritten with
+this release's version unconditionally, after the migration walk, which made the field an
+assertion: a 1.0.0 document came back claiming to be current with nothing having
+transformed it, and that claim travelled into the evidence bundle, whose spec section is
+the reproducibility record a reviewer reads against the author's own file. The same line
+would have relabelled a migration chain that stalled halfway as fully migrated.
+
+A **later** minor than this release knows is now refused. Backward compatibility is not
+forward compatibility: a 1.3.0 reader is promised nothing about a 1.9.0 document. Its new
+*fields* are caught by `extra="forbid"` — but only if the document uses them, so one that
+happens not to slipped straight through, and nothing here can tell whether a later minor
+changed the meaning of a field this build already reads. It was loaded and relabelled with
+this release's version, which left a reviewer no trace that it had ever been newer.
+
+A different **major** version is refused as it always was.
+
 **A tag and a parameter map, not a typed union**, and the trade is worth stating. A union of
 every pack element would validate a document completely at parse time and would make
 `spec-ir` depend on all twenty-odd packs, so every new element became a bump to this
