@@ -122,6 +122,41 @@ jobs:
             exit 1
           fi
 
+  # `pip install anvilate` is what a published tool's action runs, and there is no
+  # `anvilate` on PyPI — so the composite action's first step would have failed for every
+  # user of it. It installs the repository instead. This job is the thing that says when
+  # that stops being right, and it fails in BOTH directions: a distribution that exists
+  # while the action installs from git is as much a finding as an action naming PyPI with
+  # nothing behind it. One-directional, it would leave the same state unnoticed again.
+  # Scheduled rather than per-push: it depends on an external index.
+  pypi-availability:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Does the index agree with what the action installs?
+        run: |
+          set -uo pipefail
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://pypi.org/pypi/anvilate/json)
+          echo "pypi.org answers $code for anvilate"
+          # The `run:` line, not the first line mentioning pip — the comment above it says
+          # "Not `pip install anvilate`", and a grep for "pip install" reads that comment
+          # and concludes the opposite of the truth.
+          install=$(grep -m1 -E '^ *run: pip install' .github/actions/check/action.yml)
+          echo "the action installs with: $install"
+          case "$install" in
+            *git+https*) from_git=1 ;;
+            *) from_git=0 ;;
+          esac
+          if [ "$code" = "200" ] && [ "$from_git" = "1" ]; then
+            echo "::error::anvilate is on PyPI now; the action should install the distribution rather than the repository, and headless-cli.md should say so"
+            exit 1
+          fi
+          if [ "$code" != "200" ] && [ "$from_git" = "0" ]; then
+            echo "::error::the action installs the anvilate distribution and the index answers $code for it; that first step fails for every caller"
+            exit 1
+          fi
+
   # The sectionproperties adapter is tested twice: against a stub, which proves the mapping
   # decisions, and against the real package, which proves the mapping is of the real API. A
   # stub written by the same hand as the code it exercises agrees with that code and says

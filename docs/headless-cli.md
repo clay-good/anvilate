@@ -447,6 +447,21 @@ must be the ones `EXIT_CODES` can actually produce.
 something this repository can test: the suite runs with the socket layer closed, and a
 `docker build` is a network operation whose result no offline gate can check. An image
 published without a gate on what it contains is the kind of claim the rest of this project
-refuses to make. `pip install anvilate` is what the action does, and it is what the
+refuses to make. Installing the package is what the action does, and it is what the
 documentation recommends until an image can be held to something.
+
+**And the install line had the same problem from the other side.** The action ran
+`pip install anvilate`, which is what a published tool's action does — and there is no
+`anvilate` on PyPI. The index answers 404 for it. Every flag the action passes was resolved
+against the CLI and every exit code against `EXIT_CODES`, and the one line that runs before
+any of them would have failed for every user of the action. Asking whether each part of an
+instruction is right is not the same as asking whether the instruction is true.
+
+So the action installs the repository — `anvilate @ git+https://github.com/clay-good/anvilate@<ref>`
+— and takes a `ref` input so a caller can pin a tag instead of tracking `main`. It works
+today, which is the whole of the argument for it. The scheduled `pypi-availability` job is
+what will say when to change it back: it asks the index whether the distribution exists and
+fails **either way round** — if `anvilate` is published while the action still installs from
+git, and if the action names PyPI while the index has nothing. A gate that fired in only one
+direction would leave this exact state sitting unnoticed a second time.
 

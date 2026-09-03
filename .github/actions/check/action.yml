@@ -17,6 +17,13 @@ inputs:
     description: "The Python to install Anvilate under."
     required: false
     default: "3.11"
+  ref:
+    description: >-
+      The Anvilate revision to install — a branch, tag, or commit of the repository. Pin it
+      to a tag for a build you want to stay reproducible; the default tracks main, which is
+      the right choice while the project is pre-alpha and the wrong one afterwards.
+    required: false
+    default: "main"
   allow-not-evaluated:
     description: >-
       Accept exit code 2 — a card that could not be fully evaluated — as a pass. Off by
@@ -46,7 +53,15 @@ runs:
         python-version: ${{ inputs.python-version }}
     - name: Install Anvilate
       shell: bash
-      run: pip install anvilate
+      env:
+        ANVILATE_REF: ${{ inputs.ref }}
+      # Not `pip install anvilate`. There is no `anvilate` on PyPI — the index answers 404
+      # for it today — so the one line every user of this action runs first would have
+      # failed for every one of them. Until a release is published, the honest install is
+      # the repository this action ships in, and `ref` is how a caller pins it. Swap this
+      # for the distribution the day it exists; the scheduled `pypi-availability` job in
+      # `ci.yml` is what will say so, and it fails either way round.
+      run: pip install "anvilate @ git+https://github.com/clay-good/anvilate@${ANVILATE_REF}"
     - name: Screen every spec
       shell: bash
       env:

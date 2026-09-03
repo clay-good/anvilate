@@ -298,3 +298,69 @@ def test_no_message_a_user_reads_names_a_path_their_install_does_not_have():
         "contain, so a user is pointed at a file they do not have. Give the full URL "
         f"instead: {offenders}"
     )
+
+
+def test_the_action_installs_something_that_exists(action):
+    """`pip install anvilate` was the first line every caller of this action ran.
+
+    There is no `anvilate` on PyPI — the index answers 404 — so the step before any of the
+    checks above would have failed for every user of the action, while every flag it passes
+    and every exit code it documents resolved perfectly. Asking whether each part of an
+    instruction is right is not the same as asking whether the instruction is true.
+
+    Offline, three things can be held together: the action installs the repository, it
+    installs the repository this package *says* it comes from, and the docs page describes
+    the same install a reader would get. Whether the distribution exists is a fact about an
+    external index, and the scheduled `pypi-availability` job asks it — in both directions,
+    so publishing to PyPI without moving the action off git fails too.
+    """
+    import tomllib
+
+    install = next(
+        step["run"] for step in action["runs"]["steps"] if step.get("run", "").startswith("pip ")
+    )
+    source = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "urls"
+    ]["Source"]
+    assert "git+" in install, (
+        "the action installs the `anvilate` distribution. It is not published: this is the "
+        "line that runs before every check, and it fails for every caller. If it has since "
+        "been published, the pypi-availability job is what should have said so"
+    )
+    assert source in install, (
+        f"the action installs from a repository that is not the project's own Source url "
+        f"({source}): {install}"
+    )
+    assert "${ANVILATE_REF}" in install, (
+        "the `ref` input is what lets a caller pin a tag instead of tracking main; the "
+        "install line does not read it"
+    )
+
+    page = (_REPO / "docs" / "headless-cli.md").read_text(encoding="utf-8")
+    assert "git+https://github.com/clay-good/anvilate@<ref>" in page, (
+        "the docs page describes an install a reader will not get from the action"
+    )
+
+
+def test_the_availability_job_fails_in_both_directions():
+    """A one-directional gate is how the repository got into this state in the first place.
+
+    A job that only failed when the action named a distribution that does not exist would
+    go green the day `anvilate` is published and leave the action installing from `main`
+    forever. Both branches, and both exit.
+    """
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "ci.yml").read_text("utf-8"))
+    job = workflow["jobs"]["pypi-availability"]
+    script = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "pypi.org/pypi/anvilate/json" in script, "the job asks no index anything"
+    assert script.count("exit 1") == 2, (
+        "the job has one failing branch. It needs two: a distribution that exists while "
+        "the action installs from git, and an action naming PyPI with nothing behind it"
+    )
+    # And it must read the `run:` line rather than the first mention of pip — the comment
+    # above that line says "Not `pip install anvilate`", and a looser grep reads the comment
+    # and concludes the opposite of the truth.
+    assert "run: pip install" in script, (
+        "the job greps for a bare `pip install`, which matches the comment explaining why "
+        "the action does not do that"
+    )
