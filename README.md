@@ -19,7 +19,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[export]"      # drop [export] if you don't need DXF output
 ```
 
-Run any of the worked examples — each is self-contained, needs no network, and prints a scorecard:
+Run any of the worked examples — every one is self-contained, needs no network, and prints its result: a scorecard for the screening examples, the computed values for the analysis ones.
 
 ```bash
 python examples/cantilever_bracket_check.py
@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,819 public symbols, each dimension-checked and
-hand-verified, 4,753 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 4,755 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -294,8 +294,9 @@ The behavioral contract for every subsystem is specified up front in [`openspec/
 ## Security
 
 Anvilate reads documents that arrived from somebody else and is built for it: safe YAML
-loading, no `eval`/`exec`/`subprocess` anywhere in the package, one module allowed to open
-a network connection and only with stated consent, and hostile XML refused at both doors.
+loading, no call to `eval`, `exec`, `pickle`, `subprocess` or `os.system` anywhere in the
+package, one module allowed to open a network connection and only with stated consent, and
+hostile XML refused at both doors.
 [SECURITY.md](SECURITY.md) states each property with the test that holds it, and is where
 to report a vulnerability.
 

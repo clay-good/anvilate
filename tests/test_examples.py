@@ -8901,3 +8901,93 @@ def test_the_timber_pages_figures_are_the_packs_own():
             assert any(abs(value - p) <= rounding for p in pinned), (
                 f"the page quotes {number} for {_label} and no NDS test asserts it"
             )
+
+
+def test_every_example_runs_its_main_and_prints_something():
+    """The part a reader sees, which CI did not run.
+
+    `runpy.run_path` executes a module without firing its `if __name__ == "__main__"`
+    guard, and every example puts its printing inside `main()`. So the tests above import
+    491 examples and exercise their *computation*, and exactly one of them called a
+    `main()`. The output — the whole of what somebody gets when they follow the quickstart
+    and type `python examples/anything.py` — was unexercised.
+
+    Two properties, both cheap (2.5 seconds for all 491): the entry point exists and
+    completes, and it puts something on stdout. A `main()` that raises, or one that prints
+    nothing because a rename left its final block dead, is the first thing a new reader
+    would hit and the last thing anything here would notice.
+    """
+    import contextlib
+    import io
+
+    missing: list[str] = []
+    silent: list[str] = []
+    broken: list[str] = []
+    for path in sorted(_EXAMPLES.glob("*.py")):
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                namespace = runpy.run_path(str(path))
+                entry = namespace.get("main")
+                if not callable(entry):
+                    missing.append(path.name)
+                    continue
+                entry()
+        except Exception as error:  # noqa: BLE001 — the finding is that it raised at all
+            broken.append(f"{path.name}: {type(error).__name__}: {error}")
+            continue
+        if not buffer.getvalue().strip():
+            silent.append(path.name)
+
+    assert not broken, (
+        "these examples raise when run the way a reader runs them:\n  " + "\n  ".join(broken)
+    )
+    assert not missing, (
+        f"these examples have no `main()`, so `python examples/<name>.py` prints nothing: {missing}"
+    )
+    assert not silent, (
+        f"these examples run and print nothing, so following the quickstart with them shows "
+        f"a reader an empty terminal: {silent}"
+    )
+
+
+def test_the_readme_does_not_promise_a_scorecard_from_every_example():
+    """The front page said "each ... prints a scorecard". Most of them do not.
+
+    491 examples; 280 print no verdict vocabulary at all — `aluminum_ladder_rail.py` prints
+    three stresses and a sentence about buckling, which is the right output for what it
+    demonstrates and is not a scorecard. A reader who takes "any of the worked examples" at
+    its word and picks one at random is more likely than not to get something else.
+
+    So the sentence now distinguishes the two kinds, and this holds it to the distinction
+    rather than to a count that would expire.
+    """
+    import contextlib
+    import io
+    import re
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    assert "prints a scorecard for" not in readme, "the universal claim is back"
+    assert "a scorecard for the screening examples, the computed values for the analysis ones" in (
+        readme
+    ), "the sentence distinguishing the two kinds of example has moved"
+
+    verdict = re.compile(r"\[(?:PASS|FAIL|NOT_EVALUATED|OVER_MARGIN)\]|scorecard", re.I)
+    with_a_card = 0
+    without = 0
+    for path in sorted(_EXAMPLES.glob("*.py")):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            namespace = runpy.run_path(str(path))
+            namespace["main"]()
+        if verdict.search(buffer.getvalue()):
+            with_a_card += 1
+        else:
+            without += 1
+    # Both kinds exist in quantity, which is exactly what makes the universal claim wrong
+    # and the distinguishing one right. Named as a property, not pinned to today's split.
+    assert with_a_card >= 50, f"only {with_a_card} examples print a scorecard"
+    assert without >= 50, (
+        f"only {without} examples print something other than a scorecard — if that has "
+        "genuinely become a handful, the README can go back to the simpler sentence"
+    )
