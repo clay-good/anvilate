@@ -229,14 +229,59 @@ def test_every_example_checks_the_figures_its_prose_quotes():
         assert reason.strip(), f"{name} is excused without a reason"
 
 
+def _names_reaching_an_execution_call() -> set[str]:
+    """Example filenames this file passes to something that actually runs them.
+
+    Read out of the syntax tree rather than searched for in the text. The filename has to be
+    a string literal inside a call to a *runner* — a function whose own body reaches
+    `runpy.run_path` or `subprocess` — so a name that appears in a comment, in a docstring,
+    or as a key in one of the exemption dicts does not count.
+    """
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    runners = {"run_path"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        body = ast.dump(node)
+        if "run_path" in body or "subprocess" in body:
+            runners.add(node.name)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = getattr(node.func, "attr", getattr(node.func, "id", ""))
+        if callee not in runners:
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                if inner.value.endswith(".py"):
+                    found.add(inner.value)
+    return found
+
+
 def test_every_example_is_executed_by_this_file():
-    # An example nobody runs is an example nobody notices breaking. The contract
-    # gate only requires each analysis module to be *mentioned* somewhere under
-    # examples/, so a new example file could ship and never execute in CI.
-    text = Path(__file__).read_text()
-    unexecuted = sorted(p.name for p in _EXAMPLES.glob("*.py") if p.name not in text)
+    """An example nobody runs is an example nobody notices breaking.
+
+    This used to ask whether the filename appeared anywhere in this file's *text*. Every one
+    of the 491 does reach a real execution call today — measured — but a substring gate is
+    satisfied by a mention, so an example added in a comment, or listed in one of the
+    exemption dicts below and never run, would have passed. That is the failure mode this
+    repository has been burned by more than once, and the file it guards is the public
+    teaching surface.
+
+    So the runners are found in the syntax tree — functions whose bodies reach
+    `runpy.run_path` or `subprocess` — and a filename counts only as a literal argument to
+    one of them.
+    """
+    executed = _names_reaching_an_execution_call()
+    assert len(executed) >= 400, (
+        f"only {len(executed)} example names reach a runner; the way this file executes "
+        "examples changed and the detector no longer sees it"
+    )
+    unexecuted = sorted(p.name for p in _EXAMPLES.glob("*.py") if p.name not in executed)
     assert not unexecuted, (
-        f"examples with no test in tests/test_examples.py (they never run in CI): {unexecuted}"
+        f"examples with no test in tests/test_examples.py (they never run in CI): "
+        f"{unexecuted}. Naming one in a comment or an exemption list does not run it."
     )
 
 
