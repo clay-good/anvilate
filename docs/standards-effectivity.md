@@ -87,6 +87,16 @@ twenty-two had been editionless since the day their pack shipped. A ratchet is o
 honest as its census, which is why this one now runs off the same session-wide collector
 the derivation-coverage gate uses and cannot be narrower than the library it audits.
 
+**Three of the twenty-two are paid off** — `EN 1993-1-9:2005` (twice) and
+`EN 15978:2011 / ISO 14040:2006` — and each was versioned off an anchor, not a guess. The
+weld-fatigue curve this library builds (N_C = 2M, N_D = 5M, N_L = 100M, m = 3 then 5) and
+the §8 elastic limit are the 2005 edition, which is also the edition every
+`WeldDetailCategory` in these docs already declares. The remaining nineteen stay listed
+because their edition has to be *read off the standard*: BTH-1's design factors and TMS
+402's allowable-stress form are identical across editions, so nothing in this repository
+says which book they came out of, and inventing one would be exactly the confidently-wrong
+citation the whole page is about.
+
 ## Textbooks are not debt
 
 `names_a_standard` matches a curated list of standards bodies, not "anything

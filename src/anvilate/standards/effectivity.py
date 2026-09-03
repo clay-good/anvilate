@@ -129,6 +129,13 @@ WRITTEN_AGAINST: dict[str, str] = {
     "ACI 318": "19",
     "ASCE 7": "22",
     "Aluminum Design Manual": "2020",
+    # The weld-fatigue curve anchors (N_C = 2M, N_D = 5M, N_L = 100M, m = 3 then 5) and
+    # the §8 elastic limit are EN 1993-1-9:2005 — the only published edition, and the one
+    # this library's own WeldDetailCategory records already declare.
+    "EN 1993-1-9": "2005",
+    # EN 15978:2011 is the only edition, and it is what the A1-A3 module boundary the
+    # embodied-carbon screen refuses to mix comes from.
+    "EN 15978": "2011",
 }
 
 # A standard designation followed by its edition: "AISC 360-16", "ASCE 7-22",

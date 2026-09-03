@@ -54,7 +54,7 @@ __all__ = [
     "embodied_carbon_scorecard",
 ]
 
-_CLAUSE_EN15978 = "EN 15978 life-cycle modules; ISO 14040 cradle-to-gate boundary"
+_CLAUSE_EN15978 = "EN 15978:2011 life-cycle modules; ISO 14040:2006 cradle-to-gate boundary"
 
 # The label that has to travel with every number this module produces.
 _SCREENING_LABEL = (

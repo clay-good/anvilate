@@ -6989,7 +6989,7 @@ def test_weld_fatigue_scorecard_screens_a_spectrum_and_requires_a_category():
     )
     assert harsh.status is CheckStatus.FAIL
     assert harsh.safety_factor == pytest.approx(0.394, abs=0.01)
-    assert harsh.reference == "EN 1993-1-9"
+    assert harsh.reference == "EN 1993-1-9:2005"
 
     # A good category-90 detail survives the same spectrum.
     good = weld_fatigue_scorecard(
