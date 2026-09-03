@@ -1322,6 +1322,54 @@ def test_the_finite_rule_leaves_an_ordinary_document_alone():
     assert spec.constraints.min_safety_factor.value > 0
 
 
+def test_every_way_a_document_fails_to_parse_is_a_spec_validation_error():
+    """Measured, not guessed — which is what turned up the one the first guard missed.
+
+    Over 21 malformed documents `yaml.safe_load` answers with a `YAMLError` twenty times
+    and, for `a: 2026-13-45`, with a plain `ValueError: month must be in 1..12` out of
+    PyYAML's date constructor. YAML resolves any `YYYY-MM-DD`-shaped scalar to a date
+    whatever field it is in, so one typo'd month anywhere in a document reached the CLI as
+
+        anvilate check: month must be in 1..12
+
+    naming no file, no line and no field. The guard catches any failure of the one call it
+    wraps now, so every unreadable document gets the same sentence with whatever position
+    PyYAML could give.
+    """
+    from anvilate.spec import SpecValidationError
+
+    # Documents PyYAML genuinely cannot read, one per failure class it uses: a tab
+    # (ScannerError), an unclosed flow sequence and a bare `:` (ParserError), an unbalanced
+    # quote (ScannerError), an undefined alias and two documents in one stream
+    # (ComposerError), a NUL (ReaderError), an unsupported directive (ParserError), and the
+    # malformed date that is a plain ValueError. `? a\n: b` and `a: 0b12` are deliberately
+    # NOT here: both parse, and they belong to schema validation rather than to this guard.
+    documents = [
+        "\ta: 1",
+        "a: [1",
+        'a: "x',
+        "a: *nope",
+        "\x00",
+        "{",
+        ":",
+        "a: 2026-13-45",
+        "%YAML 9.9\n---\na: 1",
+        "---\n---\na: 1",
+    ]
+    for document in documents:
+        with pytest.raises(SpecValidationError) as raised:
+            load_spec_yaml(document)
+        problem = raised.value.errors[0]
+        assert "not valid YAML" in problem["msg"], (document, problem)
+        assert problem["msg"].rstrip().endswith(tuple("abcdefghijklmnopqrstuvwxyz.)0123456789'")), (
+            f"{document!r} produced a reason that trails off: {problem['msg']!r}"
+        )
+
+    # The date one specifically: it carries the reason, and it is not a YAMLError.
+    with pytest.raises(SpecValidationError, match="month must be in 1..12"):
+        load_spec_yaml("a: 2026-13-45")
+
+
 def test_a_document_that_is_not_valid_yaml_is_a_spec_validation_error():
     """The library boundary, not just the CLI.
 

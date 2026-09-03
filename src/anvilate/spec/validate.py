@@ -74,7 +74,17 @@ def load_spec_yaml(text: str) -> DesignSpec:
     """
     try:
         data = yaml.safe_load(text)
-    except yaml.YAMLError as failure:
+    except Exception as failure:
+        # `except Exception`, not `yaml.YAMLError`, and measuring is what settled it. Over 21
+        # malformed documents `safe_load` answers with `YAMLError` twenty times and, for
+        # `a: 2026-13-45`, with a plain `ValueError: month must be in 1..12` out of PyYAML's
+        # date constructor. YAML resolves any `YYYY-MM-DD`-shaped scalar to a date whatever
+        # field it is in, so one typo'd month anywhere in a document reached the CLI as
+        # `anvilate check: month must be in 1..12` — naming no file, no line and no field.
+        #
+        # The `try` wraps exactly one call whose only job is to read the text, so any failure
+        # of it is an unreadable document and gets the same sentence. The position is carried
+        # when PyYAML gives one and the reason always is.
         mark = getattr(failure, "problem_mark", None)
         where = f"line {mark.line + 1}, column {mark.column + 1}" if mark is not None else "<root>"
         problem = getattr(failure, "problem", None) or str(failure).split("\n")[0]
