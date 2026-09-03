@@ -66,6 +66,16 @@ unconditional: a document that *claims* to be a spec is treated as one whatever 
 in, while a **broken** spec that declares no version is indistinguishable from a stray file
 and is skipped like one.
 
+**`check` and `export` search a directory; `diff` and `verify` take a file**, and handing one
+of the latter a directory used to answer `[Errno 21] Is a directory: 'specs'`. True, names the
+path, and useless — least of all does it say the thing that explains the mistake, which is that
+two of the commands *do* take a directory. The refusal names them:
+
+```text
+anvilate diff: specs is a directory, and diff takes a file. `anvilate check` and
+`anvilate export` are the commands that search a directory for the specs in it.
+```
+
 **A file or directory the sweep cannot open is a bad request, not a stray file.** `skipped`
 says "this is some other YAML file", and the sweep cannot know that about a file it never
 read — so a `*.yaml` it has no permission to open, or a symlink whose target was deleted,

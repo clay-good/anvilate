@@ -2147,3 +2147,50 @@ def test_a_check_that_keeps_its_name_and_stops_being_evaluated_is_a_regression()
     moved_back = {name: (was, now) for name, was, now in _regressions(after, before)}
     assert moved_back["bolt shear"] == (CheckStatus.NOT_EVALUATED, CheckStatus.FAIL)
     assert set(moved_back) == {"bolt shear", "bearing"}, moved_back
+
+
+def test_a_directory_given_to_a_command_that_takes_a_file_says_which_command_takes_one(
+    tmp_path,
+):
+    """`[Errno 21] Is a directory: 'specs'` is true and useless.
+
+    It names the path and says nothing to act on — least of all the thing that would explain
+    the mistake, which is that `check` and `export` *do* search a directory and `diff` and
+    `verify` do not. Somebody hands a directory to `diff` because they learned it works for
+    `check`, so the refusal names the asymmetry.
+    """
+    directory = tmp_path / "specs"
+    directory.mkdir()
+    spec = tmp_path / "part.yaml"
+    spec.write_text(_SPEC, encoding="utf-8")
+    (directory / "part.yaml").write_text(_SPEC, encoding="utf-8")
+
+    for label, argv in (
+        ("diff, first argument", ("diff", str(directory), str(spec))),
+        ("diff, second argument", ("diff", str(spec), str(directory))),
+        ("verify", ("verify", str(directory))),
+    ):
+        code, out, err = _run(*argv)
+        assert code == EXIT_BAD_REQUEST, label
+        assert out == ""
+        assert "is a directory" in err, f"{label}: {err!r}"
+        assert "Errno" not in err, f"{label} still leaks an errno: {err!r}"
+        # The way out, which is the half an errno cannot carry.
+        for searching in ("anvilate check", "anvilate export"):
+            assert searching in err, f"{label} does not name {searching}: {err!r}"
+
+    # And the commands it names really do take one, or the advice sends the reader in circles.
+    for command in ("check", "export"):
+        code, out, err = _run(command, str(directory))
+        assert code != EXIT_BAD_REQUEST, f"{command} was named as taking a directory: {err}"
+        assert "deck_plate" in out, out
+
+
+def test_an_empty_search_is_still_a_bad_request(tmp_path):
+    """The sweep does its own walk now, and "nothing found, nothing failed, exit 0" is the
+    silent green the directory form exists to avoid — so the empty case is checked where the
+    walk was replaced rather than assumed to have survived it."""
+    (tmp_path / "deeper").mkdir()
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_BAD_REQUEST, "an empty search read as a pass"
+    assert "no Design Spec found" in err

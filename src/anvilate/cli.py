@@ -487,6 +487,9 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
 
     try:
         envelope = json.loads(args.envelope.read_text(encoding="utf-8"))
+    except IsADirectoryError:
+        print(f"anvilate verify: {_is_a_directory(args.envelope, command='verify')}", file=err)
+        return EXIT_BAD_REQUEST
     except OSError as failure:
         print(f"anvilate verify: {failure}", file=err)
         return EXIT_BAD_REQUEST
@@ -774,6 +777,26 @@ def _is_a_spec(document: dict) -> bool:
     return True
 
 
+# The commands that take a directory and search it. Named in the refusal below, because the
+# reason somebody hands a directory to `diff` is that they learned it works for `check`.
+_SEARCHING_COMMANDS = ("check", "export")
+
+
+def _is_a_directory(path: Path, *, command: str) -> str:
+    """Why a directory is not the argument, and which command does take one.
+
+    `[Errno 21] Is a directory: 'specs'` is true, names the path, and says nothing a caller
+    can act on — least of all that they were not simply wrong to try, since ``check`` and
+    ``export`` search a directory and this command does not. That asymmetry is the whole
+    reason the mistake gets made, so the refusal states it.
+    """
+    searching = " and ".join(f"`anvilate {name}`" for name in _SEARCHING_COMMANDS)
+    return (
+        f"{path} is a directory, and {command} takes a file. {searching} are the commands "
+        f"that search a directory for the specs in it."
+    )
+
+
 def _claims_a_spec(path: Path) -> bool:
     """Does an undecodable file still say ``anvilate_spec`` somewhere in its bytes?
 
@@ -831,6 +854,9 @@ def _load(path: Path, *, err, command: str):
 
     try:
         document = path.read_text(encoding="utf-8")
+    except IsADirectoryError:
+        print(f"anvilate {command}: {_is_a_directory(path, command=command)}", file=err)
+        return EXIT_BAD_REQUEST
     except OSError as failure:
         print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST

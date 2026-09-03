@@ -1,0 +1,1 @@
+anvilate check: no Design Spec found in /private/tmp/claude-501/-Users-user-Documents-development-public-anvilate--claude-worktrees-repo-dev-loop-c58f1e/210e7861-a8ab-4d7b-9f65-361d9fbfad54/scratchpad/empty/nothing
