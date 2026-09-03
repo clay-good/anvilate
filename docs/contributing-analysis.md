@@ -384,14 +384,24 @@ times too large.
 
 So: **if a parameter is named for a bounded quantity, bound it.** Ten modules already
 carry a private `_fraction(value, name)` for the (0, 1] case; use it, or write the
-comparison inline. `tests/test_fraction_guards.py` trips 32 of these guards one at a time
+comparison inline. `tests/test_fraction_guards.py` trips 40 of these guards one at a time
 and then passes a value just inside each bound, because a guard that refuses everything
 passes a refusal test exactly as well as a correct one.
 
 That file is also the ratchet. It re-derives the census from the source — following a
 parameter into the helper it is validated by, which is the whole difference between a
 census and a list of false positives — so a new function taking one of these parameters
-without a guard fails there rather than shipping. **5 parameters are exempt**, each with
+without a guard fails there rather than shipping.
+
+**The census is static, and that is a limit worth knowing.** It reads the source and asks
+whether a guard is *written*; it cannot ask whether one is ever *evaluated*. A line-trace of
+the suite is what answers that, and it found eight guards that existed and had never run —
+five functions share the heat-exchanger `capacity_ratio` bound and only one of them was ever
+called with a bad value, and the radiation case passed its slip as `emissivity_1`, so the
+`emissivity_2` guard two lines down returned before it could refuse anything. All eight were
+correct. They are cases now, because an unrun guard is an unevaluated comparison and an
+inverted one reads exactly like a correct one. If you add a bounded parameter to a function
+that already has a sibling guard, add the case too: the census will not tell you. **5 parameters are exempt**, each with
 the reason its name lies about its range: a spectral efficiency is bits per second per
 hertz, a molar absorptivity (in two functions) is tens of thousands, a heat pump's
 seasonal efficiency is its COP of 3 to 4, and excess air routinely runs past 100%. An exemption that turns out to be

@@ -40,6 +40,8 @@ from anvilate.analysis import (
     coating_dry_film_thickness,
     collector_useful_heat,
     compressor_isentropic_from_polytropic,
+    counterflow_ntu_for_effectiveness,
+    crossflow_both_unmixed_effectiveness,
     electroplating_mass_deposited,
     equilibrium_vapor_mole_fraction,
     fillet_weld_design_strength,
@@ -54,11 +56,16 @@ from anvilate.analysis import (
     obstruction_meter_flow_rate,
     otto_cycle_efficiency,
     parallel_flow_effectiveness,
+    parallel_flow_ntu_for_effectiveness,
     parallel_system_reliability,
     pv_array_power,
+    radiation_heat_transfer_coefficient,
     radiation_two_surface_exchange,
     rectangular_weir_flow,
+    shell_and_tube_effectiveness,
+    shell_and_tube_ntu_for_effectiveness,
     stagnation_temperature_ratio,
+    view_factor_reciprocity,
     weld_base_metal_shear_strength,
     weld_heat_input,
     wind_turbine_rotor_thrust,
@@ -252,6 +259,80 @@ _CASES: tuple[tuple[str, Callable[[Any], Any], Any, Any], ...] = (
         ),
         90,
         0.9,
+    ),
+    # --- Guards that EXIST and had never RUN -------------------------------------------
+    #
+    # `test_every_bounded_parameter_is_guarded` is a STATIC census: it reads the source and
+    # asks whether a guard is written. It cannot ask whether one is ever evaluated, and a
+    # line-trace says these eight never were — five functions share the `capacity_ratio`
+    # bound and only `parallel_flow_effectiveness` above was called with a bad one; the
+    # `emissivity` case passes its slip as `emissivity_1`, so the `emissivity_2` guard two
+    # lines down returned before it could refuse anything.
+    #
+    # An unrun guard is an unevaluated comparison, and an inverted one reads exactly like a
+    # correct one. All eight were checked by hand before these cases were written; the
+    # cases are what keep them checked.
+    (
+        "capacity_ratio (crossflow, both unmixed)",
+        lambda v: crossflow_both_unmixed_effectiveness(ntu=1.5, capacity_ratio=v),
+        1.6,
+        0.6,
+    ),
+    (
+        "capacity_ratio (counterflow NTU inverse)",
+        lambda v: counterflow_ntu_for_effectiveness(effectiveness=0.5, capacity_ratio=v),
+        1.6,
+        0.6,
+    ),
+    (
+        "capacity_ratio (parallel-flow NTU inverse)",
+        lambda v: parallel_flow_ntu_for_effectiveness(effectiveness=0.4, capacity_ratio=v),
+        1.6,
+        0.6,
+    ),
+    (
+        "capacity_ratio (shell and tube)",
+        lambda v: shell_and_tube_effectiveness(ntu=1.5, capacity_ratio=v),
+        1.6,
+        0.6,
+    ),
+    (
+        "capacity_ratio (shell and tube NTU inverse)",
+        lambda v: shell_and_tube_ntu_for_effectiveness(effectiveness=0.4, capacity_ratio=v),
+        1.6,
+        0.6,
+    ),
+    (
+        "emissivity_2 (the second surface)",
+        lambda v: radiation_two_surface_exchange(
+            emissivity_1=0.8,
+            area_1=Q("2 m**2"),
+            temperature_1=Q("600 K"),
+            emissivity_2=v,
+            area_2=Q("2 m**2"),
+            temperature_2=Q("300 K"),
+            view_factor=1.0,
+        ),
+        90,
+        0.9,
+    ),
+    (
+        "emissivity (radiation film coefficient)",
+        lambda v: radiation_heat_transfer_coefficient(
+            emissivity=v,
+            surface_temperature=Q("400 K"),
+            surroundings_temperature=Q("300 K"),
+        ),
+        90,
+        0.9,
+    ),
+    (
+        "view_factor_1_to_2 (reciprocity)",
+        lambda v: view_factor_reciprocity(
+            area_1=Q("2 m**2"), view_factor_1_to_2=v, area_2=Q("1 m**2")
+        ),
+        50,
+        0.5,
     ),
     (
         "liquid_mole_fraction",
