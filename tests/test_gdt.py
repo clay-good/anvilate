@@ -87,6 +87,73 @@ def test_a_form_control_takes_no_datum_and_a_relationship_control_requires_one()
         )
 
 
+def test_the_datum_rule_is_total_over_the_families_and_matches_what_the_validator_does():
+    """The table, checked in both directions against the behaviour it is supposed to drive.
+
+    The rule used to be two positional lists — FORM forbids, three families require, and
+    PROFILE was simply not mentioned. Correct, and indistinguishable from an omission: a
+    sixth family added later would have inherited the most permissive answer from the same
+    silence, with nothing failing. It is a total map now, so a new family is a KeyError at
+    the one place that decides.
+
+    WHAT EACH HALF PROVES, because they are not the same thing. The totality assertion is
+    the one with teeth against the original defect: dropping a family fails here with a
+    sentence, rather than as a KeyError inside somebody's build. The loop below holds the
+    map against frames actually built, which catches the map and the validator DRIFTING
+    APART — it fails if `_legal` stops reading a rung — but it cannot pin a value, because
+    the map is what drives the behaviour it is compared to. Change PROFILE to `True` and
+    both sides move together and this test passes.
+
+    The values are pinned by
+    `test_a_form_control_takes_no_datum_and_a_relationship_control_requires_one`, which
+    names its characteristics and its expected refusals independently of the table. That is
+    the test that fails when PROFILE's entry is wrong, and it is why this one does not
+    claim to.
+    """
+    from anvilate.gdt import _DATUMS_REQUIRED
+
+    assert set(_DATUMS_REQUIRED) == set(CharacteristicClass), (
+        "every family needs an entry; a missing one is a KeyError at build time, but the "
+        "point of the map is that it is answered here first"
+    )
+
+    representative = {
+        family: next(c for c in Characteristic if c.characteristic_class is family)
+        for family in CharacteristicClass
+    }
+
+    def builds(characteristic: Characteristic, datums: tuple) -> bool:
+        try:
+            FeatureControlFrame(
+                characteristic=characteristic,
+                tolerance=_q("0.05 mm"),
+                feature_type=FeatureType.FEATURE_OF_SIZE,
+                datums=datums,
+            )
+        except pydantic.ValidationError:
+            return False
+        return True
+
+    for family, characteristic in representative.items():
+        without = builds(characteristic, ())
+        with_one = builds(characteristic, (DatumReference(letter="A"),))
+        expected = _DATUMS_REQUIRED[family]
+        if expected is True:
+            assert (without, with_one) == (False, True), (
+                f"{family.value} is recorded as requiring a datum; a {characteristic.value} "
+                f"frame without one built"
+            )
+        elif expected is False:
+            assert (without, with_one) == (True, False), (
+                f"{family.value} is recorded as taking no datum; a {characteristic.value} "
+                f"frame with one built"
+            )
+        else:
+            assert (without, with_one) == (True, True), (
+                f"{family.value} is recorded as legal either way, and one spelling was refused"
+            )
+
+
 def test_material_condition_modifiers_need_a_feature_of_size():
     """A surface has no size, so Ⓜ on one does not tighten the control — it fails to parse."""
     for condition in (MaterialCondition.MMC, MaterialCondition.LMC):

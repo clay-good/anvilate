@@ -72,6 +72,25 @@ class CharacteristicClass(StrEnum):
     RUNOUT = "runout"
 
 
+#: Whether each family of control takes a datum reference frame. A TOTAL MAP over
+#: :class:`CharacteristicClass`, so a sixth family is a KeyError at the one place that
+#: decides rather than inheriting the most permissive rule from a fallthrough.
+#:
+#: PROFILE is the reason this is a map and not two lists. A profile control is legal both
+#: ways and means different things: referenced to a datum frame it controls location,
+#: orientation and form together; unreferenced it controls form alone, the surface against
+#: its own true profile. Neither spelling is an error, so it can be neither required nor
+#: forbidden — and stated here rather than left as the family the validator does not
+#: mention, which reads identically to the family somebody forgot.
+_DATUMS_REQUIRED: dict[CharacteristicClass, bool | None] = {
+    CharacteristicClass.FORM: False,  # the surface against itself; a datum is meaningless
+    CharacteristicClass.ORIENTATION: True,
+    CharacteristicClass.LOCATION: True,
+    CharacteristicClass.RUNOUT: True,
+    CharacteristicClass.PROFILE: None,  # legal both ways, and they mean different things
+}
+
+
 class Characteristic(StrEnum):
     """The geometric characteristics of ASME Y14.5 / ISO 1101."""
 
@@ -281,22 +300,15 @@ class FeatureControlFrame(RevalidatedModel):
                 f"edition for a legacy drawing, or use position or runout, which is what "
                 f"the removal intended"
             )
-        if family is CharacteristicClass.FORM and self.datums:
+        required = _DATUMS_REQUIRED[family]
+        if required is False and self.datums:
             raise ValueError(
                 f"{self.characteristic.value} is a form control — the surface against "
                 f"itself — and takes no datum reference; "
                 f"{[str(d) for d in self.datums]} was given. A form callout that needs a "
                 f"datum is an orientation callout"
             )
-        if (
-            family
-            in (
-                CharacteristicClass.ORIENTATION,
-                CharacteristicClass.LOCATION,
-                CharacteristicClass.RUNOUT,
-            )
-            and not self.datums
-        ):
+        if required is True and not self.datums:
             raise ValueError(
                 f"{self.characteristic.value} is a relationship to a datum reference "
                 f"frame and none was given; a control of {family.value} without a datum "
