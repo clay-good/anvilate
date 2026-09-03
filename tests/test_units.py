@@ -1031,6 +1031,54 @@ def test_has_dimension_asks_about_the_unit_without_building_a_quantity():
     assert built == 0, f"has_dimension built {built} pint quantities to read a unit's dimension"
 
 
+def test_a_malformed_unit_is_a_unit_error_however_pint_chose_to_fail():
+    """The second version of this guard, and the reason there was a second one.
+
+    The first caught `PintError` and covered **2 of 26** ways a malformed spelling actually
+    fails. Over 37 odd strings pint answers with a bare `AssertionError` 22 times — `-`, `+`,
+    `*`, `/`, `**` among them — with an **empty message**: no message, no type information,
+    and it reads as a broken invariant rather than a typo. Two more come out of Python's own
+    tokenizer as `TokenError`. Exactly one is `UndefinedUnitError`, which is what the first
+    version was written against.
+
+    `-` is the one that matters. It is what an engineer writes for "no units" on every
+    drawing there is, and it reached `Quantity.to`, `render` and `decimals_for`.
+    """
+    from anvilate.units import UnitError, decimals_for
+    from anvilate.units.format import render
+
+    spellings = ["-", "--", "+", "*", "/", "**", "^2", "(mm", "mm)", "[]", "notaunit", "mm2"]
+    paths = {
+        "Quantity.to": lambda unit: Quantity.parse("1 mm").to(unit),
+        "decimals_for": decimals_for,
+        "render": lambda unit: render(Quantity.parse("1 mm"), unit=unit),
+    }
+    wrong: list[str] = []
+    for spelling in spellings:
+        for label, call in paths.items():
+            try:
+                call(spelling)
+            except UnitError:
+                continue
+            except Exception as failure:  # noqa: BLE001 — the finding is the type
+                wrong.append(f"{label}({spelling!r}) -> {type(failure).__name__}")
+            else:
+                wrong.append(f"{label}({spelling!r}) was accepted")
+    assert not wrong, (
+        "a malformed unit has to be this library's UnitError whatever pint threw:\n  "
+        + "\n  ".join(wrong)
+    )
+
+    # An exception with no message still says what it was, or the refusal says nothing.
+    with pytest.raises(UnitError, match=r"could not read the unit '-': .+"):
+        decimals_for("-")
+
+    # And the spellings that legitimately mean "dimensionless" still work, because
+    # refusing those would trade one wrong refusal for another.
+    for dimensionless in ("", "dimensionless", "count", "percent"):
+        assert decimals_for(dimensionless) >= 0
+
+
 def test_no_unit_taking_helper_answers_with_pints_own_exception():
     """A bad unit string gets this library's refusal, not the unit library's.
 

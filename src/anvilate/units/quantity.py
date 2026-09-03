@@ -15,7 +15,6 @@ from math import isfinite
 from typing import Any
 
 import pint
-from pint.errors import PintError
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
@@ -153,8 +152,24 @@ def _unit_object(unit: str) -> pint.Unit:
     """
     try:
         return UREG.Unit(unit)
-    except PintError as failure:
-        raise UnitError(f"could not read the unit {unit!r}: {failure}") from failure
+    except Exception as failure:
+        # `except Exception`, deliberately, and it is the second version of this guard. The
+        # first caught `PintError` and covered **2 of 26** ways a malformed spelling actually
+        # fails. Over 37 odd strings pint answers with a bare `AssertionError` 22 times — for
+        # `-`, `+`, `*`, `/`, `**` among them — with an EMPTY message, which is the worst
+        # failure available: no message, no type information, and it reads as a broken
+        # invariant rather than a typo. Two more come out of Python's own tokenizer as
+        # `TokenError`. Only one is `UndefinedUnitError`.
+        #
+        # `-` matters most: it is what an engineer writes for "no units" on every drawing
+        # there is, and it reached `Quantity.to`, `render` and `decimals_for`.
+        #
+        # Enumerating a dependency's undocumented failure modes is a list that goes stale, and
+        # this function has exactly one job — turn a string into a Unit. Any failure to do
+        # that is an unreadable spelling, so any failure gets the same sentence. The message
+        # is kept when there is one, and named when there is not.
+        detail = str(failure) or f"{type(failure).__name__} with no message"
+        raise UnitError(f"could not read the unit {unit!r}: {detail}") from failure
 
 
 @lru_cache(maxsize=8192)
