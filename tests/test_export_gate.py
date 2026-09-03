@@ -739,3 +739,46 @@ def test_the_spec_is_exportable_while_the_part_is_red():
         for name, fn in _export_entry_points().items()
         if not _writes_a_file_or_document(fn)
     ), "a function that emits nothing has acquired a gate it has no artifact to watermark"
+
+
+def test_the_page_names_the_tags_a_receiving_script_reads():
+    """`docs/export-gating.md` says where the watermark lives and, until now, not what to
+    read once you are there.
+
+    The watermark's whole purpose is that somebody downstream can tell a validated file from
+    an overridden one. That is a programmatic question — a QA script reading a DXF header —
+    and the answer is three tag names the page did not contain. Held against the code so the
+    table cannot drift into naming a tag no exporter writes.
+    """
+    import pathlib
+
+    from anvilate.export.gate import BLOCKING_KEY, NOTICE_KEY, STATUS_KEY, ExportAuthorization
+
+    page = (pathlib.Path(__file__).resolve().parents[1] / "docs" / "export-gating.md").read_text(
+        encoding="utf-8"
+    )
+
+    validated = dict(ExportAuthorization(validated=True).metadata())
+    override = ExportAuthorization(validated=False, overridden=True, blocking=("tip deflection",))
+    overridden = dict(override.metadata())
+
+    # Every tag an export can carry is named on the page...
+    for key in (STATUS_KEY, NOTICE_KEY, BLOCKING_KEY):
+        assert f"`{key}`" in page, f"the page does not name {key}, which an export writes"
+    # ...and the page names no tag the code does not write.
+    written = set(validated) | set(overridden)
+    named = {
+        line.split("`")[1] for line in page.splitlines() if line.startswith("| `ANVILATE_EXPORT_")
+    }
+    assert named == written, (
+        f"the page's tag table and the exported metadata have parted company — only on the "
+        f"page {sorted(named - written)}, only in the file {sorted(written - named)}"
+    )
+
+    # The claim the page makes about BLOCKING being absent rather than empty.
+    assert BLOCKING_KEY not in validated, "a validated export now carries the blocking tag"
+    assert BLOCKING_KEY in overridden
+    assert validated[STATUS_KEY] == "VALIDATED"
+    assert overridden[STATUS_KEY] == "UNVALIDATED"
+    for value in ("VALIDATED", "UNVALIDATED"):
+        assert f"`{value}`" in page, f"the page no longer states the {value} status value"

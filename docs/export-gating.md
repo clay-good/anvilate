@@ -63,6 +63,25 @@ for application metadata, shown by CAD packages under drawing properties, and re
 `ezdxf.readfile`. It goes in the header rather than on a `TEXT` layer because a layer can be
 switched off. QIF gets the same lines at the front of the header `Scope`.
 
+**The tags, because a receiving QA script has to know what to read.** Both formats carry the
+same key/value pairs — `ExportAuthorization.metadata()` writes them once and each exporter
+only places them:
+
+| tag | when | value |
+| --- | --- | --- |
+| `ANVILATE_EXPORT_STATUS` | always | `VALIDATED` or `UNVALIDATED` |
+| `ANVILATE_EXPORT_NOTICE` | always | the screening notice — even a clean pass is a screen |
+| `ANVILATE_EXPORT_BLOCKING` | only on an unvalidated export | the override notice and the checks that blocked it, named |
+
+A consumer that wants one yes/no reads `ANVILATE_EXPORT_STATUS`. One that wants to know
+*why* reads `ANVILATE_EXPORT_BLOCKING`, which is absent rather than empty on a validated
+file — so its presence is itself the answer. Reading a DXF back:
+
+```python
+import ezdxf
+dict(ezdxf.readfile("part.dxf").header.custom_vars)["ANVILATE_EXPORT_STATUS"]
+```
+
 ## The bundle half
 
 The requirement watermarks two things: the exported file's own metadata *and* the evidence
