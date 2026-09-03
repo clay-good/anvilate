@@ -86,10 +86,24 @@ def test_the_public_symbol_count_is_the_manifests_own():
         if line.strip() and not line.startswith("#")
     ]
     assert len(manifest) > 1000, "the manifest came back implausibly small"
-    claimed = int(_claimed(r"and ([\d,]+) public symbols").replace(",", ""))
-    assert claimed == len(manifest), (
-        f"the README says {claimed:,} public analysis symbols; the manifest holds "
-        f"{len(manifest):,}. It read 1,811 against 1,818 before this test existed"
+
+    # EVERY occurrence, not the first. The README states this count twice — "1,819 public
+    # symbols" in the analysis-library paragraph and "the 1,819 public analysis symbols" in
+    # the citations row — and `_claimed` reads whichever the pattern happens to reach. The
+    # anchored pattern matched only the first, so the second copy could drift a whole release
+    # behind the surface and behind its own twin, which is the failure mode a gate on a
+    # duplicated number exists to prevent.
+    page = (_REPO / "README.md").read_text(encoding="utf-8")
+    stated = re.findall(r"([\d,]+) public (?:analysis )?symbols", page)
+    assert len(stated) >= 2, (
+        f"the README states the public-symbol count {len(stated)} time(s); this gate reads "
+        "every occurrence and needs to know when there is only one left"
+    )
+    wrong = [count for count in stated if int(count.replace(",", "")) != len(manifest)]
+    assert not wrong, (
+        f"the README states {stated} public analysis symbols; the manifest holds "
+        f"{len(manifest):,}. It read 1,811 against 1,818 before this test existed, and the "
+        f"second copy was unread until this gate looked at all of them"
     )
 
 
