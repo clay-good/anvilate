@@ -25,10 +25,11 @@ rating practice given in *Machinery's Handbook*.
 
 from __future__ import annotations
 
-from math import acos, ceil, cos, pi, sin
+from math import acos, cos, pi, sin
 
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+from ._counting import whole_count_ceil
 
 __all__ = [
     "chain_length_in_pitches",
@@ -141,7 +142,7 @@ def minimum_sprocket_teeth_for_chordal_variation(*, max_variation: float) -> int
     """
     if not 0 < max_variation < 1:
         raise ValueError(f"max_variation must be in (0, 1); got {max_variation}")
-    return ceil(pi / acos(1.0 - max_variation))
+    return whole_count_ceil(pi / acos(1.0 - max_variation))
 
 
 def chain_speed(

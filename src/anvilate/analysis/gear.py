@@ -29,12 +29,13 @@ N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import acos, atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, tan
+from math import acos, atan2, cos, degrees, pi, prod, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s, revolutions_per_minute, revolutions_per_second
+from ._counting import whole_count_ceil
 from .contact import hertz_cylinder_contact
 
 # Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
@@ -715,7 +716,7 @@ def minimum_teeth_to_avoid_undercut(
     if addendum_coefficient <= 0:
         raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
     exact = 2.0 * addendum_coefficient / sin(phi) ** 2
-    return ceil(exact)
+    return whole_count_ceil(exact)
 
 
 def involute_function(*, pressure_angle: float) -> float:

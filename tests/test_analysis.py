@@ -43451,3 +43451,112 @@ def test_no_public_analysis_function_answers_with_pints_own_exception():
         "a message naming no parameter, and a TypeError where every guard raises "
         "ValueError:\n  " + "\n  ".join(leaked)
     )
+
+
+# --- Whole counts taken from a floating-point ratio -----------------------------------
+#
+# A count of teeth or bolts is an integer answer to a division done in binary floating
+# point, and a design that fits exactly does not always divide exactly. 152.4 / 12.7 —
+# a 6 in workpiece at a 0.5 in broach pitch, twelve teeth — is 11.999999999999998, so the
+# bare floor reported eleven teeth in cut and the cutting force that count feeds came back
+# 8% low. The four counts below are the whole surface of that shape; each is pinned on the
+# exactly-fitting case, on the case that genuinely falls between two integers, and (where
+# the inputs carry units) on the same design written two ways.
+
+
+def test_broaching_teeth_in_cut_counts_an_exact_fit_as_the_whole_number_it_is():
+    from anvilate.analysis import broaching_cutting_force, broaching_teeth_in_cut
+
+    # Six inches of workpiece at a half-inch pitch is twelve teeth, in any spelling.
+    assert broaching_teeth_in_cut(workpiece_length=_q("6 in"), tooth_pitch=_q("0.5 in")) == 12
+    assert broaching_teeth_in_cut(workpiece_length=_q("3 in"), tooth_pitch=_q("0.25 in")) == 12
+    assert broaching_teeth_in_cut(workpiece_length=_q("152.4 mm"), tooth_pitch=_q("12.7 mm")) == 12
+    # A length genuinely between two pitches still rounds down: only whole teeth cut.
+    assert broaching_teeth_in_cut(workpiece_length=_q("10 in"), tooth_pitch=_q("0.375 in")) == 26
+    assert broaching_teeth_in_cut(workpiece_length=_q("25 mm"), tooth_pitch=_q("8 mm")) == 3
+    # The count sets the instantaneous load, so an undercount understates the force the
+    # broach carries — the direction that matters.
+    force = broaching_cutting_force(
+        specific_cutting_force=_q("2000 N/mm**2"),
+        teeth_in_cut=broaching_teeth_in_cut(workpiece_length=_q("6 in"), tooth_pitch=_q("0.5 in")),
+        cut_width=_q("10 mm"),
+        rise_per_tooth=_q("0.05 mm"),
+    )
+    assert force.to("kN").magnitude == pytest.approx(12.0, rel=1e-9)
+
+
+def test_flange_coupling_bolt_count_does_not_depend_on_the_spelling_of_the_radius():
+    from anvilate.analysis import flange_coupling_bolt_count
+
+    def count(radius: str) -> int:
+        return flange_coupling_bolt_count(
+            torque=_q("2000 N*m"),
+            bolt_circle_radius=_q(radius),
+            allowable_bolt_force=_q("5 kN"),
+        )
+
+    # 2000 N*m over a 100 mm circle on 5 kN bolts is exactly four. Written in feet, the
+    # same radius divided to 4.000000000000001 and the bare ceiling bought a fifth bolt.
+    assert count("100 mm") == 4
+    assert count("0.1 m") == 4
+    assert count("0.32808398950131233 ft") == 4
+    # A torque genuinely past four bolts' worth still rounds up.
+    assert (
+        flange_coupling_bolt_count(
+            torque=_q("2001 N*m"),
+            bolt_circle_radius=_q("100 mm"),
+            allowable_bolt_force=_q("5 kN"),
+        )
+        == 5
+    )
+
+
+def test_minimum_teeth_to_avoid_undercut_does_not_buy_a_tooth_on_a_representation_error():
+    from anvilate.analysis import minimum_teeth_to_avoid_undercut
+
+    # 2k/sin²φ at φ = 30°, k = 0.5 is exactly 4; in floating point it is 4.000000000000001,
+    # and the bare ceiling asked for a fifth tooth the geometry does not need.
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=30.0, addendum_coefficient=0.5) == 4
+    # The textbook values are unmoved: each falls between two integers and rounds up.
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=20.0) == 18
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=14.5) == 32
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=25.0) == 12
+
+
+def test_minimum_sprocket_teeth_answers_a_target_taken_from_a_real_sprocket():
+    from math import cos, pi
+
+    from anvilate.analysis import minimum_sprocket_teeth_for_chordal_variation
+
+    # The target a 23-tooth sprocket actually meets must come back as 23, not 24: the
+    # inverse of chordal_speed_variation has to round-trip its own forward form.
+    for teeth in range(9, 41):
+        target = 1.0 - cos(pi / teeth)
+        assert minimum_sprocket_teeth_for_chordal_variation(max_variation=target) == teeth
+    # The documented round targets are unmoved.
+    assert minimum_sprocket_teeth_for_chordal_variation(max_variation=0.02) == 16
+    assert minimum_sprocket_teeth_for_chordal_variation(max_variation=0.01) == 23
+
+
+def test_the_whole_count_forms_snap_only_a_representation_error():
+    from anvilate.analysis._counting import whole_count_ceil, whole_count_floor
+
+    # A ratio one ulp off an integer is that integer, both ways.
+    assert whole_count_ceil(4.000000000000001) == 4
+    assert whole_count_floor(11.999999999999998) == 12
+    # A ratio genuinely between two integers is not touched.
+    assert whole_count_ceil(4.001) == 5
+    assert whole_count_floor(11.999) == 11
+    assert whole_count_ceil(4.0) == 4
+    assert whole_count_floor(12.0) == 12
+    # The snap is far narrower than any engineering resolution: a part in a million is a
+    # real difference and stays one.
+    assert whole_count_ceil(4.000001) == 5
+    assert whole_count_floor(11.999999) == 11
+    # Negatives and zero keep the ordinary meaning of the two roundings.
+    assert whole_count_ceil(-4.000000000000001) == -4
+    assert whole_count_floor(-4.000000000000001) == -4
+    assert whole_count_ceil(-4.5) == -4
+    assert whole_count_floor(-4.5) == -5
+    assert whole_count_ceil(0.0) == 0
+    assert whole_count_floor(0.0) == 0

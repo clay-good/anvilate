@@ -43,7 +43,14 @@ def _claimed(pattern: str, page: str = "README.md") -> str:
 
 
 def test_the_analysis_module_count_is_the_real_one():
-    modules = [m.name for m in pkgutil.iter_modules(analysis_package.__path__) if not m.ispkg]
+    # Public modules only. A leading underscore is a shared implementation detail — it
+    # ships no check and holds no formula, so counting it would tell a reader the library
+    # covers one more thing than it does.
+    modules = [
+        m.name
+        for m in pkgutil.iter_modules(analysis_package.__path__)
+        if not m.ispkg and not m.name.startswith("_")
+    ]
     assert int(_claimed(r"\(([\d,]+) closed-form modules").replace(",", "")) == len(modules)
 
 

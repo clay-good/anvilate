@@ -22,9 +22,8 @@ broach itself can carry before it yields.
 
 from __future__ import annotations
 
-from math import floor
-
 from ..units import Quantity
+from ._counting import whole_count_floor
 
 __all__ = [
     "broaching_cutting_force",
@@ -51,7 +50,7 @@ def broaching_teeth_in_cut(*, workpiece_length: Quantity, tooth_pitch: Quantity)
         raise ValueError("workpiece_length must be positive")
     if pitch <= 0:
         raise ValueError("tooth_pitch must be positive")
-    return max(1, floor(length / pitch))
+    return max(1, whole_count_floor(length / pitch))
 
 
 def broaching_cutting_force(

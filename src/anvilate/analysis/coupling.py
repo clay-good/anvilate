@@ -22,9 +22,8 @@ torque requires.
 
 from __future__ import annotations
 
-from math import ceil
-
 from ..units import Quantity, require_finite
+from ._counting import whole_count_ceil
 
 __all__ = [
     "flange_coupling_torque",
@@ -119,4 +118,4 @@ def flange_coupling_bolt_count(
     if f <= 0:
         raise ValueError(f"allowable_bolt_force must be positive; got {allowable_bolt_force}")
     t = torque.to("N*m").magnitude
-    return ceil(t / (f * r))
+    return whole_count_ceil(t / (f * r))

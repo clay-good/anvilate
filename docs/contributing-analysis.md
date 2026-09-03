@@ -761,3 +761,53 @@ states inputs *and* a result, rebuild the case from the page's inputs. Where the
 block *is* the output, state the inputs in the test and compare — reading the values back
 out of the rendered block makes the page its own fixture, and it will then agree with
 itself however far it drifts.
+
+## The same design, written in two unit systems
+
+Every check here takes dimensioned quantities and converts internally, so the unit the
+caller writes should not be able to change the answer. That is a property a sweep can
+check, and nothing was checking it.
+
+The sweep: wrap every function in `anvilate.analysis`, `anvilate.standards` and
+`anvilate.tolerance`, record one real call each during an ordinary suite run — **1,542
+functions** — then replay each recorded call with every argument converted to US customary
+base units (`pint`'s `ureg.default_system = "US"`, so a metre becomes a yard and a newton a
+pound·yard/s²) and compare the two results field by field. Same physical inputs, different
+spelling, and the answers must agree.
+
+One disagreement came back, and it opened a class:
+
+    DIFFER  analysis.coupling.flange_coupling_bolt_count: 4.0  vs  5.0
+
+**An integer count is the answer to a division, and the division is done in floating
+point.** 2000 N·m over a 100 mm bolt circle on 5 kN bolts is exactly four bolts; write the
+same radius in feet and the quotient is 4.000000000000001, and a bare `ceil` buys a fifth
+bolt. Four functions had the shape, and the sweep only reached the first — the other three
+take plain floats or fit exactly in metric, so no conversion moves them:
+
+| Function | The exactly-fitting case | Was | Is |
+| --- | --- | --- | --- |
+| `broaching_teeth_in_cut` | a 6 in workpiece at a 0.5 in pitch | 11 | 12 |
+| `flange_coupling_bolt_count` | 2000 N·m, a 100 mm circle in feet, 5 kN bolts | 5 | 4 |
+| `minimum_teeth_to_avoid_undercut` | φ = 30°, k = 0.5 (2k/sin²φ = 4) | 5 | 4 |
+| `minimum_sprocket_teeth_for_chordal_variation` | the target a 23-tooth sprocket meets | 24 | 23 |
+
+The broaching one is the one that matters: teeth in cut sets the instantaneous cutting
+force, so the undercount reported a load 8% below the one the broach actually carries. The
+other three err upward, which is harmless in the part and still wrong in the answer.
+
+So: **a whole count comes from `_counting.whole_count_ceil` or `whole_count_floor`, never
+from `math.ceil` or `math.floor`.** They snap a ratio within a relative 1e-9 of an integer
+onto it and round only what genuinely falls between two — a tolerance far below any
+engineering resolution and far above what a conversion and a division accumulate. Pin the
+new count on the exactly-fitting case, on a case that truly falls between two integers, and
+where the inputs carry units, on the same design written two ways.
+
+Two more results the sweep reported, and neither is a defect. `laminar_boundary_layer_
+thickness` and `laminar_skin_friction_coefficient` refused the converted call: their test
+input sits *exactly* on the Re = 5·10⁵ transition, so a conversion moves it across a guard
+that is correctly there. And `half_sine_shock_amplification` takes `int((1+β)/(2β))` on a
+bound that is an integer whenever ρ is a half-integer — ρ = 2.5 computes it as
+2.9999999999999996 — but the dropped endpoint is `sin(2πρ)`, which is exactly zero at every
+ρ that makes the bound whole, so the term it loses never governs the maximum. Reach the
+survivor before writing the excuse; both of these were reached.

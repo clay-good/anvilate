@@ -36,7 +36,22 @@ _TESTS = Path(__file__).resolve().parent
 
 
 def _module_names() -> list[str]:
-    return sorted(m.name for m in pkgutil.iter_modules(analysis_pkg.__path__))
+    """The public analysis modules — the shipped surface these gates are about.
+
+    A leading underscore means a shared implementation detail rather than a physics
+    module: it has no place in the API table of contents and no example of its own.
+    ``test_a_private_analysis_module_exports_nothing`` is what keeps that exclusion
+    from becoming a way to ship public surface unnoticed.
+    """
+    return sorted(
+        m.name for m in pkgutil.iter_modules(analysis_pkg.__path__) if not m.name.startswith("_")
+    )
+
+
+def _private_module_names() -> list[str]:
+    return sorted(
+        m.name for m in pkgutil.iter_modules(analysis_pkg.__path__) if m.name.startswith("_")
+    )
 
 
 def _live_surface() -> set[str]:
@@ -110,6 +125,17 @@ def test_every_module_has_a_runnable_example():
         if not pattern.search(example_text):
             uncovered.append(name)
     assert not uncovered, f"analysis modules with no runnable example under examples/: {uncovered}"
+
+
+def test_a_private_analysis_module_exports_nothing():
+    """The exclusion above is only safe while a private module is genuinely private."""
+    for name in _private_module_names():
+        module = importlib.import_module(f"anvilate.analysis.{name}")
+        assert getattr(module, "__all__", None) == [], (
+            f"anvilate.analysis.{name} is private (leading underscore) but declares "
+            f"__all__ = {getattr(module, '__all__', None)!r}; a module with public "
+            "symbols must be public, so the manifest, docstring and example gates see it"
+        )
 
 
 def test_every_module_is_listed_in_the_package_docstring():
