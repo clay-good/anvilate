@@ -60,8 +60,29 @@ def parse_spec(data: dict) -> DesignSpec:
 
 
 def load_spec_yaml(text: str) -> DesignSpec:
-    """Load and validate a spec from a YAML (or JSON) document."""
-    data = yaml.safe_load(text)
+    """Load and validate a spec from a YAML (or JSON) document.
+
+    A document that is not well-formed YAML is a :class:`SpecValidationError` like any other
+    bad document, carrying the line and column PyYAML found the trouble at.
+
+    It used to be a traceback. `yaml.YAMLError` descends from `Exception` and not from
+    `ValueError`, so it fell through every caller's guard — including the CLI's, which
+    catches `ValueError`, `TypeError` and `KeyError` — and `anvilate check` answered a tab in
+    the indentation with a stack trace through `yaml/scanner.py` and exit 1, the code that
+    means a part failed. A tab is one of the commonest things to get wrong in a YAML file,
+    and the answer to it is a sentence with a line number in it.
+    """
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as failure:
+        mark = getattr(failure, "problem_mark", None)
+        where = f"line {mark.line + 1}, column {mark.column + 1}" if mark is not None else "<root>"
+        problem = getattr(failure, "problem", None) or str(failure).split("\n")[0]
+        context = getattr(failure, "context", None)
+        detail = f"{context}, {problem}" if context else str(problem)
+        raise SpecValidationError(
+            [{"loc": where, "msg": f"the document is not valid YAML — {detail}"}]
+        ) from failure
     if not isinstance(data, dict):
         raise SpecValidationError([{"loc": "<root>", "msg": "spec must be a mapping"}])
     return parse_spec(data)

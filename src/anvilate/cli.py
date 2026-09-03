@@ -791,8 +791,27 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
             )
             for candidate in candidates:
                 try:
-                    document = yaml.safe_load(candidate.read_text(encoding="utf-8"))
-                except (OSError, yaml.YAMLError):
+                    text = candidate.read_text(encoding="utf-8")
+                except OSError:
+                    text = ""
+                try:
+                    document = yaml.safe_load(text)
+                except yaml.YAMLError:
+                    # A file that will not parse cannot be told apart from "some other YAML
+                    # file" by its keys, because parsing is what reveals them — but its raw
+                    # text still can. One that *says* `anvilate_spec` and will not parse is
+                    # somebody's broken spec, and skipping it with "not a Design Spec" both
+                    # misdescribes it and lets a repository sweep pass over a part nobody
+                    # screened. That is the silent green this tool exists to refuse, so it
+                    # is a bad request naming the file. A malformed YAML file that claims
+                    # nothing is still just a stray file, and is still skipped.
+                    if "anvilate_spec" in text:
+                        print(
+                            f"anvilate {command}: {candidate}: names anvilate_spec and is "
+                            f"not valid YAML, so it was not screened",
+                            file=err,
+                        )
+                        return EXIT_BAD_REQUEST
                     document = None
                 if isinstance(document, dict) and "anvilate_spec" in document:
                     found.append(candidate)

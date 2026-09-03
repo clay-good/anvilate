@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1576,3 +1577,62 @@ def test_check_prints_the_work_in_the_units_the_spec_declares(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert " mm" in printed and "MPa" in printed, printed
     assert "kip" not in printed and "ksi" not in printed, printed
+
+
+def test_a_yaml_syntax_error_is_a_bad_request_with_a_line_number(tmp_path):
+    """A tab in the indentation used to be a traceback through `yaml/scanner.py`.
+
+    `yaml.YAMLError` descends from `Exception` and not from `ValueError`, so it fell through
+    `_load`'s `(ValueError, TypeError, KeyError)` guard — and `anvilate check` answered one of
+    the commonest things to get wrong in a YAML file with a stack trace and exit 1, the code
+    that means a part FAILED. Five malformed shapes did it: a tab in the indentation, a tab
+    after a colon, a stray tab mid-block, an unclosed bracket and an unbalanced quote.
+
+    The same knowledge was already in this file 140 lines away — the directory scan catches
+    `yaml.YAMLError` explicitly — which is what makes this a gap rather than an oversight
+    about the exception hierarchy.
+    """
+    for label, text in (
+        ("a tab in the indentation", "name: x\nacceptance:\n\ttiers: [T1_analytical]\n"),
+        ("a tab after a colon", "name:\tx\ndescription: d\n"),
+        ("an unclosed bracket", "name: x\nacceptance: {tiers: [T1_analytical\n"),
+        ("an unbalanced quote", 'name: "x\ndescription: d\n'),
+    ):
+        path = tmp_path / "spec.yaml"
+        path.write_text(text, encoding="utf-8")
+        code, out, err = _run("check", str(path))
+        assert code == EXIT_BAD_REQUEST, f"{label} answered {code}, not a bad request"
+        assert out == ""
+        assert "Traceback" not in err, f"{label} still answers with a stack trace"
+        assert "not valid YAML" in err, f"{label}: {err!r}"
+        # The line number is the whole point: "fix your YAML" without one is not help.
+        assert re.search(r"line \d+, column \d+", err), f"{label} names no position: {err!r}"
+
+
+def test_a_malformed_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_path):
+    """A repository sweep must not pass over a part nobody screened.
+
+    `anvilate check specs/` is a merge gate. A file that will not parse cannot be told from
+    "some other YAML file" by its keys — parsing is what reveals them — so a broken spec used
+    to be reported as `not a Design Spec, skipped` and the run carried on to exit 0. The raw
+    text still tells them apart: one that *says* `anvilate_spec` and will not parse is
+    somebody's broken spec.
+    """
+    (tmp_path / "good.yaml").write_text(_SPEC, encoding="utf-8")
+    stray = tmp_path / "notes.yaml"
+    stray.write_text("unrelated: [\n", encoding="utf-8")  # malformed, and claims nothing
+
+    # A stray malformed file is still just a stray file: skipped, reported, run continues.
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_CODES[CheckStatus.NOT_EVALUATED], err
+    assert "notes.yaml: not a Design Spec, skipped" in err
+    assert "deck_plate" in out
+
+    broken = tmp_path / "broken.yaml"
+    broken.write_text('anvilate_spec: "1.3.0"\nname: b\nacceptance:\n\ttiers: [T1_analytical]\n')
+    code, out, err = _run("check", str(tmp_path))
+    assert code == EXIT_BAD_REQUEST, "a broken spec in the sweep did not stop the run"
+    assert "broken.yaml: names anvilate_spec and is not valid YAML" in err
+    assert "not a Design Spec, skipped" not in err.split("broken.yaml")[-1], (
+        "the broken spec is still being described as some other YAML file"
+    )

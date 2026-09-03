@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -1319,3 +1320,31 @@ def test_the_finite_rule_leaves_an_ordinary_document_alone():
     spec = golden_bracket()
     assert spec.constraints.max_mass.value.to("g").magnitude == pytest.approx(150.0)
     assert spec.constraints.min_safety_factor.value > 0
+
+
+def test_a_document_that_is_not_valid_yaml_is_a_spec_validation_error():
+    """The library boundary, not just the CLI.
+
+    `load_spec_yaml` is the function that parses YAML, so it is where a YAML syntax error
+    becomes a spec error. It used to let `yaml.YAMLError` through — which descends from
+    `Exception`, not `ValueError` — so every caller's guard missed it and any tool built on
+    this function answered a mistyped document with a stack trace.
+    """
+    import yaml
+
+    from anvilate.spec import SpecValidationError
+
+    with pytest.raises(SpecValidationError) as raised:
+        load_spec_yaml("name: x\nacceptance:\n\ttiers: [T1_analytical]\n")
+
+    # A ValueError, so the ordinary guard catches it...
+    assert isinstance(raised.value, ValueError)
+    assert not isinstance(raised.value, yaml.YAMLError)
+    # ...carrying the position, which is the only part a person can act on.
+    assert len(raised.value.errors) == 1
+    problem = raised.value.errors[0]
+    assert re.fullmatch(r"line \d+, column \d+", problem["loc"]), problem
+    assert "not valid YAML" in problem["msg"]
+    assert "cannot start any token" in problem["msg"]
+    # The original is kept as the cause rather than swallowed.
+    assert isinstance(raised.value.__cause__, yaml.YAMLError)

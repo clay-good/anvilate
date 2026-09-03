@@ -52,6 +52,19 @@ silently. One you *named* is an error: you said it was a spec and it is not. An 
 search is a bad request rather than a pass, because "nothing found, nothing failed, exit 0"
 is the silent green this command exists to avoid.
 
+**A file that will not parse is the third case, and it used to fall into the second.** A
+document cannot be recognised by its keys if it cannot be read at all — parsing is what
+reveals them — so a broken spec in a searched directory was reported as `not a Design Spec,
+skipped` and the sweep carried on to exit 0, over a part nobody screened. The raw text still
+tells them apart: one that *says* `anvilate_spec` and will not parse is somebody's broken
+spec, and it is a bad request naming the file. A malformed YAML file that claims nothing is
+still just a stray file and is still skipped.
+
+A file you **name** that will not parse is a bad request with the position in it —
+`line 8, column 1: the document is not valid YAML — found character '\t' that cannot start
+any token`. It used to be a stack trace through PyYAML and exit 1, the code that means a
+part failed.
+
 Over many specs each block carries its path as well as its name — two parts in a repository can share one, and a run that printed the name alone gave two identical blocks and no way to tell which was which. A single named spec keeps the bare name, since the caller supplied the path. Over many specs the exit code is the worst verdict found, so one failing part fails the
 run — what a merge gate needs.
 
