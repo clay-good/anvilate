@@ -952,3 +952,66 @@ def test_a_certificate_says_when_the_calibration_was_performed():
     # renders as it did.
     same = str(certificate(issue_date="2026-01-05", performance_end_date="2026-01-05"))
     assert same == str(certificate(issue_date="2026-01-05"))
+
+
+def test_a_refused_bare_number_is_quoted_the_way_the_line_wrote_it():
+    """The refusal is right and it misquoted the line it was refusing.
+
+    `_VALUE`'s unit group is mandatory and its magnitude group is not anchored to the end,
+    so a value that is nothing but a number still matched — by backtracking until the unit
+    had a character to take. `2.0` split into a magnitude of `2.` and a unit of `0`, and the
+    sentence came back as **`'2. 0' has no unit`** about a line that said `2.0`. `12` became
+    `'1 2'`; `0.75` became `'0.7 5'`; `100.5` became `'100. 5'`.
+
+    "A bare number is not a quantity" is this module's doctrine and the verdict was never in
+    question. But a refusal that misquotes its own subject reads as a parser fault, and it
+    sends a reader looking for a typo they did not make — on the most ordinary line a
+    requirements sheet carries, `Minimum safety factor: 2.0`.
+
+    A bare number now takes the same path `2` already took, so one mistake gets one sentence.
+    """
+    for line in (
+        "Minimum safety factor: 2.0",
+        "Minimum safety factor: 2",
+        "Ratio: 0.75",
+        "Count: 12",
+        "Factor: 1.05",
+        "Scale: 100.5",
+    ):
+        draft = extract_requirements(line, document="rfq.txt")
+        assert draft.values == (), f"{line!r} was extracted as a quantity"
+        assert len(draft.unparsed) == 1, line
+        reason = draft.unparsed[0].reason
+        assert reason == "the value is not a number with a unit", f"{line!r}: {reason!r}"
+        # The specific defect: no reassembled, space-injected version of the number.
+        written = line.split(":", 1)[1].strip()
+        assert written.replace(".", ". ") not in reason
+        assert " " not in reason.replace("the value is not a number with a unit", "").strip()
+
+
+def test_a_unit_that_begins_with_a_digit_still_parses():
+    """The narrow escape the fix had to leave open.
+
+    The split is only treated as one number when the unit half is *entirely* digits, commas
+    and dots. A unit may legitimately start with a digit — `1/s` is how a requirement sheet
+    writes a frequency — and rejecting the whole shape would have traded one wrong refusal
+    for another.
+    """
+    draft = extract_requirements("Frequency: 50 1/s", document="rfq.txt")
+    assert draft.unparsed == ()
+    assert len(draft.values) == 1
+    assert draft.values[0].quantity.to("Hz").magnitude == pytest.approx(50.0)
+
+    # And the shapes the module already documented are untouched.
+    for line, fragment in (
+        ("Utilisation: 12 %", "has no unit"),
+        ("Load: 1e400 kN", "overflows to inf"),
+        ("Thickness: 25 +/- 0.1 mm", "range or a tolerance"),
+    ):
+        refused = extract_requirements(line, document="rfq.txt")
+        assert refused.values == (), line
+        assert fragment in refused.unparsed[0].reason, (line, refused.unparsed[0].reason)
+    for line, unit in (("Temp: -20 degC", "°C"), ("Mass: 1,200 kg", "kg"), ("Load: 60 kN", "kN")):
+        taken = extract_requirements(line, document="rfq.txt")
+        assert len(taken.values) == 1, line
+        assert unit in str(taken.values[0].quantity), line

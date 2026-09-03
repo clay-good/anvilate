@@ -106,6 +106,26 @@ def _split(line: str) -> re.Match[str] | None:
 _VALUE = re.compile(r"^(?P<magnitude>[-+]?\d[\d,]*\.?\d*(?:[eE][-+]?\d+)?)\s*(?P<unit>\S.*)$")
 
 
+def _is_a_bare_number(match: re.Match[str]) -> bool:
+    """Whether the split found one number rather than a magnitude and a unit.
+
+    `_VALUE`'s unit group is mandatory and its magnitude group is not anchored to the end,
+    so a value that is nothing but a number still matches — by backtracking until the unit
+    has a character to take. `2.0` split into a magnitude of `2.` and a unit of `0`, and the
+    refusal quoted the two back with the space between them: **`'2. 0' has no unit`**, about
+    a line that said `2.0`. `12` became `'1 2'` and `0.75` became `'0.7 5'`.
+
+    The verdict was right — a bare number is not a quantity, and this module says so at
+    length — but a refusal that misquotes the line it is refusing reads as a parser fault,
+    and it sent the reader looking for a typo they had not made. A bare number now takes the
+    same path `2` already took, so the two spellings of one mistake get one sentence.
+
+    A unit never consists only of digits, a comma and a dot; `1/s` and `%` and `degC` all
+    survive, and only a split that reassembles into a single number is caught.
+    """
+    return bool(re.fullmatch(r"[\d,.]+", match.group("unit")))
+
+
 # How close two extractions of one field have to be to count as the same requirement.
 # Relative, so it means the same thing in kilonewtons and in gigametres, and tight enough
 # that it only absorbs the float error of a unit conversion (~1e-15) — 50 kN and 50000 N
@@ -972,8 +992,9 @@ def extract_requirements(
                 UnparsedLine(source=location, reason="the label normalizes to an empty field name")
             )
             continue
-        value_match = _VALUE.match(match.group("value"))
-        if value_match is None:
+        stated = match.group("value").strip()
+        value_match = _VALUE.match(stated)
+        if value_match is None or _is_a_bare_number(value_match):
             unparsed.append(
                 UnparsedLine(source=location, reason="the value is not a number with a unit")
             )
