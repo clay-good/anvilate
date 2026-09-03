@@ -578,8 +578,10 @@ class AcceptanceCriteria(_Base):
 # 1.1.0 added the optional LoadCase.nature classification, the DesignSpec
 # combination_basis, and the seismic parameters. 1.2.0 added element_type and
 # element_params. 1.3.0 added constraints.max_safety_factor, the top of the target band an
-# OVER_MARGIN verdict is measured against. All additive; an older 1.x spec loads unchanged
-# and is re-stamped.
+# OVER_MARGIN verdict is measured against. All additive, which is what lets an older 1.x
+# spec load unchanged — and it comes back saying which version it is, not this one. The
+# version a document carries is a record of what it is, never an assertion that it is
+# current; see `migrate_to_current`.
 SCHEMA_VERSION = "1.3.0"
 
 

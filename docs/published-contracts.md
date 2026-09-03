@@ -89,7 +89,10 @@ exists to avoid.
 `constraints.max_safety_factor` is the top of the target band. `OVER_MARGIN` was first-class
 everywhere a verdict is read and reachable only from a pack argument no document could set,
 so the status shipped for months with no way to ask for it. Additive, like every 1.x change
-before it: an older spec loads unchanged and is re-stamped.
+before it, so an older spec loads unchanged — and comes back declaring the version its
+author wrote, not this release's. The field is a record of what the document is; see
+[screening a document](spec-screening.md#anvilate_spec-is-a-record-not-an-assertion) for why
+it used to be an assertion and what that cost the evidence bundle.
 
 ### 1.2.0: a derivation with nothing substituted into it
 
