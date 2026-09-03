@@ -363,7 +363,13 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
     # nothing "moved for the worse", and the part went from screened to unscreened. A
     # different set of checks is not a worse set — that decision stands — but a different
     # verdict is a worse verdict, and the roll-up is defined for exactly this comparison.
-    worse = _BLOCKING_ORDER.index(after_card.status) > _BLOCKING_ORDER.index(before_card.status)
+    #
+    # `_moved_for_the_worse`, not `_BLOCKING_ORDER` directly: this line used the blocking
+    # order, which sorts FAIL above NOT_EVALUATED because a failure is the thing to look at
+    # first — so it read `fail → not_evaluated` as an improvement and exited 0 over a change
+    # that deleted the failing checks. Deleting the element does it, and so does deleting the
+    # constraint they are judged against.
+    worse = _moved_for_the_worse(before_card.status, after_card.status)
     if worse:
         print(
             f"anvilate diff: the card: {before_card.status.value} → {after_card.status.value}",
@@ -377,6 +383,34 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
     return max(codes, key=_EXIT_SEVERITY.index)
 
 
+def _moved_for_the_worse(was: CheckStatus, now: CheckStatus) -> bool:
+    """Did this verdict get worse? Which is not the question ``_BLOCKING_ORDER`` answers.
+
+    That list ranks how hard a verdict *blocks* — a FAIL is the thing to look at before a
+    NOT_EVALUATED, so it sorts above it — and the diff read it as an ordering of badness. On
+    that reading ``fail → not_evaluated`` is an **improvement**, and `anvilate diff` exited 0,
+    "nothing regressed", over a change that deleted two failing checks and left the tier
+    unevaluated. Its own rendering said ``- padeye net tension: removed (was fail)`` three
+    lines above the exit code that contradicted it. Deleting the thing being checked is the
+    way to silence a failing gate, so it is the one change a gate must never call an
+    improvement.
+
+    So a verdict that becomes NOT_EVALUATED is a regression from anything else. "A screen that
+    could not run is not a screen that passed" is this library's rule, and this is the rest of
+    it: nor is it a screen that improved on one that failed. Going from a known failure to not
+    knowing loses the check. Everything else is the blocking order, which is right for the
+    comparisons that stay inside the screened statuses.
+
+    **FAIL and NOT_EVALUATED are therefore incomparable, and that is the point.** Both
+    directions between them are reported: one loses the check, the other reveals a failure, and
+    neither is an improvement. No single ordering of the four statuses can say that, which is
+    how a list built to rank blocking urgency came to be read as a scale of badness.
+    """
+    if now is CheckStatus.NOT_EVALUATED:
+        return was is not CheckStatus.NOT_EVALUATED
+    return _BLOCKING_ORDER.index(now) > _BLOCKING_ORDER.index(was)
+
+
 def _regressions(before: Scorecard, after: Scorecard):
     """Checks whose status moved for the worse, by name.
 
@@ -388,8 +422,7 @@ def _regressions(before: Scorecard, after: Scorecard):
     return [
         (entry.name, was[entry.name], entry.status)
         for entry in after.entries
-        if entry.name in was
-        and _BLOCKING_ORDER.index(entry.status) > _BLOCKING_ORDER.index(was[entry.name])
+        if entry.name in was and _moved_for_the_worse(was[entry.name], entry.status)
     ]
 
 

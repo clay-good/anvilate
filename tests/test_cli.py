@@ -1998,3 +1998,152 @@ def test_a_self_referential_symlink_in_a_swept_directory_terminates(tmp_path):
     assert code != EXIT_BAD_REQUEST, err
     # One part, counted once: the same file reached twice is not two parts.
     assert out.startswith("deck_plate: "), out
+
+
+def test_deleting_a_failing_check_is_not_an_improvement(tmp_path):
+    """`anvilate diff` exited 0 — "nothing regressed" — over a change that deleted two
+    FAILING checks and left the tier unevaluated.
+
+    The card comparison used `_BLOCKING_ORDER`, which sorts FAIL above NOT_EVALUATED because a
+    failure is the thing to look at first. Read as an ordering of badness that makes
+    `fail → not_evaluated` an *improvement*. The diff's own rendering printed
+    `- padeye net tension: removed (was fail)` three lines above the exit code that
+    contradicted it.
+
+    Two ordinary edits do it, and both are what somebody reaches for when a check is in the
+    way: delete the `element_type` so no pack screen is selected, or delete the `constraints`
+    the checks are judged against. Deleting the thing being checked is *the* way to silence a
+    failing gate, so it is the one change a merge gate must never call an improvement.
+    """
+    padeye = (_REPO / "examples" / "padeye.spec.yaml").read_text(encoding="utf-8")
+    failing = padeye.replace("magnitude: 60.0, unit: kN", "magnitude: 600.0, unit: kN")
+    before = tmp_path / "before.yaml"
+    before.write_text(failing, encoding="utf-8")
+    assert _run("check", str(before))[0] == EXIT_FAILED, "the 'before' spec must fail"
+
+    silenced = {
+        "the element deleted": re.sub(
+            r"element_type: lifting_lug\nelement_params:\n(?:  .*\n)+", "", failing
+        ),
+        "the constraint deleted": re.sub(r"constraints:.*\n", "", failing),
+    }
+    for label, text in silenced.items():
+        after = tmp_path / "after.yaml"
+        after.write_text(text, encoding="utf-8")
+        assert _run("check", str(after))[0] == EXIT_NOT_EVALUATED, label
+
+        code, out, err = _run("diff", str(before), str(after))
+        assert code == EXIT_NOT_EVALUATED, (
+            f"{label}: diff answered {code}; a part that stopped being screened has not "
+            f"improved on one that failed"
+        )
+        assert "the card: fail → not_evaluated" in err, f"{label}: {err!r}"
+        # The rendering already said the checks went away; the exit code now agrees with it.
+        assert "removed (was fail)" in out, out
+
+    # The genuine improvement still reads as one, so this is not "every change is a regression".
+    fixed = tmp_path / "fixed.yaml"
+    fixed.write_text(padeye, encoding="utf-8")
+    assert _run("diff", str(before), str(fixed))[0] == EXIT_OK, "fail → pass must be exit 0"
+
+
+def test_no_transition_into_not_evaluated_is_ever_an_improvement():
+    """Every ordered pair of statuses, stated as properties rather than as a second copy of
+    the rungs — a table of expected answers derived from the code under test pins nothing.
+
+    The last assertion is the scope of the change: exactly one pair moved, and naming it is
+    what says this widened the rule by the one case it was written for rather than making
+    every edit a regression.
+    """
+    from anvilate.cli import _BLOCKING_ORDER, _moved_for_the_worse
+
+    statuses = list(CheckStatus)
+    assert set(statuses) == set(_BLOCKING_ORDER), (
+        "a status outside the blocking order would compare by an index that raises"
+    )
+
+    for status in statuses:
+        assert not _moved_for_the_worse(status, status), f"{status} did not move at all"
+
+    # Antisymmetric everywhere except one pair, and that exception is the design statement:
+    # FAIL and NOT_EVALUATED are not two points on one axis of badness. Going from "it fails"
+    # to "we do not know" loses the check; going the other way reveals a failure. Neither is
+    # an improvement, so both directions are reported, and a single ordering cannot say that —
+    # which is exactly how the blocking order came to be read as one.
+    incomparable = {frozenset({CheckStatus.FAIL, CheckStatus.NOT_EVALUATED})}
+    for was in statuses:
+        for now in statuses:
+            if was is now:
+                continue
+            both = _moved_for_the_worse(was, now) and _moved_for_the_worse(now, was)
+            assert both == (frozenset({was, now}) in incomparable), (
+                f"{was.value} → {now.value}: worse in both directions is only right for the "
+                f"pair that is genuinely incomparable"
+            )
+
+    # The rule this exists for: losing the check is never an improvement.
+    for was in statuses:
+        if was is CheckStatus.NOT_EVALUATED:
+            continue
+        assert _moved_for_the_worse(was, CheckStatus.NOT_EVALUATED), (
+            f"{was} → not_evaluated read as no regression; a screen that could not run is "
+            f"not a screen that passed, and it has not improved on one that failed"
+        )
+
+    def by_blocking_order(was, now):
+        return _BLOCKING_ORDER.index(now) > _BLOCKING_ORDER.index(was)
+
+    moved = {
+        (was.value, now.value)
+        for was in statuses
+        for now in statuses
+        if _moved_for_the_worse(was, now) != by_blocking_order(was, now)
+    }
+    assert moved == {("fail", "not_evaluated")}, (
+        f"this rule differs from the blocking order on {sorted(moved)}; it is meant to differ "
+        f"on exactly the transition that deleted a failing check"
+    )
+
+
+def test_a_check_that_keeps_its_name_and_stops_being_evaluated_is_a_regression():
+    """The per-check half of the same rule, constructed rather than screened.
+
+    `_regressions` and the card comparison both read `_moved_for_the_worse`, and only the card
+    comparison is reachable from a spec today: the two ways to silence a failing check delete
+    it by name, and a check that goes `fail → not_evaluated` while *keeping* its name needs a
+    screen that can report both under one name, which no pack does yet.
+
+    That makes the per-check line unpinned by the end-to-end case above rather than correct by
+    construction — restoring the blocking order there passes every other test in this file. So
+    it is exercised directly. A pack that gains such a screen inherits the right answer, and if
+    somebody reverts the line this fails.
+    """
+    from anvilate.cli import _regressions
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    def card(*pairs):
+        return Scorecard(
+            entries=tuple(
+                ScorecardEntry(name=name, status=status, detail="d") for name, status in pairs
+            )
+        )
+
+    before = card(
+        ("bolt shear", CheckStatus.FAIL),
+        ("weld throat", CheckStatus.PASS),
+        ("bearing", CheckStatus.FAIL),
+    )
+    after = card(
+        ("bolt shear", CheckStatus.NOT_EVALUATED),  # the check was silenced, not fixed
+        ("weld throat", CheckStatus.PASS),  # unchanged
+        ("bearing", CheckStatus.PASS),  # genuinely fixed
+    )
+    moved = _regressions(before, after)
+    assert [name for name, _was, _now in moved] == ["bolt shear"], moved
+    assert moved[0][1:] == (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED)
+
+    # And the reverse is reported too, because the two are incomparable rather than ordered.
+    # ("bearing" comes along for the ride: pass → fail is a regression by any reading.)
+    moved_back = {name: (was, now) for name, was, now in _regressions(after, before)}
+    assert moved_back["bolt shear"] == (CheckStatus.NOT_EVALUATED, CheckStatus.FAIL)
+    assert set(moved_back) == {"bolt shear", "bearing"}, moved_back

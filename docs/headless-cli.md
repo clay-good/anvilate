@@ -440,6 +440,20 @@ unscreened while `diff` exited 0. `VERDICT before → after` is on the card and 
 the exit code, because a different *verdict* is a worse verdict and `Scorecard.status` is
 defined for exactly that comparison.
 
+**And "worse" is not the order the card blocks in.** That comparison first used
+`_BLOCKING_ORDER`, which sorts `fail` above `not_evaluated` because a failure is the thing to
+look at first — so `fail → not_evaluated` read as an *improvement*, and `diff` exited 0 over a
+change that deleted two failing checks. Delete the spec's `element_type`, or the `constraints`
+the checks are judged against, and the failing part came back "nothing regressed" while the
+rendering three lines above said `- padeye net tension: removed (was fail)`. Deleting the
+thing being checked is how a failing gate gets silenced, so it is the one change a gate must
+never call an improvement.
+
+So **`fail` and `not_evaluated` are incomparable**, and moving either way is reported. One
+loses the check, the other reveals a failure; neither is an improvement, and no single ranking
+of the four statuses can say that. A genuine repair still exits 0: `fail → pass` is an
+improvement and reads as one.
+
 **The geometry half is named rather than omitted**, for the same reason the unbuilt command
 is named rather than left unknown: a reader who sees no mass delta should be told there is
 none to be had, not left wondering whether the mass was equal.
