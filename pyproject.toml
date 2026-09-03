@@ -5,12 +5,21 @@ build-backend = "hatchling.build"
 [project]
 name = "anvilate"
 version = "0.0.1"
-description = "Local-first design agent for mechanical engineers: plain English to physics-validated, parametric STEP/DXF."
+description = "Local-first analytical screening for mechanical, structural and industrial engineers: a physics-validated scorecard where every check cites its code."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [{ name = "Clay Good" }]
-keywords = ["cad", "cae", "fea", "mechanical-engineering", "step", "parametric"]
+keywords = [
+    "mechanical-engineering",
+    "structural-engineering",
+    "engineering-analysis",
+    "cad",
+    "cae",
+    "dxf",
+    "units",
+    "tolerance-analysis",
+]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "License :: OSI Approved :: MIT License",
@@ -49,6 +58,9 @@ anvilate = "anvilate.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/clay-good/anvilate"
+Documentation = "https://github.com/clay-good/anvilate/tree/main/docs"
+Source = "https://github.com/clay-good/anvilate"
+Issues = "https://github.com/clay-good/anvilate/issues"
 Specification = "https://github.com/clay-good/anvilate/tree/main/openspec"
 
 [tool.hatch.build.targets.wheel]

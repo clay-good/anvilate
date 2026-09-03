@@ -841,3 +841,81 @@ def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
             f"the README row for {name} no longer quotes {figure}; strike it from "
             "_DERIVED_IN_A_README_ROW so the list stays honest"
         )
+
+
+# Each capability the README's status line calls unbuilt, and the words a one-line
+# description would claim it with. A synonym table rather than a substring of the README,
+# because "plain English" is how a description claims a "natural-language front end" and
+# "STEP/DXF" is how it claims "STEP export" — neither contains the other, and a gate that
+# looked for the README's own phrasing would have passed the very sentence that prompted it.
+_CLAIMED_BY = {
+    "natural-language front end": ("plain english", "natural language", "natural-language"),
+    "3D geometry": ("3d ", "geometry kernel", "solid model"),
+    "FEA": ("fea", "finite element"),
+    "STEP export": ("step/", "step ", " step", "parametric step"),
+}
+
+
+def _unbuilt_capabilities() -> list[str]:
+    """The capabilities the README's own status line says are still being built."""
+    readme = (_REPO / "README.md").read_text(encoding="utf-8")
+    status = re.search(r"\*\*Status:.*?\*\*(.*?)\n\n", readme, re.S)
+    assert status is not None, "the README's status line has moved"
+    # `[^.]` so the span cannot cross a sentence boundary. The status paragraph opens with a
+    # different "The …" sentence — "The deterministic engineering core is real, tested, and
+    # runnable today." — and a non-greedy `.+?` starts at the earliest position it can,
+    # which swallowed that one and reported "tested" as an unbuilt capability.
+    listed = re.search(r"The ([^.]+) described under \[Where this is going\]", status.group(1))
+    assert listed is not None, (
+        "the README status no longer lists the unbuilt capabilities in the shape this gate "
+        "reads; restore the sentence or rewrite the gate with it"
+    )
+    return [part.strip() for part in re.split(r",\s*(?:and\s*)?", listed.group(1)) if part.strip()]
+
+
+def test_the_packaged_description_does_not_promise_what_the_readme_calls_unbuilt():
+    """The one sentence PyPI and GitHub show, held against the status the README states.
+
+    `pyproject.toml`'s `description` is the whole of what a reader sees before deciding to
+    click. It said "plain English to physics-validated, parametric STEP/DXF" while the
+    README's own status line says the natural-language front end and STEP export "are still
+    being built" — the destination described as the product, in the one field with no room
+    for a caveat.
+
+    Same class as the `classifiers` that claimed one Python version while CI proved three:
+    a metadata claim nobody gated.
+    """
+    import tomllib
+
+    unbuilt = _unbuilt_capabilities()
+    assert len(unbuilt) >= 3, f"only {unbuilt} parsed out of the README status line"
+
+    with (_REPO / "pyproject.toml").open("rb") as handle:
+        described = tomllib.load(handle)["project"]["description"].lower()
+
+    promised = sorted(
+        f"{capability} (via {word!r})"
+        for capability in unbuilt
+        # `.get`, not `[]`: a capability missing from the table is the *other* test's
+        # finding, and a KeyError here would report it as a crash in this one.
+        for word in _CLAIMED_BY.get(capability, ())
+        if word in described
+    )
+    assert not promised, (
+        f"pyproject's description promises {promised}, which the README's own status line "
+        "says is still being built. That field has no room for a caveat: say what the "
+        "package does today and leave the destination to the README."
+    )
+
+
+def test_the_unbuilt_capability_table_covers_what_the_readme_lists():
+    """The other direction. A capability the README calls unbuilt and this table does not
+    know is one the description could promise freely."""
+    unbuilt = set(_unbuilt_capabilities())
+    assert unbuilt == set(_CLAIMED_BY), (
+        f"the README's unbuilt list and the synonym table have parted company — only in the "
+        f"README {sorted(unbuilt - set(_CLAIMED_BY))}, only in the table "
+        f"{sorted(set(_CLAIMED_BY) - unbuilt)}"
+    )
+    for capability, words in _CLAIMED_BY.items():
+        assert words, f"{capability} has no words that would claim it"
