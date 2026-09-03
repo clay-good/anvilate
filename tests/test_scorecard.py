@@ -361,6 +361,39 @@ def test_a_failing_check_outranks_a_check_that_could_not_run():
     assert with_pass.governing().name == "could not run"
 
 
+def test_the_governing_ranking_is_total_and_agrees_with_the_cards_own_roll_up():
+    """The gate that would have caught the missing over-margin rung.
+
+    `governing()` ranks by status, and the ranking's whole justification is that it mirrors
+    the precedence `Scorecard.status` rolls up with. That was asserted in a docstring and
+    by nothing else — the ranking had three branches for four statuses and the suite was
+    green. So the ordering is derived here from the roll-up itself rather than restated: for
+    every ordered pair, a card holding both must roll up to the higher-ranked one, and the
+    higher-ranked one must be what governs.
+
+    Total, too. An if-chain ending in a bare `return 0` answers a status nobody has thought
+    about with the passing rung; a fifth member of the enumeration must be a KeyError here.
+    """
+    import itertools
+
+    from anvilate.scorecard import _STATUS_RANK
+
+    assert set(_STATUS_RANK) == set(CheckStatus), (
+        "every status needs a rung; a missing one silently ranks as passing"
+    )
+    assert len(set(_STATUS_RANK.values())) == len(CheckStatus), "the rungs must be distinct"
+
+    for low, high in itertools.permutations(CheckStatus, 2):
+        if _STATUS_RANK[low] >= _STATUS_RANK[high]:
+            continue
+        card = Scorecard(entries=(_entry("lower", low), _entry("higher", high)))
+        assert card.status is high, (
+            f"{high.value} outranks {low.value} in the governing ranking, so a card "
+            f"holding both must roll up to {high.value}, not {card.status.value}"
+        )
+        assert card.governing().name == "higher"
+
+
 def test_an_over_margin_card_does_not_name_a_passing_check_as_governing():
     """The rung that was missing, and the one that mattered.
 

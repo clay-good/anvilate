@@ -51,25 +51,29 @@ class CheckStatus(StrEnum):
     NOT_EVALUATED = "not_evaluated"
 
 
+#: Each status's precedence, for ordering: failed > could-not-run > over-margin > passed.
+#: Mirrors — completely — the precedence :attr:`Scorecard.status` rolls up with, so a
+#: ranking built on it can never name a check whose status is milder than the card's.
+#:
+#: A TOTAL MAP over the enumeration, for the reason `anvilate.cli.EXIT_CODES` gives about
+#: itself: an if-chain ending in a bare `return 0` answers a status nobody has thought
+#: about with the passing rung, silently. This was that chain, and it had three branches
+#: for four statuses — ``OVER_MARGIN`` fell through to the passing rung, which was the one
+#: rung that mattered, because an over-margin check has a LOW utilization by definition.
+#: It lost the tie-break to every ordinary passing check, every time, so a card reading
+#: ``OVER_MARGIN`` named a ``pass`` check as governing and said nothing about the
+#: over-engineered one that set its status. A fifth status is now a KeyError here, at the
+#: one place that has to decide.
+_STATUS_RANK: dict[CheckStatus, int] = {
+    CheckStatus.PASS: 0,
+    CheckStatus.OVER_MARGIN: 1,
+    CheckStatus.NOT_EVALUATED: 2,
+    CheckStatus.FAIL: 3,
+}
+
+
 def _status_rank(status: CheckStatus) -> int:
-    """A status's precedence, for ordering: failed > could-not-run > over-margin > passed.
-
-    Mirrors — completely — the precedence :attr:`Scorecard.status` rolls up with, so a
-    ranking built on it can never name a check whose status is milder than the card's.
-
-    ``OVER_MARGIN`` used to fall through to the passing rung, and it was the one rung that
-    mattered because an over-margin check has a LOW utilization by definition: it lost the
-    tie-break to every ordinary passing check, every time. A card reading `OVER_MARGIN`
-    named a `pass` check as governing and said nothing about the over-engineered one that
-    set its status.
-    """
-    if status is CheckStatus.FAIL:
-        return 3
-    if status is CheckStatus.NOT_EVALUATED:
-        return 2
-    if status is CheckStatus.OVER_MARGIN:
-        return 1
-    return 0
+    return _STATUS_RANK[status]
 
 
 class Direction(StrEnum):
