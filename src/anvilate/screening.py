@@ -177,6 +177,19 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
     return found
 
 
+@cache
+def _screen_parameters(screen: Callable[..., Scorecard]) -> Mapping[str, inspect.Parameter]:
+    """``screen``'s parameters, derived once per pack function.
+
+    `_screen_element` asks which optional keywords a pack screen accepts, and re-derived the
+    whole signature on every call to do it — 14% of the time to screen one lifting lug, and
+    a merge gate runs this over every spec in a repository. A function's signature does not
+    change, and the registry hands back the same function objects every time, so the map is
+    memoised on the function itself.
+    """
+    return inspect.signature(screen).parameters
+
+
 def _screen_element(
     tag: str,
     params: Mapping[str, Any],
@@ -232,7 +245,7 @@ def _screen_element(
     # and the spec declares none, the tier is NOT_EVALUATED rather than screened against a
     # number this library made up. A safety factor nobody stated is the assumption most
     # worth refusing to make.
-    parameters = inspect.signature(screen).parameters
+    parameters = _screen_parameters(screen)
     wanted = parameters.get("required_safety_factor")
     keywords: dict[str, object] = {}
     if wanted is not None:

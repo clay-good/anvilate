@@ -145,6 +145,30 @@ def _unit_object(unit: str) -> pint.Unit:
     return UREG.Unit(unit)
 
 
+@lru_cache(maxsize=8192)
+def _short_spelling(unit: str) -> str:
+    """The short (``~``) spelling of ``unit``, formatted once per spelling.
+
+    `to()` rendered `f"{converted.units:~}"` on every conversion, and the target units are
+    `_unit_object(unit)` — so the spelling is a pure function of the argument that was being
+    recomputed through pint's formatter at each call. It was 2,400 `format_unit` calls and
+    13% of the time to screen one lifting lug.
+    """
+    return f"{_unit_object(unit):~}"
+
+
+@lru_cache(maxsize=8192)
+def _dimensionality_of_unit(unit: str) -> object:
+    """The dimensionality of ``unit``, derived once per spelling.
+
+    `has_dimension` read `self.pint.dimensionality`, which builds a whole pint Quantity —
+    magnitude, registry dispatch and all — to answer a question about the unit alone. The
+    dimensionality of a quantity is the dimensionality of its units, and the spelling is the
+    whole of the key.
+    """
+    return _unit_object(unit).dimensionality
+
+
 @lru_cache(maxsize=1024)
 def _dimensionality_of(expected: str) -> object:
     """``UREG.get_dimensionality(expected)``, for the same reason."""
@@ -267,11 +291,11 @@ class Quantity(RevalidatedModel):
         # The target spelling is memoised for the same reason the source one is: `.to("MPa")`
         # inside a screen ran pint's unit parser on every call.
         converted = self.pint.to(_unit_object(unit))
-        return Quantity(magnitude=converted.magnitude, unit=f"{converted.units:~}")
+        return Quantity(magnitude=converted.magnitude, unit=_short_spelling(unit))
 
     def has_dimension(self, expected: str) -> bool:
         """Whether this quantity's dimension matches ``expected`` (e.g. ``"[pressure]"``)."""
-        return self.pint.dimensionality == _dimensionality_of(expected)
+        return _dimensionality_of_unit(self.unit) == _dimensionality_of(expected)
 
     def __str__(self) -> str:
         return f"{self.magnitude:g} {display_unit(self.unit)}"

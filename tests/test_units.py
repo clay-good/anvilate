@@ -938,3 +938,94 @@ def test_the_dimensions_the_system_does_not_convert_are_the_ones_the_page_names(
                 "docs/calculation-reports.md still tells a reader it does not — update the "
                 "page, and check whether the pack that pinned its units still needs to"
             )
+
+
+def test_the_memoised_unit_helpers_answer_exactly_what_pint_answers():
+    """The two caches behind `to()` and `has_dimension()`, held against the direct forms.
+
+    Both replaced a per-call pint round trip with a lookup keyed on the unit spelling: the
+    short spelling of a conversion target, and a unit's dimensionality. Each is only sound
+    because the answer is a pure function of the spelling, and that is the thing to check —
+    a cache that returns a *different* answer is far worse than the cost it saved.
+    """
+    from anvilate.units.quantity import (
+        _dimensionality_of_unit,
+        _short_spelling,
+        _unit_object,
+    )
+
+    spellings = [
+        "MPa",
+        "mm",
+        "m",
+        "kN",
+        "N",
+        "kN*m",
+        "N*m",
+        "mm**4",
+        "m**4",
+        "N/mm**2",
+        "kg/m**3",
+        "kN/m**3",
+        "kg/m",
+        "degC",
+        "degF",
+        "K",
+        "Hz",
+        "rpm",
+        "s",
+        "in",
+        "ft",
+        "ksi",
+        "psi",
+        "lbf",
+        "ft*lbf",
+        "m/s**2",
+        "J/(kg*K)",
+        "W/(m*K)",
+        "MPa*m**0.5",
+        "1/s",
+        "deg",
+        "rad",
+        "L/s",
+        "W",
+        "V",
+        "A",
+        "ohm",
+    ]
+    for unit in spellings:
+        quantity = Quantity(magnitude=1.0, unit=unit)
+        assert _dimensionality_of_unit(unit) == quantity.pint.dimensionality, unit
+        converted = quantity.pint.to(_unit_object(unit))
+        assert _short_spelling(unit) == f"{converted.units:~}", unit
+
+
+def test_has_dimension_asks_about_the_unit_without_building_a_quantity():
+    """A dimension check is a question about the unit, and it used to build a whole pint
+    Quantity — magnitude, registry dispatch and all — to ask it.
+
+    Timed as a third of the cost of screening one lifting lug, and a merge gate runs that
+    over every spec in a repository. Asserted by counting constructions rather than by a
+    clock, because a timing threshold in CI is a flake waiting to happen.
+    """
+    import pint
+
+    quantity = Quantity.parse("250 MPa")
+    quantity.has_dimension("[pressure]")  # warm the spelling caches
+
+    original, built = pint.Quantity.__new__, 0
+
+    def counting(cls, *args, **kwargs):
+        nonlocal built
+        built += 1
+        return original(cls, *args, **kwargs)
+
+    pint.Quantity.__new__ = counting
+    try:
+        for _ in range(5):
+            assert quantity.has_dimension("[pressure]")
+            assert not quantity.has_dimension("[length]")
+    finally:
+        pint.Quantity.__new__ = original
+
+    assert built == 0, f"has_dimension built {built} pint quantities to read a unit's dimension"
