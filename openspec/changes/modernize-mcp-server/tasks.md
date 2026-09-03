@@ -55,14 +55,19 @@
       comparison with nothing on the other side. One spec screened over MCP and at the
       shell must produce the same scorecard *document*, not the same status — two cards
       agreeing on PASS and differing on which checks ran is the drift a status comparison
-      cannot see. The one divergence is recorded rather than smoothed: the CLI exports an
-      evidence bundle from a spec file and MCP refuses `export_artifact`, and the cause is
-      the whole content of `resolve-mcp-tool-subjects` — the tool names nothing in its
-      input to act on while the shell command takes the path of what it exports. The test
-      asserts the divergence *and* its cause, so it fails the day the tool is given a
-      subject, which is exactly when it should be revisited. The sandbox half is still
-      undischargeable. The export
-      half is **done**, the sandbox half cannot be done yet. Writing the parity test found
+      cannot see. The one divergence was recorded rather than smoothed, and
+      **it has since been closed** — which is what the recording was for. It read: the CLI
+      exports an evidence bundle from a spec file and MCP refuses `export_artifact`, because
+      the tool named nothing in its input to act on while the shell command takes the path of
+      what it exports. The test asserted the divergence *and* its cause, "so it fails the day
+      the tool is given a subject". `resolve-mcp-tool-subjects` gave it one and
+      `export-over-mcp` ruled that the tool returns the bundle and writes nothing, so the two
+      surfaces are now held against each other *by value*: the same spec, screened either
+      way, must roll up to the same document. The remaining difference is a spelling —
+      `--artifact evidence-bundle` at the shell, `{"format": "evidence_bundle"}` over MCP,
+      each idiomatic for its surface — and the two vocabularies are compared with the
+      separator normalised so an artifact reachable from one door only is a failure.
+      The export half is **done**; the sandbox half cannot be done yet. Writing the parity test found
       that the validation and watermark gates had no implementation on *either* side to be
       compared: `Gate.WATERMARK` appeared nowhere outside `mcp.py`, and the DXF exporters
       wrote a cuttable file from a width, a height and a list of holes. `anvilate.export.gate`

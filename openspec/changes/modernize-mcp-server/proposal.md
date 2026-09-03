@@ -28,7 +28,10 @@ engineering checks with citations* — an empty niche.
 ## Impact
 
 - Affected specs: `headless-automation` (1 modified, 2 added requirements).
-- Affected code (when implemented): the MCP server component (not yet built — this
-  changes its target before code exists, the cheapest possible time).
+- Affected code: the MCP server component. **This was written before the server existed**
+  — "changes its target before code exists, the cheapest possible time" — and the target
+  landed: task 2.1 shipped `handle_request` on the 2026-07-28 revision, stateless, and 2.2
+  shipped `structuredContent`. What is left under this change is release plumbing (3.1, 3.2)
+  and the Tasks extension (2.3), not the server.
 - The existing "MCP inherits all gates" rule is unchanged and restated in the modified
   requirement.
