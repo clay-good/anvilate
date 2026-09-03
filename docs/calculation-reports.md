@@ -66,6 +66,14 @@ In reading order: a header (project, preparer, date, unit system), the standards
 editions relied upon, the assumptions in force, one section per check, a margin
 summary naming the governing check, and the screening disclaimer.
 
+**A two-sided check shows its band in the Required column**, not just the floor:
+`OVER MARGIN  net tension: 6.67 vs 2.00–4.00 required`. The column used to show the
+minimum only, so an over-margin row read `6.67 vs 2.00 required` — the limit it satisfied,
+while the 4.00 it exceeded appeared nowhere in the condensed table a reviewer actually
+scans, and the row's verdict contradicted its own numbers. The band is shown whenever an
+upper bound was declared, so what the column reports does not depend on which side of the
+band the check landed.
+
 **The standards and assumptions headings are always there, even when the list under one is
 empty** — an empty list renders as `none declared`. It used to render as nothing at all,
 which meant a report whose author deliberately declared no assumptions and one whose author

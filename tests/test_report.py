@@ -424,6 +424,46 @@ def test_margin_summary_states_the_computed_factor_before_the_required_minimum()
     assert html.index("1.85") < html.index("1.50")
 
 
+def test_the_margin_summary_states_the_band_a_two_sided_check_was_held_to():
+    """A row whose verdict says OVER MARGIN and whose numbers show a comfortable pass.
+
+    The Required column showed only the floor, so an over-margin check read
+
+        OVER MARGIN    net tension: 6.67 vs 2.00 required
+
+    — the limit it satisfied, while the 4.00 it exceeded appeared nowhere in the table a
+    reviewer actually scans. Shown whenever an upper bound was declared, not only when the
+    check landed outside it, so what the column reports does not depend on the verdict.
+    """
+    from anvilate.report.document import CalculationReport, ReportSection
+    from anvilate.scorecard import ScorecardEntry
+
+    sections = tuple(
+        ReportSection(entry=entry)
+        for entry in (
+            ScorecardEntry.from_safety_factor(
+                "net tension", computed=6.67, required=2.0, upper=4.0
+            ),
+            ScorecardEntry.from_safety_factor(
+                "web crippling", computed=3.1, required=2.0, upper=4.0
+            ),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=2.4, required=2.0),
+        )
+    )
+    report = CalculationReport(title="padeye", sections=sections)
+    assert report._summary_rows() == (
+        ("net tension", "6.67", "2.00–4.00", "OVER MARGIN"),
+        ("web crippling", "3.10", "2.00–4.00", "PASS"),
+        ("pin bearing", "2.40", "2.00", "PASS"),
+    )
+    text = report.to_text()
+    assert "OVER MARGIN    net tension: 6.67 vs 2.00–4.00 required" in text
+    # The row's numbers agree with its verdict: 6.67 is outside 2.00-4.00, 3.10 is not.
+    assert "PASS           web crippling: 3.10 vs 2.00–4.00 required" in text
+    # And the same rows feed the HTML table.
+    assert "2.00–4.00" in report.to_html()
+
+
 def test_margin_summary_holds_its_fixed_two_decimal_precision():
     # The module promises a report renders byte-identically on every rebuild "so a diff
     # between two reports is an engineering change, never rendering noise". The precision

@@ -426,11 +426,19 @@ class CalculationReport(BaseModel):
         for section in self.sections:
             entry = section.entry
             factor = "—" if entry.safety_factor is None else f"{entry.safety_factor:.2f}"
-            required = (
-                "—"
-                if entry.required_safety_factor is None
-                else f"{entry.required_safety_factor:.2f}"
-            )
+            # A check with a two-sided band shows the BAND here, not just its floor. The
+            # margin summary is the condensed table a reviewer scans, and an OVER_MARGIN
+            # row read "6.67 vs 2.00 required" — the limit it satisfied, while the 4.00 it
+            # exceeded appeared nowhere in the table. A row whose verdict says it is outside
+            # and whose numbers show it comfortably inside is the contradiction this column
+            # exists to prevent. Shown whenever an upper bound was declared, so what the
+            # column reports does not depend on which side of the band the check landed.
+            if entry.required_safety_factor is None:
+                required = "—"
+            elif entry.upper_safety_factor is None:
+                required = f"{entry.required_safety_factor:.2f}"
+            else:
+                required = f"{entry.required_safety_factor:.2f}–{entry.upper_safety_factor:.2f}"
             rows.append((entry.name, factor, required, _STATUS_LABEL[entry.status]))
         return tuple(rows)
 
