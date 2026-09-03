@@ -327,6 +327,29 @@ _REGISTRY = _REPO / "docs" / "api" / "underived-checks.txt"
 # test hand-builds as one of the library's own checks.
 _ENTRY_MACHINERY = frozenset({"scorecard.py", "derivation.py", "_models.py"})
 
+# ---------------------------------------------------------------------------
+# Reading a node's source text, for the AST sweeps.
+#
+# `ast.get_source_segment` re-splits the ENTIRE file on every call, so a sweep over one
+# module's 210 raise sites costs 1.6 seconds — and three such gates added 56 seconds to the
+# pre-push gate before anybody measured them. Slicing pre-split lines is ~13,000x faster and
+# gives whole lines rather than exact columns, which is all a regex over a refusal message
+# needs.
+# ---------------------------------------------------------------------------
+
+_SOURCE_LINES: dict[Path, list[str]] = {}
+
+
+def source_text(path: Path, node: object) -> str:
+    """The source lines ``node`` spans, from a per-file cache."""
+    lines = _SOURCE_LINES.get(path)
+    if lines is None:
+        lines = _SOURCE_LINES[path] = path.read_text(encoding="utf-8").splitlines()
+    start = getattr(node, "lineno", 0) - 1
+    end = getattr(node, "end_lineno", None) or (start + 1)
+    return "\n".join(lines[start:end])
+
+
 _SRC = _REPO / "src" / "anvilate"
 
 # Surviving library-built entries, by id. Kept as strong references for the whole run so no

@@ -27,6 +27,7 @@ import pytest
 
 import anvilate as anvilate_pkg
 import anvilate.analysis as analysis_pkg
+from conftest import source_text
 
 _REPO = Path(__file__).resolve().parent.parent
 _MANIFEST = _REPO / "docs" / "api" / "analysis-public-surface.txt"
@@ -3598,8 +3599,7 @@ def test_a_dimension_guard_enforces_the_dimension_its_message_names():
     paired = 0
     wrong: list[str] = []
     for path in sorted(src_root.rglob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         where = str(path.relative_to(src_root))
         for function in ast.walk(tree):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -3609,11 +3609,11 @@ def test_a_dimension_guard_enforces_the_dimension_its_message_names():
                 raises = [s for s in node.body if isinstance(s, ast.Raise)]
                 if not raises:
                     continue
-                message = " ".join((ast.get_source_segment(source, raises[0]) or "").split())
+                message = " ".join(source_text(path, raises[0]).split())
                 stated = dimension.findall(message)
                 if not stated:
                     continue
-                condition = " ".join((ast.get_source_segment(source, node.test) or "").split())
+                condition = " ".join(source_text(path, node.test).split())
                 enforced = dimension.findall(condition)
                 if enforced:
                     direct += 1
@@ -3629,7 +3629,7 @@ def test_a_dimension_guard_enforces_the_dimension_its_message_names():
                 variable = guarded.group(1)
                 elsewhere: list[str] = []
                 for other in nodes:
-                    text = " ".join((ast.get_source_segment(source, other.test) or "").split())
+                    text = " ".join(source_text(path, other.test).split())
                     if variable in text and ("has_dimension" in text or "dimensionality" in text):
                         elsewhere += dimension.findall(text)
                 if not elsewhere:

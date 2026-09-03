@@ -25,6 +25,7 @@ import ast
 import pathlib
 import re
 from collections.abc import Callable
+from functools import cache
 from typing import Any
 
 import pytest
@@ -71,6 +72,7 @@ from anvilate.analysis import (
     wind_turbine_rotor_thrust,
 )
 from anvilate.units import Quantity
+from conftest import source_text
 
 Q = Quantity.parse
 
@@ -771,12 +773,19 @@ def _enforced_interval(test: ast.expr) -> tuple[float, bool, float, bool] | None
     return (low, _INCLUSIVE[type(chain.ops[0])], high, _INCLUSIVE[type(chain.ops[1])])
 
 
-def _interval_guards() -> list[tuple[str, int, str, ast.If, ast.Raise]]:
+@cache
+def _interval_guards() -> tuple[tuple[str, int, str, ast.If, ast.Raise], ...]:
+    """Every guard whose message names a closed interval, swept once per session.
+
+    Cached, and reading its message through `conftest.source_text` rather than
+    `ast.get_source_segment`. Two tests call this, and the segment reader re-splits the whole
+    file on every call — between them that was 24 of the 81 seconds `tests/test_contract.py`
+    and this file took, in a gate CONTRIBUTING tells every contributor to run before pushing.
+    """
     root = pathlib.Path(__file__).resolve().parents[1] / "src" / "anvilate"
     found = []
     for path in sorted(root.rglob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for parent in ast.walk(tree):
             for node in ast.iter_child_nodes(parent):
                 if not isinstance(node, ast.If):
@@ -784,13 +793,13 @@ def _interval_guards() -> list[tuple[str, int, str, ast.If, ast.Raise]]:
                 for statement in node.body:
                     if not isinstance(statement, ast.Raise):
                         continue
-                    message = " ".join((ast.get_source_segment(source, statement) or "").split())
+                    message = " ".join(source_text(path, statement).split())
                     if _INTERVAL_IN_A_MESSAGE.search(message) is None:
                         continue
                     found.append(
                         (str(path.relative_to(root)), statement.lineno, message, node, statement)
                     )
-    return found
+    return tuple(found)
 
 
 def test_every_guard_enforces_the_interval_its_own_message_states() -> None:
