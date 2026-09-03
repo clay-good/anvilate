@@ -736,6 +736,16 @@ _REFERENCE_TARGETS: dict[str, str] = {
 }
 
 
+def _is_count(value: str) -> bool:
+    """Whether ``value`` is a non-negative whole number, as QIF's count attributes must be.
+
+    `str.isdigit()` and not a `try: int()`: it rejects the empty string, a sign, a decimal
+    point and whitespace in one expression, and a count attribute admits none of them. It
+    accepts other Unicode decimal digits, which `int()` also accepts, so the two agree.
+    """
+    return value.isdigit()
+
+
 def qif_schema_issues(document: str) -> list[str]:
     """Structural problems in an emitted QIF document, as a list of complaints.
 
@@ -771,16 +781,26 @@ def qif_schema_issues(document: str) -> list[str]:
             by_id.setdefault(identifier, _local(element.tag))
     if len(set(ids)) != len(ids):
         issues.append("the document reuses a QIF id; ids must be unique across the file")
-    declared = int(root.get("idMax", "0"))
+    # Both counts come out of the document, so neither is known to be a number. `int()` on
+    # a non-numeric one raised straight out of a function whose whole contract is that it
+    # *reports* a malformed document rather than throwing at its reader — `idMax="many"`,
+    # `idMax=""`, `idMax="2.5"` and `n="lots"` each did it. A count that is not a count is
+    # exactly the structural problem this function exists to name.
+    stated = root.get("idMax", "0")
+    declared = int(stated) if _is_count(stated) else None
+    if declared is None:
+        issues.append(f"idMax is {stated!r}, which is not a whole number of ids")
     numeric = [int(i) for i in ids if i.isdigit()]
-    if numeric and max(numeric) != declared:
+    if numeric and declared is not None and max(numeric) != declared:
         issues.append(f"idMax is {declared} but the largest id in the document is {max(numeric)}")
 
     for element in root.iter():
         count = element.get("n")
         if count is None:
             continue
-        if int(count) != len(element):
+        if not _is_count(count):
+            issues.append(f"{_local(element.tag)} declares n={count!r}, which is not a count")
+        elif int(count) != len(element):
             issues.append(
                 f"{_local(element.tag)} declares n={count} but carries {len(element)} children"
             )

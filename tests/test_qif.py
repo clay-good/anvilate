@@ -1205,3 +1205,38 @@ def test_every_qif_name_this_module_emits_exists_in_the_published_schema():
         assert f'name="{planar}"' in published
     for element in ("MaterialCondition", "ZoneShape", "TangentPlane", "FreeState"):
         assert f'name="{element}"' in published, element
+
+
+def test_a_count_that_is_not_a_count_is_a_complaint_and_not_a_crash():
+    """`qif_schema_issues` promises in its own docstring that it never throws.
+
+    "A document this cannot parse is reported as a complaint, not raised. A self-check that
+    throws on the malformed input it exists to detect moves the failure to the reader." It
+    then ran `int()` on two attributes that come out of the document — `idMax` and every
+    `n` — so `idMax="many"`, `idMax=""`, `idMax="2.5"` and `n="lots"` each raised
+    `ValueError` at whoever called it. A count that is not a count is precisely the
+    structural problem the function exists to name.
+
+    The page documents this as the check you run on a file, so the caller is not always the
+    exporter that wrote it.
+    """
+    from anvilate.export.qif import QIF_NAMESPACE, qif_schema_issues
+
+    def document(body: str = "", **attrs: str) -> str:
+        rendered = "".join(f' {k}="{v}"' for k, v in attrs.items())
+        return f'<QIFDocument xmlns="{QIF_NAMESPACE}"{rendered}>{body}</QIFDocument>'
+
+    for spelling in ("many", "", "2.5", "-3", " 4"):
+        issues = qif_schema_issues(document(idMax=spelling))
+        assert any("not a whole number of ids" in issue for issue in issues), (
+            f"idMax={spelling!r} produced {issues}"
+        )
+
+    counted = qif_schema_issues(document('<Features n="lots"><F/></Features>'))
+    assert any("not a count" in issue for issue in counted), counted
+
+    # The checks the malformed values used to hide still work on well-formed ones.
+    assert qif_schema_issues(document('<Features n="1"><F/></Features>')) == []
+    wrong = qif_schema_issues(document('<Features n="4"><F/></Features>'))
+    assert any("declares n=4 but carries 1 children" in issue for issue in wrong), wrong
+    assert qif_schema_issues(document()) == []

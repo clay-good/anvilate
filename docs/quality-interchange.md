@@ -218,6 +218,12 @@ root element and namespace, the `idMax` claim against the ids actually present, 
 uniqueness, every `n` count against what it counts, and every internal reference resolving.
 An empty list means the document is self-consistent — not that it is schema-valid.
 
+**It reports, it does not raise** — including on the counts themselves. `idMax` and every `n`
+come out of the document, so neither is known to be a number, and `idMax="many"` or
+`n="lots"` is a complaint like any other structural problem rather than a `ValueError` at
+whoever called the check. A self-check that throws on the malformed input it exists to detect
+moves the failure to its reader.
+
 Schema validation is the real conformance check and it is opt-in on both sides, because the
 schemas are separate (free) downloads and the parser is not a runtime dependency:
 
