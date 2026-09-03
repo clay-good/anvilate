@@ -1636,3 +1636,69 @@ def test_a_malformed_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_pat
     assert "not a Design Spec, skipped" not in err.split("broken.yaml")[-1], (
         "the broken spec is still being described as some other YAML file"
     )
+
+
+def test_every_documented_invocation_names_a_real_command_and_real_flags():
+    """The examples, not just the reference table beside them.
+
+    `test_the_flag_table_is_the_parsers_own` holds the *table* against the parser in both
+    directions, which is the right check for a reference. It says nothing about the dozen
+    `anvilate …` lines in the prose and the README — a block reading `--formt json` would
+    pass it, and a copied command that argparse rejects is worse than a stale table, because
+    the reader copied it in good faith.
+
+    Every documented invocation is parsed here, with its placeholder paths swapped for a
+    real spec so argparse gets as far as the flags.
+    """
+    import argparse
+    import contextlib
+    import io
+    import re
+    from pathlib import Path
+
+    from anvilate.cli import _build_parser
+
+    root = Path(__file__).resolve().parent.parent
+    pages = sorted((root / "docs").rglob("*.md")) + [root / "README.md"]
+    invocations: list[tuple[str, str]] = []
+    for page in pages:
+        for block in re.findall(r"```(?:bash|sh|console)\n(.*?)```", page.read_text(), re.S):
+            for raw in block.splitlines():
+                line = raw.split("#")[0].split("||")[0].strip().rstrip("\\").strip()
+                if line.startswith("anvilate ") and not line.startswith("anvilate-mcp"):
+                    invocations.append((page.name, line))
+    assert len(invocations) >= 8, f"only {len(invocations)} documented invocations were found"
+
+    parser = _build_parser()
+    subcommands = next(
+        dict(action.choices)
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    broken: list[str] = []
+    for page_name, line in invocations:
+        words = line.split()[1:]
+        command = words[0] if words else ""
+        if command not in subcommands:
+            broken.append(f"{page_name}: {line!r} — {command!r} is not a command")
+            continue
+        # Placeholders stand in for paths the page does not ship; argparse only has to get
+        # far enough to accept or reject the *flags*, so any real file will do. Only tokens
+        # that LOOK like a path are swapped: substituting every non-flag word turned
+        # `--format json` into `--format <a path>`, and the gate reported the page as broken
+        # over a mangling of its own making.
+        looks_like_a_path = re.compile(r"\.(?:ya?ml|json)$|/$")
+        argv = [
+            "examples/padeye.spec.yaml" if looks_like_a_path.search(word) else word
+            for word in words
+        ]
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                parser.parse_args(argv)
+        except SystemExit:
+            broken.append(f"{page_name}: {line!r} — the parser rejects it")
+
+    assert not broken, (
+        "these documented commands do not parse, so a reader who copies one is told it is a "
+        "bad request:\n  " + "\n  ".join(broken)
+    )
