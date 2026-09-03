@@ -65,6 +65,23 @@ class StandardsResolver:
     def has_material(self, ref: str) -> bool:
         return self._materials.has_material(ref)
 
+    def material_is_bundled(self, ref: str) -> bool | None:
+        """Whether ``ref`` is a bundled record, an extension record, or unknown.
+
+        `standards-data` requires that "extension records SHALL be distinguishable from
+        bundled records in every report", and the `ReferenceResolver` protocol answers only
+        whether a reference *exists* — so the screen asserted "resolves in the bundled
+        materials database" for a team-local alloy, which is the one provenance claim it had
+        no way to check. `screen_spec`'s own docstring points a reader at exactly that path.
+
+        Optional rather than added to the protocol: a resolver that cannot answer returns
+        nothing and the screen says the neutral thing instead of guessing. Third-party
+        resolvers keep working unchanged.
+        """
+        if not self._materials.has_material(ref):
+            return None
+        return self._materials.get(ref).bundled
+
     def has_component(self, ref: str) -> bool:
         return (
             self._components.has_component(ref)

@@ -817,11 +817,28 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
     An *imported* interface is NOT_EVALUATED rather than skipped: resolving it needs the
     document it names, which a screen of one spec does not have.
     """
+    # Where the record came from, not just that it exists. `standards-data` requires
+    # extension records to be "distinguishable from bundled records in every report", and the
+    # `ReferenceResolver` protocol answers existence only — so this line asserted "resolves in
+    # the bundled materials database" for a team-local alloy, on the very path `screen_spec`'s
+    # docstring recommends for one. A resolver that cannot say gets the neutral sentence
+    # rather than the unverifiable claim.
+    bundled = getattr(resolver, "material_is_bundled", None)
+    provenance = bundled(spec.material.ref) if callable(bundled) else None
+    if provenance is True:
+        where = "resolves in the bundled materials database"
+    elif provenance is False:
+        where = (
+            "resolves as a team-local extension record, which overrides bundled data of the "
+            "same identifier — its properties are the team's, not this library's"
+        )
+    else:
+        where = "resolves in the materials database"
     entries = [
         ScorecardEntry(
             name="material resolution",
             status=CheckStatus.PASS,
-            detail=f"{spec.material.ref} resolves in the bundled materials database",
+            detail=f"{spec.material.ref} {where}",
         )
         if resolver.has_material(spec.material.ref)
         else ScorecardEntry(

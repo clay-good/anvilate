@@ -1739,3 +1739,79 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         f"stated something, which is the silent green `validation-gauntlet` forbids."
     )
     assert probed | set(_NOTHING_TO_SCREEN) == fields
+
+
+def test_a_team_local_material_is_not_reported_as_bundled_data():
+    """`standards-data` requires extension records "distinguishable from bundled records in
+    every report", and this report said the opposite.
+
+    The `ReferenceResolver` protocol answers whether a reference *exists*, so the material
+    entry asserted `"{ref} resolves in the bundled materials database"` for every material it
+    could find — including a team-local alloy overriding a bundled record. That is the one
+    provenance claim the screen had no way to check, on the very path `screen_spec`'s own
+    docstring recommends: "pass one built from `MaterialsDatabase.extended` to screen a spec
+    that names a team-local alloy".
+
+    In a library whose thesis is that every number says where it came from, a card asserting
+    the wrong source is worse than one that says nothing.
+    """
+    import yaml
+
+    from anvilate.standards import default_materials_db
+    from anvilate.standards.resolver import StandardsResolver, default_standards_resolver
+
+    database = default_materials_db()
+    record = database.get("ASTM-A36").model_dump(mode="json")
+    for derived in ("id", "bundled"):
+        record.pop(derived, None)
+    record["name"] = "Acme local plate"
+    extended = database.extended(
+        yaml.safe_dump({"materials": {"ACME-LOCAL-1": record}}, sort_keys=False)
+    )
+    assert extended.get("ACME-LOCAL-1").bundled is False
+    assert extended.get("ASTM-A36").bundled is True
+
+    base = default_standards_resolver()
+    resolver = StandardsResolver(
+        extended,
+        base._components,
+        base._bearings,
+        base._dowels,
+        base._cap_screws,
+        base._washers,
+        base._hex_nuts,
+        base._hex_bolts,
+        base._extrusions,
+        base._extra_components,
+    )
+
+    def material_line(ref: str, using) -> str:
+        spec = _spec(material=MaterialRef(ref=ref))
+        card = screen_spec(spec, resolver=using) if using is not None else screen_spec(spec)
+        return next(e for e in card.entries if e.name == "material resolution").detail
+
+    local = material_line("ACME-LOCAL-1", resolver)
+    assert "team-local extension record" in local, local
+    assert "bundled materials database" not in local, local
+
+    bundled = material_line("ASTM-A36", resolver)
+    assert "resolves in the bundled materials database" == bundled.split("ASTM-A36 ")[1]
+
+    # A resolver that cannot answer provenance gets the neutral sentence, not a guess — the
+    # protocol is unchanged, so a third-party resolver keeps working.
+    class Blind:
+        def has_material(self, ref: str) -> bool:
+            return True
+
+        def has_component(self, ref: str) -> bool:
+            return True
+
+        def known_materials(self):
+            return ("X",)
+
+        def known_components(self):
+            return ()
+
+    blind = material_line("WHATEVER", Blind())
+    assert blind.endswith("resolves in the materials database"), blind
+    assert "bundled" not in blind, blind
