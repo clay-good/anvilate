@@ -444,14 +444,20 @@ class BundleSections(RevalidatedModel):
         The disclaimer is appended here rather than passed in, so there is no call that
         renders a bundle without it.
         """
-        return "\n".join([self.render_rollup(), SCREENING_DISCLAIMER])
+        return "\n".join([self._render_rollup(), SCREENING_DISCLAIMER])
 
-    def render_rollup(self) -> str:
+    def _render_rollup(self) -> str:
         """The roll-up block without the trailing disclaimer, shared by both renderings.
 
         Factored out rather than duplicated: the disclaimer has to be last in each rendering
         and the block above it is the same block, so a section added here reaches the
         exported bundle too instead of only the summary somebody remembered to update.
+
+        Private, because it is the one way to obtain a bundle roll-up with no disclaimer on
+        it. `headless-automation` requires a bundle to carry the disclaimer "in every case",
+        and what upheld that was both callers here remembering to append it. A third caller
+        reaching a public method would have shipped an undisclaimed roll-up and broken no
+        test. Callers outside this class want `render` or `render_document`.
         """
         return "\n".join(
             [
@@ -492,7 +498,7 @@ class BundleSections(RevalidatedModel):
         # scorecard with no entries, so "checks:" is never a heading over nothing.
         return "\n".join(
             [
-                self.render_rollup(),
+                self._render_rollup(),
                 "checks:",
                 *self._check_lines(),
                 *self.spec_block(),

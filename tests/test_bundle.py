@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -846,13 +847,59 @@ def test_the_exported_bundle_shows_the_work_not_only_the_verdict():
             assert line.strip() in document, f"the bundle dropped a line of the work: {line!r}"
 
     # The roll-up is untouched: its canonical form is hashed into signed attestations.
-    rollup = BundleSections(scorecard=card).render_rollup()
+    rollup = BundleSections(scorecard=card)._render_rollup()
     assert "where:" not in rollup
     assert "where:" in document
 
     # And every check still has its own line, worked or not.
     for entry in card.entries:
         assert f"  {entry}" in document
+
+
+@pytest.mark.parametrize(
+    "verdict, entry",
+    [
+        (CheckStatus.PASS, ScorecardEntry.from_safety_factor("a", computed=3.0, required=2.0)),
+        (CheckStatus.FAIL, ScorecardEntry.from_safety_factor("a", computed=0.5, required=2.0)),
+        (
+            CheckStatus.OVER_MARGIN,
+            ScorecardEntry.from_safety_factor("a", computed=9.0, required=2.0, upper=3.0),
+        ),
+        (
+            CheckStatus.NOT_EVALUATED,
+            ScorecardEntry(name="a", status=CheckStatus.NOT_EVALUATED, detail="no cycle data"),
+        ),
+    ],
+    ids=lambda value: value.value if isinstance(value, CheckStatus) else "",
+)
+def test_every_bundle_surface_carries_the_disclaimer_and_its_status(verdict, entry):
+    """`headless-automation`: a bundle "SHALL carry the screening disclaimer and its own
+    rolled-up status in every case".
+
+    Every case is both halves of a product nobody had swept: each verdict a card can roll up
+    to, against each surface a caller can receive a bundle through. The scenarios covered
+    pass and fail through the readable rendering; a caller taking the structured content —
+    which is what the MCP export tool returns — was reading a different renderer.
+    """
+    sections = BundleSections(scorecard=Scorecard(entries=(entry,)))
+    assert sections.status is verdict, "the fixture no longer produces the verdict it names"
+
+    for name in ("render", "render_document", "to_document_dict", "to_json_dict"):
+        produced = getattr(sections, name)()
+        blob = produced if isinstance(produced, str) else json.dumps(produced, default=str)
+        assert SCREENING_DISCLAIMER in blob, (
+            f"{name}() returns a bundle with no screening disclaimer on it"
+        )
+        # Read the status the surface itself declares, not any occurrence of the word. A
+        # substring search over the whole rendering is satisfied by the single check's own
+        # status and passes with the bundle's roll-up deleted outright — measured.
+        if isinstance(produced, dict):
+            declared = produced.get("status")
+        else:
+            declared = produced.splitlines()[0].split()[1].lower()
+        assert declared == verdict.value.replace("_", " ") or declared == verdict.value, (
+            f"{name}() rolled up to {declared!r}, not to the {verdict.value} it stands on"
+        )
 
 
 def test_the_evidence_bundle_pages_worked_block_is_what_the_bundle_prints():
