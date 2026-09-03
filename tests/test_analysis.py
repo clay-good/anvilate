@@ -43349,3 +43349,105 @@ def test_two_lifters_rated_alike_and_weighing_differently_do_not_render_alike():
     for device in (light, heavy):
         assert f"+{device.self_weight}" in str(device)
         assert f"design load {device.design_load}" in str(device)
+
+
+def test_no_public_analysis_function_answers_with_pints_own_exception():
+    """A dimension mistake gets this library's refusal, not the unit library's.
+
+    Found by binding every required parameter of all 1,719 public analysis functions to a
+    plausible value and calling: four `nds_*_scorecard` entries came back with
+
+        DimensionalityError: Cannot convert from 'millimeter' ([length]) to 'megapascal'
+
+    which names neither the parameter nor the screen. Every sibling says
+    `allowable must be a [pressure] quantity; got [length] (5 mm)`. And
+    `pint.DimensionalityError` is a **TypeError** while every guard here raises
+    `ValueError`, so a caller catching the documented refusal type missed exactly these four.
+
+    The asymmetry was *inside* each function: the applied stress was guarded twice and the
+    allowable went straight to `.to("MPa")`. This sweeps the whole surface so a fifth screen
+    cannot reintroduce it.
+    """
+    import inspect
+
+    from pint.errors import PintError
+
+    import anvilate.analysis as analysis
+
+    def plausible(name: str, annotation: object) -> object | None:
+        text = str(annotation)
+        if "Quantity" not in text:
+            return {"float": 0.5, "int": 2, "bool": False, "str": "x"}.get(
+                next((k for k in ("float", "int", "bool", "str") if k in text), ""),
+            )
+        lowered = name.lower()
+        for key, unit in (
+            ("stress", "MPa"),
+            ("modulus", "MPa"),
+            ("strength", "MPa"),
+            ("pressure", "MPa"),
+            ("force", "kN"),
+            ("load", "kN"),
+            ("moment", "kN*m"),
+            ("torque", "N*m"),
+            ("length", "mm"),
+            ("width", "mm"),
+            ("thickness", "mm"),
+            ("diameter", "mm"),
+            ("radius", "mm"),
+            ("height", "mm"),
+            ("depth", "mm"),
+            ("area", "mm**2"),
+            ("temperature", "degC"),
+            ("time", "s"),
+            ("mass", "kg"),
+            ("power", "kW"),
+            ("velocity", "m/s"),
+            ("frequency", "Hz"),
+            ("volume", "L"),
+            ("density", "kg/m**3"),
+        ):
+            if key in lowered:
+                return Quantity.parse(f"1 {unit}")
+        return Quantity.parse("1 mm")
+
+    called = 0
+    leaked: list[str] = []
+    for name in sorted(dir(analysis)):
+        if name.startswith("_"):
+            continue
+        function = getattr(analysis, name)
+        if not callable(function) or inspect.isclass(function):
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):  # pragma: no cover - a builtin without one
+            continue
+        keywords = {}
+        for parameter_name, parameter in signature.parameters.items():
+            if parameter.default is not inspect.Parameter.empty:
+                continue
+            if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+                continue
+            value = plausible(parameter_name, parameter.annotation)
+            if value is None:
+                break
+            keywords[parameter_name] = value
+        else:
+            called += 1
+            try:
+                function(**keywords)
+            except PintError as failure:
+                leaked.append(f"{name}: {type(failure).__name__}: {failure}")
+            except Exception:  # noqa: BLE001 — any refusal of the library's own is fine
+                pass
+
+    assert called >= 1500, (
+        f"only {called} functions were reached; the binder stopped matching signatures and "
+        "this sweep is checking a fraction of the surface"
+    )
+    assert not leaked, (
+        "these answer a dimension mistake with pint's exception rather than this library's — "
+        "a message naming no parameter, and a TypeError where every guard raises "
+        "ValueError:\n  " + "\n  ".join(leaked)
+    )

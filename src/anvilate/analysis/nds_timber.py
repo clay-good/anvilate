@@ -129,6 +129,31 @@ def nds_adjusted_design_value(
     return Quantity(magnitude=ref * prod(factors.values(), start=1.0), unit="MPa")
 
 
+def _adjusted_design_value(value: Quantity, name: str) -> float:
+    """An adjusted NDS design value in MPa, or the library's own refusal.
+
+    The applied stress in each of these screens is guarded twice — `isinstance`, then
+    `has_dimension` — and the **allowable** was not guarded at all: it went straight to
+    `.to("MPa")` and pint answered for us. That is wrong in two ways at once. The message
+    becomes "Cannot convert from 'millimeter' ([length]) to 'megapascal'", naming neither the
+    parameter nor the screen, where every sibling says `allowable must be a [pressure]
+    quantity; got [length] (5 mm)`. And `pint.DimensionalityError` is a **TypeError**, while
+    every guard in this library raises `ValueError` — so a caller catching the documented
+    refusal type missed this one entirely.
+
+    One function rather than four copies: the rule is the same in bending, shear, bearing and
+    compression, and a fifth screen should not have to remember it.
+    """
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+    if not value.has_dimension("[pressure]"):
+        raise ValueError(
+            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
+        )
+    require_finite(value, name=name)
+    return value.to("MPa").magnitude
+
+
 def _nds_margin_derivation(
     *,
     applied: Quantity,
@@ -206,7 +231,7 @@ def nds_bending_scorecard(
             f"bending_stress must be a [pressure] quantity; got {bending_stress.dimensionality}"
         )
     fb = abs(bending_stress.to("MPa").magnitude)
-    fb_allow = adjusted_bending_value.to("MPa").magnitude
+    fb_allow = _adjusted_design_value(adjusted_bending_value, "adjusted_bending_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fb == 0 else fb_allow / fb
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
@@ -282,7 +307,7 @@ def nds_shear_scorecard(
             f"shear_stress must be a [pressure] quantity; got {shear_stress.dimensionality}"
         )
     fv = abs(shear_stress.to("MPa").magnitude)
-    fv_allow = adjusted_shear_value.to("MPa").magnitude
+    fv_allow = _adjusted_design_value(adjusted_shear_value, "adjusted_shear_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fv == 0 else fv_allow / fv
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
@@ -410,7 +435,7 @@ def nds_bearing_scorecard(
             f"bearing_stress must be a [pressure] quantity; got {bearing_stress.dimensionality}"
         )
     fc = abs(bearing_stress.to("MPa").magnitude)
-    fc_allow = adjusted_bearing_value.to("MPa").magnitude
+    fc_allow = _adjusted_design_value(adjusted_bearing_value, "adjusted_bearing_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
@@ -644,7 +669,7 @@ def nds_compression_scorecard(
             f"{compression_stress.dimensionality}"
         )
     fc = abs(compression_stress.to("MPa").magnitude)
-    fc_allow = adjusted_compression_value.to("MPa").magnitude
+    fc_allow = _adjusted_design_value(adjusted_compression_value, "adjusted_compression_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
