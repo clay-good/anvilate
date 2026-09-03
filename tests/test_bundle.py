@@ -1006,3 +1006,145 @@ def test_the_bundle_headline_is_the_entrys_own_line():
 
     rendered = BundleSections(scorecard=Scorecard(entries=(fragile,))).render_document()
     assert "fragile: 20.0% of samples fall short" in rendered, rendered
+
+
+# --- every key the document can carry -------------------------------------------------
+
+
+def _every_section() -> BundleSections:
+    """A bundle carrying every optional section at once.
+
+    Nothing in the suite built one. Across a whole run, `to_document_dict` produced only its
+    nine unconditional keys — and of the seven conditional ones, `verification` and `exports`
+    appeared solely in a *predicate body*, while `review`, `exploration`, `callouts`,
+    `calloutScorecard` and `geometricTolerances` were produced by no test at all. Seven
+    branches of the one method both export surfaces render, none of them ever taken.
+    """
+    from anvilate.explore import Objective, Parameter, Study, StudyEvaluation, run_study
+    from anvilate.export.gate import ExportRecord, authorize_export
+    from anvilate.gdt import (
+        Characteristic,
+        DatumReference,
+        FeatureControlFrame,
+        FeatureType,
+        FrameModifier,
+        MaterialCondition,
+    )
+
+    def evaluate(parameters):
+        x, y = parameters["x"], parameters["y"]
+        return StudyEvaluation(
+            objectives={"f": x, "g": y},
+            scorecard=Scorecard(
+                entries=(
+                    ScorecardEntry.from_safety_factor(
+                        "feasible", computed=2.0 if x + y >= 4.0 else 0.5, required=2.0
+                    ),
+                )
+            ),
+        )
+
+    study = Study(
+        name="analytic",
+        parameters=(
+            Parameter(name="x", low=0.0, high=4.0, unit="mm", steps=3),
+            Parameter(name="y", low=0.0, high=4.0, unit="mm", steps=3),
+        ),
+        objectives=(Objective(name="f"), Objective(name="g")),
+    )
+    return _sections(
+        verification=_plan(performed=True),
+        review=_dossier(stale=False),
+        exploration=run_study(study, evaluate),
+        callouts=CalloutSet(
+            callouts=(
+                SurfaceFinish(
+                    scope="shaft_journal", roughness=_q(0.8, "um"), method=ProductionMethod.GROUND
+                ),
+            )
+        ),
+        frames=(
+            FeatureControlFrame(
+                characteristic=Characteristic.POSITION,
+                tolerance=_q(0.2, "mm"),
+                feature_type=FeatureType.FEATURE_OF_SIZE,
+                material_condition=MaterialCondition.MMC,
+                modifiers=(FrameModifier.DIAMETER,),
+                datums=(DatumReference(letter="A"), DatumReference(letter="B")),
+            ),
+        ),
+        exports=(ExportRecord(artifact="part.dxf", authorization=authorize_export(_card())),),
+        assumptions=("linear elastic, small deflection",),
+    )
+
+
+def _keys_the_document_can_carry() -> set[str]:
+    """Every key `to_document_dict` and `to_json_dict` can put in the document.
+
+    Read out of the source rather than listed here. A list would be a second copy of the
+    method, and a key added to the method and not to the copy is exactly the drift that let
+    seven branches go unexercised — the test would have gone on passing over a document it no
+    longer described.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    keys: set[str] = set()
+    for name in ("to_document_dict", "to_json_dict"):
+        source = inspect.getsource(getattr(BundleSections, name))
+        # `getsource` keeps the method's own indentation, which is not a parseable module.
+        # `cleandoc` will not fix it either: it leaves the `def` line flush and the body
+        # indented relative to nothing.
+        tree = ast.parse(textwrap.dedent(source))
+        for node in ast.walk(tree):
+            # `"key": value` inside a dict literal, and `body["key"] = value`.
+            if isinstance(node, ast.Dict):
+                keys.update(
+                    key.value
+                    for key in node.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                )
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant):
+                        if isinstance(target.slice.value, str):
+                            keys.add(target.slice.value)
+    return keys
+
+
+def test_the_document_can_carry_every_key_it_names_and_a_bare_bundle_carries_none_of_them():
+    """Both directions, over keys read out of the method rather than restated.
+
+    The conditional keys are *absent* rather than null when their section is — the bundle's
+    rule that "this layer never ran" and "this layer concluded nothing" are different facts —
+    and `spec` is the deliberate exception, null rather than absent so a reader can tell "no
+    spec" from "a key I forgot to look for".
+    """
+    can_carry = _keys_the_document_can_carry()
+    assert len(can_carry) >= 15, f"the key reader found only {sorted(can_carry)}"
+
+    full = _every_section().to_document_dict()
+    unreachable = can_carry - set(full)
+    assert not unreachable, (
+        f"these keys are in the method and no bundle here produces them: {sorted(unreachable)}. "
+        f"A branch of the document nothing builds is a branch nothing renders."
+    )
+
+    bare = _sections().to_document_dict()
+    always = {
+        "disclaimer",
+        "assumptions",
+        "status",
+        "covers",
+        "missing",
+        "testVerified",
+        "sections",
+        "scorecard",
+        "spec",
+    }
+    assert set(bare) == always, sorted(set(bare) ^ always)
+    # `spec` is present and null; every other optional key is absent, not null.
+    assert bare["spec"] is None
+    for key in can_carry - always:
+        assert key not in bare, f"{key} appears on a bundle that has no such section"
