@@ -351,6 +351,16 @@ Two behaviours a client depends on:
   `-32602` naming the handle and what to do about it, because the handle is the thing that is
   wrong; the last-resort guard is what catches whatever nobody has thought of yet.
 
+**A record that resolves is not yet a record this build can read**, and the two tools that take
+a screening handle both check now, in the one reader they share. `read_scorecard` was the worse
+of the two and it did not crash: it returned the stored document verbatim, so a card written by
+an older release crossed as a **successful** result — `isError` false — carrying three
+violations of the versioned scorecard contract its own `outputSchema` `$ref`s. A client that
+validates against the published schema, which is the point of publishing one, then rejects the
+payload without being able to tell whether the server or its own pin is wrong. The runtime
+result check cannot see this: it stops at the envelope, deliberately, because resolving those
+references is network-shaped work that does not belong on a path a caller waits on.
+
 [The headless CLI](headless-cli.md) follows the same rule at the shell — one backed command, three refused by name — and its exit codes are the interface a CI job reads.
 
 [Driving Anvilate from a coding agent](agent-mcp-integration.md) is the operator's half of this page: the two-call loop that works today, the two steps of the obvious four-step loop that are not callable, and how to tell the three refusals apart.

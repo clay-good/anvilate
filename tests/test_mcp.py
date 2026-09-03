@@ -1518,14 +1518,35 @@ def test_a_record_this_build_cannot_read_is_refused_and_the_server_stays_up(monk
             "arguments": {"subject": handle, "format": "evidence_bundle"},
         },
     }
+    # Both tools that read a screening record, because the check is in `_screening` — the one
+    # reader they share so they cannot come to differ about what a handle is allowed to be.
+    # `read_scorecard` was the worse of the two: it returned the stored document verbatim, so
+    # instead of crashing it served a *successful* result, `isError` false, carrying three
+    # violations of the versioned scorecard contract its own outputSchema `$ref`s. A client
+    # that validates against the published schema rejects that payload without knowing whether
+    # the server or its own pin is wrong.
+    for arguments in (
+        {"subject": handle},
+        {"subject": handle, "format": "evidence_bundle"},
+    ):
+        tool = "read_scorecard" if "format" not in arguments else "export_artifact"
+        answer = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": tool, "arguments": arguments},
+            }
+        )
+        assert "result" not in answer, f"{tool} answered with a result for a record it cannot read"
+        # INVALID_PARAMS, not INTERNAL_ERROR: the handle is the thing that is wrong, and the
+        # last-resort guard reporting a defect in anvilate would send the client to the wrong
+        # place. The remedy has to be actionable, so it names what to do about it.
+        assert answer["error"]["code"] == -32602, answer["error"]
+        assert "cannot read" in answer["error"]["message"], answer["error"]["message"]
+        assert "run_validation again" in answer["error"]["message"], answer["error"]["message"]
+
     reply = handle_request(call)
-    assert "result" not in reply
-    # INVALID_PARAMS, not INTERNAL_ERROR: the handle is the thing that is wrong, and the
-    # last-resort guard reporting a defect in anvilate would send the client to the wrong
-    # place. The remedy has to be actionable, so it names what to do about it.
-    assert reply["error"]["code"] == -32602, reply["error"]
-    assert "cannot read" in reply["error"]["message"]
-    assert "Publish the screening again" in reply["error"]["message"]
 
     # And the loop keeps reading: the request behind it is answered.
     stream = io.StringIO(
@@ -1594,3 +1615,47 @@ def test_nothing_a_handler_raises_can_end_the_read_loop(monkeypatch):
     serve_stdio(stream, sink)
     answered = [_json.loads(line) for line in sink.getvalue().strip().splitlines()]
     assert [reply.get("id") for reply in answered] == [1, 2]
+
+
+def test_no_dispatched_tool_can_serve_a_payload_its_published_contract_rejects(
+    monkeypatch, tmp_path
+):
+    """The claim the `$ref` makes, held against a store this build did not write.
+
+    `read_scorecard` publishes its result as one `$ref` to the versioned scorecard contract,
+    and returned `record["scorecard"]` verbatim — so a card an older release stored crossed as
+    a successful result with three violations of that document. `result_issues` cannot catch it
+    by design: it stops at the envelope, which is a deliberate, documented boundary. The
+    happy-path test above resolves the references, but only over records this build just wrote,
+    and those conform by construction.
+
+    So the adversarial record goes through the same resolved-reference validator. Either the
+    tool refuses it or the payload conforms; serving a non-conforming payload under a published
+    contract is the third option, and it is the one that was happening.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    from anvilate.store import SubjectStore, subject_store_root
+
+    store = SubjectStore(subject_store_root())
+    stale = store.publish("screening", {"scorecard": {"entries": [{"name": "x"}]}, "spec": {}})
+
+    registry = _released_registry()
+    for tool_name in _dispatched_tool_names():
+        tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
+        if tool.subject is None:
+            continue
+        arguments = {"subject": stale}
+        if tool_name == "export_artifact":
+            arguments["format"] = "evidence_bundle"
+        answer = _call(tool_name, arguments)
+        if "error" in answer:
+            continue  # refused, which is the other acceptable answer
+        validator = jsonschema.Draft202012Validator(tool.output_schema, registry=registry)
+        errors = [
+            f"{list(error.absolute_path)}: {error.message}"
+            for error in validator.iter_errors(answer["result"]["structuredContent"])
+        ]
+        assert not errors, (
+            f"{tool_name} served a result its own published outputSchema rejects: {errors}"
+        )

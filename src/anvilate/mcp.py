@@ -1073,7 +1073,7 @@ def _screening(handle: str) -> Mapping[str, Any]:
     a stale handle receives.
     """
     try:
-        return subject_store().resolve(handle, kind=_SCREENING)
+        record = subject_store().resolve(handle, kind=_SCREENING)
     except UnknownSubject as unknown:
         message = str(unknown.args[0])
         if "'scorecard'" in message:
@@ -1084,6 +1084,37 @@ def _screening(handle: str) -> Mapping[str, Any]:
                 f"again to publish a handle of the current shape"
             ) from unknown
         raise
+
+    # A record that resolves is not yet a record this build can read, and the difference is a
+    # false claim rather than a crash. `read_scorecard` returned `record["scorecard"]`
+    # verbatim, and its published outputSchema `$ref`s the versioned scorecard contract — so a
+    # card an older release stored crossed as a *successful* result, `isError` false, with
+    # three violations of the document the catalog handed the client. `result_issues` cannot
+    # see it: it stops at the envelope, and that boundary is deliberate and documented.
+    #
+    # A client that validates against the published schema — which is the point of publishing
+    # one — then rejects the payload without knowing whether the server or its own pin is
+    # wrong. That is the exact sentence `result_issues` exists for, one layer in.
+    #
+    # Checked here rather than in either handler, because this function is the one reader for
+    # both tools that take a screening result and exists so they cannot come to differ about
+    # what a handle is allowed to be. The models are built and thrown away: the check is
+    # whether this build can read the record, and the document a caller gets is still the one
+    # the handle names rather than a re-serialization of it.
+    from .scorecard import Scorecard
+    from .spec import parse_spec
+
+    try:
+        Scorecard.model_validate(record["scorecard"])
+        parse_spec(record["spec"])
+    except (ValueError, TypeError, KeyError) as unreadable:
+        raise UnknownSubject(
+            f"{handle} resolves to a screening record this build cannot read "
+            f"({unreadable}). The subject store outlives a release, so this is an entry an "
+            f"older version published or something outside this library wrote. Call "
+            f"run_validation again to publish a handle of the current shape"
+        ) from unreadable
+    return record
 
 
 def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
