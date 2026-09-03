@@ -4,14 +4,18 @@ Install, screen a part, read the verdict. Ten minutes, no network, no CAD.
 
 ## Install
 
-Python 3.11 or newer.
+Python 3.11 or newer. Anvilate is pre-alpha and is not on PyPI yet, so the install is from a
+clone — the same one the [README](../README.md) gives:
 
 ```bash
-pip install anvilate
+git clone https://github.com/clay-good/anvilate.git
+cd anvilate
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
 ```
 
-Nothing else is required. The materials and standards tables ship inside the package;
-DXF output needs `pip install "anvilate[export]"`, and nothing here does.
+Nothing else is required. The materials and standards tables ship inside the package; DXF
+output needs the export extra (`pip install -e ".[export]"`), and nothing here does.
 
 ## Your first validated part
 

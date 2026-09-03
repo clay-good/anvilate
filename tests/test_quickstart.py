@@ -100,21 +100,41 @@ def test_the_page_states_the_exit_code_rule_the_cli_actually_uses():
         assert phrase in _PAGE, phrase
 
 
-def test_the_install_line_is_the_distribution_that_is_published():
-    """A quickstart whose first command installs the wrong name is a page nobody gets past."""
+def test_the_install_line_is_one_a_reader_can_actually_run():
+    """A quickstart whose first command fails is a page nobody gets past.
+
+    It checked the distribution *name* — that the page says `anvilate` and not
+    `anvilate-lib` — which is the right check for a published package and says nothing
+    about whether the command works. Anvilate is pre-alpha and is not on PyPI, so
+    `pip install anvilate` could not succeed for anybody, on the page whose promise is
+    "ten minutes, no network, no CAD".
+
+    Both halves are held now: the page installs from the same place the README does, and
+    the extra it offers is one `pyproject.toml` defines.
+    """
     import tomllib
 
     config = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
     name = config["project"]["name"]
-    # The *token*, not a substring: "pip install anvilate" is contained in
-    # "pip install anvilate-lib", so a page installing the wrong distribution passed.
-    installed = {
-        token.strip("\"'").split("[")[0] for token in re.findall(r"pip install (\S+)", _PAGE)
-    }
-    assert installed == {name}, f"the quickstart installs {sorted(installed)}, not {name!r}"
+    readme = (_REPO / "README.md").read_text(encoding="utf-8")
+
+    def from_source(page: str) -> bool:
+        return "pip install -e" in page and f"git clone https://github.com/clay-good/{name}" in page
+
+    assert from_source(readme), "the README no longer installs from a clone; this gate reads it"
+    assert from_source(_PAGE), (
+        "the quickstart does not install the way the README does. Anvilate is not published, "
+        "so a bare `pip install anvilate` fails for every reader; when it IS published, "
+        "change both pages together and this gate with them."
+    )
+    assert not re.search(r"^\s*pip install anvilate\s*$", _PAGE, re.M), (
+        "the quickstart installs a distribution that is not published"
+    )
 
     extras = set(config["project"]["optional-dependencies"])
-    mentioned = set(re.findall(rf"{name}\[(\w+)\]", _PAGE))
+    # The *token*, not a substring: `.[export]` is contained in `.[exportx]`, so a page
+    # offering an extra that does not exist would pass a looser read.
+    mentioned = set(re.findall(r"pip install -e \"\.\[(\w+)\]\"", _PAGE))
     assert mentioned <= extras, f"the page offers extras that do not exist: {mentioned - extras}"
     assert mentioned, "the page mentions no extra, so this gate checked nothing"
 
