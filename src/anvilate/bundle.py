@@ -239,6 +239,13 @@ class BundleSections(RevalidatedModel):
 
     def sections(self) -> tuple[SectionStatus, ...]:
         """Every present layer, with what it concluded — the roll-up's own inputs."""
+        # The over-margin count is appended only when there is one, and the asymmetry with
+        # the other two is deliberate: a target band is opt-in, so most cards have none, and
+        # printing "0 over margin" on every bundle in the library teaches a reader to skip
+        # the field. What is NOT acceptable is the roll-up this line used to give — the
+        # status said OVER_MARGIN and the only prose under it read "3 run, 0 failing, 0 not
+        # evaluated", two zeroes accounting for none of the verdict above them.
+        over_margin = len(self.scorecard.over_margin())
         found: list[SectionStatus] = [
             SectionStatus(
                 name="checks",
@@ -247,6 +254,7 @@ class BundleSections(RevalidatedModel):
                     f"{len(self.scorecard.entries)} run, "
                     f"{len(self.scorecard.failures())} failing, "
                     f"{len(self.scorecard.not_evaluated())} not evaluated"
+                    + (f", {over_margin} over margin" if over_margin else "")
                 ),
             )
         ]

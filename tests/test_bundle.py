@@ -693,6 +693,36 @@ def _a_card_worth_reading() -> Scorecard:
     )
 
 
+def test_the_rollup_counts_the_over_margin_checks_that_set_its_own_status():
+    """A status with no supporting count is the roll-up's version of a silent green.
+
+    The checks line gave "N run, M failing, K not evaluated" and no more, so a card whose
+    status is OVER_MARGIN rendered as
+
+        [OVER_MARGIN] checks: 3 run, 0 failing, 0 not evaluated
+
+    — the verdict on the left, and under it two zeroes accounting for none of it. The
+    roll-up is the whole document some readers see.
+    """
+    banded = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor(
+                "net tension", computed=6.67, required=2.0, upper=4.0
+            ),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=2.4, required=2.0),
+        )
+    )
+    line = next(s for s in BundleSections(scorecard=banded).sections() if s.name == "checks")
+    assert line.status is CheckStatus.OVER_MARGIN
+    assert line.detail == "2 run, 0 failing, 0 not evaluated, 1 over margin"
+
+    # A band is opt-in, so a card without one reads exactly as it always did: printing
+    # "0 over margin" on every bundle in the library teaches a reader to skip the field.
+    plain = next(s for s in BundleSections(scorecard=_card()).sections() if s.name == "checks")
+    assert plain.detail == "2 run, 0 failing, 0 not evaluated"
+    assert "over margin" not in plain.detail
+
+
 def test_the_exported_bundle_carries_every_check_and_the_rollup_does_not():
     """`artifact-export` asks the bundle to carry "the scorecard with thresholds and measured
     values", and its scenario is an engineer who receives **only the bundle**.

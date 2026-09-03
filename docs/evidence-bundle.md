@@ -20,6 +20,12 @@ print(sections.render())
 #     analysis, 0 unresolved
 ```
 
+The checks line names a fourth count, `N over margin`, only when the card has any — a
+target band is opt-in, so most cards have none, and printing `0 over margin` on every
+bundle in the library teaches a reader to skip the field. It is there because without it a
+card whose status is `OVER_MARGIN` rendered as `[OVER_MARGIN] checks: 3 run, 0 failing, 0
+not evaluated`: the verdict on the left, and under it two zeroes accounting for none of it.
+
 ## The roll-up is not the bundle a reviewer receives
 
 `render()` above is the **roll-up**: one line per layer, and the checks layer's line reads
