@@ -52,7 +52,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ._models import Named, RevalidatedModel
 from .attestation import (
@@ -79,6 +79,7 @@ from .verification import VerificationPlan
 
 __all__ = [
     "SectionStatus",
+    "BundleDocument",
     "BundleSections",
     "assemble_evidence_bundle",
 ]
@@ -136,6 +137,74 @@ class SectionStatus(BaseModel):
     def __str__(self) -> str:
         mark = " (informational)" if self.informational else ""
         return f"[{self.status.value.upper()}] {self.name}{mark}: {self.detail}"
+
+
+class BundleDocument(BaseModel):
+    """The exported evidence bundle, as the document a consumer receives.
+
+    This exists so the bundle has a **published contract**. It is what
+    :meth:`BundleSections.to_document_dict` returns and what the ``export_artifact`` MCP tool
+    serves, and that tool used to describe its entire output as ``{"type": "object"}`` — a
+    published ``outputSchema`` that said nothing about the one thing it publishes. The schema
+    is generated from this model by :mod:`anvilate.contracts`, the same way the Design Spec
+    and scorecard contracts are, because a hand-written copy of a live document is wrong the
+    first time somebody adds a field.
+
+    **A wire model, so the field names are the wire's.** They are camelCase because the
+    document has been camelCase since before it had a contract, and renaming a published key
+    to satisfy a naming convention would break every reader to no purpose. The aliases carry
+    that; the Python attributes stay snake_case.
+
+    **Absent and null mean different things here.** A section that never ran is *absent*; the
+    bundle's whole doctrine is that "this layer never ran" and "this layer concluded nothing"
+    are different facts, and collapsing them to null would assert the second. ``spec`` and
+    ``calloutScorecard`` are the two exceptions, present-and-null, because for those a null
+    *is* the modelled answer — ``spec: null`` lets a reader tell "no spec" from "a key I forgot
+    to look for".
+
+    **This model describes the document; it does not build it.** Dumping it with
+    ``exclude_unset=True`` would reproduce the absent-versus-null rule at this level and also
+    apply it to every nested model, dropping ``informational: false``, ``reference: null``,
+    ``blocking: []`` and more from eight nested structures. Pydantic has no per-level control,
+    so the alternative was to change bytes this document has always emitted — the wrong trade
+    for a schema's provenance. What holds the two together is
+    ``test_every_document_this_library_can_build_validates_against_its_published_contract``,
+    which validates every document the library builds against this model and against the
+    released schema, and the key-set test that holds these fields to the keys
+    :meth:`BundleSections.to_document_dict` actually emits.
+
+    What the generated schema is looser about than reality: the six absent-when-missing keys
+    are described as optional *and* nullable, because that is what an ``X | None`` field
+    generates. Every real document validates; a hand-written schema could say it more exactly
+    and would go stale instead.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    disclaimer: str
+    assumptions: tuple[str, ...]
+    status: CheckStatus
+    covers: tuple[str, ...]
+    missing: tuple[str, ...]
+    test_verified: bool = Field(serialization_alias="testVerified", alias="testVerified")
+    sections: tuple[SectionStatus, ...]
+    scorecard: Scorecard
+    # Null rather than absent, deliberately: see the class docstring.
+    spec: DesignSpec | None
+
+    verification: VerificationPlan | None = None
+    review: ReviewerDossier | None = None
+    exploration: StudyResult | None = None
+    callouts: CalloutSet | None = None
+    # Null when a callout set is present and derives no card of its own, which is why it is
+    # passed explicitly rather than left unset alongside `callouts`.
+    callout_scorecard: Scorecard | None = Field(
+        default=None, serialization_alias="calloutScorecard", alias="calloutScorecard"
+    )
+    exports: tuple[ExportRecord, ...] | None = None
+    geometric_tolerances: tuple[str, ...] | None = Field(
+        default=None, serialization_alias="geometricTolerances", alias="geometricTolerances"
+    )
 
 
 class BundleSections(RevalidatedModel):
@@ -559,6 +628,20 @@ class BundleSections(RevalidatedModel):
         one signed document. The spec is here for the same reason and on the same terms:
         ``null`` rather than absent, so a consumer reading this document can tell "no spec"
         from "a key I forgot to look for".
+
+        :class:`BundleDocument` is this document's published contract, and it deliberately
+        does not *build* it. Constructing the model and dumping it with ``exclude_unset`` is
+        the obvious way to reproduce the absent-versus-null distinction, and it also applies
+        that exclusion to every nested model — dropping ``informational: false``,
+        ``reference: null``, ``blocking: []`` and more out of eight nested structures.
+        Pydantic offers no per-level control, so the choice was between changing what this
+        document has always emitted and letting the model describe rather than produce it.
+        Changing published bytes to improve a schema's provenance is the wrong trade.
+
+        What keeps the two from drifting is a gate rather than a shared code path:
+        ``test_every_document_this_library_can_build_validates_against_its_published_contract``
+        validates every document built here against the model and against the released schema,
+        and the key-set test beside it holds the model's fields to the keys this method emits.
         """
         return {
             **self.to_json_dict(),

@@ -1,0 +1,2434 @@
+{
+  "$defs": {
+    "AcceptanceCriteria": {
+      "additionalProperties": false,
+      "description": "Which checks must run and the thresholds they are judged against.",
+      "properties": {
+        "fea_convergence_tol": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fea Convergence Tol"
+        },
+        "max_displacement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tiers": {
+          "items": {
+            "$ref": "#/$defs/ValidationTier"
+          },
+          "minItems": 1,
+          "title": "Tiers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tiers"
+      ],
+      "title": "AcceptanceCriteria",
+      "type": "object"
+    },
+    "CalloutSet": {
+      "description": "The callouts declared on a part, addressable by characteristic and by tag.",
+      "properties": {
+        "callouts": {
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SurfaceFinish"
+              },
+              {
+                "$ref": "#/$defs/Coating"
+              },
+              {
+                "$ref": "#/$defs/HeatTreatment"
+              },
+              {
+                "$ref": "#/$defs/ProcessNote"
+              },
+              {
+                "$ref": "#/$defs/FreeTextNote"
+              }
+            ]
+          },
+          "title": "Callouts",
+          "type": "array"
+        }
+      },
+      "title": "CalloutSet",
+      "type": "object"
+    },
+    "ChainLink": {
+      "additionalProperties": false,
+      "description": "One dimension in a stack-up chain, referenced by its tag.\n\n``direction`` is ``+1`` when the dimension growing widens the resulting gap\nand ``-1`` when it narrows it.",
+      "properties": {
+        "dimension": {
+          "title": "Dimension",
+          "type": "string"
+        },
+        "direction": {
+          "default": 1,
+          "enum": [
+            1,
+            -1
+          ],
+          "title": "Direction",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dimension"
+      ],
+      "title": "ChainLink",
+      "type": "object"
+    },
+    "CheckStatus": {
+      "description": "A check's outcome.\n\n``NOT_EVALUATED`` is never silently treated as a pass — a check that could\nnot run is reported as such. ``OVER_MARGIN`` is a passing check whose margin\nran past a declared upper band: acceptable, never blocking, but flagged so an\nover-engineered candidate is as visible as a failing one.",
+      "enum": [
+        "pass",
+        "fail",
+        "over_margin",
+        "not_evaluated"
+      ],
+      "title": "CheckStatus",
+      "type": "string"
+    },
+    "Coating": {
+      "description": "A coating or plating callout: a specification, a class, and a thickness range.\n\nThe thickness is a *range* because plating is specified as one: a fit or a thread\nengagement has to be evaluated at both ends of it, and a check handed only the\nnominal is a check that never saw the worst case. ``minimum`` may equal ``maximum``\nfor a single declared value.",
+      "properties": {
+        "coating_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coating Class"
+        },
+        "kind": {
+          "const": "coating",
+          "default": "coating",
+          "title": "Kind",
+          "type": "string"
+        },
+        "maximum_thickness": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "minimum_thickness": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "specification": {
+          "title": "Specification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "specification",
+        "minimum_thickness",
+        "maximum_thickness"
+      ],
+      "title": "Coating",
+      "type": "object"
+    },
+    "Comparison": {
+      "description": "What a check measured, what it was judged against, and which way passes.\n\nA check that compares two quantities used to state the comparison as a *sentence*,\nwritten at screening time. A screen does not know what unit system its result will be\nread in, so a US-customary report printed a deflection verdict in millimetres directly\nbeneath a worked derivation in inches — same check, same page, two systems.\n\nThe numbers travel instead, and the sentence is rendered by whoever is showing it. That\nis the shape :meth:`ScorecardEntry.from_safety_factor` has always had: it writes its\nline from the two factors rather than taking one from its caller, which is why the\nsafety-factor half of the library never had this defect.\n\n``minimum_decimals`` is the precision floor the sentence starts from; it widens from\nthere until the two figures are distinguishable, because a FAIL reading \"15.000 mm vs\nlimit 15.000 mm\" states the opposite of its own verdict.",
+      "properties": {
+        "limit": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "limit_label": {
+          "title": "Limit Label",
+          "type": "string"
+        },
+        "measured": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "measured_label": {
+          "title": "Measured Label",
+          "type": "string"
+        },
+        "minimum_decimals": {
+          "default": 3,
+          "title": "Minimum Decimals",
+          "type": "integer"
+        },
+        "sense": {
+          "$ref": "#/$defs/LimitSense"
+        }
+      },
+      "required": [
+        "measured",
+        "limit",
+        "sense",
+        "measured_label",
+        "limit_label"
+      ],
+      "title": "Comparison",
+      "type": "object"
+    },
+    "Constraints": {
+      "additionalProperties": false,
+      "description": "Bounds the design must satisfy.",
+      "properties": {
+        "envelope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Envelope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_Annotated_Quantity__AfterValidator__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_safety_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_safety_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Constraints",
+      "type": "object"
+    },
+    "DecisionOrigin": {
+      "description": "Where a value in the dossier came from.\n\n``UNATTRIBUTED`` is not a tidy-up item. An assumption nobody recorded the source of is\nthe single thing a reviewer most needs surfaced, so it sorts near the top rather than\nbeing defaulted to something reassuring.",
+      "enum": [
+        "user",
+        "deterministic",
+        "model",
+        "unattributed"
+      ],
+      "title": "DecisionOrigin",
+      "type": "string"
+    },
+    "Derivation": {
+      "description": "A check's worked calculation: formula, substitution, result, citation.\n\n``symbolic`` is the governing formula written the way the source writes it\n(``\"σ_b = M · c / I\"``); ``inputs`` supply every symbol on its right-hand side;\n``result`` is the left-hand side with the computed value; and ``citation`` names\nthe handbook section or standard clause the formula comes from. Every symbol\nused carries its own glossary line, so the derivation is readable without the\nsource book open.",
+      "properties": {
+        "citation": {
+          "title": "Citation",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/SymbolValue"
+          },
+          "minItems": 1,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "result": {
+          "$ref": "#/$defs/SymbolValue"
+        },
+        "symbolic": {
+          "title": "Symbolic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbolic",
+        "inputs",
+        "result",
+        "citation"
+      ],
+      "title": "Derivation",
+      "type": "object"
+    },
+    "DerivationAbsence": {
+      "description": "Why a check renders no worked calculation — the two kinds that are finished.\n\nNeither is a shortfall. A ``LOOKUP`` has no arithmetic between its two numbers:\nan exemption, an identification line, a table comparison, a consistency verdict.\nA ``NUMERIC_RESULT`` has real mathematics behind it and no substitutable line —\nits value is the root of an equation, solved rather than evaluated, so the\ninputs/outputs table is the correct rendering for it rather than a shortfall.\n\nThe third kind a check can be in — **debt**, a closed form nobody has written\ndown yet — is deliberately not a member. Debt is the *absence* of a declaration,\nrecorded per clause in ``docs/api/underived-checks.txt`` where the ratchet keeps\nthe list downward-only. Making it declarable here would let a check retire its\nown debt by describing it, which is the collapse this vocabulary exists to refuse.",
+      "enum": [
+        "lookup",
+        "numeric_result"
+      ],
+      "title": "DerivationAbsence",
+      "type": "string"
+    },
+    "DesignPoint": {
+      "description": "One evaluated design: where it sits, what it scores, and whether it is admissible.\n\n``feasible`` is the scorecard's own verdict, and ``NOT_EVALUATED`` is **not**\nfeasible: a design whose governing check could not run has not been shown to work.\n``governing_check`` names the check running closest to its limit, which is what tells\na reader *why* a point is where it is — an infeasible point names what stopped it,\nand a feasible one names what it would hit first if pushed.\n\n``fragile`` is True when a check on this point carries a margin distribution showing a\nmaterial shortfall probability. Such a point is feasible — it passes nominally — and\nit is exactly the design an optimiser will hand back, because the front is drawn at\nthe edge of feasibility where fragility lives. Reporting it is the difference between\n\"the lightest passing design\" and \"the lightest design that passes on paper\".",
+      "properties": {
+        "feasible": {
+          "title": "Feasible",
+          "type": "boolean"
+        },
+        "fragile": {
+          "default": false,
+          "title": "Fragile",
+          "type": "boolean"
+        },
+        "governing_check": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Governing Check"
+        },
+        "governing_safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Governing Safety Factor"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "objectives": {
+          "additionalProperties": true,
+          "title": "Objectives",
+          "type": "object"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "index",
+        "parameters",
+        "objectives",
+        "status",
+        "feasible"
+      ],
+      "title": "DesignPoint",
+      "type": "object"
+    },
+    "DesignSpec": {
+      "additionalProperties": false,
+      "description": "A complete, typed statement of engineering intent for one part.",
+      "properties": {
+        "acceptance": {
+          "$ref": "#/$defs/AcceptanceCriteria"
+        },
+        "anvilate_spec": {
+          "default": "1.3.0",
+          "title": "Anvilate Spec",
+          "type": "string"
+        },
+        "chains": {
+          "items": {
+            "$ref": "#/$defs/DimensionChain"
+          },
+          "title": "Chains",
+          "type": "array"
+        },
+        "combination_basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "asce7_lrfd",
+                "asce7_asd",
+                "asce7_lrfd_seismic",
+                "asce7_asd_seismic"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combination Basis"
+        },
+        "constraints": {
+          "$ref": "#/$defs/Constraints"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "dimensions": {
+          "items": {
+            "$ref": "#/$defs/ToleranceDimension"
+          },
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "element_params": {
+          "additionalProperties": true,
+          "title": "Element Params",
+          "type": "object"
+        },
+        "element_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Element Type"
+        },
+        "exports": {
+          "items": {
+            "$ref": "#/$defs/InterfaceContract"
+          },
+          "title": "Exports",
+          "type": "array"
+        },
+        "geometric_tolerances": {
+          "items": {
+            "$ref": "#/$defs/GeometricTolerance"
+          },
+          "title": "Geometric Tolerances",
+          "type": "array"
+        },
+        "interfaces": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "imported": "#/$defs/ImportedInterface",
+                "standard_component": "#/$defs/StandardComponentInterface"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/StandardComponentInterface"
+              },
+              {
+                "$ref": "#/$defs/ImportedInterface"
+              }
+            ]
+          },
+          "title": "Interfaces",
+          "type": "array"
+        },
+        "load_cases": {
+          "items": {
+            "$ref": "#/$defs/LoadCase"
+          },
+          "title": "Load Cases",
+          "type": "array"
+        },
+        "manufacturing": {
+          "$ref": "#/$defs/Manufacturing"
+        },
+        "material": {
+          "$ref": "#/$defs/MaterialRef"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "seismic_design_acceleration": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seismic Design Acceleration"
+        },
+        "seismic_redundancy_factor": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "title": "Seismic Redundancy Factor",
+          "type": "number"
+        },
+        "units": {
+          "$ref": "#/$defs/Provenanced_UnitSystem_"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "units",
+        "material",
+        "manufacturing",
+        "acceptance"
+      ],
+      "title": "DesignSpec",
+      "type": "object"
+    },
+    "DimensionChain": {
+      "additionalProperties": false,
+      "description": "A user-declared 1D stack-up chain and the clearance it must hold.\n\nThe chain names dimensions (by tag) and sums their directed sizes into a gap\nthat must land within ``required_min``..``required_max``. :meth:`build`\nresolves it against the spec's dimensions into a\n:class:`~anvilate.tolerance.StackUp` for worst-case / RSS analysis.",
+      "properties": {
+        "links": {
+          "items": {
+            "$ref": "#/$defs/ChainLink"
+          },
+          "minItems": 1,
+          "title": "Links",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required_max": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "required_min": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "links",
+        "required_min",
+        "required_max"
+      ],
+      "title": "DimensionChain",
+      "type": "object"
+    },
+    "Direction": {
+      "description": "Which way a parameter has to move to improve a check's margin.",
+      "enum": [
+        "increase",
+        "decrease"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "Envelope": {
+      "additionalProperties": false,
+      "description": "A bounding-box constraint.",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "y": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "z": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "ExportAuthorization": {
+      "description": "Permission to write one artifact, and the watermark that goes into it.\n\nConstructed by :func:`authorize_export` and not usefully by hand: the validator below\nrefuses the two combinations that would let a caller assemble a clean-looking\nauthorization for a part that did not pass.",
+      "properties": {
+        "blocking": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocking",
+          "type": "array"
+        },
+        "overridden": {
+          "default": false,
+          "title": "Overridden",
+          "type": "boolean"
+        },
+        "validated": {
+          "title": "Validated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "validated"
+      ],
+      "title": "ExportAuthorization",
+      "type": "object"
+    },
+    "ExportRecord": {
+      "description": "One artifact that was emitted, and the authorization it left under.\n\nThe requirement watermarks two things, not one: the exported file's own metadata *and*\nthe evidence bundle. The file half is :meth:`ExportAuthorization.metadata`, written by\neach exporter. This is the bundle half — the disclosure that an artifact exists in the\nworld, named, with the verdict it carries.\n\nIt is deliberately a *record of what happened* rather than a permission: nothing\nconsults it before writing. A bundle that carries none of these is not a bundle that\nexported nothing; it is one that does not say, and\n:meth:`~anvilate.bundle.BundleSections.missing` names it as such.",
+      "properties": {
+        "artifact": {
+          "title": "Artifact",
+          "type": "string"
+        },
+        "authorization": {
+          "$ref": "#/$defs/ExportAuthorization"
+        }
+      },
+      "required": [
+        "artifact",
+        "authorization"
+      ],
+      "title": "ExportRecord",
+      "type": "object"
+    },
+    "FitTolerance": {
+      "additionalProperties": false,
+      "description": "An ISO 286 fit designation for a single feature, e.g. ``H7`` or ``g6``.",
+      "properties": {
+        "designation": {
+          "title": "Designation",
+          "type": "string"
+        },
+        "type": {
+          "const": "fit",
+          "default": "fit",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "designation"
+      ],
+      "title": "FitTolerance",
+      "type": "object"
+    },
+    "FreeTextNote": {
+      "description": "An unstructured note: stored, distinguished, and unreadable by any check.\n\nIt exists so that a drawing's prose is not lost, and it carries no typed parameters\nat all — :meth:`CalloutSet.consumable` excludes it, which is the enforcement rather\nthan a convention that a reviewer has to remember.",
+      "properties": {
+        "kind": {
+          "const": "free_text",
+          "default": "free_text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "sequence": {
+          "default": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "FreeTextNote",
+      "type": "object"
+    },
+    "GeometricCharacteristic": {
+      "description": "The geometric characteristics this slice supports (ISO 1101 / ASME Y14.5).",
+      "enum": [
+        "flatness",
+        "straightness",
+        "circularity",
+        "cylindricity",
+        "perpendicularity",
+        "parallelism",
+        "angularity",
+        "position",
+        "circular_runout",
+        "total_runout"
+      ],
+      "title": "GeometricCharacteristic",
+      "type": "string"
+    },
+    "GeometricTolerance": {
+      "additionalProperties": false,
+      "description": "A geometric tolerance (GD&T feature control frame) on a tagged feature.\n\n``tolerance`` is the tolerance-zone width, or its diameter when ``diametral``\n(the ⌀ modifier, used for a hole axis under a position control). ``feature``\nis the semantic tag the control applies to; ``datums`` are the ordered datum\nreferences (primary, secondary, tertiary). Whether a ``feature`` or ``datum``\ntag names a real geometry feature is checked by the tag-graph layer, not here.",
+      "properties": {
+        "characteristic": {
+          "$ref": "#/$defs/GeometricCharacteristic"
+        },
+        "datums": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datums",
+          "type": "array"
+        },
+        "diametral": {
+          "default": false,
+          "title": "Diametral",
+          "type": "boolean"
+        },
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "characteristic",
+        "tolerance",
+        "feature"
+      ],
+      "title": "GeometricTolerance",
+      "type": "object"
+    },
+    "HeatTreatment": {
+      "description": "A heat-treatment callout: the specification and the condition it produces.\n\n``condition`` is the string that has to line up with a material record — ``\"T6\"``,\n``\"CD\"``, ``\"QT\"``. Anvilate does not infer properties from a hardness range; it\nresolves the *declared condition* against the database and reports \"not evaluated\"\nnaming the condition when no record backs it. ``hardness`` travels with the callout\nfor the drawing and the inspection, and is never converted into a strength.",
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "hardness": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardness"
+        },
+        "kind": {
+          "const": "heat_treatment",
+          "default": "heat_treatment",
+          "title": "Kind",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "specification": {
+          "title": "Specification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "specification",
+        "condition"
+      ],
+      "title": "HeatTreatment",
+      "type": "object"
+    },
+    "HolePattern": {
+      "additionalProperties": false,
+      "description": "A bolt/hole pattern published as part of an interface contract.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "hole_count": {
+          "minimum": 1,
+          "title": "Hole Count",
+          "type": "integer"
+        },
+        "hole_size": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "diameter",
+        "hole_count",
+        "hole_size"
+      ],
+      "title": "HolePattern",
+      "type": "object"
+    },
+    "ImportedInterface": {
+      "additionalProperties": false,
+      "description": "An interface imported from another spec's published contract.",
+      "properties": {
+        "contract": {
+          "title": "Contract",
+          "type": "string"
+        },
+        "source_spec": {
+          "title": "Source Spec",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "type": {
+          "const": "imported",
+          "default": "imported",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_spec",
+        "contract",
+        "tag"
+      ],
+      "title": "ImportedInterface",
+      "type": "object"
+    },
+    "InterfaceContract": {
+      "additionalProperties": false,
+      "description": "A published, importable interface: the geometry a mating part designs against.",
+      "properties": {
+        "mating_plane": {
+          "title": "Mating Plane",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "$ref": "#/$defs/HolePattern"
+        }
+      },
+      "required": [
+        "name",
+        "mating_plane",
+        "pattern"
+      ],
+      "title": "InterfaceContract",
+      "type": "object"
+    },
+    "LimitSense": {
+      "description": "Which side of its limit a measured value has to be on to pass.",
+      "enum": [
+        "at_most",
+        "at_least"
+      ],
+      "title": "LimitSense",
+      "type": "string"
+    },
+    "LimitTolerance": {
+      "additionalProperties": false,
+      "description": "An asymmetric tolerance given as signed upper/lower limit deviations.",
+      "properties": {
+        "lower": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "type": {
+          "const": "limits",
+          "default": "limits",
+          "title": "Type",
+          "type": "string"
+        },
+        "upper": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "upper",
+        "lower"
+      ],
+      "title": "LimitTolerance",
+      "type": "object"
+    },
+    "LoadCase": {
+      "additionalProperties": false,
+      "description": "A single load condition the part must survive.\n\nEach ``kind`` carries its own magnitude: a ``static`` or ``quasi_static`` case\na ``force`` (quasi-static also a ``quasi_static_factor`` that scales it), a\n``remote_mass`` case an offset ``remote_mass``. A case missing its magnitude is\nrejected at construction — a downstream analysis can never be handed a load\nwith nothing to apply.\n\n``nature`` optionally classifies the case by its ASCE 7 load nature (dead, live,\nwind, seismic, …) so a declared combination set can factor it. It is orthogonal\nto ``kind`` (which is how the load is applied) and defaults to ``None`` — a spec\nthat does not use load combinations leaves it unset.",
+      "properties": {
+        "applied_to": {
+          "title": "Applied To",
+          "type": "string"
+        },
+        "force": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/LoadKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "nature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoadNature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quasi_static_factor": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quasi Static Factor"
+        },
+        "remote_mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "applied_to"
+      ],
+      "title": "LoadCase",
+      "type": "object"
+    },
+    "LoadKind": {
+      "enum": [
+        "static",
+        "quasi_static",
+        "remote_mass"
+      ],
+      "title": "LoadKind",
+      "type": "string"
+    },
+    "LoadNature": {
+      "description": "The nature of a load case, by its ASCE 7 symbol.\n\nThe factor a combination applies depends on the load's nature, not its name —\ndead load is always factored as dead load. Seismic (``E``) carries the\nhorizontal earthquake effect ρ·Q_E; the vertical part folds into the dead factor.",
+      "enum": [
+        "D",
+        "L",
+        "Lr",
+        "S",
+        "R",
+        "W",
+        "E"
+      ],
+      "title": "LoadNature",
+      "type": "string"
+    },
+    "Manufacturing": {
+      "additionalProperties": false,
+      "description": "The manufacturing process and the DFM parameters it is checked against.",
+      "properties": {
+        "min_wall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "process": {
+          "$ref": "#/$defs/ManufacturingProcess"
+        },
+        "tolerance_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance Class"
+        }
+      },
+      "required": [
+        "process"
+      ],
+      "title": "Manufacturing",
+      "type": "object"
+    },
+    "ManufacturingProcess": {
+      "enum": [
+        "cnc_milling",
+        "cnc_turning",
+        "grinding",
+        "wire_edm",
+        "reaming",
+        "fdm",
+        "sls",
+        "sheet_metal",
+        "injection_molding",
+        "die_casting"
+      ],
+      "title": "ManufacturingProcess",
+      "type": "string"
+    },
+    "MarginUncertainty": {
+      "description": "A sampled margin: the chance it falls short, its band, and what drives it.\n\n``shortfall_probability`` is the fraction of samples whose response fell below\n``required`` — the number a nominal pass can hide. ``lower`` and ``upper`` bound\nthe central ``coverage`` fraction of the sampled response. ``sensitivities``\nranks the inputs by their first-order share of the response variance, largest\nfirst. Everything is reproducible from ``seed``.",
+      "properties": {
+        "citation": {
+          "default": "Monte Carlo propagation of input distributions; first-order (Taylor) variance sensitivity. Screening only — not a certified reliability analysis.",
+          "title": "Citation",
+          "type": "string"
+        },
+        "coverage": {
+          "title": "Coverage",
+          "type": "number"
+        },
+        "lower": {
+          "title": "Lower",
+          "type": "number"
+        },
+        "mean": {
+          "title": "Mean",
+          "type": "number"
+        },
+        "method": {
+          "const": "monte_carlo",
+          "default": "monte_carlo",
+          "title": "Method",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "number"
+        },
+        "samples": {
+          "title": "Samples",
+          "type": "integer"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sensitivities": {
+          "items": {
+            "$ref": "#/$defs/Sensitivity"
+          },
+          "title": "Sensitivities",
+          "type": "array"
+        },
+        "shortfall_probability": {
+          "title": "Shortfall Probability",
+          "type": "number"
+        },
+        "std": {
+          "title": "Std",
+          "type": "number"
+        },
+        "upper": {
+          "title": "Upper",
+          "type": "number"
+        }
+      },
+      "required": [
+        "samples",
+        "seed",
+        "required",
+        "mean",
+        "std",
+        "shortfall_probability",
+        "lower",
+        "upper",
+        "coverage",
+        "sensitivities"
+      ],
+      "title": "MarginUncertainty",
+      "type": "object"
+    },
+    "MaterialRef": {
+      "additionalProperties": false,
+      "description": "A database identifier for a material (e.g. ``AA-6061-T6``).",
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "MaterialRef",
+      "type": "object"
+    },
+    "Objective": {
+      "description": "One quantity the study ranks designs by, and which direction is better.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sense": {
+          "$ref": "#/$defs/ObjectiveSense",
+          "default": "minimize"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Objective",
+      "type": "object"
+    },
+    "ObjectiveSense": {
+      "description": "Whether an objective is better small or better large.",
+      "enum": [
+        "minimize",
+        "maximize"
+      ],
+      "title": "ObjectiveSense",
+      "type": "string"
+    },
+    "Origin": {
+      "description": "The source of a value in a compiled Design Spec.",
+      "enum": [
+        "user_stated",
+        "database_resolved",
+        "default"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "Parameter": {
+      "description": "One swept design variable: its name, its bounds, its unit, and its resolution.\n\n``steps`` is how many values a :attr:`SamplingStrategy.GRID` sweep takes across\n``[low, high]`` inclusive, so 2 gives the two ends and 5 gives quarter points. It is\nignored by a Halton sweep, which samples continuously.\n\n``unit`` is recorded rather than applied: the evaluator receives plain floats and is\nresponsible for reading them in the unit the parameter declares. Recording it means\na front cannot be read back without knowing what its axes are in.",
+      "properties": {
+        "high": {
+          "title": "High",
+          "type": "number"
+        },
+        "low": {
+          "title": "Low",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "steps": {
+          "default": 5,
+          "title": "Steps",
+          "type": "integer"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "low",
+        "high",
+        "unit"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "ProcessNote": {
+      "description": "A structured process note: a recognized category and typed parameters.\n\nThe category is what makes it consumable — two notes of different categories at the\nsame scope are different characteristics and get different identifiers. Parameters\nare dimensioned :class:`~anvilate.units.Quantity` values, so a note cannot smuggle an\nunchecked number into a check the way a sentence can.",
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "kind": {
+          "const": "process_note",
+          "default": "process_note",
+          "title": "Kind",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "category"
+      ],
+      "title": "ProcessNote",
+      "type": "object"
+    },
+    "ProductionMethod": {
+      "description": "How the surface was produced — the index of the Marin surface-factor table.\n\n``POLISHED`` (mirror-polished or lapped) is the rotating-beam specimen's own surface\nand takes k_a = 1.0 by definition rather than by fit. ``MACHINED`` covers cold-drawn\nas well, as the published table does: they share a row.",
+      "enum": [
+        "polished",
+        "ground",
+        "machined",
+        "hot_rolled",
+        "as_forged"
+      ],
+      "title": "ProductionMethod",
+      "type": "string"
+    },
+    "Provenanced_Annotated_Quantity__AfterValidator__": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[Annotated[Quantity, AfterValidator]]",
+      "type": "object"
+    },
+    "Provenanced_UnitSystem_": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "$ref": "#/$defs/UnitSystem"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[UnitSystem]",
+      "type": "object"
+    },
+    "Provenanced_float_": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[float]",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "RepairHint": {
+      "description": "How to move a failing check back into bounds.\n\nA failed check computes this deterministically — never an LLM guess. It names\nthe governing spec ``parameter`` by its stable name and the ``direction`` that\nimproves the margin. When a paired design inverse exists, ``corrective_value``\n(in ``unit``) is the value of that parameter which satisfies the check at the\nrequired margin — turning repair from a search into a single solve. Without an\ninverse the value is ``None``: a direction is still honest, an invented number\nis not. ``provenance`` records where the hint came from (the inverse function,\nor a monotonicity declaration).",
+      "properties": {
+        "corrective_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corrective Value"
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "parameter",
+        "direction"
+      ],
+      "title": "RepairHint",
+      "type": "object"
+    },
+    "ReviewItem": {
+      "description": "One line of a dossier: a check, why it is where it is, and who to ask about it.",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/ScorecardEntry"
+        },
+        "origin": {
+          "$ref": "#/$defs/DecisionOrigin"
+        },
+        "origin_detail": {
+          "default": "",
+          "title": "Origin Detail",
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/ReviewPriority"
+        }
+      },
+      "required": [
+        "entry",
+        "priority",
+        "origin"
+      ],
+      "title": "ReviewItem",
+      "type": "object"
+    },
+    "ReviewPriority": {
+      "description": "The order a reviewer should work in. Lower sorts first.\n\nFixed and documented rather than tuned, because the point of an ordering is that two\nruns agree and a diff between dossiers means something. The order is not \"worst\nfirst\" — it is *most likely to change the engineer's decision* first, which is why an\nunevaluated check outranks a failing one: a FAIL is already visible and already\nblocking, while a NOT_EVALUATED is the check that silently is not there.",
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "title": "ReviewPriority",
+      "type": "integer"
+    },
+    "ReviewRecord": {
+      "description": "A licensed engineer's record that they reviewed a specific artifact.\n\n``covers_digest`` is the :func:`artifact_digest` of what was reviewed.\n:meth:`applies_to` re-derives the digest and says whether this record still covers the\nartifact in hand. Anything that moves the digest — an input, a material, a toolchain\nversion — invalidates it, and that is the intended behaviour rather than an\ninconvenience.\n\n``accepted_exceptions`` names checks the engineer has decided to accept despite their\nstatus. Recording an exception does **not** change the check: it still renders with\nthe status it computed. A tool that let a review turn a FAIL into a pass would be\nlaundering the engineer's judgement into an appearance of analysis.",
+      "properties": {
+        "accepted_exceptions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Exceptions",
+          "type": "array"
+        },
+        "covers_digest": {
+          "title": "Covers Digest",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "reviewed_on": {
+          "format": "date",
+          "title": "Reviewed On",
+          "type": "string"
+        },
+        "reviewer": {
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reviewer",
+        "reviewed_on",
+        "covers_digest",
+        "scope"
+      ],
+      "title": "ReviewRecord",
+      "type": "object"
+    },
+    "ReviewerDossier": {
+      "description": "Everything a reviewer needs, ordered by what most deserves their attention.\n\n``items`` are in :class:`ReviewPriority` order and ties keep the scorecard's own\norder, so the ordering is total and two runs over the same inputs agree exactly.\n\n``status`` is the scorecard's status, unchanged and unchangeable from here. ``record``\nis the review, if one has been made and still applies; ``stale_record`` is True when a\nrecord exists but the artifact has moved underneath it — the state a reviewer most\nneeds told, because it looks identical to \"reviewed\" from the outside.",
+      "properties": {
+        "digest": {
+          "title": "Digest",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReviewItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "model_involvement": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Model Involvement",
+          "type": "array"
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReviewRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stale_record": {
+          "default": false,
+          "title": "Stale Record",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "items",
+        "status",
+        "digest"
+      ],
+      "title": "ReviewerDossier",
+      "type": "object"
+    },
+    "RoughnessParameter": {
+      "description": "Which roughness parameter a finish callout states.",
+      "enum": [
+        "Ra",
+        "Rz"
+      ],
+      "title": "RoughnessParameter",
+      "type": "string"
+    },
+    "SamplingStrategy": {
+      "description": "How the study picks the points it evaluates.\n\n:attr:`GRID` is the full-factorial product of each parameter's steps — exhaustive,\nreproducible, and the right default when the space is small enough to sweep whole.\n:attr:`HALTON` is a deterministic low-discrepancy sequence for a space too large to\ngrid: it fills the box more evenly than a coarse grid at the same budget and, unlike\na random sample, is a pure function of the point index.\n\n**This is Halton, not Sobol.** Sobol needs published direction numbers per dimension;\nreproducing them from memory is exactly the guess this library's citation contract\nexists to prevent, and no anchor was available. Halton is elementary — the radical\ninverse of the index in one prime base per dimension — so it can be written down and\nchecked by hand, which is why it is what ships.",
+      "enum": [
+        "grid",
+        "halton"
+      ],
+      "title": "SamplingStrategy",
+      "type": "string"
+    },
+    "Scorecard": {
+      "description": "A collection of check entries with a rolled-up overall status.\n\nThe roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``\nif any check failed, else ``NOT_EVALUATED`` if any check could not run (or\nthere are no checks at all), else ``OVER_MARGIN`` if any check passed above\nits band, and only ``PASS`` when every check ran and passed cleanly. So\n:attr:`passed` is never true while a check is unevaluated, and an\nover-engineered card is visible without being blocked.",
+      "properties": {
+        "entries": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ScorecardEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "Scorecard",
+      "type": "object"
+    },
+    "ScorecardEntry": {
+      "description": "One check's result: a name, a tri-state status, and a detail line.",
+      "properties": {
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Comparison"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "derivation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Derivation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "repair_hint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepairHint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "required_safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Safety Factor"
+        },
+        "safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Factor"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarginUncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "underived": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Underived"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "upper_safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper Safety Factor"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "title": "ScorecardEntry",
+      "type": "object"
+    },
+    "SectionStatus": {
+      "description": "One layer's contribution: what it is, what it concluded, and whether that is a verdict.\n\n``informational`` marks a layer whose conclusion is *about something other than this\npart*. A design-space sweep says what the space contains; a set of feature control\nframes says the callouts parse. Neither is a statement that the part is or is not\nsound, so neither enters the roll-up — and letting them would mean an exhaustive sweep\nwith nothing feasible in it condemning a part that passes every check on its own\ndrawing. They are still carried, still rendered, and still counted in\n:meth:`BundleSections.covers`.",
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "informational": {
+          "default": false,
+          "title": "Informational",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "title": "SectionStatus",
+      "type": "object"
+    },
+    "Sensitivity": {
+      "description": "One input's share of the response variance, first-order (Taylor).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "variance_share": {
+          "title": "Variance Share",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "variance_share"
+      ],
+      "title": "Sensitivity",
+      "type": "object"
+    },
+    "StandardComponentInterface": {
+      "additionalProperties": false,
+      "description": "An interface to a standard component, referenced by database ID.",
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "type": {
+          "const": "standard_component",
+          "default": "standard_component",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "tag"
+      ],
+      "title": "StandardComponentInterface",
+      "type": "object"
+    },
+    "Study": {
+      "description": "A declared design-space study: what to sweep, what to rank by, and how far to go.\n\n``budget`` caps how many points are evaluated. A grid larger than the budget is\n*truncated*, not resampled, and the result says so — a front from a truncated sweep\nis provisional, and the distinction between \"the lightest passing design\" and \"the\nlightest passing design we got to\" is the whole reason the flag exists.\n\n``seed`` is recorded for reproducibility even though nothing here is random: both\nstrategies are pure functions of the study, so a study re-run returns the identical\nset in the identical order. The seed shifts the Halton start index, which is the one\nknob that changes which points a truncated sweep gets to.",
+      "properties": {
+        "budget": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "objectives": {
+          "items": {
+            "$ref": "#/$defs/Objective"
+          },
+          "title": "Objectives",
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "strategy": {
+          "$ref": "#/$defs/SamplingStrategy",
+          "default": "grid"
+        }
+      },
+      "required": [
+        "name",
+        "parameters",
+        "objectives"
+      ],
+      "title": "Study",
+      "type": "object"
+    },
+    "StudyResult": {
+      "description": "A completed study: every point evaluated, and the exact front over the feasible ones.\n\n``front`` is the non-dominated subset of the *feasible* points — exact, not\napproximate, because the whole evaluated set is in hand. ``provisional`` is True\nwhenever the sweep did not exhaust the declared grid — because a budget truncated it,\nor because it sampled continuously and never visited the grid at all — and then the\nfront is the best of what ran and nothing stronger. Only an untruncated grid sweep is\ncomplete. Nothing here is described as optimal.",
+      "properties": {
+        "front_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Front Indices",
+          "type": "array"
+        },
+        "grid_size": {
+          "title": "Grid Size",
+          "type": "integer"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/DesignPoint"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "provisional": {
+          "title": "Provisional",
+          "type": "boolean"
+        },
+        "study": {
+          "$ref": "#/$defs/Study"
+        }
+      },
+      "required": [
+        "study",
+        "points",
+        "front_indices",
+        "grid_size",
+        "provisional"
+      ],
+      "title": "StudyResult",
+      "type": "object"
+    },
+    "SurfaceFinish": {
+      "description": "A surface-finish callout: a roughness value, its parameter, and the method.\n\n``method`` is what the Marin surface factor is derived from — the published fit is\nindexed by production method, not by roughness. ``roughness`` is still load-bearing:\nit is checked against the range the method typically attains, so a callout that names\ntwo incompatible things is surfaced rather than silently resolved toward one of them.",
+      "properties": {
+        "kind": {
+          "const": "surface_finish",
+          "default": "surface_finish",
+          "title": "Kind",
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/ProductionMethod"
+        },
+        "parameter": {
+          "$ref": "#/$defs/RoughnessParameter",
+          "default": "Ra"
+        },
+        "roughness": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "roughness",
+        "method"
+      ],
+      "title": "SurfaceFinish",
+      "type": "object"
+    },
+    "SymbolValue": {
+      "description": "One symbol in a derivation: its name, what it means, and its value.\n\n``symbol`` is the token as it appears in the symbolic formula (``\"M\"``,\n``\"σ_b\"``), ``description`` the plain-language gloss a reviewer unfamiliar with\nthe source text needs, and ``value`` either a :class:`~anvilate.units.Quantity`\nor a bare float for a genuinely dimensionless number (a friction coefficient, a\ncount). ``unit`` is a *preferred* display unit, used only when the document declares\nno unit system; a document that declares one gets that system. Set ``unit_is_required``\nwhere the preference is arithmetic rather than taste — see the field.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "unit_is_required": {
+          "default": false,
+          "title": "Unit Is Required",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "symbol",
+        "description",
+        "value"
+      ],
+      "title": "SymbolValue",
+      "type": "object"
+    },
+    "SymmetricTolerance": {
+      "additionalProperties": false,
+      "description": "A symmetric ± tolerance, e.g. ``±0.1 mm``.",
+      "properties": {
+        "plus_minus": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "type": {
+          "const": "symmetric",
+          "default": "symmetric",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plus_minus"
+      ],
+      "title": "SymmetricTolerance",
+      "type": "object"
+    },
+    "ToleranceDimension": {
+      "additionalProperties": false,
+      "description": "An explicitly-toleranced dimension declared on the spec.\n\n``tolerance`` is the typed :data:`~anvilate.tolerance.Tolerance` union —\nsymmetric ±, asymmetric limits, or an ISO 286 fit — and overrides the general\nclass for the feature at ``tag``. :meth:`resolve` yields the common\n:class:`~anvilate.tolerance.ResolvedTolerance` band the drawing, DFM, and\nstack-up layers read.",
+      "properties": {
+        "nominal": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "tolerance": {
+          "discriminator": {
+            "mapping": {
+              "fit": "#/$defs/FitTolerance",
+              "limits": "#/$defs/LimitTolerance",
+              "symmetric": "#/$defs/SymmetricTolerance"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SymmetricTolerance"
+            },
+            {
+              "$ref": "#/$defs/LimitTolerance"
+            },
+            {
+              "$ref": "#/$defs/FitTolerance"
+            }
+          ],
+          "title": "Tolerance"
+        }
+      },
+      "required": [
+        "tag",
+        "nominal",
+        "tolerance"
+      ],
+      "title": "ToleranceDimension",
+      "type": "object"
+    },
+    "Underived": {
+      "description": "A check's own statement that it has no formula to show, and why.\n\nIt rides on the :class:`~anvilate.scorecard.ScorecardEntry` in the place the\n:class:`Derivation` would have taken, so it travels into the evidence bundle and\nthe JSON alongside the verdict it explains. That is the point of putting it here\nrather than in a file addressed by citation: a clause cited by two checks — one\nthat computes and one that does not — cannot be answered once.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DerivationAbsence"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "title": "Underived",
+      "type": "object"
+    },
+    "UnitSystem": {
+      "description": "The unit system a spec is authored and reported in.",
+      "enum": [
+        "SI",
+        "US"
+      ],
+      "title": "UnitSystem",
+      "type": "string"
+    },
+    "ValidationTier": {
+      "enum": [
+        "T0_geometry",
+        "T1_analytical",
+        "T2_dfm",
+        "T3_fea"
+      ],
+      "title": "ValidationTier",
+      "type": "string"
+    },
+    "VerificationArchetype": {
+      "description": "A class of physical verification, and what a check must supply to plan one.\n\n``clause_token`` is matched against a scorecard entry's ``reference`` — the clause\nthe check already cites — so the mapping runs off the citation rather than off a\ncheck's display name, which a caller chooses freely.\n\n``required_parameters`` are the quantities the acceptance criterion needs and the\ncheck itself does not carry: a proof test needs the rated load, a hydrostatic test\nneeds the MAWP. When one is missing the item is *unresolved*, not omitted.\n\n``practice_default`` marks an archetype whose criterion is established practice\nrather than a clause in a cited standard. It is reported alongside the criterion, so\na reader can tell which numbers carry a standard's authority and which do not.",
+      "properties": {
+        "citation": {
+          "title": "Citation",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/VerificationMethod"
+        },
+        "practice_default": {
+          "default": false,
+          "title": "Practice Default",
+          "type": "boolean"
+        },
+        "required_parameters": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Parameters",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "method",
+        "title",
+        "citation"
+      ],
+      "title": "VerificationArchetype",
+      "type": "object"
+    },
+    "VerificationItem": {
+      "description": "One planned physical verification: what to do, to what, and what counts as a pass.\n\n``driving_checks`` names the analytical checks this test stands behind, which is the\nlink the matrix exists to make: a test with no driving check is a test nobody asked\nfor, and a check with no test is verified by analysis alone.\n\n``outcome`` is ``None`` until a result is recorded, and :attr:`status` is\n``NOT_EVALUATED`` while it is. A planned test never renders as a passed one.",
+      "properties": {
+        "acceptance": {
+          "title": "Acceptance",
+          "type": "string"
+        },
+        "archetype": {
+          "$ref": "#/$defs/VerificationArchetype"
+        },
+        "driving_checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Driving Checks",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerificationOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "required_accuracy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Accuracy"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus",
+          "description": "``NOT_EVALUATED`` until an outcome is recorded; then that outcome's verdict.",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "name",
+        "archetype",
+        "driving_checks",
+        "acceptance",
+        "status"
+      ],
+      "title": "VerificationItem",
+      "type": "object"
+    },
+    "VerificationMethod": {
+      "description": "How a requirement is shown to be met (the systems-engineering four).\n\n:attr:`ANALYSIS` is the method Anvilate's own checks *are* — and naming it as a\nmethod rather than an absence is the point: a check verified by analysis alone is\nverified by a legitimate method, it is simply not verified by a physical one.",
+      "enum": [
+        "analysis",
+        "inspection",
+        "demonstration",
+        "test"
+      ],
+      "title": "VerificationMethod",
+      "type": "string"
+    },
+    "VerificationOutcome": {
+      "description": "A recorded result: what was measured, when, by whom, and on what instrument.\n\nAll four are required. An outcome without an instrument identity or a performer is\nnot traceable, and an untraceable record is closer to a claim than to evidence — the\nplan would rather have no outcome than an anonymous one.",
+      "properties": {
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "measured": {
+          "title": "Measured",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "performed_by": {
+          "title": "Performed By",
+          "type": "string"
+        },
+        "performed_on": {
+          "format": "date",
+          "title": "Performed On",
+          "type": "string"
+        }
+      },
+      "required": [
+        "passed",
+        "measured",
+        "performed_on",
+        "performed_by",
+        "instrument"
+      ],
+      "title": "VerificationOutcome",
+      "type": "object"
+    },
+    "VerificationPlan": {
+      "description": "A scorecard's physical verification plan, with its coverage stated.\n\n``analysis_only`` names the checks that map to no physical test **and passed** —\nverified by analysis, which is a method, and counted so the matrix cannot imply\notherwise. ``failing_checks`` names the ones that failed: a failing check is not\nverified by analysis, it is the thing the analysis found, and no verification plan\nover a failing design rolls up green.\n``unresolved`` names the checks that *should* have produced a test item and could\nnot: a check that did not run, or one whose archetype needed a quantity nobody\nsupplied. Both are listed rather than dropped.",
+      "properties": {
+        "analysis_only": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Analysis Only",
+          "type": "array"
+        },
+        "failing_checks": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Failing Checks",
+          "type": "array"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/VerificationItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus",
+          "description": "The plan's roll-up. ``NOT_EVALUATED`` until every planned test has a result.\n\nA plan is not evidence. This never reports PASS on intent — only on a full set of\nrecorded outcomes, and a single failed outcome fails the plan.",
+          "readOnly": true
+        },
+        "unresolved": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Unresolved",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "analysis_only",
+        "unresolved",
+        "status"
+      ],
+      "title": "VerificationPlan",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/evidence-bundle/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
+  "properties": {
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "calloutScorecard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Scorecard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "callouts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CalloutSet"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "covers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Covers",
+      "type": "array"
+    },
+    "disclaimer": {
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "exploration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StudyResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "exports": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ExportRecord"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exports"
+    },
+    "geometricTolerances": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Geometrictolerances"
+    },
+    "missing": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing",
+      "type": "array"
+    },
+    "review": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReviewerDossier"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "scorecard": {
+      "$ref": "#/$defs/Scorecard"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/SectionStatus"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "spec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DesignSpec"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/CheckStatus"
+    },
+    "testVerified": {
+      "title": "Testverified",
+      "type": "boolean"
+    },
+    "verification": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VerificationPlan"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "disclaimer",
+    "assumptions",
+    "status",
+    "covers",
+    "missing",
+    "testVerified",
+    "sections",
+    "scorecard",
+    "spec"
+  ],
+  "title": "BundleDocument",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

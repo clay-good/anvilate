@@ -1,23 +1,40 @@
-# The published contracts: Spec IR and scorecard as JSON Schema
+# The published contracts: Spec IR, scorecard and evidence bundle as JSON Schema
 
-**Anvilate's input and its output are now documents anything can validate, without
+**Anvilate's input and its outputs are now documents anything can validate, without
 importing Python.**
 
-The two load-bearing data contracts are the Design Spec IR going in and the scorecard
-coming out. As Python classes they are only checkable from Python; as JSON Schema 2020-12
-they are checkable by a CAD add-in, a CI job, or an MCP client that has never heard of
-anvilate.
+The load-bearing data contracts are the Design Spec IR going in, and the scorecard and the
+evidence bundle coming out. As Python classes they are only checkable from Python; as JSON
+Schema 2020-12 they are checkable by a CAD add-in, a CI job, or an MCP client that has never
+heard of anvilate.
 
 | Artifact | What it describes | Version |
 | --- | --- | --- |
 | [`docs/api/schemas/design-spec.schema.json`](api/schemas/design-spec.schema.json) | the typed part description the pipeline consumes | the same number a spec file states in `anvilate_spec` |
-| [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `1.1.0` |
+| [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `SCORECARD_SCHEMA_VERSION` |
+| [`docs/api/schemas/evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json) | every layer's contribution for one part, the roll-up, the scorecard and the spec | `BUNDLE_SCHEMA_VERSION` |
+
+The version cells name the constants rather than quoting numbers, and
+`test_the_contract_tables_versions_are_the_constants_own` holds them to the module. This row
+said `1.1.0` while the scorecard contract was at 1.6.0 — a published version number, stated
+wrongly, on the page that exists to document the published versions.
 
 ```python
 from anvilate.contracts import freeze_release, scorecard_json_schema, write_schemas
 ```
 
 `write_schemas` regenerates the published artifacts; `freeze_release` cuts a version, once.
+
+**The evidence bundle had no contract at all** until it had this one. The `export_artifact`
+MCP tool published its entire output as `{"type": "object"}` — the one thing the tool exists
+to hand a client was the one thing its schema said nothing about — because there was no third
+schema to `$ref`. It is generated from `anvilate.bundle.BundleDocument`, which *describes* the
+document rather than building it: constructing that model and dumping it with `exclude_unset`
+would reproduce the absent-versus-null rule at the top level and also strip
+`informational: false`, `reference: null` and `blocking: []` out of eight nested structures,
+and changing bytes the document has always emitted is the wrong price for a schema's
+provenance. A gate validates every bundle the library builds against the released artifact,
+which is what keeps the description true.
 
 2020-12 specifically, because that is the dialect the MCP tool-schema contract expects —
 which is why these exist in this form rather than as an ad-hoc dump.

@@ -151,6 +151,11 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
 _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
+# The evidence bundle, published at 1.0.0 so `export_artifact` can describe what it returns.
+# It could not before: the tool declared its entire output as `{"type": "object"}`, because
+# `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
+# here for the same reason as the two above.
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.0.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
@@ -530,12 +535,12 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "format": {"type": "string"},
                     # The bundle itself, as the primitives `BundleSections.to_document_dict`
                     # produces — the roll-up *and* the card, because a bundle whose checks a
-                    # reviewer cannot read is not evidence. Untyped here because there is no
-                    # published bundle contract
-                    # to `$ref` — `contracts.py` generates a spec schema and a scorecard
-                    # schema and no third one — and paraphrasing the document inline would
-                    # be a second description of it that drifts from the model.
-                    "bundle": {"type": "object"},
+                    # reviewer cannot read is not evidence. It was `{"type": "object"}`: the
+                    # one thing this tool exists to hand a client was the one thing its
+                    # published schema said nothing about, because there was no bundle
+                    # contract to `$ref`. There is now, generated from
+                    # `anvilate.bundle.BundleDocument`.
+                    "bundle": {"$ref": _BUNDLE_REF},
                     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                 },
                 required=["format", "bundle", "sha256"],
@@ -597,7 +602,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
         if required not in properties:
             issues.append(f"{where} requires {required!r}, which it does not define")
     for ref in sorted(_refs(schema)):
-        if ref not in {_SPEC_REF, _SCORECARD_REF}:
+        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF}:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
                 "at its current version"

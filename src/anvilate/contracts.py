@@ -42,6 +42,8 @@ __all__ = [
     "ELEMENT_SCHEMA_VERSIONS",
     "element_schema_version",
     "SCORECARD_SCHEMA_VERSION",
+    "BUNDLE_SCHEMA_VERSION",
+    "bundle_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
     "schema_artifacts",
@@ -69,6 +71,13 @@ SPEC_SCHEMA_VERSION = SCHEMA_VERSION
 # generated schema changes; the gate in tests/test_contracts.py refuses a changed schema
 # under an unchanged version and says so by name.
 SCORECARD_SCHEMA_VERSION = "1.6.0"
+
+# The evidence bundle, which the `export_artifact` MCP tool serves and `anvilate export`
+# prints. It had no contract at all: the tool published its entire output as
+# `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
+# schema said nothing about. Same rule as the two above — bump on a change to the generated
+# document, and the gate refuses a changed schema under an unchanged version.
+BUNDLE_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:
@@ -122,6 +131,32 @@ def scorecard_json_schema() -> dict[str, Any]:
             "Anvilate scorecard: one typed result per validation check, with a rolled-up "
             "status. A check that could not run reports not_evaluated, which is not a pass. "
             "Generated from anvilate.scorecard.Scorecard."
+        ),
+    )
+
+
+def bundle_json_schema() -> dict[str, Any]:
+    """The exported evidence bundle as a JSON Schema 2020-12 document.
+
+    Generated from :class:`anvilate.bundle.BundleDocument`, which describes the document
+    :meth:`anvilate.bundle.BundleSections.to_document_dict` emits. That model does not build
+    the document — its own docstring says why — so the thing that makes this schema true of
+    the real bundle is the gate that validates every document the library builds against it,
+    rather than a shared code path.
+    """
+    from .bundle import BundleDocument
+
+    return _artifact(
+        BundleDocument,
+        name="evidence-bundle",
+        version=BUNDLE_SCHEMA_VERSION,
+        description=(
+            "Anvilate evidence bundle: every screening layer's contribution for one part, "
+            "with one rolled-up status, the scorecard, and the spec the verdicts were "
+            "computed from. A layer that never ran is an absent key, not a null one — the "
+            "two are different facts and the bundle refuses to collapse them. Carries the "
+            "screening disclaimer unconditionally. Generated from anvilate.bundle."
+            "BundleDocument."
         ),
     )
 
@@ -187,6 +222,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
     return {
         "design-spec.schema.json": spec_json_schema(),
         "scorecard.schema.json": scorecard_json_schema(),
+        "evidence-bundle.schema.json": bundle_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema
             for tag, schema in element_json_schemas().items()

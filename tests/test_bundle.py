@@ -1148,3 +1148,96 @@ def test_the_document_can_carry_every_key_it_names_and_a_bare_bundle_carries_non
     assert bare["spec"] is None
     for key in can_carry - always:
         assert key not in bare, f"{key} appears on a bundle that has no such section"
+
+
+def test_every_document_this_library_can_build_validates_against_its_published_contract():
+    """What holds `BundleDocument` to the document it describes but does not build.
+
+    The obvious construction — build the model, dump it with `exclude_unset` — reproduces the
+    absent-versus-null rule at the top level and also applies it to every nested model,
+    dropping `informational: false`, `reference: null`, `blocking: []` and more out of eight
+    nested structures. Pydantic has no per-level control, so the model describes the document
+    rather than producing it, and this is what keeps the two from drifting.
+
+    Both halves matter and they are different checks. The **model** accepting the document says
+    the Python types are right. The **released schema** accepting it says the artifact a client
+    actually fetches is right, with its `$ref`s resolved — and that is the one a consumer runs,
+    so it is the one that has to be true.
+    """
+    from anvilate.bundle import BundleDocument
+
+    documents = {
+        "every section at once": _every_section().to_document_dict(),
+        "a scorecard and nothing else": _sections().to_document_dict(),
+        "a failing card": _sections(scorecard=_card(passing=False)).to_document_dict(),
+        "a plan with nothing performed": _sections(
+            verification=_plan(performed=False)
+        ).to_document_dict(),
+        "a review that no longer applies": _sections(
+            review=_dossier(stale=True)
+        ).to_document_dict(),
+    }
+    for label, document in documents.items():
+        BundleDocument.model_validate(document)
+
+    jsonschema = pytest.importorskip("jsonschema")
+    from referencing import Registry, Resource
+
+    from anvilate.contracts import (
+        BUNDLE_SCHEMA_VERSION,
+        SCORECARD_SCHEMA_VERSION,
+        SPEC_SCHEMA_VERSION,
+    )
+
+    released = Path(__file__).resolve().parent.parent / "docs" / "api" / "schemas" / "released"
+    bundle_schema = json.loads(
+        (released / f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json").read_text(encoding="utf-8")
+    )
+    # The released files, not the live generators: validating against the same call that
+    # produced the document would agree with itself. A client resolves the versioned URL, and
+    # these files are what that URL serves.
+    registry = Registry().with_resources(
+        [
+            (document["$id"], Resource.from_contents(document))
+            for document in (
+                bundle_schema,
+                json.loads(
+                    (released / f"design-spec-{SPEC_SCHEMA_VERSION}.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                json.loads(
+                    (released / f"scorecard-{SCORECARD_SCHEMA_VERSION}.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+            )
+        ]
+    )
+    validator = jsonschema.Draft202012Validator(bundle_schema, registry=registry)
+    for label, document in documents.items():
+        errors = [
+            f"{list(error.absolute_path)}: {error.message}"
+            for error in validator.iter_errors(document)
+        ]
+        assert not errors, f"{label} does not validate against the published contract: {errors}"
+
+    # The schema has to be discriminating, or every assertion above passes on a document the
+    # schema does not really describe. Not by closing `additionalProperties`: this artifact
+    # leaves it open on purpose, the way the scorecard contract does, so a client pinned to
+    # 1.0.0 keeps reading a later bundle that gained a section. (The Design Spec schema *is*
+    # closed, and the asymmetry is right — it is an input, where a misspelled key must be
+    # refused rather than ignored.) So the probes are a required key removed and a required
+    # key given the wrong type.
+    baseline = documents["a scorecard and nothing else"]
+    for label, broken in (
+        ("a required key removed", {k: v for k, v in baseline.items() if k != "disclaimer"}),
+        ("status as a number", {**baseline, "status": 7}),
+        ("status outside the enumeration", {**baseline, "status": "probably fine"}),
+        ("sections as a string", {**baseline, "sections": "one"}),
+        ("a section missing its own status", {**baseline, "sections": [{"name": "checks"}]}),
+    ):
+        assert list(validator.iter_errors(broken)), (
+            f"the published bundle schema accepts {label}, so validating against it says "
+            f"nothing about the document"
+        )

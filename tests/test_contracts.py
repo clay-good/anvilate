@@ -388,3 +388,56 @@ def test_a_version_pin_names_an_element_that_exists():
 
     stale = sorted(set(ELEMENT_SCHEMA_VERSIONS) - set(element_registry()))
     assert not stale, f"ELEMENT_SCHEMA_VERSIONS pins tags no pack registers: {stale}"
+
+
+def test_the_contract_tables_versions_are_the_constants_own():
+    """The page documenting the published versions had one of them wrong.
+
+    `docs/published-contracts.md` listed the scorecard contract at `1.1.0` while
+    `SCORECARD_SCHEMA_VERSION` was `1.6.0` — five bumps, each with its own paragraph further
+    down the same page, and the table at the top said none of them. A quoted version number is
+    the one kind of documentation that cannot be a little bit stale: a reader pins to it.
+
+    So the cells name the constants and this resolves them. Naming a constant that does not
+    exist fails, and so does a row for an artifact the module does not publish — a table that
+    is only checked in one direction goes stale by omission instead.
+    """
+    from anvilate import contracts as contracts_module
+
+    page = (_SCHEMAS.parent.parent / "published-contracts.md").read_text(encoding="utf-8")
+    rows = [line for line in page.splitlines() if line.startswith("| [`docs/api/schemas/")]
+    assert len(rows) >= 3, f"the table reader found {len(rows)} rows; it has stopped matching"
+
+    named: set[str] = set()
+    for row in rows:
+        cells = [cell.strip() for cell in row.strip("|").split("|")]
+        version = cells[-1].strip("`")
+        if not version.endswith("_SCHEMA_VERSION"):
+            # One row deliberately states no number: the Spec IR's version *is* the one a
+            # spec file declares, so quoting it here would be a second place for it to live.
+            assert "anvilate_spec" in version, (
+                f"this row quotes {version!r} rather than naming a constant; a quoted version "
+                f"number is what went stale"
+            )
+            continue
+        assert hasattr(contracts_module, version), (
+            f"the table names {version}, which anvilate.contracts does not define"
+        )
+        named.add(version)
+        artifact = cells[0]
+        # And the artifact the row points at is one the module actually publishes.
+        stem = artifact.split("api/schemas/")[-1].split(")")[0]
+        assert stem in schema_artifacts(), (
+            f"the table has a row for {stem}, which is not a published artifact"
+        )
+
+    # The other direction: every version constant the module publishes has a row.
+    declared = {
+        name
+        for name in dir(contracts_module)
+        if name.endswith("_SCHEMA_VERSION") and not name.startswith("ELEMENT")
+    }
+    assert declared == named | {"SPEC_SCHEMA_VERSION"}, (
+        f"these published version constants have no row in the table: "
+        f"{sorted(declared - named - {'SPEC_SCHEMA_VERSION'})}"
+    )

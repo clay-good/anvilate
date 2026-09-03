@@ -351,6 +351,13 @@ Two behaviours a client depends on:
   `-32602` naming the handle and what to do about it, because the handle is the thing that is
   wrong; the last-resort guard is what catches whatever nobody has thought of yet.
 
+**`export_artifact` describes what it returns.** Its `bundle` property was
+`{"type": "object"}` — the one thing the tool exists to hand a client was the one thing its
+published schema said nothing about, because there was no bundle contract to `$ref`. It now
+points at [`evidence-bundle/1.0.0`](api/schemas/evidence-bundle.schema.json), so every
+dispatched tool's result is a document with a published contract, and the CI check that
+resolves those references validates a real result of each one.
+
 **A record that resolves is not yet a record this build can read**, and the two tools that take
 a screening handle both check now, in the one reader they share. `read_scorecard` was the worse
 of the two and it did not crash: it returned the stored document verbatim, so a card written by

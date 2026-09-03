@@ -45,6 +45,7 @@ attestation.SignatureState
 attestation.VerificationReport
 attestation.verify_attestation
 bundle.SectionStatus
+bundle.BundleDocument
 bundle.BundleSections
 bundle.assemble_evidence_bundle
 callouts.MARIN_SURFACE_CITATION
@@ -88,11 +89,13 @@ contracts.ELEMENT_SCHEMA_INITIAL_VERSION
 contracts.ELEMENT_SCHEMA_VERSIONS
 contracts.element_schema_version
 contracts.SCORECARD_SCHEMA_VERSION
+contracts.BUNDLE_SCHEMA_VERSION
 contracts.SPEC_SCHEMA_VERSION
 contracts.schema_artifacts
 contracts.schema_issues
 contracts.element_json_schemas
 contracts.scorecard_json_schema
+contracts.bundle_json_schema
 contracts.spec_json_schema
 contracts.write_schemas
 dcc.DCC_NAMESPACE

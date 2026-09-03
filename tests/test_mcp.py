@@ -900,7 +900,11 @@ def _released_registry():
     """
     from referencing import Registry, Resource
 
-    from anvilate.contracts import SCORECARD_SCHEMA_VERSION, SPEC_SCHEMA_VERSION
+    from anvilate.contracts import (
+        BUNDLE_SCHEMA_VERSION,
+        SCORECARD_SCHEMA_VERSION,
+        SPEC_SCHEMA_VERSION,
+    )
 
     # The filenames are derived from the version constants rather than typed. They were
     # typed, and a scorecard version bump left this resolving the *previous* contract —
@@ -911,6 +915,7 @@ def _released_registry():
             for document in (
                 _released(f"design-spec-{SPEC_SCHEMA_VERSION}.json"),
                 _released(f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"),
+                _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
             )
         ]
     )
@@ -979,10 +984,9 @@ def test_a_dispatched_result_validates_against_the_released_schemas(tool_name):
     # must not be a thing a reader has to notice. `export_artifact` declares its `bundle` as a
     # bare object: the evidence bundle has no published schema to point at, so for that tool
     # this test checks the envelope and nothing more. Publish one and tighten this.
-    follows_a_reference = "$ref" in json.dumps(tool.output_schema)
-    assert follows_a_reference == (tool_name != "export_artifact"), (
-        f"{tool_name}: whether this check resolves a reference or only checks the envelope "
-        f"has changed; if the bundle contract is now published, validate against it"
+    assert "$ref" in json.dumps(tool.output_schema), (
+        f"{tool_name} publishes no reference, so this check verifies the envelope and nothing "
+        f"more. Every dispatched tool's result is a document with a published contract"
     )
 
 

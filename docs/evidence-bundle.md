@@ -44,6 +44,20 @@ the analysis. So there are two renderings, and which one you want depends on who
 | `render()` / `to_json_dict()` | the attestation predicate | the roll-up over layers, the assumptions, the disclaimer |
 | `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail, its clause and its worked calculation, plus the spec they were computed from |
 
+**The JSON document has a published contract**:
+[`evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json), generated from
+`anvilate.bundle.BundleDocument` and versioned like the Spec IR and scorecard contracts — see
+[the published contracts](published-contracts.md). Until it existed the `export_artifact` MCP
+tool described its entire output as `{"type": "object"}`.
+
+A key that is **absent** and a key that is **null** mean different things here, and the schema
+keeps both. A layer that never ran leaves its key out, because "this layer never ran" and "this
+layer concluded nothing" are different facts and the bundle refuses to collapse them. `spec` and
+`calloutScorecard` are the two present-and-null exceptions: for those a null *is* the answer, so
+a reader can tell "no spec" from "a key I forgot to look for". `additionalProperties` is left
+open, as on the scorecard contract, so a client pinned to `1.0.0` keeps reading a later bundle
+that gained a section.
+
 ### The work, not just the verdict
 
 A check that carries a derivation renders it under its line — the formula, the values put
