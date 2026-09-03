@@ -75,6 +75,7 @@ from ..gdt import (
     MaterialCondition,
 )
 from ..scorecard import CheckStatus, ScorecardEntry
+from ..verification import VerificationOutcome
 from .gate import ExportAuthorization
 
 __all__ = [
@@ -638,6 +639,26 @@ def export_qif_results(
     return ET.tostring(root, encoding="unicode", xml_declaration=True) + "\n"
 
 
+def _recorded_outcome(outcome: VerificationOutcome | None) -> str:
+    """A performed test's record, in full, for the characteristic that crosses.
+
+    `VerificationOutcome` requires all four of value, date, performer and instrument, and
+    requires them for one reason: an untraceable record is closer to a claim than to
+    evidence. The crossing carried the measured value alone, so the QIF document a quality
+    department receives said a proof test measured 125.4 kN and did not say who performed
+    it, when, or on what instrument — a traceability record stripped at precisely the
+    boundary where it stops being ours and starts being someone else's evidence.
+    """
+    if outcome is None:
+        return ""
+    return (
+        f"; recorded: {outcome.measured}"
+        f"; performed by {outcome.performed_by}"
+        f" on {outcome.performed_on.isoformat()}"
+        f" using {outcome.instrument}"
+    )
+
+
 def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
     """The verification plan's items as scorecard entries, for the crossing.
 
@@ -676,7 +697,7 @@ def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
             status=item.status,
             detail=(
                 f"{item.archetype.title} — acceptance: {item.acceptance}"
-                + ("" if item.outcome is None else f"; recorded: {item.outcome.measured}")
+                + _recorded_outcome(item.outcome)
             ),
             reference=item.archetype.citation,
             # A verification item crossed into the characteristic list: a physical test

@@ -110,6 +110,12 @@ plan out gave a lifter whose proof test cracked it at 108% a characteristic list
 per-characteristic — the reviewer dossier and a design-space sweep — are named in the
 header rather than invented as characteristics.
 
+A performed test crosses with the whole record behind it: what was measured, who performed
+it, on what date, and on which instrument. `VerificationOutcome` refuses to be built
+without all four, because an untraceable record is closer to a claim than to evidence — and
+the crossing used to carry the measured value alone, so the document said a proof test
+measured 125.4 kN and left the other three in the object it was exported from.
+
 ## Determinism
 
 The same evidence exports the same bytes. There are no timestamps, and the document UUID

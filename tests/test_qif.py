@@ -762,6 +762,69 @@ def test_a_failed_physical_test_is_in_the_characteristic_list():
     assert any(record["status"] == "FAIL" for record in read.values())
 
 
+def test_a_performed_test_crosses_with_the_record_that_makes_it_traceable():
+    """`VerificationOutcome` requires all four of value, date, performer and instrument,
+    for one stated reason: an untraceable record is closer to a claim than to evidence.
+
+    The crossing carried the measured value alone. So the QIF document a quality department
+    receives said a proof test measured 125.4 kN and did not say who performed it, when, or
+    on what instrument — the three fields the model refuses to be constructed without,
+    dropped at exactly the boundary where the record stops being ours and becomes somebody
+    else's evidence. The model's requirement and the document's content were arguing.
+    """
+    from anvilate.verification import (
+        VerificationArchetype,
+        VerificationItem,
+        VerificationMethod,
+        VerificationOutcome,
+        VerificationPlan,
+    )
+
+    plan = VerificationPlan(
+        items=(
+            VerificationItem(
+                name="proof load to 125%",
+                archetype=VerificationArchetype(
+                    key="proof-load",
+                    method=VerificationMethod.TEST,
+                    title="Proof load test",
+                    clause_token="ASME BTH-1",
+                    acceptance_template="no permanent deformation at 125% of rated load",
+                    citation="ASME B30.20",
+                ),
+                driving_checks=("pin bearing",),
+                acceptance="no permanent deformation",
+                outcome=VerificationOutcome(
+                    passed=True,
+                    measured="125.4 kN held 10 min; no permanent set at the bail",
+                    instrument="Load cell LC-4471, cal. due 2027-02-11",
+                    performed_by="M. Okonkwo, lifting test bay",
+                    performed_on=date(2026, 8, 18),
+                ),
+            ),
+        ),
+        analysis_only=(),
+        unresolved=(),
+    )
+    sections = BundleSections(
+        scorecard=Scorecard(
+            entries=(ScorecardEntry.from_safety_factor("pin bearing", computed=2.7, required=2.0),)
+        ),
+        verification=plan,
+    )
+    description = _read_characteristics(_export(sections))["proof load to 125%"]["description"]
+    assert isinstance(description, str)
+    for field, expected in (
+        ("the measured value", "125.4 kN held 10 min"),
+        ("who performed it", "M. Okonkwo, lifting test bay"),
+        ("when it was performed", "2026-08-18"),
+        ("the instrument", "Load cell LC-4471"),
+    ):
+        assert expected in description, (
+            f"the characteristic does not record {field}, so the document carries a verdict "
+            f"about a physical test that nobody can trace: {description!r}"
+        )
+
 def test_the_header_discloses_the_layers_that_are_not_characteristics():
     """The scope claim rested on one un-asserted f-string interpolation: dropping the
     bundle summary from the header left the document mentioning the uncovered layers
