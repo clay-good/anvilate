@@ -525,7 +525,12 @@ class AnvilatePredicate(RevalidatedModel):
     Everything a second engineer needs to decide whether the verdict is still theirs:
     the digest of the spec that was screened, the scorecard it produced, the standards
     citations behind it, the environment that computed it, and the AI-involvement
-    disclosure. The predicate is data, not prose — the report layer renders it.
+    disclosure. The predicate is data, not prose: it is written machine-readably into the
+    signed statement, and `anvilate.report` renders none of it. `AIDisclosure.__str__` is
+    the one prose form of the disclosure — "3 model event(s) by ..., 1 unconfirmed" — and
+    a caller that wants a reviewer to read it has to print it, as
+    `examples/attested_evidence_bundle.py` does. This sentence used to say the report layer
+    rendered the predicate, which sent a reader looking in a module that never mentions it.
     """
 
     model_config = ConfigDict(frozen=True)
