@@ -14,15 +14,24 @@ neither is obvious:
   ratios on the docs pages, and the claims in `SECURITY.md` are all read back by the suite.
   If you change a count, the test tells you the real one.
 
-Run the whole gate before pushing — CI runs each of these and the format check is separate
-from the lint:
+First, install the development extra — the gate below needs `pytest` and `ruff`, and the
+README's `pip install -e ".[export]"` does not carry them:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Then run the whole gate before pushing. The format check is separate from the lint, and CI
+runs the first three:
 
 ```bash
 ruff check src tests examples && ruff format --check src tests examples && pytest -q
+npx openspec validate --all --strict
 ```
 
-Behavior changes land as [OpenSpec](openspec/) change proposals first: the requirement and
-its scenarios, then the implementation, then the change is archived into
-`openspec/specs/`. `npx openspec validate --all --strict` is part of the gate.
+The OpenSpec validation is a local check rather than a CI one, so it is the step that
+depends on you running it. Behavior changes land as [OpenSpec](openspec/) change proposals
+first: the requirement and its scenarios, then the implementation, then the change is
+archived into `openspec/specs/`.
 
 Security issues go through [SECURITY.md](SECURITY.md), not a pull request.

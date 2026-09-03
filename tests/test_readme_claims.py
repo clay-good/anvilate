@@ -919,3 +919,61 @@ def test_the_unbuilt_capability_table_covers_what_the_readme_lists():
     )
     for capability, words in _CLAIMED_BY.items():
         assert words, f"{capability} has no words that would claim it"
+
+
+# Commands CONTRIBUTING gives a contributor that CI deliberately does not run, each with the
+# reason. A command in the guide and not in the workflow is otherwise a claim that something
+# is enforced when it is not.
+_LOCAL_ONLY_GATE_STEPS = {
+    "npx openspec validate --all --strict": (
+        "the spec validator is a node package and CI installs no node toolchain, so this is "
+        "the step that depends on the contributor running it — and the guide says so"
+    ),
+    'pip install -e ".[dev]"': (
+        "CI installs the dev extra with its own step rather than by copying this line, so "
+        "the two say the same thing in different words"
+    ),
+}
+
+
+def test_every_command_contributing_gives_is_run_by_ci_or_declared_local():
+    """The guide's copyable block, held against the workflow.
+
+    Two commands were already checked by name. `pytest -q` was not, and
+    `npx openspec validate --all --strict` sat *outside* the copyable block in a sentence
+    calling it "part of the gate" — so a contributor copying the block never ran it, and the
+    sentence claimed an enforcement that existed nowhere. It is inside the block now and
+    named as local-only.
+    """
+    guide = (_REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    workflow = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((_REPO / ".github" / "workflows").glob("*.yml"))
+    )
+    blocks = re.findall(r"```bash\n(.*?)```", guide, re.S)
+    assert blocks, "CONTRIBUTING.md has no command block for a contributor to copy"
+
+    commands = [
+        part.strip()
+        for block in blocks
+        for line in block.splitlines()
+        for part in line.split("&&")
+        if part.strip()
+    ]
+    assert len(commands) >= 4, f"only {commands} were read out of the guide"
+
+    unbacked = [
+        command
+        for command in commands
+        if command not in workflow and command not in _LOCAL_ONLY_GATE_STEPS
+    ]
+    assert not unbacked, (
+        f"CONTRIBUTING.md tells a contributor to run these and CI does not, so the guide "
+        f"and the gate have parted company: {unbacked}. Add the step to the workflow, or "
+        f"record it in _LOCAL_ONLY_GATE_STEPS with the reason CI cannot."
+    )
+    for command, reason in _LOCAL_ONLY_GATE_STEPS.items():
+        assert command in guide, f"{command!r} is excused and the guide no longer gives it"
+        assert len(reason.split()) >= 8, f"{command!r} is excused without a stated reason"
+    # The guide has to say that some of it is not enforced, or a reader assumes all of it is.
+    assert "local check rather than a CI one" in guide
