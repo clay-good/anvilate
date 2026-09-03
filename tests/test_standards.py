@@ -1475,6 +1475,7 @@ def test_a_recorded_waiver_carries_its_reason_and_its_date_into_the_entry():
     assert waiver.rationale in detail, "the entry does not say why the mixing was accepted"
     assert waiver.accepted_on.isoformat() in detail, "the entry does not say when"
 
+
 def test_an_editionless_reference_is_not_evaluated_rather_than_passed():
     """A clause with no edition cannot be checked against a basis, and reporting only the
     ones that happen to carry editions would describe a bundle nobody assembled."""

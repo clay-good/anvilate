@@ -825,6 +825,7 @@ def test_a_performed_test_crosses_with_the_record_that_makes_it_traceable():
             f"about a physical test that nobody can trace: {description!r}"
         )
 
+
 def test_the_header_discloses_the_layers_that_are_not_characteristics():
     """The scope claim rested on one un-asserted f-string interpolation: dropping the
     bundle summary from the header left the document mentioning the uncovered layers
