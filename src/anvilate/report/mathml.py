@@ -360,7 +360,7 @@ def formula_to_mathml(formula: str, *, display: str = "block") -> str | None:
     ``"inline"`` for one sitting inside a line of text or a table cell. The report's symbol
     glossary needs the second — it typeset ``σ_b`` in the formula and printed the raw string
     ``σ_b`` in the legend beside it, so a reviewer matching one to the other saw two different
-    renderings of one symbol, in 90 of 389 legend rows.
+    renderings of one symbol, in every legend row whose symbol carries a subscript.
 
     ``None`` on anything the grammar does not cover **and** on anything that parses to a
     tree which does not write back out as the same string. The caller renders the plain

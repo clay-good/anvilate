@@ -1527,7 +1527,7 @@ def test_the_symbol_legend_is_typeset_the_way_the_formula_above_it_is():
     The derivation rendered `σ_b` as a subscript and the glossary row under it printed the
     literal `σ_b` — two spellings of one symbol in one document, and matching a symbol in the
     working to its row in the legend is exactly what a reviewer does with this table. Across
-    the suite, 90 of 389 legend rows carried an underscore that way.
+    library, every legend row whose symbol carries a subscript read that way.
 
     HTML only, and that is not an oversight: the text rendering has no MathML anywhere, so
     there `σ_b` in the legend matches `σ_b` in the formula. Each rendering is internally

@@ -500,9 +500,9 @@ class CalculationReport(BaseModel):
             for symbol, description, value in derivation.glossary(system=self.unit_system):
                 # Typeset, so the legend and the formula above it show one symbol rather than
                 # two spellings of it. The formula rendered `σ_b` as a subscript and the
-                # legend printed the raw `σ_b` beside it — 90 of 389 legend rows carried an
-                # underscore that way, and matching a symbol in the working to its row is the
-                # thing a reviewer does with this table. Plain text where it will not typeset,
+                # legend printed the raw `σ_b` beside it, in every row whose symbol carries a
+                # subscript — and matching a symbol in the working to its row is the thing a
+                # reviewer does with this table. Plain text where it will not typeset,
                 # for the reason the derivation lines fall back: a legend entry that is not
                 # the symbol the check cited is worse than a line of text.
                 typeset = formula_to_mathml(symbol, display="inline")
