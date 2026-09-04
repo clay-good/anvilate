@@ -1177,7 +1177,7 @@ def test_every_document_this_library_can_build_validates_against_its_published_c
             review=_dossier(stale=True)
         ).to_document_dict(),
     }
-    for label, document in documents.items():
+    for document in documents.values():
         BundleDocument.model_validate(document)
 
     jsonschema = pytest.importorskip("jsonschema")

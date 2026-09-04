@@ -11,9 +11,9 @@ can reasonably hold, so the check fails only clearly-unachievable tolerances.
 from __future__ import annotations
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
-from .._models import Provenance
+from .._models import Provenance, RevalidatedModel
 from ..units import Quantity
 from .general import ToleranceRangeError
 
@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 
-class ProcessCapability(BaseModel):
+class ProcessCapability(RevalidatedModel):
     """The finest total tolerance band a process can reasonably hold (a screening
     estimate), with its source and a caveat note."""
 
@@ -38,7 +38,7 @@ class ProcessCapability(BaseModel):
     note: str
 
 
-class AchievabilityCheck(BaseModel):
+class AchievabilityCheck(RevalidatedModel):
     """The result of screening a demanded tolerance against a process's floor.
 
     ``achievable`` is True when the demanded total tolerance band is at least the

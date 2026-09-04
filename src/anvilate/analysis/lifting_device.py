@@ -39,7 +39,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from .._models import Named
+from .._models import Named, RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -426,7 +426,7 @@ class BTH1LimitState(StrEnum):
     PIN_BEARING = "pin_bearing"
 
 
-class LifterMemberStress(BaseModel):
+class LifterMemberStress(RevalidatedModel):
     """One computed stress in a lifter member, tagged with the limit state it belongs to.
 
     Screened against the ASME BTH-1 §3-2/§3-3 allowable its limit state names.
@@ -445,7 +445,7 @@ class LifterMemberStress(BaseModel):
     limit_state: BTH1LimitState
 
 
-class LifterPinPlate(BaseModel):
+class LifterPinPlate(RevalidatedModel):
     """A pin-connected plate in a lifter — a lug, a pad eye, a bail — and its load.
 
     Screened against the ASME BTH-1 §3-2.1 net-section and §3-3.3 bearing allowables.
@@ -465,7 +465,7 @@ class LifterPinPlate(BaseModel):
     load: Quantity
 
 
-class LifterDevice(BaseModel):
+class LifterDevice(RevalidatedModel):
     """A below-the-hook lifting device: what it is rated for, and what it is designed to.
 
     ``rated_load`` is the load the device will be *marked* with, and ``self_weight`` is

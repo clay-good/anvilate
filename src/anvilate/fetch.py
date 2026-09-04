@@ -36,7 +36,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from ._models import Named, Provenance, RevalidatedModel
 

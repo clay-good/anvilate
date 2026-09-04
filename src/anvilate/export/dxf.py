@@ -19,7 +19,7 @@ from __future__ import annotations
 from math import cos, pi, radians, sin, tan
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
 from .._models import RevalidatedModel
 from ..gdt import FeatureControlFrame

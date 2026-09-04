@@ -59,7 +59,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from ._models import EMPTY_MAP, FrozenMap, rebuilt_quantities
+from ._models import EMPTY_MAP, FrozenMap, RevalidatedModel, rebuilt_quantities
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -86,7 +86,7 @@ _NO_ELEMENT_REASON = (
 )
 
 
-class StructureMember(BaseModel):
+class StructureMember(RevalidatedModel):
     """One member of a structure, named the same way a spec names a single element.
 
     The nesting is deliberate rather than a second vocabulary: a member is written with the

@@ -64,10 +64,14 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.cli` — the headless command line: one command that is
   backed, three refused by name with what each is waiting on.
 - :mod:`anvilate._models` — the base class that makes a model's invariants
-  survive ``model_copy``, which runs no validators. A **field** validator counts
-  as an invariant here exactly as an after-validator does: a rule stated per
-  field is still a rule an update can break, and five models sat in the gap
-  where the census read only the second kind.
+  survive ``model_copy``, which runs no validators. Every kind of validator
+  counts as an invariant here, not just an after-validator: a ``field_validator``
+  is one, and so is a rule that arrives in a field's *annotation* — ``Named``
+  and ``Provenance`` refuse a blank that way, and ``FrozenMap`` is what makes a
+  frozen model's mapping actually immutable. A census that read only decorators
+  missed forty-two models, including one where a copy handed back a plain
+  ``dict`` in place of a ``MappingProxyType`` and it could then be mutated in
+  place.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.

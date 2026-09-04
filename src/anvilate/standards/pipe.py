@@ -25,8 +25,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
@@ -55,7 +56,7 @@ def _nps_value(nps: str) -> float:
         return 0.0
 
 
-class PipeDimensions(BaseModel):
+class PipeDimensions(RevalidatedModel):
     """One (nominal size, schedule) pipe's tabled dimensions.
 
     ``nominal_size`` is the NPS designator as written (``"4"``, ``"1-1/2"``),

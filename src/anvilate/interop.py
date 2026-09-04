@@ -32,7 +32,7 @@ from enum import StrEnum
 from math import isfinite
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
 from ._models import FrozenMap, Named, RevalidatedModel, cited
 from .analysis.cold_formed_steel import ElasticBuckling
@@ -201,7 +201,7 @@ class MemberForceRecord(RevalidatedModel):
         return tuple(sorted(self.stations[0].components))
 
 
-class MemberDemand(BaseModel):
+class MemberDemand(RevalidatedModel):
     """The governing demand bound to Anvilate's quantities, and where it came from.
 
     ``stations`` gives each component its own governing position. Screening the whole

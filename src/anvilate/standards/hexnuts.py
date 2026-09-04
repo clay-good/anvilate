@@ -15,8 +15,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -40,7 +41,7 @@ def _nut_key(designation: str) -> tuple[float, str]:
         return (0.0, designation)
 
 
-class HexNut(BaseModel):
+class HexNut(RevalidatedModel):
     """An ISO 4032 style-1 hexagon nut's standardized dimensions.
 
     ``width_across_flats`` is the wrench size s and the pocket a design must clear;

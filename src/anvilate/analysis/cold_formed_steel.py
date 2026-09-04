@@ -256,7 +256,7 @@ class DSMStrength(BaseModel):
         return f"DSM nominal {self.nominal} governed by {self.governing.value} buckling"
 
 
-class PrequalifiedLimits(BaseModel):
+class PrequalifiedLimits(RevalidatedModel):
     """A geometry range over which the DSM curves are calibrated (AISI S100 §1.1.1.1).
 
     DSM's empirical curves were fitted to tested sections, and the standard lists the

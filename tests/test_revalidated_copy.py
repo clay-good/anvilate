@@ -81,6 +81,85 @@ def test_every_model_with_an_invariant_revalidates_its_copies(module_name, class
     )
 
 
+def _models_with_an_annotated_validator() -> list[tuple[str, str, list[str]]]:
+    """Every model with a field whose *annotation* carries a validator.
+
+    Read off the imported models rather than the source, and that is the point. The census
+    above looks for a decorator in a file, and pydantic's other idiom for an invariant is
+    ``Annotated[str, AfterValidator(...)]`` — which is how `Named` and `Provenance` are built
+    in `_models.py`, and how `FrozenMap` freezes a mapping. A model whose whole invariant
+    arrives through a shared type alias declared in another module has no decorator anywhere
+    in its own file, so a source scan sees nothing to protect. Thirty-seven models were in
+    that gap.
+
+    Resolving the alias by AST would mean following an import to a module-level
+    ``Annotated[...]`` assignment. `model_fields[...].metadata` already holds the answer.
+    """
+    found: list[tuple[str, str, list[str]]] = []
+    for model in _every_model_class():
+        fields = sorted(
+            name
+            for name, field in model.model_fields.items()
+            if any(type(item).__name__.endswith("Validator") for item in field.metadata or ())
+        )
+        if fields:
+            found.append((model.__module__, model.__qualname__, fields))
+    return found
+
+
+def _every_model_class() -> list[type]:
+    """Every pydantic model the package defines, by importing all of it."""
+    from pydantic import BaseModel
+
+    found: dict[str, type] = {}
+    for path in sorted(_SRC.rglob("*.py")):
+        module_name = ".".join(("anvilate", *path.relative_to(_SRC).with_suffix("").parts))
+        module_name = module_name.removesuffix(".__init__")
+        module = importlib.import_module(module_name)
+        for value in vars(module).values():
+            if (
+                isinstance(value, type)
+                and issubclass(value, BaseModel)
+                and value is not BaseModel
+                and value.__module__.startswith("anvilate")
+            ):
+                found[f"{value.__module__}.{value.__qualname__}"] = value
+    return [found[key] for key in sorted(found)]
+
+
+def test_the_annotated_census_finds_the_models_it_is_meant_to_walk():
+    """Without this the check below passes on a metadata read that matched nothing."""
+    found = _models_with_an_annotated_validator()
+    assert len(found) > 50, len(found)
+    # `Named` is the alias this is really about, and `SectionStatus.name` is one of them.
+    assert ("anvilate.bundle", "SectionStatus", ["name"]) in found
+
+
+@pytest.mark.parametrize(
+    ("module_name", "class_name", "fields"),
+    [(m, c, f) for m, c, f in _models_with_an_annotated_validator()],
+    ids=lambda value: value if isinstance(value, str) else ",".join(value),
+)
+def test_a_model_whose_invariant_is_in_its_annotation_revalidates_its_copies(
+    module_name, class_name, fields
+):
+    """The same rule as above, for the invariants a decorator scan cannot see.
+
+    Two things were getting through. `Named` and `Provenance` refuse a blank, so a copy could
+    put an empty name on a section or an empty citation on a derivation — a blank provenance
+    field in the library whose product is provenance. And `FrozenMap` is what makes a frozen
+    model's mapping actually immutable: `model_copy` replaced a `mappingproxy` with a plain
+    `dict`, which was then mutated in place. `frozen=True` stops attribute assignment;
+    `FrozenMap` stops mutation *through* the value, and the copy dropped the second.
+    """
+    model = getattr(importlib.import_module(module_name), class_name)
+    assert issubclass(model, RevalidatedModel), (
+        f"{module_name}.{class_name} carries an invariant in the annotation of {fields}, and "
+        f"`model_copy` walks straight past it. Inherit RevalidatedModel — see "
+        f"anvilate/_models.py"
+    )
+
+
 # --- the base actually does something ----------------------------------------------------
 #
 # A census cannot see a base class that re-validates nothing. Each probe below builds a real
@@ -151,7 +230,12 @@ def test_the_base_is_not_paid_for_by_models_with_no_invariant():
     entry acquired an invariant of its own, at which point a true statement about the rule
     read as a failure of it.
     """
+    # Both censuses, because both kinds of declaration are a reason to inherit the base. Read
+    # only the decorators and the thirty-seven models whose invariant arrives through an
+    # `Annotated` alias look like models protecting nothing — this assertion would then refuse
+    # the very fix the check above demands.
     declaring = {name for _, name in _classes_with_an_after_validator()}
+    declaring |= {name for _, name, _fields in _models_with_an_annotated_validator()}
     inheriting = _model_classes_inheriting_the_base()
     assert len(inheriting) > 20, "the walk found almost nothing, so it proves almost nothing"
     without = sorted(
@@ -452,3 +536,52 @@ def test_only_the_serialisers_own_shape_is_rebuilt():
         assert reference["element.other"] == {"a": 1, "b": 2}
         assert reference["element.count"] == 3 and reference["element.checked"] is True
         assert reference["element.absent"] is None
+
+
+def test_a_blank_name_cannot_be_copied_onto_a_model_that_refuses_one():
+    """A probe for the `Named` shape, because the census cannot see a base that does nothing.
+
+    `Named` is `Annotated[str, AfterValidator(refuse_a_blank)]`, so the rule lives in the
+    annotation and no decorator names it. A copy put `'   '` on a bundle section's name, and
+    `Provenance` behaves the same way — which in this library means a copy could blank the
+    citation on a `Derivation`, in the package whose product is provenance.
+    """
+    from anvilate.bundle import SectionStatus
+    from anvilate.evidence import SourceRecord
+    from anvilate.scorecard import CheckStatus
+
+    section = SectionStatus(name="checks", status=CheckStatus.PASS, detail="2 run, 0 failing")
+    with pytest.raises(ValidationError):
+        section.model_copy(update={"name": "   "})
+    assert section.model_copy(update={"name": "verification"}).name == "verification"
+
+    record = SourceRecord(
+        ref="AISC-360", kind="material", name="AISC 360-22", sources=("bundled table",)
+    )
+    with pytest.raises(ValidationError):
+        record.model_copy(update={"ref": ""})
+
+
+def test_a_copy_cannot_unfreeze_a_frozen_mapping():
+    """The `FrozenMap` shape, and the sharper of the two.
+
+    `frozen=True` stops attribute assignment; `FrozenMap`'s validator is what stops mutation
+    *through* the value, by wrapping the mapping in a `MappingProxyType`. `model_copy` runs no
+    validators, so it handed back a plain `dict` in a frozen model's field — and it could then
+    be mutated in place. An "immutable" object whose contents change is worse than a mutable
+    one, because every reader has been told it cannot.
+    """
+    from types import MappingProxyType
+
+    from anvilate.screening import StructureMember
+
+    member = StructureMember(element_type="lifting_lug", element_params={"width": 120.0})
+    assert isinstance(member.element_params, MappingProxyType)
+
+    copied = member.model_copy(update={"element_params": {"width": 200.0}})
+    assert isinstance(copied.element_params, MappingProxyType), (
+        "the copy handed back a plain dict, so a frozen model's mapping is mutable again"
+    )
+    with pytest.raises(TypeError):
+        copied.element_params["injected"] = 99  # type: ignore[index]
+    assert dict(copied.element_params) == {"width": 200.0}

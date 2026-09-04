@@ -115,7 +115,7 @@ def _worst(statuses: Iterable[CheckStatus]) -> CheckStatus:
     return max(candidates, key=_PRECEDENCE.index)
 
 
-class SectionStatus(BaseModel):
+class SectionStatus(RevalidatedModel):
     """One layer's contribution: what it is, what it concluded, and whether that is a verdict.
 
     ``informational`` marks a layer whose conclusion is *about something other than this

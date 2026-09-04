@@ -25,7 +25,7 @@ from math import isfinite, sqrt
 from random import Random
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, RevalidatedModel
 
@@ -136,7 +136,7 @@ class Symmetric(RevalidatedModel):
 InputDistribution = Normal | Uniform | Symmetric
 
 
-class Sensitivity(BaseModel):
+class Sensitivity(RevalidatedModel):
     """One input's share of the response variance, first-order (Taylor)."""
 
     model_config = ConfigDict(frozen=True)
@@ -145,7 +145,7 @@ class Sensitivity(BaseModel):
     variance_share: float  # 0..1, the fraction of the response variance this input drives
 
 
-class MarginUncertainty(BaseModel):
+class MarginUncertainty(RevalidatedModel):
     """A sampled margin: the chance it falls short, its band, and what drives it.
 
     ``shortfall_probability`` is the fraction of samples whose response fell below

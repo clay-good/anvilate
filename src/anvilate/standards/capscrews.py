@@ -15,8 +15,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -40,7 +41,7 @@ def _screw_key(designation: str) -> tuple[float, str]:
         return (0.0, designation)
 
 
-class SocketHeadCapScrew(BaseModel):
+class SocketHeadCapScrew(RevalidatedModel):
     """An ISO 4762 socket-head cap screw's standardized head geometry.
 
     ``head_diameter`` is the head outer diameter dk (the counterbore must clear

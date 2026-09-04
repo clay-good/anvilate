@@ -113,7 +113,22 @@ def rebuilt_quantities(value: Any) -> Any:
 
 
 class RevalidatedModel(BaseModel):
-    """A model whose ``model_copy`` re-runs the validators its constructor ran."""
+    """A model whose ``model_copy`` re-runs the validators its constructor ran.
+
+    **What counts as a validator here is every kind**, and that took three widenings to get
+    right. A ``mode="after"`` model validator, a ``field_validator``, and a rule carried in a
+    field's *annotation* — which is how :func:`named`, :func:`provenance` and :data:`FrozenMap`
+    below state theirs. The ratchet in ``tests/test_revalidated_copy.py`` read only the first
+    for a long time, so a model whose whole invariant arrived through one of these aliases had
+    no decorator in its own file and looked like a model with nothing to protect. Forty-two
+    were in that gap.
+
+    The sharpest of them is ``FrozenMap``. ``frozen=True`` stops attribute assignment; the
+    annotation's validator is what stops mutation *through* the value, by wrapping the mapping
+    in a ``MappingProxyType``. Without this base, ``model_copy`` handed back a plain ``dict``
+    in a frozen model's field, and it could then be mutated in place — an object every reader
+    has been told is immutable, quietly changing.
+    """
 
     def model_copy(self, *, update: Any = None, deep: bool = False) -> Self:
         """A copy with the invariants re-checked.

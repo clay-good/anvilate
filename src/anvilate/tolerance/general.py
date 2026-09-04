@@ -12,9 +12,9 @@ from __future__ import annotations
 from enum import StrEnum
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
-from .._models import Provenance
+from .._models import Provenance, RevalidatedModel
 from ..units import Quantity
 
 __all__ = [
@@ -75,7 +75,7 @@ def resolve_class(value: str | None) -> ToleranceClass:
     return ToleranceClass.parse(value)
 
 
-class GeneralTolerance(BaseModel):
+class GeneralTolerance(RevalidatedModel):
     """A resolved general tolerance: the permissible ± deviation and its source."""
 
     model_config = ConfigDict(frozen=True)
@@ -209,7 +209,7 @@ def general_tolerance_source() -> str:
 # --- Angular general tolerances (ISO 2768-1) ---
 
 
-class AngularTolerance(BaseModel):
+class AngularTolerance(RevalidatedModel):
     """A resolved angular general tolerance: the permissible ± angular deviation
     (keyed by the shorter leg length) and its source."""
 

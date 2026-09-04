@@ -180,7 +180,7 @@ class SymbolValue(BaseModel):
         return f"{self.value:g}"
 
 
-class Derivation(BaseModel):
+class Derivation(RevalidatedModel):
     """A check's worked calculation: formula, substitution, result, citation.
 
     ``symbolic`` is the governing formula written the way the source writes it

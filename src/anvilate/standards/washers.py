@@ -14,8 +14,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -39,7 +40,7 @@ def _washer_key(designation: str) -> tuple[float, str]:
         return (0.0, designation)
 
 
-class PlainWasher(BaseModel):
+class PlainWasher(RevalidatedModel):
     """An ISO 7089 plain washer's standardized dimensions.
 
     ``inner_diameter`` is the bore d1 that clears the screw, ``outer_diameter`` the

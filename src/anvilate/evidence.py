@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
-from ._models import Named, Provenance
+from ._models import Named, Provenance, RevalidatedModel
 from .spec import DesignSpec, StandardComponentInterface
 from .standards import (
     BearingTable,
@@ -39,7 +39,7 @@ from .tolerance import general_tolerance_source, resolve_class
 __all__ = ["SourceRecord", "collect_provenance"]
 
 
-class SourceRecord(BaseModel):
+class SourceRecord(RevalidatedModel):
     """The provenance of one standards record a spec references.
 
     ``sources`` are the record's distinct citation sources, sorted — one entry

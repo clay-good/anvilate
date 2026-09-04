@@ -92,7 +92,7 @@ class VerificationMethod(StrEnum):
     TEST = "test"
 
 
-class VerificationArchetype(BaseModel):
+class VerificationArchetype(RevalidatedModel):
     """A class of physical verification, and what a check must supply to plan one.
 
     ``clause_token`` is matched against a scorecard entry's ``reference`` — the clause
@@ -146,7 +146,7 @@ class VerificationOutcome(RevalidatedModel):
         return self
 
 
-class VerificationItem(BaseModel):
+class VerificationItem(RevalidatedModel):
     """One planned physical verification: what to do, to what, and what counts as a pass.
 
     ``driving_checks`` names the analytical checks this test stands behind, which is the

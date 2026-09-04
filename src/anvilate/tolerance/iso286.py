@@ -14,9 +14,9 @@ from __future__ import annotations
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
-from .._models import Provenance
+from .._models import Provenance, RevalidatedModel
 from ..units import Quantity
 from .general import ToleranceRangeError
 
@@ -30,7 +30,7 @@ __all__ = [
 ]
 
 
-class StandardTolerance(BaseModel):
+class StandardTolerance(RevalidatedModel):
     """A resolved ISO 286-1 standard tolerance: the zone width and its source."""
 
     model_config = ConfigDict(frozen=True)
@@ -235,7 +235,7 @@ def _delta_correction(letter: str, grade: int, nominal: Quantity) -> float:
     return it_n - it_prev
 
 
-class LimitDeviations(BaseModel):
+class LimitDeviations(RevalidatedModel):
     """Resolved limit deviations for an ISO 286 tolerance zone.
 
     ``upper`` and ``lower`` are the signed deviations from the basic size (ES/EI
@@ -396,7 +396,7 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
 # --- Fits: a hole zone mated with a shaft zone ---
 
 
-class Fit(BaseModel):
+class Fit(RevalidatedModel):
     """A resolved ISO 286 fit: a hole zone mated with a shaft zone.
 
     Clearance is measured as hole size minus shaft size, so a positive value is

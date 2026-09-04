@@ -72,7 +72,7 @@ def _written_factor(factor: float) -> str:
     return written if "." in written else f"{written}.0"
 
 
-class LoadCombination(BaseModel):
+class LoadCombination(RevalidatedModel):
     """One factored sum over load natures, with the clause it comes from.
 
     ``factors`` maps each contributing nature to its factor; ``evaluate`` sums

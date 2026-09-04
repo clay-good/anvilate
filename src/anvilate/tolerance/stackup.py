@@ -30,7 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .._models import Named
+from .._models import Named, RevalidatedModel
 from ..units import Quantity
 from .explicit import ResolvedTolerance
 
@@ -59,7 +59,7 @@ def _quantile(sorted_vals: tuple[float, ...], q: float) -> float:
     return sorted_vals[lo] * (1.0 - frac) + sorted_vals[hi] * frac
 
 
-class StackContributor(BaseModel):
+class StackContributor(RevalidatedModel):
     """One dimension in a stack-up chain: a resolved tolerance and its direction.
 
     ``direction`` is ``+1`` when the feature growing widens the resulting gap and
@@ -102,7 +102,7 @@ class StackContributor(BaseModel):
         return (self._half_mm * self._half_mm) / 3.0
 
 
-class Contribution(BaseModel):
+class Contribution(RevalidatedModel):
     """One dimension's share of the stack-up's total variation.
 
     ``share`` runs 0..1; the shares over a result sum to 1. It is computed for the

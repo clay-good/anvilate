@@ -1550,8 +1550,6 @@ def test_a_record_this_build_cannot_read_is_refused_and_the_server_stays_up(monk
         assert "cannot read" in answer["error"]["message"], answer["error"]["message"]
         assert "run_validation again" in answer["error"]["message"], answer["error"]["message"]
 
-    reply = handle_request(call)
-
     # And the loop keeps reading: the request behind it is answered.
     stream = io.StringIO(
         _json.dumps(call)

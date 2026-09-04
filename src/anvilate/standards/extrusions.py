@@ -18,9 +18,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
-from .._models import Named
+from .._models import Named, RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -48,7 +48,7 @@ def _profile_key(designation: str) -> tuple[float, str]:
         return (0.0, designation)
 
 
-class ExtrusionProfile(BaseModel):
+class ExtrusionProfile(RevalidatedModel):
     """A T-slot extrusion profile's mating dimensions.
 
     ``profile_width`` is the square module width (the bolting face and the grid

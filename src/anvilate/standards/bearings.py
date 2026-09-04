@@ -15,8 +15,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -37,7 +38,7 @@ def _bearing_key(designation: str) -> tuple[int, str]:
     return (int(digits) if digits else 0, designation)
 
 
-class Bearing(BaseModel):
+class Bearing(RevalidatedModel):
     """A deep-groove ball bearing's ISO 15 boundary dimensions.
 
     ``bore`` is the inner (shaft) diameter, ``outer_diameter`` the housing-seat

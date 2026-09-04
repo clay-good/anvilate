@@ -37,7 +37,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from .._models import EMPTY_MAP, FrozenMap, Provenance, RevalidatedModel
 from ..derivation import DerivationAbsence, Underived
@@ -184,7 +184,7 @@ class EditionAgreement(StrEnum):
     NOT_RECORDED = "not recorded"  # the citation itself names no edition to compare
 
 
-class Citation(BaseModel):
+class Citation(RevalidatedModel):
     """A standard, its edition, and the clause — the three parts of a real citation.
 
     ``edition`` is a string, not an integer, because that is how editions are written and
@@ -294,7 +294,7 @@ class MixedEditionWaiver(RevalidatedModel):
         return self
 
 
-class DesignBasis(BaseModel):
+class DesignBasis(RevalidatedModel):
     """The editions a project has adopted, and the waivers it has recorded.
 
     ``pins`` maps a standard designation to the edition this project designs to, e.g.

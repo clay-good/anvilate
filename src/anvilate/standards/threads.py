@@ -16,8 +16,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
@@ -123,7 +124,7 @@ def default_clearance_table() -> ClearanceHoleTable:
 _Length = Annotated[QuantityProperty, dimensioned("[length]", "thread dimension")]
 
 
-class MetricThread(BaseModel):
+class MetricThread(RevalidatedModel):
     """A metric thread: its designation, pitch, and 75%-thread tap drill. Covers
     coarse threads (keyed ``M8``) and pitch-qualified fine threads (``M8x1``)."""
 

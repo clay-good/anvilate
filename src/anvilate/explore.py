@@ -173,7 +173,7 @@ class Parameter(RevalidatedModel):
         return tuple(self.low + span * index / (self.steps - 1) for index in range(self.steps))
 
 
-class Objective(BaseModel):
+class Objective(RevalidatedModel):
     """One quantity the study ranks designs by, and which direction is better."""
 
     model_config = ConfigDict(frozen=True)
@@ -267,7 +267,7 @@ class Study(RevalidatedModel):
         return tuple(points)
 
 
-class StudyEvaluation(BaseModel):
+class StudyEvaluation(RevalidatedModel):
     """What the caller's evaluator returns for one design point: its numbers and its verdict.
 
     ``objectives`` must carry a finite value for every objective the study declares, and
@@ -282,7 +282,7 @@ class StudyEvaluation(BaseModel):
     scorecard: Scorecard
 
 
-class DesignPoint(BaseModel):
+class DesignPoint(RevalidatedModel):
     """One evaluated design: where it sits, what it scores, and whether it is admissible.
 
     ``feasible`` is the scorecard's own verdict, and ``NOT_EVALUATED`` is **not**

@@ -15,8 +15,9 @@ from functools import cache
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -40,7 +41,7 @@ def _dowel_key(designation: str) -> tuple[float, str]:
         return (0.0, designation)
 
 
-class DowelPin(BaseModel):
+class DowelPin(RevalidatedModel):
     """An ISO 2338 parallel pin's standardized dimensions.
 
     ``nominal_diameter`` is the pin diameter d, toleranced to ``tolerance_class``
