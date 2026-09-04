@@ -226,12 +226,12 @@ a unit test. That is the argument for typesetting the whole corpus in CI.
 subscript and the glossary row beneath it printed the literal string `σ_b` — two spellings of
 one symbol in one document, in every legend row whose symbol carries a subscript. Matching a
 symbol in the working to its row in the legend is the thing a reviewer actually does with that
-table, so the cells carry the same MathML the formula does, at `display="inline"`. Any
-symbol
-the grammar declines is escaped and printed as text, by the same rule the formula lines follow: a legend
-entry that is not the symbol the check cited is worse than a line of text. The plain-text
-rendering is untouched, and there the raw `σ_b` is right, because the formula beside it is raw
-too — each rendering is internally consistent, which is the property that matters.
+table, so the cells carry the same MathML the formula does, at `display="inline"`. Any symbol
+the grammar declines is escaped and printed as text, by the same rule the formula lines
+follow: a legend entry that is not the symbol the check cited is worse than a line of text.
+The plain-text rendering is untouched, and there the raw `σ_b` is right, because the formula
+beside it is raw too — each rendering is internally consistent, which is the property that
+matters.
 
 Found the same way the precedence bug was: by rendering a report and looking at it.
 
