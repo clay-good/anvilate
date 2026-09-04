@@ -123,7 +123,7 @@ class Structure(BaseModel):
     other members still run: a frame is not un-screened because one brace was misspelt.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     # A tuple, not a list, and `frozen=True` is the reason. Frozen refuses attribute
     # *assignment*; it says nothing about the value. As a list, `structure.members.append(...)`

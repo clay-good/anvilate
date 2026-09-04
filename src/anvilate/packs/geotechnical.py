@@ -75,7 +75,7 @@ class ShallowFooting(GuardedInputs):
     the width from exceeding the length.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
     signed_fields: tuple[str, ...] = ("applied_load",)
 
     width: Quantity
@@ -220,7 +220,7 @@ class RetainingWall(GuardedInputs):
     ``base_friction_coefficient`` μ between the base and the soil. Loads are per unit wall length.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
     signed_fields: tuple[str, ...] = ("vertical_load",)
 
     retained_height: Quantity
@@ -375,7 +375,7 @@ class InfiniteSlope(GuardedInputs):
     seepage after rain — the case that most often triggers failure; omit it for the dry slope.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     cohesion: Quantity
     friction_angle: float
@@ -506,7 +506,7 @@ class DrivenPile(GuardedInputs):
     ``factor_of_safety`` is the global factor applied to the ultimate capacity (typically 2.5–3).
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
     signed_fields: tuple[str, ...] = ("applied_load",)
 
     diameter: Quantity

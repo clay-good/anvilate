@@ -55,7 +55,7 @@ class PumpDuty(GuardedInputs):
     figures (the former from the installation, the latter from the pump curve). All positive.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     flow_rate: Quantity
     total_head: Quantity
@@ -162,7 +162,7 @@ class PipeRun(GuardedInputs):
     ``available_head`` is the head the source (a pump, a reservoir) can supply against the losses.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     flow_rate: Quantity
     diameter: Quantity

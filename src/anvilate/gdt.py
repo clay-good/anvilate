@@ -224,7 +224,7 @@ class DatumReference(RevalidatedModel):
     and not a set.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     letter: str
     boundary: DatumBoundary = DatumBoundary.RMB
@@ -272,7 +272,7 @@ class FeatureControlFrame(RevalidatedModel):
     * **Concentricity and symmetry are 2009-only**, removed by the 2018 edition.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     characteristic: Characteristic
     tolerance: Quantity

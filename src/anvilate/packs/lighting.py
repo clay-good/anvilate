@@ -40,7 +40,7 @@ class LightingInstallation(GuardedInputs):
     the energy-code cap the install must stay under. All are the caller's values.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     luminaire_count: int
     lumens_per_luminaire: Quantity

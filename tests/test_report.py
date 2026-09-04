@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 from xml.etree import ElementTree as ET
 
 import pytest
 from pydantic import ValidationError
-
-import re
 
 from anvilate.derivation import DerivationAbsence
 from anvilate.report import (

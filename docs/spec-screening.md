@@ -87,6 +87,18 @@ exited over a part nobody screened. The sweep asks the loader now; see
 leaves. Declaring the version is still the way to make a sweep's refusal unconditional, since
 a document that *claims* to be a spec is treated as one whatever state it is in.
 
+**A misspelled parameter is refused, not dropped.** The element models forbid unknown fields,
+and until they did, `element_params` being an untyped map meant a typo reached the pack model
+and was ignored. A misspelled *required* parameter was always caught — the field it should have
+filled comes back missing — and that asymmetry is what hid the other half: a beam declaring
+`deflection_limt` was screened with no deflection limit, **the deflection check disappeared
+from the card**, and the card still said `pass`. A check that was asked for and did not run,
+reported as a pass.
+
+Every element schema moved to `1.1.0` for it, since each now closes `additionalProperties`.
+A client sending a property this library was quietly dropping is refused by the published
+contract rather than screened without it, which is the direction a version has to move for.
+
 **A tag and a parameter map, not a typed union**, and the trade is worth stating. A union of
 every pack element would validate a document completely at parse time and would make
 `spec-ir` depend on all twenty-odd packs, so every new element became a bump to this

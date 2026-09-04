@@ -32,6 +32,14 @@ FeatureControlFrame(
 | Ø zone only on a feature of size | A Ø zone is the zone of an axis, and a surface has no axis |
 | Ⓟ only on position/orientation of a feature of size | A projected zone controls a fastener's attitude above the surface |
 
+**A frame refuses a field it does not declare.** `DatumReference` takes a `boundary`
+(RMB/MMB/LMB), and it used to accept `material_condition=` — a name from the *tolerance*
+compartment, not the datum one — silently ignore it, and hand back a datum at RMB. The frame
+then rendered `|A|B|C` for something a caller had written as B at MMB, which is a different
+instruction to a fabricator: a datum simulated at its maximum material boundary allows a
+datum shift that one at RMB does not. Both GD&T models forbid unknown fields now.
+
+
 ## The edition is not decoration
 
 **ASME Y14.5-2018 eliminated concentricity and symmetry.** Both were median-point controls

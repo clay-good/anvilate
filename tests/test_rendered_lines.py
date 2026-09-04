@@ -84,7 +84,6 @@ def _screens():
     cards.append(
         screen_ventilation(
             VentilationZone(
-                name="office",
                 people_outdoor_rate=Quantity.parse("2.5 L/s"),
                 occupancy=12,
                 area_outdoor_rate=Quantity.parse("0.3 L/s/m**2"),

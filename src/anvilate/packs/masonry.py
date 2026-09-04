@@ -42,7 +42,7 @@ class MasonryWall(GuardedInputs):
     extreme-fibre bending stress from out-of-plane wind. All stresses are the caller's.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     masonry_strength: Quantity
     slenderness_ratio: float

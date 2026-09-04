@@ -179,7 +179,47 @@ ELEMENT_SCHEMA_INITIAL_VERSION = "1.0.0"
 # entry to bump one element; every other element's `$id` is untouched by that edit. An entry
 # naming a tag no pack registers is refused by the gate in tests/test_contracts.py -- a
 # renamed element must not leave a live version pin behind pointing at nothing.
-ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {}
+ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
+    # All twenty-four moved together at 1.1.0, and for one reason: the element models now
+    # forbid unknown fields, so each published schema closes `additionalProperties`. That is a
+    # real change to what the contract accepts and it is *stricter*, which is the direction a
+    # version has to move for — a client sending a property this library was quietly dropping
+    # is refused by the schema now instead of screened without it.
+    #
+    # What it fixes is a silent green in the document front door. `element_params` is an
+    # untyped map, so a misspelled OPTIONAL parameter reached the pack model and was ignored:
+    # a beam declaring `deflection_limt` was screened with no deflection limit at all, the
+    # deflection check vanished from the card, and the card still said PASS. A check that was
+    # asked for and did not run, reported as a pass.
+    #
+    # A single shared number would have re-issued every element on any one element's change,
+    # which is what this map exists to avoid. They share a version here because they share a
+    # cause; the next bump will be one line.
+    "base_plate": "1.1.0",
+    "beam_column_member": "1.1.0",
+    "beam_member": "1.1.0",
+    "bolted_connection": "1.1.0",
+    "column_member": "1.1.0",
+    "concrete_bearing": "1.1.0",
+    "cover_plate": "1.1.0",
+    "driven_pile": "1.1.0",
+    "feeder": "1.1.0",
+    "gusset_plate": "1.1.0",
+    "infinite_slope": "1.1.0",
+    "lifting_lug": "1.1.0",
+    "lighting_installation": "1.1.0",
+    "masonry_wall": "1.1.0",
+    "pipe_run": "1.1.0",
+    "pump_duty": "1.1.0",
+    "retaining_wall": "1.1.0",
+    "shallow_footing": "1.1.0",
+    "shear_plate": "1.1.0",
+    "structure": "1.1.0",
+    "tension_member": "1.1.0",
+    "ventilation_zone": "1.1.0",
+    "welded_connection": "1.1.0",
+    "worker_noise_exposure": "1.1.0",
+}
 
 
 def element_schema_version(tag: str) -> str:

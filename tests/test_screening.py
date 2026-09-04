@@ -1869,3 +1869,81 @@ def test_a_team_local_component_is_not_reported_as_bundled_data_either():
     assert "team-local extension record" in local, local
     assert "bundled component tables" not in local, local
     assert "resolves in the bundled component tables" in interface_line("NEMA23")
+
+
+def test_a_misspelled_element_parameter_is_refused_rather_than_dropped():
+    """A check that was asked for and did not run, reported as a pass.
+
+    `element_params` is an untyped map, so whatever a document writes reaches the pack model
+    as keyword arguments. The models did not forbid unknown fields, so a misspelled *optional*
+    parameter was silently ignored and its default used instead — and for a beam that means
+    the declared deflection limit vanishes, **the deflection check disappears from the card
+    altogether**, and the card still says PASS.
+
+    A misspelled *required* parameter was always caught, because the field it should have
+    filled comes back missing. That asymmetry is what kept this hidden: the obvious typo is
+    refused and the quiet one is not.
+    """
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamMember
+
+    beam = {
+        "name": "joist",
+        "section": CrossSection.rectangular(width=_q("100 mm"), height=_q("200 mm")),
+        "length": _q("4 m"),
+        "support": "simply_supported",
+        "load": _q("8 kN"),
+        "load_type": "point",
+        "material": "ASTM-A36",
+    }
+    declared = _lug_spec(
+        element_type="beam_member", element_params={**beam, "deflection_limit": _q("2 mm")}
+    )
+    card = screen_spec(declared)
+    assert any("deflection" in entry.name for entry in card.entries), (
+        "the declared limit did not produce a deflection check, so this fixture proves nothing"
+    )
+
+    # One letter dropped. It used to screen clean, without the check.
+    with pytest.raises(ValueError, match="deflection_limt"):
+        BeamMember(**beam, deflection_limt=_q("2 mm"))
+
+    typo = _lug_spec(
+        element_type="beam_member", element_params={**beam, "deflection_limt": _q("2 mm")}
+    )
+    card = screen_spec(typo)
+    tier = next(e for e in card.entries if e.name == "T1 analytical")
+    assert tier.status is CheckStatus.NOT_EVALUATED, (
+        "a document the pack model refuses must not screen as though it were understood"
+    )
+    assert "deflection_limt" in tier.detail, tier.detail
+    assert not card.passed, "a misspelled parameter still produced a passing card"
+
+
+def test_every_element_a_document_can_name_refuses_a_field_it_does_not_declare():
+    """The rule over the registry rather than over one example.
+
+    A new pack element inherits this by being registered, and a permissive one fails here by
+    name. The GD&T models carry it for the same reason: a `DatumReference` took a
+    `material_condition=` that it has no such field for — its modifier is `boundary` — and
+    silently gave back a datum at RMB, so the drawing said something the caller did not.
+    """
+    from anvilate.gdt import DatumReference, FeatureControlFrame
+    from anvilate.screening import element_registry
+
+    permissive = sorted(
+        f"{model.__module__}.{model.__qualname__}"
+        for _tag, (model, _screen) in element_registry().items()
+        if model.model_config.get("extra") != "forbid"
+    )
+    assert not permissive, (
+        "a document naming these elements can misspell an optional parameter and be screened "
+        f"without it: {permissive}"
+    )
+    assert len(element_registry()) >= 24, "the registry walk found too little to prove anything"
+
+    for model in (DatumReference, FeatureControlFrame):
+        assert model.model_config.get("extra") == "forbid", model
+
+    with pytest.raises(ValueError, match="material_condition"):
+        DatumReference(letter="B", material_condition="MMC")

@@ -40,7 +40,7 @@ class VentilationZone(GuardedInputs):
     serves, and ``required_air_changes`` the minimum ACH the application needs. All caller-supplied.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     people_outdoor_rate: Quantity
     occupancy: float

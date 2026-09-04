@@ -345,7 +345,7 @@ class BeamMember(GuardedInputs):
     for it.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = (
         "load",
         "load_position",
@@ -762,7 +762,7 @@ class ColumnMember(GuardedInputs):
     id (E and yield drive the screen).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("axial_load",)
 
     name: Named
@@ -898,7 +898,7 @@ class BoltedConnection(GuardedInputs):
     direction) adds the §J3.10 bolt-hole tear-out check.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = (
         "load",
         "tension",
@@ -1183,7 +1183,7 @@ class WeldedConnection(GuardedInputs):
     an E70 electrode). The allowable weld shear is 0.6·F_EXX (AISC §J2.4).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named
@@ -1263,7 +1263,7 @@ class BasePlate(GuardedInputs):
     under the bearing pressure, σ = 3·f_p·l²/t², screened against the plate yield.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("axial_load",)
 
     name: Named
@@ -1442,7 +1442,7 @@ class LiftingLug(GuardedInputs):
     bearing on the pin d·t, both against the lug material's yield (ASME BTH-1).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named
@@ -1595,7 +1595,7 @@ class GussetPlate(GuardedInputs):
     Ubs = 1) uses the material's ultimate strength.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named
@@ -1694,7 +1694,7 @@ class TensionMember(GuardedInputs):
     and tensile rupture on the effective net section (P/A_e vs Fu).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named
@@ -1839,7 +1839,7 @@ class BeamColumnMember(GuardedInputs):
     yield drive both capacities).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = (
         "axial_load",
         "moment",
@@ -2041,7 +2041,7 @@ class ConcreteBearing(GuardedInputs):
     delivered. The nominal bearing strength is 0.85·f′c·A₁·√(A₂/A₁).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named
@@ -2150,7 +2150,7 @@ class ShearPlate(GuardedInputs):
     tear-out (§J4.3) and bolt shear (§J3.6).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
 
     name: Named

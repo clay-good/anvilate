@@ -42,7 +42,7 @@ class WorkerNoiseExposure(GuardedInputs):
     exposed at that combined level over the shift. Both are the caller's measured values.
     """
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
     machine_levels: tuple[float, ...]
     exposure_duration: Quantity

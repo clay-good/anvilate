@@ -99,7 +99,7 @@ class CoverPlate(GuardedInputs):
     0.8 of the diameter).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: Named
     pressure: Quantity
