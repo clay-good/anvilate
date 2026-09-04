@@ -376,15 +376,32 @@ def _slot_vertices(
 ) -> list[tuple[float, float, float]]:
     """Obround corner vertices as (x, y, bulge) — two straight sides and two
     semicircular end caps (bulge 1). ``length`` is the overall axis dimension,
-    ``width`` the end-cap diameter; ``vertical`` runs the axis along Y."""
+    ``width`` the end-cap diameter; ``vertical`` runs the axis along Y.
+
+    **A DXF bulge belongs to the segment that *starts* at its vertex**, and the vertical case
+    had it on the wrong pair. Its four vertices were the horizontal ones with x and y swapped,
+    which moves the corners correctly and leaves each bulge attached to the segment it was on
+    — so the semicircles landed on the two long sides and the end caps came out flat. A
+    10 x 40 slot was drawn as a 40 x 30 lens: four times too wide, 10 mm short, and bulging
+    ±15 mm either side of where the slot belongs.
+
+    It was worse than a wrong shape. `export_plate_dxf` checks a slot against the plate using
+    the *intended* half-extents, so a 10 x 60 vertical slot centred 8 mm from the left edge
+    passed the bounds check on its envelope of x 3..13 and was drawn spanning x −22..38 —
+    22 mm off the edge of the plate, in a file a shop cuts from.
+
+    So the vertical case is the horizontal one **rotated**, (x, y) → (−y, x), rather than
+    transposed. A rotation carries each arc to an arc of the same radius and sense, so the
+    bulges stay valid and stay on the segments they belong to.
+    """
     radius = width / 2
     straight = (length - width) / 2  # centre-to-centre of the two end caps, halved
     if vertical:
         return [
-            (cx - radius, cy - straight, 0),
-            (cx + radius, cy - straight, 1),
-            (cx + radius, cy + straight, 0),
-            (cx - radius, cy + straight, 1),
+            (cx + radius, cy - straight, 0),
+            (cx + radius, cy + straight, 1),
+            (cx - radius, cy + straight, 0),
+            (cx - radius, cy - straight, 1),
         ]
     return [
         (cx - straight, cy - radius, 0),

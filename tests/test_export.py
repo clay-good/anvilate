@@ -579,3 +579,88 @@ def test_model_copy_cannot_put_a_sizeless_hole_back():
     slot = Slot(x=_q("50 mm"), y=_q("50 mm"), length=_q("30 mm"), width=_q("8 mm"))
     with pytest.raises(ValueError, match="slot width must be positive"):
         slot.model_copy(update={"width": _q("0 mm")})
+
+
+def test_a_vertical_slot_is_drawn_as_tall_as_it_was_asked_for(tmp_path):
+    """The vertical case put its bulges on the long sides, so the caps came out flat.
+
+    A DXF bulge belongs to the segment that *starts* at its vertex. The vertical vertices were
+    the horizontal ones with x and y swapped, which moves the corners correctly and leaves each
+    bulge on the segment it was already on — the two semicircles landed on the long sides and
+    the end caps became straight lines. A 10 x 40 slot was drawn as a **40 x 30 lens**: four
+    times too wide, 10 mm short, bulging ±15 mm either side of where the slot belongs.
+
+    **The vertices alone cannot show this**, which is why it survived: their bounding box is
+    10 x 30 either way, and only the arcs differ. So this flattens the polyline the way any
+    reader does and measures the path that gets cut.
+
+    Found by rendering a plate and looking at it.
+    """
+    ezdxf = pytest.importorskip("ezdxf")
+    from ezdxf.path import make_path
+
+    out = tmp_path / "slots.dxf"
+    export_plate_dxf(
+        width=_q("200 mm"),
+        height=_q("200 mm"),
+        holes=[],
+        slots=[
+            Slot(
+                x=_q("60 mm"), y=_q("100 mm"), length=_q("40 mm"), width=_q("10 mm"), vertical=True
+            ),
+            Slot(x=_q("140 mm"), y=_q("100 mm"), length=_q("40 mm"), width=_q("10 mm")),
+        ],
+        path=out,
+        authorization=authorize_export(None, override=True),
+    )
+    drawn = []
+    for entity in ezdxf.readfile(out).modelspace():
+        if entity.dxftype() != "LWPOLYLINE" or entity.dxf.layer != "HOLES":
+            continue
+        points = list(make_path(entity).flattening(0.01))
+        xs = [p.x for p in points]
+        ys = [p.y for p in points]
+        drawn.append((max(xs) - min(xs), max(ys) - min(ys)))
+    vertical, horizontal = sorted(drawn, key=lambda wh: wh[0])
+
+    assert vertical == pytest.approx((10.0, 40.0), abs=0.05), (
+        f"the vertical slot is drawn {vertical[0]:.1f} x {vertical[1]:.1f}; a 10 x 40 slot "
+        f"has to be 10 wide and 40 tall"
+    )
+    assert horizontal == pytest.approx((40.0, 10.0), abs=0.05), horizontal
+
+
+def test_a_vertical_slot_cannot_be_drawn_off_the_plate_the_check_let_it_onto(tmp_path):
+    """The bounds check and the writer have to be about the same shape.
+
+    `export_plate_dxf` tests a slot against the plate with the *intended* half-extents. While
+    the drawn shape was a lens four times too wide, a 10 x 60 vertical slot centred 8 mm from
+    the left edge passed on its envelope of x 3..13 and was drawn spanning x −22..38 — 22 mm
+    off the edge of the plate, in a file a shop cuts from.
+
+    So the property is the two agreeing: whatever the writer accepts, it draws inside.
+    """
+    ezdxf = pytest.importorskip("ezdxf")
+    from ezdxf.path import make_path
+
+    out = tmp_path / "edge.dxf"
+    export_plate_dxf(
+        width=_q("100 mm"),
+        height=_q("100 mm"),
+        holes=[],
+        slots=[
+            Slot(x=_q("8 mm"), y=_q("50 mm"), length=_q("60 mm"), width=_q("10 mm"), vertical=True)
+        ],
+        path=out,
+        authorization=authorize_export(None, override=True),
+    )
+    for entity in ezdxf.readfile(out).modelspace():
+        if entity.dxftype() != "LWPOLYLINE" or entity.dxf.layer != "HOLES":
+            continue
+        points = list(make_path(entity).flattening(0.01))
+        assert min(p.x for p in points) >= -0.05, (
+            "the writer accepted this slot and drew it off the left edge of the plate"
+        )
+        assert max(p.x for p in points) <= 100.05
+        assert min(p.y for p in points) >= -0.05
+        assert max(p.y for p in points) <= 100.05

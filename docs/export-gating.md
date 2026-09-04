@@ -147,6 +147,21 @@ radius-0 circle. Three of the four ways to build a `Hole` already refused this �
 helper checks the diameter it is handed — and the unguarded one was the way the docs tell you
 to build a plate.
 
+**A vertical slot was drawn as a lens.** A DXF bulge belongs to the segment that *starts* at
+its vertex, and the vertical obround's four vertices were the horizontal ones with x and y
+swapped — which moves the corners correctly and leaves each bulge on the segment it was
+already on. The two semicircles landed on the long sides and the end caps came out flat, so a
+10 × 40 slot was cut as a 40 × 30 lens: four times too wide, 10 mm short, bulging ±15 mm either
+side of where the slot belongs. The vertical case is the horizontal one *rotated* now,
+(x, y) → (−y, x), which carries each arc to an arc of the same radius and sense.
+
+It was worse than a wrong shape, because the bounds check and the writer stopped being about
+the same one: a slot is tested against the plate on its *intended* half-extents, so a 10 × 60
+vertical slot centred 8 mm from the left edge passed on its envelope of x 3..13 and was drawn
+spanning x −22..38 — 22 mm off the edge of the plate. The vertex bounding box is identical
+either way, which is why nothing caught it; the test flattens the polyline the way a reader
+does and measures the path that gets cut. It was found by rendering a plate and looking at it.
+
 Two things are deliberately *not* refused. **Overlapping features are legitimate**: a hole
 crossing a slot is how a keyhole cut-out is described, and a hole inside a larger one is a
 counterbore seen in plan, so the writer emits what it is given and the merged profile is the
