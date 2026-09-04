@@ -305,8 +305,22 @@ def test_a_frozen_models_mapping_field_refuses_writes():
     assert len(score_candidate(task, {"name": "lug", "material": "wrong"}).fields) == 2
 
 
-def _frozen_models_with_a_mapping_field():
-    """Every frozen model in the package carrying a mapping-shaped field."""
+def _frozen_models_with_a_mutable_container_field():
+    """Every frozen model carrying a field whose *value* can be mutated in place.
+
+    Not just a mapping, which is what this census read for a long time — and the premise is
+    broader than the detector was. ``frozen=True`` refuses attribute *assignment*; it says
+    nothing about the object a field holds, so a `list` or a `set` on a frozen model is as
+    open as a `dict`. `screening.Structure.members` was a `list[StructureMember]`:
+    `structure.members.append(...)` worked, and `.clear()` walked straight through the
+    field's own `min_length=1` to leave a Structure with no members — a state its constructor
+    refuses. A structure screened and then appended to carries a scorecard computed over
+    members it no longer has.
+
+    A sequence's fix is a `tuple`, which this package uses everywhere else; a mapping's is
+    `FrozenMap`. So the two families are reported together and the assertion says which
+    remedy applies.
+    """
     import importlib
     import pkgutil
 
@@ -329,7 +343,13 @@ def _frozen_models_with_a_mapping_field():
             seen.add(value)
             for name, field in value.model_fields.items():
                 annotation = str(field.annotation)
-                if annotation.startswith(("dict[", "Mapping[", "collections.abc.Mapping[")):
+                mapping = annotation.startswith(
+                    ("dict[", "Mapping[", "collections.abc.Mapping[", "<class 'dict'>")
+                )
+                sequence = annotation.startswith(
+                    ("list[", "set[", "frozenset[", "<class 'list'>", "<class 'set'>")
+                )
+                if mapping or sequence:
                     found.append((value, name))
     assert seen, "the walk imported no models, so this gate checked nothing"
     return found
@@ -337,10 +357,10 @@ def _frozen_models_with_a_mapping_field():
 
 @pytest.mark.parametrize(
     ("model", "field"),
-    [(model, field) for model, field in _frozen_models_with_a_mapping_field()],
+    [(model, field) for model, field in _frozen_models_with_a_mutable_container_field()],
 )
-def test_every_frozen_mapping_field_is_a_frozen_mapping(model, field):
-    """The census, so a new `dict` field on a frozen model cannot land unfrozen.
+def test_every_container_on_a_frozen_model_is_one_nobody_can_write_to(model, field):
+    """The census, so a new `dict` or `list` field on a frozen model cannot land mutable.
 
     `anvilate.mcp.ToolDefinition` is the one exemption and it is a real one: its two fields
     hold arbitrarily nested JSON Schema documents, where freezing the top level would read
@@ -354,7 +374,13 @@ def test_every_frozen_mapping_field_is_a_frozen_mapping(model, field):
     built = model.model_construct()
     example = getattr(built, field, None)
     annotation = str(model.model_fields[field].annotation)
-    assert annotation.startswith(("Mapping[", "collections.abc.Mapping[")), (
+    if annotation.startswith(("list[", "set[", "<class 'list'>", "<class 'set'>")):
+        pytest.fail(
+            f"{model.__module__}.{model.__name__}.{field} is a {annotation} on a frozen "
+            f"model, so anyone holding it can append to or clear it after every validator has "
+            f"run — including past a min_length. Use a tuple, as the rest of this package does"
+        )
+    assert annotation.startswith(("Mapping[", "collections.abc.Mapping[", "frozenset[")), (
         f"{model.__module__}.{model.__name__}.{field} is a bare dict on a frozen model, so "
         f"anyone holding the model can write to it after every validator has run. Use "
         f"FrozenMap from anvilate._models"
@@ -362,8 +388,8 @@ def test_every_frozen_mapping_field_is_a_frozen_mapping(model, field):
     assert example is None or isinstance(example, MappingProxyType)
 
 
-def test_the_frozen_mapping_census_is_looking_at_something():
-    found = _frozen_models_with_a_mapping_field()
+def test_the_frozen_container_census_is_looking_at_something():
+    found = _frozen_models_with_a_mutable_container_field()
     assert len(found) >= 9, found
     assert any(model.__module__ == "anvilate.interop" for model, _ in found)
 
@@ -585,3 +611,34 @@ def test_a_copy_cannot_unfreeze_a_frozen_mapping():
     with pytest.raises(TypeError):
         copied.element_params["injected"] = 99  # type: ignore[index]
     assert dict(copied.element_params) == {"width": 200.0}
+
+
+def test_a_frozen_structure_cannot_gain_or_lose_members_after_it_is_built():
+    """A probe for the sequence half, because a census only reads annotations.
+
+    `Structure.members` was `list[StructureMember]` on a frozen model with `min_length=1`.
+    `frozen=True` refused `structure.members = []` and did nothing about
+    `structure.members.append(...)` or `.clear()` — and `.clear()` walks straight through the
+    `min_length`, leaving a Structure in a state its own constructor refuses. The screening
+    consequence is the point: a structure screened and then appended to carries a scorecard
+    computed over members it no longer has.
+    """
+    from anvilate.screening import Structure, StructureMember
+
+    member = StructureMember(element_type="lifting_lug", element_params={"width": 120.0})
+    structure = Structure(members=[member])  # a list still constructs it; pydantic coerces
+    assert isinstance(structure.members, tuple)
+
+    with pytest.raises(ValidationError):
+        structure.members = ()  # type: ignore[misc]
+    for mutate in (
+        lambda: structure.members.append(member),  # type: ignore[attr-defined]
+        lambda: structure.members.clear(),  # type: ignore[attr-defined]
+    ):
+        with pytest.raises(AttributeError):
+            mutate()
+    assert len(structure.members) == 1
+
+    # And the invariant the in-place clear used to walk through is still enforced.
+    with pytest.raises(ValidationError):
+        Structure(members=[])

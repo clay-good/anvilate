@@ -142,6 +142,14 @@ reader cannot tell which one failed. **One member that cannot be screened does n
 un-screen the others:** it contributes its own `NOT_EVALUATED` entry, which the roll-up
 already refuses to treat as a pass, and the rest of the frame is still screened.
 
+**The member list is a tuple, and `frozen=True` is why.** Frozen refuses attribute
+*assignment* and says nothing about the value a field holds, so as a `list` the members of a
+frozen `Structure` could be appended to and **cleared** in place — and `.clear()` walks
+straight through the field's own `min_length=1`, leaving a structure with no members, a state
+its constructor refuses. The screening consequence is the one that matters: a structure
+screened and then appended to carries a scorecard computed over members it no longer has. You
+still write a list in YAML and still pass a list in Python; what comes back is immutable.
+
 It is the one tag the packs do not supply — a structure belongs to no discipline, since its
 members can come from any of them — and it is the one element whose members can come from
 several packs at once. A structure cannot be a member of a structure; list the members

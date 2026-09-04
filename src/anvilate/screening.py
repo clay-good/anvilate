@@ -125,7 +125,13 @@ class Structure(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    members: list[StructureMember] = Field(min_length=1)
+    # A tuple, not a list, and `frozen=True` is the reason. Frozen refuses attribute
+    # *assignment*; it says nothing about the value. As a list, `structure.members.append(...)`
+    # and `.clear()` both worked on a frozen model — and `.clear()` walks straight through the
+    # `min_length=1` below, leaving a Structure with no members, a state the constructor
+    # refuses. Worse than the empty case: a structure screened and then appended to carries a
+    # scorecard computed over members it no longer has.
+    members: tuple[StructureMember, ...] = Field(min_length=1)
 
 
 def _tag(name: str) -> str:
