@@ -498,8 +498,17 @@ class CalculationReport(BaseModel):
             out.append('<table class="glossary">')
             out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")
             for symbol, description, value in derivation.glossary(system=self.unit_system):
+                # Typeset, so the legend and the formula above it show one symbol rather than
+                # two spellings of it. The formula rendered `σ_b` as a subscript and the
+                # legend printed the raw `σ_b` beside it — 90 of 389 legend rows carried an
+                # underscore that way, and matching a symbol in the working to its row is the
+                # thing a reviewer does with this table. Plain text where it will not typeset,
+                # for the reason the derivation lines fall back: a legend entry that is not
+                # the symbol the check cited is worse than a line of text.
+                typeset = formula_to_mathml(symbol, display="inline")
+                rendered = escape(symbol) if typeset is None else typeset
                 out.append(
-                    f"<tr><td>{escape(symbol)}</td><td>{escape(description)}</td>"
+                    f"<tr><td>{rendered}</td><td>{escape(description)}</td>"
                     f"<td>{escape(value)}</td></tr>"
                 )
             out.append("</table>")

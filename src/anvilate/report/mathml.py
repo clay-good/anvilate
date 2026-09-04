@@ -353,8 +353,14 @@ def _emit(node: _Node, *, unwrap: bool = False) -> str:
     return f"{_emit(left)}<mo>{escape(node.text)}</mo>{_emit(right)}"
 
 
-def formula_to_mathml(formula: str) -> str | None:
+def formula_to_mathml(formula: str, *, display: str = "block") -> str | None:
     """``formula`` as a MathML ``<math>`` element, or ``None`` if it cannot be trusted.
+
+    ``display`` is the element's own attribute: ``"block"`` for a formula on its own line,
+    ``"inline"`` for one sitting inside a line of text or a table cell. The report's symbol
+    glossary needs the second — it typeset ``σ_b`` in the formula and printed the raw string
+    ``σ_b`` in the legend beside it, so a reviewer matching one to the other saw two different
+    renderings of one symbol, in 90 of 389 legend rows.
 
     ``None`` on anything the grammar does not cover **and** on anything that parses to a
     tree which does not write back out as the same string. The caller renders the plain
@@ -380,4 +386,4 @@ def formula_to_mathml(formula: str) -> str | None:
             return None
         emitted.append(_emit(tree))
     body = "<mo>=</mo>".join(emitted)
-    return f'<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">{body}</math>'
+    return f'<math xmlns="http://www.w3.org/1998/Math/MathML" display="{display}">{body}</math>'

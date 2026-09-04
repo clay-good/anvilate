@@ -222,6 +222,18 @@ division read a substituted `1.00 kN / 10.00 mm²` as `(1.00 kN / 10.00) · mm²
 drawn as a force over a number times an area. What found it was rendering a real report, not
 a unit test. That is the argument for typesetting the whole corpus in CI.
 
+**The symbol legend is typeset too, and it was not.** The working rendered `σ_b` as a
+subscript and the glossary row beneath it printed the literal string `σ_b` — two spellings of
+one symbol in one document, in 90 of 389 legend rows across the suite. Matching a symbol in the
+working to its row in the legend is the thing a reviewer actually does with that table, so the
+cells carry the same MathML the formula does, at `display="inline"`. A symbol the grammar
+declines is escaped and printed as text, by the same rule the formula lines follow: a legend
+entry that is not the symbol the check cited is worse than a line of text. The plain-text
+rendering is untouched, and there the raw `σ_b` is right, because the formula beside it is raw
+too — each rendering is internally consistent, which is the property that matters.
+
+Found the same way the precedence bug was: by rendering a report and looking at it.
+
 One caveat worth stating: MathML layout quality depends on a math font being present.
 Windows ships Cambria Math and macOS 13+ ships STIX Two Math; elsewhere the glyphs may be
 plainer. The markup is correct either way, and no font is bundled — a font in the document

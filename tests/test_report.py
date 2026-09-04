@@ -9,6 +9,8 @@ from xml.etree import ElementTree as ET
 import pytest
 from pydantic import ValidationError
 
+import re
+
 from anvilate.derivation import DerivationAbsence
 from anvilate.report import (
     CALC_RECORD_SCHEMA_VERSION,
@@ -1517,4 +1519,75 @@ def test_no_derivation_the_library_builds_typesets_more_than_two_fractions_deep(
                 too_deep.append(f"{label}: {line}")
     assert not too_deep, "formulas typeset more than two fractions deep:\n  " + "\n  ".join(
         too_deep
+    )
+
+
+def test_the_symbol_legend_is_typeset_the_way_the_formula_above_it_is():
+    """One symbol, one rendering. The legend printed the raw string beside the working.
+
+    The derivation rendered `σ_b` as a subscript and the glossary row under it printed the
+    literal `σ_b` — two spellings of one symbol in one document, and matching a symbol in the
+    working to its row in the legend is exactly what a reviewer does with this table. Across
+    the suite, 90 of 389 legend rows carried an underscore that way.
+
+    HTML only, and that is not an oversight: the text rendering has no MathML anywhere, so
+    there `σ_b` in the legend matches `σ_b` in the formula. Each rendering is internally
+    consistent, which is the property that matters.
+    """
+    html = _report().to_html()
+
+    # The subscript reaches the legend, not just the working.
+    assert html.count("<msub><mi>σ</mi><mi>b</mi></msub>") >= 2, (
+        "the legend still prints a symbol the formula typesets"
+    )
+    legend_row = re.search(r"<tr><td>(.*?)</td><td>bending stress</td>", html, re.S)
+    assert legend_row is not None, html
+    assert legend_row.group(1).startswith("<math"), legend_row.group(1)
+    assert 'display="inline"' in legend_row.group(1), (
+        "a block-display formula inside a table cell breaks the row"
+    )
+    assert "σ_b" not in html, "the raw underscore spelling is still in the document"
+
+    # The plain-text rendering is untouched, and there the raw spelling is the right one.
+    text = _report().to_text()
+    assert "σ_b" in text
+    assert "<math" not in text
+
+
+def test_a_legend_symbol_that_will_not_typeset_falls_back_to_text():
+    """The same rule the derivation lines follow: decline rather than guess.
+
+    A legend entry that is not the symbol the check cited is worse than a line of text, so a
+    symbol the grammar cannot parse is escaped and printed as-is rather than dropped or
+    approximated.
+    """
+    from anvilate.report.mathml import formula_to_mathml
+
+    assert formula_to_mathml("σ_b", display="inline") is not None
+    # `=` inside a symbol is outside the grammar; it must decline rather than emit something.
+    assert formula_to_mathml("a = b = c") is None
+    # And an unparseable symbol still reaches the document, escaped.
+    odd = Derivation(
+        symbolic="y = a<b",
+        inputs=(
+            SymbolValue(symbol="a<b", description="an odd symbol", value=Quantity.parse("1 mm")),
+        ),
+        result=SymbolValue(symbol="y", description="result", value=Quantity.parse("1 mm")),
+        citation="Test",
+    )
+    section = ReportSection(
+        entry=ScorecardEntry.from_safety_factor("odd", computed=2.0, required=1.5),
+        derivation=odd,
+    )
+    html = CalculationReport(
+        title="t", project="p", date="2026-01-01", unit_system=UnitSystem.SI, sections=(section,)
+    ).to_html()
+    # The LEGEND cell, not anywhere in the page: `symbolic` renders the same characters as
+    # escaped text in the derivation block above, so a bare `in html` passes while the cell
+    # is empty — which is exactly what the mutation that drops this fallback produces.
+    cell = re.search(r"<tr><td>(.*?)</td><td>an odd symbol</td>", html, re.S)
+    assert cell is not None, html
+    assert cell.group(1) == "a&lt;b", (
+        f"the legend cell for a symbol that will not typeset holds {cell.group(1)!r}; it must "
+        f"carry the escaped symbol rather than nothing"
     )
