@@ -19,8 +19,9 @@ from __future__ import annotations
 from math import cos, pi, radians, sin, tan
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
+from .._models import RevalidatedModel
 from ..gdt import FeatureControlFrame
 from ..units import Quantity
 from .gate import ExportAuthorization
@@ -99,8 +100,35 @@ def _stamp(doc, authorization: ExportAuthorization) -> None:
         doc.header.custom_vars.append(tag, value)
 
 
-class Hole(BaseModel):
-    """A circular hole in a plate: its centre (x, y) and diameter."""
+def _positive_length(value: Quantity, field: str) -> Quantity:
+    """``value``, or a refusal — a feature dimension is a positive length or it is not one.
+
+    On the models rather than in the writer, because the writer was not the only way in. The
+    three pattern helpers each check the diameter they are handed and the writer checks a
+    slot's length and width, so every path was guarded except the one the docstrings tell a
+    caller to use: constructing a :class:`Hole` and passing it to
+    :func:`export_plate_dxf`. Here it covers all of them at once.
+    """
+    if not isinstance(value, Quantity) or not value.has_dimension("[length]"):
+        raise ValueError(f"{field} must be a [length] quantity; got {value!r}")
+    if value.to("mm").magnitude <= 0:
+        raise ValueError(
+            f"{field} must be positive; got {value}. A feature with no size is not a feature, "
+            f"and a negative one is written into the DXF as a negative radius — an entity no "
+            f"reader is required to accept, on a file a shop cuts from."
+        )
+    return value
+
+
+class Hole(RevalidatedModel):
+    """A circular hole in a plate: its centre (x, y) and diameter.
+
+    ``diameter`` must be a positive length. It was unchecked, and the plate-bounds test in
+    :func:`export_plate_dxf` cannot stand in for it: that test is
+    ``cx - radius >= 0 and cx + radius <= w``, which a *negative* radius satisfies more
+    easily than a real one, so a Ø-10 mm hole passed the guard and wrote ``radius = -5.0``
+    into the drawing. A zero diameter passed it too and wrote a radius-0 circle.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -108,12 +136,23 @@ class Hole(BaseModel):
     y: Quantity
     diameter: Quantity
 
+    @field_validator("diameter")
+    @classmethod
+    def _a_hole_has_a_size(cls, value: Quantity) -> Quantity:
+        return _positive_length(value, "hole diameter")
 
-class Slot(BaseModel):
+
+class Slot(RevalidatedModel):
     """A slotted (obround) hole: its centre (x, y), overall ``length``, ``width``,
     and orientation. ``length`` is the overall dimension along the slot axis
     (end-cap to end-cap), ``width`` the across-axis dimension (the end-cap
-    diameter). ``vertical`` runs the slot along Y instead of X."""
+    diameter). ``vertical`` runs the slot along Y instead of X.
+
+    Both are positive lengths. :func:`export_plate_dxf` already refused a non-positive width
+    and a length no greater than it — the relational half stays there, since it is about the
+    pair — but only on the way through that one writer, and only for a slot rather than for a
+    hole.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -122,6 +161,11 @@ class Slot(BaseModel):
     length: Quantity
     width: Quantity
     vertical: bool = False
+
+    @field_validator("length", "width")
+    @classmethod
+    def _a_slot_has_a_size(cls, value: Quantity, info) -> Quantity:
+        return _positive_length(value, f"slot {info.field_name}")
 
 
 def _mm(value: Quantity, name: str) -> float:

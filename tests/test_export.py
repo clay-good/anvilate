@@ -516,3 +516,66 @@ def test_the_gdt_writer_handles_every_stroke_the_union_declares():
             f"{member.__name__} is a Stroke and the DXF writer's chain does not name it, so "
             "a frame carrying one raises 'unknown stroke primitive' at export"
         )
+
+
+def test_a_hole_with_no_size_is_refused_before_it_reaches_a_drawing():
+    """A negative diameter wrote `radius = -5.0` into the DXF a shop cuts from.
+
+    `export_plate_dxf` checks each feature against the plate — and that check cannot stand in
+    for this one. It is `cx - radius >= 0 and cx + radius <= w`, which a *negative* radius
+    satisfies **more easily** than a real one: a Ø-10 mm hole at (50, 50) tests 55 and 45, both
+    comfortably inside, so the guard that exists let it through and ezdxf wrote a CIRCLE with a
+    negative radius — an entity no reader is required to accept. A zero diameter passed the
+    same way and wrote a radius-0 circle.
+
+    Three of the four ways to get a `Hole` already refused it: each pattern helper checks the
+    diameter it is handed. The unguarded one was the way the docstrings tell a caller to build
+    a plate — construct a `Hole`, pass it to the writer — so the rule belongs on the model,
+    where all four paths meet.
+    """
+    for bad in ("-10 mm", "0 mm", "-1 um"):
+        with pytest.raises(ValueError, match="hole diameter must be positive"):
+            Hole(x=_q("50 mm"), y=_q("50 mm"), diameter=_q(bad))
+    Hole(x=_q("50 mm"), y=_q("50 mm"), diameter=_q("10 mm"))  # and a real one is fine
+
+    # A slot's length and width were checked by the writer and not by the model, so a slot
+    # handed to anything else was unguarded in the same way.
+    for field, kwargs in (
+        ("width", {"length": _q("30 mm"), "width": _q("0 mm")}),
+        ("width", {"length": _q("30 mm"), "width": _q("-8 mm")}),
+        ("length", {"length": _q("0 mm"), "width": _q("8 mm")}),
+    ):
+        with pytest.raises(ValueError, match=f"slot {field} must be positive"):
+            Slot(x=_q("50 mm"), y=_q("50 mm"), **kwargs)
+
+    # The relational rule stays in the writer, because it is about the pair rather than a field.
+    with pytest.raises(ValueError, match="needs length > width > 0"):
+        export_plate_dxf(
+            width=_q("100 mm"),
+            height=_q("100 mm"),
+            holes=[],
+            slots=[Slot(x=_q("50 mm"), y=_q("50 mm"), length=_q("8 mm"), width=_q("8 mm"))],
+            path="unused.dxf",
+            authorization=authorize_export(None, override=True),
+        )
+
+
+def test_a_feature_dimension_that_is_not_a_length_is_refused_by_the_model_too():
+    """`_mm` in the writer says this, and said it only there. A `Hole` carrying a mass reached
+    every other consumer of the model unremarked."""
+    for bad in ("3 kg", "5 N", "2 deg"):
+        with pytest.raises(ValueError, match="hole diameter must be a .length. quantity"):
+            Hole(x=_q("50 mm"), y=_q("50 mm"), diameter=_q(bad))
+
+
+def test_model_copy_cannot_put_a_sizeless_hole_back():
+    """`model_copy` does not re-run field validators, so the rule above would hold only until
+    somebody copied a good hole into a bad one. Both models are `RevalidatedModel` for that
+    reason — the same decision this repository has already made for its spec models."""
+    good = Hole(x=_q("50 mm"), y=_q("50 mm"), diameter=_q("10 mm"))
+    with pytest.raises(ValueError, match="hole diameter must be positive"):
+        good.model_copy(update={"diameter": _q("-10 mm")})
+
+    slot = Slot(x=_q("50 mm"), y=_q("50 mm"), length=_q("30 mm"), width=_q("8 mm"))
+    with pytest.raises(ValueError, match="slot width must be positive"):
+        slot.model_copy(update={"width": _q("0 mm")})

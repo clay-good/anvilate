@@ -28,6 +28,8 @@ from collections import Counter
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from ._models import RevalidatedModel
+
 from .fetch import DatasetRecipe
 
 __all__ = [
@@ -72,7 +74,7 @@ _REQUIRED_HEADINGS = (
 )
 
 
-class CaseSpecification(BaseModel):
+class CaseSpecification(RevalidatedModel):
     """One suite case, read out of its Markdown headings.
 
     The fields are the suite's own vocabulary, not Anvilate's: this is what the case
@@ -106,7 +108,7 @@ class CaseSpecification(BaseModel):
         return value
 
 
-class ScopeVerdict(BaseModel):
+class ScopeVerdict(RevalidatedModel):
     """Whether Anvilate can express a case at all, and if not, why not.
 
     ``reason`` is empty exactly when ``in_scope`` is true. It is a sentence rather than a

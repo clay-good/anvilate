@@ -28,7 +28,14 @@ _SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "anvilate"
 
 
 def _classes_with_an_after_validator() -> list[tuple[str, str]]:
-    """Every class in the package declaring a ``mode="after"`` model validator.
+    """Every class in the package declaring an invariant ``model_copy`` would bypass.
+
+    A ``mode="after"`` model validator, or a ``field_validator``. Both are skipped by
+    ``model_copy`` and both are restored by the re-validating base, so both are reasons to
+    inherit it — and the gate below, which refuses a class that inherits the base and protects
+    nothing, read only the first. `export.dxf.Hole` was the counterexample: its invariant is
+    that a diameter is a positive length, one field at a time, and a rule stated per field is
+    still a rule an update can break.
 
     Read out of the source rather than off the imported classes, because a validator
     inherited from a base is not the thing this gate is about: the question is which classes
@@ -44,8 +51,11 @@ def _classes_with_an_after_validator() -> list[tuple[str, str]]:
             declares = any(
                 isinstance(item, ast.FunctionDef)
                 and any(
-                    "model_validator" in ast.unparse(decorator)
-                    and "after" in ast.unparse(decorator)
+                    (
+                        "model_validator" in ast.unparse(decorator)
+                        and "after" in ast.unparse(decorator)
+                    )
+                    or "field_validator" in ast.unparse(decorator)
                     for decorator in item.decorator_list
                 )
                 for item in node.body

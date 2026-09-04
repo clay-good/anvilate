@@ -26,7 +26,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ._models import Provenance
+from ._models import Provenance, RevalidatedModel
 from .units import Quantity, UnitSystem, render
 
 __all__ = [
@@ -97,7 +97,7 @@ class DerivationAbsence(StrEnum):
     NUMERIC_RESULT = "numeric_result"
 
 
-class Underived(BaseModel):
+class Underived(RevalidatedModel):
     """A check's own statement that it has no formula to show, and why.
 
     It rides on the :class:`~anvilate.scorecard.ScorecardEntry` in the place the

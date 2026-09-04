@@ -64,7 +64,10 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.cli` — the headless command line: one command that is
   backed, three refused by name with what each is waiting on.
 - :mod:`anvilate._models` — the base class that makes a model's invariants
-  survive ``model_copy``, which runs no validators.
+  survive ``model_copy``, which runs no validators. A **field** validator counts
+  as an invariant here exactly as an after-validator does: a rule stated per
+  field is still a rule an update can break, and five models sat in the gap
+  where the census read only the second kind.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.

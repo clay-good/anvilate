@@ -38,7 +38,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from ._models import Named, Provenance
+from ._models import Named, Provenance, RevalidatedModel
 
 __all__ = [
     "ConsentRequired",
@@ -69,7 +69,13 @@ class Opener(Protocol):
     def __call__(self, url: str) -> bytes: ...  # pragma: no cover - a typing shape
 
 
-class DatasetRecipe(BaseModel):
+# `RevalidatedModel`, not `BaseModel`, and `name` is why. Its validator exists because the
+# name becomes a path in the download cache, so a separator or a traversal in it is a write
+# outside the cache — and `model_copy` runs no validators, so
+# `recipe.model_copy(update={"name": "../escape"})` produced exactly the recipe the validator
+# was written to refuse. The same bypass reached `sha256` (a digest that verifies nothing) and
+# `url` (http instead of https). A rule stated per field is still a rule an update can break.
+class DatasetRecipe(RevalidatedModel):
     """What it takes to fetch one dataset, and to say afterwards what was fetched.
 
     ``name`` is the cache key and the sidecar's stem; ``url`` the publisher's own
@@ -120,7 +126,7 @@ class DatasetRecipe(BaseModel):
         return value
 
 
-class FetchProvenance(BaseModel):
+class FetchProvenance(RevalidatedModel):
     """What was fetched, from where, under what licence, and when the caller says.
 
     Written beside the payload as ``<name>.provenance.json`` so a cache directory is

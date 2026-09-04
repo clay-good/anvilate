@@ -131,6 +131,29 @@ label — the disclaimer dropped from the rendering and from the predicate body,
 assumptions list vanishing again in the bundle and in the report, and a blank assumption
 accepted. All seventeen were killed.
 
+## The gate is about the verdict; the geometry has its own floor
+
+Authorization says whether the *part* passed its checks. It says nothing about whether the
+feature list describes a cuttable shape, and the writer is the last thing between a spec and a
+file a shop cuts from — so the feature models carry their own rule: **a hole's diameter and a
+slot's length and width are positive lengths.**
+
+That was missing on holes, and the plate-bounds check in `export_plate_dxf` could not stand in
+for it. The bounds test is `cx - radius >= 0 and cx + radius <= w`, which a **negative** radius
+satisfies *more easily* than a real one — a Ø-10 mm hole at (50, 50) tests 55 and 45, both
+comfortably inside the plate. It passed, and ezdxf wrote a `CIRCLE` with `radius = -5.0`, an
+entity no reader is required to accept. A zero diameter passed the same way and wrote a
+radius-0 circle. Three of the four ways to build a `Hole` already refused this — each pattern
+helper checks the diameter it is handed — and the unguarded one was the way the docs tell you
+to build a plate.
+
+Two things are deliberately *not* refused. **Overlapping features are legitimate**: a hole
+crossing a slot is how a keyhole cut-out is described, and a hole inside a larger one is a
+counterbore seen in plan, so the writer emits what it is given and the merged profile is the
+designed one. And a feature exactly **tangent to the plate edge** is left to the caller, in the
+same spirit as the corner-radius note: the writer checks features against the full rectangle
+and does not judge edge distance, which is a fabrication rule with no single right number.
+
 ## What is not gated
 
 The report renderer carries its own disclaimer and is not an artifact the export gate sees.

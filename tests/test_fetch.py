@@ -283,3 +283,47 @@ def test_a_provenance_sidecar_that_is_not_utf8_text_is_refused_like_a_missing_on
     (tmp_path / "cases.csv.provenance.json").write_bytes(b"\xff\xfe{\x00}\x00")
     with pytest.raises(IntegrityError, match="not UTF-8 text"):
         cached_dataset(_recipe(), cache_dir=tmp_path)
+
+
+def test_a_copy_cannot_put_a_recipe_where_its_validators_refuse_to():
+    """`model_copy` runs no validators, and `name` is the one that matters.
+
+    Its validator exists because the name becomes a path in the download cache, so a separator
+    or a traversal in it is a write *outside* the cache — and a copy produced exactly the recipe
+    the validator was written to refuse. The same bypass reached `sha256`, giving a recipe whose
+    digest verifies nothing, and `url`, putting the transport back to http after the constructor
+    had insisted on https.
+
+    Found by widening the census in `tests/test_revalidated_copy.py`, which read only
+    `mode="after"` model validators — so a class whose whole invariant is a *field* validator
+    read as a class with nothing to protect. Five models were in that blind spot.
+    """
+    recipe = _recipe()
+    for field, value, complaint in (
+        ("name", "../escape", "file-safe"),
+        ("name", "nested/name", "file-safe"),
+        ("sha256", "not-a-digest", "64 lowercase hex"),
+        ("url", "http://example.invalid/cases.csv", "https"),
+    ):
+        with pytest.raises(ValueError, match=complaint):
+            recipe.model_copy(update={field: value})
+
+    # A copy that changes nothing is still free, and one that stays legal still works.
+    assert recipe.model_copy() == recipe
+    assert recipe.model_copy(update={"redistributable": False}).redistributable is False
+
+
+def test_a_copy_cannot_backdate_provenance_to_something_that_is_not_a_date():
+    """The retrieval date is the caller's stated fact and the whole module refuses to read a
+    clock for it, so a copy must not be the way a non-date gets in."""
+    provenance = FetchProvenance(
+        name="cases.csv",
+        url=_recipe().url,
+        sha256=_recipe().sha256,
+        license="CC0-1.0",
+        source="a test",
+        redistributable=True,
+        retrieved="2026-01-01",
+    )
+    with pytest.raises(ValueError, match="ISO date"):
+        provenance.model_copy(update={"retrieved": "yesterday"})
