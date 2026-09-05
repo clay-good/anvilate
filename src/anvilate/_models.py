@@ -51,6 +51,35 @@ __all__ = [
 _LONGEST_CITED = 1_024
 
 
+#: Prefixes pydantic puts on a validator's own message, which a reader did not write and
+#: does not need. `msg` for a `ValueError` raised inside a validator is "Value error, " plus
+#: the sentence the validator wrote — so every refusal this library composes with care
+#: reached the shell wearing pydantic's label: `anvilate check: name: Value error, this field
+#: is 5,000 characters`. The sentences are the product here; the label is scaffolding.
+#:
+#: Only the two pydantic prepends to a message the library itself wrote. A type error's
+#: message ("Input should be a valid integer") is pydantic's own sentence, has no prefix, and
+#: is left exactly as it is.
+_PYDANTIC_PREFIXES = ("Value error, ", "Assertion failed, ")
+
+
+def _refusal_line(location: str, message: str) -> str:
+    """One validation failure as a reader should see it: the path, then the sentence.
+
+    Two things are dropped. The prefix above, and the **empty location**: a rule that holds
+    for the whole document has no field to name, and the obvious `f"{loc}: {msg}"` then reads
+    `anvilate check: : Value error, description is 5,000 characters` — a doubled colon with
+    nothing between. Every document-level rule lands there: the finite-number rule, the depth
+    bound, the string bound and the collection bound all belong to the document rather than
+    to one of its fields.
+    """
+    for prefix in _PYDANTIC_PREFIXES:
+        if message.startswith(prefix):
+            message = message[len(prefix) :]
+            break
+    return f"{location}: {message}" if location else message
+
+
 def cited(states: str) -> Any:
     """A provenance field that refuses to be present and blank — or an unbounded wall.
 

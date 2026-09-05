@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
+from .._models import _refusal_line
 from .ir import DesignSpec
 from .references import ReferenceResolver, UnknownReferenceError, default_resolver
 from .version import migrate_to_current
@@ -37,7 +38,7 @@ class SpecValidationError(ValueError):
 
     def __init__(self, errors: list[dict[str, Any]]) -> None:
         self.errors = errors
-        lines = [f"  {e['loc']}: {e['msg']}" for e in errors]
+        lines = [f"  {_refusal_line(e['loc'], e['msg'])}" for e in errors]
         super().__init__("spec failed validation:\n" + "\n".join(lines))
 
     @classmethod

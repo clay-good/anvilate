@@ -2419,3 +2419,85 @@ def test_an_empty_search_is_still_a_bad_request(tmp_path):
     code, out, err = _run("check", str(tmp_path))
     assert code == EXIT_BAD_REQUEST, "an empty search read as a pass"
     assert "no Design Spec found" in err
+
+
+def test_a_validation_refusal_reads_as_a_sentence_and_not_as_a_pydantic_error():
+    """Every refusal this library composes with care reached the shell wearing two warts.
+
+    `anvilate check: : Value error, description is 5,000 characters`. The doubled colon is an
+    **empty location** — a rule that holds for the whole document has no field to name, and
+    every document-level rule lands there: the finite-number rule, the depth bound, the
+    string bound and the collection bound. The `Value error,` is pydantic's label on a
+    message the library wrote itself. Neither is something a reader wrote or needs.
+
+    A field-level refusal still names its field, because that is the part a reader acts on.
+    """
+    import tempfile
+
+    import yaml
+
+    from anvilate.cli import EXIT_BAD_REQUEST, run
+
+    base = yaml.safe_load((_REPO / "examples" / "nema23_bracket.spec.yaml").read_text())
+    load_case = base["load_cases"][0]
+    cases = {
+        # A document-level rule: no field to name, so no location and no leading colon.
+        "description is 5,000 characters": ({**base, "description": "A" * 5_000}, ""),
+        "load_cases holds 1,100 items": (
+            {**base, "load_cases": [{**load_case, "name": f"c{i}"} for i in range(1_100)]},
+            "",
+        ),
+        # A field-level rule keeps its path.
+        "this field is 5,000 characters": ({**base, "name": "A" * 5_000}, "name: "),
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "s.spec.yaml"
+        for sentence, (document, prefix) in cases.items():
+            path.write_text(yaml.safe_dump(document), encoding="utf-8")
+            out, err = io.StringIO(), io.StringIO()
+            assert run(["check", str(path)], stdout=out, stderr=err) == EXIT_BAD_REQUEST
+            line = err.getvalue().strip().splitlines()[0]
+            assert line.startswith(f"anvilate check: {prefix}{sentence}"), line
+            assert "Value error" not in line, line
+            assert ": :" not in line, line
+
+
+def test_every_surface_that_prints_a_validation_failure_uses_the_one_renderer():
+    """Four places rebuilt the same line by hand, which is why all four wore both warts.
+
+    The census is over the source, because the shape that reintroduces them is textual: a
+    line that reaches for a validation error's `loc` and its `msg` together is a line
+    composing a refusal, and it has to compose it through the one function.
+
+    The floor is the point. The first version of this test looked for `{e['loc']}` — the
+    exact spelling of the code it had just replaced — and so, once the replacement was in,
+    it swept nothing and passed. A census asserts how many things it found.
+    """
+    import re
+
+    # A *subscript* of `loc`, which is a line reading an error, rather than the `"loc":` of
+    # a line building one — `spec/validate.py` composes its own error dicts and is not a
+    # renderer.
+    pattern = re.compile(r"""\[["\']loc["\']\]""")
+    # A line that also *writes* a `loc` key is building an error rather than rendering one:
+    # `SpecValidationError._from_pydantic` carries the path and the sentence forward as data
+    # for the surfaces below to render. Keyed on that shape rather than on a line number,
+    # which the next edit above it would invalidate.
+    builds_one = re.compile(r"""\{\s*["\']loc["\']\s*:""")
+
+    sites, offenders = [], []
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not pattern.search(line) or "msg" not in line:
+                continue
+            at = f"{path.relative_to(_REPO)}:{number}"
+            where = f"{at}: {line.strip()}"
+            sites.append(where)
+            if "_refusal_line" not in line and not builds_one.search(line):
+                offenders.append(where)
+    assert len(sites) >= 4, f"the census found only {len(sites)} refusal sites: {sites}"
+    assert not offenders, (
+        "these build a refusal line by hand rather than through "
+        "`anvilate._models._refusal_line`, so they print pydantic's label and a doubled "
+        "colon for a document-level rule:\n  " + "\n  ".join(offenders)
+    )

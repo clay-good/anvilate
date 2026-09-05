@@ -60,6 +60,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, TextIO
 
+from ._models import _refusal_line
 from .scorecard import CheckStatus, Scorecard
 from .units import UnitSystem
 
@@ -1004,7 +1005,7 @@ def _load(path: Path, *, err, command: str):
         # Every path, not the first one: a script author fixing a spec one error per run is
         # the experience this avoids, and the paths are what the loader already produced.
         for problem in failure.errors:
-            print(f"anvilate {command}: {problem['loc']}: {problem['msg']}", file=err)
+            print(f"anvilate {command}: {_refusal_line(problem['loc'], problem['msg'])}", file=err)
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:
         print(f"anvilate {command}: {failure}", file=err)

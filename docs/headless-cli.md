@@ -177,6 +177,19 @@ A document does not state a string longer than 4,096 characters now, values and 
 alike, and the refusal names the path: `element_params.finish is 4,097 characters`. The
 longest string any spec here states is a 64-character description.
 
+Every one of those refusals is printed as a sentence rather than as a pydantic error. Two
+things used to ride along with each. `Value error,` is the label pydantic puts on a message
+one of this library's own validators wrote, and nobody reading `anvilate check` needs it; and
+a rule that holds for the whole *document* has no field to name, so the obvious `loc: msg`
+gave `anvilate check: : Value error, description is 5,000 characters` — a doubled colon with
+nothing between. All four document-level rules land there. A field-level refusal still names
+its field, because that is the part a reader acts on: `name: this field is 5,000 characters`.
+
+Five surfaces composed that line by hand — the shell, two MCP tools, the attestation
+verifier's problem list, and a screening scorecard's detail — which is why all five wore both
+warts, and why one of them had already invented a local `<element>` to paper over the empty
+location. One renderer now, and a census over the source holds the five to it.
+
 Breadth is the fourth axis and the last one a document has. 500,000 `load_cases` were
 accepted, and every one of them then went on to be screened, rendered, exported and signed. A
 document does not state a collection of more than 1,024 items now, mappings and lists alike,

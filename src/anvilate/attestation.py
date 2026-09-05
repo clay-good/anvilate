@@ -60,7 +60,7 @@ from pydantic import (
     model_validator,
 )
 
-from ._models import RevalidatedModel
+from ._models import RevalidatedModel, _refusal_line
 from .evidence import SourceRecord
 from .review import DecisionOrigin
 from .scorecard import CheckStatus, Scorecard
@@ -1105,7 +1105,7 @@ def _predicate_schema_problems(predicate: object) -> list[str]:
 
 def _first_paths(failure: ValidationError) -> str:
     return "; ".join(
-        f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+        _refusal_line(".".join(str(part) for part in error["loc"]), error["msg"])
         for error in failure.errors()[:3]
     )
 

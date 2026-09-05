@@ -59,7 +59,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel, rebuilt_quantities
+from ._models import (
+    EMPTY_MAP,
+    FrozenMap,
+    ItemCollection,
+    RevalidatedModel,
+    _refusal_line,
+    rebuilt_quantities,
+)
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -232,7 +239,7 @@ def _screen_element(
         element = model.model_validate(dict(params))
     except ValidationError as refused:
         reasons = "; ".join(
-            f"{'.'.join(str(part) for part in error['loc']) or '<element>'}: {error['msg']}"
+            _refusal_line(".".join(str(part) for part in error["loc"]), error["msg"])
             for error in refused.errors()
         )
         return [

@@ -49,7 +49,7 @@ from typing import Any, TextIO
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import Named, RevalidatedModel
+from ._models import Named, RevalidatedModel, _refusal_line
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .spec import ValidationTier
@@ -1141,7 +1141,7 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
     try:
         spec = parse_spec(dict(document))
     except SpecValidationError as failure:
-        return {"errors": [f"{e['loc']}: {e['msg']}" for e in failure.errors]}
+        return {"errors": [_refusal_line(e["loc"], e["msg"]) for e in failure.errors]}
     except (ValueError, TypeError, KeyError) as failure:
         # parse_spec raises SpecValidationError for a schema failure; anything else is a
         # document it could not even attempt, and it still belongs in `errors` rather than
@@ -1191,7 +1191,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         spec = parse_spec(document)
     except SpecValidationError as failure:
         raise _InvalidArguments(
-            [f"spec.{e['loc']}: {e['msg']}" for e in failure.errors]
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {failure}"]) from failure
