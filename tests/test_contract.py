@@ -3938,11 +3938,18 @@ def test_the_rendering_ratchet_fires_in_each_of_its_four_directions():
     """
     from conftest import _rendering_debt_failure, _unrendered_manifest
 
-    listed = _unrendered_manifest()
-    assert len(listed) >= 50, f"only {len(listed)} renderings are on the list"
-    declared = listed | {f"anvilate.pack.Rendered{n}" for n in range(120 - len(listed))}
+    # Synthetic sets, not the real list's size. The debt list is meant to reach zero, so a
+    # floor on *it* would fight the ratchet it is testing — the first cut of this test put
+    # one there and failed the moment fifty-seven renderings were paid off in one commit.
+    # The floor that belongs here is on what the sweep *declares*, and the rule carries it.
+    listed = {f"anvilate.pack.Unrendered{n}" for n in range(20)}
+    declared = listed | {f"anvilate.pack.Rendered{n}" for n in range(100)}
     rendered = declared - listed
-    assert len(declared) >= 100
+
+    # The real list is still held to being well formed, which is the part of it a test can
+    # assert without pinning how much debt is left.
+    for entry in _unrendered_manifest():
+        assert entry.startswith("anvilate.") and entry.count(".") >= 2, entry
 
     # The state the repository is in: everything declared is either rendered or listed.
     assert _rendering_debt_failure(declared, rendered, listed) is None
@@ -3965,3 +3972,61 @@ def test_the_rendering_ratchet_fires_in_each_of_its_four_directions():
     # 4. And the floor, because a sweep that wrapped nothing passes every check above.
     complaint = _rendering_debt_failure(set(), set(), set())
     assert complaint is not None and "all but empty set" in complaint
+
+
+def test_every_enum_that_writes_its_own_rendering_says_something_and_says_it_once():
+    """Fifty-seven renderings paid off the debt list at once, by property rather than by eye.
+
+    An enum's `__str__` needs no fixture — every member is already constructed — so the only
+    thing standing between these and a reader was that nobody had called them. Both
+    properties asserted here are the family the audit found: a rendering that says nothing,
+    and **two members that render identically**, which is `AngularTolerance` dropping the
+    shorter leg and `FieldOutcome` dropping `detail` in enum form. `TimberProperty` is the
+    one that would hurt: `F_c` and `F_c_perp` are different NDS allowables and a collision
+    there prints a parallel-to-grain value under a perpendicular-to-grain name.
+
+    Discovered the same way `tests/conftest.py` discovers renderings for the ratchet — the
+    class writes its own `__str__` rather than inheriting `StrEnum`'s — so rendering them
+    here is what strikes them off `docs/api/unrendered-strings.txt`.
+    """
+    import enum
+    import importlib
+    import pkgutil
+    import sys as _sys
+
+    import anvilate
+
+    for module in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            importlib.import_module(module.name)
+        except Exception:  # noqa: BLE001 - an optional dependency is not a gate failure
+            continue
+
+    found: dict[str, type] = {}
+    for name, module in list(_sys.modules.items()):
+        if not name.startswith("anvilate"):
+            continue
+        for obj in list(vars(module).values()):
+            if not isinstance(obj, type) or "__str__" not in vars(obj):
+                continue
+            if not issubclass(obj, enum.Enum):
+                continue
+            if not getattr(obj, "__module__", "").startswith("anvilate"):
+                continue
+            found[f"{obj.__module__}.{obj.__qualname__}"] = obj
+
+    assert len(found) >= 50, f"only {len(found)} enums write their own rendering"
+    members = 0
+    for label, cls in sorted(found.items()):
+        rendered: dict[str, str] = {}
+        for member in cls:
+            text = str(member)
+            members += 1
+            assert text.strip(), f"{label}.{member.name} renders as blank"
+            clash = rendered.get(text)
+            assert clash is None, (
+                f"{label}.{member.name} and {label}.{clash} both render as {text!r}; two "
+                "members a reader cannot tell apart is the defect this whole family is"
+            )
+            rendered[text] = member.name
+    assert members >= 150, f"only {members} enum members were rendered"

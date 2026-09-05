@@ -384,7 +384,12 @@ called (strike it off), and a listed name that no longer defines a `__str__` at 
 can only shrink.
 
 **Paying one off is one line in a test**: build the object and read what it prints against
-what it carries. Do not assert a fixed string — walk the fields and require each value to
+what it carries. Fifty-seven of them came off in one go, because an enum's rendering needs no
+fixture — every member is already constructed. They are held to two properties rather than to
+fixed strings: a member that renders as blank, and **two members of one enum that render
+identically**, which is the audit's own family in enum form. `TimberProperty` is the one that
+would hurt — `F_c` and `F_c_perp` are different NDS allowables, and a collision there prints a
+parallel-to-grain value under a perpendicular-to-grain name. Do not assert a fixed string — walk the fields and require each value to
 appear, which is what caught the two the BTH-1 rendering was dropping.
 
 What the rule does *not* catch is a **branch** of a rendering nobody takes:
