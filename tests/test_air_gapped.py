@@ -108,7 +108,7 @@ def test_the_golden_path_completes_with_the_socket_layer_closed(
     from anvilate.scorecard import CheckStatus
 
     with _no_network(monkeypatch):
-        bundle, rebuilt, bumped, verified, tampered, _unkeyed = attest_the_lug()
+        bundle, rebuilt, bumped, verified, tampered, _unkeyed, _unread = attest_the_lug()
 
     # Asserted rather than merely run: an offline pipeline that produced nothing, or that
     # silently degraded to an unverified seal, would satisfy "made no network call".

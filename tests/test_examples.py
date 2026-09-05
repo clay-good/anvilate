@@ -8478,7 +8478,7 @@ def test_reviewer_dossier_example_puts_the_unevaluated_check_first():
 
 def test_attested_bundle_example_reproduces_its_digest_and_catches_the_tamper():
     namespace = runpy.run_path(str(_EXAMPLES / "attested_evidence_bundle.py"))
-    bundle, rebuilt, bumped, verified, tampered, unkeyed = namespace["attest_the_lug"]()
+    bundle, rebuilt, bumped, verified, tampered, unkeyed, unread = namespace["attest_the_lug"]()
     # Same inputs, same address; a materials-database bump moves it.
     assert bundle.digest == rebuilt.digest
     assert bundle.digest != bumped.digest
@@ -8489,6 +8489,23 @@ def test_attested_bundle_example_reproduces_its_digest_and_catches_the_tamper():
     assert "'lug.dxf' digest mismatch" in tampered.problems[0]
     # A signature nobody checked is not a checked signature.
     assert unkeyed.status is CheckStatus.NOT_EVALUATED
+    # A bundle that says more than this verifier knows how to read. Signed, verified, every
+    # subject matching — and still not a pass, because part of what was attested was not
+    # read. The three assertions are separate on purpose: a report that recorded the key and
+    # still said PASS would satisfy the first and none of the others.
+    assert unread.unread_predicate_keys == ("waivers",)
+    from anvilate.attestation import SignatureState
+
+    assert unread.signature_state is SignatureState.SYMMETRIC_VERIFIED
+    assert not unread.problems and not unread.unchecked_subjects
+    assert unread.status is CheckStatus.NOT_EVALUATED
+    assert "predicate states waivers, not read here" in str(unread)
+
+    # And an envelope that declares no payload type at all is refused, not defaulted: the
+    # pre-authentication encoding binds the type, so a reader supplying it verifies against
+    # a string the envelope never said.
+    field, kind = namespace["read_an_envelope_that_declares_no_type"]()
+    assert (field, kind) == ("payloadType", "missing")
 
 
 def test_plated_shaft_callouts_example_turns_a_pass_into_a_fail():

@@ -2,7 +2,7 @@
 
 A lifting lug screens to three checks and produces two artifacts — the scorecard as
 JSON and the drawing as DXF. This wraps that result in an attestation and then does the
-four things a second engineer would actually do with one.
+six things a second engineer would actually do with one.
 
 1. **Rebuild it.** The same inputs through the same toolchain produce the same bundle
    digest, character for character. Nothing in the payload is a wall clock: the
@@ -17,6 +17,17 @@ four things a second engineer would actually do with one.
 4. **Verify without the key.** The envelope carries a signature and nothing checked it,
    so the report comes back NOT_EVALUATED. This is the no-silent-green rule applied to
    the seal itself: an unverified signature is not a verified one.
+5. **Read a bundle that says more than this verifier knows how to read.** One key added
+   to the predicate — a ``waivers`` entry — and correctly signed. Nothing is wrong with
+   it, and it is not a pass either: the claim sits inside the signature, so it is part of
+   what was attested, and a report that stayed silent would present a partly-read
+   document as a fully-read one. NOT_EVALUATED, naming the key. A newer Anvilate writing
+   a field this one has not been taught produces exactly this shape, which is why it is
+   reported rather than refused.
+6. **Read an envelope that declares no payload type.** DSSE requires ``payloadType``, and
+   the pre-authentication encoding a signature is computed over binds it — so a reader
+   that supplies the type itself is verifying against a string the envelope never said.
+   It is refused rather than defaulted.
 
 Two honesty notes the example prints out loud. The bundled signer is HMAC — symmetric,
 so whoever can verify it could also have produced it. It detects tampering; it does not
@@ -31,6 +42,11 @@ Run it directly (``python examples/attested_evidence_bundle.py``);
 
 from __future__ import annotations
 
+import base64
+import json
+
+from pydantic import ValidationError
+
 from anvilate.attestation import (
     AIDisclosure,
     AIEvent,
@@ -41,7 +57,9 @@ from anvilate.attestation import (
     EnvironmentBOM,
     EvidenceBundle,
     LocalHmacSigner,
+    Signature,
     Subject,
+    dsse_pae,
     sha256_hex,
     verify_attestation,
 )
@@ -129,6 +147,32 @@ def _bundle(materials_version: str = "2026.03") -> EvidenceBundle:
     )
 
 
+def _envelope_with_an_extra_claim(envelope: Attestation, signer: LocalHmacSigner) -> Attestation:
+    """The same envelope with one key added to the predicate, re-signed over the new payload.
+
+    Not a tamper, and the distinction is the whole point: the signature verifies, every
+    subject digest matches, and nothing is wrong with the document. It states something in
+    the place a verifier looks, under a key this verifier has never been taught — which is
+    what a bundle written by a newer Anvilate looks like from here.
+    """
+    statement = json.loads(base64.b64decode(envelope.payload))
+    statement["predicate"]["waivers"] = ["clause 3-3.2 accepted by A. Engineer, P.E."]
+    payload = json.dumps(statement, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return Attestation(
+        payload_type=envelope.payload_type,
+        payload=base64.b64encode(payload).decode("ascii"),
+        signatures=(
+            Signature(
+                keyid=signer.keyid,
+                algorithm=signer.algorithm,
+                sig=base64.b64encode(signer.sign(dsse_pae(envelope.payload_type, payload))).decode(
+                    "ascii"
+                ),
+            ),
+        ),
+    )
+
+
 def attest_the_lug():
     """The bundle, its rebuild, a database bump, a tampered artifact, and a missing key."""
     signer = LocalHmacSigner(b"a local signing secret held by the engineer")
@@ -144,11 +188,28 @@ def attest_the_lug():
         envelope, artifacts=artifacts | {"lug.dxf": DRAWING_DXF + b"\n"}, signer=signer
     )
     unkeyed = verify_attestation(envelope, artifacts=artifacts)
-    return bundle, rebuilt, bumped, verified, tampered, unkeyed
+    unread = verify_attestation(
+        _envelope_with_an_extra_claim(envelope, signer), artifacts=artifacts, signer=signer
+    )
+    return bundle, rebuilt, bumped, verified, tampered, unkeyed, unread
+
+
+def read_an_envelope_that_declares_no_type():
+    """What a DSSE envelope missing its `payloadType` gets, rather than a default.
+
+    The pre-authentication encoding a signature is computed over binds the payload type, so
+    a reader that supplies the type itself is verifying against a string the envelope never
+    said. DSSE requires the field; this returns the refusal a reader gets instead.
+    """
+    try:
+        Attestation.model_validate({"payload": "e30=", "signatures": []})
+    except ValidationError as refusal:
+        return refusal.errors()[0]["loc"][0], refusal.errors()[0]["type"]
+    raise AssertionError("an envelope with no declared payload type was accepted")
 
 
 def main() -> None:
-    bundle, rebuilt, bumped, verified, tampered, unkeyed = attest_the_lug()
+    bundle, rebuilt, bumped, verified, tampered, unkeyed, unread = attest_the_lug()
     print(f"bundle digest        {bundle.digest}")
     print(f"rebuilt, same inputs {rebuilt.digest}  (identical: {bundle.digest == rebuilt.digest})")
     print(f"materials 2026.09    {bumped.digest}  (moved: {bundle.digest != bumped.digest})")
@@ -159,6 +220,10 @@ def main() -> None:
     print(f"  attested?          {verified.attested}  (HMAC is symmetric — tamper-evident only)")
     print(f"  tampered drawing   {tampered}")
     print(f"  without the key    {unkeyed}")
+    print(f"  an unread claim    {unread}")
+    print(f"  its verdict        {unread.status.value}  (signed, intact, and not fully read)")
+    field, kind = read_an_envelope_that_declares_no_type()
+    print(f"\n  no declared type   refused: {field} is {kind}")
 
 
 if __name__ == "__main__":
