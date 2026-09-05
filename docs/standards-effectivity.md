@@ -174,3 +174,22 @@ saying `PASS` over it would be doing the same thing one level up.
   between editions, here is the result under each" is worth building; populating it needs
   each difference verified against the publishers' own comparison documents, and an
   unverified entry would be worse than an empty registry.
+
+## Reading a citation is linear in what it reads
+
+The designation half of the citation pattern was an unbounded lazy repetition, so the scan
+was **quadratic in the length of the subject** — the time quadrupled every time the length
+doubled. A reference a few thousand characters long took a tenth of a second, one four times
+that took seconds, and a long paste did not finish at all.
+
+The subject is not this library's own text. `design_basis_scorecard` is handed
+`entry.reference` for every entry of a scorecard, and a scorecard comes back out of the
+subject store and out of an attestation envelope — where the field is a free string with no
+length on it. So `anvilate export` over one such entry hangs, and nothing in the run says why.
+
+The repetition is bounded now, which makes the scan linear, and the bound is a fact about the
+data rather than a guess: the longest designation this library emits is "Aluminum Design
+Manual" at 22 characters against a bound of 62. A session-wide rule over every citation the
+library actually puts on an entry reports any designation that reaches **half** the bound —
+before it is exceeded, because a rule that fires at the bound fires after the first real
+standard has been mis-parsed.

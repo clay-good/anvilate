@@ -2278,3 +2278,71 @@ def test_extending_a_shared_database_leaves_the_shared_one_alone():
     assert extended.has_material("ACME-BRACKET-STOCK")
     assert extended is not default_materials_db()
     assert not default_materials_db().has_material("ACME-BRACKET-STOCK")
+
+
+def test_reading_a_citation_is_linear_in_the_length_of_what_it_reads():
+    """The designation was an unbounded lazy repetition, so the scan was quadratic.
+
+    `design_basis_scorecard` is handed `entry.reference` for every entry of a scorecard, and
+    a scorecard comes back from the subject store and out of an attestation envelope — where
+    the field is a free string with no length on it. So the subject is not this library's own
+    text, and the time quadrupled every time the length doubled: a reference of a few thousand
+    characters took a tenth of a second, and a long paste did not finish at all — `anvilate
+    export` over one such entry hangs.
+
+    Timed as a *ratio* rather than a wall clock, and from the **minimum** of several runs: a
+    quadratic scan quadruples when the input doubles and a linear one does not, which stays
+    true on a slow machine and a fast one, while any single measurement on a loaded machine
+    does not. The structural half is asserted too, because a timing test that goes green
+    under contention for the wrong reason is worse than no timing test.
+    """
+    import re
+    import time
+
+    from anvilate.standards.effectivity import _CITATION, _LONGEST_DESIGNATION, parse_citation
+
+    # The repetition is bounded in the pattern itself. Read out of the compiled pattern
+    # rather than trusted: this is the one line that makes the scan linear.
+    assert re.search(r"\{0,\d+\}\?", _CITATION.pattern), _CITATION.pattern
+    assert f"{{0,{_LONGEST_DESIGNATION}}}?" in _CITATION.pattern
+
+    def _fastest(length: int) -> float:
+        subject = "A" * length
+        best = float("inf")
+        for _ in range(7):
+            start = time.perf_counter()
+            parse_citation(subject)
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    short, long = _fastest(4_000), _fastest(16_000)
+    # Four times the input. Linear predicts ~4x, quadratic ~16x. The floor keeps a run whose
+    # short measurement lands near the clock's resolution from deciding anything.
+    assert long < max(short * 8, 0.05), f"{short:.4f}s at 4k and {long:.4f}s at 16k is not linear"
+
+
+def test_the_designation_ratchet_fires_on_a_designation_that_is_getting_long():
+    """The session rule reports before the bound is reached, so prove the detector.
+
+    A rule that fires only once the bound is already exceeded fires after the first real
+    standard has been silently mis-parsed. This one reports at *half* the bound, and half a
+    bound is exactly the sort of arithmetic that is written once and never exercised: today's
+    longest designation is 22 characters against 62, so the ratchet is silent on real data
+    and would stay silent if it were checking nothing at all.
+    """
+    from anvilate.standards.effectivity import _LONGEST_DESIGNATION, parse_citation
+    from conftest import _designations_at_or_past_the_bound
+
+    ordinary = "ASME BTH-1-2020 §3-3.2"
+    assert parse_citation(ordinary) is not None
+    assert _designations_at_or_past_the_bound({ordinary}) == set()
+
+    # A designation exactly at half the bound, and one just under it.
+    at_half = "A" * (_LONGEST_DESIGNATION // 2 - 1) + "1-2020"
+    just_under = "A" * (_LONGEST_DESIGNATION // 2 - 3) + "1-2020"
+    assert parse_citation(at_half) is not None and parse_citation(just_under) is not None
+    assert _designations_at_or_past_the_bound({at_half}), at_half
+    assert _designations_at_or_past_the_bound({just_under}) == set(), just_under
+
+    # And a citation it cannot parse at all is not reported as an over-long designation.
+    assert _designations_at_or_past_the_bound({"a" * 200}) == set()

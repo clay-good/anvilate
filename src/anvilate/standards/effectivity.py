@@ -157,8 +157,21 @@ WRITTEN_AGAINST: dict[str, str] = {
 # designation ending in a digit ("AISC 360", "ACI 318", "AISI S100") takes an edition
 # suffix; one ending in a letter is a clause prefix and the number after it is the clause.
 # This is the same trap the Eurocode pattern below already guards, in its other spelling.
+# The designation's length is bounded, and that is not cosmetic. Unbounded, the lazy
+# repetition is retried from every start position in the subject, so the scan is quadratic:
+# a reference of 3,200 characters took 127 ms and one of 100,000 did not finish. And these
+# subjects are not this library's own strings — `design_basis_scorecard` is handed
+# `entry.reference` for every entry of a scorecard, and a scorecard comes back from the
+# subject store and out of an attestation envelope, where the field is a free string with no
+# length on it. A bounded repetition makes the scan linear in the subject.
+#
+# 62 rather than a round number: measured across every citation string in this repository
+# that parses, the longest designation is "Aluminum Design Manual" at 22 characters, and no
+# standard designation is remotely near this bound. `_LONGEST_DESIGNATION` is asserted
+# against that corpus so the bound is a fact about the data rather than a guess.
+_LONGEST_DESIGNATION = 62
 _CITATION = re.compile(
-    r"(?P<standard>[A-Z][A-Za-z0-9 .&/-]*?[A-Za-z0-9])"
+    rf"(?P<standard>[A-Z][A-Za-z0-9 .&/-]{{0,{_LONGEST_DESIGNATION}}}?[A-Za-z0-9])"
     r"(?:"
     r"-(?P<hyphenated>(?:19|20)\d{2})\b"
     r"|(?<=\d)-(?P<short>\d{2})(?![\d-])"

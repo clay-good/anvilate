@@ -159,6 +159,23 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         return
 
     citations = _observed_citations()
+    overlong = sorted(_designations_at_or_past_the_bound(citations))
+    if overlong:
+        # A bound picked out of the air is a bound that refuses a real standard one day.
+        # `_CITATION`'s designation is a *bounded* repetition because an unbounded lazy one
+        # made the scan quadratic in a subject the library does not control — and the bound
+        # is only safe while it is far above anything real. Positive evidence, so a filtered
+        # run reports on the subset it saw, like the other rules that read what the library
+        # built rather than what it failed to build.
+        print(
+            "\nCITATION DESIGNATIONS: these are at or past half the length "
+            "`anvilate.standards.effectivity._LONGEST_DESIGNATION` allows, so the bound that "
+            "keeps citation parsing linear is no longer comfortably clear of the data:\n  "
+            + "\n  ".join(overlong)
+        )
+        session.exitstatus = 1
+        return
+
     unversioned = sorted(_editionless_citations(citations) - _editionless_manifest())
     if unversioned:
         print(
@@ -873,6 +890,24 @@ def _editionless_manifest() -> set[str]:
         for line in _EDITIONLESS.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
+
+
+def _designations_at_or_past_the_bound(citations: set[str]) -> set[str]:
+    """Citations whose designation is within a factor of two of the parser's length bound.
+
+    Reported at *half* the bound rather than at it, because a rule that fires only once the
+    bound is already exceeded fires after the first real standard has been silently
+    mis-parsed. The longest designation the library emits today is "Aluminum Design Manual"
+    at 22 characters against a bound of 62.
+    """
+    from anvilate.standards.effectivity import _CITATION, _LONGEST_DESIGNATION
+
+    found = set()
+    for text in citations:
+        match = _CITATION.search(text)
+        if match is not None and len(match.group("standard")) * 2 >= _LONGEST_DESIGNATION:
+            found.add(f"{text!r} — designation {len(match.group('standard'))} characters")
+    return found
 
 
 def _editionless_citations(citations: set[str]) -> set[str]:
