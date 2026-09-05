@@ -65,6 +65,19 @@ requires the field, so nothing valid is refused by requiring it; what is refused
 supplying the answer to its own check. `anvilate verify` reports it as a bad request naming
 `payloadType`.
 
+**A key inside the predicate that this verifier does not read is reported too.** Same rule,
+one level in: a payload type it cannot read is a problem because a document it cannot read is
+not one it can vouch for, and a *key* it does not recognise is the same claim in a smaller
+place. It was ignored — `anvilate verify` printed a clean `[PASS]` over a predicate carrying
+`"waivers": ["signed off by nobody"]`, a claim inside the signature and so part of what was
+attested, and never mentioned it. The report carries `unread_predicate_keys` now, the verdict
+moves to `NOT_EVALUATED`, and the line says `predicate states waivers, not read here`.
+
+Reported rather than refused, and that is the same distinction `unverified_signatures` draws:
+a bundle written by a newer Anvilate is not a broken bundle, and a verifier that failed on
+every key it had not been taught would make each release refuse the one before it. What it
+must not do is stay silent.
+
 ## The predicate is checked against its schema, not only its type label
 
 `verify_attestation` makes three checks, and the third was missing for a release. A

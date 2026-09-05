@@ -1125,6 +1125,64 @@ def test_the_verifier_requires_every_key_the_writer_emits():
     )
 
 
+def test_a_predicate_key_this_verifier_does_not_read_is_reported_not_ignored():
+    """The rule the payload type already follows, one level in.
+
+    A payload type this verifier does not recognise is a reported problem, because a document
+    it cannot read is not a document it can vouch for. A *key* it does not recognise is the
+    same claim in a smaller place, and it was ignored: `anvilate verify` printed a clean PASS
+    over a predicate carrying `"waivers": ["signed off by nobody"]` and never mentioned it.
+    The key is inside the signature, so it is part of what was attested.
+
+    NOT_EVALUATED rather than FAIL, and that is deliberate. A bundle written by a newer
+    Anvilate is not a broken bundle, and a verifier that failed on every key it had not been
+    taught would make each release refuse the one before it. What it must not do is stay
+    silent — the same distinction `unverified_signatures` draws one level up.
+    """
+    from anvilate.attestation import _PREDICATE_OPTIONAL_KEYS, _unread_predicate_keys
+
+    honest = _honest_predicate()
+    assert _unread_predicate_keys(honest) == ()
+    # Every key the writer emits, required and optional alike, is one the verifier reads.
+    both = {**honest, **dict.fromkeys(_PREDICATE_OPTIONAL_KEYS)}
+    assert _unread_predicate_keys(both) == ()
+    assert _unread_predicate_keys({**honest, "waivers": ["x"], "aaa": 1}) == ("aaa", "waivers")
+    # A predicate that is not an object is somebody else's report to make.
+    assert _unread_predicate_keys([1, 2, 3]) == ()
+
+
+def test_a_signed_bundle_carrying_an_unread_claim_does_not_verify_clean():
+    """The whole path, because the field is only worth having if the verdict moves.
+
+    A report that recorded the key and still said PASS would be the silent green with an
+    audit trail: a reader looking at the verdict, which is what a merge gate reads, would see
+    nothing at all.
+    """
+    import base64
+    import json
+
+    from anvilate.attestation import Attestation, CheckStatus, verify_attestation
+
+    bundle = _bundle()
+    clean = Attestation.unsigned(bundle)
+    baseline = verify_attestation(clean, artifacts=_artifacts())
+    assert baseline.unread_predicate_keys == ()
+    assert baseline.status is CheckStatus.PASS, baseline
+
+    statement = json.loads(base64.b64decode(clean.payload))
+    statement["predicate"]["waivers"] = ["signed off by nobody"]
+    tampered = Attestation(
+        payload_type=clean.payload_type,
+        payload=base64.b64encode(
+            json.dumps(statement, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii"),
+    )
+    report = verify_attestation(tampered, artifacts=_artifacts())
+    assert report.unread_predicate_keys == ("waivers",), report
+    assert report.status is CheckStatus.NOT_EVALUATED, report
+    assert "waivers" in str(report), str(report)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "expected"),
     [

@@ -120,6 +120,9 @@ _PREDICATE_REQUIRED_KEYS = (
     "aiDisclosure",
 )
 
+#: Keys `to_json_dict` writes only sometimes. Read, but not required.
+_PREDICATE_OPTIONAL_KEYS = ("sections",)
+
 PREDICATE_TYPE = "https://anvilate.dev/attestation/screening/v1"
 
 # The DSSE payloadType for an in-toto statement. Part of the signed pre-authentication
@@ -862,8 +865,9 @@ class VerificationReport(BaseModel):
     """What a verification found, in the library's own tri-state.
 
     :attr:`status` is ``FAIL`` when something did not match, ``NOT_EVALUATED`` when a
-    signature went unchecked or an artifact was not supplied to compare, and ``PASS``
-    only when everything checkable was checked and matched. :attr:`attested` is
+    signature went unchecked, an artifact was not supplied to compare, or the predicate
+    states something this verifier does not read, and ``PASS`` only when everything
+    checkable was checked and matched. :attr:`attested` is
     stricter still: it is True only for a signature that establishes authorship, so an
     unsigned bundle and an HMAC-verified one are both honestly short of attested.
     """
@@ -880,6 +884,13 @@ class VerificationReport(BaseModel):
     # is not a check either, and a report that counted only the one it could verify would
     # present a partly-checked envelope as a fully-checked one.
     unverified_signatures: tuple[str, ...] = ()
+    # Keys the signed predicate carries that this verifier does not read. Inside the
+    # signature, so they are part of what was attested — and a report that did not name them
+    # would present a partly-read document as a fully-read one, which is the same failure
+    # `unverified_signatures` exists to prevent one level up. Not a `problem`, because a
+    # bundle from a newer Anvilate is not a broken bundle; NOT_EVALUATED is the honest verdict
+    # for "some of what was signed is not something I can check".
+    unread_predicate_keys: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
 
     # A verdict a serialised document does not carry is one its reader has to
@@ -897,7 +908,7 @@ class VerificationReport(BaseModel):
         unchecked_signature = (
             self.signature_state is SignatureState.NOT_CHECKED or self.unverified_signatures
         )
-        if unchecked_signature or self.unchecked_subjects:
+        if unchecked_signature or self.unchecked_subjects or self.unread_predicate_keys:
             return CheckStatus.NOT_EVALUATED
         return CheckStatus.PASS
 
@@ -913,9 +924,31 @@ class VerificationReport(BaseModel):
             detail += f"; {len(self.unchecked_subjects)} subject(s) not supplied"
         if self.unverified_signatures:
             detail += f"; {len(self.unverified_signatures)} signature(s) under other keys"
+        if self.unread_predicate_keys:
+            detail += f"; predicate states {', '.join(self.unread_predicate_keys)}, not read here"
         if self.problems:
             detail += "; " + "; ".join(self.problems)
         return f"{head}: {detail}"
+
+
+def _unread_predicate_keys(predicate: object) -> tuple[str, ...]:
+    """Keys the predicate states that this verifier reads none of.
+
+    The rule the payload type already follows, one level in. A type this verifier does not
+    recognise is a reported problem, because a document it cannot read is not a document it
+    can vouch for — and a *key* it does not recognise is the same claim in a smaller place.
+    It is inside the signature, so it is part of what was attested, and until now
+    `anvilate verify` printed a clean PASS over a predicate carrying
+    `"waivers": ["signed off by nobody"]` without ever mentioning it.
+
+    Reported rather than refused. A bundle from a newer Anvilate is not a broken bundle, and
+    a verifier that failed on any key it had not been taught would make every release break
+    the one before it. What it must not do is stay silent.
+    """
+    if not isinstance(predicate, dict):
+        return ()  # not a predicate at all; `_predicate_schema_problems` says so
+    known = set(_PREDICATE_REQUIRED_KEYS) | set(_PREDICATE_OPTIONAL_KEYS)
+    return tuple(sorted(key for key in predicate if key not in known))
 
 
 def _predicate_schema_problems(predicate: object) -> list[str]:
@@ -1191,5 +1224,6 @@ def verify_attestation(
         checked_subjects=tuple(checked),
         unchecked_subjects=tuple(unchecked),
         unverified_signatures=tuple(unverified),
+        unread_predicate_keys=_unread_predicate_keys(statement.get("predicate")),
         problems=tuple(problems),
     )
