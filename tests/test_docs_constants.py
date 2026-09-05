@@ -1772,3 +1772,33 @@ def test_the_headless_cli_page_quotes_the_two_string_bounds_and_the_data_it_clea
     citations = _evidence_references() | conftest._observed_citations()
     assert "half of that" in page, "the citation ratchet sentence on headless-cli.md has moved"
     assert len(max(citations, key=len)) * 2 <= _LONGEST_CITED
+
+
+def test_the_effectivity_page_quotes_the_two_bounds_that_make_the_scan_bounded():
+    """The page argues that reading a citation is bounded work, from three numbers.
+
+    Two are the bounds themselves — the designation's 62 and the citation's 1,024 — and they
+    live in two different modules. The third is the headroom that makes the first defensible:
+    "Aluminum Design Manual" at 22 characters. The page became a page arguing from numbers no
+    test read the moment the citation bound was written into it, which is what the docs-page
+    ratchet in test_contract.py is for.
+    """
+    from anvilate._models import _LONGEST_CITED
+    from anvilate.standards.effectivity import _LONGEST_DESIGNATION, parse_citation
+
+    # Whitespace-normalised: the page is hard-wrapped, so a phrase it states can straddle a
+    # line break and a test that missed it for that reason would be reporting on nothing.
+    page = re.sub(r"\s+", " ", _page("standards-effectivity.md"))
+
+    claim = re.search(r"at (\d+) characters against a bound of (\d+)", page)
+    assert claim is not None, "the designation bound sentence on standards-effectivity.md has moved"
+    longest = "Aluminum Design Manual"
+    assert longest in page
+    parsed = parse_citation(f"{longest} 2020")
+    assert parsed is not None and parsed.standard == longest
+    assert int(claim.group(1)) == len(longest)
+    assert int(claim.group(2)) == _LONGEST_DESIGNATION
+
+    claim = re.search(r"a citation is at most ([\d,]+) characters", page)
+    assert claim is not None, "the citation bound sentence on standards-effectivity.md has moved"
+    assert int(claim.group(1).replace(",", "")) == _LONGEST_CITED

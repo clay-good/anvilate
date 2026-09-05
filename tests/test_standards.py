@@ -2280,45 +2280,145 @@ def test_extending_a_shared_database_leaves_the_shared_one_alone():
     assert not default_materials_db().has_material("ACME-BRACKET-STOCK")
 
 
-def test_reading_a_citation_is_linear_in_the_length_of_what_it_reads():
+def _unbounded_repeats(pattern: str) -> list[str]:
+    """Every repetition in ``pattern`` with no upper bound, from the parsed pattern itself.
+
+    `re._parser` is what `re.compile` runs, so this reads the same tree the engine will.
+    Walking it rather than the pattern *text* is the whole point: a substring check finds a
+    bounded repetition somewhere and concludes the pattern is bounded everywhere.
+    """
+    import re._parser as parser
+    from re._constants import MAXREPEAT
+
+    found: list[str] = []
+
+    def walk(sequence) -> None:
+        for op, av in sequence:
+            name = str(op)
+            if name in ("MAX_REPEAT", "MIN_REPEAT"):
+                low, high, sub = av
+                if high == MAXREPEAT:
+                    found.append(f"{name} {{{low},}}")
+                walk(sub)
+            elif name == "SUBPATTERN":
+                walk(av[3])
+            elif name == "BRANCH":
+                for branch in av[1]:
+                    walk(branch)
+            elif name in ("ASSERT", "ASSERT_NOT"):
+                walk(av[1])
+            elif name == "ATOMIC_GROUP":
+                walk(av)
+
+    walk(parser.parse(pattern))
+    return found
+
+
+def test_nothing_in_the_citation_pattern_repeats_without_a_bound():
     """The designation was an unbounded lazy repetition, so the scan was quadratic.
 
     `design_basis_scorecard` is handed `entry.reference` for every entry of a scorecard, and
-    a scorecard comes back from the subject store and out of an attestation envelope — where
-    the field is a free string with no length on it. So the subject is not this library's own
-    text, and the time quadrupled every time the length doubled: a reference of a few thousand
-    characters took a tenth of a second, and a long paste did not finish at all — `anvilate
-    export` over one such entry hangs.
+    a scorecard comes back from the subject store and out of an attestation envelope. The
+    time quadrupled every time the length doubled: a reference of a few thousand characters
+    took a tenth of a second, and a long paste did not finish at all.
 
-    Timed as a *ratio* rather than a wall clock, and from the **minimum** of several runs: a
-    quadratic scan quadruples when the input doubles and a linear one does not, which stays
-    true on a slow machine and a fast one, while any single measurement on a loaded machine
-    does not. The structural half is asserted too, because a timing test that goes green
-    under contention for the wrong reason is worse than no timing test.
+    **This replaces a wall-clock ratio, and the ratio is why.** It timed 4k against 16k and
+    required under 8x, which is a fact about the machine as much as about the pattern: the
+    16k run does four times the work, so it is four times as exposed to being descheduled,
+    and `min` over several runs does not help when every run is contended. It failed three
+    times in a row on a loaded machine and passed on a quiet one, at commits either side of
+    the fix. What is asserted instead is the property, and it is deterministic.
+
+    The structural half that was here checked a *substring* of the pattern text — that
+    `{0,62}?` appears in it somewhere. That is satisfied by a pattern with a bounded
+    repetition in one place and an unbounded one in another, which is exactly the defect,
+    and `test_the_pattern_gate_sees_an_unbounded_repeat_it_is_not_looking_at` builds one.
+
+    `_EUROCODE` is deliberately not held to this. Its `(?:-\\d+)*` is unbounded and cannot
+    backtrack, because every iteration has to begin with a literal `-`: "EN 1993" followed by
+    four thousand "-1"s and then a character that cannot continue takes 0.3 ms. A rule that
+    refused it would be a rule about the shape of a quantifier rather than about the work.
+    """
+    from anvilate.standards.effectivity import _CITATION
+
+    assert _unbounded_repeats(_CITATION.pattern) == [], (
+        "the citation pattern repeats without an upper bound, which is what made the scan "
+        "quadratic in a subject this library does not control"
+    )
+
+
+def test_the_designations_bound_is_the_one_the_engine_will_use():
+    """The bound the engine will use is the constant, and not a literal beside it.
+
+    What this catches is the join coming apart: the pattern is an f-string, and a hand-edit
+    that writes `{0,900}?` into it leaves `_LONGEST_DESIGNATION` documented, ratcheted and
+    read by nothing. Checked against the *parsed* pattern, since the pattern text is the
+    string the constant was interpolated into.
+
+    What it cannot catch is the constant itself being widened — it is keyed on the constant,
+    so it agrees with whatever the constant says. That is
+    `test_the_designation_ratchet_fires_on_a_designation_that_is_getting_long`'s job, and it
+    reads the citations the library actually builds.
+    """
+    import re._parser as parser
+
+    from anvilate.standards.effectivity import _CITATION, _LONGEST_DESIGNATION
+
+    designation = None
+    for op, av in parser.parse(_CITATION.pattern):
+        if str(op) == "SUBPATTERN":
+            for inner_op, inner_av in av[3]:
+                if str(inner_op) == "MIN_REPEAT":
+                    designation = inner_av[:2]
+                    break
+            break
+    assert designation == (0, _LONGEST_DESIGNATION), designation
+
+
+def test_the_pattern_gate_sees_an_unbounded_repeat_it_is_not_looking_at():
+    """The adversary for the two above: the gate this replaced could not fail.
+
+    Leave the designation's `{0,62}?` exactly where it is — so the old substring check still
+    finds what it looks for — and make a *different* part of the pattern unbounded. The old
+    assertion passes on it; the walk does not.
     """
     import re
-    import time
 
-    from anvilate.standards.effectivity import _CITATION, _LONGEST_DESIGNATION, parse_citation
+    from anvilate.standards.effectivity import _CITATION, _LONGEST_DESIGNATION
 
-    # The repetition is bounded in the pattern itself. Read out of the compiled pattern
-    # rather than trusted: this is the one line that makes the scan linear.
-    assert re.search(r"\{0,\d+\}\?", _CITATION.pattern), _CITATION.pattern
-    assert f"{{0,{_LONGEST_DESIGNATION}}}?" in _CITATION.pattern
+    mutated = _CITATION.pattern.replace(r"[\s:](?P<long>", r"[\s:]*(?P<long>")
+    assert mutated != _CITATION.pattern
+    # What the old gate asserted, on the mutated pattern: both halves still hold.
+    assert re.search(r"\{0,\d+\}\?", mutated)
+    assert f"{{0,{_LONGEST_DESIGNATION}}}?" in mutated
+    # And the pattern is unbounded all the same.
+    assert _unbounded_repeats(mutated) == ["MAX_REPEAT {0,}"]
 
-    def _fastest(length: int) -> float:
-        subject = "A" * length
-        best = float("inf")
-        for _ in range(7):
-            start = time.perf_counter()
-            parse_citation(subject)
-            best = min(best, time.perf_counter() - start)
-        return best
 
-    short, long = _fastest(4_000), _fastest(16_000)
-    # Four times the input. Linear predicts ~4x, quadratic ~16x. The floor keeps a run whose
-    # short measurement lands near the clock's resolution from deciding anything.
-    assert long < max(short * 8, 0.05), f"{short:.4f}s at 4k and {long:.4f}s at 16k is not linear"
+def test_the_subject_the_citation_scan_reads_is_bounded_too():
+    """A linear scan of an unbounded string is still unbounded work.
+
+    The pattern's bound is half the answer; the other half is that `entry.reference` — the
+    only value that reaches `parse_citation` in this library — cannot be arbitrarily long.
+    It is a `cited` field, and `cited` refuses past `_LONGEST_CITED` for this reason among
+    others. Asserted here rather than only where the bound lives, because this is the caller
+    that made the length matter.
+    """
+    import pydantic
+
+    from anvilate._models import _LONGEST_CITED
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+    from anvilate.standards.effectivity import parse_citation
+
+    def entry(reference: str) -> ScorecardEntry:
+        return ScorecardEntry(name="n", status=CheckStatus.PASS, detail="d", reference=reference)
+
+    assert entry("A" * _LONGEST_CITED).reference
+    with pytest.raises(pydantic.ValidationError, match="is not one a reader can follow"):
+        entry("A" * (_LONGEST_CITED + 1))
+
+    # And the scan really is the consumer of that field.
+    assert parse_citation("A" * _LONGEST_CITED) is None
 
 
 def test_the_designation_ratchet_fires_on_a_designation_that_is_getting_long():

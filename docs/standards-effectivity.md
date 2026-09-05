@@ -184,8 +184,11 @@ that took seconds, and a long paste did not finish at all.
 
 The subject is not this library's own text. `design_basis_scorecard` is handed
 `entry.reference` for every entry of a scorecard, and a scorecard comes back out of the
-subject store and out of an attestation envelope — where the field is a free string with no
+subject store and out of an attestation envelope — where the field was a free string with no
 length on it. So `anvilate export` over one such entry hangs, and nothing in the run says why.
+That second half is closed as well now: `reference` is a citation, a citation is at most 1,024
+characters, and a linear scan of a bounded subject is bounded work. Both halves are needed —
+a linear scan of an unbounded string is still unbounded.
 
 The repetition is bounded now, which makes the scan linear, and the bound is a fact about the
 data rather than a guess: the longest designation this library emits is "Aluminum Design
@@ -193,3 +196,18 @@ Manual" at 22 characters against a bound of 62. A session-wide rule over every c
 library actually puts on an entry reports any designation that reaches **half** the bound —
 before it is exceeded, because a rule that fires at the bound fires after the first real
 standard has been mis-parsed.
+
+**That the repetition is bounded is checked against the parsed pattern, not against its
+text.** The gate here used to look for `{0,62}?` as a substring, which a pattern with a
+bounded repetition in one place and an unbounded one in another satisfies — the defect
+itself. `re._parser` is walked instead, so the claim is about every repetition in the
+pattern, and a test builds the pattern that passes the old check and fails the new one.
+`_EUROCODE` is deliberately exempt: its `(?:-\d+)*` is unbounded and cannot backtrack,
+because every iteration has to begin with a literal `-`.
+
+There is no longer a timing assertion. The one that was here compared 4k against 16k and
+required under 8x, which measures the machine as much as the pattern: the larger run does
+four times the work and is four times as exposed to being descheduled, so it failed three
+times running under load and passed on a quiet machine at the same commit. The two
+structural facts — a bounded pattern and a bounded subject — are what made it true, and
+they are decidable.
