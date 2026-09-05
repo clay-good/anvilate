@@ -1322,6 +1322,69 @@ def test_a_document_cannot_state_an_infinite_or_undefined_number(build, field):
         build()
 
 
+_PADEYE_PARAMS = {
+    "name": "padeye",
+    "material": "ASTM-A36",
+    "width": {"magnitude": 120.0, "unit": "mm"},
+    "hole_diameter": {"magnitude": 40.0, "unit": "mm"},
+    "thickness": {"magnitude": 20.0, "unit": "mm"},
+    "load": {"magnitude": 60.0, "unit": "kN"},
+}
+
+
+def _padeye(*, element_params: dict) -> DesignSpec:
+    """The README's own spec, with its element parameters swapped."""
+    return DesignSpec.model_validate(
+        {
+            "name": "padeye",
+            "description": "A lifting padeye.",
+            "units": {"value": "SI", "origin": "user_stated"},
+            "material": {"ref": "ASTM-A36"},
+            "manufacturing": {"process": "sheet_metal"},
+            "acceptance": {"tiers": ["T1_analytical"]},
+            "element_type": "lifting_lug",
+            "element_params": element_params,
+        }
+    )
+
+
+def test_the_padeye_fixture_is_a_document_that_compiles():
+    """So the test below is refusing the infinity and not the fixture."""
+    assert _padeye(element_params=_PADEYE_PARAMS).element_type == "lifting_lug"
+
+
+def test_the_finite_rule_reaches_into_the_documents_free_form_parts():
+    """The rule's own words are "no field of a *document*", and it saw top-level floats only.
+
+    `element_params` is a free-form mapping and it is where a screened dimension actually
+    lives — the twenty-four element models set their own `model_config`, with no shared base
+    to hang this on. So a lifting lug 1e400 mm wide compiled: the shell took it as a valid
+    spec, and MCP answered `-32603 Internal error`, raised late by the canonical-JSON writer
+    with no field named. The path is built as the walk goes, so the message says which value.
+    """
+    from anvilate.spec.ir import _first_non_finite
+
+    base = _PADEYE_PARAMS
+    for path, params in (
+        ("element_params.width", {**base, "width": {"magnitude": float("inf"), "unit": "mm"}}),
+        (
+            "element_params.thickness",
+            {**base, "thickness": {"magnitude": float("nan"), "unit": "mm"}},
+        ),
+    ):
+        with pytest.raises(ValidationError, match="not a number a document can state") as raised:
+            _padeye(element_params=params)
+        assert path in str(raised.value), str(raised.value)
+
+    # Nested one layer deeper, and inside a list, because the walk is recursive or it is a
+    # rule about the top level of a mapping wearing the same words.
+    where, value = _first_non_finite("p", {"a": {"b": [1.0, {"c": float("inf")}]}})
+    assert (where, value) == ("p.a.b[1].c", float("inf"))
+    # And it lets ordinary containers through, including the booleans and strings and enums
+    # that share a walk with them.
+    assert _first_non_finite("p", {"a": [1.0, "x", True, None, {"b": 2}]}) == (None, None)
+
+
 def test_the_finite_rule_leaves_an_ordinary_document_alone():
     """The guard walks every field of every spec model, so the thing to hold is that it lets
     a real one through."""
@@ -1535,10 +1598,15 @@ def test_a_number_that_is_not_read_in_base_ten_is_refused():
         assert f"{text!r} is read as {read_as!r}" in message, message
         assert "does not mean what its digits say" in message
 
-    for text in (".inf", ".nan", "-.inf"):
+    # `.inf` and `1.0e+400` are the same value and only one of them looks like one. The
+    # check was on the spelling, so it caught the first: an overflow to infinity agrees with
+    # its own base-ten reading and fell straight through the comparison. A width of
+    # `1.0e+400` mm compiled.
+    for text in (".inf", ".nan", "-.inf", "1.0e+400", "-1.0e+400", "1.0e+400000"):
         with pytest.raises(SpecValidationError) as raised:
             load_spec_yaml(f"a: {text}\n")
-        assert "has to be a finite number" in raised.value.errors[0]["msg"]
+        assert "has to be a finite number" in raised.value.errors[0]["msg"], text
+        assert re.fullmatch(r"line \d+, column \d+", raised.value.errors[0]["loc"]), text
 
 
 def test_the_numbers_a_spec_is_actually_written_with_are_untouched():

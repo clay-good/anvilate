@@ -432,6 +432,48 @@ def test_arguments_are_checked_against_the_published_input_schema():
     assert dispatched["result"]["isError"] is True
 
 
+def test_an_overflowing_number_is_a_bad_document_and_not_an_internal_error():
+    """`1e400` is ordinary JSON and `json.loads` reads it as infinity.
+
+    So a conformant client could put an infinite width in a document, and it compiled: the
+    finite rule saw top-level fields only and `element_params` is a free-form mapping. What
+    the client got back was `-32603 Internal error — compile_spec raised ValueError`, from
+    the canonical-JSON writer at the far end of the call, naming no field. Every other bad
+    document on this surface comes back as a *result* with the offending path in it, and
+    this one is no different in kind.
+    """
+    import json
+
+    document = json.loads(
+        json.dumps(
+            {
+                "name": "padeye",
+                "description": "A lifting padeye.",
+                "units": {"value": "SI", "origin": "user_stated"},
+                "material": {"ref": "ASTM-A36"},
+                "manufacturing": {"process": "sheet_metal"},
+                "acceptance": {"tiers": ["T1_analytical"]},
+                "element_type": "lifting_lug",
+                "element_params": {
+                    "name": "padeye",
+                    "material": "ASTM-A36",
+                    "width": {"magnitude": 1.0, "unit": "mm"},
+                    "hole_diameter": {"magnitude": 1.0, "unit": "mm"},
+                    "thickness": {"magnitude": 1.0, "unit": "mm"},
+                    "load": {"magnitude": 1.0, "unit": "kN"},
+                },
+            }
+        ).replace('"magnitude": 1.0, "unit": "mm"', '"magnitude": 1e400, "unit": "mm"', 1)
+    )
+    assert document["element_params"]["width"]["magnitude"] == float("inf")
+
+    answer = _call("compile_spec", {"document": document})
+    assert "error" not in answer, answer
+    assert answer["result"]["isError"] is True
+    errors = answer["result"]["structuredContent"]["errors"]
+    assert any("element_params.width is inf" in problem for problem in errors), errors
+
+
 def test_a_boolean_is_not_a_number():
     """`isinstance(True, int)` is True in Python and a boolean is not a number in JSON, so
     a bare isinstance check would accept `width_px: true` as a pixel count."""

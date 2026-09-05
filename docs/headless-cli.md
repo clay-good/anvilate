@@ -147,8 +147,18 @@ octal and a colon as sexagesimal — so the document does not say what it appear
 A scalar YAML resolves to a number has to agree with the base-ten reading of the same text,
 which leaves every number a spec is actually written with alone — `20`, `-3`, `+7`, `20.5`,
 `.5`, `1.5E-3`, and `20_0`, since underscores group digits the same way in YAML and in
-Python. `.inf` and `.nan` are refused for the other reason: they are read exactly as written,
-and nothing downstream has a defined answer for a dimension that is not a finite number.
+Python. `.inf` and `.nan` are refused for the other reason: nothing downstream has a defined
+answer for a dimension that is not a finite number.
+
+That second rule started out checking the *spelling*, which caught `.inf` and missed
+`1.0e+400` — an overflow to infinity that agrees with its own base-ten reading and looks like
+an ordinary number. It is on the value now. And the same claim is enforced a layer in, where
+it belongs: the Design Spec's "no field of a document is an infinity or a NaN" rule walked
+top-level fields only, so `element_params` — a free-form mapping, and where a screened
+dimension actually lives — was exempt. A lifting lug `1e400` mm wide compiled at the shell and
+answered `-32603 Internal error` over MCP, raised by the canonical-JSON writer at the far end
+of the call with no field named. The walk goes into mappings and sequences now and names the
+path it found: `element_params.width is inf`.
 
 A `<<:` merge key still works, and a key the document sets locally still overrides the merged
 one. That is not an exception to the duplicate rule — the check runs over the keys as

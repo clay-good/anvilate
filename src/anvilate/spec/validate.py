@@ -10,8 +10,8 @@ meaningful diffs between revisions.
 from __future__ import annotations
 
 import difflib
-import math
 import re
+from math import isfinite
 from typing import Any
 
 import yaml
@@ -116,6 +116,12 @@ def _construct_int(loader: _StrictSpecLoader, node: yaml.ScalarNode) -> int:
 
 def _construct_float(loader: _StrictSpecLoader, node: yaml.ScalarNode) -> float:
     value = yaml.SafeLoader.construct_yaml_float(loader, node)
+    # Finiteness first, and on the value rather than on the spelling. `.inf` is read exactly
+    # as written, so it agrees with its own base-ten reading and would fall through the
+    # comparison below — but so does `1.0e+400`, which is an overflow to infinity that looks
+    # like an ordinary number. Checking the spelling caught the first and not the second.
+    if not isfinite(value):
+        raise _misread(node, value)
     try:
         if float(node.value) == value:
             return value
@@ -125,7 +131,7 @@ def _construct_float(loader: _StrictSpecLoader, node: yaml.ScalarNode) -> float:
 
 
 def _misread(node: yaml.ScalarNode, value: object) -> yaml.MarkedYAMLError:
-    if isinstance(value, float) and not math.isfinite(value):
+    if isinstance(value, float) and not isfinite(value):
         # `.inf` and `.nan` are read exactly as written, so the sentence below would be a
         # lie about them. They are refused for the other reason: nothing downstream of here
         # has a defined answer for a dimension that is not a finite number, and a NaN in

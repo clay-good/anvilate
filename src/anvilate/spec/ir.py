@@ -9,11 +9,19 @@ origin recorded via :class:`Provenanced`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from math import isfinite
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from .._models import FrozenMap, Named, Provenance, RevalidatedModel, rebuilt_quantities
 from ..loads import (
@@ -74,6 +82,44 @@ Length = Annotated[Quantity, AfterValidator(require_dimension("[length]", name="
 Force = Annotated[Quantity, AfterValidator(require_dimension("[force]", name="force"))]
 
 
+def _first_non_finite(where: str, value: object) -> tuple[str | None, float | None]:
+    """The first infinity or NaN under ``value``, and the path to it — or ``(None, None)``.
+
+    A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the number is two
+    layers in. Unwrapping by attribute rather than by type keeps this from importing the
+    provenance module, and an enum's `.value` is a string, which the float check filters out.
+
+    Mappings and sequences are walked because a document's free-form parts are containers —
+    `element_params` above all — and the path is built as it goes, so the message names
+    `element_params.width.magnitude` rather than `element_params`. Sub-models are not walked:
+    each is a `_Base` and has already run this rule on itself.
+    """
+    value = getattr(value, "value", value)
+    if isinstance(value, Quantity):
+        return (where, value.magnitude) if not isfinite(value.magnitude) else (None, None)
+    if isinstance(value, BaseModel):
+        return None, None
+    # Before the float branch: `bool` is a subclass of `int`, not of `float`, so it never
+    # reaches it — but a mapping's keys and values are `object` here and being explicit is
+    # cheaper than working that out again.
+    if isinstance(value, bool):
+        return None, None
+    if isinstance(value, float):
+        return (where, value) if not isfinite(value) else (None, None)
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            found = _first_non_finite(f"{where}.{key}", item)
+            if found[0] is not None:
+                return found
+        return None, None
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for index, item in enumerate(value):
+            found = _first_non_finite(f"{where}[{index}]", item)
+            if found[0] is not None:
+                return found
+    return None, None
+
+
 class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid")  # unknown keys are rejected
 
@@ -90,18 +136,20 @@ class _Base(RevalidatedModel):
 
         One rule here rather than a `isfinite` in every validator below: they were written
         one field at a time, and `min_safety_factor > 0` is True for infinity.
+
+        **Into the containers, too, and that is where the hole was.** The claim above is
+        about a document, and it was enforced over top-level fields only — so
+        `element_params`, a free-form mapping and the place a *screened dimension* actually
+        lives, was exempt. A lifting lug 1e400 mm wide compiled, and the twenty-four element
+        models set their own `model_config` with no shared base to hang this on. It reached
+        the shell as an accepted spec and MCP as an internal error, raised late by the
+        canonical-JSON writer with no field named.
         """
         for name in type(self).model_fields:
-            value = getattr(self, name, None)
-            # A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the
-            # number is two layers in. Unwrapping by attribute rather than by type keeps this
-            # from importing the provenance module, and an enum's `.value` is a string, which
-            # the float check below filters out.
-            value = getattr(value, "value", value)
-            magnitude = value.magnitude if isinstance(value, Quantity) else value
-            if isinstance(magnitude, float) and not isfinite(magnitude):
+            where, magnitude = _first_non_finite(name, getattr(self, name, None))
+            if where is not None:
                 raise ValueError(
-                    f"{name} is {magnitude}, which is not a number a document can state; "
+                    f"{where} is {magnitude}, which is not a number a document can state; "
                     f"a requirement that is infinite or undefined is not a requirement"
                 )
         return self
