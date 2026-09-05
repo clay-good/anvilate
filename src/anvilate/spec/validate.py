@@ -46,6 +46,48 @@ class SpecValidationError(ValueError):
         return cls(errors)
 
 
+class _RefuseDuplicateKeys(yaml.SafeLoader):
+    """A loader that refuses a mapping declaring the same key twice.
+
+    PyYAML takes the last one and says nothing, so a spec with ``constraints:`` written
+    twice is screened against whichever copy happens to be lower in the file — and the
+    declaration the engineer wrote first is nowhere in the card, the stderr lines or the
+    evidence bundle. A padeye declaring ``min_safety_factor: 10.0`` and then, forty lines
+    down after a paste, ``min_safety_factor: 2.0`` **passes**, and nothing in the run
+    mentions the 10. That is the same defect as an ignored keyword — a declaration the user
+    makes that nothing answers — arriving through the document rather than through a field
+    name.
+
+    Refusing is what the YAML specification itself says to do: "it is an error for two equal
+    keys to appear in the same mapping node". So this is a malformed document like a tab in
+    the indentation, it is reported the same way, and both marks are carried — the line the
+    key is repeated on is where the reader looks, and the line it was first declared on is
+    the one they have to compare it against.
+    """
+
+    def construct_mapping(self, node, deep: bool = False):
+        first: dict[Any, Any] = {}
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                seen = key in first
+            except TypeError:
+                # An unhashable key — a list or a mapping used as one. It cannot collide
+                # with anything here and PyYAML refuses it a moment later on its own terms.
+                continue
+            if seen:
+                raise yaml.MarkedYAMLError(
+                    context=f"the key {key!r} was already declared at line "
+                    f"{first[key].line + 1}, column {first[key].column + 1}",
+                    context_mark=None,
+                    problem="a key declared twice silently discards the earlier "
+                    "declaration, so the document does not say what it appears to",
+                    problem_mark=key_node.start_mark,
+                )
+            first[key] = key_node.start_mark
+        return super().construct_mapping(node, deep=deep)
+
+
 def parse_spec(data: dict) -> DesignSpec:
     """Parse and validate a raw spec dict into a typed :class:`DesignSpec`.
 
@@ -63,7 +105,9 @@ def load_spec_yaml(text: str) -> DesignSpec:
     """Load and validate a spec from a YAML (or JSON) document.
 
     A document that is not well-formed YAML is a :class:`SpecValidationError` like any other
-    bad document, carrying the line and column PyYAML found the trouble at.
+    bad document, carrying the line and column PyYAML found the trouble at. A key declared
+    twice is one of those documents — see :class:`_RefuseDuplicateKeys` for why taking the
+    last one quietly is the worst of the three available answers.
 
     It used to be a traceback. `yaml.YAMLError` descends from `Exception` and not from
     `ValueError`, so it fell through every caller's guard — including the CLI's, which
@@ -73,7 +117,9 @@ def load_spec_yaml(text: str) -> DesignSpec:
     and the answer to it is a sentence with a line number in it.
     """
     try:
-        data = yaml.safe_load(text)
+        # `yaml.load` with an explicit SafeLoader subclass, which is `safe_load` plus the
+        # duplicate-key refusal; nothing here can construct an arbitrary Python object.
+        data = yaml.load(text, Loader=_RefuseDuplicateKeys)
     except Exception as failure:
         # `except Exception`, not `yaml.YAMLError`, and measuring is what settled it. Over 21
         # malformed documents `safe_load` answers with `YAMLError` twenty times and, for

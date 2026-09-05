@@ -3521,28 +3521,80 @@ def test_no_yaml_document_can_construct_a_python_object():
     one keystroke away from `yaml.load` — which is why it is swept rather than trusted. The
     count is asserted first, because a sweep that stopped finding call sites would report
     clean on a package that had switched every one of them.
+
+    **`yaml.load` with an explicit `Loader=` is judged on the loader, not on the spelling.**
+    This gate was a set of function names, and the one call site that needs a custom loader —
+    the duplicate-key refusal — reads exactly as unsafe to a name-matching sweep while being
+    `safe_load` plus one refusal. Answering that by exempting the file would have left the
+    gate unable to see the next real one. So the loader argument is *resolved and imported*,
+    and the call passes only if what it names is a `SafeLoader` subclass. A `yaml.load` with
+    no loader, or with `yaml.Loader`, `yaml.UnsafeLoader` or `yaml.FullLoader`, still fails.
     """
     import ast
+    import importlib
+
+    import yaml
 
     src = _REPO / "src" / "anvilate"
     safe = 0
+    checked_loaders: list[str] = []
     unsafe: list[str] = []
     for path in sorted(src.rglob("*.py")):
+        module = ".".join(path.relative_to(_REPO / "src").with_suffix("").parts)
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             name = ast.unparse(node.func)
+            where = f"{path.relative_to(_REPO)}:{node.lineno} calls {name}"
             if name in ("yaml.safe_load", "yaml.safe_load_all"):
                 safe += 1
             elif name in ("yaml.load", "yaml.load_all", "yaml.unsafe_load", "yaml.full_load"):
-                unsafe.append(f"{path.relative_to(_REPO)}:{node.lineno} calls {name}")
+                loader = next(
+                    (kw.value for kw in node.keywords if kw.arg == "Loader"),
+                    None,
+                )
+                if loader is None:
+                    unsafe.append(f"{where} with no Loader")
+                    continue
+                # Resolved through the module that makes the call, so the name in the source
+                # is the class the sweep judges — not a same-named class from somewhere else.
+                named = ast.unparse(loader)
+                resolved = getattr(importlib.import_module(module), named.split(".")[0], None)
+                for part in named.split(".")[1:]:
+                    resolved = getattr(resolved, part, None)
+                if not (isinstance(resolved, type) and issubclass(resolved, yaml.SafeLoader)):
+                    unsafe.append(f"{where} with Loader={named}, which is not a SafeLoader")
+                    continue
+                checked_loaders.append(f"{path.relative_to(_REPO)} with Loader={named}")
 
     assert safe >= 15, f"the sweep found only {safe} safe_load calls, so it is looking wrong"
     assert not unsafe, (
         "these load YAML with a constructing loader, so a document can build arbitrary "
         f"Python objects on the way in: {unsafe}"
     )
+
+    # The exemption is narrow and it is named, so a second one has to be argued for here.
+    assert checked_loaders == ["src/anvilate/spec/validate.py with Loader=_RefuseDuplicateKeys"], (
+        checked_loaders
+    )
+
+
+def test_the_spec_loader_refuses_a_document_that_names_a_python_constructor():
+    """The behaviour the sweep above is a proxy for, asserted directly on the one loader
+    that is not `yaml.safe_load`. A sweep over names can only say the call looks right."""
+    import yaml
+
+    from anvilate.spec import SpecValidationError, load_spec_yaml
+
+    for document in (
+        "!!python/object/apply:os.system ['echo pwned']",
+        "name: x\nmaterial: !!python/object/apply:os.system ['echo pwned']\n",
+        "!!python/name:os.system",
+    ):
+        with pytest.raises((SpecValidationError, yaml.YAMLError)) as raised:
+            load_spec_yaml(document)
+        assert "could not determine a constructor" in str(raised.value), document
 
 
 def test_the_library_runs_nothing_it_reads():

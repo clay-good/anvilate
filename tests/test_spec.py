@@ -434,12 +434,20 @@ def test_the_cli_page_shows_a_provenanced_value_the_parser_accepts():
     import yaml
 
     page = (Path(__file__).resolve().parent.parent / "docs" / "headless-cli.md").read_text()
-    block = re.search(r"```yaml\n(.*?)```", page, re.S)
-    assert block is not None, "the provenanced-value block on headless-cli.md has moved"
-    # The block shows `units:` twice — the bare form first, the correct one second — and
-    # PyYAML keeps the last, which is the one under test.
-    shown = yaml.safe_load(block.group(1))
+    blocks = re.findall(r"```yaml\n(.*?)```", page, re.S)
+    # Addressed by its own content, not by being the first YAML block on the page: a block
+    # added anywhere above it used to silently become the thing under test, and one was.
+    #
+    # The two forms are also two blocks now. They were one, with `units:` written twice and
+    # the right form second, which worked only because PyYAML keeps the last of two equal
+    # keys — the exact behaviour `_RefuseDuplicateKeys` exists to refuse, printed on the page
+    # that documents the refusal, in the block a reader is invited to copy.
+    shown = [yaml.safe_load(block) for block in blocks if "what the IR asks for" in block]
+    assert len(shown) == 1, "the provenanced-value block on headless-cli.md has moved"
+    shown = shown[0]
     assert set(shown) == {"units"}, shown
+    wrong = [yaml.safe_load(b) for b in blocks if "what you would naturally write" in b]
+    assert wrong == [{"units": "SI"}], wrong
     loaded = Provenanced[UnitSystem].model_validate(shown["units"])
     assert loaded.value is UnitSystem.SI
     assert loaded.origin is Origin.USER_STATED
@@ -1396,3 +1404,108 @@ def test_a_document_that_is_not_valid_yaml_is_a_spec_validation_error():
     assert "cannot start any token" in problem["msg"]
     # The original is kept as the cause rather than swallowed.
     assert isinstance(raised.value.__cause__, yaml.YAMLError)
+
+
+# --- A key declared twice, which PyYAML answers by taking the last one and saying nothing --
+
+
+_DUPLICATE_SPEC = """
+anvilate_spec: "1.3.0"
+name: padeye
+description: A lifting padeye.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+constraints: {min_safety_factor: {value: 10.0, origin: user_stated}}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+acceptance: {tiers: [T1_analytical]}
+"""
+
+
+def test_a_key_declared_twice_is_refused_and_both_lines_are_named():
+    """The declaration that was silently discarded.
+
+    PyYAML keeps the last of two equal keys and reports nothing, so this document screened
+    against `min_safety_factor: 2.0` and **passed** — with the 10.0 the engineer wrote
+    absent from the card, from the stderr lines and from the evidence bundle. Nothing in the
+    run mentioned that a second `constraints` had replaced the first.
+
+    Both marks are asserted because one of them is not enough to act on: the line the key is
+    repeated on is where the reader looks, and the line it was first declared on is what
+    they have to compare it against. In a long spec those are nowhere near each other.
+    """
+    with pytest.raises(SpecValidationError) as raised:
+        load_spec_yaml(_DUPLICATE_SPEC)
+
+    problem = raised.value.errors[0]
+    assert re.fullmatch(r"line 9, column 1", problem["loc"]), problem
+    assert "'constraints'" in problem["msg"]
+    assert "line 8, column 1" in problem["msg"], "the first declaration is not named"
+    assert "silently discards" in problem["msg"]
+
+
+def test_the_document_that_used_to_pass_against_the_wrong_number_is_the_one_refused():
+    """Not a hypothetical: the same text, minus one of the two declarations, still loads —
+    so what is refused is the duplication itself and not something else about the document."""
+    for keep in ("10.0", "2.0"):
+        text = "\n".join(
+            line
+            for line in _DUPLICATE_SPEC.splitlines()
+            if "min_safety_factor" not in line or keep in line
+        )
+        spec = load_spec_yaml(text)
+        assert spec.constraints.min_safety_factor.value == float(keep)
+
+
+def test_a_duplicate_is_refused_wherever_it_is_nested_or_however_it_is_written():
+    """A nested mapping and a flow mapping are the same failure and are caught the same way.
+
+    The block form at the top level is the one somebody produces by pasting; the nested and
+    inline forms are the ones a generator produces, and a rule that only saw the first would
+    pass every document a tool wrote.
+    """
+    documents = {
+        "nested": "a:\n  b: 1\n  b: 2\n",
+        "flow": "a: {b: 1, b: 2}\n",
+        "nested flow": "a:\n  b: {c: 1, c: 2}\n",
+        "deep": "a:\n  b:\n    c:\n      d: 1\n      d: 2\n",
+        "in a sequence": "a:\n  - b: 1\n    b: 2\n",
+    }
+    for label, document in documents.items():
+        with pytest.raises(SpecValidationError) as raised:
+            load_spec_yaml(document)
+        assert "silently discards" in raised.value.errors[0]["msg"], label
+
+
+def test_the_refusal_does_not_fire_on_the_same_key_in_two_different_mappings():
+    """The rule is one mapping, not one document. Every element in a list of dimensions has
+    a `tag`, and a gate that read those as duplicates would refuse every real spec."""
+    document = "a:\n  - tag: x\n  - tag: y\nb:\n  tag: z\n"
+    with pytest.raises(SpecValidationError) as raised:
+        load_spec_yaml(document)
+    # It fails validation as a spec, which is a different complaint entirely.
+    assert "silently discards" not in str(raised.value)
+
+
+def test_no_yaml_document_this_package_ships_declares_a_key_twice():
+    """The other seventeen loaders, which have the same defect and no gate on it.
+
+    A bundled table with a designation written twice loses a row silently — the same
+    mechanism, one layer down, where nobody would ever see the missing entry. They are clean
+    today; this is what keeps them that way. The floor is asserted because a sweep that finds
+    nothing to check passes just as quietly as one that checks everything.
+    """
+    import yaml
+
+    from anvilate.spec.validate import _RefuseDuplicateKeys
+
+    root = Path(__file__).resolve().parent.parent
+    shipped = sorted((root / "src" / "anvilate").rglob("*.yaml"))
+    assert len(shipped) >= 17, f"only {len(shipped)} bundled YAML files were swept"
+    for path in shipped:
+        yaml.load(path.read_text(encoding="utf-8"), Loader=_RefuseDuplicateKeys)
+
+    examples = sorted((root / "examples").rglob("*.yaml"))
+    assert len(examples) >= 2, f"only {len(examples)} example specs were swept"
+    for path in examples:
+        load_spec_yaml(path.read_text(encoding="utf-8"))

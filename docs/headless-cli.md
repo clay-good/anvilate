@@ -108,6 +108,30 @@ A file you **name** that will not parse is a bad request with the position in it
 any token`. It used to be a stack trace through PyYAML and exit 1, the code that means a
 part failed.
 
+**A document that parses and does not say what it appears to is refused too, and that one
+was silent.** A spec declaring the same key twice is a document PyYAML reads happily: it
+keeps the last of the two and reports nothing. So a padeye declaring
+
+```yaml
+constraints: {min_safety_factor: {value: 10.0, origin: user_stated}}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+```
+
+was screened against 2.0 and **passed**, with the 10.0 its author wrote absent from the card,
+from the stderr lines and from the evidence bundle — a declaration the user made that nothing
+answered, arriving through the document rather than through a field name. It is a bad request
+now, and both marks are in it, because one of them is not enough to act on:
+
+```text
+anvilate check: line 9, column 1: the document is not valid YAML — the key 'constraints' was
+already declared at line 8, column 1, a key declared twice silently discards the earlier
+declaration, so the document does not say what it appears to
+```
+
+Refusing is what the YAML specification says to do — "it is an error for two equal keys to
+appear in the same mapping node" — and it applies at any depth and in either syntax, since
+the duplicate a generator writes is nested or inline rather than pasted at the top level.
+
 **A file that will not *decode* is the same case one layer earlier.** Every document these
 commands read is UTF-8, and a file that is not gets a bad request naming what wrote it:
 
@@ -264,6 +288,9 @@ writing a provenanced value bare:
 
 ```yaml
 units: SI                 # what you would naturally write
+```
+
+```yaml
 units:                    # what the IR asks for
   value: SI
   origin: user_stated

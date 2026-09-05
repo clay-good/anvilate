@@ -1804,6 +1804,30 @@ def test_a_malformed_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_pat
     )
 
 
+def test_a_key_declared_twice_stops_the_run_rather_than_screening_the_last_one(tmp_path):
+    """The silent green this refusal exists to close, at the shell and in a sweep.
+
+    A spec declaring `constraints` twice used to be screened against whichever copy was
+    lower in the file, and **exit 0**: the first declaration was in no card, no stderr line
+    and no bundle. The run has to stop on it, because the document does not say what its
+    author wrote and no verdict computed from it means anything.
+    """
+    duplicated = _SPEC + "description: A mezzanine deck plate, actually.\n"
+    spec = tmp_path / "deck.yaml"
+    spec.write_text(duplicated, encoding="utf-8")
+
+    code, out, err = _run("check", str(spec))
+    assert code == EXIT_BAD_REQUEST, out
+    assert "'description'" in err and "silently discards" in err
+
+    # And in the sweep, where the alternative is worse: the file parses, so it is recognised
+    # as a spec and refused by name rather than skipped as "some other YAML file".
+    (tmp_path / "good.yaml").write_text(_SPEC, encoding="utf-8")
+    code, _out, err = _run("check", str(tmp_path))
+    assert code == EXIT_BAD_REQUEST
+    assert "not a Design Spec, skipped" not in err
+
+
 def test_every_documented_invocation_names_a_real_command_and_real_flags():
     """The examples, not just the reference table beside them.
 
