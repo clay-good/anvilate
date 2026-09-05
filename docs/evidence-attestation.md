@@ -44,6 +44,17 @@ a standard the output does not actually follow. Standard attestation tooling rea
 predicate it does not recognize, so the bundle is useful to a verifier that has never
 heard of Anvilate.
 
+**`payloadType` is read off the wire, and the envelope round-trips.** It had a Python name
+and a wire name — `payload_type` and `payloadType` — and only one of them was used on each
+side: `to_envelope` wrote the wire spelling and `model_validate` read the Python one, so an
+envelope loaded from a file **never saw its own declared type**. It took the default,
+silently, and `verify_attestation` then computed the pre-authentication encoding from a
+string the envelope had not said. Nothing noticed because today's only payload type is the
+default, and the test that proves the signature binds the envelope's *own* type relabels it
+in Python rather than through the wire shape, so it never crossed the gap. A payload type
+this verifier does not read is now a reported problem, the same rule the predicate type
+follows, and every key `to_envelope` writes is held against the fields the model reads.
+
 ## The predicate is checked against its schema, not only its type label
 
 `verify_attestation` makes three checks, and the third was missing for a release. A

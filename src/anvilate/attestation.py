@@ -53,6 +53,7 @@ from typing import Protocol, runtime_checkable
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     ValidationError,
     computed_field,
     field_validator,
@@ -754,9 +755,17 @@ class Attestation(RevalidatedModel):
     standing by omission.
     """
 
-    model_config = ConfigDict(frozen=True)
+    # `populate_by_name` because the wire name and the Python name differ for exactly one
+    # field, and both have to work: DSSE spells it `payloadType`, this module spells it
+    # `payload_type`, and `to_envelope` wrote the first while `model_validate` read the
+    # second. So an envelope read back off disk **never saw its own declared type** — it
+    # took the default, silently, and the verifier then computed the pre-authentication
+    # encoding from a string the envelope had not said. `Signature`'s three fields are
+    # spelled the same on both sides, which is why only this one was wrong and why nothing
+    # noticed: today's only payload type *is* the default.
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    payload_type: str = DSSE_PAYLOAD_TYPE
+    payload_type: str = Field(default=DSSE_PAYLOAD_TYPE, alias="payloadType")
     payload: str  # base64 of the canonical statement bytes, as DSSE requires
     signatures: tuple[Signature, ...] = ()
 
@@ -1031,6 +1040,15 @@ def verify_attestation(
     if statement.get("_type") != STATEMENT_TYPE:
         problems.append(
             f"statement type is {statement.get('_type')!r}, expected {STATEMENT_TYPE!r}"
+        )
+    if attestation.payload_type != DSSE_PAYLOAD_TYPE:
+        # The envelope's own declaration, which is bound into the signature and which this
+        # verifier reads the payload as. Reported for the same reason the predicate type is:
+        # a document this verifier does not claim to understand must not come back clean,
+        # and until the wire name was read at all this could not be reached from a file.
+        problems.append(
+            f"payload type is {attestation.payload_type!r}, which this verifier does not "
+            f"read (it understands {DSSE_PAYLOAD_TYPE!r})"
         )
     if predicate_type != PREDICATE_TYPE:
         problems.append(

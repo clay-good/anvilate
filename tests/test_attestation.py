@@ -736,6 +736,72 @@ def test_a_field_cannot_be_attributed_twice():
         )
 
 
+def test_the_envelope_round_trips_through_the_wire_shape_it_writes():
+    """`to_envelope` wrote `payloadType`; `model_validate` read `payload_type`.
+
+    So an envelope read back off disk never saw its own declared type — it took the default,
+    silently — and `verify_attestation` then computed the pre-authentication encoding from a
+    string the envelope had not said. Nothing noticed because today's only payload type *is*
+    the default, and the test below this one relabels the envelope in Python rather than
+    through its wire shape, so it proved the binding at the model and never crossed the gap.
+
+    Asserted on a **relabelled** envelope for exactly that reason: an equality that holds
+    because the value happens to equal the default is not a round trip.
+    """
+    signer = LocalHmacSigner(_SECRET)
+    envelope = Attestation.signed_by(_bundle(), signer)
+    for subject in (envelope, envelope.model_copy(update={"payload_type": "application/x+json"})):
+        wire = subject.to_envelope()
+        assert Attestation.model_validate(wire) == subject, wire["payloadType"]
+        # Through JSON as well: the file on disk is text, and `verify` parses it.
+        assert Attestation.model_validate(json.loads(json.dumps(wire))) == subject
+
+
+def test_every_key_the_envelope_writes_is_a_key_the_model_reads():
+    """The structural half, so a fourth key added to one side is caught rather than the
+    round trip being re-derived by hand. Read out of `to_envelope`'s own dict literal."""
+    import ast
+    import inspect
+
+    source = inspect.getsource(Attestation.to_envelope)
+    tree = ast.parse(source.lstrip() if source.startswith(" ") else source)
+    written = {
+        key.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        for key in node.keys
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
+    readable = set(Attestation.model_fields) | {
+        field.alias for field in Attestation.model_fields.values() if field.alias
+    }
+    # The signature entries are `Signature`'s own wire shape, and it has no aliases.
+    readable |= set(Signature.model_fields)
+    assert written, "the envelope's keys were not found in its source"
+    assert written <= readable, f"written and never read back: {sorted(written - readable)}"
+
+
+def test_a_payload_type_this_verifier_does_not_read_is_reported():
+    """DSSE binds `payloadType` into the signature, so a verifier that does not read the
+    field is reporting on a document it has not looked at. Same rule as `predicateType`,
+    and it could not be reached from a file at all until the wire name was read."""
+    envelope = Attestation.model_validate(
+        {**Attestation.unsigned(_bundle()).to_envelope(), "payloadType": "application/x+json"}
+    )
+    report = verify_attestation(envelope, artifacts=_artifacts())
+    assert any("payload type is 'application/x+json'" in problem for problem in report.problems), (
+        report.problems
+    )
+    assert report.status is not CheckStatus.PASS
+    # And the ordinary envelope is not now complained about.
+    assert not any(
+        "payload type" in problem
+        for problem in verify_attestation(
+            Attestation.unsigned(_bundle()), artifacts=_artifacts()
+        ).problems
+    )
+
+
 def test_the_signature_binds_the_envelopes_own_payload_type():
     # signed_by used to sign the module constant while verify read the envelope's field.
     # Equivalent today, and a trap the moment a second payload type exists.
