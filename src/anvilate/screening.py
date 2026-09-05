@@ -59,7 +59,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from ._models import EMPTY_MAP, FrozenMap, RevalidatedModel, rebuilt_quantities
+from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel, rebuilt_quantities
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -110,7 +110,7 @@ class StructureMember(RevalidatedModel):
     )
 
 
-class Structure(BaseModel):
+class Structure(ItemCollection, BaseModel):
     """Several elements screened into one card, so a document can describe a whole assembly.
 
     `screen_structure` in the structural pack takes a *list* of members, so no single tag

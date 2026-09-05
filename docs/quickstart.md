@@ -53,27 +53,14 @@ library:
 - **Both checks ran and both are reported.** The lug is comfortable in tension and short in
   bearing; a screen that returned one number would have returned the wrong one.
 - **Every entry cites its clause.** `ASME BTH-1 §3-3`, not "per code".
+- **Every number carries its unit**, and a `Quantity` refuses arithmetic rather than
+  guessing which unit the answer is in — see [values and units](units-and-quantities.md).
+- **The card is a container of its entries**: `len(card)`, `for entry in card`,
+  `card[0]` and `entry in card` all answer about the checks. (`bool(card)` is False for a
+  card with no checks in it, which is the same question as "did anything run".)
 - **The card is FAIL because its worst entry is**, and `card.governing()` names which — the
   check to fix first. A thicker lug is the fix, and
   [typed repair feedback](repair-feedback.md) will say by how much.
-
-## What a `Quantity` will not do for you
-
-A `Quantity` is a value and a unit, and it refuses every arithmetic and rounding operation
-rather than guessing which unit the answer is in. The refusal is the documentation: it
-names the mistake and the line to write instead.
-
-| You write | You get |
-| --- | --- |
-| `stress > allowable` | refused — compare `stress.to("MPa").magnitude` against the other, which is where the unit you compared in gets written down |
-| `load * 2`, `a + b`, `d ** 2` | refused — a parameter taking a plain number was handed a `Quantity`; the message says which number to pass |
-| `-stress`, `round(load, 2)`, `abs(gap)` | refused — rounding or negating a magnitude without naming its unit is how a value is rounded in metres and read in millimetres |
-| `f"{load:.2f}"` | refused — a format spec describes a number, and this is a number with a unit; write `f"{load.to('kN').magnitude:.2f} kN"` |
-| `f"{load}"`, `str(load)` | `50 kN` — the library's own rendering, and the one thing the format protocol does answer |
-| `a == b` | works, field-wise: `1 m` and `1000 mm` are equal to nothing but themselves |
-
-Real arithmetic goes through `.to(unit).magnitude`, or through `.pint` where the unit
-algebra itself is the point.
 
 ## The same thing from the shell
 

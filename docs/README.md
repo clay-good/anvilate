@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Forty-five pages, arranged by what you are trying to do. The [README](../README.md) is the
+Forty-six pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
@@ -13,6 +13,7 @@ You have a part and you want a verdict.
 | [`anvilate` on the command line](headless-cli.md) | Screen a spec, export its bundle, verify an attestation, diff two revisions. The exit codes are the interface, and **2 is not a pass**. |
 | [Screening a Design Spec](spec-screening.md) | What a spec document alone can be screened on, and the tier that has to name a gap rather than run. |
 | [Calculation reports](calculation-reports.md) | The submittal a reviewer reads: formula, substitution, result, clause. |
+| [Values and units](units-and-quantities.md) | What a `Quantity` is, and the arithmetic it refuses so a value is never computed in one unit and read in another. |
 | [What a citation means](citations.md) | What a clause reference does and does not claim, and where every bundled number came from. |
 
 ## Screening by discipline

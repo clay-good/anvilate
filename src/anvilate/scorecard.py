@@ -19,7 +19,7 @@ from math import isnan
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import Named, Provenance, RevalidatedModel
+from ._models import ItemCollection, Named, Provenance, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, Underived
 from .uncertainty import MarginUncertainty
 from .units import Quantity, UnitSystem, decimals_distinguishing, render
@@ -557,7 +557,7 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
         )
 
 
-class Scorecard(BaseModel):
+class Scorecard(ItemCollection, BaseModel):
     """A collection of check entries with a rolled-up overall status.
 
     The roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``

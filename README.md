@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,819 public symbols, each dimension-checked and
-hand-verified, 5,076 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,083 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -231,6 +231,7 @@ Three cross-cutting layers keep a green from being a silent one.
 | [Screening a spec on its own terms](docs/spec-screening.md) | Every pack screens a typed element you build by hand; this screens the document — tolerance achievability, load combinations, material resolution — so a spec no longer compiles and stops. |
 | [Calculation reports](docs/calculation-reports.md) | Every check renders as a reviewable document: the formula, the values put into it, the result, and the clause. Units are chosen to *compose* rather than to look familiar. |
 | [What a citation means](docs/citations.md) | What a clause reference does and does not claim — and every one of the 1,819 public analysis symbols names one. Eight of the seventeen bundled materials carry a specification minimum and screen unchanged; the other nine report `not_evaluated` until the caller declares that this screen accepts a typical value — a declaration that then lands on every entry the screen produced, including the passing ones. A [fatigue record](docs/citations.md) carries its curve, its survival level, what it was measured on, and where it came from, and cannot be built without all four. Data the library may read but may not ship goes through [fetch-on-first-use](docs/citations.md), where consent is an argument rather than a default. |
+| [Values and units](docs/units-and-quantities.md) | Every number is a magnitude and a unit, and a `Quantity` refuses arithmetic, ordering, rounding and format specs rather than choosing a unit the caller never wrote down. Each refusal names the mistake and the line to write instead; `.to(unit).magnitude` is where the unit a comparison was made in gets recorded. |
 | [Analysis interop](docs/analysis-interop.md) | Externally computed member forces and section properties come in through a typed doorway that makes the axis mapping, the axial sign convention, and every component you chose *not* to screen explicit rather than inferred. |
 | [Semantic GD&T](docs/semantic-gdt.md) | A feature control frame as data, with Y14.5's grammar enforced in the constructor: flatness cannot reference a datum, Ⓜ cannot sit on a surface, and symmetry cannot appear on a 2018 drawing. |
 | [Typed MBD callouts](docs/typed-callouts.md) | Surface finish, plating and heat treatment as the check inputs they always were — the finish derives the Marin surface factor, plating moves a fit by twice its thickness and a 60° thread's pitch diameter by four times it. |

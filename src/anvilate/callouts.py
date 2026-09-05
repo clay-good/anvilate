@@ -47,7 +47,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._models import EMPTY_MAP, FrozenMap, RevalidatedModel
+from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, require_finite
@@ -398,7 +398,7 @@ class FreeTextNote(_Callout):
 Callout = SurfaceFinish | Coating | HeatTreatment | ProcessNote | FreeTextNote
 
 
-class CalloutSet(RevalidatedModel):
+class CalloutSet(ItemCollection, RevalidatedModel):
     """The callouts declared on a part, addressable by characteristic and by tag."""
 
     model_config = ConfigDict(frozen=True)

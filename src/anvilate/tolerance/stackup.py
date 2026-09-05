@@ -30,7 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .._models import Named, RevalidatedModel
+from .._models import ItemCollection, Named, RevalidatedModel
 from ..units import Quantity
 from .explicit import ResolvedTolerance
 
@@ -225,7 +225,7 @@ class MonteCarloResult(BaseModel):
         return f"{self.method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm @ {pct:.2f}%)"
 
 
-class StackUp(BaseModel):
+class StackUp(ItemCollection, BaseModel):
     """A one-dimensional stack-up over an ordered chain of contributors."""
 
     model_config = ConfigDict(frozen=True)

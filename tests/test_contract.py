@@ -4030,3 +4030,175 @@ def test_every_enum_that_writes_its_own_rendering_says_something_and_says_it_onc
             )
             rendered[text] = member.name
     assert members >= 150, f"only {members} enum members were rendered"
+
+
+# --- A model that IS one collection, and Python's container protocol ------------------
+#
+# Pydantic gives every model an `__iter__` over its (field, value) pairs. On a model whose
+# one field is the items, that is not a missing feature but a wrong answer that does not
+# raise: `list(card)` was `[("entries", (entry, entry))]` — one item for a two-check card —
+# and `entry in card` was False for a check the card holds, because membership fell
+# through to that iterator. `len(card)` and `card[0]` raised `TypeError`.
+#
+# `ItemCollection` in `anvilate/_models.py` answers the protocol about the items. The gate
+# is the census: a model with exactly one field, and that field a collection, has to mix it
+# in or be named below with the reason it is not what it looks like.
+
+
+_NOT_A_COLLECTION_OF_ITS_OWN = {
+    "anvilate.packs._guarded.GuardedInputs": (
+        "a base class for pack inputs, and `signed_fields` is a declaration ABOUT the "
+        "subclass's other fields — the object is never the tuple"
+    ),
+}
+
+
+def _single_collection_models() -> dict[str, type]:
+    """Every model in the package whose one field is a collection."""
+    import sys as _sys
+
+    from pydantic import BaseModel
+
+    for module in pkgutil.walk_packages(anvilate_pkg.__path__, "anvilate."):
+        try:
+            importlib.import_module(module.name)
+        except Exception:  # noqa: BLE001 - an optional dependency is not a gate failure
+            continue
+
+    found: dict[str, type] = {}
+    for name, module in list(_sys.modules.items()):
+        if not name.startswith("anvilate"):
+            continue
+        for obj in list(vars(module).values()):
+            if not isinstance(obj, type) or not issubclass(obj, BaseModel):
+                continue
+            if not getattr(obj, "__module__", "").startswith("anvilate"):
+                continue
+            fields = list(obj.model_fields)
+            if len(fields) != 1:
+                continue
+            annotation = str(obj.model_fields[fields[0]].annotation)
+            if not (annotation.startswith("tuple[") or annotation.startswith("list[")):
+                continue
+            found[f"{obj.__module__}.{obj.__qualname__}"] = obj
+    return found
+
+
+def test_a_model_that_is_one_collection_answers_the_container_protocol():
+    """The census, so the next one cannot ship iterating over its own field names."""
+    from anvilate._models import ItemCollection
+
+    models = _single_collection_models()
+    assert len(models) >= 5, f"only {len(models)} single-collection models were found"
+
+    missing = sorted(
+        label
+        for label, cls in models.items()
+        if not issubclass(cls, ItemCollection) and label not in _NOT_A_COLLECTION_OF_ITS_OWN
+    )
+    assert not missing, (
+        "these models are one collection and answer len()/iteration/indexing about their "
+        f"FIELD NAMES, which is pydantic's `__iter__` and the wrong answer: {missing}. Mix "
+        "in anvilate._models.ItemCollection, or name it in "
+        "_NOT_A_COLLECTION_OF_ITS_OWN with the reason"
+    )
+    stale = sorted(set(_NOT_A_COLLECTION_OF_ITS_OWN) - set(models))
+    assert not stale, f"_NOT_A_COLLECTION_OF_ITS_OWN names models the census does not: {stale}"
+
+
+def _container_fixtures() -> dict[str, object]:
+    from anvilate.analysis import strength_scorecard
+    from anvilate.callouts import CalloutSet, FreeTextNote
+    from anvilate.packs.structural import LiftingLug
+    from anvilate.scorecard import Scorecard
+    from anvilate.screening import Structure, StructureMember
+    from anvilate.tolerance.explicit import SymmetricTolerance
+    from anvilate.tolerance.stackup import StackContributor, StackUp
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    lug = LiftingLug(
+        name="padeye",
+        width=q("80 mm"),
+        hole_diameter=q("25 mm"),
+        thickness=q("12 mm"),
+        load=q("50 kN"),
+        material="ASTM-A36",
+    )
+    return {
+        "Scorecard": Scorecard(
+            entries=(
+                strength_scorecard("a", stress=q("100 MPa"), allowable=q("250 MPa"), required=1.5),
+                strength_scorecard("b", stress=q("200 MPa"), allowable=q("250 MPa"), required=1.5),
+            )
+        ),
+        "CalloutSet": CalloutSet(
+            callouts=(FreeTextNote(text="deburr"), FreeTextNote(text="break edges", sequence=2))
+        ),
+        "Structure": Structure(
+            members=(StructureMember(element_type="lifting_lug", element_params=lug.model_dump()),)
+        ),
+        "StackUp": StackUp(
+            contributors=(
+                StackContributor(
+                    name="plate",
+                    tolerance=SymmetricTolerance(plus_minus=q("0.1 mm")).resolve(q("10 mm")),
+                ),
+                StackContributor(
+                    name="shim",
+                    tolerance=SymmetricTolerance(plus_minus=q("0.05 mm")).resolve(q("2 mm")),
+                    direction=-1,
+                ),
+            )
+        ),
+    }
+
+
+@pytest.mark.parametrize("label", sorted(_container_fixtures()))
+def test_the_container_protocol_answers_about_the_items_not_the_field_names(label):
+    """Read against the field the model carries, not against a fixed count."""
+    obj = _container_fixtures()[label]
+    (field,) = list(type(obj).model_fields)
+    items = tuple(getattr(obj, field))
+    assert len(items) >= 1, "the fixture has to hold something for this to say anything"
+
+    assert len(obj) == len(items)
+    assert list(obj) == list(items)
+    assert obj[0] is items[0]
+    assert obj[-1] is items[-1]
+    assert list(obj[:1]) == [items[0]]
+    # The one that answered False about something the object holds.
+    assert items[0] in obj
+    # And the shape it used to answer, so the fix cannot be undone quietly.
+    assert list(obj) != [(field, items)]
+    assert bool(obj) is True
+
+
+def test_an_empty_collection_is_falsy_and_a_full_one_is_not():
+    """`bool()` follows `__len__`, so `if card:` stopped being True over no checks."""
+    from anvilate.scorecard import Scorecard
+
+    assert not Scorecard()
+    assert len(Scorecard()) == 0
+    assert _container_fixtures()["Scorecard"]
+
+
+def test_the_mixin_refuses_a_model_that_is_not_one_collection():
+    """The derived field is the premise; a two-field model says so instead of choosing.
+
+    Nothing can pick, for a model with an `entries` and a `notes`, which one `len()` meant.
+    Deriving rather than declaring is what makes this reachable at all — a declared field
+    name would simply be wrong and answer anyway.
+    """
+    from pydantic import BaseModel
+
+    from anvilate._models import ItemCollection
+
+    class TwoFields(ItemCollection, BaseModel):
+        entries: tuple[int, ...] = ()
+        notes: tuple[str, ...] = ()
+
+    with pytest.raises(TypeError, match="there is no way to choose"):
+        len(TwoFields(entries=(1, 2), notes=("x",)))

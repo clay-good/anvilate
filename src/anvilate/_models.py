@@ -20,7 +20,7 @@ to every model in the library.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 from typing import Annotated, Any, Self, TypeVar
 
@@ -29,6 +29,7 @@ from pydantic import AfterValidator, BaseModel, PlainSerializer
 __all__ = [
     "EMPTY_MAP",
     "FrozenMap",
+    "ItemCollection",
     "Named",
     "Provenance",
     "RevalidatedModel",
@@ -110,6 +111,50 @@ def rebuilt_quantities(value: Any) -> Any:
                 pass
         rebuilt[key] = entry
     return rebuilt
+
+
+class ItemCollection:
+    """A model whose one field IS the items, made to answer Python's container protocol.
+
+    Pydantic gives every model an ``__iter__`` over its ``(field, value)`` pairs and nothing
+    else. On a model whose single field is the collection — a scorecard's entries, a
+    structure's members — that is not a missing feature, it is a **wrong answer that does
+    not raise**::
+
+        list(card)      -> [("entries", (entry, entry))]   one item, for a two-check card
+        len(card)       -> TypeError: object of type 'Scorecard' has no len()
+        entry in card   -> False, for an entry the card is holding
+        bool(card)      -> True, for a card with no checks in it
+
+    ``entry in card`` is the one that matters: membership falls through to ``__iter__``, so
+    it compared a ``ScorecardEntry`` against the tuple ``("entries", ...)`` and answered
+    False about a check the card contains. A caller who writes it gets no error and the
+    wrong answer, which is the shape this library refuses everywhere else.
+
+    Mixed in ahead of ``BaseModel`` so these win the MRO. The items field is **derived** and
+    not declared: the whole premise is a model that is one collection, so a class with two
+    fields is not one of these and says so rather than picking a field.
+    """
+
+    def _items(self) -> tuple[Any, ...]:
+        fields = list(type(self).model_fields)  # type: ignore[attr-defined]
+        if len(fields) != 1:
+            raise TypeError(
+                f"{type(self).__name__} mixes in ItemCollection and carries "
+                f"{len(fields)} fields ({', '.join(fields)}); the protocol below answers "
+                f"for a model that IS one collection, and there is no way to choose here "
+                f"which of several fields a caller meant by len() or iteration"
+            )
+        return tuple(getattr(self, fields[0]))
+
+    def __len__(self) -> int:
+        return len(self._items())
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._items())
+
+    def __getitem__(self, index: Any) -> Any:
+        return self._items()[index]
 
 
 class RevalidatedModel(BaseModel):
