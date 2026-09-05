@@ -1385,6 +1385,61 @@ def test_the_finite_rule_reaches_into_the_documents_free_form_parts():
     assert _first_non_finite("p", {"a": [1.0, "x", True, None, {"b": 2}]}) == (None, None)
 
 
+def test_a_document_that_nests_past_what_anything_can_serialise_is_refused_here():
+    """The same shape as the infinite width, one probe later: accepted at the front door and
+    failed at the far end of the call.
+
+    A 400-deep `element_params` compiled, and `canonical_json` then answered
+    `-32603 Internal error: compile_spec raised ValueError: Circular reference detected` —
+    an internal error for a client's own input, naming a circular reference that does not
+    exist, because that is what Python's JSON encoder says when it runs out of depth. It is
+    refused at validation now, naming the field rather than the thirty-two `[0]`s it got to.
+    """
+    from anvilate.spec.ir import _MAX_DOCUMENT_DEPTH
+
+    def _nested(levels: int, *, wrap) -> dict:
+        deep: object = 1
+        for _ in range(levels):
+            deep = wrap(deep)
+        return {**_PADEYE_PARAMS, "deep": deep}
+
+    # Both containers the walk descends into. Lists alone leave the mapping arm of it
+    # untested, and a mapping is the shape a JSON client actually sends.
+    for wrap in (lambda inner: [inner], lambda inner: {"a": inner}):
+        # One under the bound is a document; one over it is not. Measured against the
+        # constant rather than a literal, so raising the bound moves both sides together.
+        _padeye(element_params=_nested(_MAX_DOCUMENT_DEPTH - 3, wrap=wrap))
+        with pytest.raises(ValidationError, match="nests more than") as raised:
+            _padeye(element_params=_nested(_MAX_DOCUMENT_DEPTH + 2, wrap=wrap))
+        assert "element_params" in str(raised.value)
+        assert "[0][0][0]" not in str(raised.value), "the path is not what a reader acts on"
+        assert ".a.a.a" not in str(raised.value)
+
+
+def test_the_depth_bound_is_far_above_the_documents_this_repository_ships():
+    """A bound picked out of the air is one that refuses a real spec. The deepest Design Spec
+    here is five levels against a bound of thirty-two."""
+    from collections.abc import Mapping as _Mapping
+
+    from anvilate.spec.ir import _MAX_DOCUMENT_DEPTH
+
+    def _depth(value: object, level: int = 0) -> int:
+        if isinstance(value, _Mapping):
+            return max((_depth(v, level + 1) for v in value.values()), default=level)
+        if isinstance(value, (list, tuple)):
+            return max((_depth(v, level + 1) for v in value), default=level)
+        return level
+
+    root = Path(__file__).resolve().parent.parent
+    specs = sorted((root / "examples").rglob("*.yaml"))
+    assert len(specs) >= 2, f"only {len(specs)} shipped specs were measured"
+    deepest = max(_depth(load_spec_yaml(s.read_text()).model_dump(mode="json")) for s in specs)
+    assert deepest * 4 < _MAX_DOCUMENT_DEPTH, (
+        f"the deepest shipped spec is {deepest} levels against a bound of "
+        f"{_MAX_DOCUMENT_DEPTH}; the bound is no longer comfortably clear of the data"
+    )
+
+
 def test_the_finite_rule_leaves_an_ordinary_document_alone():
     """The guard walks every field of every spec model, so the thing to hold is that it lets
     a real one through."""

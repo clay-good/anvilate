@@ -82,7 +82,24 @@ Length = Annotated[Quantity, AfterValidator(require_dimension("[length]", name="
 Force = Annotated[Quantity, AfterValidator(require_dimension("[force]", name="force"))]
 
 
-def _first_non_finite(where: str, value: object) -> tuple[str | None, float | None]:
+#: How deep a document is allowed to nest, measured from a model's own field.
+#:
+#: A fact about the data: the deepest Design Spec this repository ships is five levels, and
+#: the free-form parts of one are `{"magnitude": ..., "unit": ...}` under a named parameter.
+#: The bound exists because a document that nests past what any consumer can serialise fails
+#: at the far end of the call instead of at its front door: `canonical_json` gave
+#: `-32603 Internal error: compile_spec raised ValueError: Circular reference detected` for a
+#: 400-deep document over MCP — an internal error for a client's input, naming a circular
+#: reference that does not exist, because that is what Python's JSON encoder says when it
+#: runs out of depth. A spec is refused here instead, naming the path.
+_MAX_DOCUMENT_DEPTH = 32
+
+
+class _TooDeep(ValueError):
+    """A document nested past :data:`_MAX_DOCUMENT_DEPTH`, carrying the path it got to."""
+
+
+def _first_non_finite(where: str, value: object, depth: int = 0) -> tuple[str | None, float | None]:
     """The first infinity or NaN under ``value``, and the path to it — or ``(None, None)``.
 
     A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the number is two
@@ -94,6 +111,8 @@ def _first_non_finite(where: str, value: object) -> tuple[str | None, float | No
     `element_params.width.magnitude` rather than `element_params`. Sub-models are not walked:
     each is a `_Base` and has already run this rule on itself.
     """
+    if depth > _MAX_DOCUMENT_DEPTH:
+        raise _TooDeep(where)
     value = getattr(value, "value", value)
     if isinstance(value, Quantity):
         return (where, value.magnitude) if not isfinite(value.magnitude) else (None, None)
@@ -108,13 +127,13 @@ def _first_non_finite(where: str, value: object) -> tuple[str | None, float | No
         return (where, value) if not isfinite(value) else (None, None)
     if isinstance(value, Mapping):
         for key, item in value.items():
-            found = _first_non_finite(f"{where}.{key}", item)
+            found = _first_non_finite(f"{where}.{key}", item, depth + 1)
             if found[0] is not None:
                 return found
         return None, None
     if isinstance(value, (list, tuple, set, frozenset)):
         for index, item in enumerate(value):
-            found = _first_non_finite(f"{where}[{index}]", item)
+            found = _first_non_finite(f"{where}[{index}]", item, depth + 1)
             if found[0] is not None:
                 return found
     return None, None
@@ -146,7 +165,16 @@ class _Base(RevalidatedModel):
         canonical-JSON writer with no field named.
         """
         for name in type(self).model_fields:
-            where, magnitude = _first_non_finite(name, getattr(self, name, None))
+            try:
+                where, magnitude = _first_non_finite(name, getattr(self, name, None))
+            except _TooDeep:
+                # The field, not the path it got to: thirty-two `[0]`s is not something a
+                # reader acts on, and the field is where they have to look.
+                raise ValueError(
+                    f"{name} nests more than {_MAX_DOCUMENT_DEPTH} levels deep, and a "
+                    f"document that nests past what any consumer can serialise is refused "
+                    f"here rather than at the far end of the call"
+                ) from None
             if where is not None:
                 raise ValueError(
                     f"{where} is {magnitude}, which is not a number a document can state; "

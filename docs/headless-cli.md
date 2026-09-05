@@ -160,6 +160,14 @@ answered `-32603 Internal error` over MCP, raised by the canonical-JSON writer a
 of the call with no field named. The walk goes into mappings and sequences now and names the
 path it found: `element_params.width is inf`.
 
+The same walk carries the other bound a free-form mapping needs. A document nested 400 levels
+deep compiled too, and `canonical_json` answered it at the far end of the call with
+`-32603 Internal error: compile_spec raised ValueError: Circular reference detected` — an
+internal error for a client's own input, naming a circular reference that does not exist,
+because that is what Python's JSON encoder says when it runs out of depth. A document that
+nests past 32 levels is refused at validation now, naming the field. The deepest Design Spec
+this repository ships is five levels, and a rule holds the bound comfortably clear of that.
+
 A `<<:` merge key still works, and a key the document sets locally still overrides the merged
 one. That is not an exception to the duplicate rule — the check runs over the keys as
 authored, before the merge is flattened into them.
