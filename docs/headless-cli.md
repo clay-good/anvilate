@@ -177,6 +177,15 @@ A document does not state a string longer than 4,096 characters now, values and 
 alike, and the refusal names the path: `element_params.finish is 4,097 characters`. The
 longest string any spec here states is a 64-character description.
 
+Breadth is the fourth axis and the last one a document has. 500,000 `load_cases` were
+accepted, and every one of them then went on to be screened, rendered, exported and signed. A
+document does not state a collection of more than 1,024 items now, mappings and lists alike,
+and the refusal names the field: `load_cases holds 1,025 items`. What the bound does not buy
+is the reading — those load cases are 17.7 MB of YAML, and parsing them is 22 of the 23
+seconds the front door spends, against 1.2 for building the models — so there is no earlier
+place to put it that would help. It is about what happens after. The widest collection any
+spec here states is eleven keys.
+
 The same range has an upper end on a **citation**, and for the same reason one end of it was
 already refused. A citation that is present and blank is refused because it reads as filled in
 every rendering and follows nowhere; a citation of a hundred thousand characters reads as

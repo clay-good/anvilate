@@ -105,6 +105,23 @@ _MAX_DOCUMENT_DEPTH = 32
 #: nema23_bracket description at 64 characters, and a rule below holds the bound clear of it.
 _MAX_STRING_LENGTH = 4_096
 
+#: How many items a collection in a document may hold.
+#:
+#: The fourth bound on the same walk, and the last axis a document has. Depth, magnitude and
+#: string length were all bounded on the argument that something at the far end of the call
+#: has to be able to answer the document — and breadth is the one that was left. 500,000
+#: `load_cases` were accepted, and every one of them then went on to be screened, rendered,
+#: exported and signed. Same shape as the 400-deep document and the 1e400 width: a stateless
+#: MCP server takes these from a client it does not control.
+#:
+#: What this does **not** buy is the cost of reading the document. Those 500,000 load cases
+#: are 17.7 MB of YAML, and parsing them is 22 of the 23 seconds the front door spends —
+#: building the models from the parsed data is the other 1.2, so refusing earlier would save
+#: nothing. The bound is about what happens *after*: a document nothing can act on is refused
+#: before anything acts on it. The widest collection any document in this repository states is
+#: eleven keys, and a rule below holds the bound clear of that.
+_MAX_COLLECTION_ITEMS = 1_024
+
 
 class _TooDeep(ValueError):
     """A document nested past :data:`_MAX_DOCUMENT_DEPTH`, carrying the path it got to."""
@@ -125,13 +142,22 @@ def _too_long(where: str, length: int) -> str:
     )
 
 
+def _too_many(where: str, count: int) -> str:
+    return (
+        f"{where} holds {count:,} items, and a document does not state a collection of more "
+        f"than {_MAX_COLLECTION_ITEMS:,}; a document larger than anything can screen, render "
+        f"or sign is refused here rather than at the far end of the call"
+    )
+
+
 def _first_unstatable(where: str, value: object, depth: int = 0) -> str | None:
     """What is wrong with the first value a document may not state — or ``None``.
 
-    Two rules share this one walk because they share a premise: a document states what a
-    consumer at the far end of the call can answer. A number that is infinite or undefined is
-    one half; a string longer than :data:`_MAX_STRING_LENGTH` is the other, and it had
-    nothing. The returned string is the whole refusal, so the path it built is in the
+    Three rules share this one walk because they share a premise: a document states what a
+    consumer at the far end of the call can answer. A number that is infinite or undefined
+    fails it, a string longer than :data:`_MAX_STRING_LENGTH` fails it, and a collection of
+    more than :data:`_MAX_COLLECTION_ITEMS` fails it — and only the first of the three was
+    written. The returned string is the whole refusal, so the path it built is in the
     sentence: `element_params.width is inf, ...`.
 
     A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the number is two
@@ -163,6 +189,8 @@ def _first_unstatable(where: str, value: object, depth: int = 0) -> str | None:
     if isinstance(value, float):
         return _not_a_number(where, value) if not isfinite(value) else None
     if isinstance(value, Mapping):
+        if len(value) > _MAX_COLLECTION_ITEMS:
+            return _too_many(where, len(value))
         for key, item in value.items():
             if isinstance(key, str) and len(key) > _MAX_STRING_LENGTH:
                 return _too_long(f"a key of {where}", len(key))
@@ -171,6 +199,8 @@ def _first_unstatable(where: str, value: object, depth: int = 0) -> str | None:
                 return found
         return None
     if isinstance(value, (list, tuple, set, frozenset)):
+        if len(value) > _MAX_COLLECTION_ITEMS:
+            return _too_many(where, len(value))
         for index, item in enumerate(value):
             found = _first_unstatable(f"{where}[{index}]", item, depth + 1)
             if found is not None:

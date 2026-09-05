@@ -1719,18 +1719,19 @@ def test_the_effectivity_change_states_the_debt_the_ratchet_actually_holds():
     )
 
 
-def test_the_headless_cli_page_quotes_the_two_string_bounds_and_the_data_it_clears():
+def test_the_headless_cli_page_quotes_the_document_bounds_and_the_data_they_clear():
     """Four numbers on one paragraph pair, and every one of them expires on its own.
 
-    Two are the constants (4,096 and 1,024), which the page argues from and which live in
-    two different modules. The third is the *headroom* — "the longest string any spec here
+    Three are the constants — the string bound, the collection bound and the citation bound —
+    which the page argues from and which live in two different modules. The fourth is the
+    *headroom* — "the longest string any spec here
     states is a 64-character description" — and that is the number that makes the first bound
     defensible. A bound quoted beside a figure nothing measures is a bound a reader has no
     reason to believe.
     """
     import conftest
     from anvilate._models import _LONGEST_CITED
-    from anvilate.spec.ir import _MAX_STRING_LENGTH
+    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
     from test_contract import _evidence_references
 
     page = _page("headless-cli.md")
@@ -1738,6 +1739,10 @@ def test_the_headless_cli_page_quotes_the_two_string_bounds_and_the_data_it_clea
     stated = re.search(r"does not state a string longer than ([\d,]+) characters", page)
     assert stated is not None, "the document string bound on headless-cli.md has moved"
     assert int(stated.group(1).replace(",", "")) == _MAX_STRING_LENGTH
+
+    items = re.search(r"a collection of more than ([\d,]+) items", page)
+    assert items is not None, "the collection bound on headless-cli.md has moved"
+    assert int(items.group(1).replace(",", "")) == _MAX_COLLECTION_ITEMS
 
     cited = re.search(r"name is at most ([\d,]+) characters", page)
     assert cited is not None, "the citation bound on headless-cli.md has moved"

@@ -1423,6 +1423,72 @@ def test_a_document_cannot_state_a_string_longer_than_anything_can_render():
     assert "element_params.finish" in str(raised.value), str(raised.value)
 
 
+def test_a_document_cannot_state_a_collection_larger_than_anything_can_act_on():
+    """The fourth bound on the same walk, and the last axis a document has.
+
+    Depth, magnitude and string length are all bounded on one argument — something at the far
+    end of the call has to be able to answer the document — and breadth was the axis left
+    open. 500,000 `load_cases` were accepted, and every one of them then went on to be
+    screened, rendered, exported and signed.
+
+    What the bound does not buy is the reading: those load cases are 17.7 MB of YAML, and
+    parsing is 22 of the 23 seconds the front door spends, so there is no earlier place to put
+    it that would help. It is about what happens after.
+    """
+    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS, _first_unstatable
+
+    at_the_bound = ["x"] * _MAX_COLLECTION_ITEMS
+    just_past = ["x"] * (_MAX_COLLECTION_ITEMS + 1)
+    assert _first_unstatable("p", at_the_bound) is None
+    assert _first_unstatable("p", just_past) is not None
+
+    # Mappings and sequences alike, and inside the free-form parts rather than only at the
+    # top — the place the identical claim about numbers was false for a year.
+    nested = _first_unstatable("p", {"a": [{"b": just_past}]})
+    assert nested is not None and nested.startswith("p.a[0].b holds 1,025 items"), nested
+    keyed = _first_unstatable("p", {"a": {str(i): i for i in range(_MAX_COLLECTION_ITEMS + 1)}})
+    assert keyed is not None and keyed.startswith("p.a holds 1,025 items"), keyed
+
+    # And through the real front door, naming the field.
+    with pytest.raises(ValidationError, match="does not state a collection of more than"):
+        _padeye(element_params={**_PADEYE_PARAMS, "holes": just_past})
+
+
+def test_the_collection_bound_is_clear_of_every_document_this_repository_ships():
+    """A bound picked out of the air is a bound that refuses a real spec one day.
+
+    Reported at a quarter of the bound rather than at it, because a rule that fires once the
+    bound is reached fires after the first real document has been refused. The widest
+    collection any spec here states is eleven keys against a bound of 1,024.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    widest, where = 0, None
+    for path in sorted(examples.rglob("*.spec.yaml")):
+        stack = [(path.name, yaml.safe_load(path.read_text(encoding="utf-8")))]
+        while stack:
+            at, node = stack.pop()
+            if isinstance(node, dict):
+                if len(node) > widest:
+                    widest, where = len(node), at
+                stack.extend((f"{at}.{k}", v) for k, v in node.items())
+            elif isinstance(node, list):
+                if len(node) > widest:
+                    widest, where = len(node), at
+                stack.extend((f"{at}[]", v) for v in node)
+
+    assert widest >= 5, f"the sweep found nothing wider than {widest}; it is reading no specs"
+    assert widest * 4 <= _MAX_COLLECTION_ITEMS, (
+        f"{where} holds {widest} items against a bound of {_MAX_COLLECTION_ITEMS}; the bound "
+        f"is no longer comfortably clear of the documents this repository ships"
+    )
+
+
 def test_a_document_that_nests_past_what_anything_can_serialise_is_refused_here():
     """The same shape as the infinite width, one probe later: accepted at the front door and
     failed at the far end of the call.
