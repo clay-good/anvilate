@@ -411,6 +411,91 @@ class Quantity(RevalidatedModel):
             f"the unit matters"
         )
 
+    # The four operators above were the ones a caller reaches for first, and stopping
+    # there left the rest of the numeric protocol answering Python's bare sentence again —
+    # `bad operand type for unary -: 'Quantity'` names neither the parameter nor the
+    # mistake, which is the whole reason the block above exists. `-stress` on a
+    # compression, `d ** 2` in a section property, `round(load, 2)` before printing and
+    # `f"{load:.2f}"` in a caller's own report are all ordinary things to write.
+    #
+    # `tests/test_units.py` holds the *completeness* of this block rather than its members:
+    # every numeric dunder Python defines is either written here or named as one this type
+    # deliberately leaves to the base class, so the next one cannot be missed the way these
+    # were.
+
+    def __neg__(self) -> Quantity:
+        raise ValueError(
+            f"unary - is not defined on a quantity ({self}); a parameter taking a plain "
+            f"number was given one. Pass Quantity(magnitude={-self.magnitude:g}, "
+            f"unit={self.unit!r}) for the negated quantity, or -q.to(unit).magnitude "
+            f"where a plain number is what is wanted"
+        )
+
+    def __pos__(self) -> Quantity:
+        raise ValueError(
+            f"unary + is not defined on a quantity ({self}); it does nothing to a number "
+            f"and the same is true here, so it is refused rather than answered — pass the "
+            f"quantity itself"
+        )
+
+    def __pow__(self, other: object) -> Quantity:
+        raise self._unsupported("**", other)
+
+    __rpow__ = __pow__
+
+    def __floordiv__(self, other: object) -> Quantity:
+        raise self._unsupported("//", other)
+
+    __rfloordiv__ = __floordiv__
+
+    def __mod__(self, other: object) -> Quantity:
+        raise self._unsupported("%", other)
+
+    __rmod__ = __mod__
+
+    def __divmod__(self, other: object) -> Quantity:
+        raise self._unsupported("divmod()", other)
+
+    __rdivmod__ = __divmod__
+
+    def _no_rounding(self, operation: str) -> ValueError:
+        return ValueError(
+            f"{operation} is not defined on a quantity ({self}); rounding a magnitude "
+            f"without saying which unit it is in is how a value gets rounded in metres and "
+            f"read in millimetres. Write {operation}(q.to(unit).magnitude) and wrap the "
+            f"result, or leave the rounding to the rendering"
+        )
+
+    def __round__(self, ndigits: int | None = None) -> Quantity:
+        raise self._no_rounding("round()")
+
+    def __floor__(self) -> Quantity:
+        raise self._no_rounding("math.floor()")
+
+    def __ceil__(self) -> Quantity:
+        raise self._no_rounding("math.ceil()")
+
+    def __trunc__(self) -> Quantity:
+        raise self._no_rounding("math.trunc()")
+
+    def __format__(self, format_spec: str) -> str:
+        """``f"{q}"`` renders the quantity; ``f"{q:.2f}"`` says what to write instead.
+
+        A format spec is a statement about a *number*, and this object is a number and a
+        unit. Applying the spec to the magnitude and appending the unit would answer
+        ``f"{q:>12}"`` by padding the number and pushing the unit past the column the
+        caller was aligning to — a table that looks aligned and is not. So the spec is
+        refused, in the same voice as the operators above, rather than half-honoured.
+        """
+        if format_spec == "":
+            return str(self)
+        raise ValueError(
+            f"a format spec ({format_spec!r}) is not defined on a quantity ({self}); it "
+            f"describes a number and this is a number with a unit. Write "
+            f'f"{{q.to(unit).magnitude:{format_spec}}} unit" to control the figure, or '
+            f'f"{{q}}" for this library\'s own rendering ({self})'
+        )
+
 
 def require_finite(value: Quantity | float, *, name: str) -> float:
     """The magnitude of ``value``, having refused a non-finite one by name.

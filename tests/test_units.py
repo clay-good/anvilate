@@ -485,6 +485,111 @@ def test_the_builtin_conversions_refuse_by_name(call, wanted):
     assert wanted in str(refusal.value)
 
 
+@pytest.mark.parametrize(
+    ("operation", "call", "remedy"),
+    [
+        # Unary minus on a compressive stress, and the exponent in a section property,
+        # are the two a caller writes without thinking about it.
+        ("unary -", lambda q: -q, "Quantity(magnitude=-2.5"),
+        ("unary +", lambda q: +q, "pass the quantity itself"),
+        ("**", lambda q: q**2, "pass 2.5"),
+        ("**", lambda q: 2**q, "pass 2.5"),
+        ("//", lambda q: q // 2, "pass 2.5"),
+        ("%", lambda q: q % 2, "pass 2.5"),
+        ("divmod()", lambda q: divmod(q, 2), "pass 2.5"),
+        ("round()", lambda q: round(q, 1), "q.to(unit).magnitude"),
+        ("round()", lambda q: round(q), "q.to(unit).magnitude"),
+        ("math.floor()", lambda q: math.floor(q), "q.to(unit).magnitude"),
+        ("math.ceil()", lambda q: math.ceil(q), "q.to(unit).magnitude"),
+        ("math.trunc()", lambda q: math.trunc(q), "q.to(unit).magnitude"),
+    ],
+)
+def test_the_rest_of_the_numeric_protocol_refuses_in_the_same_voice(operation, call, remedy):
+    """The block above stopped at four operators, and the rest went on answering Python.
+
+    `-stress`, `d ** 2`, `round(load, 2)` — every one of these came back as
+    `bad operand type for unary -: 'Quantity'` or `type Quantity doesn't define __round__
+    method`, which is the sentence that whole section exists to replace. The premise was
+    "the operations this type deliberately does not support, saying which"; the detector
+    was twelve operators.
+
+    Rounding gets its own reason rather than the shared one: the mistake there is not a
+    wrapped plain number, it is rounding a magnitude without saying which unit it is in.
+    """
+    quantity = Quantity(magnitude=2.5, unit="mm")
+    with pytest.raises(ValueError, match="not defined") as refusal:
+        call(quantity)
+    message = str(refusal.value)
+    assert operation in message
+    assert remedy in message, "the refusal must say what to write instead"
+
+
+def test_a_format_spec_is_refused_and_the_bare_rendering_is_not():
+    """`f"{q:.2f}"` raised a bare TypeError, and honouring it would misalign a table.
+
+    A spec describes a number; this is a number and a unit. `f"{q:>12}"` answered by
+    padding the magnitude would push the unit past the column the caller was aligning to —
+    a table that looks aligned and is not — so it is refused rather than half-honoured.
+    The empty spec is the rendering and keeps working, which is what `f"{q}"` is.
+    """
+    quantity = Quantity(magnitude=2.5, unit="mm")
+    assert f"{quantity}" == "2.5 mm"
+    assert format(quantity, "") == "2.5 mm"
+    for spec in (".2f", ">12", "e", "^20s"):
+        with pytest.raises(ValueError, match="not defined") as refusal:
+            format(quantity, spec)
+        message = str(refusal.value)
+        assert repr(spec) in message
+        assert "q.to(unit).magnitude" in message
+        assert "2.5 mm" in message, "the refusal shows what the plain rendering gives"
+
+
+# `float` and not a list written here: the mistake being guarded is a caller treating a
+# Quantity as a number, so the protocol to cover is the one a number implements. A
+# hand-written set of names is satisfied by whatever was thought of the day it was
+# written, which is exactly how the four operators above came to be the only four.
+_DELIBERATELY_INHERITED = {
+    "__eq__": "pydantic's field-wise equality; it always worked and refusing it would regress",
+    "__ne__": "the inverse of the above, and Python derives it",
+    "__hash__": "pydantic's, on the frozen fields; a Quantity is a dict key in this library",
+    "__bool__": "no numeric meaning here — a quantity is a value object, never a truth value",
+    "__repr__": "pydantic's, which shows the fields; `__str__` is the reader's rendering",
+    "__new__": "object construction, not the numeric protocol",
+    "__getattribute__": "attribute access, not the numeric protocol",
+    "__getformat__": "a CPython float internal, not part of any protocol a caller uses",
+    "__getnewargs__": "pickling support, and a Quantity pickles correctly through pydantic",
+}
+
+
+def test_every_operation_a_number_answers_is_answered_or_declared_here():
+    """The gate on the *completeness* of the refusal block, not on its members.
+
+    Four operators were written, then `int`/`float`/`abs`, and everything else in the
+    protocol went on answering with the interpreter's sentence for as long as nobody
+    tried it. This asks the question the other way round: take every dunder `float`
+    defines — the protocol a caller who thinks this is a number will reach into — and
+    require each to be written on `Quantity` or named above with the reason it is left to
+    the base class.
+    """
+    numeric_protocol = {
+        name for name in vars(float) if name.startswith("__") and name.endswith("__")
+    }
+    assert len(numeric_protocol) >= 30, "the protocol was read as all but empty"
+
+    written = {name for name in vars(Quantity) if name.startswith("__") and name.endswith("__")}
+    unanswered = sorted(numeric_protocol - written - set(_DELIBERATELY_INHERITED))
+    assert not unanswered, (
+        f"a caller writing these on a Quantity gets Python's sentence, which names neither "
+        f"the parameter nor the mistake: {unanswered}. Refuse each by name, or add it to "
+        "_DELIBERATELY_INHERITED with the reason"
+    )
+
+    # And the table cannot carry a name the protocol does not have, or it rots into a
+    # list of things nobody checks.
+    stale = sorted(set(_DELIBERATELY_INHERITED) - numeric_protocol)
+    assert not stale, f"_DELIBERATELY_INHERITED names what `float` does not define: {stale}"
+
+
 def test_equality_still_works_because_it_always_did():
     """The refusals are for operators that did not exist. Equality did, and is untouched:
     turning a working comparison into a refusal would be a regression dressed as a fix."""
