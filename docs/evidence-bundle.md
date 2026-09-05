@@ -55,7 +55,7 @@ keeps both. A layer that never ran leaves its key out, because "this layer never
 layer concluded nothing" are different facts and the bundle refuses to collapse them. `spec` and
 `calloutScorecard` are the two present-and-null exceptions: for those a null *is* the answer, so
 a reader can tell "no spec" from "a key I forgot to look for". `additionalProperties` is left
-open, as on the scorecard contract, so a client pinned to `1.0.0` keeps reading a later bundle
+open, as on the scorecard contract, so a client pinned to an earlier version keeps reading a later bundle
 that gained a section.
 
 ### The work, not just the verdict
@@ -89,6 +89,32 @@ The split is not tidiness. Folding the card into `to_json_dict()` would move the
 form hashed into every predicate — invalidating attestations already signed — and put two
 copies of one scorecard inside one signed document, which is two chances for them to
 disagree. A test asserts the predicate still carries the roll-up and not the document.
+
+## The bundle carries the sources its numbers were read from
+
+The same scenario, one field along. `citations` — the standards, certificates and database
+records behind the dimensioned properties — has travelled in the signed attestation predicate
+since that layer shipped, and the **document** dropped it. So a reviewer holding only the
+bundle read `[PASS] material resolution: AA-6061-T6 resolves in the bundled materials
+database` and had no way to see which table, which edition, or which certificate that was.
+Same field, same records, two consumers, and only one of them had it.
+
+```text
+sources:
+  AA-6061-T6 (material) Aluminium 6061-T6 — Aluminum Design Manual 2020, Table A.3.4
+```
+
+A bundle carrying none says so — `sources: none recorded — this bundle names the standards
+its checks cite and not the certificates, tables or database records they were read from` —
+on the rule the `spec` and `assumptions` blocks beside it already follow: a heading that
+vanishes makes an absence something a reader has to notice rather than something the document
+states. In the JSON the key is *absent* rather than an empty list, which is that same
+distinction in the form this document has always drawn it.
+
+The schema moves to `1.1.0` for the added key. Nothing a `1.0.0` client already reads has
+changed, and neither release closes `additionalProperties`, so an old client keeps working; it
+simply cannot see where the numbers came from. The roll-up is untouched, because its canonical
+form is hashed into attestations somebody has already signed.
 
 ## The bundle carries the spec, so the scenario is performable
 

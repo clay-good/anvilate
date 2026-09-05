@@ -151,11 +151,17 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
 _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
-# The evidence bundle, published at 1.0.0 so `export_artifact` can describe what it returns.
-# It could not before: the tool declared its entire output as `{"type": "object"}`, because
+# The evidence bundle, published so `export_artifact` can describe what it returns. It could
+# not before: the tool declared its entire output as `{"type": "object"}`, because
 # `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
 # here for the same reason as the two above.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.0.0.json"
+#
+# 1.1.0 adds `citations`, absent when the bundle carries none — the standards, certificates
+# and database records the numbers were read from, which the signed attestation predicate has
+# always carried and the document a reviewer receives did not. Nothing a 1.0.0 client already
+# reads has changed and neither release closes `additionalProperties`, so an old client keeps
+# working; it simply cannot see where the numbers came from.
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session

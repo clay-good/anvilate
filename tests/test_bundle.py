@@ -1020,6 +1020,7 @@ def _every_section() -> BundleSections:
     `calloutScorecard` and `geometricTolerances` were produced by no test at all. Seven
     branches of the one method both export surfaces render, none of them ever taken.
     """
+    from anvilate.evidence import SourceRecord
     from anvilate.explore import Objective, Parameter, Study, StudyEvaluation, run_study
     from anvilate.export.gate import ExportRecord, authorize_export
     from anvilate.gdt import (
@@ -1075,6 +1076,14 @@ def _every_section() -> BundleSections:
         ),
         exports=(ExportRecord(artifact="part.dxf", authorization=authorize_export(_card())),),
         assumptions=("linear elastic, small deflection",),
+        citations=(
+            SourceRecord(
+                ref="AA-6061-T6",
+                kind="material",
+                name="Aluminium 6061-T6",
+                sources=("Aluminum Design Manual 2020, Table A.3.4",),
+            ),
+        ),
     )
 
 
@@ -1343,3 +1352,84 @@ def test_a_sections_block_can_no_longer_carry_anything_at_all():
         "sections carries status 'excellent'" in problem
         for problem in _predicate_schema_problems({**honest, "sections": {"status": "excellent"}})
     )
+
+
+def test_a_source_record_renders_every_field_it_carries():
+    """A record is a provenance claim, and a rendering that drops part of one makes a
+    different claim than the record does.
+
+    Exists because the exported bundle prints these and nothing rendered one before it did:
+    the sources block came out as `ref='AA-6061-T6' kind='material' name=...`, pydantic's
+    field dump. Held to the property the rendering sweep uses — move one field and the line
+    has to move with it — over the model's own field list, so a fifth field cannot land
+    unrendered.
+    """
+    from anvilate.evidence import SourceRecord
+
+    record = SourceRecord(
+        ref="AA-6061-T6",
+        kind="material",
+        name="Aluminium 6061-T6",
+        sources=("Aluminum Design Manual 2020, Table A.3.4", "ASTM B209-14"),
+    )
+    line = str(record)
+    assert line == (
+        "AA-6061-T6 (material) Aluminium 6061-T6 — "
+        "Aluminum Design Manual 2020, Table A.3.4; ASTM B209-14"
+    ), line
+
+    moved = {
+        "ref": "AA-7075-T6",
+        "kind": "component",
+        "name": "Aluminium 7075-T6",
+        "sources": ("ASTM B209-14",),
+    }
+    assert set(moved) == set(SourceRecord.model_fields), (
+        "SourceRecord's fields and the ones moved here have diverged: "
+        f"unmoved {sorted(set(SourceRecord.model_fields) - set(moved))}"
+    )
+    for field, value in moved.items():
+        assert str(record.model_copy(update={field: value})) != line, (
+            f"moving {field} left the rendering identical"
+        )
+
+    # An empty source list says so rather than collapsing to nothing, on the rule the blocks
+    # around it follow: a record whose sources nobody recorded and one with sources must not
+    # read the same.
+    assert "none recorded" in str(record.model_copy(update={"sources": ()}))
+
+
+def test_the_exported_bundle_carries_the_sources_its_numbers_were_read_from():
+    """The signed predicate has carried them since that layer shipped; the document did not.
+
+    `artifact-export`'s scenario is a reviewer who receives **only the bundle** and re-runs
+    the analysis, and a screening result whose sources are somewhere else is not one they can
+    act on. Same field, same records, two consumers, and only one of them had it.
+
+    Both renderings, because they are two surfaces over one definition — the text a person
+    reads and the JSON a tool does — and the absent case, because a bundle that collected no
+    sources and one whose sources are all recorded are different facts.
+    """
+    from anvilate.evidence import SourceRecord
+
+    record = SourceRecord(
+        ref="AA-6061-T6",
+        kind="material",
+        name="Aluminium 6061-T6",
+        sources=("Aluminum Design Manual 2020, Table A.3.4",),
+    )
+    carried = _sections(citations=(record,))
+    bare = _sections()
+
+    document = carried.render_document()
+    assert "sources:" in document
+    assert str(record) in document, document
+    assert carried.to_document_dict()["citations"] == [record.model_dump(mode="json")]
+
+    # Absent from the JSON, and stated in the text: the two ways this document says "no".
+    assert "citations" not in bare.to_document_dict()
+    assert "none recorded" in bare.render_document()
+
+    # The roll-up is untouched. Its canonical form is hashed into attestations somebody has
+    # already signed, and moving it would move every one of their digests.
+    assert carried.render() == bare.render()

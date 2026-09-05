@@ -77,7 +77,7 @@ SCORECARD_SCHEMA_VERSION = "1.6.0"
 # `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
 # schema said nothing about. Same rule as the two above — bump on a change to the generated
 # document, and the gate refuses a changed schema under an unchanged version.
-BUNDLE_SCHEMA_VERSION = "1.0.0"
+BUNDLE_SCHEMA_VERSION = "1.1.0"
 
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:

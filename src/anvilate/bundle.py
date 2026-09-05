@@ -192,6 +192,15 @@ class BundleDocument(BaseModel):
     # Null rather than absent, deliberately: see the class docstring.
     spec: DesignSpec | None
 
+    # Absent when the bundle carries none, present when it does. The standards, certificates
+    # and database records the numbers were read from: the bundle has carried them into the
+    # signed attestation predicate since that layer shipped, and the *document* — the thing
+    # `anvilate export --artifact evidence-bundle` prints and the `export_artifact` MCP tool
+    # serves — dropped them. `artifact-export`'s scenario is a reviewer holding only this
+    # document, and a screening result whose sources are somewhere else is not one they can
+    # act on. Same field, same records, two consumers; only one of them had it.
+    citations: tuple[SourceRecord, ...] | None = None
+
     verification: VerificationPlan | None = None
     review: ReviewerDossier | None = None
     exploration: StudyResult | None = None
@@ -570,6 +579,7 @@ class BundleSections(RevalidatedModel):
                 self._render_rollup(),
                 "checks:",
                 *self._check_lines(),
+                *self.citations_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
@@ -618,6 +628,25 @@ class BundleSections(RevalidatedModel):
             )
         return ("spec:", *(f"  {line}" for line in dump_spec_yaml(self.spec).splitlines()))
 
+    def citations_block(self) -> tuple[str, ...]:
+        """The sources as rendered lines — never empty, so the heading never vanishes.
+
+        The rule :meth:`spec_block` and :meth:`assumptions_block` follow, one field along, and
+        for the same reason: a bundle whose sources nobody collected and one whose sources are
+        all recorded are different facts, and a reader is owed the first in the document
+        rather than by noticing an absence.
+
+        The records themselves have been carried into the signed attestation predicate since
+        that layer shipped. The *document* dropped them — and `artifact-export`'s scenario is
+        a reviewer holding only this document.
+        """
+        if not self.citations:
+            return (
+                "sources: none recorded — this bundle names the standards its checks cite "
+                "and not the certificates, tables or database records they were read from",
+            )
+        return ("sources:", *(f"  {record}" for record in self.citations))
+
     def to_document_dict(self) -> dict[str, object]:
         """The exported bundle as JSON: the roll-up, and the whole card under ``scorecard``.
 
@@ -643,11 +672,17 @@ class BundleSections(RevalidatedModel):
         validates every document built here against the model and against the released schema,
         and the key-set test beside it holds the model's fields to the keys this method emits.
         """
-        return {
+        document: dict[str, object] = {
             **self.to_json_dict(),
             "scorecard": self.scorecard.model_dump(mode="json"),
             "spec": None if self.spec is None else self.spec.model_dump(mode="json"),
         }
+        # Absent rather than an empty list, which is this document's rule everywhere: a
+        # bundle that collected no sources and one whose sources are all recorded are
+        # different facts, and `[]` asserts the second.
+        if self.citations:
+            document["citations"] = [record.model_dump(mode="json") for record in self.citations]
+        return document
 
     def to_json_dict(self) -> dict[str, object]:
         """The sections as JSON-safe primitives, for the attestation predicate.

@@ -53,6 +53,19 @@ class SourceRecord(RevalidatedModel):
     name: Named  # the record's name, or a fit designation for a tolerance
     sources: tuple[str, ...]
 
+    def __str__(self) -> str:
+        """One line a reviewer reads, rather than pydantic's field dump.
+
+        The exported bundle prints these, and until it did there was no surface that rendered
+        a source record at all — so it printed
+        ``ref='AA-6061-T6' kind='material' name='Aluminium 6061-T6' sources=(...)``. Every
+        field is here, because a record is a provenance claim and a rendering that drops part
+        of one is a provenance claim nobody made: `sources` says "none recorded" rather than
+        collapsing to an empty pair of brackets, on the same rule the blocks around it follow.
+        """
+        listed = "; ".join(self.sources) or "none recorded"
+        return f"{self.ref} ({self.kind}) {self.name} — {listed}"
+
 
 # The governing standard for geometric tolerancing (feature control frames); a
 # fixed reference, not a sourced dimension, so it is a constant rather than table

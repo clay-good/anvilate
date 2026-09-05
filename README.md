@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,820 public symbols, each dimension-checked and
-hand-verified, 5,108 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,110 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -242,7 +242,7 @@ Three cross-cutting layers keep a green from being a silent one.
 | | |
 | --- | --- |
 | [Verification planning](docs/verification-planning.md) | Once the physics passes, the physical test each check implies — a BTH-1 lifter's 125% proof load, a vessel's UG-99 hydrostatic — with the rule that a plan is never evidence: nothing performed reports `not_evaluated`, never a pass. |
-| [One evidence bundle](docs/evidence-bundle.md) | Every layer's output, with a single roll-up that is never better than its worst section. An absent layer is named rather than assumed. |
+| [One evidence bundle](docs/evidence-bundle.md) | Every layer's output, with a single roll-up that is never better than its worst section. An absent layer is named rather than assumed, and so are the sources: the document carries the standards, certificates and database records its numbers were read from, or says it recorded none. |
 | [Attested evidence](docs/evidence-attestation.md) | An in-toto statement whose subjects are the artifact digests and whose predicate carries the scorecard, the citations, and a CycloneDX inventory of the environment — *read* rather than typed. An unsigned bundle says so, and a signature nobody checked reports `not_evaluated`. |
 | [QIF Results](docs/quality-interchange.md) | A scorecard is structurally a set of characteristics with requirements and actuals, so the whole thing exports as ISO 23952 for CMM and quality software — with the tri-state carried across rather than flattened. |
 | [The export gate](docs/export-gating.md) | A DXF or QIF document is written only when the scorecard passes, or under an explicit override that stamps `UNVALIDATED` and the blocking checks into the file's own metadata. |
