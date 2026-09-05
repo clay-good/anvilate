@@ -1150,6 +1150,53 @@ def test_a_predicate_key_this_verifier_does_not_read_is_reported_not_ignored():
     # A predicate that is not an object is somebody else's report to make.
     assert _unread_predicate_keys([1, 2, 3]) == ()
 
+    # And not only at the top. A key on a scorecard ENTRY is the same claim one level in, and
+    # it is the level a reader actually reads.
+    card = honest["scorecard"]
+    entries = [{**card["entries"][0], "signed_off_by": "nobody"}, *card["entries"][1:]]
+    deeper = {**honest, "scorecard": {**card, "entries": entries, "waivers": ["x"]}}
+    assert _unread_predicate_keys(deeper) == (
+        "scorecard.entries[0].signed_off_by",
+        "scorecard.waivers",
+    )
+    citations = [{**honest["citations"][0], "superseded_by": "nothing"}]
+    assert _unread_predicate_keys({**honest, "citations": citations}) == (
+        "citations[0].superseded_by",
+    )
+
+
+def test_the_unread_key_sweep_reports_nothing_on_a_document_this_library_wrote():
+    """The half that decides whether the sweep is usable at all.
+
+    It works by round-tripping each part through the model that reads it and diffing the
+    keys, so a model that drops a key of its own — an alias spelt one way on the wire and
+    another in Python, a field excluded from serialisation — would report every honest bundle
+    as carrying an unread claim, and the NOT_EVALUATED verdict would mean nothing.
+
+    Run over the predicate as written, and over the same predicate with each optional part
+    present, because a sweep proved only on the default shape is proved on one document.
+    """
+    from anvilate.attestation import _unread_predicate_keys
+
+    honest = _honest_predicate()
+    assert _unread_predicate_keys(honest) == ()
+
+    card = honest["scorecard"]
+    assert card["entries"], "the fixture card has no entries; the sweep would prove nothing"
+    for entry in card["entries"]:
+        assert _unread_predicate_keys({**honest, "scorecard": {**card, "entries": [entry]}}) == ()
+
+    # And over every entry the suite has built so far, which is the corpus with the field
+    # combinations a fixture does not have: a derivation, an uncertainty annotation, a repair
+    # hint, a comparison. Positive evidence, so a filtered run checks the subset it reached.
+    import conftest
+
+    observed = list(conftest._library_entries.values())
+    for entry in observed:
+        serialised = entry.model_dump(mode="json")
+        card_with_it = {**card, "entries": [serialised]}
+        assert _unread_predicate_keys({**honest, "scorecard": card_with_it}) == (), entry.name
+
 
 def test_a_signed_bundle_carrying_an_unread_claim_does_not_verify_clean():
     """The whole path, because the field is only worth having if the verdict moves.

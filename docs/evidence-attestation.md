@@ -73,6 +73,15 @@ place. It was ignored — `anvilate verify` printed a clean `[PASS]` over a pred
 attested, and never mentioned it. The report carries `unread_predicate_keys` now, the verdict
 moves to `NOT_EVALUATED`, and the line says `predicate states waivers, not read here`.
 
+**And not only at the top.** A key on a scorecard *entry* — `"signed_off_by": "nobody"` beside
+a check — is the same claim one level further in, and it is the level a reader actually reads.
+The parts backed by a model are found by round-tripping them through it and diffing the keys,
+not by a second hand-written list: what the reader could not carry is exactly what does not
+come back. Keys only, and in one direction, since the reader legitimately adds keys the
+document did not have (`status` is computed) and normalises values. `bom` and `aiDisclosure`
+are not swept — a CycloneDX inventory is somebody else's schema, and this verifier is not the
+authority on what may appear in one.
+
 Reported rather than refused, and that is the same distinction `unverified_signatures` draws:
 a bundle written by a newer Anvilate is not a broken bundle, and a verifier that failed on
 every key it had not been taught would make each release refuse the one before it. What it

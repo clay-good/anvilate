@@ -931,8 +931,35 @@ class VerificationReport(BaseModel):
         return f"{head}: {detail}"
 
 
+def _keys_dropped_on_the_way_in(raw: object, produced: object, where: str = "") -> list[str]:
+    """Keys present in ``raw`` and absent from ``produced``, with the path to each.
+
+    A model reads a document by parsing it, and a key it has no field for is dropped without
+    a word. Rather than hand-list what each model reads — a list that goes stale the first
+    time a field is added, and which is the direction the predicate's own key check was
+    already missing — the parsed object is serialised again and the two are compared. What
+    the reader could not carry is exactly what does not come back.
+
+    Only keys, and only in one direction. The reader legitimately *adds* keys the document
+    did not have (`Scorecard.status` is computed) and legitimately normalises values, so a
+    value comparison would report an honest document.
+    """
+    dropped: list[str] = []
+    if isinstance(raw, dict) and isinstance(produced, dict):
+        for key, value in raw.items():
+            path = f"{where}.{key}".lstrip(".")
+            if key not in produced:
+                dropped.append(path)
+            else:
+                dropped.extend(_keys_dropped_on_the_way_in(value, produced[key], path))
+    elif isinstance(raw, list) and isinstance(produced, list) and len(raw) == len(produced):
+        for index, (before, after) in enumerate(zip(raw, produced, strict=True)):
+            dropped.extend(_keys_dropped_on_the_way_in(before, after, f"{where}[{index}]"))
+    return dropped
+
+
 def _unread_predicate_keys(predicate: object) -> tuple[str, ...]:
-    """Keys the predicate states that this verifier reads none of.
+    """Everything the predicate states that this verifier reads none of.
 
     The rule the payload type already follows, one level in. A type this verifier does not
     recognise is a reported problem, because a document it cannot read is not a document it
@@ -941,6 +968,13 @@ def _unread_predicate_keys(predicate: object) -> tuple[str, ...]:
     `anvilate verify` printed a clean PASS over a predicate carrying
     `"waivers": ["signed off by nobody"]` without ever mentioning it.
 
+    **And not only at the top.** A key on a scorecard *entry* is the same claim one level
+    further in — `"signed_off_by": "nobody"` beside a check — and it is the level a reader
+    actually reads. The parts backed by a model are found by round-tripping them rather than
+    by a second hand-written key list; `bom` and `aiDisclosure` are not, because a CycloneDX
+    inventory is somebody else's schema and this verifier is not the authority on what may
+    appear in one.
+
     Reported rather than refused. A bundle from a newer Anvilate is not a broken bundle, and
     a verifier that failed on any key it had not been taught would make every release break
     the one before it. What it must not do is stay silent.
@@ -948,7 +982,34 @@ def _unread_predicate_keys(predicate: object) -> tuple[str, ...]:
     if not isinstance(predicate, dict):
         return ()  # not a predicate at all; `_predicate_schema_problems` says so
     known = set(_PREDICATE_REQUIRED_KEYS) | set(_PREDICATE_OPTIONAL_KEYS)
-    return tuple(sorted(key for key in predicate if key not in known))
+    unread = [key for key in predicate if key not in known]
+
+    scorecard = predicate.get("scorecard")
+    if isinstance(scorecard, dict):
+        try:
+            card = Scorecard.model_validate(scorecard)
+        except (ValidationError, TypeError):
+            pass  # `_predicate_schema_problems` reports a scorecard that does not validate
+        else:
+            unread += [
+                f"scorecard.{path}"
+                for path in _keys_dropped_on_the_way_in(scorecard, card.model_dump(mode="json"))
+            ]
+
+    citations = predicate.get("citations")
+    if isinstance(citations, list):
+        for index, citation in enumerate(citations):
+            if not isinstance(citation, dict):
+                continue
+            try:
+                record = SourceRecord.model_validate(citation)
+            except (ValidationError, TypeError):
+                continue
+            unread += [
+                f"citations[{index}].{path}"
+                for path in _keys_dropped_on_the_way_in(citation, record.model_dump(mode="json"))
+            ]
+    return tuple(sorted(unread))
 
 
 def _predicate_schema_problems(predicate: object) -> list[str]:
