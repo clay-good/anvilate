@@ -9,7 +9,7 @@ what it is waiting on.
 | `check` | one or more specs, or a directory | `--format`, `--show-work` | every check passed, or passed with margin to spare |
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
-| `diff` | two specs | — | nothing got worse |
+| `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | — | nothing: it is specified and unbuilt, and exits 4 |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -233,6 +233,13 @@ carried, and one reader supplies the toolchain to both renderings.
 `export` carries the same roll-up: `status` at the top of the payload, a
 `N bundles: WORST` line at the end of the text, and the exit code — all three from one
 computation, because three renderings of one run that can disagree eventually will.
+
+`diff --format json` is the same rule taken one step earlier. The text rendering used to
+**be** the comparison — the sections were assembled as strings, and the exit code was worked
+out a second time, separately, from the two cards. A machine-readable diff written as a
+second renderer would have been a second answer to "what moved", free to drift from the one
+a human reviewer is shown. So the comparison is built once as data, and the text, the JSON
+and the exit code are all read off it.
 
 `governing` is `null` rather than absent on a card with nothing to govern — an ordinary card
 of passing checks that carry no safety factor — because a missing key and a card with
@@ -467,6 +474,36 @@ improvement and reads as one.
 **The geometry half is named rather than omitted**, for the same reason the unbuilt command
 is named rather than left unknown: a reader who sees no mass delta should be told there is
 none to be had, not left wondering whether the mass was equal.
+
+**`--format json` is what the merge gate reads.** `diff` is the command a CI job runs on a
+commit that changes a shared pattern, and until it had a machine-readable rendering the job's
+only options were the exit code — one integer for a whole comparison — or scraping the text.
+The payload carries every section the text prints, with one key per section, present on every
+run whether or not it has anything in it:
+
+```json
+{"before": {"path": "before.yaml", "name": "deck_plate", "status": "pass"},
+ "after":  {"path": "after.yaml",  "name": "deck_plate", "status": "fail"},
+ "spec": {"changed": true, "lines": ["-description: A mezzanine deck plate."]},
+ "verdict": {"before": "pass", "after": "fail", "worse": true},
+ "checks": {"moved": [{"name": "bending", "change": "moved", "before": "pass",
+                       "after": "fail", "detail": "the moment exceeds the section",
+                       "worse": true}],
+            "unchanged": 2},
+ "geometry": {"compared": false, "reason": "mass, volume and centre-of-gravity deltas..."},
+ "regression": {"regressed": true, "status": "fail"}}
+```
+
+`regression` is the `governing` of this payload: **the one conclusion a consumer cannot
+rebuild from the rest of it** without reimplementing which moves count as worse — including
+the rule that `fail` and `not_evaluated` are incomparable, which no ordering of the four
+statuses expresses. `status` there is what the exit code is computed from, so the two cannot
+disagree.
+
+`change` is `moved`, `added` or `removed`, and `worse` is `false` on both of the last two.
+A different set of checks is not a worse set — the rule the exit code has always followed —
+and what makes a deleted check visible instead is `verdict.worse`, which reads the card's own
+roll-up and cannot be deleted by deleting the checks.
 
 ## The one that is refused
 

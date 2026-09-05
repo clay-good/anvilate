@@ -1000,6 +1000,145 @@ def test_diff_is_no_longer_on_the_unbuilt_list():
     assert "geometry-generation" in _DIFF_NEEDS_GEOMETRY
 
 
+# --- diff --format json, and the one document both renderings come off ---------------------
+
+
+def _pair_screening(monkeypatch, was: CheckStatus, now: CheckStatus):
+    """Screen `before.yaml` to `was` and `after.yaml` to `now`, one check called `bending`."""
+    from anvilate import screening
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        status = now if "revised" in spec.description else was
+        return Scorecard(entries=(ScorecardEntry(name="bending", status=status, detail="d"),))
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+
+
+_EVERY_STATUS = (
+    CheckStatus.PASS,
+    CheckStatus.OVER_MARGIN,
+    CheckStatus.NOT_EVALUATED,
+    CheckStatus.FAIL,
+)
+
+
+def test_the_json_diff_is_the_only_thing_on_stdout(spec_pair):
+    """A caller piping this into a parser gets a document, not a document with a headline
+    printed above it — the failure mode `--format json` exists to avoid."""
+    before, after = spec_pair
+    code, out, err = _run("diff", "--format", "json", str(before), str(after))
+    payload = json.loads(out)
+    assert code == EXIT_OK and err == ""
+    assert payload["before"]["path"] == str(before)
+    assert payload["after"]["path"] == str(after)
+
+
+def test_the_json_diff_carries_every_section_on_every_run(spec_pair):
+    """The shape does not change with the content. A payload whose keys come and go is one
+    every caller has to branch on, and the branch is wrong the first time a comparison turns
+    out to be empty — the rule the text rendering already follows by printing `GEOMETRY` with
+    nothing under it."""
+    before, after = spec_pair
+    sections = {"before", "after", "spec", "verdict", "checks", "geometry", "regression"}
+    for arguments in ((before, before), (before, after)):
+        _code, out, _err = _run("diff", "--format", "json", *[str(p) for p in arguments])
+        payload = json.loads(out)
+        assert set(payload) == sections, arguments
+        assert set(payload["checks"]) == {"moved", "unchanged"}
+        assert payload["geometry"] == {
+            "compared": False,
+            "reason": payload["geometry"]["reason"],
+        }
+
+
+@pytest.mark.parametrize("was", _EVERY_STATUS)
+@pytest.mark.parametrize("now", _EVERY_STATUS)
+def test_the_text_diff_is_that_same_document_rendered(spec_pair, monkeypatch, was, now):
+    """The gate this whole change is built around, over all sixteen verdict pairs.
+
+    The text rendering used to *be* the comparison, so a second renderer for JSON would have
+    been a second answer to "what moved". Feeding the published payload back through
+    `_render_diff` and getting the text run's own stdout is what proves there is one
+    document: a JSON payload computed separately could agree on these sixteen and drift on
+    the seventeenth, and this cannot.
+    """
+    from anvilate.cli import _render_diff
+
+    _pair_screening(monkeypatch, was, now)
+    before, after = spec_pair
+    _code, text, _err = _run("diff", str(before), str(after))
+    _code, out, _err = _run("diff", "--format", "json", str(before), str(after))
+    assert _render_diff(json.loads(out)) + "\n" == text
+
+
+@pytest.mark.parametrize("was", _EVERY_STATUS)
+@pytest.mark.parametrize("now", _EVERY_STATUS)
+def test_the_exit_code_is_the_regression_the_payload_publishes(spec_pair, monkeypatch, was, now):
+    """`regression.status` is this payload's `governing`: the one conclusion a consumer
+    cannot rebuild without reimplementing which moves count as worse — including that `fail`
+    and `not_evaluated` are incomparable, which no ordering of the four expresses. The exit
+    code is computed from it, so the two cannot disagree."""
+    _pair_screening(monkeypatch, was, now)
+    before, after = spec_pair
+    code, out, _err = _run("diff", "--format", "json", str(before), str(after))
+    regression = json.loads(out)["regression"]
+    assert regression["regressed"] is (regression["status"] is not None)
+    expected = (
+        EXIT_OK if regression["status"] is None else EXIT_CODES[CheckStatus(regression["status"])]
+    )
+    assert code == expected
+
+
+def test_both_directions_between_fail_and_not_evaluated_are_reported_as_worse(
+    spec_pair, monkeypatch
+):
+    """Neither is an improvement: one loses the check, the other reveals a failure."""
+    for was, now in (
+        (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED),
+        (CheckStatus.NOT_EVALUATED, CheckStatus.FAIL),
+    ):
+        _pair_screening(monkeypatch, was, now)
+        before, after = spec_pair
+        _code, out, _err = _run("diff", "--format", "json", str(before), str(after))
+        payload = json.loads(out)
+        assert [entry["worse"] for entry in payload["checks"]["moved"]] == [True], (was, now)
+        assert payload["regression"]["regressed"] is True
+
+
+def test_a_deleted_check_is_not_worse_and_the_card_verdict_is_what_catches_it(
+    spec_pair, monkeypatch
+):
+    """Deleting the failing check is how a failing gate gets silenced. `worse` stays False
+    on a removal — a different set of checks is not a worse set — and what reports it instead
+    is the card's own roll-up, which cannot be deleted by deleting the checks."""
+    from anvilate import screening
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        if "revised" in spec.description:
+            return Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name="T1 analytical", status=CheckStatus.NOT_EVALUATED, detail="d"
+                    ),
+                )
+            )
+        return Scorecard(
+            entries=(ScorecardEntry(name="bending", status=CheckStatus.FAIL, detail="d"),)
+        )
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    before, after = spec_pair
+    code, out, _err = _run("diff", "--format", "json", str(before), str(after))
+    payload = json.loads(out)
+    removed = [e for e in payload["checks"]["moved"] if e["change"] == "removed"]
+    assert [e["name"] for e in removed] == ["bending"]
+    assert removed[0]["worse"] is False
+    assert payload["verdict"] == {"before": "fail", "after": "not_evaluated", "worse": True}
+    assert code == EXIT_NOT_EVALUATED
+
+
 def test_an_unbuilt_operation_is_refused_by_name_however_it_is_invoked():
     """`anvilate build part.yaml` is what a reader of the help types, and it used to fail
     as a *usage error*.

@@ -58,7 +58,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from .scorecard import CheckStatus, Scorecard
 from .units import UnitSystem
@@ -253,6 +253,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     diff.add_argument("before", type=Path, help="the spec as it was")
     diff.add_argument("after", type=Path, help="the spec as it is")
+    diff.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="text for a person, json for the merge gate that has to decide",
+    )
 
     export = commands.add_parser(
         "export",
@@ -353,7 +359,18 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
 
     before_card, after_card = cards
     before_spec, after_spec = names
-    print(_render_diff(before_spec, after_spec, before_card, after_card), file=out)
+    document = _diff_document(
+        before_spec,
+        after_spec,
+        before_card,
+        after_card,
+        before_path=args.before,
+        after_path=args.after,
+    )
+    if args.format == "json":
+        print(json.dumps(document, indent=2, sort_keys=True), file=out)
+    else:
+        print(_render_diff(document), file=out)
 
     regressions = _regressions(before_card, after_card)
     for name, was, now in regressions:
@@ -375,12 +392,12 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
             f"anvilate diff: the card: {before_card.status.value} → {after_card.status.value}",
             file=err,
         )
-    if not regressions and not worse:
-        return EXIT_OK
-    codes = [EXIT_CODES[now] for _n, _w, now in regressions]
-    if worse:
-        codes.append(EXIT_CODES[after_card.status])
-    return max(codes, key=_EXIT_SEVERITY.index)
+    # Off the document rather than recomputed beside it. `regression.status` is the one
+    # conclusion a consumer cannot rebuild from the rest of the payload without
+    # reimplementing `_moved_for_the_worse`, and an exit code computed separately from the
+    # number the payload publishes is two answers to one question.
+    regressed_to = document["regression"]["status"]
+    return EXIT_OK if regressed_to is None else EXIT_CODES[CheckStatus(regressed_to)]
 
 
 def _moved_for_the_worse(was: CheckStatus, now: CheckStatus) -> bool:
@@ -426,13 +443,34 @@ def _regressions(before: Scorecard, after: Scorecard):
     ]
 
 
-def _render_diff(before_spec, after_spec, before: Scorecard, after: Scorecard) -> str:
-    """The three sections, each present even when it has nothing in it."""
+def _diff_document(
+    before_spec,
+    after_spec,
+    before: Scorecard,
+    after: Scorecard,
+    *,
+    before_path: Path,
+    after_path: Path,
+) -> dict[str, Any]:
+    """The comparison itself, as data, before anybody has decided how to print it.
+
+    Both renderings and the exit code come off this one structure. The text rendering used
+    to *be* the comparison — the sections were built as strings, and the exit code was
+    computed a second time, separately, from the cards — so a machine-readable diff written
+    as a second renderer would have been a second implementation of "what moved", free to
+    disagree with the first. A merge gate reads `diff`, and the thing it reads has to be the
+    thing the human reviewer is shown.
+
+    Every key is present on every run, including the sections with nothing in them. A shape
+    that changes with the content is a shape every caller has to branch on, and the branch is
+    wrong the first time a comparison happens to be empty — the same rule `check --format
+    json` follows about `governing`, and the reason the text rendering prints ``GEOMETRY``
+    even though it has nothing to say under it.
+    """
     import difflib
 
     from .spec import dump_spec_yaml
 
-    lines = [f"{before_spec.name} → {after_spec.name}", "", "SPEC"]
     changed = [
         line
         for line in difflib.unified_diff(
@@ -443,25 +481,113 @@ def _render_diff(before_spec, after_spec, before: Scorecard, after: Scorecard) -
         )
         if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
     ]
-    lines.extend(f"  {line}" for line in changed or ("no change",))
 
-    lines.extend(["", f"VERDICT  {before.status.value} → {after.status.value}", "", "CHECKS"])
     was = {entry.name: entry for entry in before.entries}
     now = {entry.name: entry for entry in after.entries}
-    moved = []
+    moved: list[dict[str, Any]] = []
     for name in sorted(set(was) | set(now)):
         if name not in now:
-            moved.append(f"  - {name}: removed (was {was[name].status.value})")
+            # Removed and added are `worse: false` deliberately. A different set of checks
+            # is not a worse set, and the exit code has never claimed otherwise; what makes
+            # a deletion visible is the card's own verdict below, which cannot be deleted.
+            moved.append(
+                {
+                    "name": name,
+                    "change": "removed",
+                    "before": was[name].status.value,
+                    "after": None,
+                    "detail": None,
+                    "worse": False,
+                }
+            )
         elif name not in was:
-            moved.append(f"  + {name}: added ({now[name].status.value})")
+            moved.append(
+                {
+                    "name": name,
+                    "change": "added",
+                    "before": None,
+                    "after": now[name].status.value,
+                    "detail": now[name].detail,
+                    "worse": False,
+                }
+            )
         elif was[name].status is not now[name].status:
-            moved.append(f"  ! {name}: {was[name].status.value} → {now[name].status.value}")
-            moved.append(f"      {now[name].detail}")
-    lines.extend(moved or ["  no verdict changed"])
-    unchanged = sum(1 for name in set(was) & set(now) if was[name].status is now[name].status)
-    lines.append(f"  ({unchanged} unchanged)")
+            moved.append(
+                {
+                    "name": name,
+                    "change": "moved",
+                    "before": was[name].status.value,
+                    "after": now[name].status.value,
+                    "detail": now[name].detail,
+                    "worse": _moved_for_the_worse(was[name].status, now[name].status),
+                }
+            )
 
-    lines.extend(["", "GEOMETRY", f"  not compared: {_DIFF_NEEDS_GEOMETRY}"])
+    verdict_worse = _moved_for_the_worse(before.status, after.status)
+    # The worst status anything regressed *to*, which is what the exit code is. `max` over
+    # the exit severity rather than over the statuses: `fail` and `not_evaluated` are
+    # incomparable as verdicts, but the codes they exit with are ordered, and it is the code
+    # this line has to pick.
+    regressed_to = [entry["after"] for entry in moved if entry["worse"]]
+    if verdict_worse:
+        regressed_to.append(after.status.value)
+    return {
+        "before": {
+            "path": str(before_path),
+            "name": before_spec.name,
+            "status": before.status.value,
+        },
+        "after": {
+            "path": str(after_path),
+            "name": after_spec.name,
+            "status": after.status.value,
+        },
+        "spec": {"changed": bool(changed), "lines": changed},
+        "verdict": {
+            "before": before.status.value,
+            "after": after.status.value,
+            "worse": verdict_worse,
+        },
+        "checks": {
+            "moved": moved,
+            "unchanged": sum(
+                1 for name in set(was) & set(now) if was[name].status is now[name].status
+            ),
+        },
+        "geometry": {"compared": False, "reason": _DIFF_NEEDS_GEOMETRY},
+        "regression": {
+            "regressed": bool(regressed_to),
+            "status": (
+                None
+                if not regressed_to
+                else max(
+                    regressed_to, key=lambda s: _EXIT_SEVERITY.index(EXIT_CODES[CheckStatus(s)])
+                )
+            ),
+        },
+    }
+
+
+def _render_diff(document: dict[str, Any]) -> str:
+    """The three sections, each present even when it has nothing in it."""
+    lines = [f"{document['before']['name']} → {document['after']['name']}", "", "SPEC"]
+    lines.extend(f"  {line}" for line in document["spec"]["lines"] or ("no change",))
+
+    verdict = document["verdict"]
+    lines.extend(["", f"VERDICT  {verdict['before']} → {verdict['after']}", "", "CHECKS"])
+    moved = []
+    for entry in document["checks"]["moved"]:
+        if entry["change"] == "removed":
+            moved.append(f"  - {entry['name']}: removed (was {entry['before']})")
+        elif entry["change"] == "added":
+            moved.append(f"  + {entry['name']}: added ({entry['after']})")
+        else:
+            moved.append(f"  ! {entry['name']}: {entry['before']} → {entry['after']}")
+            moved.append(f"      {entry['detail']}")
+    lines.extend(moved or ["  no verdict changed"])
+    lines.append(f"  ({document['checks']['unchanged']} unchanged)")
+
+    lines.extend(["", "GEOMETRY", f"  not compared: {document['geometry']['reason']}"])
     return "\n".join(lines)
 
 
