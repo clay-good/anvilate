@@ -110,6 +110,9 @@ def laminar_boundary_layer_thickness(
     ``kinematic_viscosity`` ν, with Re_x = U*x/ν: δ = 5*x/√Re_x. The layer thickens downstream (as
     √x) and thins in faster or less viscous flow. Valid while laminar (Re_x below ~5e5). Returns the
     boundary-layer thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the Blasius flat-plate
+    similarity solution.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -134,6 +137,9 @@ def laminar_displacement_thickness(
     δ* around their perimeter, and ignoring it is why a nominal throat passes less than its
     geometric area suggests. Valid while laminar (Re_x below ~5e5). Returns the displacement
     thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the Blasius flat-plate
+    similarity solution.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -159,6 +165,9 @@ def laminar_momentum_thickness(
     not an identity — θ is a length and C_f a dimensionless coefficient, and the two part company
     in the turbulent regime (θ/x = 0.036/Re^0.2 against C_f = 0.0592/Re^0.2). Valid while laminar
     (Re_x below ~5e5). Returns the momentum thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the Blasius flat-plate
+    similarity solution.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -183,6 +192,9 @@ def boundary_layer_shape_factor(
     one goes at roughly 2.4. A rising H along a diffuser or an aerofoil's aft surface is the
     standard signal that the flow is about to detach — before any of the thickness relations here
     stop applying. Returns the dimensionless shape factor as a plain float.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the integral thicknesses and
+    the shape factor built from them.
     """
     _check(displacement_thickness, "[length]", "displacement_thickness")
     _check(momentum_thickness, "[length]", "momentum_thickness")
@@ -204,6 +216,9 @@ def laminar_skin_friction_coefficient(
     U, the ``distance`` x from the leading edge, and the ``kinematic_viscosity`` ν, with
     Re_x = U*x/ν: C_f = 0.664/√Re_x. It falls as the boundary layer thickens downstream. Valid while
     laminar (Re_x below ~5e5). Returns the skin-friction coefficient as a plain float.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the Blasius flat-plate
+    similarity solution.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -221,6 +236,9 @@ def laminar_plate_drag_coefficient(
     integrated over the plate, from the ``freestream_velocity`` U, the ``plate_length`` L, and the
     ``kinematic_viscosity`` ν, with Re_L = U*L/ν: C_D = 1.328/√Re_L — exactly twice the
     trailing-edge C_f. Valid while laminar (Re_L below ~5e5). Returns the drag coefficient (float).
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the Blasius flat-plate
+    similarity solution.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(plate_length, "[length]", "plate_length")
@@ -244,6 +262,9 @@ def turbulent_boundary_layer_thickness(
     linearly in x (as x^0.8) rather than as √x. This is the regime real plates, hulls, and fuselages
     actually run in. Assumes the layer is turbulent from the leading edge. Returns the
     boundary-layer thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the 1/7-power turbulent
+    flat-plate relations.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -265,6 +286,9 @@ def turbulent_skin_friction_coefficient(
     laminar 1/√Re_x, and sits well above it at the same station — the steep near-wall velocity
     gradient of a turbulent profile is exactly why tripping a layer costs friction drag. Valid for
     roughly 5e5 < Re_x < 1e7. Returns the skin-friction coefficient as a plain float.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the 1/7-power turbulent
+    flat-plate relations.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
@@ -286,6 +310,9 @@ def turbulent_plate_drag_coefficient(
     Assumes turbulence from the leading edge, which overstates drag when the laminar run is a
     significant fraction of the plate. Valid for roughly 5e5 < Re_L < 1e7. Returns the drag
     coefficient as a plain float.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the 1/7-power turbulent
+    flat-plate relations.
     """
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(plate_length, "[length]", "plate_length")
@@ -322,6 +349,9 @@ def turbulent_displacement_thickness(
     exponents (x^0.8 against x^0.5). The usual alternative is to omit the correction entirely. The
     1/7-power profile is an engineering fit valid for roughly 5×10⁵ < Re_x < 10⁷ and drifting
     slowly outside it. Returns the displacement thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the 1/7-power turbulent
+    flat-plate relations.
     """
     return Quantity(
         magnitude=turbulent_boundary_layer_thickness(
@@ -352,6 +382,9 @@ def turbulent_momentum_thickness(
     momentum integral C_D = 2θ/L lands within 3% of
     :func:`turbulent_plate_drag_coefficient`, the residual being the standard 1/7-power versus
     Schlichting-fit artifact rather than an error in either. Returns the momentum thickness in m.
+
+    Source: Schlichting & Gersten, *Boundary-Layer Theory*, the 1/7-power turbulent
+    flat-plate relations.
     """
     return Quantity(
         magnitude=(7.0 / 72.0)

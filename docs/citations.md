@@ -42,6 +42,15 @@ It means all three of these:
   paid, and the file stays as a ratchet so a new check cannot ship without one. Naming a
   source is not the same as having been checked against it: what a citation does and does
   not claim is the whole of this page.
+- **And 33 of them name it only by accident.** The gate matches a curated list of sources
+  as substrings, and an eponym is both a person and a quantity: a docstring that says
+  "Poisson's ratio ν" or "the Reynolds number" satisfies it while naming no source at all.
+  `Young` was struck from the list once for exactly this ("Young's modulus"), and the
+  remaining 33 are enumerated in
+  [`docs/api/eponym-credited-symbols.txt`](api/eponym-credited-symbols.txt) — a downward-only
+  ratchet, so a new one cannot ship and each paid off is one fewer. An eponymous *law*,
+  *equation* or *solution* — `Paris law`, `Lamé stresses` — is a real citation and is not on
+  it.
 
 ## How to verify one
 

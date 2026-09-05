@@ -203,6 +203,7 @@ Reynolds
 Rohsenow
 Sabine
 Schiller
+Schlichting
 Sieder
 Stokes
 Terzaghi

@@ -734,6 +734,120 @@ def _module_cited_manifest() -> set[str]:
     }
 
 
+# --- An eponym is a person and a quantity, and the gate cannot tell them apart ---------
+#
+# `Young` was struck from citation-authorities.txt after it shipped: it matched "Young's
+# modulus" and credited three elastic-wave functions to a material property. That was one
+# token, and the shape is a family. `Poisson` credits fourteen symbols that name Poisson's
+# ratio as an *input*; `Reynolds` credits seven that mention the Reynolds number; and
+# `pipe_flow.reynolds_number` is credited for naming its own output.
+
+# The nouns that make an eponym a quantity rather than a work. Deliberately short: an
+# eponymous *law*, *equation*, *solution* or *correlation* names where the formula came
+# from and is a citation — `Lamé stresses`, `Paris law`, `Sabine equation`. A `number`, a
+# `ratio`, a `modulus` and a `combination` are things that merely appear in one.
+_QUANTITY_NOUN = re.compile(r"(?:numbers?|ratios?|moduli|modulus|groups?|combinations?)")
+
+
+def _only_names_a_quantity(token: str, text: str) -> bool:
+    """True when every occurrence of ``token`` in ``text`` is `<token> <quantity noun>`."""
+    seen = 0
+    for match in re.finditer(re.escape(token), text):
+        seen += 1
+        # The hyphen matters: "Newman & Raju stress-intensity factor" and "Wahl
+        # stress-correction factor" are attributions, and the noun that follows the
+        # eponym there is the head of a compound, not the quantity itself.
+        following = re.match(r"(?:\u2019s|'s)?\s*(\w+)(-?)", text[match.end() : match.end() + 30])
+        if not following or following.group(2):
+            return False
+        if not _QUANTITY_NOUN.fullmatch(following.group(1).lower()):
+            return False
+    return seen > 0
+
+
+def _falsely_credited_symbols() -> set[str]:
+    """Public symbols whose only authority token appears only as the name of a quantity."""
+    authorities = _citation_authorities()
+    module_cited = _module_cited_manifest()
+    flagged: set[str] = set()
+    for entry in _manifest_surface():
+        module_name, _, symbol = entry.partition(".")
+        try:
+            module = importlib.import_module(f"anvilate.analysis.{module_name}")
+            obj = getattr(module, symbol)
+        except (ImportError, AttributeError):  # pragma: no cover - the surface gate catches this
+            continue
+        text = inspect.getdoc(obj) or ""
+        if entry in module_cited:
+            text = text + "\n" + (inspect.getdoc(module) or "")
+        hits = [token for token in authorities if token in text]
+        if len(hits) == 1 and _only_names_a_quantity(hits[0], text):
+            flagged.add(entry)
+    return flagged
+
+
+def _eponym_manifest() -> set[str]:
+    path = _REPO / "docs" / "api" / "eponym-credited-symbols.txt"
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def _eponym_debt_failure(flagged: set[str], listed: set[str]) -> str | None:
+    """The rule as a function of two sets, so each direction can be made to fire."""
+    unlisted = sorted(flagged - listed)
+    if unlisted:
+        return (
+            "these public symbols name no source: their only citation token is an eponym "
+            "appearing as the name of a quantity — Poisson's ratio, the Reynolds number — "
+            "which is what `Young` was struck from the authorities list for. Name the "
+            "source in the symbol's own docstring; do NOT add a line to "
+            "docs/api/eponym-credited-symbols.txt:\n  " + "\n  ".join(unlisted)
+        )
+    struck = sorted(listed - flagged)
+    if struck:
+        return (
+            "these are recorded as falsely credited and are not any more. Strike them from "
+            "docs/api/eponym-credited-symbols.txt so the list can only shrink:\n  "
+            + "\n  ".join(struck)
+        )
+    return None
+
+
+def test_no_symbol_is_credited_to_an_eponym_that_names_a_quantity():
+    """A ratchet over the citations that are not citations, in both directions."""
+    flagged = _falsely_credited_symbols()
+    assert len(flagged) <= 40, (
+        f"{len(flagged)} symbols are falsely credited; the rule has widened rather than "
+        "the library having got worse"
+    )
+    complaint = _eponym_debt_failure(flagged, _eponym_manifest())
+    assert complaint is None, complaint
+
+
+def test_the_eponym_rule_tells_an_attribution_from_a_quantity():
+    """The rule's own discriminator, on the phrases it was written against.
+
+    Getting this backwards is the expensive direction: a rule that calls `Paris law` a
+    false credit sends someone to rewrite a citation that was right.
+    """
+    assert _only_names_a_quantity("Reynolds", "as a function of the Reynolds number")
+    assert _only_names_a_quantity("Poisson", "and Poisson's ratio nu describe the disc")
+    assert _only_names_a_quantity("Mises", "the input to the von Mises combination")
+    # An eponymous law, solution, equation or correlation IS the attribution.
+    assert not _only_names_a_quantity("Paris", "the Paris law da/dN = C(dK)^m")
+    assert not _only_names_a_quantity("Lame", "The exact Lame stresses at the bore")
+    assert not _only_names_a_quantity("Sabine", "Sabine equation for reverberation time")
+    assert not _only_names_a_quantity("Wahl", "the Wahl stress-correction factor")
+    # One good mention anywhere in the docstring is enough to keep the credit.
+    assert not _only_names_a_quantity(
+        "Reynolds", "the Reynolds number, from Reynolds, *An Experimental Investigation*"
+    )
+    assert not _only_names_a_quantity("Reynolds", "no mention at all")
+
+
 def test_every_new_public_check_names_its_source():
     """The citation gate, held as a ratchet: the debt can only go down.
 

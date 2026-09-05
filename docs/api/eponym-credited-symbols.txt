@@ -1,0 +1,65 @@
+# Symbols whose ONLY citation is an eponym naming a quantity (the false-credit debt).
+#
+# The citation gate credits a symbol when a token from citation-authorities.txt appears in
+# its docstring. That is a substring test, and an eponym is both a person and a quantity:
+# `Young` was struck from the authorities list after it shipped, because it matched
+# "Young's modulus" and falsely credited three elastic-wave functions.
+#
+# One token was the whole of that fix, and the shape was not. `Poisson` credits fourteen
+# symbols whose docstrings mention **Poisson's ratio as an input parameter**; `Reynolds`
+# credits seven that mention **the Reynolds number**; and `pipe_flow.reynolds_number` is
+# credited for naming its own output. None of these names a source. The gate reported a
+# fully cited surface over them.
+#
+# THE RULE, and it is narrow on purpose. A symbol is on this list when its only authority
+# token appears *only* immediately before `number`, `ratio`, `modulus` or `combination` —
+# the nouns that make an eponym a quantity rather than a work. `Lamé stresses`,
+# `Blasius solution`, `Paris law`, `Archard wear law`, `Sabine equation` and
+# `Newman & Raju stress-intensity factor` are NOT on it and must not be: an eponymous law,
+# equation, solution or correlation names the person the formula came from, which is a
+# citation. A dimensionless group is not.
+#
+# It is a RATCHET, in the same shape as the debt files beside it, and it fails in three
+# directions: a newly false-credited symbol that is not listed, a listed symbol that now
+# names a real source (strike it off), and a listed symbol the rule no longer flags.
+#
+# TO PAY A LINE OFF: name the source in the symbol's OWN docstring, and add the token to
+# citation-authorities.txt if the list does not have it. `boundary_layer`'s eleven were the
+# first eleven paid off this way — every one was credited to "the Reynolds number", and the
+# module names Blasius and von Karman in prose while citing no listed authority at all.
+# They cite Schlichting & Gersten, *Boundary-Layer Theory*, now.
+#
+# Do NOT add a line to silence a new failure. A new check names its source.
+axial.axial_elongation
+axial.axial_stiffness
+axial.axial_stress
+axial.circular_area
+axial.required_axial_area
+composite.composite_major_poisson_ratio
+coriolis.ekman_number
+drag.galilei_number
+fluid_statics.morton_number
+flywheel.rotating_annular_disc_bore_stress
+flywheel.rotating_annular_disc_radial_stress
+flywheel.rotating_annular_disc_tangential_stress
+flywheel.rotating_solid_disc_max_stress
+flywheel.rotating_solid_disc_radial_stress
+flywheel.rotating_solid_disc_tangential_stress
+gas_transport.prandtl_number
+mass_transfer.lewis_number
+mass_transfer.schmidt_number
+mass_transfer.sherwood_number
+naval_architecture.ittc_friction_coefficient
+pipe_flow.reynolds_number
+pipe_flow.turbulent_entry_length
+pressure_vessel.sphere_external_pressure_buckling
+pressure_vessel.thin_wall_cylinder_diametral_growth
+pressure_vessel.thin_wall_sphere_diametral_growth
+thermal.brinkman_number
+thermal.marangoni_number
+thermal.richardson_number
+thermal.thermal_shock_stress
+thermal.thermal_shock_temperature_limit
+thermal.through_wall_gradient_thermal_stress
+thermal.triaxial_constrained_thermal_stress
+torsion.hollow_shaft_diameter_for_bending_torsion
