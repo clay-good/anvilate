@@ -175,6 +175,21 @@ python -c "from anvilate.store import subject_store_root; print(subject_store_ro
 Deleting it, whole or in part, is safe at any time: nothing evicts anything, and a handle
 that no longer resolves is refused by name rather than answered wrongly.
 
+**Editing it is not, and now it says so.** A handle is the digest of its own record, and
+`resolve` checked everything about a stored entry except that. Present, decodable, readable
+JSON, the right kind — every guard reasoning, in its own comment, from "this is a file
+something outside this library wrote" — and none of them asked whether the bytes still hash
+to the handle they are filed under. So a stored scorecard whose verdict was edited from
+`fail` to `pass` resolved under the handle it was published as, and every reader served the
+edit: `read_scorecard` returns the record's document as stored rather than a re-serialisation
+of it, and an exported evidence bundle is built from the same record. The invariant was in
+`publish`'s docstring — "a store whose files change under a handle is not content-addressed"
+— and held on the writing side only.
+
+An entry whose content no longer hashes to its handle is refused by name, saying what it
+hashes to instead and that the fix is to delete it and publish again. Restoring the bytes
+restores the handle: the check is on the content, not a flag.
+
 **What a client pinned to the old surface is owed.** The four schemas gained a *required*
 property, and `compile_spec` and `run_validation` gained one in their output, so this is a
 breaking change to the tool surface — which is exactly why the contracts shipped before the

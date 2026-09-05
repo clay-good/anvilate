@@ -169,6 +169,29 @@ class SubjectStore:
                 f"only where its document was published, and nothing here evicts an entry — "
                 f"so this is a store that never held it, or one whose directory was removed"
             ) from missing
+        # **The address, against the content it addresses.** Everything above this line
+        # checks the entry's *shape* — present, decodable, readable, the right kind — and
+        # the docstrings all reason from "this is a file something outside this library
+        # wrote". The one thing that mattered about such a file was the one thing nothing
+        # looked at: whether it still hashes to the handle it is filed under. `publish`
+        # writes these bytes and computes the handle from them, and its own docstring says
+        # a store whose files change under a handle is not content-addressed — an invariant
+        # held on the writing side and nowhere else. Edit one byte of a stored scorecard's
+        # verdict and every reader of that handle, up to and including an exported evidence
+        # bundle, served the edit.
+        #
+        # Byte-exact rather than re-canonicalised: the file *is* the payload the digest was
+        # taken over, so re-serialising to compare would be asking a different question and
+        # would answer it wrong for anything this build canonicalises differently.
+        actual = sha256_hex(text.encode("utf-8"))
+        if actual != handle.removeprefix("sha256:"):
+            raise UnknownSubject(
+                f"{handle} is in the subject store at {self._root} and its content hashes "
+                f"to sha256:{actual}, so the file no longer holds the document the handle "
+                f"names. A handle is the digest of its own record and nothing here rewrites "
+                f"an entry, so this file was edited or replaced after it was published; "
+                f"delete it and publish the document again"
+            )
         try:
             record = json.loads(text)
         except ValueError as unreadable:
@@ -183,9 +206,24 @@ class SubjectStore:
                 f"{unreadable}. Publishing is atomic, so this is a file something outside "
                 f"this library wrote or truncated; delete it and publish the document again"
             ) from unreadable
+        if not isinstance(record, dict):
+            raise UnknownSubject(
+                f"{handle} is in the store at {self._root} and holds a JSON "
+                f"{type(record).__name__}, not a record. Every entry is an object with a "
+                f"'kind' and a 'document'; delete it and publish the document again"
+            )
         if kind is not None and record.get("kind") != kind:
             raise UnknownSubject(
                 f"{handle} names a {record.get('kind')!r}, and a {kind!r} was asked for"
+            )
+        if "document" not in record:
+            # A `KeyError` here is not an `UnknownSubject`, so it left `resolve` unwrapped
+            # and past every caller handling one — the same trap the two guards above were
+            # written for, on the one line that had not been given the treatment.
+            raise UnknownSubject(
+                f"{handle} is in the store at {self._root} and carries no 'document'. Every "
+                f"entry is an object with a 'kind' and a 'document'; delete it and publish "
+                f"the document again"
             )
         return record["document"]
 
