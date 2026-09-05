@@ -940,8 +940,10 @@ def _predicate_schema_problems(predicate: object) -> list[str]:
     status = predicate.get("status")
     if status not in {member.value for member in CheckStatus}:
         problems.append(f"predicate status is {status!r}, which is not a scorecard status")
+        status = None
+    scorecard = None
     try:
-        Scorecard.model_validate(predicate["scorecard"])
+        scorecard = Scorecard.model_validate(predicate["scorecard"])
     except (ValidationError, TypeError) as failure:
         problems.append(f"predicate scorecard does not validate: {_first_paths(failure)}")
     citations = predicate.get("citations")
@@ -963,6 +965,37 @@ def _predicate_schema_problems(predicate: object) -> list[str]:
         problems.append("predicate bom lists no components array")
     if not isinstance(predicate.get("aiDisclosure"), dict):
         problems.append("predicate aiDisclosure is not an object")
+
+    # `sections` is the one key `to_json_dict` writes conditionally, and nothing above this
+    # line looked at it — so a wire predicate could carry anything at all under it.
+    rolled = None
+    sections = predicate.get("sections")
+    if sections is not None and not isinstance(sections, dict):
+        problems.append(f"predicate sections is a JSON {type(sections).__name__}, not an object")
+    elif isinstance(sections, dict):
+        rolled = sections.get("status")
+        if rolled is not None and rolled not in {member.value for member in CheckStatus}:
+            problems.append(
+                f"predicate sections carries status {rolled!r}, which is not a scorecard status"
+            )
+            rolled = None
+
+    # **The headline verdict, against the document it claims to summarise.**
+    # `AnvilatePredicate.status` computes it — the sections roll-up when there is one, and
+    # the scorecard's own verdict otherwise — so the producing side cannot write anything
+    # else. The reading side never compared them. A predicate saying ``"status": "pass"``
+    # over a failing scorecard, or over ``"sections": {"status": "fail"}``, verified with no
+    # problem reported at all: the one claim on the outside of a signed document, the one
+    # standard tooling reads, and nothing checked it. That is the same defect as a predicate
+    # of `{"anything": "at all"}` verifying PASS, moved from the body to the headline.
+    if status is not None:
+        carried, source = (
+            (rolled, "sections roll-up")
+            if rolled is not None
+            else ((scorecard.status.value, "scorecard it carries") if scorecard else (None, ""))
+        )
+        if carried is not None and status != carried:
+            problems.append(f"predicate status is {status!r} while the {source} says {carried!r}")
     return problems
 
 

@@ -1241,3 +1241,105 @@ def test_every_document_this_library_can_build_validates_against_its_published_c
             f"the published bundle schema accepts {label}, so validating against it says "
             f"nothing about the document"
         )
+
+
+# --- the reading side of the predicate, which is the only side that is untrusted ----------
+
+
+def _wire_predicate_with_sections(*, passing: bool = True) -> dict:
+    """A wire predicate carrying every key `to_json_dict` can write, `sections` included."""
+    bundle = assemble_evidence_bundle(
+        BundleSections(scorecard=_card(passing=passing)),
+        subjects=(),
+        artifacts={"scorecard.json": b"{}"},
+        spec_digest="a" * 64,
+        bom=_bom(),
+        ai_disclosure=AIDisclosure.none(),
+    )
+    wire = bundle.predicate.to_json_dict()
+    assert "sections" in wire, "the maximal predicate stopped carrying sections"
+    return wire
+
+
+def test_every_key_the_predicate_writes_is_a_key_the_verifier_checks():
+    """`to_json_dict`'s keys, held against the checker by corrupting each one in turn.
+
+    A substring gate over the checker's source would pass on a mention in a comment. This
+    one replaces the value at each key with something that cannot be right and requires a
+    reported problem, which is the claim the gate is actually making. It is written from the
+    method's own dict literal, so a key added on the writing side has to be answered here.
+
+    `sections` is what it caught: the one key `to_json_dict` writes conditionally, and the
+    only one the checker had never looked at.
+    """
+    import ast
+    import inspect
+
+    from anvilate.attestation import AnvilatePredicate, _predicate_schema_problems
+
+    source = inspect.getsource(AnvilatePredicate.to_json_dict)
+    written = {
+        key.value
+        for node in ast.walk(ast.parse(source.lstrip()))
+        if isinstance(node, ast.Dict)
+        for key in node.keys
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
+    written |= {
+        node.slice.value
+        for node in ast.walk(ast.parse(source.lstrip()))
+        if isinstance(node, ast.Subscript)
+        and isinstance(node.slice, ast.Constant)
+        and isinstance(node.slice.value, str)
+    }
+    assert len(written) >= 7, f"only {sorted(written)} were found in to_json_dict"
+
+    honest = _wire_predicate_with_sections()
+    assert _predicate_schema_problems(honest) == [], "the honest predicate is not clean"
+    for key in sorted(written):
+        corrupted = {**honest, key: "not what belongs here"}
+        assert _predicate_schema_problems(corrupted), f"{key!r} can carry anything at all"
+
+
+def test_the_headline_verdict_is_checked_against_the_document_it_summarises():
+    """The one claim on the outside of a signed document, and nothing read it.
+
+    `AnvilatePredicate.status` computes the headline — the sections roll-up when there is
+    one, the scorecard's own verdict otherwise — so the producing side cannot write anything
+    else. The reading side never compared them, so a predicate saying `"status": "pass"` over
+    a failing scorecard verified with **no problem reported**. That is the same defect as a
+    predicate of `{"anything": "at all"}` verifying PASS, moved from the body to the headline.
+    """
+    from anvilate.attestation import _predicate_schema_problems
+
+    honest = _wire_predicate_with_sections(passing=False)
+    assert _predicate_schema_problems(honest) == []
+
+    lying = {**honest, "status": "pass"}
+    assert honest["status"] != "pass", "the fixture stopped being able to tell these apart"
+    assert any(
+        "predicate status is 'pass' while the sections roll-up says" in problem
+        for problem in _predicate_schema_problems(lying)
+    ), _predicate_schema_problems(lying)
+
+    # And with no sections, the scorecard it carries is what the headline has to match.
+    sectionless = {key: value for key, value in honest.items() if key != "sections"}
+    assert _predicate_schema_problems(sectionless) == []
+    assert any(
+        "while the scorecard it carries says" in problem
+        for problem in _predicate_schema_problems({**sectionless, "status": "pass"})
+    )
+
+
+def test_a_sections_block_can_no_longer_carry_anything_at_all():
+    from anvilate.attestation import _predicate_schema_problems
+
+    honest = _wire_predicate_with_sections()
+    assert any(
+        "sections is a JSON list" in problem
+        for problem in _predicate_schema_problems({**honest, "sections": [1, 2]})
+    )
+    assert any(
+        "sections carries status 'excellent'" in problem
+        for problem in _predicate_schema_problems({**honest, "sections": {"status": "excellent"}})
+    )

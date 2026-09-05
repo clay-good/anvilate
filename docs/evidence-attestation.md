@@ -62,6 +62,16 @@ predicate of `{"anything": "at all"}` verified **PASS** whenever the type string
 and the subject digests did — an envelope carrying no scorecard, no citations and no bill
 of materials came back clean, which is the one answer a verifier must never give.
 
+**The same defect had a second home: the headline.** `AnvilatePredicate.status` computes the
+verdict on the outside of the document — the sections roll-up when there is one, the
+scorecard's own verdict otherwise — so a producer cannot write anything else there. The
+reading side never compared them, so a predicate saying `"status": "pass"` over a failing
+scorecard, or over `"sections": {"status": "fail"}`, verified with **no problem reported at
+all**. It is the one claim standard tooling reads, and it was the one claim nothing checked.
+And `sections` — the only key the predicate writes conditionally — had never been looked at,
+so it could carry anything. Both are checked now, and every key `to_json_dict` writes is held
+against the checker by corrupting each one in turn and requiring a reported problem.
+
 Checked against the **wire** shape rather than the model. `to_json_dict` renames and
 reshapes on the way out (`specDigest`, a CycloneDX `bom`, an `aiDisclosure` body), so
 handing the wire predicate to `AnvilatePredicate.model_validate` reports every field as
