@@ -579,11 +579,42 @@ class BundleSections(RevalidatedModel):
                 self._render_rollup(),
                 "checks:",
                 *self._check_lines(),
+                *self.callout_checks_block(),
                 *self.citations_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def callout_checks_block(self) -> tuple[str, ...]:
+        """The callout layer's own checks, when there is a callout layer.
+
+        The same argument :meth:`_check_lines` makes, one card along. This method's history
+        is that the roll-up named a layer and withheld its checks — `[NOT_EVALUATED] callouts`
+        with nothing under it — and the fix carried the *scorecard's* checks into the
+        document and stopped there. The callout card is a second card, the JSON has carried
+        it as `calloutScorecard` since the contract was published, and the text carried none
+        of it. So a reviewer holding only the document read that the callout layer could not
+        be evaluated and not that it was because "AMS 2759 to condition QT declared, but no
+        base material".
+
+        Nothing when there are no callouts, and that is the difference from
+        :meth:`spec_block`: callouts are a *layer*, so an absent one is already named in the
+        roll-up's own `not covered` list. A second sentence saying it again would be the
+        duplication the roll-up exists to avoid.
+        """
+        card = self.callout_card()
+        if card is None or not card.entries:
+            return ()
+        from .report import ReportSection
+
+        system = self.spec.units.value if self.spec is not None and self.spec.units else None
+        lines = ["callout checks:"]
+        for entry in card.entries:
+            section = ReportSection(entry=entry)
+            lines.append(f"  {section.headline(system=system)}")
+            lines.extend(f"  {line}" for line in section.worked_lines(system=system))
+        return tuple(lines)
 
     def _check_lines(self) -> tuple[str, ...]:
         """One line per check, and under it the work, where the check did any.

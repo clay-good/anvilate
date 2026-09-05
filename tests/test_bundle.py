@@ -1433,3 +1433,53 @@ def test_the_exported_bundle_carries_the_sources_its_numbers_were_read_from():
     # The roll-up is untouched. Its canonical form is hashed into attestations somebody has
     # already signed, and moving it would move every one of their digests.
     assert carried.render() == bare.render()
+
+
+def test_the_exported_bundle_carries_the_callout_layers_checks_not_just_its_verdict():
+    """The argument `_check_lines` makes, one card along, and the fix stopped one card short.
+
+    `render_document` exists because the roll-up named a layer and withheld its checks —
+    `[NOT_EVALUATED] callouts` with nothing under it. That fix carried the *scorecard's*
+    checks into the document and left the callout card, which the JSON has published as
+    `calloutScorecard` since the contract was written. So a reviewer holding only the text
+    read that the callout layer could not be evaluated and not that it was because no base
+    material had been supplied to resolve the condition against.
+
+    The consequence is measurable in a way a missing block usually is not: `base_material`
+    and `known_materials` are carried on the bundle, feed `callout_scorecard`, change the
+    card it returns — and could not change the document at all.
+    """
+    from anvilate.callouts import CalloutSet, HeatTreatment
+
+    treatment = HeatTreatment(scope="body", specification="AMS 2759", condition="QT")
+    sections = _every_section().model_copy(update={"callouts": CalloutSet(callouts=(treatment,))})
+    document = sections.render_document()
+    card = sections.callout_card()
+    assert card is not None and card.entries
+
+    assert "callout checks:" in document
+    for entry in card.entries:
+        assert entry.name in document, entry.name
+        assert entry.detail in document, entry.detail
+
+    # The inputs the card is computed from now reach the document, which is the half a
+    # missing block hides: they were carried, they changed the card, and nothing rendered it.
+    resolved = sections.model_copy(
+        update={"base_material": "ASTM-A36", "known_materials": ("ASTM-A36",)}
+    )
+    assert resolved.callout_card() != card
+    assert resolved.render_document() != document
+
+    # Absent when there is no callout layer, and that is not the `spec` rule: callouts are a
+    # layer, so an absent one is already named in the roll-up's own `not covered` list.
+    without = sections.model_copy(update={"callouts": None})
+    assert "callout checks:" not in without.render_document()
+    assert "callouts" in without.render_document(), "the roll-up should still name the gap"
+
+    # The roll-up itself is untouched: its canonical form is hashed into signed attestations.
+    assert (
+        sections.render()
+        == _every_section()
+        .model_copy(update={"callouts": CalloutSet(callouts=(treatment,))})
+        .render()
+    )

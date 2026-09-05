@@ -90,6 +90,28 @@ form hashed into every predicate — invalidating attestations already signed �
 copies of one scorecard inside one signed document, which is two chances for them to
 disagree. A test asserts the predicate still carries the roll-up and not the document.
 
+### The callout layer's checks, too
+
+The same argument, one card along. `render_document` exists because the roll-up named a layer
+and withheld its checks; that fix carried the *scorecard's* checks into the document and
+stopped at the second card. The callout layer has its own — the JSON has published them as
+`calloutScorecard` since the contract was written — and the text carried none of them, so a
+reviewer read `[NOT_EVALUATED] callouts` and not the reason:
+
+```text
+callout checks:
+  [NOT_EVALUATED] heat treatment at body: AMS 2759 to condition QT declared, but no base
+  material was supplied to resolve the condition against
+```
+
+The consequence is sharper than a missing block usually is. `base_material` and
+`known_materials` are carried on the bundle and feed `callout_scorecard`; they change the card
+it returns, and until this they could not change the document at all.
+
+Absent when there is no callout layer, and that is deliberately *not* the `spec` rule above:
+callouts are a layer, so an absent one is already named in the roll-up's own `not covered`
+list, and a second sentence saying it again is the duplication the roll-up exists to avoid.
+
 ## The bundle carries the sources its numbers were read from
 
 The same scenario, one field along. `citations` — the standards, certificates and database
