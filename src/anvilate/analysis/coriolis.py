@@ -151,6 +151,8 @@ def ekman_number(
     bottom or surface, whose depth scales as √(ν/f). Together with the :func:`rossby_number` it
     closes the rotating-flow force balance — Ro/Ek = U·L/ν is exactly the Reynolds number. Returns
     the Ekman number as a plain float.
+
+    Source: Cushman-Roisin & Beckers, *Introduction to Geophysical Fluid Dynamics*.
     """
     _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
     if not isinstance(coriolis_parameter, Quantity):

@@ -297,6 +297,8 @@ def rotating_solid_disc_max_stress(
     R, ``rotational_speed`` ω (positive), and Poisson's ratio ``poisson`` ν
     (0 ≤ ν < 0.5) describe the disc. Screen it against the material's allowable.
     Returns the peak centre stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     _require(density, "[mass] / [length]**3", "density")
     _require(outer_radius, "[length]", "outer_radius")
@@ -359,6 +361,8 @@ def rotating_solid_disc_radial_stress(
     ``radius`` r (between 0 and R), ``rotational_speed`` ω, and Poisson's ratio
     ``poisson`` ν describe the disc and the point of interest. Returns the radial
     stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     rho, big_r, r, omega = _rotating_disc_inputs(
         density, outer_radius, radius, rotational_speed, poisson
@@ -385,6 +389,8 @@ def rotating_solid_disc_tangential_stress(
     keyway must survive. ``density`` ρ, ``outer_radius`` R, ``radius`` r (0 to R),
     ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν are as in
     :func:`rotating_solid_disc_radial_stress`. Returns the tangential stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     rho, big_r, r, omega = _rotating_disc_inputs(
         density, outer_radius, radius, rotational_speed, poisson
@@ -413,6 +419,8 @@ def rotating_annular_disc_bore_stress(
     ``density`` ρ, ``outer_radius`` R_o, ``inner_radius`` R_i (0 < R_i < R_o),
     ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν describe the disc.
     Returns the bore tangential stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     _require(density, "[mass] / [length]**3", "density")
     _require(outer_radius, "[length]", "outer_radius")
@@ -486,6 +494,8 @@ def rotating_annular_disc_radial_stress(
     ``inner_radius`` R_i, ``radius`` r (between R_i and R_o), ``rotational_speed`` ω,
     and Poisson's ratio ``poisson`` ν describe the disc and the point. Returns the
     radial stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     rho, ro, ri, r, omega = _annular_disc_inputs(
         density, outer_radius, inner_radius, radius, rotational_speed, poisson
@@ -511,6 +521,8 @@ def rotating_annular_disc_tangential_stress(
     ``density`` ρ, ``outer_radius`` R_o, ``inner_radius`` R_i, ``radius`` r (between
     R_i and R_o), ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν are as in
     :func:`rotating_annular_disc_radial_stress`. Returns the tangential stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     rho, ro, ri, r, omega = _annular_disc_inputs(
         density, outer_radius, inner_radius, radius, rotational_speed, poisson

@@ -433,6 +433,8 @@ def hollow_shaft_diameter_for_bending_torsion(
     load, strength, and ``required_safety_factor`` arguments are as in the solid
     form; ``bore_ratio`` k = d_i/d_o must be in [0, 1). Returns the minimum outer
     diameter in mm; k = 0 recovers the solid diameter exactly.
+
+    Source: Shigley's *Mechanical Engineering Design*, combined bending and torsion of shafts.
     """
     if not 0.0 <= bore_ratio < 1.0:
         raise ValueError(f"bore_ratio must be in [0, 1); got {bore_ratio}")

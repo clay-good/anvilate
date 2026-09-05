@@ -157,6 +157,9 @@ def composite_major_poisson_ratio(
     ``fiber_poisson`` ν_f, and ``matrix_poisson`` ν_m (each in [0, 0.5)). It sits between the
     fiber and matrix values; the *minor* ratio ν₂₁ follows from the reciprocity
     ν₂₁ = ν₁₂·E₂/E₁. Returns the dimensionless ν₁₂.
+
+    Source: Daniel & Ishai, *Engineering Mechanics of Composite Materials*, the rule of
+    mixtures.
     """
     vf = _fraction(fiber_fraction)
     for value, name in ((fiber_poisson, "fiber_poisson"), (matrix_poisson, "matrix_poisson")):

@@ -50,6 +50,9 @@ def schmidt_number(*, kinematic_viscosity: Quantity, mass_diffusivity: Quantity)
     concentration boundary layers. For gases Sc ≈ 0.6 (water vapor in air ≈ 0.6); for dissolved
     species in liquids it runs into the hundreds or thousands. Returns the dimensionless Schmidt
     number as a plain float.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*, mass
+    transfer.
     """
     _check(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
     _check(mass_diffusivity, "[length]**2 / [time]", "mass_diffusivity")
@@ -76,6 +79,9 @@ def sherwood_number(
     convective to diffusive mass transport — and is what a mass-transfer correlation
     (Sh = f(Re, Sc)) returns, from which k_c = Sh·D_AB/L is recovered. Returns the dimensionless
     Sherwood number as a plain float.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*, mass
+    transfer.
     """
     _check(mass_transfer_coefficient, "[length] / [time]", "mass_transfer_coefficient")
     _check(characteristic_length, "[length]", "characteristic_length")
@@ -100,6 +106,9 @@ def lewis_number(*, thermal_diffusivity: Quantity, mass_diffusivity: Quantity) -
     whether heat or a species diffuses faster; when Le ≈ 1 (as for air-water vapor) the thermal and
     concentration boundary layers coincide, which is why the wet-bulb temperature nearly equals the
     adiabatic-saturation temperature. Returns the dimensionless Lewis number as a plain float.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*, mass
+    transfer.
     """
     _check(thermal_diffusivity, "[length]**2 / [time]", "thermal_diffusivity")
     _check(mass_diffusivity, "[length]**2 / [time]", "mass_diffusivity")

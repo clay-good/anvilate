@@ -243,6 +243,8 @@ def thermal_shock_stress(
     describe the shock — ΔT is the instantaneous surface-to-bulk difference, the
     severe limit of an infinitely fast quench. Returns the magnitude of the surface
     stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
@@ -296,6 +298,8 @@ def thermal_shock_temperature_limit(
     α, and Poisson's ratio ``poisson`` ν (0 ≤ ν < 0.5). This is the severe (infinitely fast,
     infinite-Biot) limit; a finite quench rate tolerates more. Returns ΔT_c as a temperature
     difference in kelvin.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     _require(fracture_strength, "[pressure]", "fracture_strength")
     if not isinstance(elastic_modulus, Quantity):
@@ -346,6 +350,8 @@ def triaxial_constrained_thermal_stress(
     ``thermal_expansion_coefficient`` α, ``temperature_change`` ΔT, and Poisson's
     ratio ``poisson`` ν (0 ≤ ν < 0.5) describe the body. Returns the magnitude of the
     hydrostatic stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
@@ -404,6 +410,8 @@ def through_wall_gradient_thermal_stress(
     (0 ≤ ν < 0.5) describe the wall. An unrestrained wall simply curves and carries no
     stress; this is the restrained-against-bending case. Returns the magnitude of the
     surface stress in MPa.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
@@ -1532,6 +1540,8 @@ def richardson_number(
     mixed convection, where the buoyancy either aids or opposes the flow. The same group with a
     density gradient in place of β·ΔT is the stability criterion for stratified atmospheric and
     ocean flows. Returns the dimensionless Richardson number.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*.
     """
     _require(thermal_expansion_coefficient, "1/[temperature]", "thermal_expansion_coefficient")
     _require(temperature_difference, "[temperature]", "temperature_difference")
@@ -1567,6 +1577,8 @@ def marangoni_number(
     the vigorous flow that stirs a weld pool, a floating-zone crystal, a solder joint, or a drying
     paint film. It is the surface-tension analogue of the Rayleigh number, dominating over buoyancy
     in thin layers and in microgravity. Returns the dimensionless Marangoni number.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*.
     """
     _require(
         surface_tension_temperature_gradient,
@@ -2558,6 +2570,8 @@ def brinkman_number(
     fluid heats itself appreciably — the reason a polymer melt in an extruder, a heavily loaded
     journal bearing, or a fast capillary-viscometer run can run far hotter than its walls and even
     show a temperature maximum inside the flow. Returns the dimensionless Brinkman number.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*.
     """
     _require(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
     _require(velocity, "[length]/[time]", "velocity")

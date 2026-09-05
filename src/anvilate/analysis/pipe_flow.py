@@ -78,6 +78,8 @@ def reynolds_number(
     the fluid's ``kinematic_viscosity`` ν (its dynamic viscosity over its density). Below about
     2300 the flow is laminar; above about 4000 it is fully turbulent. Feed the result to
     :func:`darcy_friction_factor`. Returns the dimensionless Reynolds number.
+
+    Source: Cengel & Cimbala, *Fluid Mechanics: Fundamentals and Applications*, internal flow.
     """
     _check(velocity, "[length]/[time]", "velocity")
     _check(diameter, "[length]", "diameter")
@@ -274,6 +276,8 @@ def turbulent_entry_length(*, diameter: Quantity) -> Quantity:
     reached somewhere between 10 and 60 diameters). Beyond a short entry a turbulent line is
     effectively fully developed everywhere, which is why the fully-developed correlations are
     usually safe for it. Returns the entry length in metres.
+
+    Source: Cengel & Cimbala, *Fluid Mechanics: Fundamentals and Applications*, internal flow.
     """
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude

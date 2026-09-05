@@ -174,6 +174,8 @@ def ittc_friction_coefficient(*, reynolds_number: float) -> float:
     instead. That is the low end of the towing-tank data the line was fitted to; below it the flow
     is not the fully turbulent boundary layer the line describes, and any real hull or model runs
     Re ≥ 10⁶ anyway. Returns the friction coefficient as a plain float.
+
+    Source: Tupper, *Introduction to Naval Architecture*, the ITTC-1957 correlation line.
     """
     if reynolds_number < 1.0e5:
         raise ValueError(

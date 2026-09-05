@@ -106,6 +106,8 @@ def prandtl_number(
     consume, setting the relative thickness of the velocity and thermal boundary layers. For gases
     Pr ≈ 0.7 (air ≈ 0.71); for water ≈ 7, for oils in the hundreds, for liquid metals far below 1.
     Returns the dimensionless Prandtl number as a plain float.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*.
     """
     _check(dynamic_viscosity, "[pressure] * [time]", "dynamic_viscosity")
     _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")

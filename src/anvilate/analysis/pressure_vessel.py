@@ -214,6 +214,8 @@ def thin_wall_cylinder_diametral_growth(
     casing. ``pressure`` p, ``radius`` r (inner), ``wall_thickness`` t,
     ``elastic_modulus`` E, and Poisson's ratio ``poisson`` ν (0 ≤ ν < 0.5) describe the
     cylinder; the wall must be positive. Returns the diametral growth in mm.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thin-shell pressure formulas.
     """
     stress = thin_wall_cylinder(pressure=pressure, radius=radius, wall_thickness=wall_thickness)
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
@@ -1414,6 +1416,8 @@ def thin_wall_sphere_diametral_growth(
     ``wall_thickness`` t, ``elastic_modulus`` E, and Poisson's ratio ``poisson`` ν
     (0 ≤ ν < 0.5) describe the sphere; the wall must be positive. Returns the diametral
     growth in mm.
+
+    Source: Roark's *Formulas for Stress and Strain*, the thin-shell pressure formulas.
     """
     stress = thin_wall_sphere_stress(
         pressure=pressure, radius=radius, wall_thickness=wall_thickness
@@ -1582,6 +1586,8 @@ def sphere_external_pressure_buckling(
     describe the shell; the wall must be positive and 0 ≤ ν < 0.5. This is the ideal
     (perfect-sphere) buckling pressure — real shells with dimples knock down well
     below it, so apply a generous factor. Returns the critical external pressure in MPa.
+
+    Source: Timoshenko & Gere, *Theory of Elastic Stability*, the Zoelly buckling pressure.
     """
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(wall_thickness, "[length]", "wall_thickness")

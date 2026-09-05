@@ -49,6 +49,8 @@ def circular_area(diameter: Quantity) -> Quantity:
 
     ``diameter`` must be positive: the square makes a negative one come back as a
     perfectly ordinary positive area, and this feeds σ = F/A everywhere downstream.
+
+    Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
     _require(diameter, "[length]", "diameter")
     if diameter.to("mm").magnitude <= 0:
@@ -62,6 +64,8 @@ def axial_stress(*, force: Quantity, area: Quantity) -> Quantity:
     A positive result is tension and a negative result compression, following the
     sign of ``force``. ``force`` must be a force and ``area`` an area (length²).
     Returns the stress in MPa.
+
+    Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
     _require(force, "[force]", "force")
     _require(area, "[length]**2", "area")
@@ -85,6 +89,8 @@ def required_axial_area(
     the material's allowable, and ``required_safety_factor`` n the margin on it
     (default 1.0). Returns the minimum area in mm²; the load and stress are
     dimension-checked and ``n`` / ``allowable_stress`` must be positive.
+
+    Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
     _require(axial_load, "[force]", "axial_load")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -108,6 +114,8 @@ def axial_elongation(
     what a thermal-growth or fit-up clearance check needs. ``force`` is a force, L and
     A are positive geometry, and ``elastic_modulus`` E the material's. Returns the
     elongation in mm.
+
+    Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
     _require(force, "[force]", "force")
     _require(length, "[length]", "length")
@@ -132,6 +140,8 @@ def axial_stiffness(*, length: Quantity, area: Quantity, elastic_modulus: Quanti
     parallel load path, and the ``k`` a mass on the end of a rod resonates on. ``area``
     A, ``length`` L, and ``elastic_modulus`` E must be positive. Returns the stiffness
     in newtons per millimetre.
+
+    Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
     _require(length, "[length]", "length")
     _require(area, "[length]**2", "area")

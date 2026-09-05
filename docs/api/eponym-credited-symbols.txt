@@ -25,41 +25,21 @@
 #
 # TO PAY A LINE OFF: name the source in the symbol's OWN docstring, and add the token to
 # citation-authorities.txt if the list does not have it. `boundary_layer`'s eleven were the
-# first eleven paid off this way — every one was credited to "the Reynolds number", and the
+# first paid off this way — every one was credited to "the Reynolds number", and the
 # module names Blasius and von Karman in prose while citing no listed authority at all.
-# They cite Schlichting & Gersten, *Boundary-Layer Theory*, now.
+# They cite Schlichting & Gersten, *Boundary-Layer Theory*, now. Thirty-one more followed:
+# most were paid with the source their own MODULE already declares, which is the cheap and
+# honest half of this debt — the module says where its content comes from and the symbol
+# simply did not repeat it. The seven modules that declared nothing (axial, flywheel,
+# gas_transport, mass_transfer, pipe_flow, pressure_vessel, torsion) needed a source read
+# and written, not copied.
+#
+# THE TWO BELOW ARE NOT PAYABLE BY COPYING. `galilei_number` and `morton_number` are
+# multiphase groups; their modules cite Cengel & Cimbala for single-phase external flow and
+# hydrostatics, which is not where either group is defined. The source is Clift, Grace &
+# Weber, *Bubbles, Drops and Particles*, or an equivalent multiphase text — and naming one
+# without reading it is the confidently-wrong citation this file exists to prevent.
 #
 # Do NOT add a line to silence a new failure. A new check names its source.
-axial.axial_elongation
-axial.axial_stiffness
-axial.axial_stress
-axial.circular_area
-axial.required_axial_area
-composite.composite_major_poisson_ratio
-coriolis.ekman_number
 drag.galilei_number
 fluid_statics.morton_number
-flywheel.rotating_annular_disc_bore_stress
-flywheel.rotating_annular_disc_radial_stress
-flywheel.rotating_annular_disc_tangential_stress
-flywheel.rotating_solid_disc_max_stress
-flywheel.rotating_solid_disc_radial_stress
-flywheel.rotating_solid_disc_tangential_stress
-gas_transport.prandtl_number
-mass_transfer.lewis_number
-mass_transfer.schmidt_number
-mass_transfer.sherwood_number
-naval_architecture.ittc_friction_coefficient
-pipe_flow.reynolds_number
-pipe_flow.turbulent_entry_length
-pressure_vessel.sphere_external_pressure_buckling
-pressure_vessel.thin_wall_cylinder_diametral_growth
-pressure_vessel.thin_wall_sphere_diametral_growth
-thermal.brinkman_number
-thermal.marangoni_number
-thermal.richardson_number
-thermal.thermal_shock_stress
-thermal.thermal_shock_temperature_limit
-thermal.through_wall_gradient_thermal_stress
-thermal.triaxial_constrained_thermal_stress
-torsion.hollow_shaft_diameter_for_bending_torsion
