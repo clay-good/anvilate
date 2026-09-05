@@ -392,10 +392,30 @@ would hurt — `F_c` and `F_c_perp` are different NDS allowables, and a collisio
 parallel-to-grain value under a perpendicular-to-grain name. Do not assert a fixed string — walk the fields and require each value to
 appear, which is what caught the two the BTH-1 rendering was dropping.
 
-What the rule does *not* catch is a **branch** of a rendering nobody takes:
-`AluminumCompressionStrength` appends " in the weld-affected zone" on a flag that has never
-been True in any run. Class-level is where all five defects were, and a branch-level rule
-would need construction fixtures for cases the library has never produced.
+### The list is empty
+
+The remaining 21 needed a constructed object, and
+[`tests/test_unread_renderings.py`](../tests/test_unread_renderings.py) builds one of each
+through the real producers. It asks the BTH-1 question as a property rather than by eye:
+**move one field and the rendering has to move with it.** A field that stays invisible is
+either rendered or named in that file's `_SUMMARISED` table with the reason it is a working
+number — an intermediate area summed into a total, a limit state behind a governing value —
+and a second rule strikes any exemption the rendering does in fact reach, so the table cannot
+become the escape hatch. Two more were not summaries:
+
+| Rendering | Carried and printed nowhere |
+| --- | --- |
+| `BeamBendingResult` | `max_moment`, which its own docstring calls the number a reviewer checks first |
+| `RivetedJointStrength` | `joint_strength`; efficiency is a ratio, so a 28 kN joint and a 280 kN joint rendered alike |
+
+That file also asserts `docs/api/unrendered-strings.txt` is still empty, so the next unread
+rendering is paid off rather than parked.
+
+What the rule does *not* catch is a **branch** of a rendering nobody takes. It is class-level
+because that is where all seven defects were, and a branch-level rule needs construction
+fixtures for cases the library has never produced — which is what the fixtures above now are
+for the two branches that had never run: `AluminumCompressionStrength` appending " in the
+weld-affected zone", and the `short by` half of the two reinforcement verdicts.
 
 ## The bound a parameter's own name fixes
 

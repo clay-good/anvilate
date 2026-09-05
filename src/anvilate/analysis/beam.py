@@ -1654,7 +1654,8 @@ class BeamBendingResult(RevalidatedModel):
 
     def __str__(self) -> str:
         return (
-            f"beam: sigma_max {self.max_bending_stress.to('MPa')}, "
+            f"beam: M_max {self.max_moment.to('kN*m')}, "
+            f"sigma_max {self.max_bending_stress.to('MPa')}, "
             f"delta_max {self.max_deflection.to('mm')}"
         )
 

@@ -73,7 +73,8 @@ class RivetedJointStrength(BaseModel):
 
     def __str__(self) -> str:
         return (
-            f"riveted joint: efficiency {self.efficiency:.1%} (governed by {self.governing_mode})"
+            f"riveted joint: {self.joint_strength.to('kN')} per pitch, "
+            f"efficiency {self.efficiency:.1%} (governed by {self.governing_mode})"
         )
 
 

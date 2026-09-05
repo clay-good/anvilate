@@ -13,27 +13,11 @@
 # calls that is not on this list, a listed rendering that is now called (strike it off),
 # and a listed name that no longer defines a `__str__` at all. The list can only shrink.
 #
-# Paying one off is one line in a test: build the object and read what it prints against
-# what it carries. That is how the four were found.
+# THE LIST IS EMPTY. It started at 80: 57 enums fell to a property sweep
+# (tests/test_contract.py) and the last 21, which need a constructed object, are read in
+# tests/test_unread_renderings.py — which also asserts that this file is still empty, so
+# a new unread rendering has to be paid off here rather than parked below.
 #
-anvilate.agenteval.ToolCall
-anvilate.analysis.aluminum.AluminumCompressionStrength
-anvilate.analysis.beam.BeamBendingResult
-anvilate.analysis.cold_formed_steel.DSMStrength
-anvilate.analysis.embodied_carbon.EmbodiedCarbonEstimate
-anvilate.analysis.interference.InterferenceFit
-anvilate.analysis.pressure_vessel.BranchReinforcement
-anvilate.analysis.pressure_vessel.FlangeMoments
-anvilate.analysis.pressure_vessel.FlangeShapeFactors
-anvilate.analysis.pressure_vessel.NozzleReinforcement
-anvilate.analysis.pressure_vessel.ThickWallSphereStress
-anvilate.analysis.pressure_vessel.ThinWallStress
-anvilate.analysis.rivet.RivetedJointStrength
-anvilate.analysis.stress.CombinedNormalStress
-anvilate.callouts.CalloutSet
-anvilate.callouts.FreeTextNote
-anvilate.derivation.Underived
-anvilate.standards.fatigue.WeldDetailCategory
-anvilate.tolerance.explicit.ResolvedTolerance
-anvilate.tolerance.general.GeneralTolerance
-anvilate.tolerance.iso286.StandardTolerance
+# Paying one off is one line in a test: build the object and read what it prints against
+# what it carries. That is how the four were found, and how the beam result's `max_moment`
+# and the riveted joint's `joint_strength` were found after them.
