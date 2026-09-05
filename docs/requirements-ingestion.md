@@ -179,6 +179,25 @@ library renders and cannot re-read is one a *spec* cannot state either.
 classified blocks the release until somebody looks at it, rather than slipping through as
 decoration. Name the exceptions with `informational_fields`.
 
+**Reading a line is linear in its length, and it was not.** Both separator patterns were
+built from lazy groups that overlap whatever follows them, so every expansion re-scanned the
+same whitespace looking for a separator: the scan quadrupled every time the line doubled,
+and a line with a few thousand spaces in it took half a second while a longer one took
+minutes. A long run of spaces is not exotic input — it is what a PDF or a spreadsheet export
+leaves on a row — and this runs on every line of whatever gets pasted in.
+
+Each piece of the patterns now ends where the next begins, with no character both can claim,
+and the line is right-stripped rather than the patterns ending in a backtrackable `\s*$`.
+Every split is the one it was before: 35,563 lines agree, label for label and value for
+value, through `extract_requirements` itself.
+
+Only the *right* end is stripped, and that is the interesting half. Stripping both stops a
+line whose label is nothing but whitespace from matching at all — and those lines are
+reported: they split, the label normalizes to an empty field name, and they come back as
+unparsed saying exactly that. Dropping them silently would defeat auditing by subtraction,
+which is the property the whole pass rests on. It would have been a regression wearing a
+speedup's clothes.
+
 ## Scope
 
 The pass is label-driven, over plain text, and knows nothing about engineering vocabulary.

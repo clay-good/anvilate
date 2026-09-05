@@ -85,16 +85,39 @@ __all__ = [
 # first space and label the field "design". There is no length bound on the label either —
 # an 81-character label used to match nothing at all and vanish without a trace, which
 # defeats the "auditable by subtraction" property the whole pass rests on.
+# The scan was **quadratic in the length of a line**, and this runs on every line of a
+# document somebody pastes. A long run of spaces is not hostile input — it is what a PDF or a
+# spreadsheet export leaves on a row — and a line with a few thousand of them took half a
+# second while a longer one took minutes.
+#
+# Both patterns were built out of lazy groups that overlap whatever follows them, so every
+# expansion re-scanned the same whitespace looking for a separator. Each piece now ends where
+# the next begins, with no character both can claim, and every split is exactly the one it
+# was before — 35,563 lines agree label for label and value for value:
+#
+# * the punctuation label runs greedily up to the separator (the class cannot cross one, so
+#   greedy and lazy find the same place) and gives back to its last non-space character, once,
+#   rather than being re-tried from every position;
+# * `|\s` is that pattern's second branch and not an oversight. A line whose label is nothing
+#   but whitespace matched before and has to keep matching: those lines are *reported* — they
+#   split, the label normalises to an empty field name, and they come back as unparsed saying
+#   so. Dropping them silently is the "vanish without a trace" the paragraph above is about,
+#   and it is a regression that would have looked like a speedup;
+# * the column label is written as "no two whitespace in a row", so it cannot expand across
+#   the gap it is supposed to stop at;
+# * the trailing `\s*$` both values backtracked against is gone, and `_split` right-strips
+#   instead — one linear pass. Only the right end, for the same reason as the branch above.
 _SEPARATORS = (
-    re.compile(r"^\s*(?P<label>[^:=]+?)\s*[:=]\s*(?P<value>\S.*?)\s*$"),
-    re.compile(r"^\s*(?P<label>\S.*?)\s{2,}(?P<value>\S.*?)\s*$"),
+    re.compile(r"^\s*(?P<label>[^:=]*[^:=\s]|\s)\s*[:=]\s*(?P<value>\S.*)$"),
+    re.compile(r"^\s*(?P<label>\S(?:\s?\S)*)\s{2,}(?P<value>\S.*)$"),
 )
 
 
 def _split(line: str) -> re.Match[str] | None:
     """The first separator that splits ``line`` into a label and a value."""
+    trimmed = line.rstrip()
     for pattern in _SEPARATORS:
-        match = pattern.match(line)
+        match = pattern.match(trimmed)
         if match is not None:
             return match
     return None

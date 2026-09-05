@@ -1015,3 +1015,88 @@ def test_a_unit_that_begins_with_a_digit_still_parses():
         taken = extract_requirements(line, document="rfq.txt")
         assert len(taken.values) == 1, line
         assert unit in str(taken.values[0].quantity), line
+
+
+# --- the line scan, which runs on every line of a document somebody pastes ---------------
+
+
+def test_splitting_a_line_is_linear_in_the_length_of_the_line():
+    """Both separators were built from lazy groups overlapping what followed them.
+
+    So every expansion re-scanned the same whitespace looking for a separator, and the scan
+    quadrupled every time the line doubled: a line with a few thousand spaces in it took half
+    a second and a longer one took minutes. A long run of spaces is not hostile input — it is
+    what a PDF or a spreadsheet export leaves on a row — and `extract_requirements` runs this
+    on every line.
+
+    Three shapes, because each was quadratic through a different pair: a line that never
+    splits, one that splits and has whitespace after the value, and one whose *label* carries
+    the run. Asserted as a ratio over the minimum of several runs, so a loaded machine cannot
+    decide it either way, and the patterns' own shape is asserted beside it.
+    """
+    import time
+
+    from anvilate.ingest import _SEPARATORS, _split
+
+    for pattern in _SEPARATORS:
+        assert ".*?" not in pattern.pattern, (
+            f"a lazy anything is back in {pattern.pattern!r}; that is the shape that "
+            "backtracks against whatever follows it"
+        )
+        assert not pattern.pattern.endswith(r"\s*$"), pattern.pattern
+
+    shapes = {
+        "never splits": lambda n: "a" + " " * n + "b",
+        "splits, trailing run": lambda n: "a  b" + " " * n,
+        "run inside the label": lambda n: "a" + " " * n + "b: 1",
+    }
+    for name, build in shapes.items():
+
+        def _fastest(length: int, build=build) -> float:
+            line = build(length)
+            _split(line)
+            best = float("inf")
+            for _ in range(5):
+                start = time.perf_counter()
+                _split(line)
+                best = min(best, time.perf_counter() - start)
+            return best
+
+        short, long = _fastest(4_000), _fastest(16_000)
+        assert long < max(short * 8, 0.05), f"{name}: {short:.4f}s at 4k, {long:.4f}s at 16k"
+
+
+def test_a_line_whose_label_is_only_whitespace_is_still_reported():
+    """The regression the obvious speedup would have caused.
+
+    Stripping both ends of the line — rather than only the right — stops these matching at
+    all, and they would then vanish with no line anywhere in the output. They are *reported*:
+    they split, the label normalises to an empty field name, and they come back as unparsed
+    saying exactly that. Auditing by subtraction is the property the whole pass rests on.
+    """
+    draft = extract_requirements("\u00a0\t: 25 mm\n", document="rfq.txt")
+    assert draft.values == ()
+    assert len(draft.unparsed) == 1
+    assert "empty field name" in str(draft.unparsed[0])
+
+
+def test_trailing_whitespace_does_not_change_what_a_line_says():
+    """The right-strip, from the other side: a row out of a spreadsheet export carries it and
+    must read exactly as the same row without it."""
+    from anvilate.ingest import _split
+
+    for line in ("Design load: 50 kN", "Bore diameter     25 mm", "Rated capacity = 5 t"):
+        bare = extract_requirements(line + "\n", document="rfq.txt")
+        padded = extract_requirements(line + "   \t \n", document="rfq.txt")
+        assert [str(v) for v in bare.values] == [str(v) for v in padded.values], line
+        assert bare.values, line
+
+        # And the captured value itself, not only what survives `Quantity.parse`. The
+        # trailing `\s*$` the patterns used to end with is what kept whitespace out of this
+        # group; the right-strip replaced it, and a reader that only checks the parsed
+        # quantity cannot tell the difference — `Quantity.parse` tolerates the space.
+        padded_match = _split(line + "   \t ")
+        assert padded_match is not None, line
+        value = padded_match.group("value")
+        assert value == value.rstrip(), f"{line!r} captured {value!r}"
+        assert value == _split(line).group("value"), line
