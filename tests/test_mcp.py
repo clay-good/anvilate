@@ -714,6 +714,88 @@ def test_a_document_the_parser_cannot_even_attempt_is_still_a_result():
     assert response["result"]["isError"] is True
 
 
+def test_every_bound_a_document_has_is_a_refusal_at_this_door_and_not_an_error():
+    """The four bounds a document carries, driven through the server a client actually talks to.
+
+    This is the probe that found the last one. A 400-deep document was accepted at the front
+    door and came back as `-32603 Internal error: Circular reference detected`; the lesson was
+    that a rule added to the models has to be *checked at the door*, because the door is where
+    a client sees it. So each bound is exercised here — a JSON-RPC error, or a `-32603`, or a
+    traceback would all be the same failure.
+
+    The control matters as much as the probes: a rule that refuses everything would pass every
+    one of the four assertions below and nothing else.
+    """
+    base = _spec_document()
+    load_case = {
+        "name": "c",
+        "kind": "static",
+        "applied_to": "edge",
+        "force": {"magnitude": 1.0, "unit": "kN"},
+    }
+    padeye = {
+        "name": "p",
+        "material": "ASTM-A36",
+        "width": {"magnitude": 120.0, "unit": "mm"},
+        "hole_diameter": {"magnitude": 40.0, "unit": "mm"},
+        "thickness": {"magnitude": 20.0, "unit": "mm"},
+    }
+    probes = {
+        "a string past the length bound": ({**base, "description": "A" * 5_000}, "characters"),
+        "a citation past its bound": ({**base, "name": "A" * 5_000}, "characters"),
+        "a list past the item bound": (
+            {**base, "load_cases": [{**load_case, "name": f"c{i}"} for i in range(1_100)]},
+            "items",
+        ),
+        "a mapping past the item bound": (
+            {
+                **base,
+                "element_type": "padeye",
+                "element_params": {**padeye, **{f"k{i}": 1 for i in range(1_100)}},
+            },
+            "items",
+        ),
+        "a number that is not one": (
+            {**base, "element_type": "padeye", "element_params": {**padeye, "width": 1e400}},
+            "not a number a document can state",
+        ),
+    }
+    for label, (document, expected) in probes.items():
+        response = _call("compile_spec", {"document": document})
+        assert "error" not in response, f"{label} came back as a JSON-RPC error: {response}"
+        result = response["result"]
+        assert result["isError"] is True, label
+        errors = result["structuredContent"]["errors"]
+        assert any(expected in message for message in errors), (label, errors)
+
+    # The control, and it has to sit close to each bound rather than far inside it: a bound
+    # dropped low enough to refuse real documents passes a control built from a tiny one.
+    inside = {
+        **base,
+        "description": "A" * 4_096,
+        "name": "A" * 1_024,
+        "load_cases": [{**load_case, "name": f"c{i}"} for i in range(1_024)],
+    }
+    assert _call("compile_spec", {"document": inside})["result"]["isError"] is False
+
+
+def test_a_name_past_its_bound_is_refused_as_a_name_and_not_as_a_citation():
+    """`cited` states the rule for a citation and for a name, and the refusal has to say which.
+
+    Its blank-refusal message has carried the field's own sentence from the start — "this
+    field must state what it is called" — and the length refusal added beside it hard-coded
+    "a citation longer than 1,024". So a spec whose `name` was too long was told its name was
+    a citation, which is the wrong noun for the one field a reader is most likely to have got
+    wrong by pasting.
+    """
+    response = _call("compile_spec", {"document": {**_spec_document(), "name": "A" * 5_000}})
+    errors = response["result"]["structuredContent"]["errors"]
+    named = [message for message in errors if message.startswith("name:")]
+    assert named, errors
+    assert "citation" not in named[0], named[0]
+    assert "what it is called" in named[0], named[0]
+
+
 # --- The transport ----------------------------------------------------------------------
 
 

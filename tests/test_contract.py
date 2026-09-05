@@ -3228,7 +3228,7 @@ def test_a_citation_has_an_upper_bound_and_it_is_clear_of_every_real_one():
 
     at_the_bound = "A" * (_LONGEST_CITED - 1) + "1"
     assert LoadCombination(name="LRFD 1", factors={"D": 1.4}, citation=at_the_bound).citation
-    with pytest.raises(pydantic.ValidationError, match="is not one a reader can follow"):
+    with pytest.raises(pydantic.ValidationError, match="nothing longer than"):
         LoadCombination(name="LRFD 1", factors={"D": 1.4}, citation=at_the_bound + "1")
 
     # Act first, then observe, as the effectivity ratchet does: how much of the suite has

@@ -2414,7 +2414,7 @@ def test_the_subject_the_citation_scan_reads_is_bounded_too():
         return ScorecardEntry(name="n", status=CheckStatus.PASS, detail="d", reference=reference)
 
     assert entry("A" * _LONGEST_CITED).reference
-    with pytest.raises(pydantic.ValidationError, match="is not one a reader can follow"):
+    with pytest.raises(pydantic.ValidationError, match="nothing longer than"):
         entry("A" * (_LONGEST_CITED + 1))
 
     # And the scan really is the consumer of that field.

@@ -80,9 +80,12 @@ def cited(states: str) -> Any:
         if not value.strip():
             raise ValueError(f"this field must state {states}")
         if len(value) > _LONGEST_CITED:
+            # The blank refusal's sentence, from the other end. `cited` states BOTH rules for
+            # a citation and for a name, so a message hard-coding "a citation" told a reader
+            # whose spec has a 5,000-character `name` that their name was a citation.
             raise ValueError(
-                f"this field is {len(value):,} characters, and a citation longer than "
-                f"{_LONGEST_CITED:,} is not one a reader can follow; it must state {states}"
+                f"this field is {len(value):,} characters, and nothing longer than "
+                f"{_LONGEST_CITED:,} is one a reader can follow; it must state {states}"
             )
         return value
 
