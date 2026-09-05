@@ -528,7 +528,7 @@ anvilate diff before.yaml after.yaml
 ```
 
 ```text
-deck_plate → deck_plate
+deck_plate (before.yaml) → deck_plate (after.yaml)
 
 SPEC
   -description: A mezzanine deck plate.
@@ -549,6 +549,14 @@ The requirement asks `diff` to compare "two builds of a part **(or a spec change
 the parenthesis is the whole of what is possible without a geometry kernel — and the half a
 merge gate reads, since the scenario is a commit that changes a shared pattern and makes a
 downstream part fail.
+
+**The header names the files as well as the specs**, and the sample above is why. Two
+revisions of one spec is what `diff` is *for*, and a spec keeps its name across a revision —
+so the ordinary case read `deck_plate → deck_plate` and said nothing about which two
+documents had been compared. The JSON payload has carried `path` for both sides since it was
+published, for the same reason `check --format json` carries it. It is rendered
+unconditionally rather than only when the names collide: a section that is sometimes absent
+is a branch every reader has to make, and it is wrong the first time.
 
 **The diff is of the spec, not of the file.** Two documents that differ textually and
 compile to the same IR are *no change* — a reordered mapping, a comment, a requoted string

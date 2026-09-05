@@ -2558,3 +2558,102 @@ def test_the_human_rendering_shows_everything_the_verdict_is_computed_from():
 
     # Absent renders too: a run that read everything and one nobody looked at must differ.
     assert "unread      none" in rendered, rendered
+
+
+#: Leaves of the diff payload that the text rendering does not show, and why each is not a
+#: hole. Every other leaf has to move the text when it moves.
+_DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW = {
+    "spec.changed": "the count of changed lines; the lines themselves are printed above it",
+    "checks.moved[].change": (
+        "the classification of the move. `added` and `removed` do change the line; `worse` "
+        "and `better` render as `before → after` on the same line, which is the same "
+        "information in the form a reader acts on"
+    ),
+    "geometry.compared": (
+        "false for every comparison this build can make, and `reason` says why. The line "
+        "exists so the section is never absent"
+    ),
+    "regression.status": (
+        "the exit code is this rendering's carrier for it — see "
+        "test_the_exit_code_is_the_regression_the_payload_publishes"
+    ),
+    "regression.regressed[]": "the checks section lists the same moves, by name",
+}
+
+
+def test_every_leaf_of_the_diff_payload_reaches_the_text_or_is_recorded_as_not_reaching_it():
+    """`_render_diff` is a rendering that no `__str__` sweep can see.
+
+    The property is the one that closed the rendering debt: move one value and the rendering
+    has to move with it. It was applied to `__str__` bodies, so the renderings that live as
+    module functions were never held to it — and `_render_verification` turned out to be
+    showing two of the four fields its own verdict is computed from.
+
+    Here it found the header. Two revisions of one spec is what `diff` is *for*, and a spec
+    keeps its name across a revision, so the ordinary case read
+    `nema23_bracket → nema23_bracket` while the payload had carried both paths all along.
+
+    A leaf that genuinely does not need to render says so above, with the reason and, where
+    there is one, the test that carries it instead.
+    """
+    import copy
+
+    from anvilate.cli import _render_diff
+
+    payload = {
+        "before": {"name": "bracket", "path": "v1.spec.yaml"},
+        "after": {"name": "bracket", "path": "v2.spec.yaml"},
+        "spec": {"lines": ["-    value: 2.0", "+    value: 3.0"], "changed": 1},
+        "verdict": {"before": "pass", "after": "fail"},
+        "checks": {
+            "moved": [
+                {
+                    "name": "tensile",
+                    "change": "worse",
+                    "before": "pass",
+                    "after": "fail",
+                    "detail": "safety factor 1.9 < 2.0",
+                }
+            ],
+            "unchanged": 3,
+        },
+        "geometry": {"compared": False, "reason": "needs two built parts"},
+        "regression": {"status": "regressed", "regressed": ["tensile"]},
+    }
+    baseline = _render_diff(copy.deepcopy(payload))
+
+    def leaves(node, where=""):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield from leaves(value, f"{where}.{key}".lstrip("."))
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                yield from leaves(value, f"{where}[{index}]")
+        else:
+            yield where, node
+
+    def replace(document, path, value):
+        node = document
+        parts = path.replace("[", ".[").split(".")
+        for part in parts[:-1]:
+            node = node[int(part[1:-1])] if part.startswith("[") else node[part]
+        if parts[-1].startswith("["):
+            node[int(parts[-1][1:-1])] = value
+        else:
+            node[parts[-1]] = value
+
+    swept, silent = 0, []
+    for path, value in leaves(payload):
+        swept += 1
+        moved = copy.deepcopy(payload)
+        replace(moved, path, "MOVED" if isinstance(value, str) else not value)
+        if _render_diff(moved) == baseline:
+            silent.append(re.sub(r"\[\d+\]", "[]", path))
+    # A floor, because a sweep that walked nothing would report no holes.
+    assert swept >= 15, f"the sweep saw only {swept} leaves"
+    assert sorted(set(silent)) == sorted(_DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW), (
+        "these leaves do not reach the text rendering and are not recorded as exempt: "
+        f"{sorted(set(silent) - set(_DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW))}; and these are "
+        "recorded as exempt but now render: "
+        f"{sorted(set(_DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW) - set(silent))}"
+    )

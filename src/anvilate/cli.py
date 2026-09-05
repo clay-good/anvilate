@@ -570,8 +570,23 @@ def _diff_document(
 
 
 def _render_diff(document: dict[str, Any]) -> str:
-    """The three sections, each present even when it has nothing in it."""
-    lines = [f"{document['before']['name']} → {document['after']['name']}", "", "SPEC"]
+    """The three sections, each present even when it has nothing in it.
+
+    **The header names the files as well as the specs.** Two revisions of one spec is what
+    `diff` is *for*, and a spec keeps its name across a revision — so the ordinary case
+    printed `nema23_bracket → nema23_bracket` and said nothing about which two documents had
+    been compared. The payload has carried `path` for both sides since it was published, for
+    the same reason `check --format json` carries it: two specs sharing a name have to be
+    distinguishable. Rendered unconditionally rather than only when the names collide,
+    following the rule the rest of this function already follows — a section that is
+    sometimes absent is a branch every reader has to make, and it is wrong the first time.
+    """
+    before, after = document["before"], document["after"]
+    lines = [
+        f"{before['name']} ({before['path']}) → {after['name']} ({after['path']})",
+        "",
+        "SPEC",
+    ]
     lines.extend(f"  {line}" for line in document["spec"]["lines"] or ("no change",))
 
     verdict = document["verdict"]
