@@ -55,6 +55,16 @@ in Python rather than through the wire shape, so it never crossed the gap. A pay
 this verifier does not read is now a reported problem, the same rule the predicate type
 follows, and every key `to_envelope` writes is held against the fields the model reads.
 
+**And the field is required, which is the other half of that.** The alias made both spellings
+*work*; the default made neither of them necessary. An envelope carrying no `payloadType` at
+all — or one whose key is misspelled, which is the same thing to a reader that ignores what it
+does not recognise — was still read as in-toto, and the verifier still computed the
+pre-authentication encoding from a string the envelope had not said. That is word for word the
+defect the alias was added to fix, surviving in the one case the alias could not reach. DSSE
+requires the field, so nothing valid is refused by requiring it; what is refused is a reader
+supplying the answer to its own check. `anvilate verify` reports it as a bad request naming
+`payloadType`.
+
 ## The predicate is checked against its schema, not only its type label
 
 `verify_attestation` makes three checks, and the third was missing for a release. A

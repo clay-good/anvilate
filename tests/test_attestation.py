@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import re
@@ -539,7 +540,8 @@ def test_an_unknown_predicate_type_is_refused_by_name():
     bundle = _bundle()
     statement = bundle.statement() | {"predicateType": "https://example.com/other/v1"}
     envelope = Attestation(
-        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii")
+        payload_type=DSSE_PAYLOAD_TYPE,
+        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii"),
     )
     report = verify_attestation(envelope, artifacts=_artifacts())
     assert report.status is CheckStatus.FAIL
@@ -549,14 +551,17 @@ def test_an_unknown_predicate_type_is_refused_by_name():
 def test_a_foreign_statement_type_is_refused():
     statement = _bundle().statement() | {"_type": "https://in-toto.io/Statement/v0.1"}
     envelope = Attestation(
-        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii")
+        payload_type=DSSE_PAYLOAD_TYPE,
+        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii"),
     )
     report = verify_attestation(envelope, artifacts=_artifacts())
     assert any("statement type is" in p for p in report.problems)
 
 
 def test_an_unreadable_payload_fails_rather_than_raising():
-    envelope = Attestation(payload=base64.b64encode(b"not json at all").decode("ascii"))
+    envelope = Attestation(
+        payload_type=DSSE_PAYLOAD_TYPE, payload=base64.b64encode(b"not json at all").decode("ascii")
+    )
     report = verify_attestation(envelope)
     assert report.status is CheckStatus.FAIL
     assert any("not readable JSON" in p for p in report.problems)
@@ -602,7 +607,8 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
 def _envelope_over(statement: object) -> Attestation:
     """An envelope carrying an arbitrary payload, bypassing the model that builds one."""
     return Attestation(
-        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii")
+        payload_type=DSSE_PAYLOAD_TYPE,
+        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii"),
     )
 
 
@@ -649,7 +655,7 @@ def test_a_payload_that_is_not_valid_base64_is_refused_at_the_door():
     # The error path itself used to re-decode and raise binascii.Error out of a function
     # whose contract is to report what did not match.
     with pytest.raises(ValidationError, match="not valid base64"):
-        Attestation(payload="!!!!not base64!!!!")
+        Attestation(payload_type=DSSE_PAYLOAD_TYPE, payload="!!!!not base64!!!!")
 
 
 def test_junk_spliced_into_the_payload_cannot_ride_along():
@@ -660,7 +666,7 @@ def test_junk_spliced_into_the_payload_cannot_ride_along():
     spliced = envelope.payload[:8] + "!!" + envelope.payload[8:]
     # Parsing a wire envelope goes through the constructor, which is where it is refused.
     with pytest.raises(ValidationError, match="not valid base64"):
-        Attestation(payload=spliced, signatures=envelope.signatures)
+        Attestation(payload_type=DSSE_PAYLOAD_TYPE, payload=spliced, signatures=envelope.signatures)
     # `model_copy` is refused too, since `Attestation` re-validates a copy — so the
     # tampered envelope is built with `model_construct`, which is pydantic's documented
     # bypass and the only remaining way such an object comes into existence.
@@ -1277,3 +1283,54 @@ def test_the_declared_spec_version_is_the_schema_the_document_is_checked_against
     assert EnvironmentBOM.of_this_environment().to_cyclonedx()["specVersion"] == (
         CYCLONEDX_SPEC_VERSION
     )
+
+
+def test_an_envelope_that_declares_no_payload_type_is_refused_rather_than_assumed():
+    """The other half of the wire-name fix, and the half a default kept open.
+
+    The alias made `payloadType` and `payload_type` both *work*. The default made neither of
+    them necessary: an envelope carrying no type at all — or one whose key is misspelled,
+    which is the same thing to a reader that ignores what it does not recognise — was read as
+    in-toto, and the verifier then computed the pre-authentication encoding from a string the
+    envelope had not said. That is word for word the defect the alias was added to fix.
+
+    DSSE requires the field, so nothing valid is refused by requiring it. What is refused is a
+    reader supplying the answer to its own check.
+    """
+    signature = {"keyid": "k", "algorithm": "ed25519", "sig": "AA=="}
+    both_spellings = ("payloadType", "payload_type")
+    for spelling in both_spellings:
+        envelope = {spelling: DSSE_PAYLOAD_TYPE, "payload": "e30=", "signatures": [signature]}
+        assert Attestation.model_validate(envelope).payload_type == DSSE_PAYLOAD_TYPE
+
+    for missing in ({}, {"payloadTypo": DSSE_PAYLOAD_TYPE}, {"payloadtype": DSSE_PAYLOAD_TYPE}):
+        envelope = {**missing, "payload": "e30=", "signatures": [signature]}
+        with pytest.raises(ValidationError, match="payloadType"):
+            Attestation.model_validate(envelope)
+
+    # And a declared type that is not this module's is carried, not overwritten — the PAE
+    # binds the envelope's own string, which is what makes the requirement matter.
+    other = {"payloadType": "application/vnd.other+json", "payload": "e30=", "signatures": []}
+    assert Attestation.model_validate(other).payload_type == "application/vnd.other+json"
+
+
+def test_the_shell_reports_an_envelope_with_no_declared_type_as_a_bad_request():
+    """The model's refusal, seen from the command a user actually runs.
+
+    `anvilate verify` reads an envelope that arrived from somewhere else. A new refusal in the
+    model is only a refusal a user sees if the shell turns it into one — and this path already
+    has four `except` arms ahead of it for exactly that reason.
+    """
+    import tempfile
+
+    from anvilate.cli import EXIT_BAD_REQUEST, run
+
+    envelope = {"payload": "e30=", "signatures": []}
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "bundle.att.json"
+        path.write_text(json.dumps(envelope), encoding="utf-8")
+        out, err = io.StringIO(), io.StringIO()
+        code = run(["verify", str(path)], stdout=out, stderr=err)
+    assert code == EXIT_BAD_REQUEST, (code, out.getvalue(), err.getvalue())
+    assert "not a DSSE envelope" in err.getvalue(), err.getvalue()
+    assert "payloadType" in err.getvalue(), err.getvalue()

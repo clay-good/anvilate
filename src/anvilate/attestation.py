@@ -765,14 +765,24 @@ class Attestation(RevalidatedModel):
     # noticed: today's only payload type *is* the default.
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    payload_type: str = Field(default=DSSE_PAYLOAD_TYPE, alias="payloadType")
+    # Required, and that is the other half of the same fix. The alias made both spellings
+    # *work*; the default made neither of them necessary, so an envelope that declared no
+    # type at all — or one whose key was misspelled, which is the same thing to a reader that
+    # ignores what it does not recognise — was still read as in-toto, and the verifier still
+    # computed the pre-authentication encoding from a string the envelope had not said. DSSE
+    # requires the field, so nothing valid is refused by requiring it here; what is refused is
+    # a reader supplying the answer to its own check.
+    payload_type: str = Field(alias="payloadType")
     payload: str  # base64 of the canonical statement bytes, as DSSE requires
     signatures: tuple[Signature, ...] = ()
 
     @classmethod
     def unsigned(cls, bundle: EvidenceBundle) -> Attestation:
         """The envelope for ``bundle`` with no signature, recorded as such."""
-        return cls(payload=base64.b64encode(bundle.payload()).decode("ascii"))
+        return cls(
+            payload_type=DSSE_PAYLOAD_TYPE,
+            payload=base64.b64encode(bundle.payload()).decode("ascii"),
+        )
 
     @classmethod
     def signed_by(cls, bundle: EvidenceBundle, signer: AttestationSigner) -> Attestation:
