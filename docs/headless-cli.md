@@ -132,6 +132,28 @@ Refusing is what the YAML specification says to do — "it is an error for two e
 appear in the same mapping node" — and it applies at any depth and in either syntax, since
 the duplicate a generator writes is nested or inline rather than pasted at the top level.
 
+**The other document that parses and means something else is a number.** PyYAML implements
+YAML 1.1, whose resolver reads `020` as **16** and `1:20` as **80**. A thickness typed with a
+leading zero — out of a padded column, a CAD export, or somebody lining a table up — was
+silently a different thickness, and every check downstream was correct arithmetic on the
+wrong number:
+
+```text
+anvilate check: line 15, column 16: the document is not valid YAML — '020' is read as 16, a
+number written this way does not mean what its digits say — YAML 1.1 reads a leading zero as
+octal and a colon as sexagesimal — so the document does not say what it appears to
+```
+
+A scalar YAML resolves to a number has to agree with the base-ten reading of the same text,
+which leaves every number a spec is actually written with alone — `20`, `-3`, `+7`, `20.5`,
+`.5`, `1.5E-3`, and `20_0`, since underscores group digits the same way in YAML and in
+Python. `.inf` and `.nan` are refused for the other reason: they are read exactly as written,
+and nothing downstream has a defined answer for a dimension that is not a finite number.
+
+A `<<:` merge key still works, and a key the document sets locally still overrides the merged
+one. That is not an exception to the duplicate rule — the check runs over the keys as
+authored, before the merge is flattened into them.
+
 **A file that will not *decode* is the same case one layer earlier.** Every document these
 commands read is UTF-8, and a file that is not gets a bad request naming what wrote it:
 

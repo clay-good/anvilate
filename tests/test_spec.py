@@ -440,7 +440,7 @@ def test_the_cli_page_shows_a_provenanced_value_the_parser_accepts():
     #
     # The two forms are also two blocks now. They were one, with `units:` written twice and
     # the right form second, which worked only because PyYAML keeps the last of two equal
-    # keys — the exact behaviour `_RefuseDuplicateKeys` exists to refuse, printed on the page
+    # keys — the exact behaviour `_StrictSpecLoader` exists to refuse, printed on the page
     # that documents the refusal, in the block a reader is invited to copy.
     shown = [yaml.safe_load(block) for block in blocks if "what the IR asks for" in block]
     assert len(shown) == 1, "the provenanced-value block on headless-cli.md has moved"
@@ -1487,23 +1487,106 @@ def test_the_refusal_does_not_fire_on_the_same_key_in_two_different_mappings():
     assert "silently discards" not in str(raised.value)
 
 
-def test_no_yaml_document_this_package_ships_declares_a_key_twice():
-    """The other seventeen loaders, which have the same defect and no gate on it.
+def test_a_merge_key_still_shares_defaults_and_a_local_override_wins():
+    """The regression the duplicate-key refusal caused, and the reason it is checked before
+    the flatten rather than after.
 
-    A bundled table with a designation written twice loses a row silently — the same
-    mechanism, one layer down, where nobody would ever see the missing entry. They are clean
-    today; this is what keeps them that way. The floor is asserted because a sweep that finds
-    nothing to check passes just as quietly as one that checks everything.
+    `SafeConstructor.construct_mapping` calls `flatten_mapping` first, which moves a `<<:`
+    merge's keys into this node — so a key the document overrides locally appears twice by
+    construction, and a check that ran after the flatten would refuse the one YAML feature a
+    directory of specs uses to share defaults. The first cut of the refusal also *constructed*
+    each key node to compare it, and `<<:` carries the merge tag, which has no constructor of
+    its own: every spec using a merge key was refused as unreadable.
+    """
+    base = (Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml").read_text()
+
+    merged = base.replace(
+        "element_params:\n  name: padeye\n  material: ASTM-A36\n",
+        "element_params:\n  <<: {name: padeye, material: ASTM-A36}\n",
+    )
+    assert "<<:" in merged
+    spec = load_spec_yaml(merged)
+    assert spec.element_params["name"] == "padeye"
+    assert spec.element_params["material"] == "ASTM-A36"
+
+    overridden = base.replace(
+        "element_params:\n  name: padeye\n",
+        "element_params:\n  <<: {name: merged}\n  name: padeye\n",
+    )
+    assert load_spec_yaml(overridden).element_params["name"] == "padeye", (
+        "a local key overriding a merged one is YAML's own rule, not a duplicate"
+    )
+
+
+def test_a_number_that_is_not_read_in_base_ten_is_refused():
+    """`020` is **16** and `1:20` is **80** to the YAML 1.1 resolver PyYAML implements.
+
+    A thickness typed with a leading zero — out of a padded column, a CAD export, or somebody
+    lining a table up — was silently a different thickness, and every check downstream was
+    correct arithmetic on the wrong number. Nothing in the run named the digits the author
+    wrote. `.inf` and `.nan` are refused too, for the other reason: they are read exactly as
+    written, and nothing downstream has a defined answer for a dimension that is not finite.
+    """
+    misread = {"020": 16, "1:20": 80, "0x20": 32, "0b101": 5, "1:20.5": 80.5}
+    for text, read_as in misread.items():
+        with pytest.raises(SpecValidationError) as raised:
+            load_spec_yaml(f"a: {text}\n")
+        message = raised.value.errors[0]["msg"]
+        assert f"{text!r} is read as {read_as!r}" in message, message
+        assert "does not mean what its digits say" in message
+
+    for text in (".inf", ".nan", "-.inf"):
+        with pytest.raises(SpecValidationError) as raised:
+            load_spec_yaml(f"a: {text}\n")
+        assert "has to be a finite number" in raised.value.errors[0]["msg"]
+
+
+def test_the_numbers_a_spec_is_actually_written_with_are_untouched():
+    """The other half, and the one that decides whether the rule is usable. A gate that
+    refused any of these would be found by the first person to write a decimal."""
+    import yaml
+
+    from anvilate.spec.validate import _StrictSpecLoader
+
+    accepted = {
+        "20": 20,
+        "0": 0,
+        "-3": -3,
+        "+7": 7,
+        "20.5": 20.5,
+        "-0.5": -0.5,
+        ".5": 0.5,
+        "20.": 20.0,
+        "0.020": 0.02,
+        "1.5E-3": 0.0015,
+        # Underscores group digits the same way in YAML and in Python, so `20_0` is 200 to
+        # both and means what it looks like. It is in this list rather than the one above
+        # for exactly that reason.
+        "20_0": 200,
+        "1_000": 1000,
+    }
+    for text, value in accepted.items():
+        assert yaml.load(f"a: {text}\n", Loader=_StrictSpecLoader)["a"] == value, text
+
+
+def test_no_yaml_document_this_package_ships_is_misread_by_the_strict_loader():
+    """The other seventeen loaders, which have the same two defects and no gate on either.
+
+    A bundled table with a designation written twice loses a row silently, and one with a
+    padded `020` in it carries 16 — the same mechanisms, one layer down, where nobody would
+    ever see the wrong entry. They are clean today; this is what keeps them that way. The
+    floor is asserted because a sweep that finds nothing to check passes just as quietly as
+    one that checks everything.
     """
     import yaml
 
-    from anvilate.spec.validate import _RefuseDuplicateKeys
+    from anvilate.spec.validate import _StrictSpecLoader
 
     root = Path(__file__).resolve().parent.parent
     shipped = sorted((root / "src" / "anvilate").rglob("*.yaml"))
     assert len(shipped) >= 17, f"only {len(shipped)} bundled YAML files were swept"
     for path in shipped:
-        yaml.load(path.read_text(encoding="utf-8"), Loader=_RefuseDuplicateKeys)
+        yaml.load(path.read_text(encoding="utf-8"), Loader=_StrictSpecLoader)
 
     examples = sorted((root / "examples").rglob("*.yaml"))
     assert len(examples) >= 2, f"only {len(examples)} example specs were swept"

@@ -10,6 +10,8 @@ meaningful diffs between revisions.
 from __future__ import annotations
 
 import difflib
+import math
+import re
 from typing import Any
 
 import yaml
@@ -46,38 +48,52 @@ class SpecValidationError(ValueError):
         return cls(errors)
 
 
-class _RefuseDuplicateKeys(yaml.SafeLoader):
-    """A loader that refuses a mapping declaring the same key twice.
+class _StrictSpecLoader(yaml.SafeLoader):
+    """``yaml.safe_load`` plus a refusal of documents that do not say what they appear to.
 
-    PyYAML takes the last one and says nothing, so a spec with ``constraints:`` written
-    twice is screened against whichever copy happens to be lower in the file — and the
-    declaration the engineer wrote first is nowhere in the card, the stderr lines or the
-    evidence bundle. A padeye declaring ``min_safety_factor: 10.0`` and then, forty lines
-    down after a paste, ``min_safety_factor: 2.0`` **passes**, and nothing in the run
-    mentions the 10. That is the same defect as an ignored keyword — a declaration the user
-    makes that nothing answers — arriving through the document rather than through a field
-    name.
+    Two things PyYAML reads without complaint, both of which change the design being
+    screened and neither of which leaves a trace anywhere in the run.
 
-    Refusing is what the YAML specification itself says to do: "it is an error for two equal
-    keys to appear in the same mapping node". So this is a malformed document like a tab in
-    the indentation, it is reported the same way, and both marks are carried — the line the
-    key is repeated on is where the reader looks, and the line it was first declared on is
-    the one they have to compare it against.
+    **A key declared twice.** PyYAML takes the last one. A spec with ``constraints:`` written
+    twice is screened against whichever copy happens to be lower in the file: declare
+    ``min_safety_factor: 10.0`` and then, forty lines down after a paste, ``2.0``, and the
+    part **passes**, with the 10 in no card, no stderr line and no evidence bundle. That is
+    the same defect as an ignored keyword — a declaration the user makes that nothing
+    answers — arriving through the document rather than through a field name. Refusing is
+    what the YAML specification itself says to do: "it is an error for two equal keys to
+    appear in the same mapping node".
+
+    **A number that is not read in base ten.** YAML 1.1, which PyYAML implements, resolves
+    ``020`` to **16** and ``1:20`` to **80**. A thickness typed with a leading zero — from a
+    padded column, a CAD export, or somebody lining up a table — is silently a different
+    thickness, and every check downstream is correct arithmetic on the wrong number. So a
+    scalar YAML resolves to a number has to mean what the digits say: the resolved value is
+    compared against the base-ten reading of the same text, and a disagreement is refused
+    naming both.
+
+    Both are reported the way a tab in the indentation is, and both carry the position. The
+    duplicate carries two, because one is not enough to act on: the line the key is repeated
+    on is where the reader looks, and the line it was first declared on is what they have to
+    compare it against.
     """
 
     def construct_mapping(self, node, deep: bool = False):
-        first: dict[Any, Any] = {}
+        # Over the keys **as authored**, before `SafeConstructor.construct_mapping` calls
+        # `flatten_mapping` and moves a `<<:` merge's keys into this node. After the flatten
+        # a key the document overrides locally appears twice by construction, and refusing
+        # that would refuse the one YAML feature specs use to share defaults.
+        #
+        # Compared as raw scalars rather than constructed objects: a key node's tag is the
+        # merge tag itself for `<<:`, which has no constructor of its own, so constructing
+        # one here is what broke merge keys the first time.
+        first: dict[tuple[str, str], Any] = {}
         for key_node, _value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            try:
-                seen = key in first
-            except TypeError:
-                # An unhashable key — a list or a mapping used as one. It cannot collide
-                # with anything here and PyYAML refuses it a moment later on its own terms.
+            if not isinstance(key_node, yaml.ScalarNode):
                 continue
-            if seen:
+            key = (key_node.tag, key_node.value)
+            if key in first:
                 raise yaml.MarkedYAMLError(
-                    context=f"the key {key!r} was already declared at line "
+                    context=f"the key {key_node.value!r} was already declared at line "
                     f"{first[key].line + 1}, column {first[key].column + 1}",
                     context_mark=None,
                     problem="a key declared twice silently discards the earlier "
@@ -86,6 +102,51 @@ class _RefuseDuplicateKeys(yaml.SafeLoader):
                 )
             first[key] = key_node.start_mark
         return super().construct_mapping(node, deep=deep)
+
+
+def _construct_int(loader: _StrictSpecLoader, node: yaml.ScalarNode) -> int:
+    value = yaml.SafeLoader.construct_yaml_int(loader, node)
+    # A plain run of base-ten digits, underscores allowed because YAML and Python group them
+    # the same way — `20_0` is 200 to both, so it means what it looks like. Anything else
+    # (`020`, `0x20`, `0b101`, `1:20`) is a base or a notation the digits do not announce.
+    if re.fullmatch(r"[+-]?[0-9_]+", node.value) and int(node.value) == value:
+        return value
+    raise _misread(node, value)
+
+
+def _construct_float(loader: _StrictSpecLoader, node: yaml.ScalarNode) -> float:
+    value = yaml.SafeLoader.construct_yaml_float(loader, node)
+    try:
+        if float(node.value) == value:
+            return value
+    except (ValueError, OverflowError):
+        pass
+    raise _misread(node, value)
+
+
+def _misread(node: yaml.ScalarNode, value: object) -> yaml.MarkedYAMLError:
+    if isinstance(value, float) and not math.isfinite(value):
+        # `.inf` and `.nan` are read exactly as written, so the sentence below would be a
+        # lie about them. They are refused for the other reason: nothing downstream of here
+        # has a defined answer for a dimension that is not a finite number, and a NaN in
+        # particular is dropped rather than propagated by every `max` it reaches.
+        problem = "a dimension has to be a finite number"
+    else:
+        problem = (
+            "a number written this way does not mean what its digits say — YAML 1.1 reads "
+            "a leading zero as octal and a colon as sexagesimal — so the document does not "
+            "say what it appears to"
+        )
+    return yaml.MarkedYAMLError(
+        context=f"{node.value!r} is read as {value!r}",
+        context_mark=None,
+        problem=problem,
+        problem_mark=node.start_mark,
+    )
+
+
+_StrictSpecLoader.add_constructor("tag:yaml.org,2002:int", _construct_int)
+_StrictSpecLoader.add_constructor("tag:yaml.org,2002:float", _construct_float)
 
 
 def parse_spec(data: dict) -> DesignSpec:
@@ -106,8 +167,9 @@ def load_spec_yaml(text: str) -> DesignSpec:
 
     A document that is not well-formed YAML is a :class:`SpecValidationError` like any other
     bad document, carrying the line and column PyYAML found the trouble at. A key declared
-    twice is one of those documents — see :class:`_RefuseDuplicateKeys` for why taking the
-    last one quietly is the worst of the three available answers.
+    twice is one of those documents, and so is a magnitude written `020` — see
+    :class:`_StrictSpecLoader` for both, and for why reading them quietly is the worst
+    of the three available answers.
 
     It used to be a traceback. `yaml.YAMLError` descends from `Exception` and not from
     `ValueError`, so it fell through every caller's guard — including the CLI's, which
@@ -119,7 +181,7 @@ def load_spec_yaml(text: str) -> DesignSpec:
     try:
         # `yaml.load` with an explicit SafeLoader subclass, which is `safe_load` plus the
         # duplicate-key refusal; nothing here can construct an arbitrary Python object.
-        data = yaml.load(text, Loader=_RefuseDuplicateKeys)
+        data = yaml.load(text, Loader=_StrictSpecLoader)
     except Exception as failure:
         # `except Exception`, not `yaml.YAMLError`, and measuring is what settled it. Over 21
         # malformed documents `safe_load` answers with `YAMLError` twenty times and, for

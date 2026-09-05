@@ -3575,7 +3575,7 @@ def test_no_yaml_document_can_construct_a_python_object():
     )
 
     # The exemption is narrow and it is named, so a second one has to be argued for here.
-    assert checked_loaders == ["src/anvilate/spec/validate.py with Loader=_RefuseDuplicateKeys"], (
+    assert checked_loaders == ["src/anvilate/spec/validate.py with Loader=_StrictSpecLoader"], (
         checked_loaders
     )
 
