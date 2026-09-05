@@ -70,6 +70,7 @@ __all__ = [
     "horizontal_cylinder_natural_convection_coefficient",
     "horizontal_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
+    "fin_array_thermal_resistance",
     "fin_array_count_for_resistance",
     "overall_heat_transfer_coefficient",
     "fouling_factor_from_coefficients",
@@ -1788,6 +1789,60 @@ def circular_source_spreading_resistance(
     return Quantity(magnitude=1.0 / (4.0 * k * a), unit=_THERMAL_RESISTANCE_UNIT)
 
 
+def fin_array_thermal_resistance(
+    *,
+    fin_count: float,
+    heat_transfer_coefficient: Quantity,
+    fin_efficiency: float,
+    fin_surface_area: Quantity,
+    unfinned_base_area: Quantity,
+) -> Quantity:
+    """A fin array's total thermal resistance, R = 1/(h·(N·η·A_f + A_base)).
+
+    The N fins and the exposed base between them sit in *parallel* between the surface and
+    the fluid, so their conductances add: h·(``fin_count`` N · ``fin_efficiency`` η ·
+    ``fin_surface_area`` A_f + ``unfinned_base_area`` A_base), and the array resistance is
+    the reciprocal. :func:`fin_thermal_resistance` is the single-fin term of that sum;
+    this is the whole surface, which is the number a junction-temperature check consumes.
+
+    ``fin_count`` is the real count and may be fractional — the design inverse
+    :func:`fin_array_count_for_resistance` returns one, and rounding *up* to the physical
+    number is a decision for the caller, so this evaluates whichever count it is handed.
+    A count of zero is the bare base, which is a real answer as long as there is some base
+    left; a surface with no fins and no exposed base carries nothing and is refused rather
+    than returned as an infinite resistance. Returns the resistance in K/W.
+
+    Source: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*, the
+    fin-array total surface efficiency — the same construction
+    :func:`fin_array_count_for_resistance` inverts.
+    """
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(fin_surface_area, "[area]", "fin_surface_area")
+    _require(unfinned_base_area, "[area]", "unfinned_base_area")
+    if not 0 < fin_efficiency <= 1:
+        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+    count = require_finite(fin_count, name="fin_count")
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    a_f = fin_surface_area.to("m**2").magnitude
+    a_base = unfinned_base_area.to("m**2").magnitude
+    if count < 0 or h <= 0 or a_f <= 0 or a_base < 0:
+        raise ValueError(
+            "fin_count and unfinned_base_area must be non-negative, and "
+            "heat_transfer_coefficient and fin_surface_area positive"
+        )
+    area = fin_efficiency * count * a_f + a_base
+    if area <= 0:
+        raise ValueError(
+            "a fin array with no fins and no exposed base has no surface to carry heat "
+            "through; its resistance is not a large number, it is undefined"
+        )
+    return Quantity(magnitude=1.0 / (h * area), unit=_THERMAL_RESISTANCE_UNIT)
+
+
 def fin_array_count_for_resistance(
     *,
     target_resistance: Quantity,
@@ -1798,7 +1853,10 @@ def fin_array_count_for_resistance(
 ) -> float:
     """The number of fins a target array resistance needs (the fin-array design inverse).
 
-    An array of N identical fins plus the exposed base carries a convective
+    The inverse of :func:`fin_array_thermal_resistance`, and the pair round-trips exactly:
+    the count returned here, put back through that function, lands on
+    ``target_resistance``. An array of N identical fins plus the exposed base carries a
+    convective
     conductance h·(N·η·A_f + A_base), so its resistance is the reciprocal. Inverting
     for the fin count that just reaches ``target_resistance`` R gives
     N = (1/(h·R) − A_base)/(η·A_f), where ``heat_transfer_coefficient`` h is the

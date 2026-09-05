@@ -17,10 +17,36 @@
 # Format: "<inverse> -> <forward>" for a paired inverse, "<symbol>" alone for one not yet
 # paired. Moving a line from the second group to the first means writing its round-trip
 # test; that is the whole point of the list.
+#
+# THE TWO SECTIONS ARE LOAD-BEARING, and were not. Every pair lived under `not yet
+# paired` while `round-tripped` was empty, because the gate read `->` anywhere in the
+# file and never looked at which heading a line sat under — so the file said, to a
+# reader, that nothing here round-trips while fifteen things did. A `->` line under
+# `not yet paired`, or a bare name under `round-tripped`, now fails.
+#
+# AND AN INVERSE MAY NOT BE ITS OWN FORWARD. `fin_array_count_for_resistance` was
+# paired with itself, which satisfied the both-halves-are-called gate by naming one
+# function twice: the array resistance it inverts was not a public symbol at all, and
+# its round-trip test reassembled the formula by hand instead of calling anything.
+# `fin_array_thermal_resistance` is that forward now, and the pair is a real one.
 
 ## round-tripped
 
-
+axial.required_axial_area -> axial.axial_stress
+column.euler_second_moment_for_load -> column.euler_buckling_load
+control_valve.required_flow_coefficient -> control_valve.valve_flow_rate
+dynamics.isolator_static_deflection_for_transmissibility -> dynamics.transmissibility
+dynamics.natural_frequency_from_deflection -> dynamics.natural_frequency
+fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
+fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
+keys.key_length_for_torque -> keys.key_shear_stress
+machining.spindle_speed_for_cutting_speed -> machining.cutting_speed
+pressure_vessel.asme_b313_pipe_wall_thickness -> pressure_vessel.asme_b313_pipe_pressure
+pressure_vessel.thin_wall_thickness_for_pressure -> pressure_vessel.thin_wall_cylinder
+section.required_section_modulus -> section.bending_stress
+thermal.fin_array_count_for_resistance -> thermal.fin_array_thermal_resistance
+torsion.shaft_diameter_for_torque -> torsion.shaft_torsional_stress
+wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bending_stress
 
 ## not yet paired (each is a candidate by name; some are conversions, not design inverses)
 accumulator.accumulator_size_for_volume
@@ -30,7 +56,6 @@ acoustics.sound_power_level_from_intensity
 acoustics.sound_pressure_from_power_level
 antenna.dish_diameter_for_gain
 antenna.max_line_of_sight_range
-axial.required_axial_area -> axial.axial_stress
 battery_peukert.peukert_exponent_from_two_rates
 beam.aisc_bearing_length_for_web_yielding
 beam.fastener_spacing_for_shear_flow
@@ -46,11 +71,9 @@ casting.riser_modulus_for_feeding
 centrifugal_casting.centrifugal_speed_for_g_factor
 chain.minimum_sprocket_teeth_for_chordal_variation
 clutch.disc_clutch_force_for_torque
-column.euler_second_moment_for_load -> column.euler_buckling_load
 combustion.equivalence_ratio_from_excess_air
 combustion.excess_air_from_flue_oxygen
 composite.fiber_volume_fraction_from_weight_fraction
-control_valve.required_flow_coefficient -> control_valve.valve_flow_rate
 conveyor.belt_speed_for_capacity
 cyclotron.cyclotron_mass_from_frequency
 data_converter.oversampling_ratio_for_bits
@@ -63,8 +86,6 @@ dynamics.angular_acceleration_from_torque
 dynamics.damping_ratio_from_half_power_bandwidth
 dynamics.damping_ratio_from_log_decrement
 dynamics.isolator_natural_frequency_for_transmissibility
-dynamics.isolator_static_deflection_for_transmissibility -> dynamics.transmissibility
-dynamics.natural_frequency_from_deflection -> dynamics.natural_frequency
 dynamics.quality_factor_from_half_power_bandwidth
 elastic_constants.bulk_modulus_from_youngs_poisson
 elastic_constants.youngs_modulus_from_bulk_shear
@@ -74,9 +95,7 @@ electroplating.electroplating_time_for_thickness
 energy_storage.current_from_c_rate
 energy_storage.discharge_time_from_c_rate
 exergy.irreversibility_from_entropy_generation
-fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
 fastener.bolt_preload_from_torque
-fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
 fastener.torque_for_preload
 fatigue.basquin_stress_for_life
 fire_protection.sprinkler_pressure_for_flow
@@ -98,14 +117,12 @@ injection_molding.max_projected_area_for_clamp
 interference.interference_for_contact_pressure
 isentropic_efficiency.compressor_isentropic_from_polytropic
 isentropic_efficiency.turbine_isentropic_from_polytropic
-keys.key_length_for_torque -> keys.key_shear_stress
 level_turn.bank_angle_for_load_factor
 level_turn.bank_angle_for_turn_rate
 level_turn.load_factor_from_bank_angle
 lifting_device.service_class_for_cycles
 living_hinge.living_hinge_web_length_for_strain
 machining.feed_for_surface_roughness
-machining.spindle_speed_for_cutting_speed -> machining.cutting_speed
 mass_energy.mass_from_energy
 momentum.coefficient_of_restitution_from_rebound
 noise_figure.noise_factor_from_figure
@@ -122,8 +139,6 @@ plate.base_plate_thickness_for_bearing
 plate.clamped_circular_plate_thickness_for_pressure
 pneumatics.air_receiver_volume_for_demand
 polarization.malus_angle_for_intensity
-pressure_vessel.asme_b313_pipe_wall_thickness -> pressure_vessel.asme_b313_pipe_pressure
-pressure_vessel.thin_wall_thickness_for_pressure -> pressure_vessel.thin_wall_cylinder
 projectile.projectile_launch_angle_for_range
 projectile.projectile_range_from_height
 quantum.minimum_energy_uncertainty
@@ -147,7 +162,6 @@ resistance_welding.spot_weld_current_for_heat
 road_curve.minimum_curve_radius
 rocket_propulsion.thrust_from_coefficient
 screw_conveyor.screw_conveyor_speed_for_capacity
-section.required_section_modulus -> section.bending_stress
 shear_spinning.shear_spinning_half_angle_for_thickness
 sheetmetal.minimum_bend_radius
 shot_peening.peening_time_for_coverage
@@ -160,7 +174,6 @@ strain_gauge.strain_from_bridge_output
 stress.max_shear_stress_plane
 temperature_sensor.thermocouple_temperature_from_voltage
 thermal.counterflow_ntu_for_effectiveness
-thermal.fin_array_count_for_resistance -> thermal.fin_array_count_for_resistance
 thermal.fouling_factor_from_coefficients
 thermal.heat_exchanger_area_for_duty
 thermal.heat_exchanger_effectiveness_from_temperatures
@@ -171,7 +184,6 @@ thermoforming.thermoforming_sheet_gauge_for_wall
 torsion.hollow_shaft_diameter_for_bending_torsion
 torsion.power_from_torque
 torsion.shaft_diameter_for_bending_torsion
-torsion.shaft_diameter_for_torque -> torsion.shaft_torsional_stress
 torsion.torque_from_power
 transmission_line.reflection_coefficient_from_vswr
 ventilation.airflow_for_air_changes
@@ -180,4 +192,3 @@ wave.wavelength_from_frequency
 wear.sliding_distance_for_wear_depth
 weld.fillet_weld_leg_for_load
 welding_heat.weld_travel_speed_for_heat_input
-wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bending_stress

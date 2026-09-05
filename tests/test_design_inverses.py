@@ -277,7 +277,14 @@ def test_key_length_for_torque_lands_the_governing_key_limit_state():
 
 
 def test_fin_array_count_for_resistance_lands_the_target_array_resistance():
-    from anvilate.analysis import fin_array_count_for_resistance
+    """This test used to reassemble R = 1/(h·(η·N·A_f + A_base)) by hand.
+
+    Which is the arithmetic under test written a second time, so it could only fail on a
+    typo, and the inventory recorded the inverse as pairing with *itself* because the
+    forward was not a public symbol. `fin_array_thermal_resistance` is that forward, and
+    the round trip now goes through it.
+    """
+    from anvilate.analysis import fin_array_count_for_resistance, fin_array_thermal_resistance
 
     target, h = _q("0.5 K/W"), _q("30 W/(m**2*K)")
     fin_area, base_area, efficiency = _q("0.004 m**2"), _q("0.002 m**2"), 0.85
@@ -288,7 +295,11 @@ def test_fin_array_count_for_resistance_lands_the_target_array_resistance():
         fin_surface_area=fin_area,
         unfinned_base_area=base_area,
     )
-    # R = 1 / (h·(η·N·A_f + A_base)) — reassemble it and confirm the target is reached.
-    total = efficiency * n * fin_area.to("m**2").magnitude + base_area.to("m**2").magnitude
-    resistance = 1.0 / (h.to("W/(m**2*K)").magnitude * total)
-    assert resistance == pytest.approx(target.to("K/W").magnitude, rel=1e-9)
+    resistance = fin_array_thermal_resistance(
+        fin_count=n,
+        heat_transfer_coefficient=h,
+        fin_efficiency=efficiency,
+        fin_surface_area=fin_area,
+        unfinned_base_area=base_area,
+    )
+    assert resistance.to("K/W").magnitude == pytest.approx(target.to("K/W").magnitude, rel=1e-12)

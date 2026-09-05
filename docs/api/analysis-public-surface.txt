@@ -1597,6 +1597,7 @@ thermal.confined_liquid_thermal_pressure
 thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance
 thermal.differential_thermal_stress
+thermal.fin_array_thermal_resistance
 thermal.fin_array_count_for_resistance
 thermal.heat_exchanger_area_for_duty
 thermal.counterflow_effectiveness

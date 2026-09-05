@@ -787,21 +787,77 @@ _INVERSE_NAME = re.compile(
 )
 
 
-def _inverse_inventory() -> tuple[dict[str, str], set[str]]:
-    """The recorded (inverse -> forward) pairs, and the symbols recorded as unpaired."""
+def _inverse_sections() -> dict[str, list[str]]:
+    """The inventory's lines, by the heading they sit under."""
     path = _REPO / "docs" / "api" / "design-inverses.txt"
-    paired: dict[str, str] = {}
-    unpaired: set[str] = set()
+    sections: dict[str, list[str]] = {}
+    heading = ""
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
+        if line.startswith("## "):
+            heading = "round-tripped" if line.startswith("## round-tripped") else "not yet paired"
+            sections.setdefault(heading, [])
+            continue
         if not line or line.startswith("#"):
             continue
-        if " -> " in line:
-            inverse, forward = line.split(" -> ", 1)
-            paired[inverse.strip()] = forward.strip()
-        else:
-            unpaired.add(line)
+        sections.setdefault(heading, []).append(line)
+    return sections
+
+
+def _inverse_inventory() -> tuple[dict[str, str], set[str]]:
+    """The recorded (inverse -> forward) pairs, and the symbols recorded as unpaired."""
+    paired: dict[str, str] = {}
+    unpaired: set[str] = set()
+    for lines in _inverse_sections().values():
+        for line in lines:
+            if " -> " in line:
+                inverse, forward = line.split(" -> ", 1)
+                paired[inverse.strip()] = forward.strip()
+            else:
+                unpaired.add(line)
     return paired, unpaired
+
+
+def test_the_inverse_inventorys_two_headings_say_what_is_under_them():
+    """Every pair sat under `not yet paired` while `round-tripped` was empty.
+
+    The reader of that file was told nothing round-trips, while fifteen things did — and
+    the gate could not see it, because it read a `->` anywhere in the file and never
+    looked at the heading above the line. The headings are the file's own claim about
+    itself, so they are checked like any other claim.
+    """
+    sections = _inverse_sections()
+    assert set(sections) == {"round-tripped", "not yet paired"}, sections.keys()
+
+    stragglers = [line for line in sections["not yet paired"] if " -> " in line]
+    assert not stragglers, (
+        "these name a forward check and sit under `not yet paired`, so the file reads as "
+        f"though they are unwritten work: {stragglers}. Move them under `round-tripped`"
+    )
+    bare = [line for line in sections["round-tripped"] if " -> " not in line]
+    assert not bare, (
+        "these sit under `round-tripped` and name no forward check, so there is nothing "
+        f"a round trip could be against: {bare}"
+    )
+    assert len(sections["round-tripped"]) >= 15, "the round-tripped section is all but empty"
+    assert sections["not yet paired"], "the debt section is empty, which is not what it means"
+
+
+def test_no_inverse_is_recorded_as_its_own_forward():
+    """A self-pairing satisfies the both-halves-are-called gate by naming one function twice.
+
+    `fin_array_count_for_resistance` was recorded as inverting itself, because the array
+    resistance it inverts was not a public symbol at all — so its round-trip test
+    reassembled the formula by hand and the AST gate below, which requires both halves to
+    be called, saw one name and was satisfied. That is a gate keyed on its own subject.
+    """
+    paired, _ = _inverse_inventory()
+    circular = sorted(inverse for inverse, forward in paired.items() if inverse == forward)
+    assert not circular, (
+        f"these are recorded as inverting themselves: {circular}. An inverse whose forward "
+        "check is not a public symbol is not paired — write the forward, or record the "
+        "bare name under `not yet paired`"
+    )
 
 
 def test_every_inverse_shaped_symbol_has_a_recorded_pairing_decision():

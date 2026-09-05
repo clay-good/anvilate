@@ -38,6 +38,10 @@ rise = temperature_rise(power=Quantity.parse("30 W"), thermal_resistance=total) 
   compare against the rated limit.
 - **`fin_efficiency`** = tanh(mL)/(mL) with m = √(h·P/(k·A_c)) — the fraction of the
   ideal (isothermal) fin heat a real fin moves.
+- **`fin_array_thermal_resistance`** = 1/(h·(N·η·A_f + A_base)) — the whole finned
+  surface, fins and exposed base in parallel; **`fin_array_count_for_resistance`** is its
+  exact inverse, returning the real fin count that reaches a target resistance (round it
+  *up* for the physical number).
 - **`junction_temperature_scorecard`** screens the rise Q·R against an allowable-rise
   budget (the rated junction limit over the ambient) as a No-silent-green check.
 

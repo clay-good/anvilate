@@ -12855,6 +12855,50 @@ def test_fin_array_count_inverts_the_array_resistance():
         )
 
 
+def test_the_fin_array_resistance_and_its_fin_count_are_each_others_inverse():
+    """The forward the inverse had no public partner for, so the inventory paired it
+    with itself and its round-trip test rewrote the formula by hand.
+
+    Read as a property in both directions rather than against a fixed number: more fins
+    lower the resistance, a count of zero is the bare base alone, and the count that
+    reaches a target lands exactly on it.
+    """
+    from anvilate.analysis import fin_array_count_for_resistance, fin_array_thermal_resistance
+
+    kw = {
+        "heat_transfer_coefficient": _q("25 W/(m**2*K)"),
+        "fin_efficiency": 0.95,
+        "fin_surface_area": _q("0.004 m**2"),
+        "unfinned_base_area": _q("0.002 m**2"),
+    }
+    target = Quantity(magnitude=0.5, unit="K/W")
+    n = fin_array_count_for_resistance(target_resistance=target, **kw)
+    assert fin_array_thermal_resistance(fin_count=n, **kw).to("K/W").magnitude == pytest.approx(
+        0.5, rel=1e-12
+    )
+
+    # Monotone: a fin added can only lower the resistance.
+    assert (
+        fin_array_thermal_resistance(fin_count=n + 1, **kw).to("K/W").magnitude
+        < fin_array_thermal_resistance(fin_count=n, **kw).to("K/W").magnitude
+    )
+    # No fins is the bare base: R = 1/(h·A_base), and nothing about the fins enters it.
+    bare = fin_array_thermal_resistance(fin_count=0.0, **kw)
+    assert bare.to("K/W").magnitude == pytest.approx(1.0 / (25.0 * 0.002), rel=1e-12)
+
+    # The guards, by the property each states rather than by its wording alone.
+    with pytest.raises(ValueError, match="fin_efficiency must be in"):
+        fin_array_thermal_resistance(**{**kw, "fin_efficiency": 1.5, "fin_count": 4.0})
+    with pytest.raises(ValueError, match="non-negative"):
+        fin_array_thermal_resistance(**{**kw, "fin_count": -1.0})
+    with pytest.raises(ValueError, match="must be a finite quantity"):
+        fin_array_thermal_resistance(**{**kw, "fin_count": float("nan")})
+    with pytest.raises(ValueError, match="it is undefined"):
+        fin_array_thermal_resistance(**{**kw, "fin_count": 0.0, "unfinned_base_area": _q("0 m**2")})
+    with pytest.raises(ValueError):
+        fin_array_thermal_resistance(**{**kw, "fin_count": 4.0, "fin_surface_area": _q("4 mm")})
+
+
 def test_circular_source_spreading_resistance_is_the_constriction_term():
     from anvilate.analysis import (
         circular_source_spreading_resistance,
