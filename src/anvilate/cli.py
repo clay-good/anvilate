@@ -665,6 +665,15 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
         statement = attestation.statement()
     except (ValueError, UnicodeDecodeError):
         statement = {}
+    if not isinstance(statement, dict):
+        # And JSON that parses is not JSON shaped like a statement. `verify_attestation` was
+        # hardened for exactly this and names the case in its own comment — a payload of
+        # `[1,2,3]` comes back as "the envelope payload is a JSON list, not a statement
+        # object" — and the shell then called `.get` on that list while *rendering* the
+        # report, so the one input the library had already been taught about was the one
+        # that answered with an AttributeError traceback. The guard above covered the
+        # exception and not the value.
+        statement = {}
     if args.format == "json":
         # `status`, `attested` and the attested toolchain are computed rather than stored,
         # so `model_dump` left all three out and the payload carried only the fields behind

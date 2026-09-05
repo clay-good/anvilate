@@ -13,6 +13,7 @@ a merge gate must not go green on it.
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import re
@@ -1549,6 +1550,59 @@ _MALFORMED_ENVELOPES = {
         {"payload": "e30=", "payloadType": "x", "signatures": {}}
     ),
     "a null payload": json.dumps({"payload": None, "payloadType": "x", "signatures": []}),
+    # The envelope is well-formed and the payload decodes and parses — and is not a
+    # statement. Everything above this line is a malformed *envelope*; the corpus stopped
+    # there while the premise it is named for is "an envelope arrives from somewhere else",
+    # which does not stop at the outer object. `verify_attestation` had already been
+    # hardened for a payload of `[1,2,3]` and says so in its own comment, and the shell
+    # crashed rendering that report.
+    **{
+        f"a payload that is a JSON {label}": json.dumps(
+            {
+                "payload": base64.b64encode(body).decode(),
+                "payloadType": "application/vnd.in-toto+json",
+                "signatures": [],
+            }
+        )
+        for label, body in {
+            "list": b"[1, 2, 3]",
+            "string": b'"a statement"',
+            "number": b"42",
+            "null": b"null",
+        }.items()
+    },
+    "a statement whose subjects are bare strings": json.dumps(
+        {
+            "payload": base64.b64encode(
+                json.dumps(
+                    {
+                        "_type": "https://in-toto.io/Statement/v1",
+                        "subject": ["padeye.dxf", "padeye.step"],
+                        "predicateType": "https://anvilate.dev/evidence-bundle/v1",
+                        "predicate": {},
+                    }
+                ).encode()
+            ).decode(),
+            "payloadType": "application/vnd.in-toto+json",
+            "signatures": [],
+        }
+    ),
+    "a statement whose predicate is a list": json.dumps(
+        {
+            "payload": base64.b64encode(
+                json.dumps(
+                    {
+                        "_type": "https://in-toto.io/Statement/v1",
+                        "subject": [],
+                        "predicateType": "https://anvilate.dev/evidence-bundle/v1",
+                        "predicate": [],
+                    }
+                ).encode()
+            ).decode(),
+            "payloadType": "application/vnd.in-toto+json",
+            "signatures": [],
+        }
+    ),
 }
 
 
@@ -1558,11 +1612,19 @@ def test_verify_refuses_a_malformed_envelope_rather_than_raising(label, fmt, tmp
     """An envelope arrives from somewhere else. It is untrusted input, and a traceback is
     the one answer this command must not give to it.
 
-    Six of these seven were already clean refusals. The seventh — a payload that is valid
+    Six of the first seven were already clean refusals. The seventh — a payload that is valid
     base64 over bytes that are not JSON — produced the *right* report, saying the payload is
     not readable JSON, and then raised `JSONDecodeError` on the way to printing it: both
     renderings re-parse the payload to read the attested toolchain, and neither asked whether
     it parsed.
+
+    **The corpus then stopped at the envelope, and the premise it is named for does not.**
+    Every case above the divider is a malformed outer object; a payload that decodes, parses,
+    and is a JSON *list* is a well-formed envelope carrying something that is not a statement.
+    `verify_attestation` was hardened for that one and names it in its own comment, so the
+    library reported it correctly — and the shell called `.get` on the list while rendering
+    that report and answered with an AttributeError traceback. The guard it had covered the
+    exception `statement()` raises and not the value it returns.
     """
     path = tmp_path / "envelope.json"
     path.write_text(_MALFORMED_ENVELOPES[label], encoding="utf-8")

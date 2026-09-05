@@ -431,6 +431,14 @@ not JSON all come back as a refusal with the reason. The last of those used to p
 right report — "the envelope payload is not readable JSON" — and then raise on the way to
 printing it, because both renderings re-parse the payload to read the attested toolchain.
 
+The list stopped at the envelope, and "arrives from somewhere else" does not. A payload that
+decodes, parses, and is a JSON **list** is a well-formed envelope carrying something that is
+not a statement — the library was hardened for that case and reports it as
+`the envelope payload is a JSON list, not a statement object`, and the shell then called
+`.get` on the list while rendering that very report. The guard covered the exception
+`statement()` raises and not the value it returns. A payload that is a JSON string, number or
+null did the same thing.
+
 **The toolchain is read out of the envelope, not out of the machine.** The requirement's
 own scenario says an engineer running this "confirms the signature, that artifact digests
 match, and reports the toolchain versions attested" — and a verifier on a different machine
