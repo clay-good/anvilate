@@ -38,8 +38,21 @@ __all__ = [
 ]
 
 
+#: How long a citation, a source or a name may be, in characters.
+#:
+#: The other end of the range `cited` already refuses. A field that is present and blank is
+#: refused because it reads as filled in every rendering and follows nowhere — and a field of
+#: a hundred thousand characters reads as filled too, renders as a wall, and is the subject
+#: `anvilate.standards.effectivity.parse_citation` scans. That scan is linear now, but linear
+#: in a string nothing bounded: a scorecard arrives from the subject store and out of an
+#: attestation envelope, where `reference` is free text. Measured across every citation and
+#: name this suite builds, the longest is 153 characters — Shigley's Marin surface factor —
+#: and a rule in tests/test_contract.py holds the bound clear of that.
+_LONGEST_CITED = 1_024
+
+
 def cited(states: str) -> Any:
-    """A provenance field that refuses to be present and blank, with its own sentence.
+    """A provenance field that refuses to be present and blank — or an unbounded wall.
 
     A citation, source, licence or reference identifier is what this library exists to
     carry. A *missing* one is a modelled state -- `cited(...) | None`, or a default of `""`
@@ -56,11 +69,21 @@ def cited(states: str) -> Any:
     The census that holds every provenance field to this is in tests/test_contract.py; it
     finds them by the marker below rather than by the annotation, since a field declared
     ``cited(...) | None`` reports a plain ``str``.
+
+    Both ends of the range, because only one of them was written. A citation is read back out
+    of a subject store and out of an attestation envelope — neither of which this library
+    wrote — and every rendering, export and signature downstream carries whatever it says.
+    :data:`_LONGEST_CITED` is what a citation can be and still be one.
     """
 
     def refuse_a_blank(value: str) -> str:
         if not value.strip():
             raise ValueError(f"this field must state {states}")
+        if len(value) > _LONGEST_CITED:
+            raise ValueError(
+                f"this field is {len(value):,} characters, and a citation longer than "
+                f"{_LONGEST_CITED:,} is not one a reader can follow; it must state {states}"
+            )
         return value
 
     refuse_a_blank.__anvilate_provenance__ = True  # type: ignore[attr-defined]

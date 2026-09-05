@@ -3207,6 +3207,43 @@ def test_the_provenance_guard_actually_refuses(factory, blank):
     assert model(name="LRFD 1", factors={"D": 1.4}, citation="ASCE 7-22 §2.3.1").citation
 
 
+def test_a_citation_has_an_upper_bound_and_it_is_clear_of_every_real_one():
+    """`cited` refused one end of the range and left the other open.
+
+    A field that is present and blank is refused because it reads as filled in every
+    rendering and follows nowhere. A field of a hundred thousand characters reads as filled
+    too — and it is the subject `parse_citation` scans, on a scorecard that arrives from the
+    subject store and out of an attestation envelope, neither of which this library wrote.
+
+    The bound rides on `cited`, so the census above is what proves every provenance field has
+    it; this checks the boundary in both directions and then ratchets the bound against the
+    citations the library actually builds. A bound that drifts down onto real data would
+    start refusing real standards, so it is reported at *half*, before the first one is lost.
+    """
+    import pydantic
+
+    import conftest
+    from anvilate._models import _LONGEST_CITED
+    from anvilate.loads import LoadCombination
+
+    at_the_bound = "A" * (_LONGEST_CITED - 1) + "1"
+    assert LoadCombination(name="LRFD 1", factors={"D": 1.4}, citation=at_the_bound).citation
+    with pytest.raises(pydantic.ValidationError, match="is not one a reader can follow"):
+        LoadCombination(name="LRFD 1", factors={"D": 1.4}, citation=at_the_bound + "1")
+
+    # Act first, then observe, as the effectivity ratchet does: how much of the suite has
+    # already run is not knowable, so the probe builds its own citations and adds whatever
+    # the session collector happens to hold.
+    citations = _evidence_references() | conftest._observed_citations()
+    assert len(citations) >= 10, f"the corpus is only {len(citations)} citations"
+    longest = max(citations, key=len)
+    assert len(longest) * 2 <= _LONGEST_CITED, (
+        f"the longest citation this library builds is {len(longest)} characters against a "
+        f"bound of {_LONGEST_CITED}, so the bound is no longer comfortably clear of the "
+        f"data:\n  {longest!r}"
+    )
+
+
 def test_every_change_delta_names_a_requirement_the_archive_can_merge():
     """A change that cannot be archived is a change that fails when the work is done.
 

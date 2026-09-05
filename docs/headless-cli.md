@@ -168,6 +168,23 @@ because that is what Python's JSON encoder says when it runs out of depth. A doc
 nests past 32 levels is refused at validation now, naming the field. The deepest Design Spec
 this repository ships is five levels, and a rule holds the bound comfortably clear of that.
 
+The third bound on that walk is on the strings, and it is the one nothing carried at all. A
+number has to be finite and a document has to nest inside 32 levels because something at the
+far end of the call has to be able to answer it — and a string has the same far end.
+`description` set to two megabytes of `A` was accepted here, cost 14.6 seconds at the front
+door alone, and then travelled into every rendering, both exports and the signed attestation.
+A document does not state a string longer than 4,096 characters now, values and mapping keys
+alike, and the refusal names the path: `element_params.finish is 4,097 characters`. The
+longest string any spec here states is a 64-character description.
+
+The same range has an upper end on a **citation**, and for the same reason one end of it was
+already refused. A citation that is present and blank is refused because it reads as filled in
+every rendering and follows nowhere; a citation of a hundred thousand characters reads as
+filled too, and it is what `parse_citation` scans — on a scorecard that arrives from the
+subject store or out of an attestation envelope, neither of which this tool wrote. A citation
+or a name is at most 1,024 characters, and a ratchet in the suite reports when the longest
+citation the library builds reaches half of that — before the first real standard is refused.
+
 A `<<:` merge key still works, and a key the document sets locally still overrides the merged
 one. That is not an exception to the duplicate rule — the check runs over the keys as
 authored, before the merge is flattened into them.

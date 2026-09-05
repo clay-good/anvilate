@@ -1717,3 +1717,58 @@ def test_the_effectivity_change_states_the_debt_the_ratchet_actually_holds():
     assert f"other {words[len(listed)].lower()} are" in notes, (
         f"the spelled-out count no longer says {words[len(listed)].lower()}"
     )
+
+
+def test_the_headless_cli_page_quotes_the_two_string_bounds_and_the_data_it_clears():
+    """Four numbers on one paragraph pair, and every one of them expires on its own.
+
+    Two are the constants (4,096 and 1,024), which the page argues from and which live in
+    two different modules. The third is the *headroom* — "the longest string any spec here
+    states is a 64-character description" — and that is the number that makes the first bound
+    defensible. A bound quoted beside a figure nothing measures is a bound a reader has no
+    reason to believe.
+    """
+    import conftest
+    from anvilate._models import _LONGEST_CITED
+    from anvilate.spec.ir import _MAX_STRING_LENGTH
+    from test_contract import _evidence_references
+
+    page = _page("headless-cli.md")
+
+    stated = re.search(r"does not state a string longer than ([\d,]+) characters", page)
+    assert stated is not None, "the document string bound on headless-cli.md has moved"
+    assert int(stated.group(1).replace(",", "")) == _MAX_STRING_LENGTH
+
+    cited = re.search(r"name is at most ([\d,]+) characters", page)
+    assert cited is not None, "the citation bound on headless-cli.md has moved"
+    assert int(cited.group(1).replace(",", "")) == _LONGEST_CITED
+
+    # The headroom, measured rather than transcribed. The specs this repository ships are
+    # the "any spec here" the page names.
+    import yaml
+
+    longest_shipped = 0
+    for path in sorted((_DOCS.parent / "examples").rglob("*.spec.yaml")):
+        stack = [yaml.safe_load(path.read_text(encoding="utf-8"))]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, str):
+                longest_shipped = max(longest_shipped, len(node))
+            elif isinstance(node, dict):
+                stack.extend(node.keys())
+                stack.extend(node.values())
+            elif isinstance(node, list):
+                stack.extend(node)
+    claim = re.search(r"a (\d+)-character description", page)
+    assert claim is not None, "the shipped-spec headroom on headless-cli.md has moved"
+    assert int(claim.group(1)) == longest_shipped, (
+        f"the page says {claim.group(1)} and the longest string in a shipped spec is "
+        f"{longest_shipped}"
+    )
+
+    # The page claims a ratchet reports at half the bound. That is a claim about a test, so
+    # it is checked against the test rather than restated: the citations the packs build are
+    # comfortably under half today, which is the state the sentence describes.
+    citations = _evidence_references() | conftest._observed_citations()
+    assert "half of that" in page, "the citation ratchet sentence on headless-cli.md has moved"
+    assert len(max(citations, key=len)) * 2 <= _LONGEST_CITED

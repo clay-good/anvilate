@@ -1362,7 +1362,7 @@ def test_the_finite_rule_reaches_into_the_documents_free_form_parts():
     spec, and MCP answered `-32603 Internal error`, raised late by the canonical-JSON writer
     with no field named. The path is built as the walk goes, so the message says which value.
     """
-    from anvilate.spec.ir import _first_non_finite
+    from anvilate.spec.ir import _first_unstatable
 
     base = _PADEYE_PARAMS
     for path, params in (
@@ -1378,11 +1378,49 @@ def test_the_finite_rule_reaches_into_the_documents_free_form_parts():
 
     # Nested one layer deeper, and inside a list, because the walk is recursive or it is a
     # rule about the top level of a mapping wearing the same words.
-    where, value = _first_non_finite("p", {"a": {"b": [1.0, {"c": float("inf")}]}})
-    assert (where, value) == ("p.a.b[1].c", float("inf"))
+    problem = _first_unstatable("p", {"a": {"b": [1.0, {"c": float("inf")}]}})
+    assert problem is not None and problem.startswith("p.a.b[1].c is inf,"), problem
     # And it lets ordinary containers through, including the booleans and strings and enums
     # that share a walk with them.
-    assert _first_non_finite("p", {"a": [1.0, "x", True, None, {"b": 2}]}) == (None, None)
+    assert _first_unstatable("p", {"a": [1.0, "x", True, None, {"b": 2}]}) is None
+
+
+def test_a_document_cannot_state_a_string_longer_than_anything_can_render():
+    """The third bound on the same walk, and the one nothing carried.
+
+    A number has to be finite and a document has to nest inside 32 levels because a consumer
+    at the far end of the call has to be able to answer it. A string has the same far end and
+    had no bound at all: `description` set to two megabytes of "A" was accepted at the front
+    door — 14.6 seconds there alone — and then travelled into every rendering, the DXF and QIF
+    exports and the signed attestation.
+
+    Checked at the boundary in both directions, because a bound asserted only from the far
+    side is satisfied by a rule that refuses everything, and into the free-form parts, because
+    that is where the finite rule's identical claim was false for a year. A mapping's *keys*
+    are strings the document states too.
+    """
+    from anvilate.spec.ir import _MAX_STRING_LENGTH, _first_unstatable
+
+    # The bound is a fact about the data: the longest string any spec here states is 64
+    # characters, so a rule that refused real documents would be caught by the suite instead.
+    assert _MAX_STRING_LENGTH >= 1_024
+
+    at_the_bound = "A" * _MAX_STRING_LENGTH
+    just_past = "A" * (_MAX_STRING_LENGTH + 1)
+    assert _first_unstatable("p", at_the_bound) is None
+    assert _first_unstatable("p", just_past) is not None
+
+    # Into the containers and onto the keys, on the same walk as the finite rule.
+    nested = _first_unstatable("p", {"a": {"b": ["ok", {"c": just_past}]}})
+    assert nested is not None and nested.startswith("p.a.b[1].c is 4,097 characters"), nested
+    keyed = _first_unstatable("p", {just_past: "ok"})
+    assert keyed is not None and keyed.startswith("a key of p is"), keyed
+
+    # And through the real front door, naming the field.
+    _padeye(element_params={**_PADEYE_PARAMS, "finish": at_the_bound})
+    with pytest.raises(ValidationError, match="does not state a string longer than") as raised:
+        _padeye(element_params={**_PADEYE_PARAMS, "finish": just_past})
+    assert "element_params.finish" in str(raised.value), str(raised.value)
 
 
 def test_a_document_that_nests_past_what_anything_can_serialise_is_refused_here():

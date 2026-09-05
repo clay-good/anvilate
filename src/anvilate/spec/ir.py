@@ -94,57 +94,96 @@ Force = Annotated[Quantity, AfterValidator(require_dimension("[force]", name="fo
 #: runs out of depth. A spec is refused here instead, naming the path.
 _MAX_DOCUMENT_DEPTH = 32
 
+#: How long a string a document is allowed to state, in characters.
+#:
+#: The third bound on the same walk, and the one the other two imply. A number has to be
+#: finite and a document has to nest inside 32 levels because a consumer at the far end of
+#: the call has to be able to answer it — and a string has the same far end. Nothing bounded
+#: one: `description` set to two megabytes of "A" was accepted here, cost 14.6 seconds at the
+#: front door alone, and then travelled into every rendering, both exports and the signed
+#: attestation. The longest string any Design Spec in this repository states is the
+#: nema23_bracket description at 64 characters, and a rule below holds the bound clear of it.
+_MAX_STRING_LENGTH = 4_096
+
 
 class _TooDeep(ValueError):
     """A document nested past :data:`_MAX_DOCUMENT_DEPTH`, carrying the path it got to."""
 
 
-def _first_non_finite(where: str, value: object, depth: int = 0) -> tuple[str | None, float | None]:
-    """The first infinity or NaN under ``value``, and the path to it — or ``(None, None)``.
+def _not_a_number(where: str, magnitude: float) -> str:
+    return (
+        f"{where} is {magnitude}, which is not a number a document can state; "
+        f"a requirement that is infinite or undefined is not a requirement"
+    )
+
+
+def _too_long(where: str, length: int) -> str:
+    return (
+        f"{where} is {length:,} characters, and a document does not state a string longer "
+        f"than {_MAX_STRING_LENGTH:,}; text no consumer can render or sign is refused here "
+        f"rather than at the far end of the call"
+    )
+
+
+def _first_unstatable(where: str, value: object, depth: int = 0) -> str | None:
+    """What is wrong with the first value a document may not state — or ``None``.
+
+    Two rules share this one walk because they share a premise: a document states what a
+    consumer at the far end of the call can answer. A number that is infinite or undefined is
+    one half; a string longer than :data:`_MAX_STRING_LENGTH` is the other, and it had
+    nothing. The returned string is the whole refusal, so the path it built is in the
+    sentence: `element_params.width is inf, ...`.
 
     A stated bound is wrapped: `max_mass` is a `Provenanced[Quantity]`, so the number is two
     layers in. Unwrapping by attribute rather than by type keeps this from importing the
-    provenance module, and an enum's `.value` is a string, which the float check filters out.
+    provenance module.
 
     Mappings and sequences are walked because a document's free-form parts are containers —
     `element_params` above all — and the path is built as it goes, so the message names
-    `element_params.width.magnitude` rather than `element_params`. Sub-models are not walked:
-    each is a `_Base` and has already run this rule on itself.
+    `element_params.width.magnitude` rather than `element_params`. A mapping's **keys** are
+    checked too, since a key is a string the document states as much as a value is.
+    Sub-models are not walked: each is a `_Base` and has already run this rule on itself.
     """
     if depth > _MAX_DOCUMENT_DEPTH:
         raise _TooDeep(where)
     value = getattr(value, "value", value)
     if isinstance(value, Quantity):
-        return (where, value.magnitude) if not isfinite(value.magnitude) else (None, None)
+        return _not_a_number(where, value.magnitude) if not isfinite(value.magnitude) else None
     if isinstance(value, BaseModel):
-        return None, None
+        return None
+    # Before the container branches, since `str` is a sequence: an enum's `.value` arrives
+    # here too, and is held to the same bound as any other string a document states.
+    if isinstance(value, str):
+        return _too_long(where, len(value)) if len(value) > _MAX_STRING_LENGTH else None
     # Before the float branch: `bool` is a subclass of `int`, not of `float`, so it never
     # reaches it — but a mapping's keys and values are `object` here and being explicit is
     # cheaper than working that out again.
     if isinstance(value, bool):
-        return None, None
+        return None
     if isinstance(value, float):
-        return (where, value) if not isfinite(value) else (None, None)
+        return _not_a_number(where, value) if not isfinite(value) else None
     if isinstance(value, Mapping):
         for key, item in value.items():
-            found = _first_non_finite(f"{where}.{key}", item, depth + 1)
-            if found[0] is not None:
+            if isinstance(key, str) and len(key) > _MAX_STRING_LENGTH:
+                return _too_long(f"a key of {where}", len(key))
+            found = _first_unstatable(f"{where}.{key}", item, depth + 1)
+            if found is not None:
                 return found
-        return None, None
+        return None
     if isinstance(value, (list, tuple, set, frozenset)):
         for index, item in enumerate(value):
-            found = _first_non_finite(f"{where}[{index}]", item, depth + 1)
-            if found[0] is not None:
+            found = _first_unstatable(f"{where}[{index}]", item, depth + 1)
+            if found is not None:
                 return found
-    return None, None
+    return None
 
 
 class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid")  # unknown keys are rejected
 
     @model_validator(mode="after")
-    def _every_number_is_finite(self) -> _Base:
-        """No field of a document is an infinity or a NaN.
+    def _every_value_is_one_a_document_can_state(self) -> _Base:
+        """No field of a document is an infinity, a NaN, or an unbounded wall of text.
 
         A `Quantity` may hold one — intermediate arithmetic produces them and each consumer
         guards its own — but a *document* never states one. Nothing checked it, and the two
@@ -156,6 +195,12 @@ class _Base(RevalidatedModel):
         One rule here rather than a `isfinite` in every validator below: they were written
         one field at a time, and `min_safety_factor > 0` is True for infinity.
 
+        **The same walk carries the string bound**, which nothing carried. `description` set
+        to two megabytes of "A" was accepted here — 14.6 seconds at the front door alone —
+        and then went on into every rendering, the DXF and QIF exports and the signed
+        attestation. It is the same claim as the other two: a document states what something
+        at the far end of the call can answer.
+
         **Into the containers, too, and that is where the hole was.** The claim above is
         about a document, and it was enforced over top-level fields only — so
         `element_params`, a free-form mapping and the place a *screened dimension* actually
@@ -166,7 +211,7 @@ class _Base(RevalidatedModel):
         """
         for name in type(self).model_fields:
             try:
-                where, magnitude = _first_non_finite(name, getattr(self, name, None))
+                problem = _first_unstatable(name, getattr(self, name, None))
             except _TooDeep:
                 # The field, not the path it got to: thirty-two `[0]`s is not something a
                 # reader acts on, and the field is where they have to look.
@@ -175,11 +220,8 @@ class _Base(RevalidatedModel):
                     f"document that nests past what any consumer can serialise is refused "
                     f"here rather than at the far end of the call"
                 ) from None
-            if where is not None:
-                raise ValueError(
-                    f"{where} is {magnitude}, which is not a number a document can state; "
-                    f"a requirement that is infinite or undefined is not a requirement"
-                )
+            if problem is not None:
+                raise ValueError(problem)
         return self
 
 
