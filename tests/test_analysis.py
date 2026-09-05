@@ -43579,3 +43579,41 @@ def test_the_whole_count_forms_snap_only_a_representation_error():
     assert whole_count_floor(-4.5) == -5
     assert whole_count_ceil(0.0) == 0
     assert whole_count_floor(0.0) == 0
+
+
+def test_the_bth1_allowables_render_every_allowable_they_carry():
+    """The rendering carried five allowable stresses and printed three.
+
+    Worse than the omission: it called `tension_gross` "F_t", which is the one name ASME
+    BTH-1 gives to *two* of them — F_t = S_y/N_d on the gross section and S_u/(1.20·N_d) on
+    the net. A reader was shown one unlabelled F_t with no way to tell which, and the
+    net-section value, which is exactly what a lug's net-tension check is judged against,
+    was carried and printed nowhere. Nothing had ever rendered this object, which is why
+    nobody had read it — `docs/api/unrendered-strings.txt` is the ratchet that follows.
+
+    Read against what the object carries, not against a fixed string: every field with a
+    stress in it has to appear.
+    """
+    from anvilate.analysis import DesignCategory, bth1_allowable_stresses
+
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.B,
+    )
+    rendered = str(allowables)
+
+    carried = {
+        name: getattr(allowables, name)
+        for name in type(allowables).model_fields
+        if isinstance(getattr(allowables, name), Quantity)
+    }
+    assert set(carried) == {"tension_gross", "tension_net", "shear", "bending", "pin_bearing"}
+    for name, quantity in carried.items():
+        assert str(quantity) in rendered, f"{name} ({quantity}) is carried and not rendered"
+
+    # And the two that share a symbol are told apart, or rendering both is no better than
+    # rendering one.
+    assert f"F_t {allowables.tension_gross} gross" in rendered
+    assert f"{allowables.tension_net} net" in rendered
+    assert "Category B" in rendered and "N_d = 3.00" in rendered

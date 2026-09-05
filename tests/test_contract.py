@@ -3926,3 +3926,42 @@ def test_every_file_a_caller_names_is_read_inside_a_guard_that_catches_a_bad_enc
         "a file a caller names is decoded with nothing catching a bad encoding: "
         + ", ".join(unguarded)
     )
+
+
+def test_the_rendering_ratchet_fires_in_each_of_its_four_directions():
+    """A ratchet nobody has made fire is a list nobody is held to.
+
+    The session rule reads an absence, so it sits below the filtered-run guard and a subset
+    in a subprocess cannot reach it. The comparison is a function of three sets for exactly
+    that reason, and each of its four complaints is shown here to fire on its own — and to
+    stay silent on the state the repository is actually in.
+    """
+    from conftest import _rendering_debt_failure, _unrendered_manifest
+
+    listed = _unrendered_manifest()
+    assert len(listed) >= 50, f"only {len(listed)} renderings are on the list"
+    declared = listed | {f"anvilate.pack.Rendered{n}" for n in range(120 - len(listed))}
+    rendered = declared - listed
+    assert len(declared) >= 100
+
+    # The state the repository is in: everything declared is either rendered or listed.
+    assert _rendering_debt_failure(declared, rendered, listed) is None
+
+    # 1. A rendering nothing calls that is not on the list.
+    one = sorted(listed)[0]
+    complaint = _rendering_debt_failure(declared, rendered, listed - {one})
+    assert complaint is not None and "nothing in the suite ever called it" in complaint
+    assert one in complaint
+
+    # 2. A listed name that is rendered anyway — the list has to shrink, not sit there.
+    complaint = _rendering_debt_failure(declared, rendered | {one}, listed)
+    assert complaint is not None and "now rendered" in complaint and one in complaint
+
+    # 3. A listed name that no longer defines a `__str__` at all.
+    ghost = "anvilate.nowhere.NoSuchClass"
+    complaint = _rendering_debt_failure(declared, rendered, listed | {ghost})
+    assert complaint is not None and "no longer define" in complaint and ghost in complaint
+
+    # 4. And the floor, because a sweep that wrapped nothing passes every check above.
+    complaint = _rendering_debt_failure(set(), set(), set())
+    assert complaint is not None and "all but empty set" in complaint

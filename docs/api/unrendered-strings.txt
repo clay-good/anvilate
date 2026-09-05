@@ -1,0 +1,96 @@
+# Classes that define their own `__str__` and that nothing in the suite ever renders
+# (the rendering debt).
+#
+# An audit once read the `__str__` bodies of this library and found four that dropped the
+# field distinguishing two objects from each other. It was an audit and not a gate, so
+# renderings went on being added that nothing ever called. `BTH1Allowables` carried five
+# allowable stresses, printed three, and called one of the two the standard names "F_t"
+# just "F_t" — a reader was shown an unlabelled value and could not tell which, while the
+# net-section allowable a lug's net-tension check is judged against was printed nowhere.
+#
+# The gate in tests/conftest.py holds this as a RATCHET, in the same shape as the
+# editionless-citation debt beside it. It fails in three directions: a rendering nothing
+# calls that is not on this list, a listed rendering that is now called (strike it off),
+# and a listed name that no longer defines a `__str__` at all. The list can only shrink.
+#
+# Paying one off is one line in a test: build the object and read what it prints against
+# what it carries. That is how the four were found.
+#
+anvilate.agenteval.ToolCall
+anvilate.analysis.aisc_compactness.CompactnessClass
+anvilate.analysis.aluminum.AluminumCompressionStrength
+anvilate.analysis.aluminum.AluminumLimitState
+anvilate.analysis.aluminum.EdgeSupport
+anvilate.analysis.aluminum.TemperGroup
+anvilate.analysis.beam.BeamBendingResult
+anvilate.analysis.cold_formed_steel.DSMLimitState
+anvilate.analysis.cold_formed_steel.DSMStrength
+anvilate.analysis.column.ColumnEnd
+anvilate.analysis.dynamics.ShockRegime
+anvilate.analysis.embodied_carbon.EmbodiedCarbonEstimate
+anvilate.analysis.embodied_carbon.ModuleScope
+anvilate.analysis.interference.InterferenceFit
+anvilate.analysis.lifting_device.BTH1LimitState
+anvilate.analysis.lifting_device.DesignCategory
+anvilate.analysis.lifting_device.ServiceClass
+anvilate.analysis.nds_timber.LoadDuration
+anvilate.analysis.pressure_vessel.BranchReinforcement
+anvilate.analysis.pressure_vessel.FlangeMoments
+anvilate.analysis.pressure_vessel.FlangeShapeFactors
+anvilate.analysis.pressure_vessel.NozzleReinforcement
+anvilate.analysis.pressure_vessel.ThickWallSphereStress
+anvilate.analysis.pressure_vessel.ThinWallStress
+anvilate.analysis.rivet.RivetedJointStrength
+anvilate.analysis.stress.CombinedNormalStress
+anvilate.attestation.ComponentKind
+anvilate.attestation.SignatureState
+anvilate.callouts.CalloutSet
+anvilate.callouts.FreeTextNote
+anvilate.callouts.RoughnessParameter
+anvilate.derivation.DerivationAbsence
+anvilate.derivation.Underived
+anvilate.explore.ObjectiveSense
+anvilate.explore.SamplingStrategy
+anvilate.gdt.Characteristic
+anvilate.gdt.CharacteristicClass
+anvilate.gdt.DatumBoundary
+anvilate.gdt.FeatureType
+anvilate.gdt.FrameModifier
+anvilate.gdt.MaterialCondition
+anvilate.gdt.Y14Edition
+anvilate.ingest.Bound
+anvilate.ingest.ConfirmationState
+anvilate.ingest.SignatureStatus
+anvilate.interop.ForceComponent
+anvilate.interop.ModeIdentification
+anvilate.loads.LoadNature
+anvilate.mcp.Cost
+anvilate.mcp.Dispatch
+anvilate.mcp.Gate
+anvilate.packs.industrial.PlateEdge
+anvilate.packs.structural.LoadType
+anvilate.packs.structural.Support
+anvilate.review.DecisionOrigin
+anvilate.scorecard.CheckStatus
+anvilate.scorecard.Direction
+anvilate.scorecard.LimitSense
+anvilate.spec.ir.GeometricCharacteristic
+anvilate.spec.ir.ManufacturingProcess
+anvilate.spec.ir.ValidationTier
+anvilate.spec.provenance.Origin
+anvilate.standards.effectivity.EditionAgreement
+anvilate.standards.fatigue.CurveSurvival
+anvilate.standards.fatigue.LoadingMode
+anvilate.standards.fatigue.SpecimenGeometry
+anvilate.standards.fatigue.WeldDetailCategory
+anvilate.standards.fatigue.WeldStressKind
+anvilate.standards.records.AllowableBasis
+anvilate.standards.threads.Fit
+anvilate.standards.timber.SizeClassification
+anvilate.standards.timber.TimberProperty
+anvilate.tolerance.explicit.ResolvedTolerance
+anvilate.tolerance.general.GeneralTolerance
+anvilate.tolerance.general.ToleranceClass
+anvilate.tolerance.iso286.StandardTolerance
+anvilate.units.system.UnitSystem
+anvilate.verification.VerificationMethod

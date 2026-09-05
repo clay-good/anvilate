@@ -365,11 +365,32 @@ And for a parse result, **make the round trip the assertion** — `str(parse(tex
 over the library's own strings. That one found a defect nobody would have written a case
 for: `29 CFR 1926` read as the year 1926.
 
-### Where it stands
+### It is a ratchet now, not an audit
 
-Twenty-five of the thirty-four were inspected and the four above fixed. The rest need
-construction fixtures nobody has written — a flange-moment set, a lifter device, an
-embodied-carbon estimate. If you build one for another reason, print it once and look.
+The paragraphs above describe something that happened once, and that is exactly how the
+count went back up: renderings kept being added that nothing ever called. A fifth defect was
+sitting in one of them. `BTH1Allowables` carries five allowable stresses, printed three, and
+called `tension_gross` **"F_t"** — the one name ASME BTH-1 gives to *two* of them, F_t on the
+gross section and F_t on the net. A reader was shown an unlabelled value with no way to tell
+which, and the net-section allowable, which is what a lug's net-tension check is judged
+against, was printed nowhere. Same family as the four above: the rendering drops what tells
+two things apart.
+
+So the suite wraps every `__str__` this package defines and records which were called. One
+that nothing calls has to be recorded in
+[`docs/api/unrendered-strings.txt`](api/unrendered-strings.txt), and the rule fails in three
+directions: a rendering nothing calls that is not on the list, a listed rendering that is now
+called (strike it off), and a listed name that no longer defines a `__str__` at all. The list
+can only shrink.
+
+**Paying one off is one line in a test**: build the object and read what it prints against
+what it carries. Do not assert a fixed string — walk the fields and require each value to
+appear, which is what caught the two the BTH-1 rendering was dropping.
+
+What the rule does *not* catch is a **branch** of a rendering nobody takes:
+`AluminumCompressionStrength` appends " in the weld-affected zone" on a flag that has never
+been True in any run. Class-level is where all five defects were, and a branch-level rule
+would need construction fixtures for cases the library has never produced.
 
 ## The bound a parameter's own name fixes
 

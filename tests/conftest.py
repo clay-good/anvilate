@@ -34,6 +34,7 @@ from __future__ import annotations
 import inspect
 import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -123,6 +124,7 @@ def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
 def pytest_configure(config: pytest.Config) -> None:
     pytest.approx = _recording_approx
     _install_the_coverage_collector()
+    _install_the_rendering_collector()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -266,6 +268,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     )
     if exitstatus != 0 or filtered or session.testsfailed:
         return
+
+    # Below the guard: this reads an *absence* — a rendering nothing called — so it is only
+    # meaningful over a whole run. A filtered run simply did not reach the tests that would
+    # have rendered them.
+    complaint = _rendering_debt_failure(
+        _declared_strings, _rendered_strings, _unrendered_manifest()
+    )
+    if complaint is not None:
+        print("\nRENDERINGS NOBODY LOOKED AT: " + complaint)
+        session.exitstatus = 1
     armed = sorted(known - recorded)
     if armed:
         print(
@@ -550,6 +562,114 @@ def _built_by_the_library() -> bool:
                 return True
         frame = frame.f_back
     return False
+
+
+# ---------------------------------------------------------------------------
+# Renderings, over every `__str__` this package defines.
+#
+# An audit once read the `__str__` bodies of this library and found four that dropped the
+# field distinguishing two objects from each other. It was an audit and not a gate, so
+# renderings have gone on being added that nothing ever calls: `BTH1Allowables` carried five
+# allowable stresses, printed three, and called one of the two the standard names "F_t"
+# just "F_t" — a reader was shown an unlabelled value and could not tell which, while the
+# net-section allowable a lug's net-tension check is judged against was printed nowhere.
+#
+# So the audit is a ratchet now. Every class in `src/anvilate` that defines its own
+# `__str__` has to be rendered at least once by the suite, or be recorded in
+# `docs/api/unrendered-strings.txt` — and the list can only shrink, in the same shape as
+# the editionless-citation debt beside it.
+#
+# What it does NOT catch is a *branch* of a rendering nobody takes; `weld_affected_governs`
+# has never been True in any run. Class-level is where the four defects were.
+# ---------------------------------------------------------------------------
+
+_UNRENDERED = _REPO / "docs" / "api" / "unrendered-strings.txt"
+_rendered_strings: set[str] = set()
+_declared_strings: set[str] = set()
+
+
+def _install_the_rendering_collector() -> None:
+    """Wrap every `__str__` this package defines so a run records which were called."""
+    import importlib
+    import pkgutil
+
+    import anvilate
+
+    for module in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            importlib.import_module(module.name)
+        except Exception:  # noqa: BLE001 - an optional dependency is not a gate failure
+            continue
+
+    for name, module in list(sys.modules.items()):
+        if not name.startswith("anvilate"):
+            continue
+        for obj in list(vars(module).values()):
+            # `"__str__" in vars(obj)` and not `hasattr`: every class has one by
+            # inheritance, and the question is which classes *wrote* one.
+            if not isinstance(obj, type) or "__str__" not in vars(obj):
+                continue
+            if not getattr(obj, "__module__", "").startswith("anvilate"):
+                continue
+            label = f"{obj.__module__}.{obj.__qualname__}"
+            if label in _declared_strings:
+                continue
+            original = vars(obj)["__str__"]
+
+            def wrapper(self, _original=original, _label=label):
+                _rendered_strings.add(_label)
+                return _original(self)
+
+            try:
+                obj.__str__ = wrapper
+            except (AttributeError, TypeError):
+                continue
+            _declared_strings.add(label)
+
+
+def _rendering_debt_failure(declared: set[str], rendered: set[str], listed: set[str]) -> str | None:
+    """The rule itself, as a function of three sets, so it can be made to fire.
+
+    The session rule that calls this lives below the filtered-run guard — it reads an
+    *absence*, so it is only meaningful over a whole run — which means a meta-test cannot
+    reach it with a subset in a subprocess. Written here it is three set comparisons and a
+    floor, and each of the four can be shown to fire on its own.
+    """
+    never = sorted(declared - rendered - listed)
+    if never:
+        return (
+            "these classes define their own `__str__` and nothing in the suite ever called "
+            "it. A rendering nobody has read is one that can drop the field distinguishing "
+            "two objects and stay green — four of them did. Render each in a test, or add "
+            "it to docs/api/unrendered-strings.txt with the reason:\n  " + "\n  ".join(never)
+        )
+    struck = sorted(listed & rendered)
+    if struck:
+        return (
+            "these are recorded as unrendered and are now rendered. Strike them from "
+            "docs/api/unrendered-strings.txt so the list can only shrink:\n  " + "\n  ".join(struck)
+        )
+    stale = sorted(listed - declared)
+    if stale:
+        return (
+            "these are on the list and no longer define a `__str__` of their own — renamed, "
+            "removed, or the rendering was deleted. Strike them from "
+            "docs/api/unrendered-strings.txt:\n  " + "\n  ".join(stale)
+        )
+    if len(declared) < 100:
+        return (
+            f"only {len(declared)} `__str__` definitions were wrapped, so this gate is "
+            "looking at an all but empty set"
+        )
+    return None
+
+
+def _unrendered_manifest() -> set[str]:
+    return {
+        line.strip()
+        for line in _UNRENDERED.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
 
 
 def _install_the_coverage_collector() -> None:

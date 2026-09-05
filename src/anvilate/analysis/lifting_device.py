@@ -172,9 +172,18 @@ class BTH1Allowables(BaseModel):
     pin_bearing: Quantity
 
     def __str__(self) -> str:
+        """All five, and the two called F_t distinguished.
+
+        This rendering carried three of the five and called `tension_gross` "F_t" — the one
+        name the docstring above gives to *two* of them. So a reader was shown one
+        unlabelled F_t and could not tell which, while the net-section value, which is what
+        a lug's net-tension check is judged against, was carried and printed nowhere. It had
+        never been rendered by anything, which is why nobody had read it.
+        """
         return (
             f"BTH-1 Category {self.category.value} (N_d = {self.design_factor:.2f}): "
-            f"F_t {self.tension_gross}, F_v {self.shear}, F_p {self.pin_bearing}"
+            f"F_t {self.tension_gross} gross / {self.tension_net} net, "
+            f"F_v {self.shear}, F_b {self.bending}, F_p {self.pin_bearing}"
         )
 
 
