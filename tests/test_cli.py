@@ -2501,3 +2501,60 @@ def test_every_surface_that_prints_a_validation_failure_uses_the_one_renderer():
         "`anvilate._models._refusal_line`, so they print pydantic's label and a doubled "
         "colon for a document-level rule:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_the_human_rendering_shows_everything_the_verdict_is_computed_from():
+    """A non-pass with nothing on the page saying why is the worst answer a report can give.
+
+    `VerificationReport.status` reads four fields: the signature state, the unchecked
+    subjects, the signatures under keys this run did not hold, and the predicate keys this
+    verifier does not read. The text rendering showed the first two, so a signed bundle
+    stating one unread key printed `NOT_EVALUATED` with every subject checked, nothing
+    unchecked and no problem on stderr.
+
+    The property is the one the `__str__` sweep uses: move one field and the rendering has to
+    move with it. Written over the model's *own* field list rather than a list here, so a
+    sixth field cannot land unrendered — and the two computed ones are covered by the
+    baseline, which prints the verdict and `attested` on its first line.
+    """
+    from anvilate.attestation import SignatureState, VerificationReport
+    from anvilate.cli import _render_verification
+
+    baseline = VerificationReport(
+        bundle_digest="a" * 64,
+        signature_state=SignatureState.SYMMETRIC_VERIFIED,
+        predicate_type="https://anvilate.dev/attestation/screening/v1",
+        checked_subjects=("scorecard.json",),
+    )
+    rendered = _render_verification(baseline, {})
+    moved = {
+        "bundle_digest": "b" * 64,
+        "signature_state": SignatureState.INVALID,
+        "predicate_type": "https://example.invalid/other/v1",
+        "checked_subjects": ("scorecard.json", "lug.dxf"),
+        "unchecked_subjects": ("lug.dxf",),
+        "unverified_signatures": ("some-other-keyid",),
+        "unread_predicate_keys": ("waivers",),
+        "problems": ("something did not match",),
+    }
+    assert set(moved) == set(VerificationReport.model_fields), (
+        "VerificationReport's fields and the ones moved here have diverged: "
+        f"unmoved {sorted(set(VerificationReport.model_fields) - set(moved))}"
+    )
+    for field, value in moved.items():
+        other = _render_verification(baseline.model_copy(update={field: value}), {})
+        assert other != rendered, f"moving {field} left the rendering identical"
+
+    # And the two that were missing say what they are, not just that something changed.
+    with_unread = _render_verification(
+        baseline.model_copy(update={"unread_predicate_keys": ("waivers",)}), {}
+    )
+    assert "unread" in with_unread and "waivers" in with_unread, with_unread
+    with_unverified = _render_verification(
+        baseline.model_copy(update={"unverified_signatures": ("some-other-keyid",)}), {}
+    )
+    assert "unverified" in with_unverified, with_unverified
+    assert "some-other-keyid" in with_unverified, with_unverified
+
+    # Absent renders too: a run that read everything and one nobody looked at must differ.
+    assert "unread      none" in rendered, rendered

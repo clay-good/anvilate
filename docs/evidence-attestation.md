@@ -82,6 +82,13 @@ document did not have (`status` is computed) and normalises values. `bom` and `a
 are not swept — a CycloneDX inventory is somebody else's schema, and this verifier is not the
 authority on what may appear in one.
 
+**And it is on the page.** `anvilate verify`'s text rendering showed the signature state and
+the two subject lists, so the first version of this printed `NOT_EVALUATED` with every subject
+checked, nothing unchecked and no problem on stderr — a non-pass with nothing saying why,
+which is the worst answer a report can give. `status` is computed from four fields and two of
+them were not rendered; all four are now, `none` included, and a test moves each field of the
+report and requires the rendering to move with it.
+
 Reported rather than refused, and that is the same distinction `unverified_signatures` draws:
 a bundle written by a newer Anvilate is not a broken bundle, and a verifier that failed on
 every key it had not been taught would make each release refuse the one before it. What it

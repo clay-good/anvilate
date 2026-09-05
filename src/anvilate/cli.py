@@ -724,6 +724,14 @@ def _attested_toolchain(statement: dict) -> dict:
 def _render_verification(report, statement: dict) -> str:
     """The report as a person reads it, with `attested` explained where it would mislead.
 
+    **Everything the verdict is computed from is on the page.** `status` reads four fields —
+    the signature state, the unchecked subjects, the signatures under keys this run did not
+    hold, and the predicate keys this verifier does not read — and this rendering showed the
+    first two. A bundle stating one unread key came back `NOT_EVALUATED` with every subject
+    checked, nothing unchecked and no problem on stderr: a non-pass with nothing on the page
+    saying why. `test_the_human_rendering_shows_everything_the_verdict_is_computed_from`
+    moves each field and requires the rendering to move with it.
+
     The toolchain the envelope attests is printed too, because the requirement's own
     scenario says an engineer running this "confirms the signature, that artifact digests
     match, **and reports the toolchain versions attested**" — and the first version showed
@@ -746,13 +754,20 @@ def _render_verification(report, statement: dict) -> str:
         f"  bundle      {report.bundle_digest}",
         f"  predicate   {report.predicate_type}",
     ]
-    for label, subjects in (
+    for label, listed in (
         ("checked", report.checked_subjects),
         ("unchecked", report.unchecked_subjects),
+        # The other two things that make a verdict NOT_EVALUATED, and neither reached this
+        # rendering. A signed bundle stating one key this verifier does not read came back
+        # `NOT_EVALUATED` with every subject checked, nothing unchecked and no problem on
+        # stderr — a non-pass with nothing on the page saying why, which is the worst answer
+        # a report can give. `report.status` reads four things; this printed two of them.
+        ("unverified", report.unverified_signatures),
+        ("unread", report.unread_predicate_keys),
     ):
-        # Both lists always render. A run that checked nothing and one whose subjects all
+        # All four always render. A run that checked nothing and one whose subjects all
         # matched must not look the same.
-        lines.append(f"  {label:11} {', '.join(subjects) or 'none'}")
+        lines.append(f"  {label:11} {', '.join(listed) or 'none'}")
     attested = _attested_toolchain(statement)
     components = attested["toolchain"]
     producer = attested["producer"]
