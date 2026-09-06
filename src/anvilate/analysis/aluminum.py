@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from math import isfinite, pi, sqrt
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -256,6 +257,15 @@ class AluminumLimitState(StrEnum):
     MEMBER_BUCKLING = "member buckling"
 
 
+if TYPE_CHECKING:
+    _PropertySource = str
+else:
+    _PropertySource = cited(
+        "where these properties came from — the mill certificate, the ADM table read, or "
+        "the project specification"
+    )
+
+
 class AlloyProperties(RevalidatedModel):
     """An alloy-temper's mechanical properties, and where they came from.
 
@@ -280,10 +290,7 @@ class AlloyProperties(RevalidatedModel):
     tensile_ultimate: Quantity  # F_tu
     elastic_modulus: Quantity  # E
     temper_group: TemperGroup
-    source: cited(
-        "where these properties came from — the mill certificate, the ADM table read, or "
-        "the project specification"
-    )
+    source: _PropertySource
     tension_coefficient: float = 1.0  # k_t, ADM Table A.3.3
     weld_affected: AlloyProperties | None = None
 

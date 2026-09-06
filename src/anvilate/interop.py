@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from math import isfinite
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ConfigDict, model_validator
 
@@ -229,6 +229,12 @@ class MemberDemand(RevalidatedModel):
         return self.components.get(component)
 
 
+if TYPE_CHECKING:
+    _ComputedBy = str
+else:
+    _ComputedBy = cited("the tool that computed these properties")
+
+
 class ExternalSectionProperties(RevalidatedModel):
     """Cross-section constants computed elsewhere, with the source that computed them.
 
@@ -247,7 +253,7 @@ class ExternalSectionProperties(RevalidatedModel):
     model_config = ConfigDict(frozen=True)
 
     name: Named
-    source: cited("the tool that computed these properties")
+    source: _ComputedBy
     source_version: str
     method: str
     area: Quantity

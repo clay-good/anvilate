@@ -46,7 +46,7 @@ export = ["ezdxf>=1.1"]
 # `jsonschema` is a dev dependency and not a runtime one: it validates the published
 # JSON Schema artifacts against the 2020-12 meta-schema in CI, which is a check about
 # what Anvilate emits rather than something anvilate needs to run.
-dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21"]
+dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21", "mypy>=1.11"]
 
 [project.scripts]
 # The MCP server on stdio. No arguments and no configuration: the surface is the

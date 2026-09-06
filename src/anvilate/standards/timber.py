@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from math import isfinite
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, model_validator
 
@@ -109,6 +110,24 @@ NDS_APPLICABLE_FACTORS: dict[TimberProperty, frozenset[str]] = {
 _MODULI = (TimberProperty.MODULUS, TimberProperty.MODULUS_MIN)
 
 
+if TYPE_CHECKING:
+    _TimberStandard = str
+else:
+    _TimberStandard = cited(
+        "the standard this design value comes from; the number alone does not say which "
+        "piece of wood it describes"
+    )
+
+
+if TYPE_CHECKING:
+    _TimberEdition = str
+else:
+    _TimberEdition = cited(
+        "the edition this design value comes from; the number alone does not say which "
+        "piece of wood it describes"
+    )
+
+
 class TimberDesignValue(RevalidatedModel):
     """One NDS reference design value, with what it is a value *of*.
 
@@ -119,14 +138,8 @@ class TimberDesignValue(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: cited(
-        "the standard this design value comes from; the number alone does not say which "
-        "piece of wood it describes"
-    )
-    edition: cited(
-        "the edition this design value comes from; the number alone does not say which "
-        "piece of wood it describes"
-    )
+    standard: _TimberStandard
+    edition: _TimberEdition
     table: str
     species: str
     grade: str

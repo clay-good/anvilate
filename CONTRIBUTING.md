@@ -10,12 +10,18 @@ neither is obvious:
 - **A check ships with its derivation.** Every scorecard entry either carries the worked
   formula or states why it has none. There is no third option; the gate names the check.
   See [calculation reports](docs/calculation-reports.md).
+- **A provenance field is a `str` to a consumer, and the suite type-checks that.** `cited(...)`
+  builds an annotated alias from a per-field sentence, so its return type is `Any` — declare
+  the field through an alias under an `if TYPE_CHECKING:` branch, never by calling `cited(...)`
+  in the annotation itself. `tests/test_typing.py` runs `mypy --strict` over a consumer that
+  imports the public surface, because nothing inside a package notices a field it declared
+  itself as `Any`.
 - **A number in prose is held against the thing it counts.** The counts on this page, the
   ratios on the docs pages, and the claims in `SECURITY.md` are all read back by the suite.
   If you change a count, the test tells you the real one.
 
-First, install the development extra — the gate below needs `pytest` and `ruff`, and the
-README's `pip install -e ".[export]"` does not carry them:
+First, install the development extra — the gate below needs `pytest`, `ruff` and `mypy`, and
+the README's `pip install -e ".[export]"` does not carry them:
 
 ```bash
 pip install -e ".[dev]"

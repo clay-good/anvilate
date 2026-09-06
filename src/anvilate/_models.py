@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from types import MappingProxyType
-from typing import Annotated, Any, Self, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, Self, TypeVar
 
 from pydantic import AfterValidator, BaseModel, PlainSerializer
 
@@ -126,16 +126,31 @@ def cited(states: str) -> Any:
 # other side: the field reads as filled, and every rendering downstream prints an entry, a
 # record or a check with nothing where its name goes. `[FAIL]    : safety factor 0.8` is a
 # scorecard line a reader cannot act on, and `governing()` names it as the check to look at.
-Named = cited(
-    "what it is called; a blank name renders as an unnamed check, record or element and "
-    "gives a reader nothing to follow"
-)
+#: A type checker reads these two as `str`, which is what the value is.
+#:
+#: `cited` returns an `Annotated` alias built from a per-field sentence, so its return
+#: annotation is `Any` — and a *call expression* is not something a type checker can read as
+#: a type. Without this branch every provenance and name field in the library is `Any` to a
+#: consumer: `takes_an_int(record.ref)` type-checked clean under `mypy --strict` while
+#: `record.sources` beside it was correctly `tuple[str, ...]`. Seventy-four fields, in a
+#: library whose stated purpose is carrying provenance.
+#:
+#: Found on the far side of an install — a downstream package importing the wheel — because
+#: nothing inside the package notices a field it declared itself as `Any`.
+if TYPE_CHECKING:
+    Named = str
+    Provenance = str
+else:
+    Named = cited(
+        "what it is called; a blank name renders as an unnamed check, record or element and "
+        "gives a reader nothing to follow"
+    )
 
-# The default spelling, for a field with nothing more specific to say than the rule itself.
-Provenance = cited(
-    "where it came from — the standard, table, certificate or record this value was read "
-    "from; a blank citation is one the document carries and no reader can follow"
-)
+    # The default spelling, for a field with nothing more specific to say than the rule.
+    Provenance = cited(
+        "where it came from — the standard, table, certificate or record this value was read "
+        "from; a blank citation is one the document carries and no reader can follow"
+    )
 
 
 def rebuilt_quantities(value: Any) -> Any:

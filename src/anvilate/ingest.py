@@ -55,6 +55,7 @@ import re
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from math import isclose, isfinite
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -252,6 +253,15 @@ class SignatureStatus(StrEnum):
     PRESENT_UNVERIFIED = "present_unverified"
 
 
+if TYPE_CHECKING:
+    _CertificateId = str
+else:
+    _CertificateId = cited(
+        "the certificate's unique identifier; without it the measured value is traceable "
+        "to nothing in particular"
+    )
+
+
 class CertificateProvenance(RevalidatedModel):
     """Where a measured value's certificate came from, and what it does and does not claim.
 
@@ -268,10 +278,7 @@ class CertificateProvenance(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    identifier: cited(
-        "the certificate's unique identifier; without it the measured value is traceable "
-        "to nothing in particular"
-    )
+    identifier: _CertificateId
     laboratory: str  # the issuing calibration laboratory
     signature_status: SignatureStatus
     claims_electronic_seal: bool = False

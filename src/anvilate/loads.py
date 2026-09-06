@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from math import isfinite
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -474,6 +475,12 @@ def _governing_for_check(
     return combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
 
 
+if TYPE_CHECKING:
+    _CombinationClause = str
+else:
+    _CombinationClause = cited("the clause the governing combination comes from")
+
+
 class CombinationEvidence(RevalidatedModel):
     """Which combination a part's checks were screened against, for the evidence bundle.
 
@@ -487,7 +494,7 @@ class CombinationEvidence(RevalidatedModel):
 
     basis: str
     governing: str
-    citation: cited("the clause the governing combination comes from")
+    citation: _CombinationClause
     demand_newtons: float
     # Load cases carrying a force with no declared nature. Any at all and the evidence is
     # NOT_EVALUATED: the demand was summed from part of the declared loads.

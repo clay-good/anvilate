@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from enum import StrEnum
 from math import isfinite
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -77,6 +78,16 @@ class ModuleScope(StrEnum):
     A1_A5 = "A1-A5 (cradle to practical completion)"
 
 
+if TYPE_CHECKING:
+    _FactorSource = str
+else:
+    _FactorSource = cited(
+        "where this factor came from — the dataset and its identifier, the EPD, or the "
+        "publication. A factor with no source cannot be checked, and an unbounded number "
+        "nobody can check is not a screen"
+    )
+
+
 class CarbonFactor(RevalidatedModel):
     """An EN 15978 mass-specific carbon factor, and what is needed to know what it means.
 
@@ -101,11 +112,7 @@ class CarbonFactor(RevalidatedModel):
     material: str
     value: float  # kgCO2e per kg
     scope: ModuleScope
-    source: cited(
-        "where this factor came from — the dataset and its identifier, the EPD, or the "
-        "publication. A factor with no source cannot be checked, and an unbounded number "
-        "nobody can check is not a screen"
-    )
+    source: _FactorSource
     band_low: float
     band_high: float
     dataset_id: str = ""

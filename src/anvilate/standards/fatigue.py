@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from math import isfinite
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, model_validator
 
@@ -435,6 +436,23 @@ EN1993_NORMAL_DETAIL_CATEGORIES: tuple[int, ...] = (
 _EN1993_STANDARD_PREFIX = "EN 1993-1-9"
 
 
+if TYPE_CHECKING:
+    _DetailStandard = str
+else:
+    _DetailStandard = cited(
+        "the standard the detail category is read from; a bare number is a curve "
+        "label, not a detail"
+    )
+
+
+if TYPE_CHECKING:
+    _DetailEdition = str
+else:
+    _DetailEdition = cited(
+        "the edition the detail category is read from; a bare number is a curve label, not a detail"
+    )
+
+
 class WeldDetailCategory(RevalidatedModel):
     """A weld detail category as a record: the standard, the detail, and which curve.
 
@@ -458,13 +476,8 @@ class WeldDetailCategory(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    standard: cited(
-        "the standard the detail category is read from; a bare number is a curve "
-        "label, not a detail"
-    )
-    edition: cited(
-        "the edition the detail category is read from; a bare number is a curve label, not a detail"
-    )
+    standard: _DetailStandard
+    edition: _DetailEdition
     table: str
     description: str
     detail_category: Quantity
