@@ -49,6 +49,14 @@ exactly why they cannot be one number.
 `wrong_but_valid()` names those candidates rather than only counting them, because a rate is
 not something anybody can act on.
 
+**And `render()` prints the caveat under the numbers**, which nothing did. `citation` is the
+argument for the shape of the three figures — the published source for the constraint tax, and
+the words "screening measurement, not a certified benchmark" — and it had carried both since
+the model was written while no rendering showed either. The one reading a person actually saw
+was three percentages with nothing saying what they are not. It is on `render` rather than
+`summary`, because the summary is a report pane's single headline and a two-sentence citation
+in it pushes the numbers off the end.
+
 ## What does not count as correct
 
 **A field the candidate omits.** It counts against correctness and says "the candidate does

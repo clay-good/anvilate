@@ -418,12 +418,24 @@ class CompilationReport(RevalidatedModel):
         )
 
     def render(self) -> str:
-        """The summary, then every task under it, worst first."""
+        """The summary, then every task under it worst first, then the caveat they are under.
+
+        The citation is the argument for the shape of the numbers above it: three figures
+        rather than one, because a single score is dominated by schema validity and would
+        show the compiler improving as it gets worse. `citation` has carried that source and
+        the words "screening measurement, not a certified benchmark" since the model was
+        written, and no rendering printed it — so the one reading a person actually sees was
+        three percentages with nothing saying what they are or are not.
+
+        On `render` and not on `summary`: the summary is a single line for a report pane, and
+        a two-sentence citation in it would push the numbers off the end. The bundle's
+        disclaimer sits in the same place for the same reason.
+        """
         ranked = sorted(
             self.outcomes,
             key=lambda o: (o.schema_valid, o.correct_fields / len(o.fields)),
         )
-        return "\n".join([self.summary(), *(f"  {outcome}" for outcome in ranked)])
+        return "\n".join([self.summary(), *(f"  {outcome}" for outcome in ranked), self.citation])
 
 
 def score_task_set(

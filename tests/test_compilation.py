@@ -301,10 +301,50 @@ def test_a_report_cannot_score_one_task_twice():
         CompilationReport(outcomes=(outcome, outcome), configuration="single-pass")
 
 
-def test_the_report_carries_the_caveat_it_is_screening():
+def test_the_report_carries_the_caveat_it_is_screening_and_prints_it():
+    """The field was checked and the rendering was not, which is a decorative assertion.
+
+    `citation` is the argument for the shape of the numbers beside it — three figures rather
+    than one, because a single score is dominated by schema validity and would show the
+    compiler improving as it gets worse. It has carried that source, and the words "screening
+    measurement, not a certified benchmark", since the model was written. Nothing printed it:
+    the only reading a person sees was three percentages with nothing saying what they are
+    not, and the only test on the field asserted `"arXiv" in report.citation`.
+    """
     report = score_task_set([_TASK], {"lug-50kn": _RIGHT}, configuration="single-pass")
     assert "not a certified benchmark" in report.citation
     assert "arXiv" in report.citation
+    assert report.citation in report.render()
+    # Not in the one-line summary, which is a report pane's headline: a two-sentence
+    # citation there pushes the numbers off the end.
+    assert report.citation not in report.summary()
+
+
+def test_every_field_of_a_compilation_report_reaches_a_rendering():
+    """The property that found the citation, kept: move a field and the rendering moves.
+
+    Over the model's own field list rather than one restated here, so a fourth field cannot
+    land unrendered — which is exactly how `citation` sat unprinted from the day it was
+    added, with a test asserting its *value* and none asserting it was ever shown.
+    """
+    from anvilate.compilation import CompilationReport
+
+    report = score_task_set([_TASK], {"lug-50kn": _RIGHT}, configuration="single-pass")
+    rendered = report.render()
+    moved = {
+        "outcomes": report.outcomes
+        + (score_candidate(_TASK.model_copy(update={"task_id": "b"}), _RIGHT),),
+        "configuration": "two-pass",
+        "citation": "a different source entirely, and still screening",
+    }
+    assert set(moved) == set(CompilationReport.model_fields), (
+        "CompilationReport's fields and the ones moved here have diverged: "
+        f"unmoved {sorted(set(CompilationReport.model_fields) - set(moved))}"
+    )
+    for field, value in moved.items():
+        assert report.model_copy(update={field: value}).render() != rendered, (
+            f"moving {field} left the rendering identical"
+        )
 
 
 def test_the_render_puts_the_worst_task_first():
@@ -317,7 +357,9 @@ def test_the_render_puts_the_worst_task_first():
     )
     lines = report.render().splitlines()
     assert lines[1].strip().startswith("t2:")
-    assert lines[-1].strip().startswith("t0:")
+    # -1 is the caveat the tasks are under; the tasks end one line above it.
+    assert lines[-2].strip().startswith("t0:")
+    assert lines[-1] == report.citation
 
 
 def test_a_field_that_was_never_compared_does_not_read_like_one_that_was_wrong():
