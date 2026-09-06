@@ -79,6 +79,22 @@ this release's version, which left a reviewer no trace that it had ever been new
 
 A different **major** version is refused as it always was.
 
+**A document that declares nothing is read as this release's version, and that is safe only
+while nothing migrates.** The section above is about the version a document comes back at
+*after* the walk; the default is the version it starts the walk at, and the same argument
+applies to it. Register the first migration and a versionless document skips it silently —
+it is already at the version the walk begins from — and comes out screened under a schema
+nobody chose for it, which then travels into the evidence bundle as the reproducibility
+record. The README's own example declares no version, so every document copied from it
+inherits this.
+
+The default stays, because requiring the field refuses seventeen documents this repository
+ships or builds and would take the directory sweep's recognition rule with it. What is added
+is a tripwire: `test_the_versionless_default_is_only_safe_while_nothing_migrates` fails on
+the first registered migration rather than after the first document is misread, and says
+there that the earliest supported version is the honest reading of a document that does not
+say.
+
 Because the field is optional, **nothing may recognise a Design Spec by it alone**, and
 `anvilate check <directory>` did — so a spec written without one screened when named and was
 reported `not a Design Spec, skipped` when found, and the merge-gate form of the command

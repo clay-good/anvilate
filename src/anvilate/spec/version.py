@@ -45,6 +45,20 @@ def migrate_to_current(data: dict) -> dict:
     bundle, where the spec section is the reproducibility record a reviewer reads. The
     same line would have covered a migration chain that stalled halfway.
     """
+    # A document that declares nothing is read as the current version, and that is a
+    # deliberate residual rather than an oversight: the directory sweep's recognition rule is
+    # "ask the loader", `examples/padeye.spec.yaml` is the versionless spec it is built on,
+    # and `test_a_spec_that_declares_no_version_is_screened_by_a_sweep_and_a_stray_file_is_not`
+    # pins both. Requiring the field refuses seventeen documents this repository ships or
+    # builds.
+    #
+    # **It is safe only while there are no migrations.** The moment one is registered below,
+    # a versionless document silently skips it — it is already at the version the walk starts
+    # from — and comes out screened under a schema nobody chose for it. That is the same
+    # shape as the overwrite this docstring describes: a reader supplying the answer to its
+    # own question. `test_the_versionless_default_is_only_safe_while_nothing_migrates` is the
+    # tripwire, and it fails on the first registered migration rather than after the first
+    # document is misread.
     declared = data.get("anvilate_spec", SCHEMA_VERSION)
     if _major(declared) != _major(SCHEMA_VERSION):
         raise UnsupportedSchemaVersion(

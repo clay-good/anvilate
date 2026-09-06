@@ -1819,3 +1819,37 @@ def test_no_yaml_document_this_package_ships_is_misread_by_the_strict_loader():
     assert len(examples) >= 2, f"only {len(examples)} example specs were swept"
     for path in examples:
         load_spec_yaml(path.read_text(encoding="utf-8"))
+
+
+def test_the_versionless_default_is_only_safe_while_nothing_migrates():
+    """A tripwire on a latent misreading, armed by the repository's own front-page example.
+
+    `migrate_to_current` reads a document declaring no `anvilate_spec` as the current
+    version. That is deliberate — the directory sweep's recognition rule is "ask the loader",
+    `examples/padeye.spec.yaml` is the versionless spec it is built on, and requiring the
+    field refuses seventeen documents this repository ships or builds — and it is safe only
+    because there is nothing to migrate.
+
+    Register the first migration and a versionless document silently skips it: the walk
+    starts from the version it was *assumed* to have, which is the one it ends at. It comes
+    out screened under a schema nobody chose for it, and the evidence bundle records that
+    schema as the reproducibility fact a reviewer reads. The README's own example is
+    versionless, so every document copied from it inherits this.
+
+    So this fails when a migration is registered rather than when a document is misread. The
+    fix at that point is to decide what an undeclared version means — the earliest supported
+    version is the honest reading, not the latest — not to delete this test.
+    """
+    from anvilate.spec.version import _MIGRATIONS, SCHEMA_VERSION, migrate_to_current
+
+    # Today's behaviour, pinned so the tripwire cannot be read as forbidding it.
+    document = {"name": "x"}
+    assert migrate_to_current(document)["anvilate_spec"] == SCHEMA_VERSION
+
+    assert not _MIGRATIONS, (
+        f"a schema migration is registered ({sorted(_MIGRATIONS)}), and a document that "
+        f"declares no anvilate_spec is still read as {SCHEMA_VERSION} — so it starts the "
+        f"walk at the end of it and skips every migration silently. Decide what an "
+        f"undeclared version means before shipping this: the earliest version this release "
+        f"supports is the honest reading of a document that does not say."
+    )
