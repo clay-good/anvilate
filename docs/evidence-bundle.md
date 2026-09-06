@@ -112,6 +112,26 @@ Absent when there is no callout layer, and that is deliberately *not* the `spec`
 callouts are a layer, so an absent one is already named in the roll-up's own `not covered`
 list, and a second sentence saying it again is the duplication the roll-up exists to avoid.
 
+## A layer the roll-up called uncovered while the card printed its result
+
+`DesignSpec.combination_evidence` says in its own docstring that it exists so "the evidence a
+bundle carries cannot forget the cases the factoring could not see" — and no bundle carried
+it. So a spec declaring `combination_basis: asce7_lrfd` exported a document whose first line
+read `not covered: ... load combinations ...` while the card two lines below printed
+`[PASS] load combination: LRFD 2 [Lr] governs under ASCE 7-22 LRFD (strength)` with the
+factored demand worked out under it. One document, two statements about the same layer, and
+the roll-up — the line a reviewer reads first, and the one hashed into the attested predicate
+— was the wrong one.
+
+Both surfaces collect it through `bundle.combinations_for`, as they do the sources. A basis
+that cannot resolve (a seismic set with no S_DS) carries no evidence rather than raising: that
+refusal is already a `NOT_EVALUATED` check on the card naming the reason, and a bundle that
+would not render over it would withhold that finding from its reader.
+
+A bundle for a spec that declares a basis is a *different document* from what this release
+used to emit, and its digest differs accordingly. That is the intended direction — the old one
+was describing a layer it had screened as missing.
+
 ## The bundle carries the sources its numbers were read from
 
 The same scenario, one field along. `citations` — the standards, certificates and database

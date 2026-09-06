@@ -805,7 +805,7 @@ def _render_verification(report, statement: dict) -> str:
 
 def _export(args: argparse.Namespace, *, out, err) -> int:
     """``export``, for the one artifact a spec file alone can produce."""
-    from .bundle import BundleSections
+    from .bundle import BundleSections, combinations_for
 
     if args.artifact in _UNBUILT_ARTIFACTS:
         print(
@@ -841,6 +841,9 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
                     # since it was published and nothing filled in: `collect_provenance`
                     # takes its databases explicitly, so every caller it had was a test.
                     citations=provenance_for(spec),
+                    # And the layer whose result was already on the card while the roll-up
+                    # above it said the layer was not covered.
+                    combinations=combinations_for(spec),
                 ),
             )
         )

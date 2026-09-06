@@ -1262,7 +1262,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     and reports the verdict in its exit code — and a surface that refused here would answer
     a question the other surface answers.
     """
-    from .bundle import BundleSections
+    from .bundle import BundleSections, combinations_for
 
     # The CLI's own table of what each artifact waits on, imported rather than restated.
     # Two surfaces cannot report an artifact as unbuilt in one place and buildable in the
@@ -1297,6 +1297,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             # same reason: two surfaces building one document must not differ in what they
             # put in it.
             citations=provenance_for(spec),
+            combinations=combinations_for(spec),
         ).to_document_dict()
     except (ValueError, TypeError, KeyError) as unreadable:
         # A handle that resolves to a record this build cannot read is the same fact as one

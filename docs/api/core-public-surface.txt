@@ -48,6 +48,7 @@ attestation.verify_attestation
 bundle.SectionStatus
 bundle.BundleDocument
 bundle.BundleSections
+bundle.combinations_for
 bundle.assemble_evidence_bundle
 callouts.MARIN_SURFACE_CITATION
 callouts.MARIN_SURFACE_CONSTANTS_MPA

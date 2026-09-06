@@ -80,6 +80,7 @@ from .verification import VerificationPlan
 __all__ = [
     "SectionStatus",
     "BundleDocument",
+    "combinations_for",
     "BundleSections",
     "assemble_evidence_bundle",
 ]
@@ -214,6 +215,29 @@ class BundleDocument(BaseModel):
     geometric_tolerances: tuple[str, ...] | None = Field(
         default=None, serialization_alias="geometricTolerances", alias="geometricTolerances"
     )
+
+
+def combinations_for(spec: DesignSpec) -> CombinationEvidence | None:
+    """The governing load combination for ``spec``, or ``None`` when there is none to carry.
+
+    `DesignSpec.combination_evidence` says in its own docstring that it exists so "the
+    evidence a bundle carries cannot forget the cases the factoring could not see" — and no
+    bundle carried it. A spec declaring `asce7_lrfd` exported a document whose roll-up said
+    `not covered: load combinations` while the card two lines below printed
+    `[PASS] load combination: LRFD 2 [Lr] governs under ASCE 7-22 LRFD (strength)` with the
+    factored demand worked out under it. One document, two statements about the same layer,
+    and the one a reviewer reads first was the wrong one.
+
+    ``None`` on a basis that cannot resolve — a seismic set with no S_DS — rather than
+    raising. That refusal is already a fact on the card, which
+    `screening._combination_entry` puts there as a NOT_EVALUATED check naming the reason, and
+    a bundle that would not render over it would withhold that finding from its reader. Same
+    rule as `evidence.provenance_for` one field along.
+    """
+    try:
+        return spec.combination_evidence()
+    except ValueError:
+        return None
 
 
 class BundleSections(RevalidatedModel):

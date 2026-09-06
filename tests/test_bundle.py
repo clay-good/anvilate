@@ -1483,3 +1483,86 @@ def test_the_exported_bundle_carries_the_callout_layers_checks_not_just_its_verd
         .model_copy(update={"callouts": CalloutSet(callouts=(treatment,))})
         .render()
     )
+
+
+def _spec_declaring_a_combination_basis():
+    import yaml
+
+    from anvilate.spec import load_spec_yaml
+
+    source = (
+        Path(__file__).resolve().parent.parent / "examples" / "nema23_bracket.spec.yaml"
+    ).read_text(encoding="utf-8")
+    document = yaml.safe_load(source)
+    document["combination_basis"] = "asce7_lrfd"
+    document["load_cases"] = [
+        {
+            "name": "dead",
+            "kind": "static",
+            "applied_to": "top",
+            "force": {"magnitude": 5.0, "unit": "kN"},
+            "nature": "D",
+        },
+        {
+            "name": "live",
+            "kind": "static",
+            "applied_to": "top",
+            "force": {"magnitude": 3.0, "unit": "kN"},
+            "nature": "L",
+        },
+    ]
+    return load_spec_yaml(yaml.safe_dump(document))
+
+
+def test_a_bundle_does_not_say_a_layer_is_uncovered_while_printing_its_result():
+    """One document, two statements about the same layer, and the roll-up had the wrong one.
+
+    `DesignSpec.combination_evidence` says in its own docstring that it exists so "the
+    evidence a bundle carries cannot forget the cases the factoring could not see", and no
+    bundle carried it. So a spec declaring `asce7_lrfd` exported a document whose first line
+    read `not covered: ... load combinations ...` while the card below it printed
+    `[PASS] load combination: LRFD 2 [Lr] governs` with the factored demand worked out. The
+    roll-up is the line a reviewer reads first, and it is the one that was wrong.
+    """
+    from anvilate.bundle import combinations_for
+
+    spec = _spec_declaring_a_combination_basis()
+    evidence = combinations_for(spec)
+    assert evidence is not None, "the fixture no longer declares a resolvable basis"
+
+    def not_covered(sections) -> str:
+        """The roll-up's own `not covered:` list, and nothing after the semicolon.
+
+        Splitting the whole rendering on `not covered` sweeps in the section lines below it,
+        so a layer that IS covered shows up in its own not-covered list. The first version
+        of this test did exactly that and failed on a correct document.
+        """
+        head = sections.render().splitlines()[0]
+        return head.split("not covered:", 1)[1].split(";", 1)[0] if "not covered:" in head else ""
+
+    carried = _sections(spec=spec, combinations=evidence)
+    rolled = carried.render()
+    assert "load combinations" not in not_covered(carried), rolled.splitlines()[0]
+    assert evidence.detail() in rolled
+
+    # And the layer is still named as missing when the spec declares no basis, which is the
+    # half that stops "always covered" passing this.
+    assert "load combinations" in not_covered(_sections())
+
+
+def test_a_basis_that_cannot_resolve_carries_no_evidence_rather_than_raising():
+    """A seismic set with no S_DS is a fact the card already states.
+
+    `screening._combination_entry` puts it there as a NOT_EVALUATED check naming the reason,
+    and a bundle that would not render over it would withhold that finding from its reader.
+    The same rule `evidence.provenance_for` follows one field along.
+    """
+    import pytest as _pytest
+
+    from anvilate.bundle import combinations_for
+
+    spec = _spec_declaring_a_combination_basis()
+    seismic = spec.model_copy(update={"combination_basis": "asce7_lrfd_seismic"})
+    with _pytest.raises(ValueError):
+        seismic.combination_evidence()
+    assert combinations_for(seismic) is None

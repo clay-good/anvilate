@@ -424,3 +424,54 @@ def test_the_two_surfaces_name_the_same_artifacts_in_their_own_spelling():
     # to happen: `evidence-bundle` at the shell, `evidence_bundle` over MCP.
     assert "evidence-bundle" in at_the_shell and "evidence-bundle" not in over_mcp
     assert "evidence_bundle" in over_mcp and "evidence_bundle" not in at_the_shell
+
+
+_SPEC_WITH_A_BASIS = """
+anvilate_spec: "1.3.0"
+name: deck_plate
+description: A mezzanine deck plate.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+combination_basis: asce7_lrfd
+load_cases:
+  - {name: dead, kind: static, applied_to: top, nature: D, force: {magnitude: 5.0, unit: kN}}
+  - {name: live, kind: static, applied_to: top, nature: L, force: {magnitude: 3.0, unit: kN}}
+"""
+
+
+def test_both_surfaces_carry_the_load_combination_layer_a_spec_declares():
+    """The parity test above compares whole documents, and was blind to this field.
+
+    `_SPEC` declares no `combination_basis`, so `combinations` was `None` on both sides and
+    the two agreed about an absent layer — which is exactly the state both were in while the
+    roll-up said `not covered: load combinations` over a card that printed the governing
+    combination. A field neither surface populates satisfies an equality happily.
+
+    So: a spec that *does* declare one, through both doors, asserting the layer is present
+    before asserting the two agree.
+    """
+    import tempfile
+    from pathlib import Path
+
+    import yaml
+
+    document = yaml.safe_load(_SPEC_WITH_A_BASIS)
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "deck.yaml"
+        path.write_text(_SPEC_WITH_A_BASIS, encoding="utf-8")
+        _code, out, _err = _cli(
+            "export", "--artifact", "evidence-bundle", "--format", "json", str(path)
+        )
+    at_the_shell = json.loads(out)["bundles"][0]["bundle"]
+
+    handle = _mcp("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]
+    over_mcp = _mcp("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"][
+        "structuredContent"
+    ]["bundle"]
+
+    layers = {section["name"] for section in at_the_shell["sections"]}
+    assert "load combinations" in layers, at_the_shell["sections"]
+    assert "load combinations" not in at_the_shell["missing"], at_the_shell["missing"]
+    assert over_mcp == at_the_shell
