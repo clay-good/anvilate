@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from anvilate.evidence import SourceRecord, collect_provenance
@@ -180,3 +182,53 @@ def test_unknown_material_ref_raises() -> None:
             materials=default_materials_db(),
             components=default_components_db(),
         )
+
+
+def test_the_bundled_database_convenience_is_the_trail_collect_provenance_gives():
+    """`collect_provenance` takes its databases explicitly, so every caller it had was a test.
+
+    That is why the two surfaces which build an evidence bundle — `anvilate export` and the
+    `export_artifact` MCP tool — never called it: they have a spec and nothing else. Both
+    bundles went out saying their sources were not recorded, in the document whose stated
+    reader receives only the bundle.
+
+    `provenance_for` is the one function both use, so the two cannot differ in what they put
+    in the document. It has to give exactly what the explicit form gives.
+    """
+    from anvilate.evidence import provenance_for
+    from anvilate.spec import load_spec_yaml
+    from anvilate.standards import default_components_db, default_materials_db
+
+    spec = load_spec_yaml(
+        (
+            Path(__file__).resolve().parent.parent / "examples" / "nema23_bracket.spec.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    explicit = collect_provenance(
+        spec, materials=default_materials_db(), components=default_components_db()
+    )
+    assert provenance_for(spec) == tuple(explicit)
+    assert len(explicit) >= 3, f"the bracket's trail is only {len(explicit)} records"
+
+
+def test_a_reference_that_does_not_resolve_gives_no_trail_rather_than_raising():
+    """Exporting is not the place that reports an unknown material.
+
+    The scorecard in the same document carries `material resolution` naming the ref, and a
+    bundle that refused to render would withhold that finding from the reader who needs it.
+    All-or-nothing rather than a per-record `try`: a partial trail presented as a whole one
+    is the failure this whole layer exists to prevent.
+    """
+    from anvilate.evidence import provenance_for
+    from anvilate.spec import load_spec_yaml
+
+    source = (
+        Path(__file__).resolve().parent.parent / "examples" / "nema23_bracket.spec.yaml"
+    ).read_text(encoding="utf-8")
+    good = load_spec_yaml(source)
+    assert provenance_for(good)
+
+    unknown = good.model_copy(
+        update={"material": good.material.model_copy(update={"ref": "NOT-A-MATERIAL"})}
+    )
+    assert provenance_for(unknown) == ()

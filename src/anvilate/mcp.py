@@ -52,6 +52,7 @@ from pydantic import ConfigDict, Field, model_validator
 from ._models import Named, RevalidatedModel, _refusal_line
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
+from .evidence import provenance_for
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
 
@@ -1285,12 +1286,17 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
 
     try:
+        spec = parse_spec(record["spec"])
         document = BundleSections(
             scorecard=Scorecard.model_validate(record["scorecard"]),
             # Never `None` on this path. The record holds the pair, so the bundle a client
             # gets over MCP carries its inputs exactly as the one `anvilate export` prints
             # does — the parity is by construction rather than by both surfaces remembering.
-            spec=parse_spec(record["spec"]),
+            spec=spec,
+            # And the same for the provenance trail, through the same one function, for the
+            # same reason: two surfaces building one document must not differ in what they
+            # put in it.
+            citations=provenance_for(spec),
         ).to_document_dict()
     except (ValueError, TypeError, KeyError) as unreadable:
         # A handle that resolves to a record this build cannot read is the same fact as one

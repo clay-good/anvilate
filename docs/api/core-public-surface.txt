@@ -111,6 +111,7 @@ derivation.DerivationAbsence
 derivation.Underived
 evidence.SourceRecord
 evidence.collect_provenance
+evidence.provenance_for
 fetch.ConsentRequired
 fetch.DatasetRecipe
 fetch.FetchProvenance

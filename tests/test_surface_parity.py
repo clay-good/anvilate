@@ -179,6 +179,11 @@ def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
     over_mcp = result["structuredContent"]
 
     assert over_mcp["bundle"] == at_the_shell
+    # And the comparison is over a document that actually carries the parts that differ.
+    # `citations` is absent when a bundle has none, so two surfaces that both collected
+    # nothing would satisfy the equality above while agreeing about an empty document —
+    # which is exactly the state both were in before `provenance_for` was wired to either.
+    assert at_the_shell["citations"], "the compared bundle records no sources"
     assert over_mcp["format"] == "evidence_bundle"
     assert result["isError"] is False
     # The bundle does not pass — that is what the CLI's exit code says — and it came back

@@ -36,7 +36,7 @@ from .standards import (
 )
 from .tolerance import general_tolerance_source, resolve_class
 
-__all__ = ["SourceRecord", "collect_provenance"]
+__all__ = ["SourceRecord", "collect_provenance", "provenance_for"]
 
 
 class SourceRecord(RevalidatedModel):
@@ -221,3 +221,33 @@ def collect_provenance(
             )
         )
     return records
+
+
+def provenance_for(spec: DesignSpec) -> tuple[SourceRecord, ...]:
+    """The provenance trail for ``spec`` against the bundled databases, or ``()``.
+
+    :func:`collect_provenance` takes its databases explicitly, which is right for a caller
+    that has them and is why every one of its callers was a test: the two surfaces that
+    build an evidence bundle — `anvilate export` and the `export_artifact` MCP tool — have a
+    spec and nothing else, so neither called it and every bundle either shipped went out
+    saying its sources were not recorded. One function both use, so the two cannot drift.
+
+    **A reference that does not resolve returns no trail rather than raising.** Exporting is
+    not the place that reports an unknown material: the scorecard in the same document
+    already carries `material resolution` as a failing check naming the ref, and a bundle
+    that refused to render because of it would withhold that finding from the reader who
+    needs it. What must not happen is a *partial* trail presented as a whole one, which is
+    why this is all-or-nothing rather than a per-record `try`.
+    """
+    from .standards import default_components_db, default_materials_db
+
+    try:
+        return tuple(
+            collect_provenance(
+                spec,
+                materials=default_materials_db(),
+                components=default_components_db(),
+            )
+        )
+    except (KeyError, LookupError, ValueError):
+        return ()

@@ -126,6 +126,15 @@ sources:
   AA-6061-T6 (material) Aluminium 6061-T6 — Aluminum Design Manual 2020, Table A.3.4
 ```
 
+Both surfaces that build a bundle collect that trail through one function,
+`evidence.provenance_for`, so neither can differ from the other about what is in the document.
+Until they did, neither called `collect_provenance` at all: it takes its databases explicitly,
+which is right for a caller that has them and is why every caller it had was a test — the CLI
+and the MCP tool have a spec and nothing else. A reference that does not resolve gives *no*
+trail rather than a partial one, and is not reported here: the scorecard in the same document
+already carries `material resolution` naming the ref, and a bundle that refused to render over
+it would withhold that finding from the reader who needs it.
+
 A bundle carrying none says so — `sources: none recorded — this bundle names the standards
 its checks cite and not the certificates, tables or database records they were read from` —
 on the rule the `spec` and `assumptions` blocks beside it already follow: a heading that

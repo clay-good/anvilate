@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from ._models import _refusal_line
+from .evidence import provenance_for
 from .scorecard import CheckStatus, Scorecard
 from .units import UnitSystem
 
@@ -829,7 +830,20 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
         # The spec goes in the bundle, not only through it. `artifact-export`'s scenario is
         # a reviewer holding only this document and re-running the analysis, and until the
         # spec was carried they were holding verdicts with no inputs behind them.
-        results.append((path, spec, BundleSections(scorecard=screen_spec(spec), spec=spec)))
+        results.append(
+            (
+                path,
+                spec,
+                BundleSections(
+                    scorecard=screen_spec(spec),
+                    spec=spec,
+                    # Where every number came from, which the bundle has had a place for
+                    # since it was published and nothing filled in: `collect_provenance`
+                    # takes its databases explicitly, so every caller it had was a test.
+                    citations=provenance_for(spec),
+                ),
+            )
+        )
 
     # One roll-up, read by the exit code and by both renderings. `check` prints its
     # run-level verdict in each; this printed it in neither, so a CI job publishing bundles
