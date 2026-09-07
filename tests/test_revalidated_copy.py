@@ -229,24 +229,72 @@ def test_the_base_is_not_paid_for_by_models_with_no_invariant():
     `ScorecardEntry`, which was the hottest copy path in the library right up until the
     entry acquired an invariant of its own, at which point a true statement about the rule
     read as a failure of it.
+
+    **Both halves are keyed on the qualified name**, and reading the bare one is what this
+    gate did for a long time. `_Base` is the name five modules give their private root, one
+    of which declares an invariant — so `ancestor.__name__ in declaring` answered True for
+    the other four and for every leaf under them, and seven models were certified by a class
+    in a package they have nothing to do with. The assertion below that a bare name IS shared
+    across modules is what keeps that from being an unfalsifiable improvement.
+
+    **The unit of the decision is the family, not the class.** ``class _Base(RevalidatedModel)``
+    is written once and applies to everything under it, so what has to be justified is that
+    subtree — `standards.records.ScalarProperty` carries no invariant of its own and never
+    will, and hoisting the family's `extra="forbid"` config away from its base to spare that
+    one leaf a parse is not a trade this library would make. The subtree is what pays and
+    the subtree is what is asked.
     """
     # Both censuses, because both kinds of declaration are a reason to inherit the base. Read
     # only the decorators and the thirty-seven models whose invariant arrives through an
     # `Annotated` alias look like models protecting nothing — this assertion would then refuse
     # the very fix the check above demands.
-    declaring = {name for _, name in _classes_with_an_after_validator()}
-    declaring |= {name for _, name, _fields in _models_with_an_annotated_validator()}
+    declaring = {f"{module}.{name}" for module, name in _classes_with_an_after_validator()}
+    declaring |= {
+        f"{module}.{name}" for module, name, _fields in _models_with_an_annotated_validator()
+    }
     inheriting = _model_classes_inheriting_the_base()
     assert len(inheriting) > 20, "the walk found almost nothing, so it proves almost nothing"
+
+    shared = {
+        name
+        for name in {model.__name__ for model in inheriting}
+        if len({model.__module__ for model in inheriting if model.__name__ == name}) > 1
+    }
+    assert shared, (
+        "no class name is shared across two modules, so keying this census on the qualified "
+        "name rather than the bare one proves nothing and the next reader will simplify it "
+        "back; if the package really has no shared name any more, delete this floor"
+    )
+
+    families: dict[str, list[type]] = {}
+    for model in inheriting:
+        families.setdefault(_optin_root(model), []).append(model)
     without = sorted(
-        f"{model.__module__}.{model.__qualname__}"
-        for model in inheriting
-        if not any(ancestor.__name__ in declaring for ancestor in model.__mro__)
+        root
+        for root, members in families.items()
+        if not any(_qualified(ancestor) in declaring for m in members for ancestor in m.__mro__)
     )
     assert not without, (
-        "these re-validate every copy and declare no invariant anywhere in their "
-        f"ancestry, so the parse buys nothing: {without}"
+        "every model under these re-validates its copies and not one of them declares an "
+        f"invariant, so the parse buys nothing: {without}"
     )
+
+
+def _qualified(model: type) -> str:
+    return f"{model.__module__}.{model.__qualname__}"
+
+
+def _optin_root(model: type) -> str:
+    """The class that made the choice for ``model``: the highest ancestor still inheriting.
+
+    ``RevalidatedModel`` is opted into on one line — usually a module's own ``_Base`` — and
+    that line is what a subtree is charged for.
+    """
+    root = model
+    for ancestor in model.__mro__:
+        if ancestor is not RevalidatedModel and issubclass(ancestor, RevalidatedModel):
+            root = ancestor
+    return _qualified(root)
 
 
 def _model_classes_inheriting_the_base() -> list[type]:
