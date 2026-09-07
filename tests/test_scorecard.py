@@ -1059,3 +1059,102 @@ def test_the_report_prints_the_stated_reason_beside_the_fallback_label():
 
     silent = ReportSection(entry=ScorecardEntry(name="fatigue", status=CheckStatus.PASS, detail=""))
     assert silent.fallback_label == "derivation not rendered"
+
+
+def test_a_scorecard_read_from_outside_is_bounded_on_every_axis_a_document_has():
+    """A scorecard is a front door, and until now it was the unbounded one.
+
+    Three routes reach `Scorecard.model_validate` with content this library did not write:
+    `anvilate verify` reads the scorecard out of a signed attestation predicate, and two MCP
+    tools read one back out of a subject store. Every bound the Design Spec's front door
+    grew — a wall of text, a collection nothing can render, nesting past what any serialiser
+    survives — applied to a spec and to nothing else, and a scorecard travels into exactly
+    the same renderings, exports and signatures. A 2 MB `detail` was accepted, and 200,000
+    entries in 2.2 seconds.
+
+    The finite-number rule is deliberately NOT among them, and that is not an oversight: a
+    check with zero demand reports an infinite safety factor, this library records one in a
+    derivation on purpose, and `tests/test_report.py` pins a calc record carrying one
+    reloading. An infinite requirement is not a requirement; an infinite result is an answer.
+    """
+    from anvilate._models import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
+
+    def entry(**over: object) -> dict[str, object]:
+        return {"name": "safety factor", "status": "pass", "detail": "2.03 vs 1.50", **over}
+
+    # A control AT each bound, not a tiny one: a control that passes a bound mutated down to
+    # ten proves nothing about the bound the library actually states.
+    Scorecard.model_validate({"entries": [entry(detail="A" * _MAX_STRING_LENGTH)]})
+    Scorecard.model_validate({"entries": [entry()] * _MAX_COLLECTION_ITEMS})
+
+    with pytest.raises(ValidationError, match="does not state a string longer") as wall:
+        Scorecard.model_validate({"entries": [entry(detail="A" * (_MAX_STRING_LENGTH + 1))]})
+    assert "detail" in str(wall.value), "the refusal does not name the field to look at"
+
+    with pytest.raises(ValidationError, match="does not state a collection of more"):
+        Scorecard.model_validate({"entries": [entry()] * (_MAX_COLLECTION_ITEMS + 1)})
+
+    # An infinite *result* still travels, which is the whole of the distinction above.
+    assert Scorecard.model_validate({"entries": [entry(safety_factor=float("inf"))]}).passed
+
+
+def test_the_bound_reaches_the_models_a_scorecard_only_holds():
+    """Bounding the card and the entry and stopping there is the version that does nothing.
+
+    The walk trusts a sub-model to have checked itself, so a `Derivation`, a `SymbolValue` or
+    a `MarginUncertainty` that nothing had opted in was skipped in silence — and the longest
+    text a scorecard carries is a derivation's, not an entry's. `tests/test_contract.py`
+    holds the whole reachable graph to this; these are the two the exemption would have been
+    easiest to leave open.
+    """
+    from anvilate._models import _MAX_STRING_LENGTH
+
+    wall = "A" * (_MAX_STRING_LENGTH + 1)
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        SymbolValue(symbol="F", description=wall, value=1.0)
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        Underived(kind=DerivationAbsence.LOOKUP, reason=wall)
+
+
+def test_the_string_bound_is_clear_of_every_scorecard_this_repository_screens():
+    """A bound picked out of the air is a bound that refuses a real card one day.
+
+    Measured over the cards the shipped example specs actually produce, walked to the leaves
+    so a derivation's symbolic line and an uncertainty's citation are in the sample too.
+    Reported at a quarter of the bound, because a rule that fires once the bound is reached
+    fires after the first real scorecard has been refused.
+    """
+    from pathlib import Path
+
+    from anvilate._models import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    examples = sorted((Path(__file__).resolve().parent.parent / "examples").rglob("*.spec.yaml"))
+    assert len(examples) >= 2, f"only {len(examples)} shipped specs were measured"
+
+    longest, widest, where = 0, 0, None
+    for path in examples:
+        card = screen_spec(load_spec_yaml(path.read_text(encoding="utf-8")))
+        stack: list[tuple[str, object]] = [(path.name, card.model_dump(mode="json"))]
+        while stack:
+            at, node = stack.pop()
+            if isinstance(node, dict):
+                widest, where = max((widest, where), (len(node), at))
+                stack.extend((f"{at}.{k}", v) for k, v in node.items())
+            elif isinstance(node, list):
+                widest, where = max((widest, where), (len(node), at))
+                stack.extend((f"{at}[]", v) for v in node)
+            elif isinstance(node, str):
+                longest, where = max((longest, where), (len(node), at))
+
+    assert longest >= 20, f"the sweep found nothing longer than {longest}; it read no cards"
+    assert widest >= 2, f"the sweep found nothing wider than {widest}; it read no cards"
+    assert longest * 4 <= _MAX_STRING_LENGTH, (
+        f"{where} states {longest} characters against a bound of {_MAX_STRING_LENGTH}; the "
+        f"bound is no longer comfortably clear of the cards this repository screens"
+    )
+    assert widest * 4 <= _MAX_COLLECTION_ITEMS, (
+        f"{where} holds {widest} items against a bound of {_MAX_COLLECTION_ITEMS}; the bound "
+        f"is no longer comfortably clear of the cards this repository screens"
+    )

@@ -14,7 +14,7 @@ from typing import Any, Generic, TypeVar
 
 from pydantic import model_validator
 
-from .._models import RevalidatedModel
+from .._models import StatableModel
 
 __all__ = ["Origin", "Provenanced"]
 
@@ -29,7 +29,7 @@ class Origin(StrEnum):
     DEFAULT = "default"
 
 
-class Provenanced(RevalidatedModel, Generic[T]):
+class Provenanced(StatableModel, Generic[T]):
     """A value tagged with its origin, and a rationale when it is a default."""
 
     value: T

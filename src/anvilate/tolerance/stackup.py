@@ -30,7 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .._models import ItemCollection, Named, RevalidatedModel
+from .._models import ItemCollection, Named, RevalidatedModel, StatableModel
 from ..units import Quantity
 from .explicit import ResolvedTolerance
 
@@ -102,7 +102,7 @@ class StackContributor(RevalidatedModel):
         return (self._half_mm * self._half_mm) / 3.0
 
 
-class Contribution(RevalidatedModel):
+class Contribution(StatableModel):
     """One dimension's share of the stack-up's total variation.
 
     ``share`` runs 0..1; the shares over a result sum to 1. It is computed for the
@@ -118,7 +118,7 @@ class Contribution(RevalidatedModel):
     half_width: Quantity  # the contributor's own equal-bilateral half-width
 
 
-class StackResult(BaseModel):
+class StackResult(StatableModel):
     """A resolved stack-up: the gap's mean, its bounds, and ranked contributions.
 
     ``nominal`` is the gap at every dimension's mean; ``lower`` and ``upper`` are

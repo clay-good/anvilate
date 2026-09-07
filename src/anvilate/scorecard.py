@@ -17,9 +17,9 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isnan
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import ConfigDict, computed_field, model_validator
 
-from ._models import ItemCollection, Named, Provenance, RevalidatedModel
+from ._models import ItemCollection, Named, Provenance, StatableModel
 from .derivation import Derivation, DerivationAbsence, Underived
 from .uncertainty import MarginUncertainty
 from .units import Quantity, UnitSystem, decimals_distinguishing, render
@@ -83,7 +83,7 @@ class Direction(StrEnum):
     DECREASE = "decrease"
 
 
-class RepairHint(BaseModel):
+class RepairHint(StatableModel):
     """How to move a failing check back into bounds.
 
     A failed check computes this deterministically — never an LLM guess. It names
@@ -150,7 +150,7 @@ def _format_utilization(value: float | None) -> str:
     return "util —" if value is None else f"util {value:.2f}"
 
 
-class GoverningChange(BaseModel):
+class GoverningChange(StatableModel):
     """A shift in which check governs, reported across a revalidation.
 
     When a revision moves the tightest check from one to another — a thicker
@@ -186,7 +186,7 @@ class LimitSense(StrEnum):
     AT_LEAST = "at_least"
 
 
-class Comparison(RevalidatedModel):
+class Comparison(StatableModel):
     """What a check measured, what it was judged against, and which way passes.
 
     A check that compares two quantities used to state the comparison as a *sentence*,
@@ -248,7 +248,7 @@ class Comparison(RevalidatedModel):
         )
 
 
-class ScorecardEntry(RevalidatedModel):
+class ScorecardEntry(StatableModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
     model_config = ConfigDict(frozen=True)
@@ -557,7 +557,7 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
         )
 
 
-class Scorecard(ItemCollection, BaseModel):
+class Scorecard(ItemCollection, StatableModel):
     """A collection of check entries with a rolled-up overall status.
 
     The roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``

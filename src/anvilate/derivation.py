@@ -24,9 +24,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
-from ._models import Provenance, RevalidatedModel
+from ._models import Provenance, StatableModel
 from .units import Quantity, UnitSystem, render
 
 __all__ = [
@@ -97,7 +97,7 @@ class DerivationAbsence(StrEnum):
     NUMERIC_RESULT = "numeric_result"
 
 
-class Underived(RevalidatedModel):
+class Underived(StatableModel):
     """A check's own statement that it has no formula to show, and why.
 
     It rides on the :class:`~anvilate.scorecard.ScorecardEntry` in the place the
@@ -129,7 +129,7 @@ class Underived(RevalidatedModel):
         return f"{self.kind.value}: {self.reason}"
 
 
-class SymbolValue(BaseModel):
+class SymbolValue(StatableModel):
     """One symbol in a derivation: its name, what it means, and its value.
 
     ``symbol`` is the token as it appears in the symbolic formula (``"M"``,
@@ -180,7 +180,7 @@ class SymbolValue(BaseModel):
         return f"{self.value:g}"
 
 
-class Derivation(RevalidatedModel):
+class Derivation(StatableModel):
     """A check's worked calculation: formula, substitution, result, citation.
 
     ``symbolic`` is the governing formula written the way the source writes it

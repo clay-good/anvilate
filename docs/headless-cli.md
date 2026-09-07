@@ -199,6 +199,36 @@ seconds the front door spends, against 1.2 for building the models — so there 
 place to put it that would help. It is about what happens after. The widest collection any
 spec here states is eleven keys.
 
+Those four bounds were the Design Spec's and nothing else's, and a spec is not the only
+document this tool reads back. `anvilate verify` reads a **scorecard** out of a signed
+attestation predicate, and two MCP tools read one back out of a subject store — content this
+tool did not write, travelling into exactly the same renderings, exports and signatures. A
+2 MB `detail` was accepted there, and 200,000 entries in 2.2 seconds. A scorecard is held to
+the three size bounds now, and so is every model one holds: a derivation, a symbol value, an
+uncertainty, a repair hint. The longest string a card this repository screens states is 282
+characters and the widest collection is twelve entries.
+
+The finite-number rule is deliberately **not** among the three. A requirement that is
+infinite is not a requirement, which is why a spec is refused for stating one — but a check
+with zero demand has an infinite safety factor, and this tool computes, records and reloads
+one on purpose. An infinite requirement and an infinite result are different objects, and
+only the first is refused.
+
+The premise the walk rests on is that a sub-model has already run the rule on itself, and
+that premise had never been checked. Asserting it over the annotation graph found eight
+models under the **spec's own** front door that nothing bounded — `Provenanced` above all,
+because the walk unwraps `.value` to reach the quantity a constraint states, which reads as
+covering the wrapper and covers only its payload. `min_safety_factor.rationale` at two
+megabytes compiled, exactly as `description` once did.
+
+Running a walk on every model a screen builds is not free, and the first version of it made
+`screen_spec` — the library's hottest function — thirty times slower. Almost all of that was
+two things that read as cheap and are not: `getattr(model, "value", model)` on a pydantic
+model with no such field, which builds and raises an AttributeError at 14 microseconds a
+call, and iterating `model_fields`, which is 11.7 microseconds under pydantic 2.13. Unwrapped
+by declared field and with the names read once, the walk costs about 0.05 ms on the bracket
+against 0.02 without it, on a command whose YAML parse alone is ten milliseconds.
+
 The same range has an upper end on a **citation**, and for the same reason one end of it was
 already refused. A citation that is present and blank is refused because it reads as filled in
 every rendering and follows nowhere; a citation of a hundred thousand characters reads as

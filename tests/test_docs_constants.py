@@ -1730,8 +1730,7 @@ def test_the_headless_cli_page_quotes_the_document_bounds_and_the_data_they_clea
     reason to believe.
     """
     import conftest
-    from anvilate._models import _LONGEST_CITED
-    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
+    from anvilate._models import _LONGEST_CITED, _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
     from test_contract import _evidence_references
 
     page = _page("headless-cli.md")

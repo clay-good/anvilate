@@ -1362,7 +1362,7 @@ def test_the_finite_rule_reaches_into_the_documents_free_form_parts():
     spec, and MCP answered `-32603 Internal error`, raised late by the canonical-JSON writer
     with no field named. The path is built as the walk goes, so the message says which value.
     """
-    from anvilate.spec.ir import _first_unstatable
+    from anvilate._models import _first_unstatable
 
     base = _PADEYE_PARAMS
     for path, params in (
@@ -1399,7 +1399,7 @@ def test_a_document_cannot_state_a_string_longer_than_anything_can_render():
     that is where the finite rule's identical claim was false for a year. A mapping's *keys*
     are strings the document states too.
     """
-    from anvilate.spec.ir import _MAX_STRING_LENGTH, _first_unstatable
+    from anvilate._models import _MAX_STRING_LENGTH, _first_unstatable
 
     # The bound is a fact about the data: the longest string any spec here states is 64
     # characters, so a rule that refused real documents would be caught by the suite instead.
@@ -1435,7 +1435,7 @@ def test_a_document_cannot_state_a_collection_larger_than_anything_can_act_on():
     parsing is 22 of the 23 seconds the front door spends, so there is no earlier place to put
     it that would help. It is about what happens after.
     """
-    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS, _first_unstatable
+    from anvilate._models import _MAX_COLLECTION_ITEMS, _first_unstatable
 
     at_the_bound = ["x"] * _MAX_COLLECTION_ITEMS
     just_past = ["x"] * (_MAX_COLLECTION_ITEMS + 1)
@@ -1465,7 +1465,7 @@ def test_the_collection_bound_is_clear_of_every_document_this_repository_ships()
 
     import yaml
 
-    from anvilate.spec.ir import _MAX_COLLECTION_ITEMS
+    from anvilate._models import _MAX_COLLECTION_ITEMS
 
     examples = Path(__file__).resolve().parent.parent / "examples"
     widest, where = 0, None
@@ -1499,7 +1499,7 @@ def test_a_document_that_nests_past_what_anything_can_serialise_is_refused_here(
     exist, because that is what Python's JSON encoder says when it runs out of depth. It is
     refused at validation now, naming the field rather than the thirty-two `[0]`s it got to.
     """
-    from anvilate.spec.ir import _MAX_DOCUMENT_DEPTH
+    from anvilate._models import _MAX_DOCUMENT_DEPTH
 
     def _nested(levels: int, *, wrap) -> dict:
         deep: object = 1
@@ -1525,7 +1525,7 @@ def test_the_depth_bound_is_far_above_the_documents_this_repository_ships():
     here is five levels against a bound of thirty-two."""
     from collections.abc import Mapping as _Mapping
 
-    from anvilate.spec.ir import _MAX_DOCUMENT_DEPTH
+    from anvilate._models import _MAX_DOCUMENT_DEPTH
 
     def _depth(value: object, level: int = 0) -> int:
         if isinstance(value, _Mapping):
@@ -1853,3 +1853,40 @@ def test_the_versionless_default_is_only_safe_while_nothing_migrates():
         f"undeclared version means before shipping this: the earliest version this release "
         f"supports is the honest reading of a document that does not say."
     )
+
+
+def test_the_bounds_reach_the_models_a_spec_only_holds():
+    """The spec's own front door had eight models under it that nothing bounded.
+
+    The walk returns `None` for a sub-model on the premise that the sub-model ran the same
+    rule on itself, and for four years' worth of this file that premise was written down and
+    never checked. `Provenanced` is the sharpest of them: the walk unwraps `.value` to reach
+    the quantity a constraint states, which reads as covering the wrapper and covers only its
+    payload — so `min_safety_factor.rationale` at two megabytes compiled, and travelled into
+    every rendering, both exports and the signed attestation exactly as `description` once
+    did. `FitTolerance.designation`, `SymmetricTolerance`, `LimitTolerance`, `StackResult`
+    and `Contribution` were the others.
+
+    The census that finds them is in tests/test_contract.py, over the annotation graph rather
+    than over any one file; these are the two a reader would want to see fail.
+    """
+    from anvilate._models import _MAX_STRING_LENGTH
+    from anvilate.spec.provenance import Origin, Provenanced
+    from anvilate.tolerance.explicit import FitTolerance
+
+    wall = "A" * (_MAX_STRING_LENGTH + 1)
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        Provenanced[float](value=2.0, origin=Origin.DEFAULT, rationale=wall)
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        FitTolerance(designation=wall)
+
+    # And through the front door a user actually reaches, rather than only the model. The
+    # rationale a shipped spec states is the defaulted one, which is what made this reachable
+    # from an ordinary document rather than only from a hand-built model.
+    shipped = Path(__file__).resolve().parent.parent / "examples" / "nema23_bracket.spec.yaml"
+    original = shipped.read_text(encoding="utf-8")
+    defaulted = "standard screening default; edit to override"
+    assert defaulted in original, "the spec no longer states the rationale this probe widens"
+    with pytest.raises(SpecValidationError, match="does not state a string longer") as refused:
+        load_spec_yaml(original.replace(defaulted, "A" * (_MAX_STRING_LENGTH + 1)))
+    assert "min_safety_factor" in str(refused.value), "the refusal names no field to look at"

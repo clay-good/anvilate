@@ -4409,3 +4409,72 @@ def test_the_mixin_refuses_a_model_that_is_not_one_collection():
 
     with pytest.raises(TypeError, match="there is no way to choose"):
         len(TwoFields(entries=(1, 2), notes=("x",)))
+
+
+def test_every_model_a_bounded_front_door_reaches_is_bounded_too():
+    """A `StatableModel` is only as bounded as the graph under it.
+
+    The walk in `_models.py` checks a field's strings, collections and nesting and returns
+    `None` for a sub-model, on the premise that the sub-model has already run the same rule
+    on itself. That premise is a whole gate's worth of assumption: bounding
+    `Scorecard` and `ScorecardEntry` and stopping there leaves `Derivation`, `SymbolValue`,
+    `MarginUncertainty` and `Sensitivity` open, and a derivation's symbolic line is the
+    longest text a card carries. The premise is not visible in any one file — it is a
+    property of the annotation graph — so it is asserted over the graph.
+
+    `Quantity` is the one exemption, and it is one because the walk reads it rather than
+    trusting it: a quantity states a magnitude and a unit, the walk checks the magnitude
+    itself, and a quantity is deliberately allowed to hold an infinity outside a document.
+    """
+    import typing
+
+    from pydantic import BaseModel
+
+    import anvilate
+    from anvilate._models import StatableModel
+    from anvilate.units import Quantity
+
+    exempt = {Quantity}
+
+    def models_in(annotation: object) -> list[type]:
+        found, stack = [], [annotation]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, type) and issubclass(node, BaseModel):
+                found.append(node)
+            stack.extend(typing.get_args(node))
+        return found
+
+    src = Path(anvilate.__file__).parent
+    doors: set[type] = set()
+    for path in sorted(src.rglob("*.py")):
+        name = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
+        for value in vars(importlib.import_module(name.removesuffix(".__init__"))).values():
+            if isinstance(value, type) and issubclass(value, StatableModel):
+                doors.add(value)
+    doors.discard(StatableModel)
+    assert len(doors) > 10, f"only {len(doors)} bounded models were found; the walk read little"
+
+    unbounded: set[str] = set()
+    seen: set[type] = set()
+    stack = sorted(doors, key=lambda m: f"{m.__module__}.{m.__qualname__}")
+    while stack:
+        model = stack.pop()
+        if model in seen or model in exempt:
+            continue
+        seen.add(model)
+        for field in model.model_fields.values():
+            for held in models_in(field.annotation):
+                if held in exempt or held in seen:
+                    continue
+                if not issubclass(held, StatableModel):
+                    unbounded.add(
+                        f"{model.__module__}.{model.__qualname__}.{field.alias or ''}"
+                        f" holds {held.__module__}.{held.__qualname__}"
+                    )
+                stack.append(held)
+
+    assert not unbounded, (
+        "these are reached from a model whose bounds a front door relies on, and the walk "
+        f"skips them in silence because they are not bounded themselves: {sorted(unbounded)}"
+    )

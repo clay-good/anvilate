@@ -27,7 +27,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, model_validator
 
-from ._models import Named, Provenance, RevalidatedModel
+from ._models import Named, Provenance, RevalidatedModel, StatableModel
 
 __all__ = [
     "Normal",
@@ -136,7 +136,7 @@ class Symmetric(RevalidatedModel):
 InputDistribution = Normal | Uniform | Symmetric
 
 
-class Sensitivity(RevalidatedModel):
+class Sensitivity(StatableModel):
     """One input's share of the response variance, first-order (Taylor)."""
 
     model_config = ConfigDict(frozen=True)
@@ -145,7 +145,7 @@ class Sensitivity(RevalidatedModel):
     variance_share: float  # 0..1, the fraction of the response variance this input drives
 
 
-class MarginUncertainty(RevalidatedModel):
+class MarginUncertainty(StatableModel):
     """A sampled margin: the chance it falls short, its band, and what drives it.
 
     ``shortfall_probability`` is the fraction of samples whose response fell below

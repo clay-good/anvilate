@@ -18,7 +18,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
-from .._models import Provenance, RevalidatedModel
+from .._models import Provenance, StatableModel
 from ..units import Quantity, require_dimension
 from .iso286 import zone_limits
 
@@ -33,8 +33,12 @@ __all__ = [
 _Length = Annotated[Quantity, AfterValidator(require_dimension("[length]", name="tolerance"))]
 
 
-class _Base(RevalidatedModel):
+class _Base(StatableModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    # These are stated in a Design Spec's `tolerance` field, so a deviation of `.inf mm`
+    # is a requirement that reads as stated and means nothing.
+    states_requirements = True
 
 
 class ResolvedTolerance(BaseModel):

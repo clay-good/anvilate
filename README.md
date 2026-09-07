@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,820 public symbols, each dimension-checked and
-hand-verified, 5,121 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,126 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -251,7 +251,7 @@ Three cross-cutting layers keep a green from being a silent one.
 
 | | |
 | --- | --- |
-| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export` and `diff`. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. |
+| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export` and `diff`. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. The three size bounds hold for a **scorecard** read back too — out of a signed attestation or a subject store — and for every model one holds. |
 | [MCP server](docs/agent-mcp-integration.md) | All of the pipeline's eight operations over stdio, as `anvilate-mcp` or `python -m anvilate.mcp`. |
 | [Published contracts](docs/published-contracts.md) | The Spec IR going in and the scorecard coming out, as JSON Schema 2020-12 — generated from the models, and held against them by a gate with two halves: the artifact must match the model, and a changed artifact must carry a moved version. |
 | [MCP tool contracts](docs/mcp-tool-contracts.md) | The same artifacts as tool definitions, whose schemas `$ref` the spec and scorecard at their versions rather than paraphrasing them, so the tool surface an agent reads cannot drift from the contract. |

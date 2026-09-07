@@ -12,6 +12,7 @@ _models.ItemCollection
 _models.Named
 _models.Provenance
 _models.RevalidatedModel
+_models.StatableModel
 _models.cited
 _models.rebuilt_quantities
 agenteval.AgentEvalReport
