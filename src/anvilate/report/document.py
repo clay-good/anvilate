@@ -572,6 +572,13 @@ def report_from_record(record: dict) -> CalculationReport:
     Rejects a record whose schema major version this build does not understand;
     a newer minor version is additive and loads with the extra fields ignored.
     """
+    if not isinstance(record, dict):
+        # Two careful guards stood below this and the function indexed blind above and below
+        # them: a record read back as a list, a bare string or null answered with `'list'
+        # object has no attribute 'get'`, and one whose `report` key had not been written
+        # answered with a bare `KeyError: 'report'`. A record exists to be reloaded, from a
+        # file somebody may have truncated, hand-edited or confused with another.
+        raise ValueError(f"a calc record is a mapping; got {type(record).__name__}")
     version = record.get("schema_version")
     if not isinstance(version, str):
         raise ValueError("calc record has no schema_version")
@@ -581,6 +588,11 @@ def report_from_record(record: dict) -> CalculationReport:
         raise ValueError(
             f"calc record schema version {version} is not readable by this build "
             f"(expects {expected_major}.x)"
+        )
+    if "report" not in record:
+        raise ValueError(
+            "calc record has no report; a record carries the document under a `report` key "
+            "and this one states its schema version and nothing else"
         )
     return CalculationReport.model_validate(_json_revive(record["report"]))
 

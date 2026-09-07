@@ -231,6 +231,19 @@ and accepted 500,000 of them, which its own `__str__` joined into 1.5 MB on one 
 And `FetchProvenance` is read from a `.provenance.json` sidecar in a cache directory that is
 an ordinary user-writable folder.
 
+The other half of a front door is the shape of what arrives, and the same census run against
+it found seven public functions answering an ordinary mistake with Python's own error. The
+sharpest is `parse_spec`: the "spec must be a mapping" guard lived in `load_spec_yaml` **one
+line above its call to it**, so the YAML path refused a top-level list with a sentence and
+`parse_spec(json.load(handle))` — the way a caller loads a JSON spec — answered `'list'
+object has no attribute 'get'`, which `anvilate` does not even catch. `report_from_record`
+had two careful guards and indexed blind above and below them. And three functions taking a
+sequence of models were called with **one** of them, which a pydantic model answers by
+iterating its own field and value pairs, so a single verdict arrived as a two-item suite.
+Every one of them refuses with a sentence now, and a gate holds the shape: an
+`AttributeError`, a `KeyError` or an `IndexError` out of a public entry point is a traceback,
+not a refusal.
+
 Running a walk on every model a screen builds is not free, and the first version of it made
 `screen_spec` — the library's hottest function — thirty times slower. Almost all of that was
 two things that read as cheap and are not: `getattr(model, "value", model)` on a pydantic

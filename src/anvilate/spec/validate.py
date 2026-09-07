@@ -161,7 +161,18 @@ def parse_spec(data: dict) -> DesignSpec:
 
     Applies schema migrations first, then validates. Raises
     :class:`SpecValidationError` naming each offending path on failure.
+
+    **A document that is not a mapping is one of those failures**, and this guard used to
+    live in :func:`load_spec_yaml` one line above the call to here — so the YAML path
+    refused a top-level list with a sentence and this one, the entry point a caller reaches
+    with `parse_spec(json.load(handle))`, answered it with ``'list' object has no attribute
+    'get'``. A JSON file that is a list, a bare string or ``null`` is the ordinary way to
+    hand a tool the wrong file, and `anvilate.cli` catches `ValueError`, `TypeError` and
+    `KeyError` — not `AttributeError`, which would have reached a user as a traceback if any
+    caller had gone this way.
     """
+    if not isinstance(data, dict):
+        raise SpecValidationError([{"loc": "<root>", "msg": "spec must be a mapping"}])
     migrated = migrate_to_current(data)
     try:
         return DesignSpec.model_validate(migrated)
@@ -208,8 +219,6 @@ def load_spec_yaml(text: str) -> DesignSpec:
         raise SpecValidationError(
             [{"loc": where, "msg": f"the document is not valid YAML — {detail}"}]
         ) from failure
-    if not isinstance(data, dict):
-        raise SpecValidationError([{"loc": "<root>", "msg": "spec must be a mapping"}])
     return parse_spec(data)
 
 

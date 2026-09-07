@@ -368,6 +368,11 @@ def schema_issues(schema: dict[str, Any]) -> list[str]:
     An empty list means the document is self-consistent, not that it is a valid 2020-12
     schema; that needs the meta-schema and a validator, which the opt-in test supplies.
     """
+    if not isinstance(schema, dict):
+        # A schema is read back from `docs/api/schemas/` to be checked, so the argument comes
+        # from a file. `'list' object has no attribute 'get'` is not a complaint about a
+        # schema, which is what this function returns.
+        return [f"a schema is a mapping; got {type(schema).__name__}"]
     issues: list[str] = []
     if schema.get("$schema") != JSON_SCHEMA_DIALECT:
         issues.append(f"the schema declares dialect {schema.get('$schema')!r}")

@@ -14,6 +14,7 @@ _models.Provenance
 _models.RevalidatedModel
 _models.StatableModel
 _models.cited
+_models.each_one
 _models.rebuilt_quantities
 agenteval.AgentEvalReport
 agenteval.AgentRunOutcome

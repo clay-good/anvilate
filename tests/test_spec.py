@@ -1890,3 +1890,27 @@ def test_the_bounds_reach_the_models_a_spec_only_holds():
     with pytest.raises(SpecValidationError, match="does not state a string longer") as refused:
         load_spec_yaml(original.replace(defaulted, "A" * (_MAX_STRING_LENGTH + 1)))
     assert "min_safety_factor" in str(refused.value), "the refusal names no field to look at"
+
+
+def test_the_dict_entry_point_refuses_a_document_that_is_not_a_mapping():
+    """`load_spec_yaml` refused a top-level list with a sentence; `parse_spec` did not.
+
+    The guard sat in `load_spec_yaml` **one line above its call to `parse_spec`**, so the two
+    public ways into the same validation disagreed about the commonest wrong file there is.
+    `parse_spec(json.load(handle))` — the way a caller loads a JSON spec — answered `'list'
+    object has no attribute 'get'`, and `anvilate.cli` catches `ValueError`, `TypeError` and
+    `KeyError`, not `AttributeError`.
+
+    The type is pinned as well as the sentence. `migrate_to_current` guards its own shape
+    now too and would fire one line later with a plain `ValueError`, which is why removing
+    this one does not show up as a traceback anywhere — it shows up as a caller's
+    `except SpecValidationError` no longer catching a bad spec.
+    """
+    for document in ([], "name: bracket", None, 3):
+        with pytest.raises(SpecValidationError, match="spec must be a mapping"):
+            parse_spec(document)
+
+    # The YAML path, which had this all along, still gives the same answer through it.
+    for text in ("- a\n- b\n", "just a string\n", "null\n"):
+        with pytest.raises(SpecValidationError, match="spec must be a mapping"):
+            load_spec_yaml(text)

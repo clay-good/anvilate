@@ -20,7 +20,7 @@ to every model in the library.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
@@ -37,8 +37,12 @@ __all__ = [
     "RevalidatedModel",
     "StatableModel",
     "cited",
+    "each_one",
     "rebuilt_quantities",
 ]
+
+
+_T = TypeVar("_T")
 
 
 #: How long a citation, a source or a name may be, in characters.
@@ -184,6 +188,36 @@ def rebuilt_quantities(value: Any) -> Any:
                 pass
         rebuilt[key] = entry
     return rebuilt
+
+
+def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
+    """``items`` as a tuple, refusing anything in it that is not a ``kind``.
+
+    Written once because the mistake it answers is one mistake. A function taking a sequence
+    of models is called with **one** of them, and a pydantic model iterates over its own
+    ``(field, value)`` pairs — so a single :class:`~anvilate.specbench.ScopeVerdict` arrived
+    at `suite_accounting` as a two-item suite and failed with ``'tuple' object has no
+    attribute 'in_scope'``. A mapping is the same story one step along: iterating it yields
+    its keys, which are strings.
+
+    Three functions had that shape and all three answered with Python's `AttributeError`,
+    which `anvilate.cli` does not even catch. The sentence names both the parameter and what
+    arrived in it, because the caller cannot see from a traceback that their one verdict
+    became two tuples. ``ValueError``, not ``TypeError``: the analysis surface has a contract
+    that every public function refuses a bad argument with a `ValueError` naming the
+    parameter, `embodied_carbon_estimate` is on that surface, and one refusal that reads two
+    ways is worse than either.
+    """
+    given = tuple(items) if isinstance(items, Iterable) and not isinstance(items, str) else (items,)
+    for item in given:
+        if not isinstance(item, kind):
+            raise ValueError(
+                f"{named} is a sequence of {kind.__name__}; got {type(item).__name__} in "
+                f"it. A single {kind.__name__} is not a sequence of one — a model iterates "
+                f"over its own field and value pairs, so it arrives here as items that are "
+                f"not {kind.__name__}"
+            )
+    return given  # type: ignore[return-value]
 
 
 class ItemCollection:

@@ -4579,3 +4579,81 @@ def test_every_model_the_library_reads_back_is_bounded_or_says_why_not():
         "anvilate.mcp.Scorecard",
         "anvilate.screening.model",
     ], f"a reader the census cannot resolve to a class appeared or moved: {sorted(unresolved)}"
+
+
+def test_no_public_function_answers_a_wrong_shaped_document_with_pythons_own_error():
+    """A document that reads back as a list, a bare string or `null` is an ordinary mistake.
+
+    `json.load` on the wrong file gives a list. A truncated write gives a mapping missing a
+    key. Every one of those is a thing a user does, and this library's answer to a thing a
+    user does is a sentence — `mcp.handle_request` has said "a JSON-RPC request is an object"
+    since it was written, and `load_spec_yaml` has said "spec must be a mapping".
+
+    Five public functions had neither. The sharpest is `parse_spec`: the mapping guard lived
+    in `load_spec_yaml` **one line above its call to here**, so the YAML path refused a
+    top-level list with a sentence and the entry point a caller reaches with
+    `parse_spec(json.load(handle))` answered `'list' object has no attribute 'get'` — and
+    `cli` catches `ValueError`, `TypeError` and `KeyError`, not `AttributeError`.
+
+    `AttributeError`, `KeyError` and `IndexError` are what this asks about because they are
+    the three Python raises when a function indexes into a shape it did not check. A
+    `ValueError` or a `TypeError` is this library refusing; those are read for a sentence
+    rather than a traceback.
+    """
+    import importlib as _importlib
+    import inspect
+
+    import anvilate
+
+    src = Path(anvilate.__file__).parent
+    junk: dict[str, object] = {
+        "a list": [],
+        "None": None,
+        "a bare string": "x",
+        "an empty mapping": {},
+        "a mapping of unexpected keys": {"nope": 1},
+    }
+    raw = (AttributeError, KeyError, IndexError)
+
+    doors, complaints = [], []
+    for path in sorted(src.rglob("*.py")):
+        module_name = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
+        module = _importlib.import_module(module_name.removesuffix(".__init__"))
+        for symbol in getattr(module, "__all__", ()):
+            function = getattr(module, symbol, None)
+            if not inspect.isfunction(function):
+                continue
+            try:
+                parameters = list(inspect.signature(function).parameters.values())
+            except (TypeError, ValueError):
+                continue
+            if not parameters:
+                continue
+            annotation = str(parameters[0].annotation)
+            if not any(
+                shape in annotation
+                for shape in ("dict", "Mapping", "Sequence", "list[", "tuple[", "Iterable")
+            ):
+                continue
+            doors.append(f"{module.__name__}.{symbol}")
+            for label, value in junk.items():
+                try:
+                    function(value)
+                except raw as answered:
+                    complaints.append(
+                        f"{module.__name__}.{symbol}({label}) -> "
+                        f"{type(answered).__name__}: {answered}"
+                    )
+                except SystemExit:
+                    # `cli.run` is the shell's entry point; argparse's usage message and a
+                    # non-zero exit ARE its refusal, and it is covered by the exit-code
+                    # matrix in tests/test_cli.py rather than here.
+                    pass
+                except Exception:  # noqa: BLE001 — every other refusal is a sentence
+                    pass
+
+    assert len(doors) > 5, f"the walk found {len(doors)} such functions; it is reading nothing"
+    assert not complaints, (
+        "these answer an ordinary wrong-shaped document with Python's own error rather than "
+        f"with a sentence, and a traceback is not a refusal: {complaints}"
+    )

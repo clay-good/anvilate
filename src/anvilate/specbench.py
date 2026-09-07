@@ -28,7 +28,7 @@ from collections import Counter
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from ._models import RevalidatedModel
+from ._models import RevalidatedModel, each_one
 from .fetch import DatasetRecipe
 
 __all__ = [
@@ -234,7 +234,7 @@ def scope_verdict(case: CaseSpecification, *, known_materials: frozenset[str]) -
 
 def suite_accounting(verdicts: list[ScopeVerdict] | tuple[ScopeVerdict, ...]) -> SuiteAccounting:
     """Tally a suite's verdicts into the census published beside any score."""
-    verdicts = tuple(verdicts)
+    verdicts = each_one(verdicts, ScopeVerdict, named="verdicts")
     counted = Counter(verdict.reason for verdict in verdicts if not verdict.in_scope)
     return SuiteAccounting(
         total=len(verdicts),

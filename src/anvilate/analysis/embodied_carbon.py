@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel, cited
+from .._models import RevalidatedModel, cited, each_one
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -266,6 +266,7 @@ def embodied_carbon_estimate(
     is an estimate that was never made, and :func:`embodied_carbon_scorecard` reports
     that as ``NOT_EVALUATED``.
     """
+    contributions = each_one(contributions, CarbonContribution, named="contributions")
     if not isinstance(contributions, Sequence):
         raise ValueError(
             f"contributions must be a sequence, not a single value; got {contributions!r}"

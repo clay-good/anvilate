@@ -52,7 +52,7 @@ from collections.abc import Sequence
 
 from pydantic import ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import RevalidatedModel, each_one
 from .mcp import REQUIRED_OPERATIONS, tool_catalog
 
 __all__ = [
@@ -400,6 +400,7 @@ def task_set_issues(tasks: Sequence[AgentTask]) -> list[str]:
     untouched reports a model can drive Anvilate when it has only been asked to drive part
     of it.
     """
+    tasks = each_one(tasks, AgentTask, named="tasks")
     issues: list[str] = []
     if not tasks:
         return ["the task set is empty, so every model scores the same on it"]

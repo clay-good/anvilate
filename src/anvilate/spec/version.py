@@ -45,6 +45,15 @@ def migrate_to_current(data: dict) -> dict:
     bundle, where the spec section is the reproducibility record a reviewer reads. The
     same line would have covered a migration chain that stalled halfway.
     """
+    if not isinstance(data, dict):
+        # The same refusal `parse_spec` gives, because this is reachable on its own: it is
+        # exported, and a caller migrating a document before validating it comes here first.
+        raise ValueError(
+            f"a spec is a mapping; got {type(data).__name__}. A JSON file that reads back "
+            f"as a list, a bare string or null is the ordinary way to hand a tool the "
+            f"wrong file, and the answer to it is a sentence"
+        )
+
     # A document that declares nothing is read as the current version, and that is a
     # deliberate residual rather than an oversight: the directory sweep's recognition rule is
     # "ask the loader", `examples/padeye.spec.yaml` is the versionless spec it is built on,
