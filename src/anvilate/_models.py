@@ -200,6 +200,9 @@ def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
     attribute 'in_scope'``. A mapping is the same story one step along: iterating it yields
     its keys, which are strings.
 
+    A **string** is refused outright rather than wrapped, and it is the version of this
+    mistake that answers instead of raising: a string is iterable, over its characters.
+
     Three functions had that shape and all three answered with Python's `AttributeError`,
     which `anvilate.cli` does not even catch. The sentence names both the parameter and what
     arrived in it, because the caller cannot see from a traceback that their one verdict
@@ -208,14 +211,39 @@ def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
     parameter, `embodied_carbon_estimate` is on that surface, and one refusal that reads two
     ways is worse than either.
     """
-    given = tuple(items) if isinstance(items, Iterable) and not isinstance(items, str) else (items,)
+    if isinstance(items, Mapping):
+        # Iterating a mapping yields its KEYS, so a mapping arrives as a tuple of strings and
+        # `{"ASCE 7": "2022"}` was read as one reference called "ASCE 7". The same shape as
+        # the string below: iterable, and iterating it means something else.
+        raise ValueError(
+            f"{named} is a sequence of {kind.__name__} and a mapping is not one — iterating "
+            f"it yields its keys, so {sorted(items)!r} is what would be read"
+        )
+    if isinstance(items, (str, bytes)):
+        # A string IS iterable, over its characters, and that is the version of this mistake
+        # that answers instead of raising: `design_basis_scorecard(references="ASCE 7-22")`
+        # reported `9 of 9 references` — one per character — as a considered NOT_EVALUATED
+        # verdict on the layer that decides whether a bundle's citations are consistent.
+        raise ValueError(
+            f"{named} is a sequence of {kind.__name__} and a string is not one — it is a "
+            f"sequence of its own characters, so {items!r} would be read as "
+            f"{len(items)} of them. Pass a list or a tuple, even for a single item"
+        )
+    given = tuple(items) if isinstance(items, Iterable) else (items,)
     for item in given:
         if not isinstance(item, kind):
+            # The model note only where it is true. `str` is not a pydantic model and does
+            # not iterate over field/value pairs, so saying so to a caller who passed a list
+            # of ints is a sentence about something that did not happen.
+            why = (
+                " A single one is not a sequence of one — a model iterates over its own "
+                "field and value pairs, so it arrives here as items that are not "
+                f"{kind.__name__}."
+                if isinstance(items, BaseModel)
+                else ""
+            )
             raise ValueError(
-                f"{named} is a sequence of {kind.__name__}; got {type(item).__name__} in "
-                f"it. A single {kind.__name__} is not a sequence of one — a model iterates "
-                f"over its own field and value pairs, so it arrives here as items that are "
-                f"not {kind.__name__}"
+                f"{named} is a sequence of {kind.__name__}; got {type(item).__name__} in it.{why}"
             )
     return given  # type: ignore[return-value]
 

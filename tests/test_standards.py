@@ -2446,3 +2446,37 @@ def test_the_designation_ratchet_fires_on_a_designation_that_is_getting_long():
 
     # And a citation it cannot parse at all is not reported as an over-long designation.
     assert _designations_at_or_past_the_bound({"a" * 200}) == set()
+
+
+def test_a_design_basis_reference_list_given_as_one_string_is_refused():
+    """`references="ASCE 7-22"` reported **9 of 9 references** — one per character.
+
+    A string is iterable, over its own characters, so passing a single reference the obvious
+    way produced a considered-looking `NOT_EVALUATED` verdict computed from letters, on the
+    layer that decides whether a bundle's citations are consistent. A mapping is the same
+    shape one step along: iterating it yields its keys, so `{"ASCE 7": "2022"}` was read as
+    one reference called `ASCE 7`.
+
+    Both are refused by the one helper that answers this mistake everywhere,
+    `_models.each_one`, which was written for a *model* passed where its sequence goes and
+    had the same two holes.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards.effectivity import DesignBasis, design_basis_scorecard
+
+    basis = DesignBasis(pins={"ASCE 7": "2022"})
+
+    # The control, at the same call: a list of one reference is a list of one reference.
+    entry = design_basis_scorecard("design basis", basis=basis, references=["ASCE 7-22 §2.3.1"])
+    assert entry.status is CheckStatus.PASS
+    assert "1 references" in entry.detail
+
+    with pytest.raises(ValueError, match="a string is not one") as as_string:
+        design_basis_scorecard("design basis", basis=basis, references="ASCE 7-22")
+    assert "9 of them" in str(as_string.value), "the refusal does not say what would be read"
+
+    with pytest.raises(ValueError, match="a mapping is not one"):
+        design_basis_scorecard("design basis", basis=basis, references={"ASCE 7": "2022"})
+
+    with pytest.raises(ValueError, match="is a sequence of str"):
+        design_basis_scorecard("design basis", basis=basis, references=[1, 2])

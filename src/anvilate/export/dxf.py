@@ -21,7 +21,7 @@ from pathlib import Path
 
 from pydantic import ConfigDict, field_validator
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, each_one
 from ..gdt import FeatureControlFrame
 from ..units import Quantity
 from .gate import ExportAuthorization
@@ -311,6 +311,8 @@ def plate_cut_length(
     to estimate cut time and cost. ``width`` and ``height`` must be positive. Returns
     the total cut length in mm.
     """
+    holes = each_one(holes or (), Hole, named="holes")
+    slots = each_one(slots or (), Slot, named="slots")
     w = _mm(width, "width")
     h = _mm(height, "height")
     if w <= 0 or h <= 0:
@@ -346,6 +348,8 @@ def plate_mass(
     All the plate dimensions and ``density`` must be positive, and the cut-outs must not
     remove more than the whole plate. Returns the mass in kg.
     """
+    holes = each_one(holes or (), Hole, named="holes")
+    slots = each_one(slots or (), Slot, named="slots")
     w = _mm(width, "width")
     h = _mm(height, "height")
     t = _mm(thickness, "thickness")
@@ -438,6 +442,8 @@ def export_plate_dxf(
     against the full rectangle, not the corner cut-offs), and :class:`ImportError`
     if ezdxf is unavailable.
     """
+    holes = each_one(holes or (), Hole, named="holes")
+    slots = each_one(slots or (), Slot, named="slots")
     ezdxf = _require_ezdxf()
     from ezdxf.enums import TextEntityAlignment
 
