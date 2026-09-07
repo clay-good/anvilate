@@ -62,7 +62,7 @@ from typing import Any, TextIO
 
 from ._models import _refusal_line
 from .evidence import provenance_for
-from .scorecard import CheckStatus, Scorecard
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import UnitSystem
 
 __all__ = ["EXIT_CODES", "main", "run"]
@@ -445,6 +445,44 @@ def _regressions(before: Scorecard, after: Scorecard):
     ]
 
 
+#: How many decimals a safety factor is shown to, everywhere this tool prints one.
+#:
+#: The comparison below is made at this precision rather than on the raw floats, so the
+#: command never reports a move a reader cannot see in the figures it is shown — and never
+#: stays silent about one they can.
+_MARGIN_DECIMALS = 2
+
+
+def _margin_move(was: ScorecardEntry, now: ScorecardEntry) -> dict[str, Any] | None:
+    """The safety factor's movement between two revisions of one check, or ``None``.
+
+    ``None`` for a check that carries no safety factor on either side — a resolution, a
+    classification, a tier that did not run — and for one whose figure is the same to the
+    decimals it is printed with.
+    """
+    before, after = was.safety_factor, now.safety_factor
+    if before is None and after is None:
+        return None
+    shown = (
+        None if before is None else round(before, _MARGIN_DECIMALS),
+        None if after is None else round(after, _MARGIN_DECIMALS),
+    )
+    if shown[0] == shown[1]:
+        return None
+    return {"before": before, "after": after, "worse": _margin_is_worse(before, after)}
+
+
+def _margin_is_worse(before: float | None, after: float | None) -> bool:
+    """Whether the margin moved toward its limit. A check that gained or lost one moved.
+
+    Reported rather than graded: it does not reach the exit code. See the `margin` branch in
+    :func:`_diff_document` for why.
+    """
+    if before is None or after is None:
+        return True
+    return after < before
+
+
 def _diff_document(
     before_spec,
     after_spec,
@@ -499,6 +537,7 @@ def _diff_document(
                     "before": was[name].status.value,
                     "after": None,
                     "detail": None,
+                    "margin": None,
                     "worse": False,
                 }
             )
@@ -510,6 +549,7 @@ def _diff_document(
                     "before": None,
                     "after": now[name].status.value,
                     "detail": now[name].detail,
+                    "margin": None,
                     "worse": False,
                 }
             )
@@ -521,7 +561,30 @@ def _diff_document(
                     "before": was[name].status.value,
                     "after": now[name].status.value,
                     "detail": now[name].detail,
+                    "margin": _margin_move(was[name], now[name]),
                     "worse": _moved_for_the_worse(was[name].status, now[name].status),
+                }
+            )
+        elif (margin := _margin_move(was[name], now[name])) is not None:
+            # A check whose verdict held and whose margin moved. Cutting a padeye from 20 mm
+            # to 12 mm took its pin bearing from 3.33 to exactly its required 2.00, and this
+            # command — whose whole job is telling an engineer what a revision did — answered
+            # `no verdict changed / (3 unchanged)`. "Unchanged" was true about the verdict
+            # and false about the check.
+            #
+            # `worse` stays False, deliberately. The exit code is a verdict contract a merge
+            # gate reads, and a margin that moved inside its band has not regressed; making
+            # this exit non-zero would fail every ordinary revision. It is reported, not
+            # graded.
+            moved.append(
+                {
+                    "name": name,
+                    "change": "margin",
+                    "before": was[name].status.value,
+                    "after": now[name].status.value,
+                    "detail": now[name].detail,
+                    "margin": margin,
+                    "worse": False,
                 }
             )
 
@@ -553,7 +616,10 @@ def _diff_document(
         "checks": {
             "moved": moved,
             "unchanged": sum(
-                1 for name in set(was) & set(now) if was[name].status is now[name].status
+                1
+                for name in set(was) & set(now)
+                if was[name].status is now[name].status
+                and _margin_move(was[name], now[name]) is None
             ),
         },
         "geometry": {"compared": False, "reason": _DIFF_NEEDS_GEOMETRY},
@@ -568,6 +634,11 @@ def _diff_document(
             ),
         },
     }
+
+
+def _margin_figure(value: float | None) -> str:
+    """A safety factor for the diff line, or the word for a check that carries none."""
+    return "none" if value is None else f"{value:.{_MARGIN_DECIMALS}f}"
 
 
 def _render_diff(document: dict[str, Any]) -> str:
@@ -598,10 +669,22 @@ def _render_diff(document: dict[str, Any]) -> str:
             moved.append(f"  - {entry['name']}: removed (was {entry['before']})")
         elif entry["change"] == "added":
             moved.append(f"  + {entry['name']}: added ({entry['after']})")
+        elif entry["change"] == "margin":
+            margin = entry["margin"]
+            moved.append(
+                f"  ~ {entry['name']}: {entry['after']}, safety factor "
+                f"{_margin_figure(margin['before'])} → {_margin_figure(margin['after'])}"
+            )
+            moved.append(f"      {entry['detail']}")
         else:
             moved.append(f"  ! {entry['name']}: {entry['before']} → {entry['after']}")
+            if entry["margin"] is not None:
+                moved[-1] += (
+                    f", safety factor {_margin_figure(entry['margin']['before'])} → "
+                    f"{_margin_figure(entry['margin']['after'])}"
+                )
             moved.append(f"      {entry['detail']}")
-    lines.extend(moved or ["  no verdict changed"])
+    lines.extend(moved or ["  no verdict changed and no margin moved"])
     lines.append(f"  ({document['checks']['unchanged']} unchanged)")
 
     lines.extend(["", "GEOMETRY", f"  not compared: {document['geometry']['reason']}"])

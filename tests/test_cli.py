@@ -2582,6 +2582,16 @@ _DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW = {
         "test_the_exit_code_is_the_regression_the_payload_publishes"
     ),
     "regression.regressed[]": "the checks section lists the same moves, by name",
+    "checks.moved[].before": (
+        "renders for every kind whose STATUS moved, which is what it is for. On a `margin` "
+        "entry it is equal to `after` by construction — the verdict is what held — so the "
+        "line prints the status once rather than `pass → pass`"
+    ),
+    "checks.moved[].margin.worse": (
+        "the direction the margin moved, which its own two figures show: a reader reads "
+        "`3.33 → 2.00` faster than a word for it. The flag is in the payload because a "
+        "merge gate reading the JSON should not have to compare two floats to learn it"
+    ),
 }
 
 
@@ -2617,7 +2627,19 @@ def test_every_leaf_of_the_diff_payload_reaches_the_text_or_is_recorded_as_not_r
                     "before": "pass",
                     "after": "fail",
                     "detail": "safety factor 1.9 < 2.0",
-                }
+                    "margin": {"before": 2.4, "after": 1.9, "worse": True},
+                },
+                # The kind whose verdict held and whose margin moved. Without one of these
+                # the sweep never reaches the branch that renders it, and every leaf under
+                # it reads as exempt for the wrong reason.
+                {
+                    "name": "bearing",
+                    "change": "margin",
+                    "before": "pass",
+                    "after": "pass",
+                    "detail": "safety factor 2.00 vs required minimum 2.00",
+                    "margin": {"before": 3.33, "after": 2.0, "worse": True},
+                },
             ],
             "unchanged": 3,
         },
@@ -2661,3 +2683,86 @@ def test_every_leaf_of_the_diff_payload_reaches_the_text_or_is_recorded_as_not_r
         "recorded as exempt but now render: "
         f"{sorted(set(_DIFF_LEAVES_THE_TEXT_DOES_NOT_SHOW) - set(silent))}"
     )
+
+
+def test_diff_reports_a_margin_that_moved_under_a_verdict_that_did_not(tmp_path):
+    """A revision that consumed two thirds of a margin was reported as "3 unchanged".
+
+    `diff` exists to tell an engineer what a revision did. Cutting the padeye's plate from
+    20 mm to 12 mm takes its pin bearing from 3.33 to **exactly** its required 2.00 and its
+    net tension from 6.67 to 4.00 — and the command answered `no verdict changed` over
+    `(3 unchanged)`. Both statements were true about the verdicts and false about the checks.
+
+    The exit code is deliberately untouched. It is a verdict contract a merge gate reads, and
+    a margin that moved inside its band has not regressed; making this exit non-zero would
+    fail every ordinary revision. It is reported, not graded.
+    """
+    padeye = Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml"
+    before = tmp_path / "before.spec.yaml"
+    after = tmp_path / "after.spec.yaml"
+    before.write_text(padeye.read_text(encoding="utf-8"), encoding="utf-8")
+    after.write_text(
+        padeye.read_text(encoding="utf-8").replace("magnitude: 20.0", "magnitude: 12.0"),
+        encoding="utf-8",
+    )
+
+    code, text, _err = _run("diff", str(before), str(after))
+    assert code == EXIT_OK, "a margin that moved inside its band is not a regression"
+    assert "3.33 → 2.00" in text and "6.67 → 4.00" in text
+    assert "(1 unchanged)" in text, "a check whose margin moved is not an unchanged check"
+    assert "no verdict changed" not in text
+
+    json_code, payload, _err = _run("diff", "--format", "json", str(before), str(after))
+    assert json_code == EXIT_OK
+    document = json.loads(payload)
+    by_name = {entry["name"]: entry for entry in document["checks"]["moved"]}
+    bearing = by_name["padeye pin bearing"]
+    assert bearing["change"] == "margin"
+    assert bearing["margin"]["before"] == pytest.approx(10 / 3)
+    assert bearing["margin"]["after"] == pytest.approx(2.0)
+    assert bearing["margin"]["worse"] is True
+    # Not graded: the machine-readable regression contract is unmoved.
+    assert bearing["worse"] is False
+    assert document["regression"] == {"regressed": False, "status": None}
+    assert document["checks"]["unchanged"] == 1
+
+    # Every branch carries the key, which is this document's stated shape rule.
+    assert all("margin" in entry for entry in document["checks"]["moved"])
+
+
+def test_diff_says_nothing_moved_when_nothing_moved(tmp_path):
+    """The control the sentence above needs: a revision with no effect still reports none.
+
+    A margin comparison made on raw floats reports a move nobody can see in the figures the
+    tool prints. This one is made at the two decimals a safety factor is shown to.
+    """
+    padeye = Path(__file__).resolve().parent.parent / "examples" / "padeye.spec.yaml"
+    before = tmp_path / "before.spec.yaml"
+    after = tmp_path / "after.spec.yaml"
+    text = padeye.read_text(encoding="utf-8")
+    before.write_text(text, encoding="utf-8")
+    after.write_text(text.replace("A lifting padeye", "A lifting pad eye"), encoding="utf-8")
+
+    code, rendered, _err = _run("diff", str(before), str(after))
+    assert code == EXIT_OK
+    assert "no verdict changed and no margin moved" in rendered
+    assert "(3 unchanged)" in rendered
+
+    # And the rule itself, at the only place it is testable: two figures that differ in the
+    # raw float and not in the two decimals the tool prints. A spec edit cannot produce that
+    # pair, so comparing raw floats passes every end-to-end case above while reporting
+    # `2.00 → 2.00` to a reader the first time a recomputation jitters a last bit.
+    from anvilate.cli import _margin_move
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+
+    def entry(factor: float) -> ScorecardEntry:
+        return ScorecardEntry(
+            name="bearing", status=CheckStatus.PASS, detail="d", safety_factor=factor
+        )
+
+    assert _margin_move(entry(2.0), entry(2.0000001)) is None, "a move nobody can see is not one"
+    assert _margin_move(entry(2.0), entry(2.01)) is not None, "a move a reader can see is one"
+    # A check that gained or lost its factor entirely moved, and there is no figure for the
+    # side that has none.
+    gained = _margin_move(entry(2.0), ScorecardEntry(name="b", status=CheckStatus.PASS, detail="d"))
+    assert gained is not None and gained["after"] is None and gained["worse"] is True

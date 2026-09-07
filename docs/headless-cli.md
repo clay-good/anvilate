@@ -593,9 +593,11 @@ SPEC
 VERDICT  pass → fail
 
 CHECKS
-  ! bending: pass → fail
+  ! bending: pass → fail, safety factor 2.40 → 1.90
       the moment exceeds the section
-  (2 unchanged)
+  ~ bearing: pass, safety factor 3.33 → 2.00
+      safety factor 2.00 vs required minimum 2.00
+  (1 unchanged)
 
 GEOMETRY
   not compared: mass, volume and centre-of-gravity deltas need two built parts. See openspec/specs/geometry-generation.
@@ -605,6 +607,19 @@ The requirement asks `diff` to compare "two builds of a part **(or a spec change
 the parenthesis is the whole of what is possible without a geometry kernel — and the half a
 merge gate reads, since the scenario is a commit that changes a shared pattern and makes a
 downstream part fail.
+
+**A check whose margin moved is not an unchanged check.** `diff` compared verdicts and
+nothing else, so cutting a padeye's plate from 20 mm to 12 mm — which takes its pin bearing
+from 3.33 to *exactly* its required 2.00 — was reported as `no verdict changed` over
+`(3 unchanged)`. Both statements were true about the verdicts and false about the checks,
+which is not what a command for telling an engineer what a revision did should say.
+
+The comparison is made at the two decimals a safety factor is printed to, so the command
+never reports a move a reader cannot see in the figures it shows them. **The exit code is
+untouched**: it is a verdict contract a merge gate reads, and a margin that moved inside its
+band has not regressed — failing every ordinary revision is not a useful gate. The movement
+is reported, not graded, and `margin.worse` in the JSON says which way it went without a
+reader having to compare two floats.
 
 **The header names the files as well as the specs**, and the sample above is why. Two
 revisions of one spec is what `diff` is *for*, and a spec keeps its name across a revision —
