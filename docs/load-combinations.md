@@ -78,6 +78,24 @@ combination_scorecard("deck strength", combinations=asce7_lrfd_basic(),
 See [`examples/spec_load_combination_check.py`](../examples/spec_load_combination_check.py)
 for the full spec-to-scorecard flow.
 
+## The keys are the ASCE symbols, and a mapping keyed by the names is refused
+
+`LoadNature.DEAD` is `D`. A caller writing `{"dead": 10.0, "live": 5.0}` — which is what a
+mapping read out of a JSON file, or written from the member names, looks like — supplied two
+loads no combination can factor, and the answer came back **"every combination sums to zero
+demand; no load to check"**: exactly what an empty mapping says. A design carrying 10 kN of
+dead load, reported as a design with nothing on it.
+
+`LoadNature` is a `StrEnum` over those symbols, so `{"D": 10.0}` and
+`{LoadNature.DEAD: 10.0}` are the same mapping and both still work. Anything else is refused
+where a non-finite load is refused, and for the sentence written there: a load that would be
+dropped rather than reported is refused instead, because raising is the only outcome that
+cannot be mistaken for an answer. The refusal names the key you got wrong and lists the seven
+symbols.
+
+The section below is the same trap one level up, on the Design Spec path, which has had a
+check for it all along. Nothing guarded the library call.
+
 ## A load case nobody classified is the quiet failure
 
 `combination_loads()` sums the cases that declare a `nature` and skips the ones that do

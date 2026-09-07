@@ -445,3 +445,51 @@ def test_a_combination_that_factors_nothing_is_refused():
     """
     with pytest.raises(ValidationError, match="at least 1 item"):
         LoadCombination(name="0.9D + 1.0E", factors={}, citation="ASCE 7-22 §2.3.6")
+
+
+def test_a_loads_mapping_keyed_by_the_name_instead_of_the_symbol_is_refused():
+    """`LoadNature.DEAD` is the ASCE symbol `D`, not the word `dead`.
+
+    A caller writing `{"dead": 10.0, "live": 5.0}` — which is what a mapping read out of a
+    JSON file or written from the member names looks like — supplied two loads that no
+    combination can factor, and the answer came back **"every combination sums to zero
+    demand; no load to check"**: exactly what an empty mapping says. A design carrying 10 kN
+    of dead load, reported as a design with nothing on it.
+
+    Refused where the NaN load is refused and for the same sentence: a load that would be
+    dropped rather than reported is refused instead, because "raising is the only outcome
+    that cannot be mistaken for an answer". The Design Spec path has a `load classification`
+    check for this trap one level up; nothing guarded the library call.
+    """
+    combinations = asce7_lrfd_basic()
+
+    # The symbol IS the member — `LoadNature` is a StrEnum — so both spellings of the key
+    # are the same key, and the refusal must not catch the one that works.
+    by_member = combination_evidence(combinations, {LoadNature.DEAD: 10.0})
+    by_symbol = combination_evidence(combinations, {"D": 10.0})
+    assert by_symbol == by_member
+    assert by_member.demand_newtons > 0
+
+    with pytest.raises(ValueError, match="is keyed by load nature") as refused:
+        combination_evidence(combinations, {"dead": 10.0, "live": 5.0})
+    message = str(refused.value)
+    assert "'dead'" in message, "the refusal does not name the key the caller got wrong"
+    for symbol in (nature.value for nature in LoadNature):
+        assert symbol in message, f"the refusal does not name {symbol}, which the caller needs"
+
+    # An empty mapping is still the honest zero it always was: nothing was supplied, and
+    # nothing is what that means.
+    assert combination_evidence(combinations, {}).demand_newtons == 0.0
+
+    # And every path through the module, not just the one probe — they all go through
+    # `LoadCombination.evaluate`, which is where the rule lives.
+    with pytest.raises(ValueError, match="is keyed by load nature"):
+        combinations.envelope({"dead": 10.0})
+    with pytest.raises(ValueError, match="is keyed by load nature"):
+        combination_scorecard(
+            "demand",
+            combinations=combinations,
+            loads={"dead": 10.0},
+            capacity=1.0,
+            required=1.0,
+        )

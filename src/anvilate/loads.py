@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from math import isfinite
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -73,6 +73,30 @@ def _written_factor(factor: float) -> str:
     return written if "." in written else f"{written}.0"
 
 
+#: Every `LoadNature` value, for the refusal below to name and to check against.
+_NATURE_SYMBOLS = tuple(nature.value for nature in LoadNature)
+
+
+def _every_key_is_a_nature(loads: Mapping[Any, float]) -> None:
+    """Refuse a loads mapping keyed by anything but a :class:`LoadNature`.
+
+    `LoadNature` is a `StrEnum` over the **ASCE symbols**, so `LoadNature.DEAD == "D"` is
+    True and a mapping keyed `{"D": 10.0}` is the same mapping. `{"dead": 10.0}` is not, and
+    nothing said so.
+    """
+    for key in loads:
+        if isinstance(key, LoadNature):
+            continue
+        if isinstance(key, str) and key in _NATURE_SYMBOLS:
+            continue  # the symbol itself: a StrEnum member and its value are one key
+        raise ValueError(
+            f"loads is keyed by load nature and {key!r} is not one. The keys are the ASCE "
+            f"symbols — {', '.join(_NATURE_SYMBOLS)} — not the names beside them, so "
+            f"{{'dead': ...}} supplies a load no combination factors and the demand comes "
+            f"back zero, which reads as a design with nothing on it"
+        )
+
+
 class LoadCombination(RevalidatedModel):
     """One factored sum over load natures, with the clause it comes from.
 
@@ -105,7 +129,17 @@ class LoadCombination(RevalidatedModel):
         counteracting uplift case the check exists to catch, and the largest surviving
         gravity demand is reported as governing with a comfortable PASS. Raising is the
         only outcome that cannot be mistaken for an answer.
+        **A key that is not a LoadNature is refused for the same reason.** `LoadNature.DEAD`
+        is the ASCE symbol ``D``, not the word ``dead``, so a caller writing
+        ``{"dead": 10.0, "live": 5.0}`` supplies two loads that no combination can factor —
+        and the answer comes back "every combination sums to zero demand; no load to check",
+        which is what an empty mapping says. A design carrying 10 kN of dead load reported as
+        a design with no load on it is the silent green this module already refuses a NaN for.
+
+        The Design Spec path has a `load classification` check for the same trap one level
+        up. Nothing guarded the library call.
         """
+        _every_key_is_a_nature(loads)
         for nature, factor in self.factors.items():
             value = loads.get(nature, 0.0)
             if not isfinite(value):
