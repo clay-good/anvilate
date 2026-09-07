@@ -334,3 +334,46 @@ def test_every_decision_origin_has_a_clause_of_its_own():
         "an origin is missing from the headline's map, so a check carrying it renders a line "
         "that says nothing about where its inputs came from"
     )
+
+
+def test_an_origin_stated_as_a_string_sorts_where_the_member_does():
+    """`{"padeye": "model"}` is what an origins map read out of JSON looks like.
+
+    `review_priority` compares the origin with `is`, against members, and nothing coerced a
+    caller's mapping on the way in — so a plain string matched no member and the check sorted
+    **ROUTINE**. It then dropped out of `attention_first`, which is the list a reviewer reads
+    first, while the `ReviewItem` it built carried `DecisionOrigin.MODEL` all the same,
+    because *that* field is coerced by pydantic. The result was a dossier whose summary named
+    a model's involvement and whose attention list pointed at nothing.
+
+    `DecisionOrigin`'s own docstring is the standard this failed: an origin nobody recorded
+    "sorts near the top rather than being defaulted to something reassuring". Routine is the
+    something reassuring.
+    """
+    card = Scorecard(entries=(ScorecardEntry(name="padeye", status=CheckStatus.PASS, detail="ok"),))
+
+    for stated in (DecisionOrigin.MODEL, "model"):
+        dossier = build_dossier(card, toolchain="t", origins={"padeye": stated})
+        item = dossier.items[0]
+        assert item.priority is ReviewPriority.MODEL_ASSUMPTION, stated
+        assert item.origin is DecisionOrigin.MODEL, stated
+        assert [i.entry.name for i in dossier.attention_first] == ["padeye"], stated
+
+    # The same for the one the vocabulary exists to surface.
+    unattributed = build_dossier(card, toolchain="t", origins={"padeye": "unattributed"})
+    assert unattributed.items[0].priority is ReviewPriority.UNATTRIBUTED_ASSUMPTION
+
+    # And an origin this library does not have is refused rather than sorted as routine.
+    with pytest.raises(ValueError, match="is not a decision origin") as refused:
+        build_dossier(card, toolchain="t", origins={"padeye": "vibes"})
+    for origin in DecisionOrigin:
+        assert repr(origin.value) in str(refused.value)
+
+    with pytest.raises(ValueError, match="origins maps a check name"):
+        build_dossier(card, toolchain="t", origins="model")
+
+    # `review_priority` is exported and takes the origin directly, so it answers the same.
+    entry = ScorecardEntry(name="padeye", status=CheckStatus.PASS, detail="ok")
+    assert review_priority(entry, origin="model") is ReviewPriority.MODEL_ASSUMPTION
+    with pytest.raises(ValueError, match="is not a decision origin"):
+        review_priority(entry, origin="vibes")

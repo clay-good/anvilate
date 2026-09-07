@@ -39,6 +39,7 @@ the same scrutiny as human work).
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from datetime import date
 from enum import IntEnum, StrEnum
 
@@ -132,6 +133,35 @@ class ReviewPriority(IntEnum):
     ROUTINE = 7
 
 
+def _an_origin(value: object) -> DecisionOrigin:
+    """``value`` as a :class:`DecisionOrigin`, refusing anything that is not one.
+
+    The comparisons below are `is`, against members. A caller's mapping is not coerced by
+    anything on the way in — `build_dossier` takes it as given and pydantic only coerces the
+    `ReviewItem` field it lands in — so `{"padeye": "model"}`, which is what an origins map
+    read out of JSON looks like, compared `is` against every member and matched none. The
+    check sorted **ROUTINE**, dropped out of `attention_first`, and its `ReviewItem` carried
+    `DecisionOrigin.MODEL` all the same, because that field *is* coerced: a dossier whose
+    summary named a model's involvement and whose attention list pointed at nothing.
+
+    Coerced here rather than by changing `is` to `==`. A `StrEnum` compares equal to its own
+    value, so `==` would have fixed the comparison and left the *item* holding a bare string
+    on some paths and a member on others; one kind of thing is easier to reason about than
+    two that are equal.
+    """
+    if isinstance(value, DecisionOrigin):
+        return value
+    try:
+        return DecisionOrigin(value)
+    except ValueError:
+        raise ValueError(
+            f"{value!r} is not a decision origin; the origins are "
+            f"{', '.join(repr(o.value) for o in DecisionOrigin)}. An origin this library "
+            f"does not recognise would sort as routine, which is the one answer an "
+            f"unrecorded origin must never get"
+        ) from None
+
+
 def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewPriority:
     """The priority band an entry falls in, given where its inputs came from.
 
@@ -139,6 +169,7 @@ def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewP
     check resting on an unattributed assumption outranks a passing check resting on a
     cited one, because the verdict is only as good as the input nobody sourced.
     """
+    origin = _an_origin(origin)
     if entry.status is CheckStatus.NOT_EVALUATED:
         return ReviewPriority.NOT_EVALUATED
     if entry.status is CheckStatus.FAIL:
@@ -374,6 +405,12 @@ def build_dossier(
     because "there was a review and it no longer covers this" is different information
     from "there was never a review".
     """
+    if origins is not None and not isinstance(origins, Mapping):
+        raise ValueError(
+            f"origins maps a check name to where its inputs came from; got {type(origins).__name__}"
+        )
+    # Not coerced here: `review_priority` below is where the value is read, and it is
+    # the public entry point a caller can reach without coming through this one.
     origins = origins or {}
     origin_details = origin_details or {}
     items: list[ReviewItem] = []

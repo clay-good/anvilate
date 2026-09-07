@@ -61,6 +61,20 @@ inputs nobody sourced`, which states something about inputs a check that did not
 not have. Both halves — the origin and the detail — go inside one bracket, so a line never
 ends in two of them.
 
+## An origin stated as a string sorts where the member does
+
+`{"padeye": "model"}` is what an origins map read out of JSON looks like, and it made the
+check **routine**. `review_priority` compares the origin with `is`, against members, and
+nothing coerced a caller's mapping on the way in — so a plain string matched none of them and
+fell through to the passing rung. The check then dropped out of `attention_first`, which is
+the list a reviewer reads first, while the `ReviewItem` it built carried
+`DecisionOrigin.MODEL` all the same, because *that* field is coerced by pydantic. A dossier
+whose summary named a model's involvement and whose attention list pointed at nothing.
+
+The value is coerced where it is read, and an origin this library does not have is refused by
+name rather than sorted as routine — which is the same standard as the section below, from
+the other side.
+
 ## A check with no recorded origin is unattributed, never routine
 
 `build_dossier` defaults a missing origin to `UNATTRIBUTED`, which sorts third. Defaulting
