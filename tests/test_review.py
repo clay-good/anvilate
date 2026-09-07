@@ -296,6 +296,21 @@ def test_the_headline_says_on_whose_word_a_check_reached_its_verdict():
     # form computed is the case a reviewer is not being asked to look at.
     assert lines[DecisionOrigin.DETERMINISTIC] == "padeye net tension: fails"
 
+    # The attribution is a bracketed tag, not a clause tacked onto the end of the reason.
+    # Appended bare it ran into the reason's own sentence — `did not run — the check is not
+    # there on inputs nobody sourced` reads as a claim about inputs a check that did not run
+    # does not have — which a property asserting "the four lines differ" cannot see. Both
+    # halves go inside ONE bracket, so a check with a detail as well does not end in two.
+    unevaluated = ReviewItem(
+        entry=ScorecardEntry(name="T0 geometry", status=CheckStatus.NOT_EVALUATED, detail="d"),
+        priority=ReviewPriority.NOT_EVALUATED,
+        origin=DecisionOrigin.MODEL,
+        origin_detail="qwen2.5-coder:14b",
+    )
+    assert unevaluated.headline.endswith("(inputs a model proposed: qwen2.5-coder:14b)")
+    assert unevaluated.headline.count("(") == 1, unevaluated.headline
+    assert " there on inputs" not in unevaluated.headline
+
     # And it is said once. The two priorities whose own sentence carries the origin must not
     # repeat it — a line reading "rests on a value a model proposed on inputs a model
     # proposed" is what a clause appended unconditionally produces.
@@ -303,7 +318,7 @@ def test_the_headline_says_on_whose_word_a_check_reached_its_verdict():
     for priority in (ReviewPriority.MODEL_ASSUMPTION, ReviewPriority.UNATTRIBUTED_ASSUMPTION):
         item = ReviewItem(entry=passing, priority=priority, origin=DecisionOrigin.MODEL)
         assert item.headline.count("a model proposed") <= 1, item.headline
-        assert "on inputs" not in item.headline, item.headline
+        assert "inputs" not in item.headline, item.headline
 
 
 def test_every_decision_origin_has_a_clause_of_its_own():

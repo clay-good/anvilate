@@ -176,10 +176,10 @@ def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewP
 #: to look at, and a clause on every routine line is noise that makes the other three harder
 #: to see rather than easier.
 _ORIGIN_CLAUSE: dict[DecisionOrigin, str] = {
-    DecisionOrigin.USER: "on inputs the engineer stated",
+    DecisionOrigin.USER: "inputs the engineer stated",
     DecisionOrigin.DETERMINISTIC: "",
-    DecisionOrigin.MODEL: "on inputs a model proposed",
-    DecisionOrigin.UNATTRIBUTED: "on inputs nobody sourced",
+    DecisionOrigin.MODEL: "inputs a model proposed",
+    DecisionOrigin.UNATTRIBUTED: "inputs nobody sourced",
 }
 
 #: The two priorities whose own sentence already states the origin, so the clause would be
@@ -226,9 +226,14 @@ class ReviewItem(BaseModel):
             ReviewPriority.ROUTINE: "passes",
         }[self.priority]
         clause = "" if self.priority in _PRIORITY_STATES_THE_ORIGIN else _ORIGIN_CLAUSE[self.origin]
-        attributed = f" {clause}" if clause else ""
-        suffix = f" ({self.origin_detail})" if self.origin_detail else ""
-        return f"{self.entry.name}: {reason}{attributed}{suffix}"
+        # Bracketed, and both halves inside one bracket. Appended bare, the clause ran into
+        # the end of the reason's own sentence: `did not run — the check is not there on
+        # inputs nobody sourced` reads as a statement about inputs a check that did not run
+        # does not have. The reason is prose and the attribution is a tag; they are not the
+        # same kind of thing and were being joined as though they were.
+        parts = [part for part in (clause, self.origin_detail) if part]
+        attribution = f" ({': '.join(parts)})" if parts else ""
+        return f"{self.entry.name}: {reason}{attribution}"
 
 
 def artifact_digest(scorecard: Scorecard, *, toolchain: str) -> str:

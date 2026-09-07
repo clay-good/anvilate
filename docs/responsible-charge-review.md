@@ -48,11 +48,18 @@ varied, is a caller-supplied string that defaults to empty, and `priority` state
 for two of the eight bands, neither of which a **failing** or **unevaluated** check can be
 in. Those are the two a reviewer reads first.
 
-The line says it now — `padeye net tension: fails on inputs a model proposed` — through a
+The line says it now — `padeye net tension: fails (inputs a model proposed)` — through a
 total map over the four origins, so a fifth is a `KeyError` at the one place that has to
 decide what to say about it. `deterministic` is the one member that adds no clause, because
 a value a cited closed form computed is the case a reviewer is *not* being asked to look at,
 and a clause on every routine line makes the other three harder to see rather than easier.
+
+The attribution is a bracketed tag rather than a clause appended to the sentence, and
+rendering a real dossier is what settled that: appended bare it ran into the end of the
+reason's own prose, and an unevaluated check read `did not run — the check is not there on
+inputs nobody sourced`, which states something about inputs a check that did not run does
+not have. Both halves — the origin and the detail — go inside one bracket, so a line never
+ends in two of them.
 
 ## A check with no recorded origin is unattributed, never routine
 
