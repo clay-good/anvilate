@@ -37,7 +37,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
-from ._models import Named, Provenance, RevalidatedModel
+from ._models import Named, Provenance, RevalidatedModel, each_one
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
 
@@ -362,6 +362,7 @@ def plan_verification(
     analysis that did not run — the test would be verifying nothing — and the honest
     output says which check and why.
     """
+    archetypes = each_one(archetypes, VerificationArchetype, named="archetypes")
     parameters = dict(parameters or {})
     by_archetype: dict[str, list[str]] = {}
     analysis_only: list[str] = []

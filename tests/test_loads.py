@@ -493,3 +493,24 @@ def test_a_loads_mapping_keyed_by_the_name_instead_of_the_symbol_is_refused():
             capacity=1.0,
             required=1.0,
         )
+
+
+def test_one_unclassified_case_named_as_a_string_is_not_fourteen_of_them():
+    """`unclassified="lateral_thrust"` became fourteen unclassified cases, one per letter.
+
+    `unclassified` is what the scorecard's detail line names — "N of M load cases carry a
+    force and no declared nature (…)" — and it travels into the evidence a bundle signs. A
+    user reporting one case the obvious way had fourteen letters named in it, over a count
+    that was also wrong.
+    """
+    combinations = asce7_lrfd_basic()
+    loads = {LoadNature.DEAD: 10.0}
+
+    assert combination_evidence(
+        combinations, loads, unclassified=("lateral_thrust",)
+    ).unclassified == ("lateral_thrust",)
+
+    with pytest.raises(ValueError, match="a string is not one"):
+        combination_evidence(combinations, loads, unclassified="lateral_thrust")
+    with pytest.raises(ValueError, match="a mapping is not one"):
+        combination_evidence(combinations, loads, unclassified={"lateral_thrust": 1})

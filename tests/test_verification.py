@@ -254,3 +254,21 @@ def test_a_plan_item_renders_the_accuracy_its_instrument_must_meet():
     # An item with no stated accuracy renders exactly as it did.
     bare = inspection.model_copy(update={"required_accuracy": None})
     assert str(bare) == str(inspection).replace(f" ({inspection.required_accuracy})", "")
+
+
+def test_one_archetype_where_the_sequence_goes_is_refused():
+    """A pydantic model iterates over its own `(field, value)` pairs.
+
+    `plan_verification(card, archetypes=DEFAULT_ARCHETYPES[0])` — one archetype passed the
+    obvious way — arrived as a handful of two-item tuples and failed with `'tuple' object has
+    no attribute 'key'`, which says nothing a caller can act on.
+    """
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(entries=(ScorecardEntry(name="c", status=CheckStatus.PASS, detail="d"),))
+    assert plan_verification(card, archetypes=DEFAULT_ARCHETYPES) is not None
+
+    with pytest.raises(ValueError, match="is a sequence of VerificationArchetype"):
+        plan_verification(card, archetypes=DEFAULT_ARCHETYPES[0])
+    with pytest.raises(ValueError, match="a string is not one"):
+        plan_verification(card, archetypes="proof-load")

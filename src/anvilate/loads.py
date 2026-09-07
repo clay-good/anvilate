@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from ._models import Named, Provenance, RevalidatedModel, cited
+from ._models import Named, Provenance, RevalidatedModel, cited, each_one
 from .derivation import Derivation, SymbolValue
 from .scorecard import CheckStatus, ScorecardEntry
 
@@ -307,6 +307,7 @@ def combination_scorecard(
     takes that combination's citation as its reference, so the scorecard shows the
     controlling combination rather than silently reducing the set to one number.
     """
+    unclassified = each_one(unclassified, str, named="unclassified")
     if unclassified:
         return ScorecardEntry(
             name=name,
@@ -593,6 +594,7 @@ def combination_evidence(
     :func:`combination_scorecard` screens with, so the bundle cannot name a different
     combination from the one the checks used.
     """
+    unclassified = each_one(unclassified, str, named="unclassified")
     governing, demand = _governing_for_check(combinations, loads, minimize=minimize)
     return CombinationEvidence(
         basis=combinations.basis,
