@@ -145,6 +145,21 @@ either carries a derivation or states why it has none; a clause is not answered 
 one entry is silent, because half a clause renders a formula for some parts and a bare
 table for others, which reads as though all of it was derived.
 
+The ratio counts **cited clauses**, and a card carries checks that cite nothing: the
+screen's own material resolution, interface resolution, general tolerance class, load
+classification and stack-up. Those were outside the count and outside the rule, and seven
+of them said nothing at all — while `tolerance achievability`, written in the same module,
+has carried its `lookup` declaration since the vocabulary existed. They all declare now,
+and the property is stated over the card instead of over the citation: **every check that
+reaches a verdict either shows its work or says why there is none.** `NOT_EVALUATED` is
+deliberately outside it — a check that could not run is a gap, its `detail` line says what
+stopped it, and making debt declarable is the collapse this vocabulary refuses.
+
+That gate also pins the *wiring* rather than the function. `combination_derivation` is
+called at exactly one place in the library, and making it return nothing — dropping the
+worked calculation from the one check on a bracket's card that has one — passed the whole
+suite before this property was stated.
+
 Every clause is answered, so the debt list in
 [`docs/api/underived-checks.txt`](api/underived-checks.txt) is empty:
 

@@ -1947,3 +1947,82 @@ def test_every_element_a_document_can_name_refuses_a_field_it_does_not_declare()
 
     with pytest.raises(ValueError, match="material_condition"):
         DatumReference(letter="B", material_condition="MMC")
+
+
+def test_every_check_that_reaches_a_verdict_says_where_its_answer_came_from():
+    """A card's checks either show their work or say why there is none. Eight did neither.
+
+    `Underived` exists to be that statement — its docstring says it rides on the entry "so it
+    travels into the evidence bundle and the JSON alongside the verdict it explains" — and
+    `tolerance achievability`, in this same module, has carried one since the vocabulary was
+    written. The checks beside it, which are the ones on every card a reader actually sees,
+    carried nothing: material resolution, both interface-resolution outcomes, both general
+    tolerance-class outcomes, load classification and the stack-up.
+
+    ``NOT_EVALUATED`` is deliberately outside the rule. A check that could not run is a
+    *gap*, and :class:`DerivationAbsence` refuses to make debt declarable on purpose — its
+    own docstring says why. Its `detail` line is where it says what stopped it.
+
+    This also pins the wiring rather than the function. `combination_derivation` is called at
+    exactly one place, and making it return `None` — dropping the worked calculation from the
+    only check on the card that has one — passed the entire suite before this test existed.
+    """
+    from pathlib import Path
+
+    from anvilate.scorecard import CheckStatus as _Status
+    from anvilate.spec import load_spec_yaml
+
+    shipped = Path(__file__).resolve().parent.parent / "examples" / "nema23_bracket.spec.yaml"
+    milled = ManufacturingProcess.CNC_MILLING
+    corpus = {
+        # Every judged branch this module has, because the property is about the branch and
+        # not about the check: an entry that declares on its passing arm and not on its
+        # failing one is the shape the census in this file's history keeps finding.
+        "a shipped spec, with interfaces": load_spec_yaml(shipped.read_text(encoding="utf-8")),
+        "an unknown material": _spec(material=MaterialRef(ref="AA-NOT-A-MATERIAL")),
+        "an unknown standard component": _spec(
+            interfaces=[StandardComponentInterface(ref="NOT-A-COMPONENT", tag="mount")]
+        ),
+        "a known tolerance class": _spec(
+            manufacturing=Manufacturing(process=milled, tolerance_class="medium")
+        ),
+        "an unknown tolerance class": _spec(
+            manufacturing=Manufacturing(process=milled, tolerance_class="iso2768-m")
+        ),
+        "a stack-up that passes": _chained_spec("0.0 mm", "1.0 mm"),
+        "a stack-up that fails": _chained_spec("0.19 mm", "0.21 mm"),
+        "a declared combination basis": _lug_spec(
+            load_cases=_classified_cases(), combination_basis="asce7_lrfd"
+        ),
+    }
+
+    silent, reached, judged = [], set(), 0
+    for where, spec in corpus.items():
+        for entry in screen_spec(spec).entries:
+            if entry.status is _Status.NOT_EVALUATED:
+                continue
+            judged += 1
+            reached.add(entry.name)
+            if entry.derivation is None and entry.underived is None:
+                silent.append(f"{where}: {entry.name} [{entry.status.value}]")
+
+    # A floor on the branches, not just the count: a corpus that stops reaching one of these
+    # would let its declaration be deleted silently, which is how this gap opened.
+    assert judged >= 20, f"the corpus reached only {judged} judged checks; it proves little"
+    for required in (
+        "material resolution",
+        "interface resolution",
+        "general tolerance class",
+        "load classification",
+        "load combination",
+        "stack-up",
+        "tolerance achievability",
+    ):
+        assert any(required in name for name in reached), (
+            f"the corpus no longer reaches a judged {required!r} check, so this property is "
+            f"no longer stated about it"
+        )
+    assert not silent, (
+        "these reach a verdict and neither show their work nor say why there is none, which "
+        f"is the silence `Underived` was written to replace: {sorted(silent)}"
+    )

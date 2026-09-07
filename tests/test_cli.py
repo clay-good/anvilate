@@ -1743,9 +1743,12 @@ def test_show_work_prints_the_worked_calculation_the_json_already_carried():
     assert "P = 60.0 kN  (lifted load)" in worked
 
     # And a check with no derivation says so, rather than being left out — a check missing
-    # from the listing reads as one whose formula was not worth showing.
+    # from the listing reads as one whose formula was not worth showing. It used to read
+    # `[derivation not rendered]`, which says a formula exists and is being withheld; a
+    # resolution check has no formula at all, and now says which of the two it is.
     assert "material resolution" in worked
-    assert "[derivation not rendered]" in worked
+    assert "derivation not rendered — " in worked, "the label lost the check's stated reason"
+    assert "there is no arithmetic between the lookup and the verdict]" in worked
 
 
 def test_the_shell_and_the_report_render_one_derivation_through_one_renderer():

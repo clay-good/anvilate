@@ -494,6 +494,15 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             name=f"stack-up: {analysis.name}",
             status=CheckStatus.PASS if analysis.passes else CheckStatus.FAIL,
             detail=str(analysis),
+            underived=Underived(
+                kind=DerivationAbsence.NUMERIC_RESULT,
+                reason=(
+                    "the arithmetic is the stack-up itself — a sum or a root-sum-square over "
+                    "the chain's links, one term per link — and the analysis carries it. A "
+                    "single substituted line over a chain of arbitrary length is not one a "
+                    "reader can check; the chain's own table is"
+                ),
+            ),
         )
         for analysis in analyses
     ]
@@ -655,6 +664,13 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                         f"{_near_misses(declared, known)} The class governs every dimension "
                         "the drawing does not tolerance individually."
                     ),
+                    underived=Underived(
+                        kind=DerivationAbsence.LOOKUP,
+                        reason=(
+                            "the declared class is looked up in the ISO 2768 classes this "
+                            "library carries; a name is either one of them or it is not"
+                        ),
+                    ),
                 )
             )
         else:
@@ -665,6 +681,13 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                     detail=(
                         f"{declared!r} resolves to ISO 2768 {resolved.value}, the class "
                         "governing every dimension not toleranced individually"
+                    ),
+                    underived=Underived(
+                        kind=DerivationAbsence.LOOKUP,
+                        reason=(
+                            "the declared class is looked up in the ISO 2768 classes this "
+                            "library carries; a name is either one of them or it is not"
+                        ),
                     ),
                 )
             )
@@ -790,7 +813,31 @@ def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
         name="load classification",
         status=CheckStatus.PASS,
         detail=f"{len(spec.load_cases)} load cases, every force-carrying one classified",
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "each load case is read for a declared nature and counted; there is no "
+                "arithmetic between the count and the verdict"
+            ),
+        ),
     )
+
+
+#: Why a resolution check shows no worked calculation.
+#:
+#: Three checks share it — the material, and each interface — because they share the whole
+#: of their arithmetic, which is none: an identifier is looked for in a table and is either
+#: there or it is not. `Underived` exists to say exactly that, and `tolerance achievability`
+#: in this same file has said it since the vocabulary was written; the checks around it,
+#: which are the ones on every card a user reads, said nothing at all.
+_A_RECORD_IS_FOUND_OR_IT_IS_NOT = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason=(
+        "the identifier the spec states is looked for in the databases this screen resolves "
+        "through; it is found or it is not, and there is no arithmetic between the lookup "
+        "and the verdict"
+    ),
+)
 
 
 _DEFAULT_RESOLVER: ReferenceResolver | None = None
@@ -852,6 +899,7 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
             name="material resolution",
             status=CheckStatus.PASS,
             detail=f"{spec.material.ref} {where}",
+            underived=_A_RECORD_IS_FOUND_OR_IT_IS_NOT,
         )
         if resolver.has_material(spec.material.ref)
         else ScorecardEntry(
@@ -863,6 +911,7 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
                 f"Every property the screens use is retrieved from this identifier, so "
                 f"nothing downstream can run on it."
             ),
+            underived=_A_RECORD_IS_FOUND_OR_IT_IS_NOT,
         )
     ]
     for interface in spec.interfaces:
@@ -908,6 +957,7 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
                     else f"unknown standard component {interface.ref!r} — "
                     f"{_near_misses(interface.ref, resolver.known_components())}"
                 ),
+                underived=_A_RECORD_IS_FOUND_OR_IT_IS_NOT,
             )
         )
     return entries
