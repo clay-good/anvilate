@@ -16,9 +16,12 @@ jurisdiction, an engineer of record, or an independent checker asks for.
 Every derivation here comes from the pack itself -- the screen functions attach the
 work to the entries they return -- so this example never restates a formula the
 check already knows, and the report cannot drift from what was actually computed.
-A check that declares no derivation still appears, as its inputs and verdict under
-an honest "derivation not rendered" label rather than a formula invented to fill
-the space.
+A check that declares no derivation still appears in a report, as its inputs and
+verdict under an honest label rather than a formula invented to fill the space --
+"derivation not rendered" where nobody said why there is none, and the check's own
+stated reason where somebody did. Every check *in this example* carries its work,
+so that path is not what these three lines show; `tests/test_report.py` is where
+it is held.
 
 The governing check is pin bearing: at 166.7 MPa against A36's 250 MPa yield, it
 carries a 1.50 factor where the lift demands 2.00 -- so the pin hole, not the lug
