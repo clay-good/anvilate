@@ -1038,10 +1038,14 @@ def test_a_stated_reason_survives_being_re_judged_against_a_band():
 
 
 def test_the_report_prints_the_stated_reason_beside_the_fallback_label():
-    """A reason nothing renders is a field, not an answer.
+    """A reason nothing renders is a field, not an answer — and neither is a kind.
 
     `derivation not rendered` alone tells a reviewer that work is missing and not whether
     anyone owes it — an exemption and an unwritten closed form print the same three words.
+    Appending the reason was the first half of the answer and it left the sentence OPENING
+    with those three words either way, so a reader skimming a column of labels still read
+    "work is missing" over a check that is finished. `kind` is the field that decides, it
+    reached the JSON, and no rendering had ever shown it.
     """
     from anvilate.report import ReportSection
 
@@ -1055,7 +1059,28 @@ def test_the_report_prints_the_stated_reason_beside_the_fallback_label():
             ),
         )
     )
-    assert exempt.fallback_label == "derivation not rendered — the standard's own exemption"
+    assert exempt.fallback_label == (
+        "no formula to render — a lookup, not a calculation: the standard's own exemption"
+    )
+
+    # The other member, because a label keyed on a kind that renders one of two is a label
+    # that was never asked about the second.
+    solved = exempt.model_copy(
+        update={
+            "entry": exempt.entry.model_copy(
+                update={
+                    "underived": Underived(
+                        kind=DerivationAbsence.NUMERIC_RESULT, reason="the root of an equation"
+                    )
+                }
+            )
+        }
+    )
+    assert solved.fallback_label == (
+        "no formula to render — a numeric result, solved rather than evaluated: "
+        "the root of an equation"
+    )
+    assert solved.fallback_label != exempt.fallback_label, "the kind moved and the label did not"
 
     silent = ReportSection(entry=ScorecardEntry(name="fatigue", status=CheckStatus.PASS, detail=""))
     assert silent.fallback_label == "derivation not rendered"

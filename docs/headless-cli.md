@@ -346,9 +346,12 @@ it. `--format json` has always carried the derivation;
 this is the half a person reads. A check with no derivation prints
 `[derivation not rendered]` rather than being left out — a check missing from the listing
 reads as one whose formula was not worth showing, and those are different things. Where the
-check states *why* it has none, the reason prints on the same line:
-`[derivation not rendered — Service Class 0 is the standard's own exemption from fatigue
-analysis…]`. Nothing is owed there, and the label alone could not say so.
+check declares *why* it has none, the whole declaration is the label:
+`[no formula to render — a lookup, not a calculation: Service Class 0 is the standard's own
+exemption from fatigue analysis…]`. Nothing is owed there, and the three words alone could
+not say so — nor could them plus the reason, which still opened every finished absence with
+"work is missing". The screen's own resolution, classification and stack-up checks all
+declare, so a card carries these lines routinely rather than only in the lifter's case.
 
 ## The exit code is the interface
 

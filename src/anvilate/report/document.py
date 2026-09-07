@@ -27,7 +27,7 @@ from math import isfinite
 from pydantic import ConfigDict, computed_field
 
 from .._models import StatableModel
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
 from ..units import UnitSystem
@@ -73,7 +73,30 @@ _STATUS_LABEL = {
     CheckStatus.NOT_EVALUATED: "NOT EVALUATED",
 }
 
+#: The label over the inputs table for a check that declares NOTHING about its missing work.
+#:
+#: The three words mean what they say and only what they say: a formula is not here and
+#: nobody has said whether one is owed.
 _FALLBACK_LABEL = "derivation not rendered"
+
+#: The same label for a check that HAS declared, by the kind of absence it declared.
+#:
+#: A TOTAL MAP over the enumeration, for the reason `_STATUS_RANK` gives about itself: a
+#: third member must be a KeyError at the one place that decides, not a silent fall-through
+#: to the wording for "nobody said".
+#:
+#: The kind was the field this label dropped. Appending the *reason* to `derivation not
+#: rendered` was the previous fix, and it left every declared absence still opening with the
+#: three words that mean "work is missing" — so an exemption and an unwritten closed form
+#: read the same at a glance, which is the exact sentence the property below was written
+#: against. `DerivationAbsence`'s own docstring says both of its members are *finished*, and
+#: the label now says so before the reason rather than after it.
+_ABSENCE_LABEL = {
+    DerivationAbsence.LOOKUP: "no formula to render — a lookup, not a calculation",
+    DerivationAbsence.NUMERIC_RESULT: (
+        "no formula to render — a numeric result, solved rather than evaluated"
+    ),
+}
 
 
 # Non-finite floats spelled as JSON strings. Python's ``json`` writes ``Infinity`` and
@@ -221,12 +244,17 @@ class ReportSection(StatableModel):
         A bare "derivation not rendered" tells a reviewer that work is missing and not
         whether anyone owes it. An exemption, a table comparison and an unwritten closed
         form all print the same three words, and only the first two are finished. When
-        the check declares why it has no formula, the reason belongs here — it is the one
-        place a reader is already looking for it.
+        the check declares why it has no formula, both halves of that declaration belong
+        here — the KIND, which says whether anyone owes anything, and then the reason.
+
+        Appending only the reason was the first fix and it left the sentence opening with
+        the same three words either way, so a reader skimming a column of labels still could
+        not tell a finished absence from an owed one. Every card carries these now: the
+        screen's own resolution, classification and stack-up checks all declare.
         """
         if self.entry.underived is None:
             return _FALLBACK_LABEL
-        return f"{_FALLBACK_LABEL} — {self.entry.underived.reason}"
+        return f"{_ABSENCE_LABEL[self.entry.underived.kind]}: {self.entry.underived.reason}"
 
     @property
     def citation(self) -> str | None:

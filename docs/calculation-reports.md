@@ -123,10 +123,13 @@ plausible fabrication.
 
 Some checks have no formula and never will. A Service Class 0 lifter is *exempt* from
 fatigue analysis; the check states the exemption and computes nothing. Those say so on
-themselves, in an `Underived` on the scorecard entry, and the reason prints beside the
-label — `[derivation not rendered — Service Class 0 is the standard's own exemption…]`
-— so a reviewer can tell "nothing is owed here" from "somebody still has to write this
-down". Two kinds, and they are not the same:
+themselves, in an `Underived` on the scorecard entry, and the label becomes the declaration
+— `[no formula to render — a lookup, not a calculation: Service Class 0 is the standard's
+own exemption…]` — so a reviewer can tell "nothing is owed here" from "somebody still has
+to write this down" without reading to the end of the sentence. The kind opens the line
+because the kind is what decides that; appending only the reason left every declared
+absence still starting with the three words that mean work is missing. Two kinds, and they
+are not the same:
 
 | Kind | What it means |
 | --- | --- |
