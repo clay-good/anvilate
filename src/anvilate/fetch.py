@@ -38,7 +38,7 @@ from typing import Protocol
 
 from pydantic import ConfigDict, field_validator
 
-from ._models import Named, Provenance, RevalidatedModel
+from ._models import Named, Provenance, RevalidatedModel, StatableModel
 
 __all__ = [
     "ConsentRequired",
@@ -126,7 +126,7 @@ class DatasetRecipe(RevalidatedModel):
         return value
 
 
-class FetchProvenance(RevalidatedModel):
+class FetchProvenance(StatableModel):
     """What was fetched, from where, under what licence, and when the caller says.
 
     Written beside the payload as ``<name>.provenance.json`` so a cache directory is

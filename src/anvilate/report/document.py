@@ -24,8 +24,9 @@ from __future__ import annotations
 from html import escape
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import ConfigDict, computed_field
 
+from .._models import StatableModel
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
@@ -130,7 +131,7 @@ def _json_revive(value: object) -> object:
     return value
 
 
-class ReportSection(BaseModel):
+class ReportSection(StatableModel):
     """One check in the report: its verdict, and the work behind it.
 
     Checks that declare their own derivation carry it on the scorecard entry, and
@@ -236,7 +237,7 @@ class ReportSection(BaseModel):
         return self.entry.reference
 
 
-class CalculationReport(BaseModel):
+class CalculationReport(StatableModel):
     """A set of checks assembled into a document a reviewer can act on.
 
     ``standards`` lists the code and standard editions relied upon, ``assumptions``

@@ -221,6 +221,16 @@ because the walk unwraps `.value` to reach the quantity a constraint states, whi
 covering the wrapper and covers only its payload. `min_safety_factor.rationale` at two
 megabytes compiled, exactly as `description` once did.
 
+Each of those doors was found by remembering the last one, so the remembering is a gate now:
+every `model_validate` in the library is resolved to the class it reads into and held to the
+bound, or written down with the reason it is exempt — an envelope whose payload *is* the
+document it signs, a model re-reading its own values, a YAML table this package ships. It
+found three more the same afternoon. `SourceRecord.sources` comes out of a signed predicate
+and accepted 500,000 of them, which its own `__str__` joined into 1.5 MB on one line. A
+**calc record** loaded back by `report_from_record` turned a 2 MB title into 4 MB of HTML.
+And `FetchProvenance` is read from a `.provenance.json` sidecar in a cache directory that is
+an ordinary user-writable folder.
+
 Running a walk on every model a screen builds is not free, and the first version of it made
 `screen_spec` — the library's hottest function — thirty times slower. Almost all of that was
 two things that read as cheap and are not: `getattr(model, "value", model)` on a pydantic

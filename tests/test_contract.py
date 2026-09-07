@@ -4478,3 +4478,104 @@ def test_every_model_a_bounded_front_door_reaches_is_bounded_too():
         "these are reached from a model whose bounds a front door relies on, and the walk "
         f"skips them in silence because they are not bounded themselves: {sorted(unbounded)}"
     )
+
+
+#: The reason the eleven bundled standards tables share.
+_BUNDLED_TABLE = (
+    "a YAML table shipped inside this package, read from `importlib.resources` and from "
+    "nowhere else; the library wrote it, and `test_standards.py` gates its shape directly"
+)
+
+#: Why each `model_validate` target in the library is allowed to be unbounded.
+#:
+#: The bounds in `_models.StatableModel` exist for content this library reads back and did
+#: not write. A `model_validate` call is where that reading happens, so every one of them is
+#: asked the question, and an answer of "this one does not need it" is written here rather
+#: than left as the absence of a base class. Adding a reader without touching this table is
+#: what the gate below refuses.
+_UNBOUNDED_READERS = {
+    "Attestation": (
+        "the envelope's `payload` IS the document it signs, base64-encoded, and a bundle "
+        "this tool itself produced can be megabytes; bounding it would refuse a valid "
+        "attestation. The predicate it decodes to is read into bounded models."
+    ),
+    "ExportAuthorization": (
+        "read back from `copied.model_dump()` — its own object, one line up. Nothing "
+        "crosses a boundary, so there is nothing to bound."
+    ),
+    "Bearing": _BUNDLED_TABLE,
+    "SocketHeadCapScrew": _BUNDLED_TABLE,
+    "NemaFrame": _BUNDLED_TABLE,
+    "DowelPin": _BUNDLED_TABLE,
+    "ExtrusionProfile": _BUNDLED_TABLE,
+    "HexBolt": _BUNDLED_TABLE,
+    "HexNut": _BUNDLED_TABLE,
+    "Material": _BUNDLED_TABLE,
+    "PipeDimensions": _BUNDLED_TABLE,
+    "MetricThread": _BUNDLED_TABLE,
+    "PlainWasher": _BUNDLED_TABLE,
+}
+
+
+def test_every_model_the_library_reads_back_is_bounded_or_says_why_not():
+    """A `model_validate` is where content this library did not write becomes a typed object.
+
+    The four document bounds were written for the spec's front door, then for the
+    scorecard's, one door at a time — and each time the next door was found by remembering
+    it. This is the census that does the remembering: every `X.model_validate(...)` and
+    `X.model_validate_json(...)` in `src/`, resolved to the class it reads into, held to
+    :class:`~anvilate._models.StatableModel` unless the table above says why not.
+
+    It found three the memory of the last door had not: `SourceRecord`, whose `sources` came
+    out of a *signed predicate* and accepted 500,000 of them (rendering 1.5 MB from
+    `__str__`); `CalculationReport`, which `report_from_record` loads from a calc record on
+    disk and which turned a 2 MB title into 4 MB of HTML; and `FetchProvenance`, read from a
+    `.provenance.json` sidecar in a cache directory that is a plain user-writable folder.
+
+    A call this walk cannot resolve to a class is not skipped — it is a hole in the census
+    exactly where a reader could hide — so those are listed and checked by hand below.
+    """
+    import ast
+
+    import anvilate
+    from anvilate._models import StatableModel
+
+    src = Path(anvilate.__file__).parent
+    readers: list[tuple[str, str, int]] = []
+    for path in sorted(src.rglob("*.py")):
+        module = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"model_validate", "model_validate_json"}
+                and isinstance(node.func.value, ast.Name)
+            ):
+                readers.append((module.removesuffix(".__init__"), node.func.value.id, node.lineno))
+
+    assert len(readers) > 15, f"the walk found {len(readers)} readers; it is reading no source"
+
+    unresolved, unbounded = [], []
+    for module, name, line in readers:
+        target = getattr(importlib.import_module(module), name, None)
+        if not isinstance(target, type):
+            unresolved.append(f"{module}.{name}")
+        elif not issubclass(target, StatableModel) and name not in _UNBOUNDED_READERS:
+            unbounded.append(f"{module}:{line} {name}")
+
+    assert not unbounded, (
+        "these read content into a model with no bound on its strings, its collections or "
+        f"its nesting, and _UNBOUNDED_READERS does not say why that is right: {unbounded}"
+    )
+    # Named rather than counted. A call this walk cannot resolve is a hole in the census
+    # exactly where a reader could hide, so each one is looked at by hand and written down:
+    # `Attestation` and `Scorecard` are read under a module-local import (both bounded or
+    # exempt above), and `screening`'s `model` is an element class taken from the registry,
+    # every one of which is a spec `_Base`.
+    # Not the line numbers: this would then fail on any edit above one of them, which is a
+    # gate that cries about the wrong thing and gets deleted.
+    assert sorted(set(unresolved)) == [
+        "anvilate.cli.Attestation",
+        "anvilate.mcp.Scorecard",
+        "anvilate.screening.model",
+    ], f"a reader the census cannot resolve to a class appeared or moved: {sorted(unresolved)}"

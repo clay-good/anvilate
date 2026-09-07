@@ -1590,3 +1590,53 @@ def test_a_legend_symbol_that_will_not_typeset_falls_back_to_text():
         f"the legend cell for a symbol that will not typeset holds {cell.group(1)!r}; it must "
         f"carry the escaped symbol rather than nothing"
     )
+
+
+def test_a_calc_record_read_back_from_disk_is_bounded():
+    """`report_from_record` loads a document from a file, and nothing bounded what it read.
+
+    A record is written to disk and reloaded — that is the whole point of one — so what comes
+    back is content this library did not write on this run. A 2 MB `title` was accepted and
+    rendered into 4 MB of HTML; 200,000 `standards` were accepted in 0.02 s. Same claim as
+    the spec's front door and the scorecard's: a document states what a consumer at the far
+    end of the call can answer.
+    """
+    from anvilate._models import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
+    from anvilate.report.document import CALC_RECORD_SCHEMA_VERSION
+
+    def record(**report: object) -> dict:
+        return {
+            "schema_version": CALC_RECORD_SCHEMA_VERSION,
+            "report": {"title": "Bracket", "sections": [], **report},
+        }
+
+    # A control AT each bound, so the bound the library states is the one under test.
+    assert report_from_record(record(title="A" * _MAX_STRING_LENGTH)).title
+    assert report_from_record(record(standards=["ASME"] * _MAX_COLLECTION_ITEMS)).standards
+
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        report_from_record(record(title="A" * (_MAX_STRING_LENGTH + 1)))
+    with pytest.raises(ValidationError, match="does not state a collection of more"):
+        report_from_record(record(standards=["ASME"] * (_MAX_COLLECTION_ITEMS + 1)))
+
+
+def test_the_sources_a_signed_predicate_states_are_bounded():
+    """`SourceRecord.sources` came out of a signed attestation predicate and out of a bundle.
+
+    500,000 of them were accepted, and `__str__` — which the exported bundle prints — joined
+    them into 1.5 MB on one line. `ref` and `name` were already bounded because they are
+    citations; `sources` is a plain tuple of strings and had nothing.
+    """
+    from anvilate._models import _MAX_COLLECTION_ITEMS, _MAX_STRING_LENGTH
+    from anvilate.evidence import SourceRecord
+
+    def source_record(sources: tuple[str, ...]) -> SourceRecord:
+        return SourceRecord.model_validate(
+            {"ref": "AA-6061-T6", "kind": "material", "name": "6061-T6", "sources": sources}
+        )
+
+    assert source_record(("ASM Handbook",) * _MAX_COLLECTION_ITEMS)
+    with pytest.raises(ValidationError, match="does not state a collection of more"):
+        source_record(("ASM Handbook",) * (_MAX_COLLECTION_ITEMS + 1))
+    with pytest.raises(ValidationError, match="does not state a string longer"):
+        source_record(("A" * (_MAX_STRING_LENGTH + 1),))
