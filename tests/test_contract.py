@@ -4770,3 +4770,98 @@ def test_every_surface_that_shows_a_check_s_work_also_shows_its_stated_absence()
         "these render a check's worked calculation and render nothing at all where the check "
         f"has none, so a declared absence reaches their reader as silence: {silent}"
     )
+
+
+#: Public sequence parameters that do not go through `_models.each_one`, and why.
+#:
+#: The analysis surface answers this mistake with its own idiom — `spring_rates must be a
+#: sequence, not a str`, naming the parameter, which is the contract its own gates hold it
+#: to — so routing it through a second one would be churn, not a fix. Everything outside it
+#: either uses the helper or is written here.
+_SEQUENCES_NOT_GUARDED_BY_EACH_ONE = {
+    "anvilate.agenteval.score_run_set.tasks": (
+        "refuses a transcript-less task by name before anything iterates the sequence"
+    ),
+    "anvilate.agenteval.score_transcript.calls": (
+        "builds an `AgentRunOutcome` from them, so a bad item is a pydantic refusal"
+    ),
+    "anvilate.compilation.score_task_set.tasks": (
+        "builds a `CompilationReport` from them, so a bad item is a pydantic refusal"
+    ),
+    "anvilate.analysis.cold_formed_steel.dsm_scorecard.outside_prequalified": (
+        "on the analysis surface, whose own refusal contract covers it"
+    ),
+}
+
+
+def test_every_public_sequence_of_models_refuses_a_single_one_of_them():
+    """A pydantic model iterates over its own `(field, value)` pairs, and a string over its
+    characters.
+
+    Both are the same mistake seen from two sides, and both *answer* rather than raise:
+    `unclassified="lateral_thrust"` became fourteen unclassified load cases, one per letter,
+    in the line a scorecard prints and a bundle signs. `_models.each_one` is the one answer;
+    this is the census that holds the doors to it, so the next such parameter is a failure
+    here rather than a defect found by hand a year later.
+
+    The analysis surface is exempt as a body, and not for convenience: it answers with its
+    own sentence naming the parameter, which is the contract `test_every_public_analysis_
+    function_refuses_a_bare_number_by_name` already holds it to.
+    """
+    import ast
+    import importlib as _importlib
+    import inspect
+    import typing
+    from collections.abc import Sequence
+
+    from pydantic import BaseModel
+
+    import anvilate
+
+    def held_kind(annotation: object) -> type | None:
+        for arg in typing.get_args(annotation) or ():
+            if isinstance(arg, type) and (issubclass(arg, BaseModel) or arg is str):
+                return arg
+        return None
+
+    src = Path(anvilate.__file__).parent
+    doors, unguarded = 0, []
+    for path in sorted(src.rglob("*.py")):
+        module_name = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
+        module_name = module_name.removesuffix(".__init__")
+        if module_name.startswith(("anvilate.analysis", "anvilate.packs")):
+            continue
+        module = _importlib.import_module(module_name)
+        bodies = {
+            node.name: ast.unparse(node)
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            if isinstance(node, ast.FunctionDef)
+        }
+        for symbol in getattr(module, "__all__", ()):
+            function = getattr(module, symbol, None)
+            if not inspect.isfunction(function) or function.__module__ != module_name:
+                continue
+            try:
+                hints = typing.get_type_hints(function)
+            except Exception:  # noqa: BLE001 — an unresolvable hint is not this test's subject
+                continue
+            for parameter, annotation in hints.items():
+                if parameter == "return":
+                    continue
+                if typing.get_origin(annotation) not in (list, tuple, Sequence):
+                    continue
+                if held_kind(annotation) is None:
+                    continue
+                doors += 1
+                where = f"{module_name}.{symbol}.{parameter}"
+                if "each_one" in bodies.get(symbol, "") or where in (
+                    _SEQUENCES_NOT_GUARDED_BY_EACH_ONE
+                ):
+                    continue
+                unguarded.append(where)
+
+    assert doors >= 6, f"the walk found {doors} such parameters; it is reading almost no source"
+    assert not unguarded, (
+        "these take a sequence of models or strings and neither guard it nor are recorded as "
+        f"refusing it another way, so a single one of them is read as its parts: {unguarded}"
+    )
