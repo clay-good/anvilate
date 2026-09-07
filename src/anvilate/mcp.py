@@ -750,6 +750,13 @@ def _object_issues(
     the other; ``noun`` is what an unexpected property is called in the message, because
     "takes no argument" is wrong about something the server sent.
     """
+    if not isinstance(document, Mapping):
+        # A complaint, not a traceback. This function's whole product is a list of what is
+        # wrong with a document, and "it is not an object" is the first thing that can be
+        # wrong with one — `result_issues` answered a string with `'str' object has no
+        # attribute 'items'`, from inside the loop below. The same reasoning
+        # `contracts.schema_issues` follows about a schema that is not a mapping.
+        return [f"{label} is a JSON object; got {type(document).__name__}"]
     properties: dict[str, Any] = schema.get("properties", {})
     issues: list[str] = []
     for name in schema.get("required", []):

@@ -1785,3 +1785,31 @@ def test_no_dispatched_tool_can_serve_a_payload_its_published_contract_rejects(
         assert not errors, (
             f"{tool_name} served a result its own published outputSchema rejects: {errors}"
         )
+
+
+def test_a_result_that_is_not_an_object_is_a_complaint_and_not_a_traceback():
+    """`result_issues` exists to say what is wrong with a document, and crashed on one.
+
+    Handed a string it answered `'str' object has no attribute 'items'` from inside its own
+    loop — Python's sentence about this module's internals, from the function whose entire
+    product is a list of complaints. "It is not an object" is the first thing that can be
+    wrong with a document, and it is the one thing this could not say.
+
+    Both directions, because `_object_issues` is shared: the argument check on the way in and
+    the result check on the way out are the same function, and a constraint taught to one has
+    always been understood by the other.
+    """
+    from anvilate.mcp import _argument_issues, result_issues, tool_catalog
+
+    tool = tool_catalog()[0]
+    for shape in ("a string", [], 3, None):
+        assert result_issues(tool, shape) == [
+            f"{tool.name} is a JSON object; got {type(shape).__name__}"
+        ], shape
+        assert _argument_issues(tool, shape) == [
+            f"{tool.name} is a JSON object; got {type(shape).__name__}"
+        ], shape
+
+    # The control: a real object is still held to its schema rather than waved through.
+    assert result_issues(tool, {}) == [f"{tool.name} requires 'errors'"] or result_issues(tool, {})
+    assert result_issues(tool, {"errors": [], "spec": {}, "subject": "sha256:" + "a" * 64}) == []
