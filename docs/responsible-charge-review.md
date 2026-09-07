@@ -38,6 +38,22 @@ visible only to a reader who walked the items. The case where that mattered most
 it hid: a model-origin check that is *also* failing sorts as failing, so its involvement
 disappeared from the counts entirely. The summary now names them.
 
+## And on every line, not only the first
+
+"Visible only to a reader who walked the items" was the argument for putting model
+involvement in the summary, and walking the items did not show it either. `ReviewItem`
+carries the origin and its `headline` — the one line a reviewer skimming reads — dropped it:
+all four origins produced the identical sentence. `origin_detail`, the only thing that ever
+varied, is a caller-supplied string that defaults to empty, and `priority` states the origin
+for two of the eight bands, neither of which a **failing** or **unevaluated** check can be
+in. Those are the two a reviewer reads first.
+
+The line says it now — `padeye net tension: fails on inputs a model proposed` — through a
+total map over the four origins, so a fifth is a `KeyError` at the one place that has to
+decide what to say about it. `deterministic` is the one member that adds no clause, because
+a value a cited closed form computed is the case a reviewer is *not* being asked to look at,
+and a clause on every routine line makes the other three harder to see rather than easier.
+
 ## A check with no recorded origin is unattributed, never routine
 
 `build_dossier` defaults a missing origin to `UNATTRIBUTED`, which sorts third. Defaulting

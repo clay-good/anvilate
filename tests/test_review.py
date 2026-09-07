@@ -9,6 +9,7 @@ import pytest
 from anvilate.review import (
     PROHIBITED_ASSURANCE_LANGUAGE,
     DecisionOrigin,
+    ReviewItem,
     ReviewPriority,
     ReviewRecord,
     artifact_digest,
@@ -264,3 +265,57 @@ def test_the_summary_names_what_a_model_proposed():
     assert "Proposed by a model: gpt-x proposed the load factor." in dossier.summary()
     # A dossier with no model involvement says nothing about models.
     assert "Proposed by a model" not in build_dossier(card, toolchain="anvilate 0.0.1").summary()
+
+
+def test_the_headline_says_on_whose_word_a_check_reached_its_verdict():
+    """All four origins used to produce the identical line.
+
+    `origin_detail` is caller-supplied and defaults to empty, so a failing check resting on
+    a value a language model proposed read exactly like one resting on a cited closed form:
+    `padeye net tension: fails`. `priority` carries the distinction for two of the eight
+    bands — MODEL_ASSUMPTION and UNATTRIBUTED_ASSUMPTION — and neither is a band a FAILING or
+    NOT_EVALUATED check can be in, which are the two a reviewer reads first.
+
+    This module had already found the hole one level up: `summary()` names the model-proposed
+    decisions because "a value a language model suggested was visible only to a reader who
+    walked the items". Walking the items did not show it either.
+    """
+    entry = ScorecardEntry(name="padeye net tension", status=CheckStatus.FAIL, detail="0.8 vs 2.0")
+
+    lines = {
+        origin: ReviewItem(entry=entry, priority=ReviewPriority.FAILING, origin=origin).headline
+        for origin in DecisionOrigin
+    }
+    assert len(set(lines.values())) == len(DecisionOrigin), (
+        f"two origins render the same failing line, so the dossier cannot tell them apart: {lines}"
+    )
+    assert "a model proposed" in lines[DecisionOrigin.MODEL]
+    assert "nobody sourced" in lines[DecisionOrigin.UNATTRIBUTED]
+    assert "the engineer stated" in lines[DecisionOrigin.USER]
+    # The one member that adds nothing, and the reason it is the one: a value a cited closed
+    # form computed is the case a reviewer is not being asked to look at.
+    assert lines[DecisionOrigin.DETERMINISTIC] == "padeye net tension: fails"
+
+    # And it is said once. The two priorities whose own sentence carries the origin must not
+    # repeat it — a line reading "rests on a value a model proposed on inputs a model
+    # proposed" is what a clause appended unconditionally produces.
+    passing = ScorecardEntry(name="shear", status=CheckStatus.PASS, detail="ok")
+    for priority in (ReviewPriority.MODEL_ASSUMPTION, ReviewPriority.UNATTRIBUTED_ASSUMPTION):
+        item = ReviewItem(entry=passing, priority=priority, origin=DecisionOrigin.MODEL)
+        assert item.headline.count("a model proposed") <= 1, item.headline
+        assert "on inputs" not in item.headline, item.headline
+
+
+def test_every_decision_origin_has_a_clause_of_its_own():
+    """A map keyed on an enumeration is a place a fifth member lands silently.
+
+    The headline reads the origin through a total map, so adding a member is a `KeyError` at
+    the one place that has to decide what to say about it rather than a line that quietly
+    says nothing.
+    """
+    from anvilate.review import _ORIGIN_CLAUSE
+
+    assert set(_ORIGIN_CLAUSE) == set(DecisionOrigin), (
+        "an origin is missing from the headline's map, so a check carrying it renders a line "
+        "that says nothing about where its inputs came from"
+    )

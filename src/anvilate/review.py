@@ -165,6 +165,30 @@ def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewP
     return ReviewPriority.ROUTINE
 
 
+#: How a review line says where a check's inputs came from.
+#:
+#: A TOTAL MAP over the enumeration, for the reason `_STATUS_RANK` in `scorecard.py` gives
+#: about itself: a fifth origin has to be a KeyError at the one place that decides, not a
+#: silent fall-through to "nothing to say about this one".
+#:
+#: `DETERMINISTIC` is the empty string on purpose and is the only member that gets it: the
+#: value was computed by a cited closed form, which is the case a reviewer is not being asked
+#: to look at, and a clause on every routine line is noise that makes the other three harder
+#: to see rather than easier.
+_ORIGIN_CLAUSE: dict[DecisionOrigin, str] = {
+    DecisionOrigin.USER: "on inputs the engineer stated",
+    DecisionOrigin.DETERMINISTIC: "",
+    DecisionOrigin.MODEL: "on inputs a model proposed",
+    DecisionOrigin.UNATTRIBUTED: "on inputs nobody sourced",
+}
+
+#: The two priorities whose own sentence already states the origin, so the clause would be
+#: said twice on one line. Everything else — a FAILING check above all — states it nowhere.
+_PRIORITY_STATES_THE_ORIGIN = frozenset(
+    {ReviewPriority.MODEL_ASSUMPTION, ReviewPriority.UNATTRIBUTED_ASSUMPTION}
+)
+
+
 class ReviewItem(BaseModel):
     """One line of a dossier: a check, why it is where it is, and who to ask about it."""
 
@@ -177,7 +201,18 @@ class ReviewItem(BaseModel):
 
     @property
     def headline(self) -> str:
-        """One line for a reviewer skimming: what it is and why it is here."""
+        """One line for a reviewer skimming: what it is, why it is here, and on whose word.
+
+        All four origins used to produce the identical line. `origin_detail` is a *caller-
+        supplied* string that defaults to empty, so a failing check resting on a value a
+        language model proposed read exactly like one resting on a cited closed form — and
+        `priority` carries the distinction for only two of the eight bands, neither of which
+        a FAILING or NOT_EVALUATED check can be in.
+
+        This module already found the same hole one level up: `summary()` says which
+        decisions a model proposed because "a value a language model suggested was visible
+        only to a reader who walked the items". Walking the items did not show it either.
+        """
         reason = {
             ReviewPriority.NOT_EVALUATED: "did not run — the check is not there",
             ReviewPriority.FAILING: "fails",
@@ -190,8 +225,10 @@ class ReviewItem(BaseModel):
             ReviewPriority.OVER_MARGIN: "passes above its band — possibly over-designed",
             ReviewPriority.ROUTINE: "passes",
         }[self.priority]
+        clause = "" if self.priority in _PRIORITY_STATES_THE_ORIGIN else _ORIGIN_CLAUSE[self.origin]
+        attributed = f" {clause}" if clause else ""
         suffix = f" ({self.origin_detail})" if self.origin_detail else ""
-        return f"{self.entry.name}: {reason}{suffix}"
+        return f"{self.entry.name}: {reason}{attributed}{suffix}"
 
 
 def artifact_digest(scorecard: Scorecard, *, toolchain: str) -> str:
