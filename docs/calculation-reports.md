@@ -112,6 +112,20 @@ Where a formula needs a value from a copyrighted table — an allowable stress, 
 chart-read coefficient — you supply it, and the report records it as user-supplied
 alongside the clause that consumed it.
 
+## A margin summary with no margins in it
+
+The condensed table at the foot of a report has a Safety factor column and a Required
+column, and most checks on an ordinary document have neither: a material resolution, an
+interface resolution, a classification, a tier that did not run. In the HTML grid an em dash
+under a numeric heading reads correctly. The text form put the same two cells into prose —
+`material resolution: — vs — required` — and on a bracket that is *every* row, nine lines of
+it under a heading that says Margin summary.
+
+The rows stay, because a check missing from the summary reads as one whose margin was not
+worth showing, and this tool reports what did not run rather than leaving it out. A row with
+neither figure now says `no safety factor to compare` instead of comparing one absence with
+another.
+
 ## Checks that have no derivation
 
 A check that does not declare a derivation still appears. It renders its inputs,

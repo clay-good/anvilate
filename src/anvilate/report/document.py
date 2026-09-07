@@ -77,6 +77,13 @@ _STATUS_LABEL = {
 #:
 #: The three words mean what they say and only what they say: a formula is not here and
 #: nobody has said whether one is owed.
+#: What a numeric cell of the margin summary says when there is no number for it.
+#:
+#: Named because the text rendering has to ask whether a row has any figures at all, and
+#: comparing against a bare em dash somewhere far from where it was written is how the two
+#: drift.
+_NO_FIGURE = "—"
+
 _FALLBACK_LABEL = "derivation not rendered"
 
 #: The same label for a check that HAS declared, by the kind of absence it declared.
@@ -363,7 +370,15 @@ class CalculationReport(StatableModel):
         out.append("Margin summary")
         out.append("--------------")
         for name, factor, required, verdict in self._summary_rows():
-            out.append(f"  {verdict:<14} {name}: {factor} vs {required} required")
+            # A row with neither figure is most of this table on an ordinary document: a
+            # resolution check, a classification, a tier that did not run. The grid form
+            # below reads an em dash in a column headed "Safety factor" correctly; the text
+            # form put the same cell into a sentence, and nine rows of "— vs — required"
+            # under a heading that says Margin summary is a table with no margins in it.
+            if factor == _NO_FIGURE and required == _NO_FIGURE:
+                out.append(f"  {verdict:<14} {name}: no safety factor to compare")
+            else:
+                out.append(f"  {verdict:<14} {name}: {factor} vs {required} required")
         governing = self.governing()
         if governing is not None:
             out.append(f"  governing check: {governing.name}")
@@ -454,7 +469,7 @@ class CalculationReport(StatableModel):
         rows = []
         for section in self.sections:
             entry = section.entry
-            factor = "—" if entry.safety_factor is None else f"{entry.safety_factor:.2f}"
+            factor = _NO_FIGURE if entry.safety_factor is None else f"{entry.safety_factor:.2f}"
             # A check with a two-sided band shows the BAND here, not just its floor. The
             # margin summary is the condensed table a reviewer scans, and an OVER_MARGIN
             # row read "6.67 vs 2.00 required" — the limit it satisfied, while the 4.00 it
@@ -463,7 +478,7 @@ class CalculationReport(StatableModel):
             # exists to prevent. Shown whenever an upper bound was declared, so what the
             # column reports does not depend on which side of the band the check landed.
             if entry.required_safety_factor is None:
-                required = "—"
+                required = _NO_FIGURE
             elif entry.upper_safety_factor is None:
                 required = f"{entry.required_safety_factor:.2f}"
             else:

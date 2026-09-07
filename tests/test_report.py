@@ -1640,3 +1640,55 @@ def test_the_sources_a_signed_predicate_states_are_bounded():
         source_record(("ASM Handbook",) * (_MAX_COLLECTION_ITEMS + 1))
     with pytest.raises(ValidationError, match="does not state a string longer"):
         source_record(("A" * (_MAX_STRING_LENGTH + 1),))
+
+
+def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence():
+    """A grid cell and a sentence are not the same rendering of the same absence.
+
+    `_summary_rows` serves both forms. In the HTML table an em dash under a column headed
+    "Safety factor" reads correctly and conventionally. The text form put the same two cells
+    into prose — `material resolution: — vs — required` — and on an ordinary document that is
+    *every* row: a resolution check, a classification, a tier that did not run. Nine lines of
+    it under a heading that says **Margin summary** is a table with no margins in it.
+
+    Both halves are asserted, because dropping the rows is the other wrong answer: a check
+    missing from the summary reads as one whose margin was not worth showing, and this
+    library reports what did not run rather than leaving it out.
+    """
+    from pathlib import Path
+
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    root = Path(__file__).resolve().parent.parent
+    bracket = load_spec_yaml((root / "examples" / "nema23_bracket.spec.yaml").read_text())
+    padeye = load_spec_yaml((root / "examples" / "padeye.spec.yaml").read_text())
+
+    for spec, expected in ((bracket, 0), (padeye, 2)):
+        card = screen_spec(spec)
+        report = CalculationReport(
+            title="probe", sections=tuple(ReportSection(entry=e) for e in card.entries)
+        )
+        text = report.to_text()
+        summary = text[text.index("Margin summary") :].splitlines()
+        assert not any("— vs —" in line for line in summary), (
+            f"a margin summary line compares one absent figure with another: {summary}"
+        )
+        # Every check is still in the table, and the ones that DO carry margins still read
+        # as a comparison.
+        rows = [line for line in summary if line.startswith("  ") and ": " in line]
+        assert len(rows) >= len(card.entries), "the summary dropped a check rather than showing it"
+        assert sum(1 for line in rows if " vs " in line and "required" in line) == expected
+        assert all(
+            "no safety factor to compare" in line or " vs " in line
+            for line in rows
+            if "governing check" not in line and "overall" not in line
+        )
+
+    # The grid form keeps the dash, which is what a numeric column under a header wants.
+    html = CalculationReport(
+        title="probe",
+        sections=tuple(ReportSection(entry=e) for e in screen_spec(padeye).entries),
+    ).to_html()
+    table = html[html.index('<table class="summary">') :]
+    assert "<td>—</td><td>—</td>" in table, "the table lost the empty-cell rendering"
