@@ -4581,8 +4581,18 @@ def test_every_model_the_library_reads_back_is_bounded_or_says_why_not():
     ], f"a reader the census cannot resolve to a class appeared or moved: {sorted(unresolved)}"
 
 
-def test_no_public_function_answers_a_wrong_shaped_document_with_pythons_own_error():
+def test_no_public_function_answers_a_wrong_shaped_first_argument_with_pythons_own_error():
     """A document that reads back as a list, a bare string or `null` is an ordinary mistake.
+
+    **The first argument only, and the name says so.** The version of this that said "no
+    public function" checked exactly what it checks now: 65 public functions take a mapping
+    or a sequence at a *later* position and it never asked one of them. Reading that premise
+    against that detector — this repository's highest-yield sweep — found three real defects
+    in an afternoon: a loads mapping keyed by the member names reporting a design with no
+    load on it, an origins mapping keyed by strings sorting a model-driven check as routine,
+    and a distributions mapping answering `'str' object has no attribute 'sample'`. Probing a
+    later argument needs a valid earlier one, which is per-function work; the premise is
+    narrowed to what is actually checked rather than left overclaiming.
 
     `json.load` on the wrong file gives a list. A truncated write gives a mapping missing a
     key. Every one of those is a thing a user does, and this library's answer to a thing a

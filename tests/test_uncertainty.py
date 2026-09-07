@@ -294,3 +294,29 @@ def test_a_fragile_check_says_so_where_a_reader_reads_it():
     card = Scorecard(entries=(entry, solid))
     assert "1 fragile" in str(card)
     assert "fragile" not in str(Scorecard(entries=(solid,)))
+
+
+def test_a_distribution_mapping_whose_values_are_not_distributions_is_refused():
+    """`{"width": "wide"}` answered `'str' object has no attribute 'sample'`.
+
+    Python's sentence about this module's internals, raised from inside the sampling loop,
+    for a caller's ordinary mistake — from a function that refuses a bad `samples`, a bad
+    `coverage` and an empty mapping with sentences of its own, two lines above. `inputs` is
+    the argument most likely to be assembled somewhere else and handed over.
+    """
+    with pytest.raises(ValueError, match="maps a name to an input distribution") as refused:
+        sample_margin(lambda v: 1.0, {"width": "wide"}, required=1.0, seed=1, samples=10)
+    message = str(refused.value)
+    assert "'width'" in message, "the refusal does not name the key the caller got wrong"
+    for kind in ("Normal", "Uniform", "Symmetric"):
+        assert kind in message, f"the refusal does not name {kind}, which the caller needs"
+
+    # The control, at the same call: a real distribution still samples.
+    result = sample_margin(
+        lambda v: v["width"],
+        {"width": Normal(mean=2.0, std=0.1)},
+        required=1.0,
+        seed=1,
+        samples=64,
+    )
+    assert result.mean == pytest.approx(2.0, abs=0.1)

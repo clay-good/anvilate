@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from math import isfinite, sqrt
 from random import Random
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import ConfigDict, model_validator
 
@@ -271,6 +271,18 @@ def sample_margin(
         raise ValueError("sample_margin needs at least one input distribution")
 
     dists = dict(inputs)
+    # A value that is not a distribution answered with `'str' object has no attribute
+    # 'sample'` from inside the sampling loop — Python's sentence about this module's
+    # internals, for a caller's ordinary mistake, from a function that refuses a bad
+    # `samples`, a bad `coverage` and an empty mapping with sentences of its own two lines
+    # above. The mapping is the argument most likely to be assembled from somewhere else.
+    for name, distribution in dists.items():
+        if not isinstance(distribution, get_args(InputDistribution)):
+            raise ValueError(
+                f"inputs maps a name to an input distribution and {name!r} is "
+                f"{type(distribution).__name__}; the distributions are "
+                f"{', '.join(kind.__name__ for kind in get_args(InputDistribution))}"
+            )
     names = sorted(dists)
     rng = Random(seed)
 
