@@ -1749,7 +1749,7 @@ def test_show_work_prints_the_worked_calculation_the_json_already_carried():
     # and why.
     assert "material resolution" in worked
     assert "[no formula to render — a lookup, not a calculation: " in worked
-    assert "there is no arithmetic between the lookup and the verdict]" in worked
+    assert "the identifier is looked for in the databases this screen resolves through]" in worked
 
 
 def test_the_shell_and_the_report_render_one_derivation_through_one_renderer():

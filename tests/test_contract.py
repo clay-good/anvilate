@@ -4657,3 +4657,53 @@ def test_no_public_function_answers_a_wrong_shaped_document_with_pythons_own_err
         "these answer an ordinary wrong-shaped document with Python's own error rather than "
         f"with a sentence, and a traceback is not a refusal: {complaints}"
     )
+
+
+def test_no_check_composes_the_same_absence_sentence_at_two_sites():
+    """A sentence written by hand at each site is one that drifts at all but one of them.
+
+    `Underived.reason` is the sentence a reviewer reads under a check that shows no worked
+    calculation, and it was composed inline. `standards/effectivity.py` wrote the same one at
+    **five** sites — every arm of one check, saying the same fact about the same check
+    whichever way it comes out — and `screening.py` wrote another at two. This library has
+    the answer already: five surfaces composed the same refusal line by hand until
+    `_models._refusal_line` became the one place, and the census that holds them to it is the
+    more reusable half of that fix.
+
+    The floor is what keeps it from becoming an assertion about nothing: it counts the
+    reasons the library actually states, so a rewrite that deletes them all fails here
+    instead of passing.
+    """
+    import ast
+    from collections import defaultdict
+
+    import anvilate
+
+    src = Path(anvilate.__file__).parent
+    sites: dict[str, list[str]] = defaultdict(list)
+    for path in sorted(src.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Underived"
+            ):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "reason":
+                    continue
+                try:
+                    stated = ast.literal_eval(keyword.value)
+                except ValueError:
+                    continue  # an f-string or a name: not a hand-composed literal
+                if isinstance(stated, str):
+                    sites[stated].append(f"{path.relative_to(src)}:{node.lineno}")
+
+    assert len(sites) >= 15, (
+        f"the walk found only {len(sites)} stated reasons; it is reading almost no source"
+    )
+    repeated = {f"{stated[:60]}…": where for stated, where in sites.items() if len(where) > 1}
+    assert not repeated, (
+        "these sentences are composed by hand at more than one site; name each one once and "
+        f"use the name, the way `_models._refusal_line` is used: {repeated}"
+    )

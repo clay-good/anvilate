@@ -366,6 +366,20 @@ class DesignBasis(RevalidatedModel):
         return tuple(out)
 
 
+#: Why every design-basis check shows no worked calculation.
+#:
+#: Written once because all five arms of the check said it, in the same words, five times.
+#: The sentence is the same fact about the same check whichever way it comes out, and a
+#: sentence composed by hand at each site is one that drifts at four of them.
+_A_CONSISTENCY_VERDICT_OVER_CITATIONS = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason=(
+        "a consistency verdict over the citations a bundle carries — every reference names "
+        "an edition, and no standard appears at two. No quantity is calculated"
+    ),
+)
+
+
 def design_basis_scorecard(
     name: str,
     *,
@@ -401,14 +415,7 @@ def design_basis_scorecard(
                 "whose citations were not collected, not one that agrees"
             ),
             reference="standards effectivity",
-            underived=Underived(
-                kind=DerivationAbsence.LOOKUP,
-                reason=(
-                    "a consistency verdict over the citations a bundle carries — every "
-                    "reference names an edition, and no standard appears at two. No quantity "
-                    "is calculated"
-                ),
-            ),
+            underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
         )
     citations = [parse_citation(text) for text in references]
     editionless = [text for text, c in zip(references, citations, strict=True) if c is None]
@@ -470,14 +477,7 @@ def design_basis_scorecard(
             status=CheckStatus.FAIL,
             detail="; ".join([*conflicts, *detail_parts]),
             reference="standards effectivity",
-            underived=Underived(
-                kind=DerivationAbsence.LOOKUP,
-                reason=(
-                    "a consistency verdict over the citations a bundle carries — every "
-                    "reference names an edition, and no standard appears at two. No quantity "
-                    "is calculated"
-                ),
-            ),
+            underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
         )
     if editionless:
         shown = ", ".join(repr(t) for t in editionless[:3])
@@ -491,14 +491,7 @@ def design_basis_scorecard(
                 f"An unversioned clause identifies a paragraph in a book nobody named."
             ),
             reference="standards effectivity",
-            underived=Underived(
-                kind=DerivationAbsence.LOOKUP,
-                reason=(
-                    "a consistency verdict over the citations a bundle carries — every "
-                    "reference names an edition, and no standard appears at two. No quantity "
-                    "is calculated"
-                ),
-            ),
+            underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
         )
     if unread_pins:
         known = sorted(cited_standards | set(WRITTEN_AGAINST))
@@ -513,14 +506,7 @@ def design_basis_scorecard(
                 f"Designations available to pin: {', '.join(known)}"
             ),
             reference="standards effectivity",
-            underived=Underived(
-                kind=DerivationAbsence.LOOKUP,
-                reason=(
-                    "a consistency verdict over the citations a bundle carries — every "
-                    "reference names an edition, and no standard appears at two. No quantity "
-                    "is calculated"
-                ),
-            ),
+            underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
         )
     return ScorecardEntry(
         name=name,
@@ -532,12 +518,5 @@ def design_basis_scorecard(
             ]
         ),
         reference="standards effectivity",
-        underived=Underived(
-            kind=DerivationAbsence.LOOKUP,
-            reason=(
-                "a consistency verdict over the citations a bundle carries — every "
-                "reference names an edition, and no standard appears at two. No quantity "
-                "is calculated"
-            ),
-        ),
+        underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
     )

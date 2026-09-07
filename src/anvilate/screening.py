@@ -497,10 +497,9 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             underived=Underived(
                 kind=DerivationAbsence.NUMERIC_RESULT,
                 reason=(
-                    "the arithmetic is the stack-up itself — a sum or a root-sum-square over "
-                    "the chain's links, one term per link — and the analysis carries it. A "
-                    "single substituted line over a chain of arbitrary length is not one a "
-                    "reader can check; the chain's own table is"
+                    "the arithmetic is the stack-up itself — a sum or a root-sum-square "
+                    "over the chain's links, one term per link — and a single substituted "
+                    "line over a chain of arbitrary length is not one a reader can check"
                 ),
             ),
         )
@@ -664,13 +663,7 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                         f"{_near_misses(declared, known)} The class governs every dimension "
                         "the drawing does not tolerance individually."
                     ),
-                    underived=Underived(
-                        kind=DerivationAbsence.LOOKUP,
-                        reason=(
-                            "the declared class is looked up in the ISO 2768 classes this "
-                            "library carries; a name is either one of them or it is not"
-                        ),
-                    ),
+                    underived=_A_CLASS_IS_ONE_OF_THE_TABLES_OR_IT_IS_NOT,
                 )
             )
         else:
@@ -682,13 +675,7 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                         f"{declared!r} resolves to ISO 2768 {resolved.value}, the class "
                         "governing every dimension not toleranced individually"
                     ),
-                    underived=Underived(
-                        kind=DerivationAbsence.LOOKUP,
-                        reason=(
-                            "the declared class is looked up in the ISO 2768 classes this "
-                            "library carries; a name is either one of them or it is not"
-                        ),
-                    ),
+                    underived=_A_CLASS_IS_ONE_OF_THE_TABLES_OR_IT_IS_NOT,
                 )
             )
     if spec.acceptance.max_displacement is not None:
@@ -815,12 +802,20 @@ def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
         detail=f"{len(spec.load_cases)} load cases, every force-carrying one classified",
         underived=Underived(
             kind=DerivationAbsence.LOOKUP,
-            reason=(
-                "each load case is read for a declared nature and counted; there is no "
-                "arithmetic between the count and the verdict"
-            ),
+            reason="each load case is read for a declared nature and counted",
         ),
     )
+
+
+#: Why the general-tolerance-class check shows no worked calculation.
+#:
+#: Written once because both arms of the check said it, in the same words, twice — which is
+#: the shape this repository keeps finding wherever a sentence is composed by hand at each
+#: site rather than named at one.
+_A_CLASS_IS_ONE_OF_THE_TABLES_OR_IT_IS_NOT = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the declared class is looked up in the ISO 2768 classes this library carries",
+)
 
 
 #: Why a resolution check shows no worked calculation.
@@ -832,11 +827,10 @@ def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
 #: which are the ones on every card a user reads, said nothing at all.
 _A_RECORD_IS_FOUND_OR_IT_IS_NOT = Underived(
     kind=DerivationAbsence.LOOKUP,
-    reason=(
-        "the identifier the spec states is looked for in the databases this screen resolves "
-        "through; it is found or it is not, and there is no arithmetic between the lookup "
-        "and the verdict"
-    ),
+    # Short on purpose. A card carries one of these per interface as well as one for the
+    # material, so the sentence is read three or ten times on one page rather than once —
+    # which a property test cannot see and reading the rendered card can.
+    reason="the identifier is looked for in the databases this screen resolves through",
 )
 
 
