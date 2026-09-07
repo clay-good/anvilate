@@ -71,10 +71,10 @@ from .gdt import FeatureControlFrame
 from .loads import CombinationEvidence
 from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
-from .scorecard import CheckStatus, Scorecard
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, dump_spec_yaml
 from .standards.effectivity import DesignBasis, design_basis_scorecard
-from .units import Quantity
+from .units import Quantity, UnitSystem
 from .verification import VerificationPlan
 
 __all__ = [
@@ -215,6 +215,29 @@ class BundleDocument(BaseModel):
     geometric_tolerances: tuple[str, ...] | None = Field(
         default=None, serialization_alias="geometricTolerances", alias="geometricTolerances"
     )
+
+
+def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
+    """One check in a bundle document: its headline, then its work or its stated absence.
+
+    Both check blocks in this document render it, and they rendered it in the same three
+    lines written twice — which is how one of them came to print the work and neither of
+    them the absence.
+
+    The three other surfaces that print a check — ``anvilate check --show-work`` and both
+    forms of the calculation report — put `[fallback_label]` where there is no work. This
+    is the fourth, and the one whose reader has nothing else.
+    """
+    from .report import ReportSection
+
+    section = ReportSection(entry=entry)
+    lines = [f"  {section.headline(system=system)}"]
+    worked = section.worked_lines(system=system)
+    if worked:
+        lines.extend(f"  {line}" for line in worked)
+    else:
+        lines.append(f"  [{section.fallback_label}]")
+    return tuple(lines)
 
 
 def combinations_for(spec: DesignSpec) -> CombinationEvidence | None:
@@ -630,14 +653,11 @@ class BundleSections(RevalidatedModel):
         card = self.callout_card()
         if card is None or not card.entries:
             return ()
-        from .report import ReportSection
 
         system = self.spec.units.value if self.spec is not None and self.spec.units else None
         lines = ["callout checks:"]
         for entry in card.entries:
-            section = ReportSection(entry=entry)
-            lines.append(f"  {section.headline(system=system)}")
-            lines.extend(f"  {line}" for line in section.worked_lines(system=system))
+            lines.extend(_check_block(entry, system=system))
         return tuple(lines)
 
     def _check_lines(self) -> tuple[str, ...]:
@@ -654,19 +674,24 @@ class BundleSections(RevalidatedModel):
         also what the calculation report and ``anvilate check --show-work`` print, so one
         derivation cannot be described three ways.
 
+        **The absence was described three ways, though.** All three of those surfaces print
+        `[fallback_label]` where a check has no work — an exemption, a lookup, a table
+        comparison — and this one printed nothing, so a reviewer holding only the bundle saw
+        two checks with their arithmetic and a third with a bare verdict, and no statement
+        that the third has no arithmetic to show. That statement is what `Underived` exists
+        to carry, and its docstring says it rides on the entry "so it travels into the
+        evidence bundle".
+
         **In the units the spec declares**, which this bundle carries. It did not, so a
         document stating `units: US` was handed to its reviewer with every formula
         substituted in millimetres and megapascals — and the spec saying otherwise printed
         forty lines further down the same file.
         """
-        from .report import ReportSection
 
         system = self.spec.units.value if self.spec is not None and self.spec.units else None
         lines: list[str] = []
         for entry in self.scorecard.entries:
-            section = ReportSection(entry=entry)
-            lines.append(f"  {section.headline(system=system)}")
-            lines.extend(f"  {line}" for line in section.worked_lines(system=system))
+            lines.extend(_check_block(entry, system=system))
         return tuple(lines)
 
     def spec_block(self) -> tuple[str, ...]:

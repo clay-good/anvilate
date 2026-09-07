@@ -1566,3 +1566,36 @@ def test_a_basis_that_cannot_resolve_carries_no_evidence_rather_than_raising():
     with _pytest.raises(ValueError):
         seismic.combination_evidence()
     assert combinations_for(seismic) is None
+
+
+def test_the_exported_document_states_a_check_s_absence_of_work_and_not_only_its_work():
+    """A reviewer holding only the bundle saw a bare verdict where a check has no formula.
+
+    The document's own docstring says its reader "receives **only the bundle** and re-runs
+    the analysis", which is why the worked calculations were added to it. A check that has
+    none was then the odd one out: two checks with their arithmetic, and a third with a
+    verdict and nothing — no statement that there is no arithmetic to show. Every other
+    surface that prints a check says it.
+    """
+    from pathlib import Path
+
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    root = Path(__file__).resolve().parent.parent
+    spec = load_spec_yaml((root / "examples" / "padeye.spec.yaml").read_text(encoding="utf-8"))
+    card = screen_spec(spec)
+    document = BundleSections(scorecard=card, spec=spec).render_document()
+
+    # The check that has work still shows it, so this is not a test of an empty rendering.
+    assert "σ_t = P / ((W − d) · t)" in document
+
+    worked = [e for e in card.entries if e.derivation is not None]
+    stated = [e for e in card.entries if e.derivation is None and e.underived is not None]
+    assert worked and stated, "the corpus no longer holds one of each kind of check"
+    for entry in stated:
+        assert entry.underived is not None
+        assert entry.underived.reason in document, (
+            f"{entry.name!r} declares why it shows no formula and the exported document "
+            f"does not carry it"
+        )

@@ -4707,3 +4707,56 @@ def test_no_check_composes_the_same_absence_sentence_at_two_sites():
         "these sentences are composed by hand at more than one site; name each one once and "
         f"use the name, the way `_models._refusal_line` is used: {repeated}"
     )
+
+
+def test_every_surface_that_shows_a_check_s_work_also_shows_its_stated_absence():
+    """`worked_lines` returns nothing for a check that has none, and nothing is not a line.
+
+    Four surfaces render a check with its work: `anvilate check --show-work`, both forms of
+    the calculation report, and the exported bundle document. Three of them put
+    `[fallback_label]` where there is no work; the bundle printed nothing, so a reviewer
+    holding **only the bundle** — which is that document's stated reader — saw two checks
+    with their arithmetic and a third with a bare verdict and no statement that it has no
+    arithmetic to show. `Underived`'s own docstring says it rides on the entry "so it travels
+    into the evidence bundle".
+
+    Stated over the source rather than over one document, because the pairing is what keeps
+    drifting: `bundle.py`'s two check blocks were three identical lines written twice, and
+    that is how one of them came to print the work and neither the absence.
+    """
+    import ast
+
+    import anvilate
+
+    src = Path(anvilate.__file__).parent
+    shows_work, also_shows_absence = [], []
+    for path in sorted(src.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            # Attribute ACCESSES, not the unparsed text. The first version of this read
+            # `"fallback_label" in ast.unparse(node)` and passed its own mutation, because
+            # the docstring of the function it was asking about names the label. A gate
+            # satisfiable by prose is satisfied by prose.
+            reached = {inner.attr for inner in ast.walk(node) if isinstance(inner, ast.Attribute)}
+            # The definition itself is not a surface: it is what the surfaces call.
+            if node.name == "worked_lines" or "worked_lines" not in reached:
+                continue
+            where = f"{path.relative_to(src)}.{node.name}"
+            shows_work.append(where)
+            if "fallback_label" in reached:
+                also_shows_absence.append(where)
+
+    # Named, not counted. Three call `worked_lines`; the HTML section renders its formulas
+    # through `formula_to_mathml` instead and already prints the label, so it is not in this
+    # list and is not missing from it either.
+    assert sorted(shows_work) == [
+        "bundle.py._check_block",
+        "cli.py._render",
+        "report/document.py.to_text",
+    ], f"a surface that renders a check's work appeared or moved: {sorted(shows_work)}"
+    silent = sorted(set(shows_work) - set(also_shows_absence))
+    assert not silent, (
+        "these render a check's worked calculation and render nothing at all where the check "
+        f"has none, so a declared absence reaches their reader as silence: {silent}"
+    )
