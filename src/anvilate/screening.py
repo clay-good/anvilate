@@ -793,28 +793,84 @@ def _combination_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
-def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
-    """The declared GD&T frames, and the fact that nothing screens them yet.
+def _illegal_frames(spec: DesignSpec) -> list[str]:
+    """Declared controls that are not legal feature control frames whatever they are on.
 
-    ``None`` when the spec declares none. Otherwise NOT_EVALUATED: a spec's
-    `GeometricTolerance` is a different type from the semantic layer's
-    `anvilate.gdt.FeatureControlFrame` that could check it, and nothing converts one to the
-    other, so a declared position control is carried into the evidence record and screened by
-    nothing. Counting them in the provenance roll-up is not looking at them.
+    The reason this entry used to give was that "a declared control is not bound to the
+    semantic GD&T layer that could check it", and the binding was the missing half: a spec's
+    `GeometricTolerance` validates a positive tolerance, the form/datum rules and duplicate
+    letters, and `anvilate.gdt.FeatureControlFrame` — in this package, on the same
+    characteristics — additionally refuses **more than three datum references**, because
+    three constrain six degrees of freedom and a fourth is over-constraint. A document could
+    declare `position 0.2 mm to A|B|C|D` and screen with nothing said about it.
+
+    **Every frame is offered as a feature of size, which is the permissive assumption.** The
+    rules that turn on feature type — Ⓜ, a projected zone, a Ø zone — all *require* one, so
+    a frame the layer refuses even under that assumption is refused under every one, and the
+    finding holds without the document ever saying what the tagged feature is. Which is the
+    same discipline the envelope check follows: only what is true in every case is a failure.
+    """
+    from .gdt import Characteristic, DatumReference, FeatureControlFrame, FeatureType, FrameModifier
+
+    illegal = []
+    for control in spec.geometric_tolerances:
+        try:
+            characteristic = Characteristic(control.characteristic.value.replace("_", " "))
+        except ValueError:
+            # A characteristic the semantic layer does not carry is not an illegal frame,
+            # it is one this check cannot speak about. The entry's reason covers it.
+            continue
+        try:
+            FeatureControlFrame(
+                characteristic=characteristic,
+                tolerance=control.tolerance,
+                feature_type=FeatureType.FEATURE_OF_SIZE,
+                datums=tuple(DatumReference(letter=letter) for letter in control.datums),
+                modifiers=(FrameModifier.DIAMETER,) if control.diametral else (),
+            )
+        except ValueError as refused:
+            # pydantic wraps the validator's sentence in a header and a tail that repeats
+            # the whole input dict. The sentence is the part written for a reader; the tail
+            # would put the frame's own fields on the card twice.
+            reason = str(refused).partition("Value error, ")[2] or str(refused)
+            illegal.append(f"{control}: {reason.partition(' [type=')[0].splitlines()[0].strip()}")
+    return illegal
+
+
+def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
+    """The declared GD&T frames: their legality, and the part nothing screens yet.
+
+    ``None`` when the spec declares none. A frame the semantic layer refuses is a FAIL — see
+    :func:`_illegal_frames`. Otherwise NOT_EVALUATED, because what is left needs two things
+    a document does not give: the tagged feature's *type*, which decides whether Ⓜ and a Ø
+    zone are legal on it, and built geometry, which is what a tolerance zone is checked
+    against. Counting the controls in the provenance roll-up is not looking at them.
     """
     if not spec.geometric_tolerances:
         return None
     controls = ", ".join(
         sorted({control.characteristic.value for control in spec.geometric_tolerances})
     )
+    illegal = _illegal_frames(spec)
+    if illegal:
+        return ScorecardEntry(
+            name="geometric tolerance",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the spec declares {len(spec.geometric_tolerances)} geometric tolerance(s) "
+                f"({controls}), and {len(illegal)} of them is not a legal feature control "
+                f"frame whatever it is applied to: " + "; ".join(illegal)
+            ),
+        )
     return ScorecardEntry(
         name="geometric tolerance",
         status=CheckStatus.NOT_EVALUATED,
         detail=(
             f"the spec declares {len(spec.geometric_tolerances)} geometric tolerance(s) "
-            f"({controls}), and nothing screened them: a declared control is not bound to "
-            "the semantic GD&T layer that could check it, and a zone is checked against "
-            "built geometry this package does not generate"
+            f"({controls}); each is a legal feature control frame, and nothing screened the "
+            "rest: whether Ⓜ or a Ø zone is legal turns on the tagged feature being a "
+            "feature of size, which the document does not say, and a zone is checked "
+            "against built geometry this package does not generate"
         ),
     )
 

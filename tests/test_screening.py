@@ -1021,6 +1021,93 @@ def test_a_document_with_no_solid_to_weigh_says_so_and_states_no_mass():
     assert "weighs" in stated.detail
 
 
+def _control(**overrides):
+    from anvilate.spec.ir import GeometricCharacteristic, GeometricTolerance
+
+    fields = {
+        "characteristic": GeometricCharacteristic.POSITION,
+        "tolerance": _q("0.2 mm"),
+        "feature": "hole_a",
+        "datums": ["A", "B", "C"],
+    }
+    fields.update(overrides)
+    return GeometricTolerance(**fields)
+
+
+def test_a_declared_control_the_gdt_layer_calls_illegal_is_a_failure():
+    """The entry said "a declared control is not bound to the semantic GD&T layer that could
+    check it", and the binding was the missing half rather than an excuse.
+
+    A spec's `GeometricTolerance` validates a positive tolerance, the form/datum rules and
+    duplicate letters. `anvilate.gdt.FeatureControlFrame` — in this package, on the same
+    characteristics — also refuses more than three datum references, because three constrain
+    six degrees of freedom. `position 0.2 mm to A|B|C|D` parsed, screened, and was carried
+    into the evidence record with nothing said about it.
+    """
+    spec = _lug_spec(geometric_tolerances=[_control(datums=["A", "B", "C", "D"])])
+    entry = next(e for e in screen_spec(spec).entries if e.name == "geometric tolerance")
+    assert entry.status is CheckStatus.FAIL
+    assert "at most three references" in entry.detail
+    assert "A|B|C|D" in entry.detail, "the entry does not say which control is illegal"
+    # pydantic's tail repeats the whole input dict; a card is not the place for it.
+    assert "[type=value_error" not in entry.detail
+
+
+def test_a_legal_control_is_still_not_screened_and_says_what_is_missing():
+    """Three datums and a Ø zone is a legal frame. What is left needs the tagged feature's
+    *type* — which decides whether Ⓜ and a Ø zone are legal on it — and built geometry."""
+    spec = _lug_spec(geometric_tolerances=[_control(diametral=True)])
+    entry = next(e for e in screen_spec(spec).entries if e.name == "geometric tolerance")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "each is a legal feature control frame" in entry.detail
+    assert "feature of size" in entry.detail
+
+
+def test_frames_are_offered_as_a_feature_of_size_so_a_refusal_holds_for_any_feature():
+    """The permissive assumption, and the reason a finding here needs no feature type.
+
+    Every rule that turns on feature type — Ⓜ, a projected zone, a Ø zone — *requires* a
+    feature of size, so a frame refused under that assumption is refused under every one. If
+    this offered a surface instead, a Ø position control on a hole would be reported as
+    illegal, which is a verdict against a document that is right.
+    """
+    from anvilate.gdt import (
+        Characteristic,
+        DatumReference,
+        FeatureControlFrame,
+        FeatureType,
+        FrameModifier,
+    )
+
+    datums = tuple(DatumReference(letter=letter) for letter in "ABC")
+    with pytest.raises(ValueError, match="surface has no"):
+        FeatureControlFrame(
+            characteristic=Characteristic.POSITION,
+            tolerance=_q("0.2 mm"),
+            feature_type=FeatureType.SURFACE,
+            datums=datums,
+            modifiers=(FrameModifier.DIAMETER,),
+        )
+    # And the screen does not report that document, because it does not assume a surface.
+    spec = _lug_spec(geometric_tolerances=[_control(diametral=True)])
+    entry = next(e for e in screen_spec(spec).entries if e.name == "geometric tolerance")
+    assert entry.status is not CheckStatus.FAIL
+
+
+def test_every_characteristic_a_spec_can_declare_reaches_the_semantic_layer():
+    """The conversion is by name, so a characteristic the two enums spell differently would
+    be skipped in silence — and skipping is the behaviour that was being fixed."""
+    from anvilate.gdt import Characteristic
+    from anvilate.spec.ir import GeometricCharacteristic
+
+    unmapped = [
+        member.value
+        for member in GeometricCharacteristic
+        if member.value.replace("_", " ") not in {c.value for c in Characteristic}
+    ]
+    assert unmapped == [], f"these declare a control the legality check cannot read: {unmapped}"
+
+
 def _beam_member_params(**overrides) -> dict:
     from anvilate.analysis import CrossSection
 

@@ -219,7 +219,8 @@ That is the whole rule. What it means field by field:
 | `manufacturing.tolerance_class` | resolved like any other identifier |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
-| `constraints.max_mass`, `constraints.max_cost`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `constraints.max_mass`, `constraints.max_cost` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `geometric_tolerances` | `FAIL` when a declared control is not a legal feature control frame whatever it is applied to — over three datum references, say. Otherwise `NOT_EVALUATED`: the remaining rules turn on the tagged feature's type, which the document does not state, and a zone is checked against built geometry |
 | `acceptance.max_displacement` | compared to the deflections the card computed: `FAIL` when one is over it, `PASS` when the single element's is under it. `NOT_EVALUATED` for a whole-structure element, where only members declaring their own deflection limit compute one, and when no check computed a deflection at all |
 | `constraints.envelope` | `FAIL` when the declared solid cannot fit **in any orientation** — its volume over the envelope's, or its longest edge over the envelope's space diagonal. Otherwise `NOT_EVALUATED`, saying whether it fits axis-aligned |
 | `manufacturing.min_wall` | `FAIL` when a wall the element declares is under it — a part described with a 20 mm plate and a 25 mm process minimum cannot be made. `NOT_EVALUATED` when every declared wall clears it, naming them: a document states the walls its checks need, not every wall of the part |
@@ -294,7 +295,22 @@ document's 0.5 mm acceptance criterion screened as a gap. The value is read off 
 structured `Comparison` rather than out of its rendered sentence, which is written in
 whatever unit system the reader asked for. A `structure` stays `NOT_EVALUATED` with the
 count: only members declaring their own limit compute a deflection, so the quiet ones are
-what the card cannot see — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
+what the card cannot see.
+
+`geometric_tolerances` said "a declared control is not bound to the semantic GD&T layer that
+could check it", and the binding was the missing half rather than an excuse for it. A spec's
+`GeometricTolerance` validates a positive tolerance, the form/datum rules and duplicate
+letters; `anvilate.gdt.FeatureControlFrame` — in this package, on the same characteristics —
+also refuses **more than three datum references**, because three constrain six degrees of
+freedom and a fourth is over-constraint. `position 0.2 mm to A|B|C|D` parsed, screened, and
+went into the evidence record with nothing said about it. It is a `FAIL` now.
+
+**Every frame is offered to that layer as a feature of size, which is the permissive
+assumption.** The rules that turn on feature type — Ⓜ, a projected zone, a Ø zone — all
+*require* one, so a frame refused under that assumption is refused under every one, and the
+finding holds without the document ever saying what the tagged feature is. Offering a surface
+instead would report a Ø position control on a hole as illegal, which is a verdict against a
+document that is right — the same rule the envelope check follows — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
 one field at a time, passed `.inf` too. No field of a document may now be an infinity or a
 NaN: a dimension whose nominal was NaN had screened to PASS on its band, because the
 achievability check compares the band against the process floor and never looks at the size
