@@ -23,21 +23,30 @@ Three things are asserted here, and the second is the one that gives the first a
   consent it really does try the network, which the block catches. That is the difference
   between a library that does not phone home and a library nobody has checked.
 
-The last test is the ratchet: `fetch` is the only module in the package that imports a
-network client at all, derived from the source rather than remembered.
+The last three tests are the ratchet, and they are three because naming clients is not a
+job that finishes. `fetch` is the only module that imports a network client; the package's
+third-party imports are exactly its declared dependencies, so a client nobody thought to
+blocklist fails anyway; and no import is smuggled past both as a string.
 """
 
 from __future__ import annotations
 
 import ast
 import pathlib
+import re
 import socket
+import sys
+import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
 
 from anvilate.fetch import ConsentRequired, DatasetRecipe, fetch_dataset
+
+_REPO = pathlib.Path(__file__).resolve().parents[1]
+# A distribution's name on PyPI is not the name it is imported by.
+_IMPORT_NAME = {"pyyaml": "yaml"}
 
 
 class NetworkAttempted(AssertionError):
@@ -202,7 +211,36 @@ def test_fetch_is_the_only_module_that_imports_a_network_client() -> None:
     is how a local-first tool acquires a phone-home line without anyone deciding to — the
     import is the decision, and it should be visible at the moment it is made.
     """
-    clients = {"socket", "urllib", "http", "ftplib", "smtplib", "telnetlib", "requests", "httpx"}
+    clients = {
+        # stdlib: everything that can open a socket, not only the ones this package would
+        # plausibly reach for. `ssl` and `asyncio` are here because `asyncio.open_connection`
+        # is a socket and `ssl` is only ever wrapped around one.
+        "socket",
+        "urllib",
+        "http",
+        "ftplib",
+        "smtplib",
+        "telnetlib",
+        "poplib",
+        "imaplib",
+        "nntplib",
+        "xmlrpc",
+        "ssl",
+        "asyncio",
+        "webbrowser",  # not a socket in this process, and it still opens the URL
+        # third party. The docstring above said "or a third-party client" while this set
+        # named two of them, so `import aiohttp` in any module passed the whole suite.
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib3",
+        "websockets",
+        "grpc",
+        "paramiko",
+        "boto3",
+        "botocore",
+        "pycurl",
+    }
     offenders: dict[str, set[str]] = {}
     package = pathlib.Path(__file__).resolve().parents[1] / "src" / "anvilate"
     for path in sorted(package.rglob("*.py")):
@@ -220,4 +258,91 @@ def test_fetch_is_the_only_module_that_imports_a_network_client() -> None:
         f"the package's network surface has moved: {offenders}. One module imports a "
         "network client, it is the fetch-on-first-use flow, and the import is inside the "
         "transport function rather than at module scope."
+    )
+
+    # SECURITY.md argues from the size of this set, and a number in prose has nothing
+    # holding it. The word is the claim a reader acts on, so it is the thing to check.
+    spelled = {"twenty-one": 21, "twenty-two": 22, "twenty-three": 23, "twenty-four": 24}
+    claim = re.search(
+        r"importing any of ([a-z-]+) stdlib or third-party clients fails the build",
+        (_REPO / "SECURITY.md").read_text(encoding="utf-8"),
+    )
+    assert claim is not None, "the network-client row in SECURITY.md has moved"
+    assert spelled[claim.group(1)] == len(clients)
+
+
+def test_the_packages_third_party_imports_are_exactly_its_declared_dependencies() -> None:
+    """The allowlist half, and the reason the blocklist above stops being load-bearing.
+
+    A blocklist of client names is a list somebody has to keep up with a world that keeps
+    publishing HTTP libraries, and the cost of missing one is silent: `import aiohttp` in
+    any module passed all 5,126 tests. This asks the other question — what does the package
+    import that Python did not ship? — and the answer has to be the dependencies declared in
+    `pyproject.toml`. A network client cannot be added without either being declared, which
+    is a diff somebody reads, or failing here.
+    """
+    project = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    requirements = [
+        *project["dependencies"],
+        *(entry for group in project["optional-dependencies"].values() for entry in group),
+    ]
+    distributions = {
+        re.split(r"[<>=!~\[; ]", entry, maxsplit=1)[0].lower() for entry in requirements
+    }
+    # A distribution's name is not its import name. Only the runtime ones matter — a dev
+    # dependency imported by the package would itself be the finding.
+    declared = {_IMPORT_NAME.get(name, name) for name in distributions}
+    assert "yaml" in declared, "the pyyaml -> yaml mapping stopped resolving"
+
+    standard = set(sys.stdlib_module_names)
+    imported: dict[str, set[str]] = {}
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names = {alias.name.split(".")[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                names = {node.module.split(".")[0]}
+            else:
+                continue
+            for name in names - standard - {"anvilate"}:
+                imported.setdefault(name, set()).add(path.name)
+
+    # Attack the gate: a scan that found no third-party imports would pass in silence.
+    assert len(imported) >= 4, f"the scan found only {sorted(imported)}"
+    assert set(imported) <= declared, (
+        "the package imports a distribution pyproject.toml does not declare: "
+        + ", ".join(
+            f"{name} in {sorted(imported[name])}" for name in sorted(set(imported) - declared)
+        )
+    )
+
+
+def test_no_module_is_imported_by_a_name_assembled_at_run_time() -> None:
+    """Both sweeps above read `import` statements, and a string is not one.
+
+    `importlib.import_module("urllib.request").urlopen(...)` imports a network client
+    without an import node anywhere in the file, and passed both. The one legitimate
+    dynamic import in the package walks `anvilate.packs` with a name it computes, so the
+    rule is about *literals*: a constant string handed to `import_module` names a module
+    somebody chose, and it belongs in an `import` statement where the sweeps can see it.
+    """
+    literals: list[str] = []
+    for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            name = (
+                function.attr
+                if isinstance(function, ast.Attribute)
+                else getattr(function, "id", "")
+            )
+            if name not in {"import_module", "__import__"}:
+                continue
+            for argument in node.args[:1]:
+                if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                    literals.append(f"{path.name}: {name}({argument.value!r})")
+    assert literals == [], (
+        f"a module is imported by a literal string rather than an import statement: "
+        f"{literals}. Every import sweep in this suite reads import nodes."
     )
