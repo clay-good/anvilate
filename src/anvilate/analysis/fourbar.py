@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from math import acos, cos, degrees, radians, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "is_grashof",
@@ -56,7 +56,10 @@ def _lengths_mm(
             raise ValueError(
                 f"{name} link must be a [length] quantity; got {value.dimensionality} ({value})"
             )
-        mm = value.to("mm").magnitude
+        # `require_finite` first: a NaN length passes `mm <= 0`, fails every subsequent
+        # comparison too, and `is_grashof` comes back False — a definite "triple-rocker"
+        # about a linkage one of whose links is not a number.
+        mm = require_finite(value, name=f"{name} link length")
         if mm <= 0:
             raise ValueError(f"{name} link length must be positive; got {value}")
         out[name] = mm
@@ -244,6 +247,10 @@ def fourbar_transmission_angle(
     the linkage cannot assemble at that input angle. Returns μ in **degrees**,
     0 ≤ μ ≤ 180.
     """
+    # `_lengths_mm` covers the four links; the crank angle is a bare float and was not
+    # covered, so a NaN θ₂ produced a transmission angle of exactly 0° — a jammed linkage,
+    # which is a definite and alarming answer about an angle nobody supplied.
+    require_finite(input_angle, name="input_angle")
     lengths = _lengths_mm(ground, input_link, coupler, output_link)
     r1, r2, r3, r4 = (
         lengths["ground"],

@@ -85,6 +85,9 @@ def _check_pressure_angle(normal_pressure_angle: float) -> float:
 
 
 def _check_friction(friction_coefficient: float) -> float:
+    # Before the comparison: a NaN slides past it and `worm_is_self_locking` returns a
+    # definite False, which is a statement that the set backdrives.
+    require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
         raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
     return friction_coefficient

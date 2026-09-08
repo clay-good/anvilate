@@ -186,6 +186,10 @@ def short_shoe_is_self_locking(
     what a backstop or one-way holdback wants. ``friction_coefficient`` μ must
     be non-negative.
     """
+    # `require_finite` and not a comparison: every comparison with NaN is False, so a NaN
+    # walks past the guard below and the boolean comes back as a definite answer about a
+    # number nobody has. See units.require_finite.
+    require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
         raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
     b = _positive_length_m(normal_arm, "normal_arm")

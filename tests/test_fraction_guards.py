@@ -24,6 +24,7 @@ from __future__ import annotations
 import ast
 import importlib
 import inspect
+import math
 import pathlib
 import pkgutil
 import re
@@ -973,4 +974,103 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
     assert accepted == [], (
         "these docstrings promise a positive parameter and the function takes a "
         f"non-positive one: {accepted}"
+    )
+
+
+# --- a NaN is not an answer ----------------------------------------------------------------
+
+
+def _uniformly_callable() -> list[tuple[str, object, dict]]:
+    """Every public analysis function that accepts every parameter bound to 1.0 m / 1.0.
+
+    The all-positive probe of :mod:`probe-the-front-door`, kept as the population the two
+    poison probes below run over: a function that refuses the uniform call refuses for a
+    reason of its own (a dimension mismatch, usually) and says nothing about NaN.
+    """
+    found = []
+    for info in pkgutil.iter_modules(analysis.__path__):
+        if info.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"anvilate.analysis.{info.name}")
+        for name in getattr(module, "__all__", ()):
+            function = getattr(module, name, None)
+            if not inspect.isfunction(function):
+                continue
+            parameters = list(inspect.signature(function).parameters.values())
+            if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
+                continue
+            arguments, bindable = {}, True
+            for parameter in parameters:
+                annotation = parameter.annotation
+                spelled = (
+                    annotation
+                    if isinstance(annotation, str)
+                    else getattr(annotation, "__name__", "")
+                )
+                value = {"Quantity": Quantity.parse("1.0 m"), "float": 1.0, "int": 2}.get(spelled)
+                if value is not None:
+                    arguments[parameter.name] = value
+                elif parameter.default is inspect.Parameter.empty:
+                    bindable = False
+                    break
+            if not bindable or not arguments:
+                continue
+            try:
+                function(**arguments)
+            except Exception:  # noqa: BLE001 - a refusal here is not this gate's subject
+                continue
+            found.append((f"{info.name}.{name}", function, arguments))
+    return found
+
+
+def test_no_analysis_function_answers_a_nan_with_a_number_or_a_verdict():
+    """Every comparison with NaN is False, so `if x < 0: raise` is a no-op against one.
+
+    That is not a curiosity — it is the defect `units.require_finite` was written for, and
+    seventeen public functions still had it. The worst were the four `is_self_locking`
+    predicates: `short_shoe_is_self_locking(friction_coefficient=nan)` came back **False**,
+    a definite statement that a brake does not grab, about a friction coefficient nobody
+    supplied. `is_grashof` said False the same way, and
+    `service_class_for_cycles(load_cycles=nan)` matched no band and hit a bare
+    `AssertionError` — a refusal `python -O` deletes.
+
+    Two more were the `1.0 ** nan == 1.0` trap, where the NaN disappears rather than
+    propagating: a tackle's mechanical advantage came back as the frictionless part count,
+    and a building's fundamental period as exactly one second.
+
+    Propagating a NaN out is fine — the caller's own guard sees it. Answering with a finite
+    number or a bool is not.
+    """
+    population = _uniformly_callable()
+    # Attack the gate: a binder that stopped reaching these would report nothing wrong.
+    assert len(population) >= 250, f"the probe reached only {len(population)} functions"
+
+    answered, crashed = [], []
+    probes = 0
+    for label, function, arguments in population:
+        for name, value in arguments.items():
+            probes += 1
+            poison = (
+                Quantity(magnitude=float("nan"), unit="m")
+                if isinstance(value, Quantity)
+                else float("nan")
+            )
+            try:
+                result = function(**{**arguments, name: poison})
+            except ValueError:
+                continue
+            except Exception as unexpected:  # noqa: BLE001 - the type is the finding
+                crashed.append(f"{label}({name}=nan) raised {type(unexpected).__name__}")
+                continue
+            magnitude = result.magnitude if isinstance(result, Quantity) else result
+            if isinstance(magnitude, bool) or (
+                isinstance(magnitude, (int, float)) and math.isfinite(magnitude)
+            ):
+                answered.append(f"{label}({name}=nan) -> {result}")
+
+    assert probes >= 500, f"only {probes} NaN probes were made"
+    assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
+    assert answered == [], (
+        "these answered a NaN with a definite value; the guard is a comparison and every "
+        f"comparison with NaN is False: {answered}"
     )

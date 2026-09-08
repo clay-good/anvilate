@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from math import log10, pi, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
 
 __all__ = [
@@ -296,6 +296,10 @@ def darcy_friction_factor(*, reynolds: float, relative_roughness: float = 0.0) -
     ``relative_roughness`` is ε/D, the pipe wall roughness over its inside diameter (0 for a
     hydraulically smooth pipe). Returns the dimensionless friction factor.
     """
+    require_finite(reynolds, name="reynolds")
+    # Roughness does not enter the laminar branch, so a NaN one returned a correct-looking
+    # 64/Re and the caller never learned their model held a NaN.
+    require_finite(relative_roughness, name="relative_roughness")
     if reynolds <= 0:
         raise ValueError(f"reynolds must be positive; got {reynolds}")
     if relative_roughness < 0:

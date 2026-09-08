@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from math import radians, sin, tan
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "sling_tension_factor",
@@ -184,6 +184,11 @@ def _check_efficiency(sheave_efficiency: float) -> float:
 
 
 def _check_lead_sheaves(lead_sheaves: int) -> int:
+    # A NaN count passes the comparison below, and the advantage is `eta ** (n + j)` — which
+    # for the ideal eta = 1 is `1.0 ** nan`, and Python makes that exactly 1.0. The NaN
+    # vanishes and the mechanical advantage comes back as the part count, which is the
+    # frictionless answer for a tackle whose lead nobody counted.
+    require_finite(lead_sheaves, name="lead_sheaves")
     if lead_sheaves < 0:
         raise ValueError(f"lead_sheaves must be non-negative; got {lead_sheaves}")
     return lead_sheaves

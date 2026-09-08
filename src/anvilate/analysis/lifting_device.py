@@ -42,7 +42,7 @@ from pydantic import BaseModel, ConfigDict
 from .._models import Named, RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "DesignCategory",
@@ -140,6 +140,11 @@ def service_class_for_cycles(load_cycles: int) -> ServiceClass:
     a whole analysis is required, so it is worth being deliberate about which side of it
     the estimate falls.
     """
+    # The bands really do cover every non-negative count, so the `AssertionError` below is
+    # an honest claim about them — and a NaN made it reachable, because it matches no band
+    # and is not `< 0` either. `python -O` strips an assert, so that path was a refusal a
+    # caller could not rely on at all.
+    require_finite(load_cycles, name="load_cycles")
     if load_cycles < 0:
         raise ValueError(f"load_cycles must be non-negative; got {load_cycles}")
     for service in ServiceClass:

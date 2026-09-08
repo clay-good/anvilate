@@ -64,6 +64,10 @@ def _geometry(
         raise ValueError(f"mean_diameter must be positive; got {mean_diameter}")
     if ell <= 0:
         raise ValueError(f"lead must be positive; got {lead}")
+    # A NaN μ passes the comparison below, and `power_screw_is_self_locking` then answers
+    # `mu >= ell / (pi * dm)` — False — which reads as "this screw backdrives" about a
+    # friction coefficient nobody supplied.
+    require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
         raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
     return dm, ell, friction_coefficient

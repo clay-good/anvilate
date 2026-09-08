@@ -223,6 +223,11 @@ def approximate_fundamental_period(
     hn = building_height.to("m").magnitude
     if hn <= 0:
         raise ValueError("building_height must be positive")
+    # A NaN passes both comparisons below, and `hn ** nan` is 1.0 when hn is 1.0 — so a
+    # missing exponent came back as a one-second fundamental period, which is a plausible
+    # building and feeds the seismic response coefficient.
+    require_finite(period_coefficient, name="period_coefficient")
+    require_finite(height_exponent, name="height_exponent")
     if period_coefficient <= 0:
         raise ValueError("period_coefficient must be positive")
     if height_exponent <= 0:

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from math import asin, exp, pi, radians, sin, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "capstan_tension_ratio",
@@ -58,6 +58,10 @@ def _require_force(value: Quantity, name: str) -> None:
 
 
 def _ratio(friction_coefficient: float, wrap_angle: float) -> float:
+    # Ahead of the comparisons, because a NaN passes both and `exp(nan)` is a NaN that the
+    # self-locking predicate downstream turns into a definite `False`.
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     if friction_coefficient < 0:
         raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
     if wrap_angle <= 0:
