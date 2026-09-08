@@ -51,6 +51,14 @@ ROUND_TRIPPED = frozenset(
         "clutch.disc_clutch_force_for_torque",
         "conveyor.belt_speed_for_capacity",
         "dc_dc_converter.boost_duty_cycle_for_output",
+        "dc_dc_converter.buck_boost_duty_cycle_for_output",
+        "dc_dc_converter.buck_duty_cycle_for_output",
+        "electroplating.electroplating_time_for_thickness",
+        "fastener.torque_for_preload",
+        "hydro_power.hydro_flow_for_power",
+        "level_turn.bank_angle_for_load_factor",
+        "mass_energy.mass_from_energy",
+        "photon.photon_wavelength_from_energy",
     }
 )
 
@@ -391,3 +399,129 @@ def test_boost_duty_cycle_for_output_lands_the_required_output():
     assert boost_output_voltage(input_voltage=supply, duty_cycle=duty).to("V").magnitude == (
         pytest.approx(target.to("V").magnitude, rel=1e-12)
     )
+
+
+def test_torque_for_preload_lands_the_required_preload():
+    """The two halves of the nut-factor relation, each listed as a candidate against the
+    other. Both take the nut factor, and it is the whole content of the relation: a pair
+    that round-trips only on the 0.2 default proves the algebra and not the plumbing."""
+    from anvilate.analysis import bolt_preload_from_torque, torque_for_preload
+
+    diameter, target = _q("12 mm"), _q("30 kN")
+    for nut_factor in (0.2, 0.15, 0.28):
+        torque = torque_for_preload(
+            preload=target, nominal_diameter=diameter, nut_factor=nut_factor
+        )
+        preload = bolt_preload_from_torque(
+            torque=torque, nominal_diameter=diameter, nut_factor=nut_factor
+        )
+        assert preload.to("kN").magnitude == pytest.approx(target.to("kN").magnitude, rel=1e-12), (
+            nut_factor
+        )
+    # A lower nut factor is a slipperier joint: less torque for the same preload.
+    assert (
+        torque_for_preload(preload=target, nominal_diameter=diameter, nut_factor=0.15)
+        .to("N*m")
+        .magnitude
+        < torque_for_preload(preload=target, nominal_diameter=diameter, nut_factor=0.28)
+        .to("N*m")
+        .magnitude
+    )
+
+
+def test_buck_duty_cycle_for_output_lands_the_required_output():
+    """One pair per test, and that is not a style choice.
+
+    The contract ratchet requires *some single test* to name both halves of each recorded
+    pairing, which is how it catches a pairing rewritten to an unrelated forward. Testing
+    the buck and the buck-boost together named all four symbols in one function, so
+    pairing `buck_duty_cycle_for_output` to `buck_boost_output_voltage` — a real mistake,
+    the two sit beside each other in the module — stayed green. Split, it fails.
+    """
+    from anvilate.analysis import buck_duty_cycle_for_output, buck_output_voltage
+
+    supply, target = _q("24 V"), _q("5 V")
+    duty = buck_duty_cycle_for_output(input_voltage=supply, output_voltage=target)
+    assert buck_output_voltage(input_voltage=supply, duty_cycle=duty).to("V").magnitude == (
+        pytest.approx(target.to("V").magnitude, rel=1e-12)
+    )
+    # A buck steps down, so its duty cycle is the output over the input.
+    assert duty == pytest.approx(5.0 / 24.0, rel=1e-12)
+
+
+def test_buck_boost_duty_cycle_for_output_lands_the_required_output():
+    from anvilate.analysis import buck_boost_duty_cycle_for_output, buck_boost_output_voltage
+
+    supply, target = _q("12 V"), _q("18 V")
+    duty = buck_boost_duty_cycle_for_output(input_voltage=supply, output_voltage=target)
+    assert buck_boost_output_voltage(input_voltage=supply, duty_cycle=duty).to(
+        "V"
+    ).magnitude == pytest.approx(target.to("V").magnitude, rel=1e-12)
+    # Stepping 12 V up to 18 V needs D/(1-D) = 1.5, so D = 0.6 — above the half that a
+    # buck's duty cycle for the same ratio would sit below.
+    assert duty == pytest.approx(0.6, rel=1e-12)
+
+
+def test_bank_angle_for_load_factor_lands_the_required_load_factor():
+    """The classic pair: a 2 g level turn is 60 degrees of bank, exactly."""
+    from anvilate.analysis import bank_angle_for_load_factor, load_factor_from_bank_angle
+
+    for target in (1.5, 2.0, 4.0):
+        bank = bank_angle_for_load_factor(load_factor=target)
+        assert load_factor_from_bank_angle(bank_angle=bank) == pytest.approx(target, rel=1e-12)
+    assert bank_angle_for_load_factor(load_factor=2.0) == pytest.approx(60.0, rel=1e-12)
+
+
+def test_photon_wavelength_from_energy_lands_the_required_energy():
+    from anvilate.analysis import photon_energy, photon_wavelength_from_energy
+
+    target = _q("2.5 eV")
+    wavelength = photon_wavelength_from_energy(energy=target)
+    assert photon_energy(wavelength=wavelength).to("eV").magnitude == pytest.approx(
+        target.to("eV").magnitude, rel=1e-12
+    )
+
+
+def test_mass_from_energy_lands_the_required_rest_energy():
+    from anvilate.analysis import mass_from_energy, rest_energy
+
+    target = _q("1 MeV")
+    mass = mass_from_energy(energy=target)
+    assert rest_energy(mass=mass).to("MeV").magnitude == pytest.approx(
+        target.to("MeV").magnitude, rel=1e-12
+    )
+
+
+def test_hydro_flow_for_power_lands_the_required_power():
+    from anvilate.analysis import hydro_flow_for_power, hydro_turbine_power
+
+    site = {
+        "net_head": _q("40 m"),
+        "overall_efficiency": 0.88,
+        "fluid_density": _q("998 kg/m**3"),
+    }
+    target = _q("500 kW")
+    flow = hydro_flow_for_power(target_power=target, **site)
+    assert hydro_turbine_power(flow_rate=flow, **site).to("kW").magnitude == pytest.approx(
+        target.to("kW").magnitude, rel=1e-12
+    )
+
+
+def test_electroplating_time_for_thickness_lands_the_required_thickness():
+    from anvilate.analysis import (
+        electroplating_deposition_thickness,
+        electroplating_time_for_thickness,
+    )
+
+    bath = {
+        "current": _q("12 A"),
+        "plated_area": _q("0.25 m**2"),
+        "equivalent_weight": 32.7,
+        "density": _q("8960 kg/m**3"),
+        "current_efficiency": 0.95,
+    }
+    target = _q("25 um")
+    plating_time = electroplating_time_for_thickness(target_thickness=target, **bath)
+    assert electroplating_deposition_thickness(plating_time=plating_time, **bath).to(
+        "um"
+    ).magnitude == pytest.approx(target.to("um").magnitude, rel=1e-12)
