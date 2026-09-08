@@ -2829,28 +2829,51 @@ def test_every_pytest_step_in_ci_counts_the_tests_it_actually_names():
     steps = re.findall(
         r"(?s)\n      - name: ([^\n]+)\n(.*?)(?=\n      - name: |\n\n  |\Z)", workflow
     )
-    checked = []
+    wanted: list[tuple[str, list[str], int]] = []
     for name, body in steps:
         expected = re.search(r'grep -qE "\^(\d+) passed"', body)
         if expected is None:
             continue
         named = re.findall(r'"(tests/[\w/]+\.py::\w+)"', body)
         assert named, f"the {name!r} step counts passes but names no test to run"
-        checked.append(name)
-        collected = subprocess.run(
-            [sys.executable, "-m", "pytest", "--collect-only", "-q", "--no-header", *named],
-            cwd=_REPO,
-            capture_output=True,
-            text=True,
-        )
-        assert collected.returncode == 0, (
-            f"the {name!r} step names a test pytest cannot collect:\n{collected.stdout[-2000:]}"
-        )
-        counted = re.search(r"(\d+) tests? collected", collected.stdout)
-        assert counted is not None, collected.stdout[-2000:]
-        assert int(counted.group(1)) == int(expected.group(1)), (
-            f"the {name!r} step collects {counted.group(1)} test(s) and requires "
-            f"'{expected.group(1)} passed'; the difference is the number of checks it "
+        wanted.append((name, named, int(expected.group(1))))
+    checked = [name for name, _named, _count in wanted]
+
+    # One collection over the union, not one per step. Four steps meant four pytest
+    # subprocesses, each paying a full import and collection — 12.5 s, the slowest test in
+    # the suite. `--collect-only -q` prints one node id per line, so a step's count is the
+    # ids that belong to it, which is the same number pytest would report for that step
+    # alone including its parametrized expansions.
+    every_id = sorted({node for _name, named, _count in wanted for node in named})
+    collected = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", "--no-header", *every_id],
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert collected.returncode == 0, (
+        f"a CI step names a test pytest cannot collect:\n{collected.stdout[-2000:]}"
+    )
+    ids = [line.strip() for line in collected.stdout.splitlines() if "::" in line]
+    assert ids, collected.stdout[-2000:]
+
+    for name, named, count in wanted:
+        matched = [
+            node
+            for node in ids
+            if any(node == want or node.startswith(f"{want}[") for want in named)
+        ]
+        # Which id failed to resolve, rather than pytest's own error dump — the renamed test
+        # is the quieter half of this gate and it should say the name.
+        unresolved = [
+            want
+            for want in named
+            if not any(node == want or node.startswith(f"{want}[") for node in ids)
+        ]
+        assert not unresolved, f"the {name!r} step names tests that no longer exist: {unresolved}"
+        assert len(matched) == count, (
+            f"the {name!r} step collects {len(matched)} test(s) and requires "
+            f"'{count} passed'; the difference is the number of checks it "
             "reports as run without running them"
         )
 
