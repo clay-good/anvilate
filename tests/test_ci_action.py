@@ -22,6 +22,7 @@ import pytest
 import yaml
 
 from anvilate.cli import EXIT_CODES, EXIT_NOT_EVALUATED, EXIT_OK, _build_parser
+from conftest import parsed_source
 
 _REPO = Path(__file__).resolve().parent.parent
 _ACTION = _REPO / ".github" / "actions" / "check" / "action.yml"
@@ -269,7 +270,7 @@ def test_no_message_a_user_reads_names_a_path_their_install_does_not_have():
     offenders: list[str] = []
     strings = 0
     for path in sorted(src.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         docstrings = {
             text
             for node in ast.walk(tree)

@@ -23,6 +23,7 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate._models import RevalidatedModel
+from conftest import parsed_source
 
 _SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "anvilate"
 
@@ -45,7 +46,7 @@ def _classes_with_an_after_validator() -> list[tuple[str, str]]:
     for path in sorted(_SRC.rglob("*.py")):
         module = ".".join(("anvilate", *path.relative_to(_SRC).with_suffix("").parts))
         module = module.removesuffix(".__init__")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if not isinstance(node, ast.ClassDef):
                 continue
             declares = any(

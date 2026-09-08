@@ -31,6 +31,7 @@ zero are exempt — there the absolute floor is the whole point.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import os
 import re
@@ -541,6 +542,31 @@ def source_text(path: Path, node: object) -> str:
 
 
 _SRC = _REPO / "src" / "anvilate"
+
+_PARSED: dict[Path, ast.Module] = {}
+
+
+def parsed_source(path: Path) -> ast.Module:
+    """``path`` parsed once for the whole session.
+
+    Eighteen sweeps in this suite walk every module under ``src/anvilate``, and each one
+    parsed all 320 of them from scratch — about 2.5 s a sweep, some 45 s of a 277 s run, for
+    a tree that does not change while the suite is running. Parsing dominates those sweeps:
+    one full ``ast.walk`` over the same 320 modules is 0.6 s.
+
+    **The tree is shared, so a caller must not mutate it.** Every sweep in this suite reads;
+    one that needs to rewrite a tree should parse its own copy and say why.
+    """
+    tree = _PARSED.get(path)
+    if tree is None:
+        tree = _PARSED[path] = ast.parse(path.read_text(encoding="utf-8"))
+    return tree
+
+
+def library_sources() -> list[tuple[Path, ast.Module]]:
+    """Every module under ``src/anvilate``, in path order, parsed once for the session."""
+    return [(path, parsed_source(path)) for path in sorted(_SRC.rglob("*.py"))]
+
 
 # Surviving library-built entries, by id. Kept as strong references for the whole run so no
 # id is reused, and superseded when the library copies an entry to attach its citation or

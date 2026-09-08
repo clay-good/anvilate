@@ -27,7 +27,7 @@ import pytest
 
 import anvilate as anvilate_pkg
 import anvilate.analysis as analysis_pkg
-from conftest import source_text
+from conftest import library_sources, parsed_source, source_text
 
 _REPO = Path(__file__).resolve().parent.parent
 _MANIFEST = _REPO / "docs" / "api" / "analysis-public-surface.txt"
@@ -583,7 +583,7 @@ def _disarmed_approx_sites(root: Path | None = None) -> list[str]:
     offenders: list[str] = []
     base = _TESTS if root is None else root
     for path in sorted(base.rglob("test_*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         constants: dict[str, object] = {}
         for node in tree.body:
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
@@ -2275,14 +2275,152 @@ def test_the_contributing_pages_two_traps_are_arithmetic_it_can_check():
     survey = re.search(r"around (\d+)% of the roughly ([\d,]+) `raise` sites", page)
     assert survey is not None, "the raise-site survey on the contributing page has moved"
     sites = 0
-    for module in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
-        sites += sum(
-            isinstance(node, ast.Raise) for node in ast.walk(ast.parse(module.read_text()))
-        )
+    for _module, tree in library_sources():
+        sites += sum(isinstance(node, ast.Raise) for node in ast.walk(tree))
     stated = float(survey.group(2).replace(",", ""))
     assert sites == pytest.approx(stated, rel=0.05), (
         f"the page says roughly {stated:.0f} raise sites and the tree has {sites}"
     )
+
+
+def _names_the_library(node: ast.AST) -> bool:
+    """Whether ``node`` contains the string ``"anvilate"`` as a literal.
+
+    Constants rather than `ast.unparse`: unparsing every assignment in every test module
+    made this gate the slowest test in the suite at 13 s, which is more than the parsing it
+    exists to save. Walking for `ast.Constant` asks the same question and costs nothing.
+    """
+    return any(
+        isinstance(child, ast.Constant)
+        and isinstance(child.value, str)
+        and "anvilate" in child.value
+        for child in ast.walk(node)
+    )
+
+
+def _library_bound_names(tree: ast.AST) -> set[str]:
+    """Names bound to an expression that mentions the library, at any level of ``tree``."""
+    return {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and _names_the_library(node.value)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def _sweeps_the_library(function: ast.AST, module_names: frozenset[str] = frozenset()) -> bool:
+    """Whether the function walks every module under ``src/anvilate``.
+
+    The receiver of the ``.rglob`` is usually a local — ``package = ... / "src" / "anvilate"``
+    then ``package.rglob("*.py")`` — so asking only whether the receiver *expression* names
+    the library saw almost none of them. The first draft did exactly that, found nothing, and
+    passed while eighteen sweeps were parsing the tree themselves: a detector narrower than
+    its own sentence, which is why the count below is asserted before the offenders are.
+    """
+    globs = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        # `glob` too, because one sweep puts the library in the *pattern*:
+        # `.glob("src/anvilate/**/*.py")`.
+        and node.func.attr in {"rglob", "glob"}
+    ]
+    if not globs:
+        # The pre-filter that keeps this cheap: most functions in this suite glob nothing,
+        # and asking anything else about them is work thrown away.
+        return False
+    library_names = _library_bound_names(function) | module_names
+    for node in globs:
+        if _names_the_library(node.func.value) or (node.args and _names_the_library(node.args[0])):
+            return True
+        receiver = node.func.value
+        if isinstance(receiver, ast.Name) and receiver.id in library_names:
+            return True
+    return False
+
+
+def _calls_ast_parse(function: ast.AST) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "parse"
+        and ast.unparse(node.func.value) == "ast"
+        for node in ast.walk(function)
+    )
+
+
+# The one sweep that must parse the library fresh, and why. Everything else reads a tree
+# somebody has already built.
+_MUST_PARSE_ITSELF = {
+    "test_no_shipped_module_carries_an_invalid_escape_sequence": (
+        "it catches the SyntaxWarning raised *during* parsing, and a tree the cache built "
+        "earlier has already emitted and swallowed it"
+    ),
+}
+
+
+def test_the_library_is_parsed_once_and_not_once_per_sweep():
+    """Eighteen sweeps in this suite walk every module under `src/anvilate`, and each parsed
+    all 320 of them from scratch.
+
+    Parsing is what those sweeps cost: one full `ast.walk` over the tree is 0.6 s and
+    building it is 2.5 s. `conftest.parsed_source` builds each module's tree once for the
+    session — over these five files alone that is 6,544 requests served by 392 parses.
+
+    So the rule is that a sweep asks the cache. A test that needs a tree nobody else has
+    touched says so in `_MUST_PARSE_ITSELF` with the reason, and there is exactly one.
+    """
+    offenders: list[str] = []
+    sweeps: list[str] = []
+    names: set[str] = set()
+    for path in sorted((_REPO / "tests").glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        # Every test name, for the exemption check below, read off the text rather than a
+        # tree — the modules that glob nothing are never parsed at all.
+        names.update(re.findall(r"^\s*(?:async )?def (test_[a-z0-9_]+)", text, re.M))
+        if "glob(" not in text:
+            continue
+        tree = ast.parse(text)
+        # `_SRC = _REPO / "src" / "anvilate"` is a module-level constant in three of these
+        # files, so the binding a sweep's receiver refers to is not inside the function.
+        module_names = frozenset(_library_bound_names(tree))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name in _MUST_PARSE_ITSELF:
+                continue
+            # The docstring is prose and this question is about code. Reading the whole
+            # source segment made this gate flag *itself*: it sweeps `tests/`, and its
+            # docstring says the word "anvilate" while explaining what it is for. The same
+            # trap the `fallback_label` sweep fell into one session earlier.
+            # Node structure, not unparsed text. Two drafts of this flagged *itself*: the
+            # first because its docstring says "anvilate", the second because its own string
+            # literals are "rglob(" and "anvilate". What is being asked is whether the
+            # function calls `.rglob` on a path under the library and calls `ast.parse` —
+            # both of which are shapes, and neither of which a string constant can be.
+            if not _sweeps_the_library(node, module_names):
+                continue
+            sweeps.append(f"{path.name}:{node.name}")
+            if _calls_ast_parse(node):
+                offenders.append(f"{path.name}:{node.name}")
+    # The floor, asserted before the offenders. A detector that stopped recognising a sweep
+    # would report an empty list and read as a clean bill of health — which is what the first
+    # draft of this test did.
+    assert len(sweeps) >= 10, f"the scan found only {len(sweeps)} sweeps of the library"
+    assert offenders == [], (
+        "these sweep the library and parse it themselves; call `conftest.parsed_source` so "
+        f"the tree is built once for the session: {offenders}"
+    )
+
+    # Attack the gate, in both directions: the exemption has to name a test that exists and
+    # really does parse, or it is a line excusing nothing. `names` is collected in the loop
+    # above rather than by walking the suite again — a second parse of every test module is
+    # exactly the cost this gate exists to remove.
+    for exempt, reason in _MUST_PARSE_ITSELF.items():
+        assert exempt in names, f"{exempt} is exempt and no longer exists; strike it off"
+        assert reason, exempt
 
 
 def test_no_shipped_module_carries_an_invalid_escape_sequence():
@@ -2896,7 +3034,7 @@ def test_every_cross_reference_the_docstrings_make_resolves():
     """
     broken, checked = [], 0
     for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         for node in ast.walk(tree):
             if not isinstance(
                 node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
@@ -3748,7 +3886,7 @@ def test_no_yaml_document_can_construct_a_python_object():
     unsafe: list[str] = []
     for path in sorted(src.rglob("*.py")):
         module = ".".join(path.relative_to(_REPO / "src").with_suffix("").parts)
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -3927,7 +4065,7 @@ def test_the_library_runs_nothing_it_reads():
     modules = 0
     for path in sorted(src.rglob("*.py")):
         modules += 1
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         bindings = _import_bindings(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call | ast.Import | ast.ImportFrom):
@@ -3988,7 +4126,7 @@ def test_a_dimension_guard_enforces_the_dimension_its_message_names():
     paired = 0
     wrong: list[str] = []
     for path in sorted(src_root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         where = str(path.relative_to(src_root))
         for function in ast.walk(tree):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -4196,7 +4334,7 @@ def test_every_file_a_caller_names_is_read_inside_a_guard_that_catches_a_bad_enc
         return {name.id for name in raised if isinstance(name, ast.Name)}
 
     for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         # Which calls sit inside which `try`. Keyed on `id`, because two structurally equal
         # calls in one file are different sites.
         cover: dict[int, set[str]] = {}
@@ -4648,7 +4786,7 @@ def test_every_model_the_library_reads_back_is_bounded_or_says_why_not():
     readers: list[tuple[str, str, int]] = []
     for path in sorted(src.rglob("*.py")):
         module = ".".join(("anvilate", *path.relative_to(src).with_suffix("").parts))
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
@@ -4796,7 +4934,7 @@ def test_no_check_composes_the_same_absence_sentence_at_two_sites():
     src = Path(anvilate.__file__).parent
     sites: dict[str, list[str]] = defaultdict(list)
     for path in sorted(src.rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if not (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
@@ -4845,7 +4983,7 @@ def test_every_surface_that_shows_a_check_s_work_also_shows_its_stated_absence()
     src = Path(anvilate.__file__).parent
     shows_work, also_shows_absence = [], []
     for path in sorted(src.rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             # Attribute ACCESSES, not the unparsed text. The first version of this read
@@ -4938,7 +5076,7 @@ def test_every_public_sequence_of_models_refuses_a_single_one_of_them():
         module = _importlib.import_module(module_name)
         bodies = {
             node.name: ast.unparse(node)
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            for node in ast.walk(parsed_source(path))
             if isinstance(node, ast.FunctionDef)
         }
         for symbol in getattr(module, "__all__", ()):

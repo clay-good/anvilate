@@ -46,6 +46,7 @@ from anvilate.export.qif import QIF_NAMESPACE, export_qif_results
 from anvilate.gdt import Characteristic, DatumReference, FeatureControlFrame, FeatureType
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
 from anvilate.units import Quantity
+from conftest import parsed_source
 
 _NS = {"q": QIF_NAMESPACE}
 _REPO = Path(__file__).resolve().parent.parent
@@ -588,9 +589,8 @@ def _functions_that_emit() -> list[tuple[str, ast.FunctionDef, set[str]]]:
     """
     out: list[tuple[str, ast.FunctionDef, set[str]]] = []
     for path in sorted(_EXPORT_PACKAGE.glob("*.py")):
-        text = path.read_text()
-        lines = text.splitlines()
-        for node in ast.walk(ast.parse(text)):
+        lines = path.read_text().splitlines()
+        for node in ast.walk(parsed_source(path)):
             if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             body = "\n".join(lines[node.lineno - 1 : node.end_lineno])

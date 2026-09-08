@@ -43,6 +43,7 @@ from contextlib import contextmanager
 import pytest
 
 from anvilate.fetch import ConsentRequired, DatasetRecipe, fetch_dataset
+from conftest import parsed_source
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 # A distribution's name on PyPI is not the name it is imported by.
@@ -244,7 +245,7 @@ def test_fetch_is_the_only_module_that_imports_a_network_client() -> None:
     offenders: dict[str, set[str]] = {}
     package = pathlib.Path(__file__).resolve().parents[1] / "src" / "anvilate"
     for path in sorted(package.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         found: set[str] = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -297,7 +298,7 @@ def test_the_packages_third_party_imports_are_exactly_its_declared_dependencies(
     standard = set(sys.stdlib_module_names)
     imported: dict[str, set[str]] = {}
     for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if isinstance(node, ast.Import):
                 names = {alias.name.split(".")[0] for alias in node.names}
             elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
@@ -328,7 +329,7 @@ def test_no_module_is_imported_by_a_name_assembled_at_run_time() -> None:
     """
     literals: list[str] = []
     for path in sorted((_REPO / "src" / "anvilate").rglob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(parsed_source(path)):
             if not isinstance(node, ast.Call):
                 continue
             function = node.func

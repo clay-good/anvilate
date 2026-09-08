@@ -72,7 +72,7 @@ from anvilate.analysis import (
     wind_turbine_rotor_thrust,
 )
 from anvilate.units import Quantity
-from conftest import source_text
+from conftest import parsed_source, source_text
 
 Q = Quantity.parse
 
@@ -548,7 +548,7 @@ def _bounded_parameters_without_a_guard() -> dict[str, str]:
     """
     holes: dict[str, str] = {}
     for path in sorted(pathlib.Path(__file__).resolve().parents[1].glob("src/anvilate/**/*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         functions = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
         for name, function in functions.items():
             if name.startswith("_"):
@@ -671,7 +671,7 @@ def test_the_census_covers_a_real_number_of_parameters() -> None:
     root = pathlib.Path(__file__).resolve().parents[1]
     seen = 0
     for path in sorted(root.glob("src/anvilate/**/*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
                 seen += sum(1 for p in _parameters(node) if _BOUNDED_NAME.search(p))
@@ -785,7 +785,7 @@ def _interval_guards() -> tuple[tuple[str, int, str, ast.If, ast.Raise], ...]:
     root = pathlib.Path(__file__).resolve().parents[1] / "src" / "anvilate"
     found = []
     for path in sorted(root.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parsed_source(path)
         for parent in ast.walk(tree):
             for node in ast.iter_child_nodes(parent):
                 if not isinstance(node, ast.If):
