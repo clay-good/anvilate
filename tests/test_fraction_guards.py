@@ -950,20 +950,27 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
         if target not in arguments:
             unprobed.append(f"{label}({target})")
             continue
-        negative = Quantity.parse("-1.0 m") if isinstance(arguments[target], Quantity) else -1.0
-        try:
-            function(**{**arguments, target: negative})
-        except ValueError:
-            continue
-        except Exception as unexpected:  # noqa: BLE001 - the type is the finding
-            accepted.append(f"{label}({target}=-1) answered {type(unexpected).__name__}")
-            continue
-        accepted.append(f"{label}({target}=-1) returned a value")
+        quantity = isinstance(arguments[target], Quantity)
+        # Zero as well as a negative: "positive" excludes zero, and the difference between
+        # `<= 0` and `< 0` is one keystroke no negative probe can see. All 65 promises this
+        # reaches refuse both today, so what this pins is that they go on doing it.
+        for spelled, value in (
+            ("-1", Quantity.parse("-1.0 m") if quantity else -1.0),
+            ("0", Quantity.parse("0.0 m") if quantity else 0.0),
+        ):
+            try:
+                function(**{**arguments, target: value})
+            except ValueError:
+                continue
+            except Exception as unexpected:  # noqa: BLE001 - the type is the finding
+                accepted.append(f"{label}({target}={spelled}) answered {type(unexpected).__name__}")
+                continue
+            accepted.append(f"{label}({target}={spelled}) returned a value")
 
     # The unprobed are named and counted, not skipped in silence: a binder that stopped
     # reaching these functions would empty `accepted` and read as a clean run.
     assert len(unprobed) <= 12, f"{len(unprobed)} promises could not be probed: {unprobed}"
     assert accepted == [], (
-        "these docstrings promise a positive parameter and the function takes a negative "
-        f"one: {accepted}"
+        "these docstrings promise a positive parameter and the function takes a "
+        f"non-positive one: {accepted}"
     )
