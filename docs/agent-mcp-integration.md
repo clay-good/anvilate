@@ -269,7 +269,10 @@ task-dispatched: build_part, run_fea_validation
 - **`-32000`, task-dispatched.** Not a failure and not a retry: the operation's cost is
   bounded by a convergence criterion or by your own code, so a synchronous call cannot
   promise a reply. `build_part` and `run_fea_validation` are the two. Waiting or backing off
-  will not help; the Tasks extension is what will.
+  will not help, and neither will looking for a task method — **this server has none yet**,
+  so these two cannot be reached by any call it answers. The message says so and links the
+  change that would add one. Until then the dispatch mode is a statement about the
+  operation's cost, not a route you can take.
 - **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
   behind them is not, and the message names what it waits on — `render_viewport` and
   `measure_geometry` both wait on built geometry. Retrying is pointless; a result invented

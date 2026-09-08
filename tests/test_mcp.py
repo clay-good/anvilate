@@ -22,6 +22,7 @@ from anvilate.contracts import (
     spec_json_schema,
 )
 from anvilate.mcp import (
+    METHOD_NOT_FOUND,
     PROTOCOL_REVISION,
     REQUIRED_OPERATIONS,
     Cost,
@@ -492,6 +493,39 @@ def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
     # And the refusal follows the declared cost, not a list of names.
     unbounded = {t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK}
     assert unbounded == {"build_part", "run_fea_validation"}
+
+
+def test_a_task_dispatched_refusal_says_there_is_no_task_transport_to_go_to():
+    """ "Task-dispatched" on its own points a client at a mechanism this server does not have.
+
+    `handle_request` answers `initialize`, `tools/list` and `tools/call` and nothing else, so
+    there is no task method to fall back to and these two operations cannot be reached by any
+    call the server answers. Both tools' published descriptions said "the call returns a task
+    handle", which no call has ever done — a client integrating against the contract was told
+    to expect a handle and got an error.
+    """
+    served = {"initialize", "tools/list", "tools/call"}
+    for method in ("tasks/create", "tasks/get", "tasks/result", "tasks/cancel"):
+        response = handle_request({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}})
+        assert response["error"]["code"] == METHOD_NOT_FOUND, method
+    # A floor under that: the methods it *does* answer still work, so the loop above is not
+    # passing because every method is refused.
+    for method in ("initialize", "tools/list"):
+        assert "result" in handle_request(
+            {"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}
+        ), method
+
+    for name in ("build_part", "run_fea_validation"):
+        message = _call(name, {"spec": {}})["error"]["message"]
+        assert "no task transport yet" in message, name
+        assert "openspec/changes/modernize-mcp-server" in message, name
+
+    # And no published description may promise the handle the server cannot return.
+    for tool in tool_catalog():
+        assert "returns a task handle" not in tool.description, tool.name
+        if tool.dispatch is Dispatch.TASK:
+            assert "dispatched as a task" in tool.description, tool.name
+    assert served == {"initialize", "tools/list", "tools/call"}
 
 
 def test_every_tool_names_what_it_acts_on():

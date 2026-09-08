@@ -3,9 +3,12 @@
 **An agent driving Anvilate over MCP gets typed documents, not prose — and knows before it
 calls whether the answer arrives in the reply or through a task handle.**
 
-This page describes the tool *contracts*. The server itself is not built yet, which is
-exactly why the contracts are pinned now: the cheapest moment to change a tool surface is
-before a client has integrated against it.
+This page describes the tool *contracts*, which were pinned before the server existed — the
+cheapest moment to change a tool surface is before a client has integrated against it. **The
+server is built now**: `anvilate-mcp` runs it on stdio, it answers `initialize`,
+`tools/list` and `tools/call`, and four of the eight operations are dispatched to real code.
+The other four are refused by name with what each waits on, which is what the rest of this
+page is about.
 
 ```python
 from anvilate.mcp import catalog_issues, tool_catalog, wire_definitions

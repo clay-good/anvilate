@@ -109,6 +109,13 @@ class Gate(StrEnum):
     WATERMARK = "watermark"
 
 
+# What a task-dispatched operation waits on here. The dispatch decision is settled — an
+# unbounded run cannot be promised in a synchronous reply — and the transport that would
+# carry it is not built, which is a different fact and the one a client is stuck on.
+_TASKS_EXTENSION = (
+    "https://github.com/clay-good/anvilate/tree/main/openspec/changes/modernize-mcp-server"
+)
+
 # The operations the headless-automation spec requires the server to expose, at minimum.
 # `catalog_issues` checks the catalog against this set in both directions: a missing
 # operation is an unmet requirement, and an extra one is a surface nobody specified.
@@ -361,7 +368,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             description=(
                 "Execute the part's generating program and return a geometry summary. The "
                 "program is caller-supplied code, so it runs sandboxed and its runtime is "
-                "bounded by nothing this library controls: the call returns a task handle."
+                "bounded by nothing this library controls: the operation is dispatched as a "
+                "task rather than answered in a synchronous reply."
             ),
             input_schema=_object_schema(
                 {"spec": {"$ref": _SPEC_REF}},
@@ -482,10 +490,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Run the FEA-class validation tier",
             description=(
                 "Run the T3 converged finite-element checks. The run stops on a convergence "
-                "tolerance, not on a clock, so the call returns a task handle: progress is "
-                "reportable, cancellation terminates the solver subprocesses, and a "
-                "cancelled run reports its affected checks as not evaluated rather than as "
-                "passing."
+                "tolerance, not on a clock, so the operation is dispatched as a task rather "
+                "than answered in a synchronous reply: progress is reportable, cancellation "
+                "terminates the solver subprocesses, and a cancelled run reports its "
+                "affected checks as not evaluated rather than as passing."
             ),
             input_schema=_object_schema(
                 {
@@ -986,12 +994,19 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         return _error(request_id, INVALID_PARAMS, "; ".join(issues))
 
     if tool.dispatch is Dispatch.TASK:
+        # The second sentence is the half that was missing, and it is the half a client can
+        # act on. This server answers `initialize`, `tools/list` and `tools/call` and
+        # nothing else: there is no task method to fall back to, so "task-dispatched" on its
+        # own read as a pointer to a mechanism that is not here. Both tools' published
+        # descriptions said "the call returns a task handle", which no call ever does.
         return _error(
             request_id,
             TOOL_UNAVAILABLE,
             f"{tool.name} is task-dispatched because its cost is {tool.cost.value}; a "
             f"synchronous tools/call cannot promise a reply for work bounded by a "
-            f"convergence criterion or by caller-supplied code",
+            f"convergence criterion or by caller-supplied code. This server serves no task "
+            f"transport yet, so the operation cannot be reached here by any method — see "
+            f"{_TASKS_EXTENSION}",
         )
     if not tool.is_stateless:
         return _error(
