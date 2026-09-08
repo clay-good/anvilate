@@ -1391,3 +1391,74 @@ def test_the_contributing_pages_non_finite_promise_is_the_gates_own():
         counted["_require"],
         counted["_check"],
     ), f"the page says {helpers.groups()} modules; the tree has {tuple(counted.values())}"
+
+
+# --- one physical constant, seventy-six declarations ----------------------------------------
+
+# The SI value of each constant this library writes down. Nine of the thirteen are *exactly*
+# defined by the 2019 SI redefinition — the speed of light, Planck, Boltzmann, elementary
+# charge, Avogadro, the gas constant that follows from k·N_A, and standard gravity, which is
+# a defined conventional value rather than a measurement. The other three are CODATA 2018.
+_SI_VALUE = {
+    "AVOGADRO": 6.02214076e23,
+    "BOLTZMANN": 1.380649e-23,
+    "ELEMENTARY_CHARGE": 1.602176634e-19,
+    "GAS_CONSTANT": 8.314462618,
+    "GRAVITY": 9.80665,
+    "PLANCK": 6.62607015e-34,
+    "PLANCK_CONSTANT": 6.62607015e-34,
+    "SPEED_OF_LIGHT": 299792458.0,
+    "STANDARD_GRAVITY": 9.80665,
+    "STEFAN_BOLTZMANN": 5.670374419e-8,
+    "UNIVERSAL_GAS_CONSTANT": 8.314462618,
+    "VACUUM_PERMEABILITY": 1.25663706212e-6,
+    "VACUUM_PERMITTIVITY": 8.8541878128e-12,
+}
+
+# Suffixes a module may put on the name to say which units it holds the value in.
+_UNIT_SUFFIX = re.compile(
+    r"_(?:M_PER_S2|M_PER_S|J_PER_K|J_S|F_PER_M|PER_MOL|W_PER_M2_K4|C|K|PA|W)$"
+)
+
+
+def test_every_copy_of_a_physical_constant_is_the_si_value():
+    """Standard gravity is written down in 26 modules and the speed of light in 11.
+
+    Nothing holds them equal. There is no canonical definition to import — the one the
+    tests reach for, `dynamics.STANDARD_GRAVITY`, is simply one of the copies — so a module
+    that quietly acquired 9.81 would be caught only where that module's own numbers are
+    pinned, and in a module whose results are checked against its own constant, not at all.
+
+    This does not ask them to agree with each other, which two matching typos would satisfy.
+    It asks each to be the value SI publishes.
+    """
+    declarations = []
+    for path in sorted(pathlib.Path(__file__).resolve().parents[1].glob("src/anvilate/**/*.py")):
+        for node in parsed_source(path).body:
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not (isinstance(target, ast.Name) and target.id.isupper()):
+                continue
+            value = node.value
+            if not (
+                isinstance(value, ast.Constant)
+                and isinstance(value.value, (int, float))
+                and not isinstance(value.value, bool)
+            ):
+                continue
+            name = _UNIT_SUFFIX.sub("", target.id.lstrip("_"))
+            if name in _SI_VALUE:
+                declarations.append((path.name, target.id, name, float(value.value)))
+
+    # Attack the gate: a scan that stopped matching would report nothing wrong, and the
+    # names are the only thing it keys on.
+    assert len(declarations) >= 70, f"the scan found only {len(declarations)} declarations"
+    assert len({name for _f, _t, name, _v in declarations}) >= 12, "it found few distinct constants"
+
+    wrong = [
+        f"{module}: {spelled} = {held!r}, SI says {_SI_VALUE[name]!r}"
+        for module, spelled, name, held in declarations
+        if held != _SI_VALUE[name]
+    ]
+    assert wrong == [], f"these are not the SI value: {wrong}"
