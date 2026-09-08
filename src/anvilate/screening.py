@@ -848,18 +848,90 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             )
         )
     if spec.manufacturing.min_wall is not None:
-        entries.append(
-            ScorecardEntry(
-                name="minimum wall",
-                status=CheckStatus.NOT_EVALUATED,
-                detail=(
-                    f"the spec declares min_wall {spec.manufacturing.min_wall}, and nothing "
-                    "screened it: a wall thickness is measured on a built solid, and no "
-                    "geometry is generated from a spec today"
-                ),
-            )
-        )
+        entries.append(_min_wall_entry(spec))
     return entries
+
+
+# The element fields that are a wall the document states outright. Four of the twenty-four
+# element types declare one; the rest describe their part by section, area or diameter and
+# name no thickness at all.
+_DECLARED_WALLS: dict[str, tuple[str, ...]] = {
+    "base_plate": ("plate_thickness",),
+    "bolted_connection": ("plate_thickness",),
+    "cover_plate": ("thickness",),
+    "lifting_lug": ("thickness",),
+}
+
+
+def _min_wall_entry(spec: DesignSpec) -> ScorecardEntry:
+    """`manufacturing.min_wall` against the walls the document declares.
+
+    This said "a wall thickness is measured on a built solid, and no geometry is generated
+    from a spec today", and a `lifting_lug` declaring `thickness: 2 mm` beside a `min_wall`
+    of 3 mm is a document that states its own violation. Nothing measured anything; the two
+    numbers were both on the page.
+
+    **A thickness under the minimum is a FAIL, and every thickness over it is not a pass.**
+    The direction is not symmetric and the entry does not pretend it is: the document names
+    the walls its checks need, not every wall of the part, so a thinner feature nobody
+    declared is exactly what a screening card cannot see. One declared wall below the
+    process minimum is certain — the part as described cannot be made — and that certainty
+    does not run the other way.
+    """
+    minimum = spec.manufacturing.min_wall
+    walls = [
+        (field, value)
+        for field in _DECLARED_WALLS.get(spec.element_type or "", ())
+        if isinstance(value := (spec.element_params or {}).get(field), Quantity)
+    ]
+    try:
+        # `Quantity` refuses `<` on purpose — "convert both to one unit and compare the
+        # magnitudes, which is where the unit you are comparing in gets written down". So
+        # the unit is written down here, once, and both sides are read in it.
+        floor = minimum.to("mm").magnitude
+        thin = [(field, value) for field, value in walls if value.to("mm").magnitude < floor]
+    except (ValueError, TypeError) as incomparable:
+        # A `min_wall` or a thickness that is not a length. Every other check on this card
+        # has its own opinion about that input; this one says what stopped it rather than
+        # falling through to a branch whose sentence would be about something else.
+        return ScorecardEntry(
+            name="minimum wall",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"the spec declares min_wall {minimum}, and it could not be compared to "
+                f"the walls this element declares: {incomparable}"
+            ),
+        )
+
+    if thin:
+        named = ", ".join(f"{field} {value}" for field, value in thin)
+        return ScorecardEntry(
+            name="minimum wall",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the spec declares min_wall {minimum} and a wall under it: {named}. "
+                f"The part as described cannot be made by a process with this minimum"
+            ),
+        )
+    if walls:
+        named = ", ".join(f"{field} {value}" for field, value in walls)
+        return ScorecardEntry(
+            name="minimum wall",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"the spec declares min_wall {minimum}, and every wall it does declare is "
+                f"over it ({named}) — which is not a pass: a document names the walls its "
+                f"checks need, not every wall of the part"
+            ),
+        )
+    return ScorecardEntry(
+        name="minimum wall",
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"the spec declares min_wall {minimum}, and nothing screened it: this element "
+            f"declares no thickness, so the document states no wall to compare it against"
+        ),
+    )
 
 
 def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:

@@ -219,7 +219,8 @@ That is the whole rule. What it means field by field:
 | `manufacturing.tolerance_class` | resolved like any other identifier |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
-| `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `manufacturing.min_wall` | `FAIL` when a wall the element declares is under it — a part described with a 20 mm plate and a 25 mm process minimum cannot be made. `NOT_EVALUATED` when every declared wall clears it, naming them: a document states the walls its checks need, not every wall of the part |
 | `seismic_design_acceleration`, `seismic_redundancy_factor` **without a seismic `combination_basis`** | `NOT_EVALUATED` — S_DS and ρ are read by the ASCE 7 seismic combination sets, so without `asce7_lrfd_seismic` or `asce7_asd_seismic` a seismic design is stated and not applied |
 | `material` resolved from a **team-local extension record** | `PASS`, saying it resolves as an extension record overriding bundled data of the same identifier — not "resolves in the bundled materials database", which is what it used to claim for a team's own alloy |
 | an `interfaces` ref resolved from a **team-local extension record** | `PASS`, saying so — the components database and the bearing table both take extension records, and the other six component tables have no extension mechanism, so a hit there is bundled by construction |
@@ -260,7 +261,15 @@ neither an upper nor a lower bound on the finished mass, and a `PASS` against `m
 would be a verdict on a part nobody described. Stated beside the bound a reader can act on
 it; compared to the bound it is exactly the silent green this card exists to refuse. A
 document with no plan rectangle to weigh — a circular cover, a lifting lug, which declares a
-width and a hole and no length — states no mass at all rather than inventing one — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
+width and a hole and no length — states no mass at all rather than inventing one.
+
+`min_wall` had the same sentence and the same problem: "a wall thickness is measured on a
+built solid". Four element types declare a thickness outright, so a lifting lug given
+`thickness: 20 mm` beside a `min_wall` of 25 mm was a document stating its own violation with
+both numbers on the page and nothing reading either. That is a **`FAIL`** now — the part as
+described cannot be made — while every declared wall clearing the minimum stays
+`NOT_EVALUATED`, because the certainty runs one way only: a thinner feature nobody declared
+is exactly what a screening card cannot see — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
 one field at a time, passed `.inf` too. No field of a document may now be an infinity or a
 NaN: a dimension whose nominal was NaN had screened to PASS on its band, because the
 achievability check compares the band against the process floor and never looks at the size

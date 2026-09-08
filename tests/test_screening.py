@@ -1020,6 +1020,81 @@ def test_a_document_with_no_solid_to_weigh_says_so_and_states_no_mass():
     assert "weighs" in stated.detail
 
 
+def test_a_declared_wall_under_the_process_minimum_is_a_failure_and_not_a_gap():
+    """`min_wall` said "a wall thickness is measured on a built solid, and no geometry is
+    generated from a spec today", and nothing was measured: a lifting lug declaring
+    `thickness: 20 mm` beside a `min_wall` of 25 mm is a document stating its own violation,
+    with both numbers on the page.
+
+    A wall under the process minimum is certain — the part as described cannot be made — so
+    it is a FAIL, and the card goes with it.
+    """
+
+    spec = _lug_spec(
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL, min_wall=_q("25 mm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "minimum wall")
+    assert entry.status is CheckStatus.FAIL
+    assert "25 mm" in entry.detail and "thickness 20 mm" in entry.detail
+    assert screen_spec(spec).status is CheckStatus.FAIL
+
+
+def test_every_declared_wall_clearing_the_minimum_is_still_not_a_pass():
+    """The direction is not symmetric and the entry may not pretend it is.
+
+    A document names the walls its checks need, not every wall of the part, so a thinner
+    feature nobody declared is exactly what a screening card cannot see. One wall under the
+    minimum is certain; all of them over it is not.
+    """
+    spec = _lug_spec(
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL, min_wall=_q("3 mm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "minimum wall")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "which is not a pass" in entry.detail
+    # And it says which wall it did look at, so the gap is one a reader can size.
+    assert "thickness 20 mm" in entry.detail
+
+
+def test_the_minimum_wall_comparison_is_made_in_a_named_unit():
+    """`Quantity` refuses `<` on purpose — "convert both to one unit and compare the
+    magnitudes, which is where the unit you are comparing in gets written down".
+
+    The first draft of this check compared the quantities directly and swallowed the
+    resulting `ValueError` into the branch that says the element declares no thickness,
+    which is a false sentence about a document that declares one. A test asserting only
+    NOT_EVALUATED would have passed it.
+    """
+    spec = _lug_spec(
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL, min_wall=_q("2.5 cm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "minimum wall")
+    assert entry.status is CheckStatus.FAIL, entry.detail
+    assert "could not be compared" not in entry.detail
+    assert "declares no thickness" not in entry.detail
+
+
+def test_an_element_that_declares_no_wall_says_that_and_not_something_else():
+    """A gusset plate is given as areas and a load; there is no thickness in the document.
+    The reason has to be about this element rather than about geometry generation."""
+    spec = _spec(
+        element_type="gusset_plate",
+        element_params={
+            "name": "g1",
+            "net_shear_area": _q("2400 mm^2"),
+            "net_tension_area": _q("1800 mm^2"),
+            "load": _q("120 kN"),
+            "material": "ASTM-A36",
+        },
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL, min_wall=_q("3 mm")),
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "minimum wall")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "declares no thickness" in entry.detail
+    assert "no geometry is generated" not in entry.detail
+
+
 def test_no_unscreened_constraint_claims_a_missing_geometry_kernel():
     """The reason a card gives has to be true of the document in front of it.
 
@@ -1250,13 +1325,21 @@ def test_a_general_tolerance_class_written_the_way_a_drawing_writes_it_is_a_verd
     )
 
 
-def test_a_declared_min_wall_is_reported_as_unscreened():
-    """A bound on built geometry, like the bounds in `constraints`, and `Manufacturing` said
-    in its own docstring that it was checked."""
+def test_a_declared_min_wall_is_reported_and_never_silently_dropped():
+    """A bound `Manufacturing` said in its own docstring was checked, and nothing read.
+
+    The entry always exists when the field does. What it *says* is now about the walls the
+    document declares rather than about a missing geometry kernel — see the three tests
+    above — but the property this one holds is the original one: declaring a `min_wall` can
+    never leave the card silent about it.
+    """
     card = screen_spec(_manufactured(min_wall=_q("2 mm")))
     entry = next(e for e in card.entries if e.name == "minimum wall")
     assert entry.status is CheckStatus.NOT_EVALUATED
-    assert "2 mm" in entry.detail and "no geometry is generated" in entry.detail
+    assert "2 mm" in entry.detail
+    assert "no geometry is generated" not in entry.detail, (
+        "the reason has to be true of the document in front of it"
+    )
     # And a spec that declares neither gets neither entry.
     plain = [e.name for e in screen_spec(_lug_spec()).entries]
     assert "minimum wall" not in plain and "general tolerance class" not in plain
