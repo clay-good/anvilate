@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import asin, degrees, log, log10, pi, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
 
 __all__ = [
@@ -359,6 +359,10 @@ def permissible_exposure_time(
     allowances a high level gives).
     """
     _check(criterion_duration, "[time]", "criterion_duration")
+    # An infinite level makes the exponent infinite and `2.0 ** inf` overflows to a divide
+    # by zero one line down.
+    require_finite(sound_level, name="sound_level")
+    require_finite(criterion_level, name="criterion_level")
     if exchange_rate <= 0:
         raise ValueError("exchange_rate (dB) must be positive")
     t0 = criterion_duration.to("hour").magnitude
@@ -676,6 +680,12 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
+    # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
+    # zero or overflows an `int()`. The `_require` helper in forty-eight sibling modules
+    # has called this since it was written and this one, in a hundred and sixty-four, did
+    # not — the same helper in two generations.
+    require_finite(value, name=name)
 
 
 def eyring_reverberation_time(

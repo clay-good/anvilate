@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from math import pi
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
@@ -59,6 +59,10 @@ def wind_shear_speed(
     _check(reference_speed, "[length]/[time]", "reference_speed")
     _check(reference_height, "[length]", "reference_height")
     _check(target_height, "[length]", "target_height")
+    # A NaN exponent passes every comparison, and `base ** nan` is exactly 1.0 when the
+    # base is 1.0 — so the NaN vanishes instead of propagating and the result reads as
+    # an ordinary answer.
+    require_finite(shear_exponent, name="shear_exponent")
     v1 = reference_speed.to("m/s").magnitude
     h1 = reference_height.to("m").magnitude
     h2 = target_height.to("m").magnitude
@@ -260,3 +264,9 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
+    # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
+    # zero or overflows an `int()`. The `_require` helper in forty-eight sibling modules
+    # has called this since it was written and this one, in a hundred and sixty-four, did
+    # not — the same helper in two generations.
+    require_finite(value, name=name)

@@ -181,6 +181,8 @@ def spline_torque_capacity(
     _require(mean_radius, "[length]", "mean_radius")
     _require(tooth_height, "[length]", "tooth_height")
     _require(spline_length, "[length]", "spline_length")
+    # Ahead of the coercion: `int(inf)` raises OverflowError before the refusal below.
+    require_finite(number_of_teeth, name="number_of_teeth")
     if int(number_of_teeth) != number_of_teeth or number_of_teeth <= 0:
         raise ValueError(f"number_of_teeth must be a positive whole number; got {number_of_teeth}")
     if not 0 < load_fraction <= 1:

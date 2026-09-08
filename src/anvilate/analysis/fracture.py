@@ -208,6 +208,10 @@ def strain_energy_release_rate(
     """
     _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
     _require(youngs_modulus, "[pressure]", "youngs_modulus")
+    # Unconditionally, not only under `plane_strain`. In plane stress nu does not enter the
+    # formula, so a NaN one was accepted and the answer came back correct — which tells a
+    # caller whose model has gone NaN nothing at all. They supplied it; it is checked.
+    require_finite(poisson_ratio, name="poisson_ratio")
     k = stress_intensity.to("Pa*m**0.5").magnitude
     e = youngs_modulus.to("Pa").magnitude
     if e <= 0:
@@ -408,6 +412,10 @@ def crack_tip_opening_displacement(
     _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(youngs_modulus, "[pressure]", "youngs_modulus")
+    # A NaN exponent passes every comparison, and `base ** nan` is exactly 1.0 when the
+    # base is 1.0 — so the NaN vanishes instead of propagating and the result reads as
+    # an ordinary answer.
+    require_finite(poisson_ratio, name="poisson_ratio")
     sigma_y = yield_strength.to("Pa").magnitude
     if sigma_y <= 0:
         raise ValueError("yield_strength must be positive")
@@ -810,6 +818,9 @@ def fad_assessment(
     _require(stress_intensity, "[pressure] * [length]**0.5", "stress_intensity")
     _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
     _require(reference_stress, "[pressure]", "reference_stress")
+    # The fourth quantity, and the one the list stopped at: without this, `.to("MPa")` below
+    # reached into whatever was passed and answered `AttributeError`.
+    _require(yield_strength, "[pressure]", "yield_strength")
     k = stress_intensity.to("MPa*m**0.5").magnitude
     kmat = fracture_toughness.to("MPa*m**0.5").magnitude
     sigma_ref = reference_stress.to("MPa").magnitude

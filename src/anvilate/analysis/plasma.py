@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
@@ -107,6 +107,12 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
+    # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
+    # zero or overflows an `int()`. The `_require` helper in forty-eight sibling modules
+    # has called this since it was written and this one, in a hundred and sixty-four, did
+    # not — the same helper in two generations.
+    require_finite(value, name=name)
 
 
 def plasma_beta(

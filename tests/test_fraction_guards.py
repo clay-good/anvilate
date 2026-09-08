@@ -35,6 +35,7 @@ from typing import Any
 import pytest
 
 import anvilate.analysis as analysis
+import anvilate.units.quantity as quantity_module
 from anvilate.analysis import (
     adiabatic_compression_power,
     asme_b313_pipe_pressure,
@@ -952,13 +953,14 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
         if target not in arguments:
             unprobed.append(f"{label}({target})")
             continue
-        quantity = isinstance(arguments[target], Quantity)
+        bound = arguments[target]
+        quantity = isinstance(bound, Quantity)
         # Zero as well as a negative: "positive" excludes zero, and the difference between
         # `<= 0` and `< 0` is one keystroke no negative probe can see. All 65 promises this
         # reaches refuse both today, so what this pins is that they go on doing it.
         for spelled, value in (
-            ("-1", Quantity.parse("-1.0 m") if quantity else -1.0),
-            ("0", Quantity.parse("0.0 m") if quantity else 0.0),
+            ("-1", Quantity(magnitude=-1.0, unit=bound.unit) if quantity else -1.0),
+            ("0", Quantity(magnitude=0.0, unit=bound.unit) if quantity else 0.0),
         ):
             try:
                 function(**{**arguments, target: value})
@@ -981,13 +983,79 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
 # --- a NaN is not an answer ----------------------------------------------------------------
 
 
+_BASE_UNIT = {
+    "[length]": "m",
+    "[mass]": "kg",
+    "[time]": "s",
+    "[temperature]": "K",
+    "[current]": "A",
+    "[substance]": "mol",
+    "[luminosity]": "cd",
+}
+
+
+@cache
+def _unit_for(dimension: str) -> str | None:
+    """A base-unit expression for a dimension string, or ``None`` if it cannot be built.
+
+    `pint` reduces `"[force] * [length]"` to `{[mass]: 1, [length]: 2, [time]: -2}`, which
+    is a unit expression once each base dimension is given its SI symbol. That is the whole
+    trick behind the population below.
+    """
+    try:
+        dimensionality = quantity_module.UREG.get_dimensionality(dimension)
+    except Exception:  # noqa: BLE001 - an expression pint cannot read is not a dimension
+        return None
+    parts = []
+    for base, power in dimensionality.items():
+        symbol = _BASE_UNIT.get(base)
+        if symbol is None:
+            return None
+        parts.append(symbol if power == 1 else f"{symbol} ** {power}")
+    return " * ".join(parts) or None
+
+
+@cache
+def _declared_dimensions() -> dict[str, dict[str, str]]:
+    """Each analysis module's ``_check(x, "[dimension]", "x")`` calls, by parameter name.
+
+    211 of the 238 modules state the dimension they want in the source, giving 1,795
+    (module, parameter) pairs — which is what lets the probe hand a pressure parameter a
+    pressure instead of a metre.
+    """
+    found: dict[str, dict[str, str]] = {}
+    for path in sorted(
+        pathlib.Path(__file__).resolve().parents[1].glob("src/anvilate/analysis/*.py")
+    ):
+        wanted = found.setdefault(path.stem, {})
+        for node in ast.walk(parsed_source(path)):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if len(node.args) < 2:
+                continue
+            first, second = node.args[0], node.args[1]
+            if (
+                isinstance(first, ast.Name)
+                and isinstance(second, ast.Constant)
+                and isinstance(second.value, str)
+                and second.value.startswith("[")
+            ):
+                wanted.setdefault(first.id, second.value)
+    return found
+
+
 @cache
 def _uniformly_callable() -> list[tuple[str, object, dict]]:
-    """Every public analysis function that accepts every parameter bound to 1.0 m / 1.0.
+    """Every public analysis function that accepts a call built from its own declarations.
 
-    The all-positive probe of :mod:`probe-the-front-door`, kept as the population the two
-    poison probes below run over: a function that refuses the uniform call refuses for a
-    reason of its own (a dimension mismatch, usually) and says nothing about NaN.
+    **Every `Quantity` gets a quantity of the dimension the function asks for.** Binding
+    them all to one metre — which is what this did — meant a pressure parameter failed on
+    dimension and the function never ran, so the probes below entered 289 functions out of
+    1,673. Reading the dimension out of each module's own `_check` calls reaches 1,083, and
+    the 23 further defects that widening found are in the commit that made it.
+
+    A function that still refuses refuses for a reason of its own and says nothing about a
+    poisoned input, so it is not in the population.
     """
     found = []
     for info in pkgutil.iter_modules(analysis.__path__):
@@ -1006,6 +1074,7 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
             # 3. Taking whichever binds reaches 289 functions where either alone reaches
             # 284 or 285 — and a guard outside the population is a guard this gate cannot
             # see, which is how the Geneva slot check was added without being exercised.
+            wanted = _declared_dimensions().get(info.name, {})
             for count in (2, 3):
                 arguments, bindable = {}, True
                 for parameter in parameters:
@@ -1015,11 +1084,11 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         if isinstance(annotation, str)
                         else getattr(annotation, "__name__", "")
                     )
-                    value = {
-                        "Quantity": Quantity.parse("1.0 m"),
-                        "float": 1.0,
-                        "int": count,
-                    }.get(spelled)
+                    if spelled == "Quantity":
+                        unit = _unit_for(wanted.get(parameter.name, "[length]")) or "m"
+                        value = Quantity(magnitude=1.0, unit=unit)
+                    else:
+                        value = {"float": 1.0, "int": count}.get(spelled)
                     if value is not None:
                         arguments[parameter.name] = value
                     elif parameter.default is inspect.Parameter.empty:
@@ -1056,7 +1125,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
     """
     population = _uniformly_callable()
     # Attack the gate: a binder that stopped reaching these would report nothing wrong.
-    assert len(population) >= 285, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1000, f"the probe reached only {len(population)} functions"
 
     answered, crashed = [], []
     probes = 0
@@ -1072,8 +1141,14 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
                 ("+inf", float("inf")),
                 ("-inf", float("-inf")),
             ):
+                # In the parameter's OWN unit. Poisoning every quantity with a *metre*
+                # meant a pressure or a viscosity was refused for a dimension mismatch —
+                # a ValueError, which this loop treats as the guard working — so the whole
+                # widened population reported clean while the crashes were still there.
                 poison = (
-                    Quantity(magnitude=number, unit="m") if isinstance(value, Quantity) else number
+                    Quantity(magnitude=number, unit=value.unit)
+                    if isinstance(value, Quantity)
+                    else number
                 )
                 try:
                     result = function(**{**arguments, name: poison})
@@ -1093,7 +1168,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
                 ):
                     answered.append(f"{label}({name}=nan) -> {result}")
 
-    assert probes >= 500, f"only {probes} non-finite probes were made"
+    assert probes >= 2500, f"only {probes} non-finite probes were made"
     assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "
@@ -1116,7 +1191,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
     check everywhere else.
     """
     population = _uniformly_callable()
-    assert len(population) >= 285, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1000, f"the probe reached only {len(population)} functions"
 
     leaked, probes = [], 0
     for label, function, arguments in population:
@@ -1132,7 +1207,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
                     continue
                 leaked.append(f"{label}({name}={spelled}) returned a value")
 
-    assert probes >= 1500, f"only {probes} junk probes were made"
+    assert probes >= 2500, f"only {probes} junk probes were made"
     assert leaked == [], (
         "these answered ordinary junk with something other than a ValueError or a "
         f"TypeError: {leaked}"

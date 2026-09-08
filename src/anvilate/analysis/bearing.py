@@ -166,6 +166,10 @@ def bearing_basic_rating_life(
     """
     _require(dynamic_load_rating, "[force]", "dynamic_load_rating")
     _require(equivalent_load, "[force]", "equivalent_load")
+    # A NaN exponent passes every comparison, and `base ** nan` is exactly 1.0 when the
+    # base is 1.0 — so the NaN vanishes instead of propagating and the result reads as
+    # an ordinary answer.
+    require_finite(life_exponent, name="life_exponent")
     c = dynamic_load_rating.to("N").magnitude
     p = equivalent_load.to("N").magnitude
     if c <= 0:
@@ -194,6 +198,9 @@ def bearing_rating_for_life(
     load is high. P must be positive, L10 and p positive. Returns the required rating in N.
     """
     _require(equivalent_load, "[force]", "equivalent_load")
+    # `L10 ** (1 / p)` is exactly 1.0 for L10 = 1.0 whatever p is, so a NaN exponent
+    # disappeared into a rating equal to the load.
+    require_finite(life_exponent, name="life_exponent")
     p_load = equivalent_load.to("N").magnitude
     if p_load <= 0:
         raise ValueError(f"equivalent_load must be positive; got {equivalent_load}")

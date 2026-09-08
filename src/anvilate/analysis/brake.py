@@ -156,6 +156,8 @@ def band_brake_max_lining_pressure(
     b = band_width.to("mm").magnitude
     if b <= 0:
         raise ValueError(f"band_width must be positive; got {band_width}")
+    # The third quantity, and the one the list at the top of this function stopped at.
+    _require(drum_diameter, "[length]", "drum_diameter")
     d = drum_diameter.to("mm").magnitude
     if d <= 0:
         raise ValueError(f"drum_diameter must be positive; got {drum_diameter}")

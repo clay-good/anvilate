@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import comb, exp, gamma, log
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "k_out_of_n_reliability",
@@ -50,6 +50,10 @@ def weibull_reliability(*, time: Quantity, characteristic_life: Quantity, shape:
     """
     _check(time, "[time]", "time")
     _check(characteristic_life, "[time]", "characteristic_life")
+    # A NaN exponent passes every comparison, and `base ** nan` is exactly 1.0 when the
+    # base is 1.0 — so the NaN vanishes instead of propagating and the result reads as
+    # an ordinary answer.
+    require_finite(shape, name="shape")
     t = time.to("s").magnitude
     eta = characteristic_life.to("s").magnitude
     if t < 0:
@@ -97,6 +101,10 @@ def weibull_hazard_rate(*, time: Quantity, characteristic_life: Quantity, shape:
     """
     _check(time, "[time]", "time")
     _check(characteristic_life, "[time]", "characteristic_life")
+    # A NaN exponent passes every comparison, and `base ** nan` is exactly 1.0 when the
+    # base is 1.0 — so the NaN vanishes instead of propagating and the result reads as
+    # an ordinary answer.
+    require_finite(shape, name="shape")
     t = time.to("s").magnitude
     eta = characteristic_life.to("s").magnitude
     if t < 0:
@@ -288,3 +296,9 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
+    # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
+    # zero or overflows an `int()`. The `_require` helper in forty-eight sibling modules
+    # has called this since it was written and this one, in a hundred and sixty-four, did
+    # not — the same helper in two generations.
+    require_finite(value, name=name)

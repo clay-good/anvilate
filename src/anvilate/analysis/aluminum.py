@@ -561,6 +561,11 @@ def aluminum_elastic_local_buckling_stress(
         raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
     if not thickness.has_dimension("[length]"):
         raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+    # This function checks its lengths inline rather than through `_require`, so it never
+    # picked up the finiteness check that helper carries — and an infinite thickness makes
+    # the b/t ratio zero, which the buckling stress then divides by.
+    require_finite(flat_width, name="flat_width")
+    require_finite(thickness, name="thickness")
     if not isinstance(elastic_modulus, Quantity):
         raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
     if not elastic_modulus.has_dimension("[pressure]"):

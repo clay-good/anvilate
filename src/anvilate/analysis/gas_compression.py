@@ -19,7 +19,7 @@ Sources: the GPSA *Engineering Data Book* and Cengel & Boles,
 
 from __future__ import annotations
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "adiabatic_compression_power",
@@ -235,3 +235,9 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
+    # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
+    # zero or overflows an `int()`. The `_require` helper in forty-eight sibling modules
+    # has called this since it was written and this one, in a hundred and sixty-four, did
+    # not — the same helper in two generations.
+    require_finite(value, name=name)
