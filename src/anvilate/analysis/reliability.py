@@ -255,6 +255,10 @@ def parallel_system_mtbf(*, failure_rate: Quantity, unit_count: int) -> Quantity
     rate = failure_rate.to("1/hour").magnitude
     if rate <= 0:
         raise ValueError(f"failure_rate must be positive; got {failure_rate}")
+    # A NaN passes the comparison below and then reaches `range()`, which answers
+    # `TypeError` — Python's complaint that an int is not an int, rather than this
+    # function's own refusal, which is right there and says what it wants.
+    require_finite(unit_count, name="unit_count")
     if unit_count < 1:
         raise ValueError(f"unit_count must be at least 1; got {unit_count}")
     harmonic = sum(1.0 / k for k in range(1, unit_count + 1))

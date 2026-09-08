@@ -1034,11 +1034,16 @@ def _declared_dimensions() -> dict[str, dict[str, str]]:
             if len(node.args) < 2:
                 continue
             first, second = node.args[0], node.args[1]
+            # `"[" in ...`, not `startswith`. A frequency is declared `"1/[time]"` and a
+            # `startswith("[")` test skipped every one of them, so those parameters fell
+            # back to the default metre and their functions dropped out of the population
+            # for a dimension mismatch — the same failure this whole binder exists to fix,
+            # one level up.
             if (
                 isinstance(first, ast.Name)
                 and isinstance(second, ast.Constant)
                 and isinstance(second.value, str)
-                and second.value.startswith("[")
+                and "[" in second.value
             ):
                 wanted.setdefault(first.id, second.value)
     return found
@@ -1125,7 +1130,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
     """
     population = _uniformly_callable()
     # Attack the gate: a binder that stopped reaching these would report nothing wrong.
-    assert len(population) >= 1000, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1150, f"the probe reached only {len(population)} functions"
 
     answered, crashed = [], []
     probes = 0
@@ -1168,7 +1173,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
                 ):
                     answered.append(f"{label}({name}=nan) -> {result}")
 
-    assert probes >= 2500, f"only {probes} non-finite probes were made"
+    assert probes >= 3000, f"only {probes} non-finite probes were made"
     assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "
@@ -1191,7 +1196,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
     check everywhere else.
     """
     population = _uniformly_callable()
-    assert len(population) >= 1000, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1150, f"the probe reached only {len(population)} functions"
 
     leaked, probes = [], 0
     for label, function, arguments in population:
@@ -1207,7 +1212,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
                     continue
                 leaked.append(f"{label}({name}={spelled}) returned a value")
 
-    assert probes >= 2500, f"only {probes} junk probes were made"
+    assert probes >= 3000, f"only {probes} junk probes were made"
     assert leaked == [], (
         "these answered ordinary junk with something other than a ValueError or a "
         f"TypeError: {leaked}"
