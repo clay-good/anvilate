@@ -117,7 +117,28 @@ SHEAR_FORM_CIRCULAR = 4.0 / 3.0
 # Enforcing by name here means a new call site inherits the guard instead of forgetting it.
 # Loads, moments and offsets are deliberately absent: a hogging moment and an uplift force
 # are signed on purpose.
-_POSITIVE_DEFINITE = frozenset({"length", "second_moment", "extreme_fibre", "elastic_modulus"})
+# Parameters `_require` also holds to being strictly positive. A **name** set, which is a
+# thing to be one entry short of, and it was: `width`, `height` and `diameter` were absent
+# while two of the docstrings below said in as many words that they "must be positive
+# lengths". So `rectangular_second_moment(width=-100 mm, height=200 mm)` returned a negative
+# I, and — worse, because it looks like an answer — `circular_second_moment(diameter=-1 m)`
+# returned a *positive* one, d⁴ being an even power, as did
+# `rectangular_plastic_section_modulus` through h².
+#
+# Not every length in this module is strictly positive, which is why this is a list rather
+# than a rule: `inner_diameter` is 0 for a solid section, and `load_position` is 0 at a
+# support. What is on it is every dimension that defines a cross-section.
+_POSITIVE_DEFINITE = frozenset(
+    {
+        "length",
+        "second_moment",
+        "extreme_fibre",
+        "elastic_modulus",
+        "width",
+        "height",
+        "diameter",
+    }
+)
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:

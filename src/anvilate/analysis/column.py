@@ -177,9 +177,22 @@ def slenderness_ratio(*, effective_length: Quantity, radius_of_gyration: Quantit
     ``effective_length`` is the already-factored length K·L; ``radius_of_gyration``
     is r. A high λ marks a long column that fails by Euler buckling; a low λ a
     stubby one where inelastic (Johnson) failure governs instead.
+
+    Both ``effective_length`` and ``radius_of_gyration`` must be a positive length. A
+    negative one produced a negative λ, which reads as an extremely stubby column and
+    sends the design down the Johnson branch; a zero radius of gyration divided.
     """
     _require(effective_length, "[length]", "effective_length")
     _require(radius_of_gyration, "[length]", "radius_of_gyration")
+    # `_require` checks the dimension and that the number is finite; neither says a column
+    # has a length. A negative `effective_length` gave a negative λ, which reads as a very
+    # stubby column and picks the Johnson branch, and a zero `radius_of_gyration` divided.
+    for value, name in (
+        (effective_length, "effective_length"),
+        (radius_of_gyration, "radius_of_gyration"),
+    ):
+        if value.to("mm").magnitude <= 0:
+            raise ValueError(f"{name} must be a positive length; got {value}")
     return effective_length.to("mm").magnitude / radius_of_gyration.to("mm").magnitude
 
 

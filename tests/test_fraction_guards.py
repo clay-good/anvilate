@@ -22,7 +22,10 @@ here rather than shipping.
 from __future__ import annotations
 
 import ast
+import importlib
+import inspect
 import pathlib
+import pkgutil
 import re
 from collections.abc import Callable
 from functools import cache
@@ -30,6 +33,7 @@ from typing import Any
 
 import pytest
 
+import anvilate.analysis as analysis
 from anvilate.analysis import (
     adiabatic_compression_power,
     asme_b313_pipe_pressure,
@@ -869,3 +873,97 @@ def test_the_compound_guard_exemptions_are_current_and_reasoned() -> None:
             f"{module}/{parameter} is a bare comparison chain now and the gate can read it; "
             "strike the exemption so it is checked like the rest"
         )
+
+
+# --- a docstring's own promise of positivity -----------------------------------------------
+
+_POSITIVITY_PROMISE = re.compile(
+    r"``([a-z_]+)``[^.]{0,80}?\bmust be (?:a )?(?:positive|strictly positive)\b", re.S
+)
+
+
+def _promised_positive() -> list[tuple[str, str, object, dict]]:
+    """Every public analysis function whose docstring names a parameter it calls positive.
+
+    Returned with the call this test can make: each parameter bound to 1.0 m or 1.0, which
+    is the shape :func:`probe_the_front_door`'s all-positive probe uses. A parameter this
+    cannot bind — a material reference, a named section — is reported rather than skipped.
+    """
+    found = []
+    for info in pkgutil.iter_modules(analysis.__path__):
+        if info.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"anvilate.analysis.{info.name}")
+        for name in getattr(module, "__all__", ()):
+            function = getattr(module, name, None)
+            if not inspect.isfunction(function) or not function.__doc__:
+                continue
+            claimed = {
+                match.group(1)
+                for match in _POSITIVITY_PROMISE.finditer(" ".join(function.__doc__.split()))
+            }
+            if not claimed:
+                continue
+            arguments, bindable = {}, True
+            for parameter in inspect.signature(function).parameters.values():
+                annotation = parameter.annotation
+                spelled = (
+                    annotation
+                    if isinstance(annotation, str)
+                    else getattr(annotation, "__name__", "")
+                )
+                value = {"Quantity": Quantity.parse("1.0 m"), "float": 1.0, "int": 2}.get(spelled)
+                if value is not None:
+                    arguments[parameter.name] = value
+                elif parameter.default is inspect.Parameter.empty:
+                    bindable = False
+                    break
+            for target in sorted(claimed):
+                found.append(
+                    (f"{info.name}.{name}", target, function, arguments if bindable else {})
+                )
+    return found
+
+
+def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_take_negative():
+    """The promise is in the prose and the enforcement is a *name* in a frozenset.
+
+    `anvilate.analysis.beam._POSITIVE_DEFINITE` is how that module holds a parameter above
+    zero, and it is a set of names — a thing to be one entry short of. It was three short:
+    `width`, `height` and `diameter` were missing while two docstrings right beneath it said
+    the lengths "must be positive". So `rectangular_second_moment(width=-100 mm)` returned a
+    negative second moment, and `circular_second_moment(diameter=-1 m)` returned a
+    **positive** one — d⁴ is an even power, so the wrong answer is the shape of a right one.
+    `column.slenderness_ratio` took a negative length and a zero radius of gyration the same
+    way.
+
+    Found by binding every public analysis function's parameters to 1.0 and substituting a
+    negative one at a time; 42 functions accepted it, and these were the ones whose own
+    docstring said they should not.
+    """
+    promises = _promised_positive()
+    # Attack the gate: a regex that stopped matching the prose would report nothing wrong.
+    assert len(promises) >= 60, f"only {len(promises)} docstring promises of positivity found"
+
+    accepted, unprobed = [], []
+    for label, target, function, arguments in promises:
+        if target not in arguments:
+            unprobed.append(f"{label}({target})")
+            continue
+        negative = Quantity.parse("-1.0 m") if isinstance(arguments[target], Quantity) else -1.0
+        try:
+            function(**{**arguments, target: negative})
+        except ValueError:
+            continue
+        except Exception as unexpected:  # noqa: BLE001 - the type is the finding
+            accepted.append(f"{label}({target}=-1) answered {type(unexpected).__name__}")
+            continue
+        accepted.append(f"{label}({target}=-1) returned a value")
+
+    # The unprobed are named and counted, not skipped in silence: a binder that stopped
+    # reaching these functions would empty `accepted` and read as a clean run.
+    assert len(unprobed) <= 12, f"{len(unprobed)} promises could not be probed: {unprobed}"
+    assert accepted == [], (
+        "these docstrings promise a positive parameter and the function takes a negative "
+        f"one: {accepted}"
+    )
