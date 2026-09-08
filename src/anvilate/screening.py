@@ -562,12 +562,19 @@ def _declared_extents(spec: DesignSpec) -> tuple[Quantity, Quantity, Quantity] |
     content this one already bounded — and `element_params` is typed `Mapping[str, Any]`, so
     a caller who assembled a spec by hand and left a raw dict there gets nothing rather than
     a parse of whatever they put in it.
+
+    **The dimension is checked, not only the type.** This function's own first line promises
+    edge *lengths*, and `element_params` is untyped until a pack model is built from it — so
+    a document writing `width: 300 kg` reached `_envelope_entry`, which converted it to
+    millimetres and took the whole card down with a `DimensionalityError`. The module's rule
+    is that a refusal is an entry and never a traceback; the wrong dimension is something the
+    element's own screen reports, and this one says nothing rather than crashing beside it.
     """
     fields = _PRISM_ELEMENTS.get(spec.element_type or "")
     if fields is None or spec.element_params is None:
         return None
     values = [spec.element_params.get(name) for name in fields[:3]]
-    if not all(isinstance(value, Quantity) for value in values):
+    if not all(isinstance(value, Quantity) and value.has_dimension("[length]") for value in values):
         return None
     return (values[0], values[1], values[2])
 
@@ -903,7 +910,12 @@ def _displacement_entry(spec: DesignSpec, screened: Sequence[ScorecardEntry]) ->
     deflections = [
         (entry.name, entry.comparison.measured)
         for entry in screened
-        if entry.comparison is not None and entry.comparison.measured_label == _DEFLECTION_LABEL
+        if entry.comparison is not None
+        and entry.comparison.measured_label == _DEFLECTION_LABEL
+        # A displacement is a length. `Comparison` requires its two sides to agree with each
+        # other and not to be any particular dimension, so a screen labelling something else
+        # "deflection" would otherwise be converted to millimetres and take the card with it.
+        and entry.comparison.measured.has_dimension("[length]")
     ]
     if not deflections:
         return ScorecardEntry(

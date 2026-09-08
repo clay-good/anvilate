@@ -1220,6 +1220,84 @@ def _envelope(x: str, y: str, z: str):
     return Envelope(x=_q(x), y=_q(y), z=_q(z))
 
 
+def test_a_comparison_labelled_deflection_that_is_not_a_length_is_left_alone():
+    """`Comparison` requires its two sides to agree with *each other*, not to be a length.
+
+    So the only thing standing between `_displacement_entry` and a `DimensionalityError` is
+    that today exactly one screen labels a comparison "deflection" and it is a beam's. The
+    guard is asserted here rather than through `screen_spec`, because a screen that produced
+    the wrong thing is what the guard is for and no screen does it yet — an unexercised guard
+    is a claim, and this is the claim being made.
+    """
+    from anvilate.scorecard import Comparison, LimitSense, ScorecardEntry
+    from anvilate.screening import _DEFLECTION_LABEL, _displacement_entry
+
+    frequency = ScorecardEntry(
+        name="misfiled",
+        status=CheckStatus.PASS,
+        detail="a frequency wearing a displacement's label",
+        comparison=Comparison(
+            measured=_q("12 Hz"),
+            limit=_q("20 Hz"),
+            sense=LimitSense.AT_LEAST,
+            measured_label=_DEFLECTION_LABEL,
+            limit_label="minimum",
+        ),
+    )
+    spec = _beam_spec(bound="5 mm", deflection_limit=None)
+    entry = _displacement_entry(spec, [frequency])
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "no check on this card computed a deflection" in entry.detail
+
+
+def test_no_declared_bound_turns_a_wrong_unit_into_a_traceback():
+    """The module's own rule: "A refusal is an entry, never a traceback."
+
+    `element_params` is typed `Mapping[str, Any]` and is only validated when a pack model is
+    built from it — which produces a NOT_EVALUATED entry rather than raising. So every check
+    that reads a parameter directly reads a value nothing has type-checked, and a document
+    writing `width: 300 kg` took the whole card down from `_envelope_entry` with pint's
+    `DimensionalityError`. `anvilate check` printed a traceback for an ordinary unit slip.
+
+    Every element field these bounds read, given a mass where a length belongs.
+    """
+    from anvilate.spec import Envelope
+
+    envelope = Constraints(envelope=Envelope(x=_q("1 m"), y=_q("1 m"), z=_q("1 m")))
+    cases = {
+        "base_plate width": _base_plate_spec(
+            element_params={
+                **_base_plate_spec().element_params,
+                "width": _q("300 kg"),
+            },
+            constraints=envelope,
+        ),
+        "base_plate plate_thickness": _base_plate_spec(
+            element_params={
+                **_base_plate_spec().element_params,
+                "plate_thickness": _q("25 kg"),
+            },
+            constraints=Constraints(max_mass=Provenanced.stated(_q("20 kg"))),
+        ),
+        "lifting_lug thickness": _lug_spec(
+            element_params={**_lug_spec().element_params, "thickness": _q("20 kg")},
+            manufacturing=Manufacturing(
+                process=ManufacturingProcess.SHEET_METAL, min_wall=_q("3 mm")
+            ),
+        ),
+    }
+    for label, spec in cases.items():
+        card = screen_spec(spec)  # the assertion is that this line returns at all
+        assert card.status is not CheckStatus.PASS, label
+        # And the problem is reported by the screen whose parameter it is, rather than by
+        # the bound that happened to read it. Which refusal the pack model reaches first is
+        # its business — a grouped-field rule can fire before the dimension one — so what is
+        # pinned is that the element check is the one that speaks.
+        tier = next(e for e in card.entries if e.name == "T1 analytical")
+        assert tier.status is CheckStatus.NOT_EVALUATED, label
+        assert "element_params do not build" in tier.detail, (label, tier.detail)
+
+
 def test_a_solid_bigger_than_its_envelope_by_volume_cannot_fit_in_any_orientation():
     """`constraint envelope` said "an envelope is checked against a built solid's bounding
     box, and no geometry is generated from a spec today", and a `base_plate` declares its
