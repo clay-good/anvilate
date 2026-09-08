@@ -59,6 +59,15 @@ ROUND_TRIPPED = frozenset(
         "level_turn.bank_angle_for_load_factor",
         "mass_energy.mass_from_energy",
         "photon.photon_wavelength_from_energy",
+        "radiation_shielding.shield_thickness_for_transmission",
+        "radioactivity.time_for_activity_decay",
+        "reactive_circuit.capacitance_for_reactance",
+        "reactive_circuit.inductance_for_reactance",
+        "reinforced_concrete.rc_stirrup_spacing_for_shear",
+        "reinforced_concrete.rc_tension_steel_for_moment",
+        "screw_conveyor.screw_conveyor_speed_for_capacity",
+        "spectroscopy.concentration_from_absorbance",
+        "spring.helical_spring_active_coils_for_rate",
     }
 )
 
@@ -525,3 +534,137 @@ def test_electroplating_time_for_thickness_lands_the_required_thickness():
     assert electroplating_deposition_thickness(plating_time=plating_time, **bath).to(
         "um"
     ).magnitude == pytest.approx(target.to("um").magnitude, rel=1e-12)
+
+
+def test_rc_tension_steel_for_moment_lands_the_required_moment():
+    """The reinforcement a required moment needs, fed back through the nominal moment.
+
+    A_s enters M_n twice — once directly and once through the stress-block depth a =
+    A_s·f_y/(0.85·f'_c·b) — so an inverse that solves the linear part and forgets the
+    quadratic lands close and not on. Exactly is the contract.
+    """
+    from anvilate.analysis import rc_beam_nominal_moment, rc_tension_steel_for_moment
+
+    beam = {
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("30 MPa"),
+        "beam_width": _q("300 mm"),
+        "effective_depth": _q("450 mm"),
+    }
+    target = _q("250 kN*m")
+    steel = rc_tension_steel_for_moment(required_moment=target, **beam)
+    assert rc_beam_nominal_moment(steel_area=steel, **beam).to("kN*m").magnitude == pytest.approx(
+        target.to("kN*m").magnitude, rel=1e-12
+    )
+
+
+def test_rc_stirrup_spacing_for_shear_lands_the_required_shear_strength():
+    from anvilate.analysis import rc_shear_reinforcement_strength, rc_stirrup_spacing_for_shear
+
+    stirrups = {
+        "stirrup_area": _q("142 mm**2"),
+        "stirrup_yield": _q("420 MPa"),
+        "effective_depth": _q("450 mm"),
+    }
+    target = _q("180 kN")
+    spacing = rc_stirrup_spacing_for_shear(required_shear_strength=target, **stirrups)
+    assert rc_shear_reinforcement_strength(stirrup_spacing=spacing, **stirrups).to(
+        "kN"
+    ).magnitude == pytest.approx(target.to("kN").magnitude, rel=1e-12)
+    # Closer stirrups carry more, so a larger demand must come back with a tighter spacing.
+    tighter = rc_stirrup_spacing_for_shear(required_shear_strength=_q("260 kN"), **stirrups)
+    assert tighter.to("mm").magnitude < spacing.to("mm").magnitude
+
+
+def test_helical_spring_active_coils_for_rate_lands_the_required_rate():
+    from anvilate.analysis import helical_spring_active_coils_for_rate, helical_spring_rate
+
+    wire = {
+        "mean_coil_diameter": _q("30 mm"),
+        "wire_diameter": _q("4 mm"),
+        "shear_modulus": _q("79.3 GPa"),
+    }
+    target = _q("12 N/mm")
+    coils = helical_spring_active_coils_for_rate(target_rate=target, **wire)
+    assert helical_spring_rate(active_coils=coils, **wire).to("N/mm").magnitude == pytest.approx(
+        target.to("N/mm").magnitude, rel=1e-12
+    )
+    # The rate goes as 1/N, so a stiffer spring is a shorter stack of active coils.
+    assert helical_spring_active_coils_for_rate(target_rate=_q("24 N/mm"), **wire) < coils
+
+
+def test_capacitance_for_reactance_lands_the_required_reactance():
+    from anvilate.analysis import capacitance_for_reactance, capacitive_reactance
+
+    frequency, target = _q("60 Hz"), _q("50 ohm")
+    capacitance = capacitance_for_reactance(reactance=target, frequency=frequency)
+    assert capacitive_reactance(capacitance=capacitance, frequency=frequency).to(
+        "ohm"
+    ).magnitude == pytest.approx(target.to("ohm").magnitude, rel=1e-12)
+
+
+def test_inductance_for_reactance_lands_the_required_reactance():
+    """Separate from the capacitive pair on purpose: both inverses take the same two
+    arguments and differ only in which way the frequency divides, so one test naming all
+    four symbols would let the two pairings be swapped without failing."""
+    from anvilate.analysis import inductance_for_reactance, inductive_reactance
+
+    frequency, target = _q("60 Hz"), _q("50 ohm")
+    inductance = inductance_for_reactance(reactance=target, frequency=frequency)
+    assert inductive_reactance(inductance=inductance, frequency=frequency).to(
+        "ohm"
+    ).magnitude == pytest.approx(target.to("ohm").magnitude, rel=1e-12)
+
+
+def test_concentration_from_absorbance_lands_the_required_absorbance():
+    from anvilate.analysis import absorbance, concentration_from_absorbance
+
+    cell = {"molar_absorptivity": _q("15000 L/(mol*cm)"), "path_length": _q("1 cm")}
+    target = 0.65
+    concentration = concentration_from_absorbance(absorbance=target, **cell)
+    assert absorbance(concentration=concentration, **cell) == pytest.approx(target, rel=1e-12)
+
+
+def test_shield_thickness_for_transmission_lands_the_required_transmission():
+    from anvilate.analysis import radiation_transmission_fraction, shield_thickness_for_transmission
+
+    mu, target = _q("0.15 1/cm"), 0.1
+    thickness = shield_thickness_for_transmission(
+        attenuation_coefficient=mu, transmission_fraction=target
+    )
+    assert radiation_transmission_fraction(
+        attenuation_coefficient=mu, thickness=thickness
+    ) == pytest.approx(target, rel=1e-12)
+
+
+def test_screw_conveyor_speed_for_capacity_lands_the_required_capacity():
+    from anvilate.analysis import (
+        screw_conveyor_speed_for_capacity,
+        screw_conveyor_volumetric_capacity,
+    )
+
+    screw = {
+        "screw_diameter": _q("250 mm"),
+        "shaft_diameter": _q("60 mm"),
+        "pitch": _q("250 mm"),
+        "fill_fraction": 0.35,
+    }
+    target = _q("0.02 m**3/s")
+    speed = screw_conveyor_speed_for_capacity(volumetric_capacity=target, **screw)
+    assert screw_conveyor_volumetric_capacity(rotational_speed=speed, **screw).to(
+        "m**3/s"
+    ).magnitude == pytest.approx(target.to("m**3/s").magnitude, rel=1e-12)
+
+
+def test_time_for_activity_decay_lands_the_required_activity():
+    from anvilate.analysis import remaining_activity, time_for_activity_decay
+
+    initial, target, half_life = _q("100 MBq"), _q("25 MBq"), _q("6 hour")
+    elapsed = time_for_activity_decay(
+        initial_activity=initial, final_activity=target, half_life=half_life
+    )
+    assert remaining_activity(
+        initial_activity=initial, half_life=half_life, elapsed_time=elapsed
+    ).to("MBq").magnitude == pytest.approx(target.to("MBq").magnitude, rel=1e-12)
+    # A quarter of the activity is exactly two half-lives.
+    assert elapsed.to("hour").magnitude == pytest.approx(12.0, rel=1e-12)
