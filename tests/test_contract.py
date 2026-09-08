@@ -3804,6 +3804,101 @@ def test_the_spec_loader_refuses_a_document_that_names_a_python_constructor():
         assert "could not determine a constructor" in str(raised.value), document
 
 
+# Modules that hand the package a way to run what it reads. `runpy` executes a file as a
+# program and `pty` spawns one; `ctypes` reaches native code with no Python in the way.
+_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "pickle",
+        "_pickle",
+        "cPickle",
+        "cloudpickle",
+        "jsonpickle",
+        "dill",
+        "subprocess",
+        "shelve",
+        "marshal",
+        "runpy",
+        "pty",
+        "ctypes",
+    }
+)
+
+# Callables that run something. The `os` process family is a prefix rule rather than a list
+# of fifteen names: `execv`, `execvp`, `execvpe`, `spawnl`, `spawnvpe`, `posix_spawnp` and
+# `forkpty` are the same decision spelled differently, and a list is a thing to be one entry
+# short of.
+_FORBIDDEN_CALLS = frozenset(
+    {"eval", "exec", "compile", "__import__", "os.system", "os.popen", "os.startfile"}
+)
+_FORBIDDEN_CALL_PREFIXES = ("os.exec", "os.spawn", "os.posix_spawn", "os.fork", "runpy.run", "pty.")
+
+
+def _RUNS_WHAT_IT_READS(target: str) -> bool:  # noqa: N802 - reads as the predicate it is
+    return target in _FORBIDDEN_CALLS or target.startswith(_FORBIDDEN_CALL_PREFIXES)
+
+
+def _import_bindings(tree: ast.AST) -> dict[str, str]:
+    """Every name the module binds by importing, mapped to what it actually names.
+
+    ``from os import system as sh`` binds ``sh`` to ``os.system``; ``import os.path as p``
+    binds ``p`` to ``os.path``. Without this a gate reading source text is comparing
+    spellings, and the author who writes the second spelling is not evading it — they are
+    writing ordinary Python.
+    """
+    bindings: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bindings[alias.asname or alias.name.split(".")[0]] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            for alias in node.names:
+                bindings[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return bindings
+
+
+def _resolved_call(node: ast.Call, bindings: dict[str, str]) -> str:
+    """The dotted name a call resolves to, with the module's own imports applied.
+
+    ``builtins.eval`` is normalised to ``eval``: importing a builtin explicitly is the same
+    call, and a gate that distinguishes them is one spelling short again.
+    """
+    spelled = ast.unparse(node.func)
+    head, _, rest = spelled.partition(".")
+    target = (
+        f"{bindings[head]}.{rest}" if head in bindings and rest else bindings.get(head, spelled)
+    )
+    prefix = "builtins."
+    return target[len(prefix) :] if target.startswith(prefix) else target
+
+
+def test_the_resolver_reads_a_call_written_the_other_way():
+    """The gate below is only as good as `_resolved_call`, so that is the thing to attack.
+
+    Each of these is how the forbidden call is written when it is not written the obvious
+    way, and each passed the whole suite before the resolver existed.
+    """
+    cases = {
+        "import os\nos.system(c)": "os.system",
+        "from os import system\nsystem(c)": "os.system",
+        "from os import system as sh\nsh(c)": "os.system",
+        "import os\nos.execvp('sh', a)": "os.execvp",
+        "import os\nos.posix_spawn(p, a, e)": "os.posix_spawn",
+        "from builtins import eval as ev\nev(s)": "eval",
+        "import runpy\nrunpy.run_path(p)": "runpy.run_path",
+    }
+    for source, expected in cases.items():
+        tree = ast.parse(source)
+        call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
+        target = _resolved_call(call, _import_bindings(tree))
+        assert target == expected, f"{source!r} resolved to {target}"
+        assert _RUNS_WHAT_IT_READS(target), source
+    # And the predicate does not say yes to the ordinary calls that look like these.
+    for source in ("import re\nre.compile(p)", "import os\nos.fspath(p)", "d.get(k)"):
+        tree = ast.parse(source)
+        call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
+        assert not _RUNS_WHAT_IT_READS(_resolved_call(call, _import_bindings(tree))), source
+
+
 def test_the_library_runs_nothing_it_reads():
     """No `eval`, `exec`, `pickle`, `subprocess` or `os.system` anywhere in the package.
 
@@ -3816,29 +3911,38 @@ def test_the_library_runs_nothing_it_reads():
     `subprocess` is on the list even though a future FEA driver will need it — GPL solvers
     are invoked out of process by design. That is a decision to make in a diff with the
     sandboxing spec open, not one to arrive at by nobody noticing.
+
+    **The call is judged on what it resolves to, not on how it is spelled.** This gate
+    compared `ast.unparse(node.func)` against a set of dotted names, so it read `os.system(cmd)`
+    and did not read `from os import system` followed by `system(cmd)` — nor `os.execvp`,
+    `os.posix_spawn`, or `eval` imported under another name. Each of those is an ordinary way
+    to write the thing the gate forbids, and all four passed the whole suite. Names are
+    resolved through the module's own import bindings first, the way
+    `test_no_yaml_document_can_construct_a_python_object` resolves its loader.
     """
     import ast
 
-    forbidden_calls = {"eval", "exec", "compile", "os.system", "os.popen", "__import__"}
-    forbidden_imports = {"pickle", "subprocess", "shelve", "marshal", "dill"}
     src = _REPO / "src" / "anvilate"
     offenders: list[str] = []
     modules = 0
     for path in sorted(src.rglob("*.py")):
         modules += 1
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        bindings = _import_bindings(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call | ast.Import | ast.ImportFrom):
                 continue
             where = f"{path.relative_to(_REPO)}:{node.lineno}"
-            if isinstance(node, ast.Call) and ast.unparse(node.func) in forbidden_calls:
-                offenders.append(f"{where} calls {ast.unparse(node.func)}")
+            if isinstance(node, ast.Call):
+                target = _resolved_call(node, bindings)
+                if _RUNS_WHAT_IT_READS(target):
+                    offenders.append(f"{where} calls {target} ({ast.unparse(node.func)})")
             elif isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split(".")[0] in forbidden_imports:
+                    if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS:
                         offenders.append(f"{where} imports {alias.name}")
             elif isinstance(node, ast.ImportFrom) and node.module:
-                if node.module.split(".")[0] in forbidden_imports:
+                if node.module.split(".")[0] in _FORBIDDEN_IMPORTS:
                     offenders.append(f"{where} imports from {node.module}")
 
     assert modules > 100, f"the sweep walked only {modules} modules, so it proves little"

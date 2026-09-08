@@ -22,7 +22,7 @@ is the one that fails if the property stops being true.
 | Property | Held by |
 | --- | --- |
 | Every YAML document — spec files and the bundled datasets alike — is read with `yaml.safe_load`. No document can construct a Python object. | `tests/test_contract.py` sweeps the package for the unsafe loaders |
-| The library never calls `eval`, `exec`, `pickle`, `subprocess` or `os.system`. | `tests/test_contract.py` |
+| The library never calls `eval`, `exec`, `pickle`, `subprocess`, `os.system` or any other way of running what it read — the `os` exec/spawn/fork family, `runpy`, `pty`, `ctypes`. Calls are judged on what they **resolve** to, so `from os import system` is the same finding as `os.system`. | `test_the_library_runs_nothing_it_reads`, and `test_the_resolver_reads_a_call_written_the_other_way` on the resolver itself |
 | `anvilate.fetch` is the only module that may import a network client, and a new module importing any of twenty-three stdlib or third-party clients fails the build. | `test_fetch_is_the_only_module_that_imports_a_network_client` |
 | The package's third-party imports are exactly the dependencies `pyproject.toml` declares, so a client nobody thought to blocklist fails too. | `test_the_packages_third_party_imports_are_exactly_its_declared_dependencies` |
 | No module is imported by a literal string handed to `import_module`, which would carry a client past every sweep that reads import statements. | `test_no_module_is_imported_by_a_name_assembled_at_run_time` |
