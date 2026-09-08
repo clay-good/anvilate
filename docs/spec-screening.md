@@ -219,7 +219,8 @@ That is the whole rule. What it means field by field:
 | `manufacturing.tolerance_class` | resolved like any other identifier |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
-| `constraints.max_mass`, `constraints.max_cost`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `constraints.max_mass`, `constraints.max_cost`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
+| `acceptance.max_displacement` | compared to the deflections the card computed: `FAIL` when one is over it, `PASS` when the single element's is under it. `NOT_EVALUATED` for a whole-structure element, where only members declaring their own deflection limit compute one, and when no check computed a deflection at all |
 | `constraints.envelope` | `FAIL` when the declared solid cannot fit **in any orientation** — its volume over the envelope's, or its longest edge over the envelope's space diagonal. Otherwise `NOT_EVALUATED`, saying whether it fits axis-aligned |
 | `manufacturing.min_wall` | `FAIL` when a wall the element declares is under it — a part described with a 20 mm plate and a 25 mm process minimum cannot be made. `NOT_EVALUATED` when every declared wall clears it, naming them: a document states the walls its checks need, not every wall of the part |
 | `seismic_design_acceleration`, `seismic_redundancy_factor` **without a seismic `combination_basis`** | `NOT_EVALUATED` — S_DS and ρ are read by the ASCE 7 seismic combination sets, so without `asce7_lrfd_seismic` or `asce7_asd_seismic` a seismic design is stated and not applied |
@@ -282,7 +283,18 @@ axis-aligned result is stated as evidence, and two conditions are failures becau
 body cannot turn its way out of either: **volume over the envelope's**, and **longest edge
 over the envelope's space diagonal** (a 1000 × 1 × 1 mm strip has exactly the volume of a
 10 mm cube and no way into it). The obvious second condition — shortest edge over the
-envelope's longest — is unreachable, because volume has always fired by then — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
+envelope's longest — is unreachable, because volume has always fired by then.
+
+`acceptance.max_displacement` was the same silence with the number *already on the page*.
+Its reason was accurate about the wiring — "the screens take their limit from the element
+itself (a beam member's `deflection_limit`), not from the acceptance criteria" — and wrong
+about the card: when the element declares its own limit the screen computes a deflection and
+prints it one line above. A beam clearing its own 2 mm limit at 0.8 mm while breaking the
+document's 0.5 mm acceptance criterion screened as a gap. The value is read off the entry's
+structured `Comparison` rather than out of its rendered sentence, which is written in
+whatever unit system the reader asked for. A `structure` stays `NOT_EVALUATED` with the
+count: only members declaring their own limit compute a deflection, so the quiet ones are
+what the card cannot see — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
 one field at a time, passed `.inf` too. No field of a document may now be an infinity or a
 NaN: a dimension whose nominal was NaN had screened to PASS on its band, because the
 achievability check compares the band against the process floor and never looks at the size

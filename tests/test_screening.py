@@ -1021,6 +1021,112 @@ def test_a_document_with_no_solid_to_weigh_says_so_and_states_no_mass():
     assert "weighs" in stated.detail
 
 
+def _beam_member_params(**overrides) -> dict:
+    from anvilate.analysis import CrossSection
+
+    params = {
+        "name": "joist",
+        "section": CrossSection.rectangular(width=_q("100 mm"), height=_q("200 mm")),
+        "length": _q("4 m"),
+        "support": "simply_supported",
+        "load": _q("8 kN"),
+        "load_type": "point",
+        "material": "ASTM-A36",
+    }
+    params.update(overrides)
+    return params
+
+
+def _beam_spec(*, bound: str, deflection_limit: str | None = "2 mm", **overrides) -> DesignSpec:
+    params = _beam_member_params()
+    if deflection_limit is not None:
+        params["deflection_limit"] = _q(deflection_limit)
+    return _lug_spec(
+        element_type="beam_member",
+        element_params=params,
+        acceptance=AcceptanceCriteria(
+            tiers=[ValidationTier.T1_ANALYTICAL], max_displacement=_q(bound)
+        ),
+        **overrides,
+    )
+
+
+def test_a_deflection_over_the_declared_acceptance_bound_is_a_failure():
+    """`acceptance.max_displacement` came back "nothing screened it" while the deflection
+    was printed one line above on the same card.
+
+    The old reason was accurate about the wiring — "the screens take their limit from the
+    element itself, not from the acceptance criteria" — and wrong about the card: when the
+    element declares its own limit, the screen computes a deflection, and this bound had a
+    number to be compared to all along. A beam clearing its own 2 mm limit at 0.8 mm and
+    breaking the document's 0.5 mm acceptance criterion screened as a gap.
+    """
+    card = screen_spec(_beam_spec(bound="0.5 mm"))
+    entry = next(e for e in card.entries if e.name == "displacement limit")
+    assert entry.status is CheckStatus.FAIL
+    assert "0.5 mm" in entry.detail and "0.8 mm" in entry.detail
+    assert card.status is CheckStatus.FAIL
+    # And the element's own check still passes — the two limits are different questions.
+    own = next(e for e in card.entries if e.name.endswith("deflection"))
+    assert own.status is CheckStatus.PASS
+
+
+def test_a_deflection_under_the_bound_passes_for_a_single_element_document():
+    """The element is the part, the screen computed its deflection under the declared load,
+    and that is the document's own question answered."""
+    card = screen_spec(_beam_spec(bound="5 mm"))
+    entry = next(e for e in card.entries if e.name == "displacement limit")
+    assert entry.status is CheckStatus.PASS
+    assert "0.8 mm" in entry.detail
+
+
+def test_the_bound_is_read_from_the_comparison_and_not_from_the_sentence():
+    """The rendered sentence is written in whatever unit system the reader asked for, so
+    reading it would make this check disagree with itself between two reports. The value
+    comes off the entry's structured `Comparison`, and this is the floor under that: the
+    label the screens attach has to still be the one this looks for."""
+    from anvilate.screening import _DEFLECTION_LABEL
+
+    card = screen_spec(_beam_spec(bound="5 mm"))
+    comparisons = [e.comparison for e in card.entries if e.comparison is not None]
+    assert comparisons, "no check on this card carries a comparison; the fixture proves nothing"
+    assert any(c.measured_label == _DEFLECTION_LABEL for c in comparisons), (
+        f"no screen labels a comparison {_DEFLECTION_LABEL!r} any more"
+    )
+
+
+def test_a_card_that_computed_no_deflection_says_what_would_produce_one():
+    """A reason a reader can act on: declare the element's own `deflection_limit`."""
+    card = screen_spec(_beam_spec(bound="5 mm", deflection_limit=None))
+    entry = next(e for e in card.entries if e.name == "displacement limit")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "no check on this card computed a deflection" in entry.detail
+    assert "`deflection_limit`" in entry.detail
+
+
+def test_a_structure_clearing_the_bound_is_not_a_pass():
+    """Only a member declaring its own `deflection_limit` computes one, so the quiet members
+    are exactly what the card cannot see. A violation among the ones it did compute is still
+    certain; all of them clearing it is not."""
+    members = [
+        {
+            "element_type": "beam_member",
+            "element_params": _beam_member_params(name=name, deflection_limit=_q("2 mm")),
+        }
+        for name in ("first", "second")
+    ]
+    spec = _structure_spec(
+        members,
+        acceptance=AcceptanceCriteria(
+            tiers=[ValidationTier.T1_ANALYTICAL], max_displacement=_q("5 mm")
+        ),
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "displacement limit")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "which is not a pass" in entry.detail
+    assert "2 deflection(s)" in entry.detail
+
+
 def _envelope(x: str, y: str, z: str):
     from anvilate.spec import Envelope
 

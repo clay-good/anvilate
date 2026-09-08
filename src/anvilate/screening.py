@@ -53,7 +53,7 @@ import importlib
 import inspect
 import pkgutil
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import cache
 from math import sqrt
 from typing import Any
@@ -819,7 +819,87 @@ def _geometric_tolerance_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
-def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+# The label a screen puts on a computed displacement. Two `measured_label` values exist in
+# the whole package — this and `"fundamental"` — so reading the structured `Comparison`
+# rather than the rendered sentence is exact, and a test asserts the label is still in use.
+_DEFLECTION_LABEL = "deflection"
+
+
+def _displacement_entry(spec: DesignSpec, screened: Sequence[ScorecardEntry]) -> ScorecardEntry:
+    """`acceptance.max_displacement` against the deflections this card already computed.
+
+    The old reason was accurate about the wiring and wrong about the card: "the screens take
+    their limit from the element itself (a beam member's `deflection_limit`), not from the
+    acceptance criteria". True — and when the element *does* declare one, the screen computes
+    a deflection, prints it one line above, and this entry still said nothing screened the
+    bound. The number was on the same card.
+
+    It is read out of the entry's structured :class:`~anvilate.scorecard.Comparison` and not
+    out of its sentence, because the sentence is rendered in whatever unit system the reader
+    asked for.
+
+    **A computed deflection over the bound is a FAIL**; every one of them under it is a PASS
+    for a single-element document, where the element is the part. For a `structure` it stays
+    NOT_EVALUATED with the count, because only the members that declare a `deflection_limit`
+    contribute one and the quiet members are exactly what a card cannot see.
+    """
+    limit = spec.acceptance.max_displacement
+    deflections = [
+        (entry.name, entry.comparison.measured)
+        for entry in screened
+        if entry.comparison is not None and entry.comparison.measured_label == _DEFLECTION_LABEL
+    ]
+    if not deflections:
+        return ScorecardEntry(
+            name="displacement limit",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"the spec declares acceptance.max_displacement {limit}, and nothing "
+                f"screened it: no check on this card computed a deflection. The element "
+                f"screens compute one when the element declares its own limit — a beam "
+                f"member's `deflection_limit` — so declaring that is what produces the "
+                f"number this bound would be compared to"
+            ),
+        )
+
+    # One unit, named once: `Quantity` refuses comparison between two quantities and is
+    # right to, and this is where the unit being compared in gets written down.
+    ceiling = limit.to("mm").magnitude
+    over = [(name, value) for name, value in deflections if value.to("mm").magnitude > ceiling]
+    named = ", ".join(f"{name} {value}" for name, value in deflections)
+    if over:
+        return ScorecardEntry(
+            name="displacement limit",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the spec declares acceptance.max_displacement {limit} and this card "
+                f"computed more: {', '.join(f'{name} {value}' for name, value in over)}"
+            ),
+        )
+    if spec.element_type == "structure":
+        return ScorecardEntry(
+            name="displacement limit",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"the spec declares acceptance.max_displacement {limit}, and the "
+                f"{len(deflections)} deflection(s) this card computed are all under it "
+                f"({named}) — which is not a pass: only a member declaring its own "
+                f"`deflection_limit` computes one, so the quiet members are unscreened"
+            ),
+        )
+    return ScorecardEntry(
+        name="displacement limit",
+        status=CheckStatus.PASS,
+        detail=(
+            f"the deflection this card computed is under "
+            f"acceptance.max_displacement {limit}: {named}"
+        ),
+    )
+
+
+def _declared_bound_entries(
+    spec: DesignSpec, screened: Sequence[ScorecardEntry] = ()
+) -> list[ScorecardEntry]:
     """The bounds a document states outside `constraints`, and what answers them.
 
     Its docstring said exactly that and neither field was read on any screening path.
@@ -870,19 +950,7 @@ def _declared_bound_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 )
             )
     if spec.acceptance.max_displacement is not None:
-        entries.append(
-            ScorecardEntry(
-                name="displacement limit",
-                status=CheckStatus.NOT_EVALUATED,
-                detail=(
-                    f"the spec declares acceptance.max_displacement "
-                    f"{spec.acceptance.max_displacement}, and nothing screened it: a "
-                    "displacement limit is judged against a deflection the element screen "
-                    "computes, and the screens take their limit from the element itself "
-                    "(a beam member's `deflection_limit`), not from the acceptance criteria"
-                ),
-            )
-        )
+        entries.append(_displacement_entry(spec, screened))
     # The seismic pair, when no seismic basis reads them. S_DS and rho are parameters *of*
     # the ASCE 7 seismic combination sets — `DesignSpec.combination_set` reads them only for
     # `asce7_lrfd_seismic` and `asce7_asd_seismic` — so a document that states them without
@@ -1310,7 +1378,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
-    entries.extend(_declared_bound_entries(spec))
+    entries.extend(_declared_bound_entries(spec, entries))
     geometric = _geometric_tolerance_entry(spec)
     if geometric is not None:
         entries.append(geometric)
