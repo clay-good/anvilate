@@ -505,6 +505,46 @@ def _lug_spec(**overrides) -> DesignSpec:
     return _spec(**base)
 
 
+def _base_plate_spec(**overrides) -> DesignSpec:
+    """A column base plate: a rectangular prism with a material, and nothing else declared."""
+    base = {
+        "element_type": "base_plate",
+        "element_params": {
+            "name": "bp1",
+            "width": _q("300 mm"),
+            "depth": _q("300 mm"),
+            "plate_thickness": _q("25 mm"),
+            "plate_material": "ASTM-A36",
+            "axial_load": _q("200 kN"),
+            "concrete_strength": _q("25 MPa"),
+        },
+        "acceptance": AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    }
+    base.update(overrides)
+    return _spec(**base)
+
+
+def _cover_plate_spec(*, circular: bool, **overrides) -> DesignSpec:
+    """An access cover, given either a plan rectangle or a diameter — the two shapes are
+    the same element type and only one of them is a solid this library can weigh."""
+    params = {
+        "name": "c1",
+        "pressure": _q("50 kPa"),
+        "thickness": _q("10 mm"),
+        "material": "ASTM-A36",
+    }
+    params.update(
+        {"diameter": _q("400 mm")} if circular else {"length": _q("400 mm"), "width": _q("250 mm")}
+    )
+    base = {
+        "element_type": "cover_plate",
+        "element_params": params,
+        "acceptance": AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    }
+    base.update(overrides)
+    return _spec(**base)
+
+
 def test_a_spec_that_names_its_element_reaches_the_pack_that_screens_it():
     """The main path, end to end from a document.
 
@@ -910,11 +950,92 @@ def test_a_declared_bound_nothing_screens_is_reported():
     assert set(reported) == {"constraint max_mass", "constraint max_cost"}
     assert all(e.status is CheckStatus.NOT_EVALUATED for e in reported.values())
     assert "150 g" in reported["constraint max_mass"].detail
-    assert "no geometry is generated" in reported["constraint max_mass"].detail
+    # A lifting lug declares a width, a hole and a thickness and no second plan dimension,
+    # so there is no solid to weigh — and the reason says what is missing about *this*
+    # document rather than that no geometry is generated from a spec.
+    assert "a mass is the mass of a whole part" in reported["constraint max_mass"].detail
+    assert "weighs" not in reported["constraint max_mass"].detail
     assert card.status is CheckStatus.NOT_EVALUATED, "the card passed with the bounds unchecked"
     # The one constraint this library does consume is not reported as unscreened: it is the
     # figure the pack screen was judged against, two entries up the same card.
     assert "constraint min_safety_factor" not in reported
+
+
+def test_the_mass_of_the_solid_a_document_declares_is_stated_and_not_compared():
+    """`max_mass` said "a mass is a property of a built solid, and no geometry is generated
+    from a spec today". The second half is true and the first is not.
+
+    A `base_plate` declares a width, a depth, a plate thickness and a plate material: that
+    is a rectangular prism with a density, and `anvilate.export.dxf.plate_mass` is in this
+    package to weigh one. The card said nothing about a number it could compute — which is
+    the silence `_constraint_entries` was written to break, in its own words: the mass was
+    "never computed and never mentioned".
+
+    **It is still NOT_EVALUATED, and that is not a hedge.** The prism is what the document
+    declares, not what the part is made of — no anchor holes, no stiffeners, no welds — so
+    it is neither an upper nor a lower bound on the finished mass, and a PASS against
+    `max_mass` would be a verdict on a part nobody described. Stated beside the bound, a
+    reader can act on it; compared to the bound, it is a silent green.
+    """
+    from anvilate.units import Quantity
+
+    spec = _base_plate_spec(
+        constraints=Constraints(max_mass=Provenanced.stated(Quantity.parse("20 kg")))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint max_mass")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    # 300 x 300 x 25 mm of A36 at 7.85 g/cm3 = 17.6625 kg, and the figure is the library's.
+    assert "17.66 kg" in entry.detail
+    assert "7.85 g/cm" in entry.detail, "the density it used is not shown"
+    assert "20 kg" in entry.detail
+    # The words that would make it a verdict are the ones that must not appear.
+    assert "is not compared to the bound" in entry.detail
+    assert "PASS" not in entry.detail
+
+
+def test_a_document_with_no_solid_to_weigh_says_so_and_states_no_mass():
+    """The other half of the same rule: a circular cover declares a diameter and no plan
+    rectangle, so `plate_mass` has nothing to weigh and the entry invents nothing.
+
+    A mass appearing for an element whose outline the document does not give would be worse
+    than the silence — it would be a number a reader could not trace to anything.
+    """
+    from anvilate.units import Quantity
+
+    spec = _cover_plate_spec(
+        circular=True,
+        constraints=Constraints(max_mass=Provenanced.stated(Quantity.parse("20 kg"))),
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint max_mass")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "weighs" not in entry.detail
+
+    # And the rectangular one, from the same element type, does state it — so the difference
+    # is the document's dimensions and not the element's name.
+    rectangular = _cover_plate_spec(
+        circular=False,
+        constraints=Constraints(max_mass=Provenanced.stated(Quantity.parse("20 kg"))),
+    )
+    stated = next(e for e in screen_spec(rectangular).entries if e.name == "constraint max_mass")
+    assert "weighs" in stated.detail
+
+
+def test_no_unscreened_constraint_claims_a_missing_geometry_kernel():
+    """The reason a card gives has to be true of the document in front of it.
+
+    Two of these three said a spec generates no geometry, which is true and was doing the
+    work of a claim that is false — that the number cannot be had. `max_cost` is the one
+    that really is waiting on something this library does not ship, and it still says so.
+    """
+    from anvilate.screening import _UNSCREENED_CONSTRAINTS
+
+    assert set(_UNSCREENED_CONSTRAINTS) == {"max_mass", "envelope", "max_cost"}
+    for field, reason in _UNSCREENED_CONSTRAINTS.items():
+        if field == "max_cost":
+            assert "this library ships none" in reason
+            continue
+        assert "geometry" not in reason, field
+        assert "built solid" not in reason, field
 
 
 def test_every_constraint_is_either_screened_or_named_as_unscreened():

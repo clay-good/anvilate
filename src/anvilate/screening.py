@@ -72,8 +72,14 @@ from .loads import combination_derivation
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
 from .standards import default_standards_resolver
+from .standards.materials import (
+    MaterialPropertyUnavailable,
+    UnknownMaterialError,
+    default_materials_db,
+)
 from .tolerance.general import ToleranceClass, ToleranceRangeError, resolve_class
 from .tolerance.process import tolerance_is_achievable
+from .units import Quantity
 
 __all__ = [
     "Structure",
@@ -510,19 +516,89 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
 # What a declared bound would take to check, said once because the entry quotes it and the
 # test pins it. `min_safety_factor` is absent on purpose: it is the one constraint this
 # module already consumes, and it is consumed by the pack screen the element selects.
+#
+# **`max_mass` and `envelope` used to say a mass and a bounding box are properties of a
+# built solid, "and no geometry is generated from a spec today".** The second half is true
+# and the first is not, and the pair of them read as one claim that was false for the
+# elements below: a `base_plate` declares a width, a depth, a plate thickness and a plate
+# material, which is a rectangular prism with a density — `anvilate.export.dxf.plate_mass`
+# is in this package to weigh exactly that, and it needs no kernel. The reason a card gives
+# for not reaching a verdict has to be true of the document in front of it.
 _UNSCREENED_CONSTRAINTS = {
     "max_mass": (
-        "a mass is a property of a built solid, and no geometry is generated from a spec today"
+        "a mass is the mass of a whole part, and a spec declares the element its checks "
+        "need rather than everything the part is made of"
     ),
     "envelope": (
-        "an envelope is checked against a built solid's bounding box, and no geometry is "
-        "generated from a spec today"
+        "an envelope bounds a whole part, and a spec declares the element its checks need "
+        "rather than everything the part is made of"
     ),
     "max_cost": (
         "a cost needs a cost model — process, setup, material and quantity — and this "
         "library ships none"
     ),
 }
+
+# The elements whose declared parameters are a complete rectangular prism: plan dimensions,
+# a thickness and a material with a density. `(width field, depth field, thickness field,
+# material field)`. A mass computed from these is the mass of *what the document declares*,
+# which is why it is reported as evidence and never as a verdict — see `_declared_mass`.
+_PRISM_ELEMENTS: dict[str, tuple[str, str, str, str]] = {
+    "base_plate": ("width", "depth", "plate_thickness", "plate_material"),
+    "cover_plate": ("length", "width", "thickness", "material"),
+}
+
+
+def _declared_mass(spec: DesignSpec) -> tuple[Quantity, str] | None:
+    """The mass of the solid this document declares, and how it was arrived at.
+
+    ``None`` when the element is not one of :data:`_PRISM_ELEMENTS`, when it leaves one of
+    its plan dimensions unstated (a circular cover declares a ``diameter`` and no
+    ``length``), or when the material does not resolve to a density.
+
+    **This is evidence, not a verdict, and the difference is the whole design.** The number
+    is exact for the prism the document describes and says nothing about anchor holes,
+    stiffeners, welds or a nameplate, because the document does not mention them — so it is
+    neither an upper nor a lower bound on the finished part, and comparing it to `max_mass`
+    would be a PASS on a part nobody described. What it is good for is the thing the
+    docstring below says was missing: a spec declaring `max_mass: 150 g` used to screen with
+    the mass "never computed and never mentioned", and a reader can do something with a
+    stated 17.66 kg beside a 20 kg bound that they cannot do with silence.
+    """
+    fields = _PRISM_ELEMENTS.get(spec.element_type or "")
+    if fields is None or spec.element_params is None:
+        return None
+    from .export.dxf import plate_mass
+
+    width_field, depth_field, thickness_field, material_field = fields
+    params = spec.element_params
+    dimensions = [params.get(name) for name in (width_field, depth_field, thickness_field)]
+    # `isinstance` and not `Quantity.model_validate`: `load_spec_yaml` has already turned
+    # every dimension into a `Quantity`, so validating again would be a second front door
+    # onto content this one already bounded — and `element_params` is typed
+    # `Mapping[str, Any]`, so a caller who assembled a spec by hand and left a raw dict
+    # there gets no mass stated rather than a parse of whatever they put in it.
+    if not all(isinstance(value, Quantity) for value in dimensions):
+        return None
+    width, depth, thickness = dimensions
+    reference = params.get(material_field)
+    if not isinstance(reference, str):
+        return None
+    try:
+        material = default_materials_db().get(reference)
+        mass = plate_mass(
+            width=width, height=depth, thickness=thickness, density=material.density.quantity
+        )
+    except (ValueError, TypeError, KeyError, UnknownMaterialError, MaterialPropertyUnavailable):
+        # A density this build cannot resolve, or a dimension that is not a length, is a
+        # reason to say nothing about the mass — not a reason to fail the screen. Every
+        # other check on this card has its own opinion about those inputs and says so.
+        return None
+    # This library's `Quantity` refuses pint's format specs on purpose — they describe a
+    # number and this is a number with a unit — so every figure here is its own rendering.
+    return mass.to("kg"), (
+        f"{width} x {depth} x {thickness} of {reference} at {material.density.quantity}"
+    )
 
 
 def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
@@ -538,16 +614,27 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     They are NOT_EVALUATED rather than absent, and each says what checking it would take.
     """
     entries = []
+    declared_mass = _declared_mass(spec)
     for field, reason in _UNSCREENED_CONSTRAINTS.items():
         declared = getattr(spec.constraints, field)
         if declared is None:
             continue
         stated = getattr(declared, "value", declared)
+        detail = f"the spec declares {field} {stated}, and nothing screened it: {reason}"
+        if field == "max_mass" and declared_mass is not None:
+            mass, how = declared_mass
+            # Stated, not compared. The status stays NOT_EVALUATED because this is the mass
+            # of the declared solid and not of the part — putting a verdict on it is the
+            # silent green the whole card exists to refuse.
+            detail += (
+                f". The solid this document does declare weighs {mass.magnitude:.4g} kg "
+                f"({how}), which is not the finished part and is not compared to the bound"
+            )
         entries.append(
             ScorecardEntry(
                 name=f"constraint {field}",
                 status=CheckStatus.NOT_EVALUATED,
-                detail=f"the spec declares {field} {stated}, and nothing screened it: {reason}",
+                detail=detail,
             )
         )
     return entries

@@ -219,7 +219,7 @@ That is the whole rule. What it means field by field:
 | `manufacturing.tolerance_class` | resolved like any other identifier |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
-| `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take |
+| `constraints.max_mass`, `constraints.envelope`, `constraints.max_cost`, `manufacturing.min_wall`, `acceptance.max_displacement`, `geometric_tolerances` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |
 | `seismic_design_acceleration`, `seismic_redundancy_factor` **without a seismic `combination_basis`** | `NOT_EVALUATED` — S_DS and ρ are read by the ASCE 7 seismic combination sets, so without `asce7_lrfd_seismic` or `asce7_asd_seismic` a seismic design is stated and not applied |
 | `material` resolved from a **team-local extension record** | `PASS`, saying it resolves as an extension record overriding bundled data of the same identifier — not "resolves in the bundled materials database", which is what it used to claim for a team's own alloy |
 | an `interfaces` ref resolved from a **team-local extension record** | `PASS`, saying so — the components database and the bearing table both take extension records, and the other six component tables have no extension mechanism, so a hit there is bundled by construction |
@@ -246,7 +246,21 @@ under T1 alone. The tier is still not forced; the acceptance criteria remain the
 But the answer to something nobody screened is "not evaluated", never a pass.
 
 `max_mass: 150 g` read as a stated requirement and was consumed by nothing anywhere in the
-library — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
+library. The entry that broke that silence then gave a reason of its own that was not true —
+"a mass is a property of a built solid, and no geometry is generated from a spec today". The
+second half is right and the first is not: a `base_plate` declares a width, a depth, a plate
+thickness and a plate material, which is a rectangular prism with a density, and
+`anvilate.export.dxf.plate_mass` is in the package to weigh one. So the card now states it:
+*"the solid this document does declare weighs 17.66 kg (300 mm x 300 mm x 25 mm of ASTM-A36
+at 7.85 g/cm³), which is not the finished part and is not compared to the bound"*.
+
+**It stays `NOT_EVALUATED`, and that is not a hedge.** The prism is what the document
+declares, not what the part is made of — no anchor holes, no stiffeners, no welds — so it is
+neither an upper nor a lower bound on the finished mass, and a `PASS` against `max_mass`
+would be a verdict on a part nobody described. Stated beside the bound a reader can act on
+it; compared to the bound it is exactly the silent green this card exists to refuse. A
+document with no plan rectangle to weigh — a circular cover, a lifting lug, which declares a
+width and a hole and no length — states no mass at all rather than inventing one — and `min_safety_factor > 0` is True for infinity, so the bound validators, written
 one field at a time, passed `.inf` too. No field of a document may now be an infinity or a
 NaN: a dimension whose nominal was NaN had screened to PASS on its band, because the
 achievability check compares the band against the process floor and never looks at the size
