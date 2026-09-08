@@ -31,10 +31,15 @@
 # `fin_array_thermal_resistance` is that forward now, and the pair is a real one.
 
 ## round-tripped
-
 axial.required_axial_area -> axial.axial_stress
+bearing.bearing_rating_for_life -> bearing.bearing_basic_rating_life
+brake.band_brake_tight_tension_for_torque -> brake.band_brake_torque
+centrifugal_casting.centrifugal_speed_for_g_factor -> centrifugal_casting.centrifugal_g_factor
+clutch.disc_clutch_force_for_torque -> clutch.disc_clutch_torque
 column.euler_second_moment_for_load -> column.euler_buckling_load
 control_valve.required_flow_coefficient -> control_valve.valve_flow_rate
+conveyor.belt_speed_for_capacity -> conveyor.conveyor_mass_flow
+dc_dc_converter.boost_duty_cycle_for_output -> dc_dc_converter.boost_output_voltage
 dynamics.isolator_static_deflection_for_transmissibility -> dynamics.transmissibility
 dynamics.natural_frequency_from_deflection -> dynamics.natural_frequency
 fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
@@ -60,24 +65,18 @@ battery_peukert.peukert_exponent_from_two_rates
 beam.aisc_bearing_length_for_web_yielding
 beam.fastener_spacing_for_shear_flow
 beam.max_transverse_shear_stress
-bearing.bearing_rating_for_life
 belt.belt_speed_for_max_power
 belt.belt_tight_tension_for_power
 boiling.minimum_film_boiling_heat_flux
-brake.band_brake_tight_tension_for_torque
 bulk_solids.beverloo_orifice_for_rate
 cam.cam_base_circle_for_pressure_angle
 casting.riser_modulus_for_feeding
-centrifugal_casting.centrifugal_speed_for_g_factor
 chain.minimum_sprocket_teeth_for_chordal_variation
-clutch.disc_clutch_force_for_torque
 combustion.equivalence_ratio_from_excess_air
 combustion.excess_air_from_flue_oxygen
 composite.fiber_volume_fraction_from_weight_fraction
-conveyor.belt_speed_for_capacity
 cyclotron.cyclotron_mass_from_frequency
 data_converter.oversampling_ratio_for_bits
-dc_dc_converter.boost_duty_cycle_for_output
 dc_dc_converter.buck_boost_duty_cycle_for_output
 dc_dc_converter.buck_duty_cycle_for_output
 dc_dc_converter.buck_minimum_inductance_for_ccm

@@ -45,6 +45,12 @@ ROUND_TRIPPED = frozenset(
         "dynamics.natural_frequency_from_deflection",
         "keys.key_length_for_torque",
         "thermal.fin_array_count_for_resistance",
+        "bearing.bearing_rating_for_life",
+        "brake.band_brake_tight_tension_for_torque",
+        "centrifugal_casting.centrifugal_speed_for_g_factor",
+        "clutch.disc_clutch_force_for_torque",
+        "conveyor.belt_speed_for_capacity",
+        "dc_dc_converter.boost_duty_cycle_for_output",
     }
 )
 
@@ -303,3 +309,85 @@ def test_fin_array_count_for_resistance_lands_the_target_array_resistance():
         unfinned_base_area=base_area,
     )
     assert resistance.to("K/W").magnitude == pytest.approx(target.to("K/W").magnitude, rel=1e-12)
+
+
+def test_bearing_rating_for_life_lands_the_required_life():
+    """The selection step: the catalogue C a target L10 needs, fed back through the life."""
+    from anvilate.analysis import bearing_basic_rating_life, bearing_rating_for_life
+
+    load, target = _q("8 kN"), 25.0
+    rating = bearing_rating_for_life(equivalent_load=load, required_life_millions=target)
+    life = bearing_basic_rating_life(dynamic_load_rating=rating, equivalent_load=load)
+    assert life == pytest.approx(target, rel=1e-12)
+
+    # And the exponent travels: a roller bearing's 10/3 must be carried by both halves, or
+    # the inverse sizes a ball bearing for a roller's life.
+    roller = bearing_rating_for_life(
+        equivalent_load=load, required_life_millions=target, life_exponent=10.0 / 3.0
+    )
+    assert bearing_basic_rating_life(
+        dynamic_load_rating=roller, equivalent_load=load, life_exponent=10.0 / 3.0
+    ) == pytest.approx(target, rel=1e-12)
+    assert roller.to("N").magnitude < rating.to("N").magnitude
+
+
+def test_disc_clutch_force_for_torque_lands_the_required_torque():
+    """Both theories, because the inverse takes the same `theory` switch the forward does
+    and a pair that only round-trips on the default is half a pair."""
+    from anvilate.analysis import disc_clutch_force_for_torque, disc_clutch_torque
+
+    geometry = {
+        "outer_radius": _q("120 mm"),
+        "inner_radius": _q("70 mm"),
+        "friction_coefficient": 0.3,
+        "surfaces": 2,
+    }
+    target = _q("120 N*m")
+    for theory in ("uniform_wear", "uniform_pressure"):
+        force = disc_clutch_force_for_torque(torque=target, theory=theory, **geometry)
+        landed = disc_clutch_torque(actuating_force=force, theory=theory, **geometry)
+        assert landed.to("N*m").magnitude == pytest.approx(target.to("N*m").magnitude, rel=1e-12), (
+            theory
+        )
+
+
+def test_band_brake_tight_tension_for_torque_lands_the_required_torque():
+    from anvilate.analysis import band_brake_tight_tension_for_torque, band_brake_torque
+
+    band = {"drum_diameter": _q("300 mm"), "friction_coefficient": 0.35, "wrap_angle": 3.665}
+    target = _q("400 N*m")
+    tension = band_brake_tight_tension_for_torque(torque=target, **band)
+    assert band_brake_torque(tight_tension=tension, **band).to("N*m").magnitude == pytest.approx(
+        target.to("N*m").magnitude, rel=1e-12
+    )
+
+
+def test_belt_speed_for_capacity_lands_the_required_mass_flow():
+    from anvilate.analysis import belt_speed_for_capacity, conveyor_mass_flow
+
+    section = {"bulk_density": _q("1400 kg/m**3"), "cross_section_area": _q("0.03 m**2")}
+    target = _q("50 t/hour")
+    speed = belt_speed_for_capacity(mass_flow=target, **section)
+    assert conveyor_mass_flow(belt_speed=speed, **section).to("kg/s").magnitude == pytest.approx(
+        target.to("kg/s").magnitude, rel=1e-12
+    )
+
+
+def test_centrifugal_speed_for_g_factor_lands_the_required_g():
+    from anvilate.analysis import centrifugal_g_factor, centrifugal_speed_for_g_factor
+
+    radius, target = _q("150 mm"), 75.0
+    speed = centrifugal_speed_for_g_factor(g_factor=target, radius=radius)
+    assert centrifugal_g_factor(rotational_speed=speed, radius=radius) == pytest.approx(
+        target, rel=1e-12
+    )
+
+
+def test_boost_duty_cycle_for_output_lands_the_required_output():
+    from anvilate.analysis import boost_duty_cycle_for_output, boost_output_voltage
+
+    supply, target = _q("12 V"), _q("30 V")
+    duty = boost_duty_cycle_for_output(input_voltage=supply, output_voltage=target)
+    assert boost_output_voltage(input_voltage=supply, duty_cycle=duty).to("V").magnitude == (
+        pytest.approx(target.to("V").magnitude, rel=1e-12)
+    )
