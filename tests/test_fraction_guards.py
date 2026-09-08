@@ -999,31 +999,42 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
             parameters = list(inspect.signature(function).parameters.values())
             if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
                 continue
-            arguments, bindable = {}, True
-            for parameter in parameters:
-                annotation = parameter.annotation
-                spelled = (
-                    annotation
-                    if isinstance(annotation, str)
-                    else getattr(annotation, "__name__", "")
-                )
-                value = {"Quantity": Quantity.parse("1.0 m"), "float": 1.0, "int": 2}.get(spelled)
-                if value is not None:
-                    arguments[parameter.name] = value
-                elif parameter.default is inspect.Parameter.empty:
-                    bindable = False
-                    break
-            if not bindable or not arguments:
-                continue
-            try:
-                function(**arguments)
-            except Exception:  # noqa: BLE001 - a refusal here is not this gate's subject
-                continue
-            found.append((f"{info.name}.{name}", function, arguments))
+            # Two counts, because neither dominates: a Geneva mechanism needs at least three
+            # slots and refuses 2, while four other functions want a count of 2 and refuse
+            # 3. Taking whichever binds reaches 289 functions where either alone reaches
+            # 284 or 285 — and a guard outside the population is a guard this gate cannot
+            # see, which is how the Geneva slot check was added without being exercised.
+            for count in (2, 3):
+                arguments, bindable = {}, True
+                for parameter in parameters:
+                    annotation = parameter.annotation
+                    spelled = (
+                        annotation
+                        if isinstance(annotation, str)
+                        else getattr(annotation, "__name__", "")
+                    )
+                    value = {
+                        "Quantity": Quantity.parse("1.0 m"),
+                        "float": 1.0,
+                        "int": count,
+                    }.get(spelled)
+                    if value is not None:
+                        arguments[parameter.name] = value
+                    elif parameter.default is inspect.Parameter.empty:
+                        bindable = False
+                        break
+                if not bindable or not arguments:
+                    continue
+                try:
+                    function(**arguments)
+                except Exception:  # noqa: BLE001 - a refusal is not this gate's subject
+                    continue
+                found.append((f"{info.name}.{name}", function, arguments))
+                break
     return found
 
 
-def test_no_analysis_function_answers_a_nan_with_a_number_or_a_verdict():
+def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash():
     """Every comparison with NaN is False, so `if x < 0: raise` is a no-op against one.
 
     That is not a curiosity — it is the defect `units.require_finite` was written for, and
@@ -1043,32 +1054,44 @@ def test_no_analysis_function_answers_a_nan_with_a_number_or_a_verdict():
     """
     population = _uniformly_callable()
     # Attack the gate: a binder that stopped reaching these would report nothing wrong.
-    assert len(population) >= 250, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 285, f"the probe reached only {len(population)} functions"
 
     answered, crashed = [], []
     probes = 0
     for label, function, arguments in population:
         for name, value in arguments.items():
             probes += 1
-            poison = (
-                Quantity(magnitude=float("nan"), unit="m")
-                if isinstance(value, Quantity)
-                else float("nan")
-            )
-            try:
-                result = function(**{**arguments, name: poison})
-            except ValueError:
-                continue
-            except Exception as unexpected:  # noqa: BLE001 - the type is the finding
-                crashed.append(f"{label}({name}=nan) raised {type(unexpected).__name__}")
-                continue
-            magnitude = result.magnitude if isinstance(result, Quantity) else result
-            if isinstance(magnitude, bool) or (
-                isinstance(magnitude, (int, float)) and math.isfinite(magnitude)
+            for spelled, number in (
+                ("nan", float("nan")),
+                # The infinities crash rather than lie, and they crash with the wrong type:
+                # a count validator's `int(count)` runs *before* the check that would have
+                # refused it in words, so `int(inf)` raised `OverflowError` — which is not
+                # the ValueError these functions document. Nine validators had that order.
+                ("+inf", float("inf")),
+                ("-inf", float("-inf")),
             ):
-                answered.append(f"{label}({name}=nan) -> {result}")
+                poison = (
+                    Quantity(magnitude=number, unit="m") if isinstance(value, Quantity) else number
+                )
+                try:
+                    result = function(**{**arguments, name: poison})
+                except ValueError:
+                    continue
+                except Exception as unexpected:  # noqa: BLE001 - the type is the finding
+                    crashed.append(f"{label}({name}={spelled}) raised {type(unexpected).__name__}")
+                    continue
+                if spelled != "nan":
+                    # An infinity may legitimately have a finite limit — an infinite
+                    # wavelength really does give zero path loss — so only the NaN case
+                    # asks what came back.
+                    continue
+                magnitude = result.magnitude if isinstance(result, Quantity) else result
+                if isinstance(magnitude, bool) or (
+                    isinstance(magnitude, (int, float)) and math.isfinite(magnitude)
+                ):
+                    answered.append(f"{label}({name}=nan) -> {result}")
 
-    assert probes >= 500, f"only {probes} NaN probes were made"
+    assert probes >= 500, f"only {probes} non-finite probes were made"
     assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "

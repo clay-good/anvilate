@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from math import exp
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "damkohler_number_first_order",
@@ -100,6 +100,7 @@ def cstr_series_conversion_first_order(*, damkohler_number: float, stages: int) 
     """
     if damkohler_number < 0:
         raise ValueError("damkohler_number must be non-negative")
+    require_finite(stages, name="stages")
     if int(stages) != stages:
         raise ValueError(f"stages must be a whole number of tanks; got {stages}")
     n = int(stages)

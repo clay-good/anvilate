@@ -312,6 +312,7 @@ def string_natural_frequency(
     _require(tension, "[force]", "tension")
     _require(length, "[length]", "length")
     _require(mass_per_length, "[mass] / [length]", "mass_per_length")
+    require_finite(mode, name="mode")
     n = int(mode)
     if n != mode or n <= 0:
         raise ValueError(f"mode must be a positive whole number; got {mode}")

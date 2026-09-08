@@ -642,6 +642,10 @@ def agma_contact_stress(
 
 
 def _check_tooth_count(count: int, name: str) -> int:
+    # Before the coercion, not after: `int(inf)` raises `OverflowError`, so the refusal
+    # below — which is the right answer and says so in words — was unreachable for exactly
+    # the input it describes, and the caller got an exception their contract does not name.
+    require_finite(count, name=name)
     whole = int(count)
     if whole != count or whole <= 0:
         raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")
@@ -713,6 +717,7 @@ def minimum_teeth_to_avoid_undercut(
     tooth. Returns the minimum whole tooth count.
     """
     phi = _check_pressure_angle(pressure_angle)
+    require_finite(addendum_coefficient, name="addendum_coefficient")
     if addendum_coefficient <= 0:
         raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
     exact = 2.0 * addendum_coefficient / sin(phi) ** 2

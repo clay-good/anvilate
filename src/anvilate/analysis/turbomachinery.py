@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from math import pi, radians, tan
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_second
 
 _STANDARD_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
@@ -188,6 +188,7 @@ def stanitz_slip_factor(*, blade_count: int) -> float:
     impellers land at 5-9. Requires Z > 0.63·π ≈ 1.98 (below that the correlation goes non-physical
     and is meaningless anyway). Returns the dimensionless slip factor, between 0 and 1.
     """
+    require_finite(blade_count, name="blade_count")
     if int(blade_count) != blade_count:
         raise ValueError(f"blade_count must be a whole number of blades; got {blade_count}")
     z = int(blade_count)

@@ -1008,6 +1008,7 @@ def plate_compression_buckling_coefficient(*, aspect_ratio: float) -> float:
     as the ``buckling_coefficient`` to :func:`plate_buckling_stress`. ``aspect_ratio``
     must be positive. Returns the dimensionless k (≥ 4).
     """
+    require_finite(aspect_ratio, name="aspect_ratio")
     if aspect_ratio <= 0:
         raise ValueError(f"aspect_ratio must be positive; got {aspect_ratio}")
     gamma = aspect_ratio

@@ -56,6 +56,10 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 
 def _check_teeth(count: int, name: str) -> int:
+    # Before the coercion, not after: `int(inf)` raises `OverflowError`, so the refusal
+    # below — which is the right answer and says so in words — was unreachable for exactly
+    # the input it describes, and the caller got an exception their contract does not name.
+    require_finite(count, name=name)
     whole = int(count)
     if whole != count or whole <= 0:
         raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")

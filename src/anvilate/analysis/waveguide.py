@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from math import sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
@@ -178,6 +178,8 @@ def rectangular_waveguide_mode_cutoff_frequency(
     b = narrow_dimension.to("m").magnitude
     if a <= 0 or b <= 0:
         raise ValueError("broad_dimension and narrow_dimension must be positive")
+    require_finite(mode_m, name="mode_m")
+    require_finite(mode_n, name="mode_n")
     if int(mode_m) != mode_m or int(mode_n) != mode_n:
         raise ValueError(f"mode indices must be whole numbers; got m = {mode_m}, n = {mode_n}")
     m, n = int(mode_m), int(mode_n)

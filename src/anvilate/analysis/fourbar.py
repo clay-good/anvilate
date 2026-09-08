@@ -59,7 +59,8 @@ def _lengths_mm(
         # `require_finite` first: a NaN length passes `mm <= 0`, fails every subsequent
         # comparison too, and `is_grashof` comes back False — a definite "triple-rocker"
         # about a linkage one of whose links is not a number.
-        mm = require_finite(value, name=f"{name} link length")
+        require_finite(value, name=f"{name} link length")
+        mm = value.to("mm").magnitude
         if mm <= 0:
             raise ValueError(f"{name} link length must be positive; got {value}")
         out[name] = mm

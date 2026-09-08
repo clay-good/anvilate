@@ -57,6 +57,10 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 
 def _check_starts(worm_starts: int) -> int:
+    # Before the coercion, not after: `int(inf)` raises `OverflowError`, so the refusal
+    # below — which is the right answer and says so in words — was unreachable for exactly
+    # the input it describes, and the caller got an exception their contract does not name.
+    require_finite(worm_starts, name="worm_starts")
     whole = int(worm_starts)
     if whole != worm_starts or whole <= 0:
         raise ValueError(f"worm_starts must be a positive whole number; got {worm_starts}")
@@ -64,6 +68,10 @@ def _check_starts(worm_starts: int) -> int:
 
 
 def _check_gear_teeth(gear_teeth: int) -> int:
+    # Before the coercion, not after: `int(inf)` raises `OverflowError`, so the refusal
+    # below — which is the right answer and says so in words — was unreachable for exactly
+    # the input it describes, and the caller got an exception their contract does not name.
+    require_finite(gear_teeth, name="gear_teeth")
     whole = int(gear_teeth)
     if whole != gear_teeth or whole <= 0:
         raise ValueError(f"gear_teeth must be a positive whole number; got {gear_teeth}")

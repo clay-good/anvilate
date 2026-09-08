@@ -22,7 +22,7 @@ broach itself can carry before it yields.
 
 from __future__ import annotations
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ._counting import whole_count_floor
 
 __all__ = [
@@ -44,6 +44,9 @@ def broaching_teeth_in_cut(*, workpiece_length: Quantity, tooth_pitch: Quantity)
     """
     _check(workpiece_length, "[length]", "workpiece_length")
     _check(tooth_pitch, "[length]", "tooth_pitch")
+    # Before the floor division that follows: an infinite length reaches `int()` and raises
+    # `OverflowError`, which is not the ValueError this function's contract names.
+    require_finite(workpiece_length, name="workpiece_length")
     length = workpiece_length.to("mm").magnitude
     pitch = tooth_pitch.to("mm").magnitude
     if length <= 0:

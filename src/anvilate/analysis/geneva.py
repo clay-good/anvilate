@@ -53,6 +53,10 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 
 def _check_slots(slots: int) -> int:
+    # Before the coercion, not after: `int(inf)` raises `OverflowError`, so the refusal
+    # below — which is the right answer and says so in words — was unreachable for exactly
+    # the input it describes, and the caller got an exception their contract does not name.
+    require_finite(slots, name="slots")
     whole = int(slots)
     if whole != slots or whole < 3:
         raise ValueError(f"slots must be a whole number ≥ 3 for an external Geneva; got {slots}")

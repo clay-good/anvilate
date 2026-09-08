@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "rayleigh_range",
@@ -44,6 +44,9 @@ def rayleigh_range(*, beam_waist: Quantity, wavelength: Quantity) -> Quantity:
     _check(beam_waist, "[length]", "beam_waist")
     _check(wavelength, "[length]", "wavelength")
     w0 = beam_waist.to("m").magnitude
+    # An infinite wavelength makes the Rayleigh range z_R = pi*w0**2/lam exactly zero, and
+    # the z/z_R that follows divides by it.
+    require_finite(wavelength, name="wavelength")
     lam = wavelength.to("m").magnitude
     if w0 <= 0:
         raise ValueError("beam_waist must be positive")
@@ -67,6 +70,9 @@ def beam_radius_at_distance(
     _check(wavelength, "[length]", "wavelength")
     _check(distance, "[length]", "distance")
     w0 = beam_waist.to("m").magnitude
+    # As in `rayleigh_range`, which this repeats rather than calls: an infinite wavelength
+    # makes z_R exactly zero and the z/z_R below divides by it.
+    require_finite(wavelength, name="wavelength")
     lam = wavelength.to("m").magnitude
     z = distance.to("m").magnitude
     if w0 <= 0:
