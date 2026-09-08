@@ -170,9 +170,18 @@ needs to run. CI installs it, so both the meta-schema check and a round trip —
 the library actually produced, validated against the published contract — run on every push
 to `main` and on every pull request, rather than skipping the way an opt-in check would.
 
-## What is not published yet
+## What is not published as a schema artifact
 
-Tool definitions. These are the schemas a tool contract would point at; mapping pipeline
-operations onto MCP tools is
-[`modernize-mcp-server`](../openspec/changes/modernize-mcp-server/tasks.md) task 1.2, and
-the server itself is unbuilt.
+Tool definitions. This section used to report all three of them — the definitions, the
+mapping of pipeline operations onto MCP tools, and the server that would serve them — as
+still ahead of us. All three have been here for a while: `modernize-mcp-server` task 1.2 is
+checked off, `anvilate-mcp` runs on stdio, and `tools/list` serves the eight definitions,
+which is what [the MCP tool surface](mcp-tool-contracts.md) is a whole page about.
+
+What is still true is the narrower thing this page is for. The three artifacts in the table
+above are files with URLs; a tool definition is not. Its schemas are assembled in
+`anvilate.mcp` and reach a client inline in the `tools/list` reply, pointing at those three
+URLs by `$ref` for everything load-bearing — so a client validating a spec, a scorecard or a
+bundle is validating against a published document, and only the thin argument wrappers are
+inline. Publishing those wrappers as their own versioned artifacts would be a fourth
+contract to version, and nothing has needed one.

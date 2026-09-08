@@ -218,6 +218,56 @@ def test_a_format_neither_surface_can_produce_is_refused_in_the_same_words():
         assert reason in err
 
 
+def test_no_live_document_says_the_mcp_server_is_unbuilt():
+    """It is built. `anvilate-mcp` runs it on stdio and four of eight operations dispatch.
+
+    Two pages said otherwise, in the same words, years apart in the writing: the tool
+    contracts page opened with "The server itself is not built yet — which is exactly why the
+    contracts are pinned now", and the published-contracts page closed with "the server
+    itself is unbuilt". Both framings were written before it existed and neither was re-read
+    when it did, which is what a page's *opening premise* is most prone to.
+
+    The individual operations that really are unbuilt keep saying so; this is about the
+    server, and the detector needs both words in one sentence to say anything.
+    """
+    from anvilate.mcp import handle_request, main  # noqa: F401 - the thing being asserted
+
+    assert "result" in handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+
+    unbuilt = re.compile(
+        r"(?:^|\.)[^.]*\bserver\b[^.]*\b(?:is|are|being)?\s*"
+        r"(?:not (?:yet )?built|unbuilt|does not exist)",
+        re.IGNORECASE,
+    )
+    # Attack the detector: the two sentences that shipped, and three true ones near them.
+    assert unbuilt.search(
+        "This page describes the tool contracts. The server itself is not built yet."
+    )
+    assert unbuilt.search(
+        "mapping operations onto MCP tools is task 1.2, and the server itself is unbuilt"
+    )
+    assert not unbuilt.search("The Tasks extension is unbuilt.")
+    assert not unbuilt.search("This server serves no task transport yet.")
+    assert not unbuilt.search(
+        "the operation behind the contract is unbuilt, and the server says so"
+    )
+
+    paths = [
+        *sorted((_REPO / "docs").rglob("*.md")),
+        *sorted((_REPO / "openspec" / "specs").rglob("*.md")),
+        _REPO / "README.md",
+    ]
+    mentions = [p for p in paths if "server" in p.read_text(encoding="utf-8").lower()]
+    assert len(mentions) >= 3, f"only {[p.name for p in mentions]} mention a server at all"
+    offenders = [
+        f"{path.relative_to(_REPO)}: {match.group().strip()[:100]}"
+        for path in mentions
+        for match in [unbuilt.search(" ".join(path.read_text(encoding="utf-8").split()))]
+        if match
+    ]
+    assert offenders == [], f"the MCP server is built, and these say it is not: {offenders}"
+
+
 def test_no_live_document_says_qif_results_need_built_geometry():
     """The claim that shipped in five places at once, and the reason it is worth a gate.
 

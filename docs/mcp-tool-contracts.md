@@ -258,10 +258,12 @@ Everything else ends in a refusal, and the kinds are worth separating:
   test holds that list of reasons against the dispatch table in **both** directions — a tool
   neither dispatched nor given a reason fails, and so does a reason left behind for a tool
   that has since been wired.
-- **`-32000`, that format is not built.** New with the export ruling, and the reason it is
-  separate: `export_artifact` is dispatched, and two of the three formats it publishes still
-  wait on geometry. A per-tool refusal could not express that, and answering `-32602` would
-  tell a client its argument was wrong — which invites a retry with a different one.
+- **`-32000`, that format is not served here.** New with the export ruling, and the reason
+  it is separate: `export_artifact` is dispatched and two of the three formats it publishes
+  are not served — one of them because it waits on geometry, the other because it waits on
+  this tool's result shape. A per-tool refusal could not express either, and answering
+  `-32602` would tell a client its argument was wrong, which invites a retry with a
+  different one.
 
 `export_artifact` answers with the evidence bundle for the scorecard its handle names, and
 **writes nothing**. That was the open decision — three shapes were considered, and the one
