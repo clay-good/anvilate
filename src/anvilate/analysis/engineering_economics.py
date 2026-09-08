@@ -23,6 +23,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log
 
+from ..units import require_finite
+
 __all__ = [
     "annuity_future_value",
     "annuity_present_value",
@@ -176,6 +178,10 @@ def straight_line_depreciation(
     """
     if useful_life <= 0:
         raise ValueError("useful_life must be positive")
+    # Every comparison with NaN is False, so a NaN cost passes both of these and the
+    # min()/max() clamp on book value below then drops it, returning a charge of zero.
+    require_finite(initial_cost, name="initial_cost")
+    require_finite(salvage_value, name="salvage_value")
     if initial_cost < 0 or salvage_value < 0:
         raise ValueError("costs must be non-negative")
     if salvage_value > initial_cost:
@@ -245,6 +251,10 @@ def declining_balance_depreciation(
     """
     if useful_life <= 0:
         raise ValueError("useful_life must be positive")
+    # Every comparison with NaN is False, so a NaN cost passes both of these and the
+    # min()/max() clamp on book value below then drops it, returning a charge of zero.
+    require_finite(initial_cost, name="initial_cost")
+    require_finite(salvage_value, name="salvage_value")
     if initial_cost < 0 or salvage_value < 0:
         raise ValueError("costs must be non-negative")
     if salvage_value > initial_cost:

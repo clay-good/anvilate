@@ -165,6 +165,11 @@ def compressor_volumetric_efficiency(
         raise ValueError(f"clearance_fraction must be in [0, 1); got {clearance_fraction}")
     if pressure_ratio < 1.0:
         raise ValueError(f"pressure_ratio must be at least 1; got {pressure_ratio}")
+    # A NaN passes the comparison below, and `ratio ** (1 / nan)` with the clearance times
+    # it comes back 1.0 — a volumetric efficiency of exactly 100%, which is the most
+    # flattering answer this function can give and the one nobody should get from a
+    # coefficient that is not a number.
+    require_finite(polytropic_exponent, name="polytropic_exponent")
     if polytropic_exponent <= 0.0:
         raise ValueError(f"polytropic_exponent must be positive; got {polytropic_exponent}")
     efficiency = 1.0 - clearance_fraction * (pressure_ratio ** (1.0 / polytropic_exponent) - 1.0)

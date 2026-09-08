@@ -1049,6 +1049,44 @@ def _declared_dimensions() -> dict[str, dict[str, str]]:
     return found
 
 
+# What a refusal says it wants, in the four shapes the library writes it. Reading the
+# complaint and trying again reaches 108 functions that a fixed binding cannot: a Mach cone
+# needs M > 1, an absorption coefficient lies in (0, 1), a reliability factor in [0.01, 1).
+_ASKS = (
+    (
+        re.compile(
+            r"\b([a-z_]{3,})\b[^.;]{0,40}?(?:must (?:lie|be) (?:in|within)|in) "
+            r"[\[(]\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*[\])]"
+        ),
+        lambda m: (m.group(1), (float(m.group(2)) + float(m.group(3))) / 2.0),
+    ),
+    (
+        re.compile(
+            r"\b([a-z_]{3,})\b[^.;]{0,30}?must (?:exceed|be (?:greater|more) than|be above) "
+            r"(-?[\d.]+)"
+        ),
+        lambda m: (m.group(1), float(m.group(2)) + 1.0),
+    ),
+    (
+        re.compile(r"\b([a-z_]{3,})\b[^.;]{0,30}?must be at least (-?[\d.]+)"),
+        lambda m: (m.group(1), float(m.group(2))),
+    ),
+    (
+        re.compile(r"\b([a-z_]{3,})\b[^.;]{0,30}?must be (?:below|less than|under) (-?[\d.]+)"),
+        lambda m: (m.group(1), float(m.group(2)) - 0.5),
+    ),
+)
+
+
+def _what_it_asked_for(message: str) -> tuple[str, float] | None:
+    """The parameter a refusal names and a value that would satisfy it, or ``None``."""
+    for pattern, pick in _ASKS:
+        found = pattern.search(message)
+        if found is not None:
+            return pick(found)
+    return None
+
+
 @cache
 def _uniformly_callable() -> list[tuple[str, object, dict]]:
     """Every public analysis function that accepts a call built from its own declarations.
@@ -1101,11 +1139,30 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         break
                 if not bindable or not arguments:
                     continue
-                try:
-                    function(**arguments)
-                except Exception:  # noqa: BLE001 - a refusal is not this gate's subject
+                # Six attempts, each one taking the refusal at its word. A guard that names
+                # its interval is telling the probe what to pass, and a fixed binding cannot
+                # satisfy "M > 1" and "0 < alpha < 1" with the same number.
+                for _attempt in range(6):
+                    try:
+                        function(**arguments)
+                    except ValueError as refused:
+                        asked = _what_it_asked_for(str(refused))
+                        if asked is None or asked[0] not in arguments:
+                            break
+                        target, number = asked
+                        held = arguments[target]
+                        arguments[target] = (
+                            Quantity(magnitude=number, unit=held.unit)
+                            if isinstance(held, Quantity)
+                            else number
+                        )
+                        continue
+                    except Exception:  # noqa: BLE001 - a refusal is not this gate's subject
+                        break
+                    found.append((f"{info.name}.{name}", function, arguments))
+                    break
+                else:
                     continue
-                found.append((f"{info.name}.{name}", function, arguments))
                 break
     return found
 
@@ -1130,7 +1187,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
     """
     population = _uniformly_callable()
     # Attack the gate: a binder that stopped reaching these would report nothing wrong.
-    assert len(population) >= 1150, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1250, f"the probe reached only {len(population)} functions"
 
     answered, crashed = [], []
     probes = 0
@@ -1173,7 +1230,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
                 ):
                     answered.append(f"{label}({name}=nan) -> {result}")
 
-    assert probes >= 3000, f"only {probes} non-finite probes were made"
+    assert probes >= 3400, f"only {probes} non-finite probes were made"
     assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "
@@ -1196,7 +1253,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
     check everywhere else.
     """
     population = _uniformly_callable()
-    assert len(population) >= 1150, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1250, f"the probe reached only {len(population)} functions"
 
     leaked, probes = [], 0
     for label, function, arguments in population:
@@ -1212,7 +1269,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
                     continue
                 leaked.append(f"{label}({name}={spelled}) returned a value")
 
-    assert probes >= 3000, f"only {probes} junk probes were made"
+    assert probes >= 3400, f"only {probes} junk probes were made"
     assert leaked == [], (
         "these answered ordinary junk with something other than a ValueError or a "
         f"TypeError: {leaked}"
