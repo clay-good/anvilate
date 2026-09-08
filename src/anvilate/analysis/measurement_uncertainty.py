@@ -39,6 +39,10 @@ def standard_uncertainty_of_mean(*, standard_deviation: Quantity, sample_size: i
     """
     if not isinstance(sample_size, int) or sample_size < 1:
         raise ValueError("sample_size must be an integer of at least 1")
+    # Before `.to(...)`: this module checks `isinstance(..., Quantity)` elsewhere and did
+    # not here, so anything else came back as an `AttributeError` from inside the call.
+    if not isinstance(standard_deviation, Quantity):
+        raise ValueError(f"standard_deviation must be a Quantity; got {standard_deviation!r}")
     s = standard_deviation.to(standard_deviation.unit).magnitude
     if s < 0:
         raise ValueError("standard_deviation must be non-negative")

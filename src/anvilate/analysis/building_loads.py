@@ -557,6 +557,11 @@ def seismic_load_effect(
     """
     if not isinstance(horizontal_effect, Quantity):
         raise ValueError("horizontal_effect must be a Quantity load effect")
+    # The same check for the other one. Without it the `.has_dimension` below reached into
+    # whatever was passed and came back `AttributeError`, which tells a caller nothing about
+    # their input and reads like a bug in this library.
+    if not isinstance(dead_load_effect, Quantity):
+        raise ValueError("dead_load_effect must be a Quantity load effect")
     if not dead_load_effect.has_dimension(horizontal_effect.dimensionality):
         raise ValueError(
             "dead_load_effect must share the horizontal effect's dimensionality "

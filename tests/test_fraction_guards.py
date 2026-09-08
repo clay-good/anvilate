@@ -883,6 +883,7 @@ _POSITIVITY_PROMISE = re.compile(
 )
 
 
+@cache
 def _promised_positive() -> list[tuple[str, str, object, dict]]:
     """Every public analysis function whose docstring names a parameter it calls positive.
 
@@ -980,6 +981,7 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
 # --- a NaN is not an answer ----------------------------------------------------------------
 
 
+@cache
 def _uniformly_callable() -> list[tuple[str, object, dict]]:
     """Every public analysis function that accepts every parameter bound to 1.0 m / 1.0.
 
@@ -1096,4 +1098,42 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "
         f"comparison with NaN is False: {answered}"
+    )
+
+
+def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
+    """`None`, a string and a list where a number belongs.
+
+    A `TypeError` is a fair answer to a type violation — it is what the violation *is*, and
+    Python raises it before the body runs for most of these. An `AttributeError` is not: it
+    means the function reached into whatever it was handed, which tells a caller nothing
+    about their input and reads like a bug in this library rather than in their call.
+
+    Two functions did. Both had the `isinstance(..., Quantity)` check for one parameter and
+    not for the neighbour beside it: `seismic_load_effect` checked `horizontal_effect` on
+    the line above and then called `.has_dimension` on an unchecked `dead_load_effect`, and
+    `standard_uncertainty_of_mean` went straight to `.to(...)` in a module that does the
+    check everywhere else.
+    """
+    population = _uniformly_callable()
+    assert len(population) >= 285, f"the probe reached only {len(population)} functions"
+
+    leaked, probes = [], 0
+    for label, function, arguments in population:
+        for name in arguments:
+            for spelled, junk in (("None", None), ("str", "12 mm"), ("list", [1.0])):
+                probes += 1
+                try:
+                    function(**{**arguments, name: junk})
+                except (ValueError, TypeError):
+                    continue
+                except Exception as unexpected:  # noqa: BLE001 - the type is the finding
+                    leaked.append(f"{label}({name}={spelled}) raised {type(unexpected).__name__}")
+                    continue
+                leaked.append(f"{label}({name}={spelled}) returned a value")
+
+    assert probes >= 1500, f"only {probes} junk probes were made"
+    assert leaked == [], (
+        "these answered ordinary junk with something other than a ValueError or a "
+        f"TypeError: {leaked}"
     )
