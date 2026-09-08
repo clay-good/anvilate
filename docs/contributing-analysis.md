@@ -154,6 +154,35 @@ Two corollaries worth internalizing:
 - **A sweep's own claim of completeness is the thing to re-verify.** "These five were the
   only sites" has been wrong more than once. Re-grep.
 
+### A non-finite input is refused, not compared
+
+**Every public analysis function refuses a NaN or an infinity rather than answering one.**
+That is a property of the whole surface now, held by
+`test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash`, which binds
+1,431 of the library's 1,746 public functions and substitutes each poison value one
+parameter at a time.
+
+Write `require_finite(value, name="value")`, not a comparison. **Every comparison with NaN
+is False**, so `if x <= 0: raise` is a no-op against one — and what happens next is rarely a
+NaN coming out the other end:
+
+- `max()` and `min()` **drop** the poisoned candidate rather than propagating it, so the
+  governing envelope comes back complete, smaller, and green;
+- `base ** nan` is exactly `1.0` when the base is `1.0`, so the NaN vanishes — that is how a
+  compressor reported 100% volumetric efficiency and a bearing a rating life of 1;
+- a boolean predicate answers **False**, which is a definite claim: `is_self_locking` said a
+  brake does not grab, for a friction coefficient nobody supplied.
+
+An infinity is the other half and it usually crashes rather than lying, with the wrong
+exception type: `int(inf)` is an `OverflowError`, and a divide by a quantity an infinity
+drove to zero is a `ZeroDivisionError`. Neither is the `ValueError` your docstring promises.
+Order matters — `require_finite` goes **above** any coercion, or the refusal you wrote is
+unreachable for exactly the input it describes.
+
+`_require` (48 modules) and `_check` (164) both call it for you on a `Quantity`. A bare
+`float` or `int` parameter has no helper, so it is the one you have to remember: a count, an
+exponent, a ratio, a coefficient.
+
 ## Finding a constant nothing pins
 
 A module-level constant can be correct, exported, documented, and still have nothing

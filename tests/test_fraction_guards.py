@@ -1334,3 +1334,60 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
         "these answered ordinary junk with something other than a ValueError or a "
         f"TypeError: {leaked}"
     )
+
+
+def test_the_contributing_pages_non_finite_promise_is_the_gates_own():
+    """The page tells a contributor the whole surface refuses a NaN, and quotes three
+    numbers doing it: how many functions the gate binds, and how many modules carry each of
+    the two helpers that call `require_finite` for them.
+
+    Every one of those moves the moment the binder reaches further or a module changes its
+    helper, and a contributor reading a stale number would size the guarantee wrong. The
+    named test has to exist too — a page pointing at a gate that was renamed is worse than a
+    page pointing at none.
+    """
+    page = " ".join(
+        (pathlib.Path(__file__).resolve().parents[1] / "docs" / "contributing-analysis.md")
+        .read_text(encoding="utf-8")
+        .split()
+    )
+
+    named = re.search(r"held by `(test_[a-z_]+)`", page)
+    assert named is not None, "the non-finite section no longer names the gate that holds it"
+    assert named.group(1) in globals(), f"{named.group(1)} is named on the page and does not exist"
+
+    bound = re.search(r"binds ([\d,]+) of the library's ([\d,]+) public functions", page)
+    assert bound is not None, "the section's function counts have moved"
+    reached, total = (int(n.replace(",", "")) for n in bound.groups())
+    assert reached == len(_uniformly_callable()), (
+        f"the page says the gate binds {reached:,} functions; it binds "
+        f"{len(_uniformly_callable()):,}"
+    )
+
+    public = sum(
+        1
+        for info in pkgutil.iter_modules(analysis.__path__)
+        if not info.name.startswith("_")
+        for name in getattr(
+            importlib.import_module(f"anvilate.analysis.{info.name}"), "__all__", ()
+        )
+        if inspect.isfunction(
+            getattr(importlib.import_module(f"anvilate.analysis.{info.name}"), name, None)
+        )
+    )
+    assert total == public, f"the page says {total:,} public functions; there are {public:,}"
+
+    helpers = re.search(r"`_require` \((\d+) modules\) and `_check` \((\d+)\)", page)
+    assert helpers is not None, "the helper counts on the page have moved"
+    counted = {"_require": 0, "_check": 0}
+    for path in sorted(
+        pathlib.Path(__file__).resolve().parents[1].glob("src/anvilate/analysis/*.py")
+    ):
+        for node in parsed_source(path).body:
+            if isinstance(node, ast.FunctionDef) and node.name in counted:
+                if "require_finite" in ast.unparse(node):
+                    counted[node.name] += 1
+    assert (int(helpers.group(1)), int(helpers.group(2))) == (
+        counted["_require"],
+        counted["_check"],
+    ), f"the page says {helpers.groups()} modules; the tree has {tuple(counted.values())}"
