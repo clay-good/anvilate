@@ -1078,6 +1078,47 @@ _ASKS = (
 )
 
 
+# Two more shapes the retry can act on. A relational guard names *two* parameters and no
+# number ("outer_radius must exceed inner_radius"), and a dimension guard names the
+# dimension it wanted, which is the one thing the AST extractor can miss.
+_RELATIONS = (
+    (
+        re.compile(
+            r"\b([a-z_]{3,})\b[^.;]{0,30}?must (?:exceed|be (?:greater|more) than|be above) "
+            r"\b([a-z_]{3,})\b"
+        ),
+        True,
+    ),
+    (
+        re.compile(
+            r"\b([a-z_]{3,})\b[^.;]{0,40}?must be (?:less than|below|under) (?:the )?"
+            r"\b([a-z_]{3,})\b"
+        ),
+        False,
+    ),
+    (re.compile(r"\b([a-z_]{3,})\b[^.;]{0,50}?and below (?:the )?\b([a-z_]{3,})\b"), False),
+)
+_WANTED_DIMENSION = re.compile(r"\b([a-z_]{3,})\b must be an? (\S*\[[^;]*?\S) quantity")
+
+
+def _which_to_scale(message: str, arguments: dict) -> str | None:
+    """The parameter to make ten times larger so a relational guard is satisfied."""
+    for pattern, raise_the_first in _RELATIONS:
+        found = pattern.search(message)
+        if found is None:
+            continue
+        first, second = found.group(1), found.group(2)
+        if first in arguments and second in arguments:
+            return first if raise_the_first else second
+    return None
+
+
+def _which_dimension_it_wanted(message: str) -> tuple[str, str] | None:
+    """The parameter and the dimension a "must be a [pressure] quantity" refusal names."""
+    found = _WANTED_DIMENSION.search(message)
+    return (found.group(1), found.group(2)) if found else None
+
+
 def _what_it_asked_for(message: str) -> tuple[str, float] | None:
     """The parameter a refusal names and a value that would satisfy it, or ``None``."""
     for pattern, pick in _ASKS:
@@ -1142,19 +1183,38 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                 # Six attempts, each one taking the refusal at its word. A guard that names
                 # its interval is telling the probe what to pass, and a fixed binding cannot
                 # satisfy "M > 1" and "0 < alpha < 1" with the same number.
-                for _attempt in range(6):
+                for _attempt in range(8):
                     try:
                         function(**arguments)
                     except ValueError as refused:
-                        asked = _what_it_asked_for(str(refused))
-                        if asked is None or asked[0] not in arguments:
+                        message = str(refused)
+                        asked = _what_it_asked_for(message)
+                        if asked is not None and asked[0] in arguments:
+                            target, number = asked
+                            held = arguments[target]
+                            arguments[target] = (
+                                Quantity(magnitude=number, unit=held.unit)
+                                if isinstance(held, Quantity)
+                                else number
+                            )
+                            continue
+                        wanted_dimension = _which_dimension_it_wanted(message)
+                        if wanted_dimension is not None and wanted_dimension[0] in arguments:
+                            target, dimension = wanted_dimension
+                            unit = _unit_for(dimension)
+                            if unit is None:
+                                break
+                            arguments[target] = Quantity(magnitude=1.0, unit=unit)
+                            continue
+                        scale = _which_to_scale(message, arguments)
+                        if scale is None:
                             break
-                        target, number = asked
-                        held = arguments[target]
-                        arguments[target] = (
-                            Quantity(magnitude=number, unit=held.unit)
+                        held = arguments[scale]
+                        bigger = (held.magnitude if isinstance(held, Quantity) else held) * 10.0
+                        arguments[scale] = (
+                            Quantity(magnitude=bigger, unit=held.unit)
                             if isinstance(held, Quantity)
-                            else number
+                            else bigger
                         )
                         continue
                     except Exception:  # noqa: BLE001 - a refusal is not this gate's subject
@@ -1187,7 +1247,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
     """
     population = _uniformly_callable()
     # Attack the gate: a binder that stopped reaching these would report nothing wrong.
-    assert len(population) >= 1250, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1400, f"the probe reached only {len(population)} functions"
 
     answered, crashed = [], []
     probes = 0
@@ -1230,7 +1290,7 @@ def test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_cras
                 ):
                     answered.append(f"{label}({name}=nan) -> {result}")
 
-    assert probes >= 3400, f"only {probes} non-finite probes were made"
+    assert probes >= 4000, f"only {probes} non-finite probes were made"
     assert crashed == [], f"a NaN reached these as something other than a refusal: {crashed}"
     assert answered == [], (
         "these answered a NaN with a definite value; the guard is a comparison and every "
@@ -1253,7 +1313,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
     check everywhere else.
     """
     population = _uniformly_callable()
-    assert len(population) >= 1250, f"the probe reached only {len(population)} functions"
+    assert len(population) >= 1400, f"the probe reached only {len(population)} functions"
 
     leaked, probes = [], 0
     for label, function, arguments in population:
@@ -1269,7 +1329,7 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
                     continue
                 leaked.append(f"{label}({name}={spelled}) returned a value")
 
-    assert probes >= 3400, f"only {probes} junk probes were made"
+    assert probes >= 4000, f"only {probes} junk probes were made"
     assert leaked == [], (
         "these answered ordinary junk with something other than a ValueError or a "
         f"TypeError: {leaked}"

@@ -269,6 +269,9 @@ def nds_shear_stress(
         raise ValueError(
             f"shear_force must be a [force] quantity; got {shear_force.dimensionality}"
         )
+    # As in `nds_bearing_stress`: the force is checked with `isinstance` and these were not.
+    if not isinstance(width, Quantity) or not isinstance(depth, Quantity):
+        raise ValueError("width and depth must be [length] quantities")
     if not width.has_dimension("[length]") or not depth.has_dimension("[length]"):
         raise ValueError("width and depth must be [length] quantities")
     b = width.to("m").magnitude
@@ -395,6 +398,11 @@ def nds_bearing_stress(
         raise ValueError(
             f"bearing_force must be a [force] quantity; got {bearing_force.dimensionality}"
         )
+    # `isinstance` too, and for both. The force above gets it and these two went straight
+    # to `.has_dimension`, which answers `AttributeError` on anything that is not a
+    # Quantity — Python's complaint, not this function's.
+    if not isinstance(width, Quantity) or not isinstance(bearing_length, Quantity):
+        raise ValueError("width and bearing_length must be [length] quantities")
     if not width.has_dimension("[length]") or not bearing_length.has_dimension("[length]"):
         raise ValueError("width and bearing_length must be [length] quantities")
     b = width.to("m").magnitude

@@ -96,6 +96,9 @@ def accumulator_size_for_volume(
     _check(precharge_pressure, "[pressure]", "precharge_pressure")
     _check(minimum_pressure, "[pressure]", "minimum_pressure")
     _check(maximum_pressure, "[pressure]", "maximum_pressure")
+    # An infinite exponent makes both (P/P)^(1/n) terms exactly 1, so the bracket they are
+    # subtracted into is zero and the sizing divides by it.
+    require_finite(polytropic_exponent, name="polytropic_exponent")
     dv = required_volume.to("L").magnitude
     if dv <= 0:
         raise ValueError("required_volume must be positive")

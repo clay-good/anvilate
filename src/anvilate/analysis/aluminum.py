@@ -383,6 +383,11 @@ def aluminum_buckling_constants(
             "implemented; an -O, -H, -T1 through -T4 temper takes ADM Table B.4.1, whose "
             "constants have a different form and are not evaluated here"
         )
+    # Both checked inline here rather than through `_require`, so neither picked up the
+    # finiteness check that helper carries: an infinite modulus makes sqrt(B_c/E) zero, and
+    # C_c = 0.41*B_c/D_c divides by it.
+    require_finite(compressive_yield, name="compressive_yield")
+    require_finite(elastic_modulus, name="elastic_modulus")
     fcy_ksi = compressive_yield.to("ksi").magnitude
     e_ksi = elastic_modulus.to("ksi").magnitude
     if fcy_ksi <= 0 or e_ksi <= 0:

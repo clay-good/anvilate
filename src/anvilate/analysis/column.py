@@ -411,6 +411,9 @@ def aisc_elastic_ltb_stress(
     e = elastic_modulus.to("MPa").magnitude
     if min(lb, rts, j, sx, ho, e) <= 0:
         raise ValueError("all quantity inputs must be positive")
+    # A NaN passes the comparison below and is then eaten by the min() that caps the
+    # interpolated moment at M_p, so the answer comes back finite, small and complete.
+    require_finite(moment_gradient_factor, name="moment_gradient_factor")
     if moment_gradient_factor <= 0:
         raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
     if section_coefficient <= 0:
@@ -464,6 +467,9 @@ def aisc_inelastic_ltb_moment(
     lr = inelastic_limit.to("mm").magnitude
     if mp <= 0 or mr <= 0 or lb <= 0 or lp <= 0 or lr <= 0:
         raise ValueError("the moments and lengths must be positive")
+    # A NaN passes the comparison below and is then eaten by the min() that caps the
+    # interpolated moment at M_p, so the answer comes back finite, small and complete.
+    require_finite(moment_gradient_factor, name="moment_gradient_factor")
     if moment_gradient_factor <= 0:
         raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
     if lr <= lp:

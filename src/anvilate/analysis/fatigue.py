@@ -715,6 +715,9 @@ def basquin_stress_for_life(
     a = _require_stress(coefficient, "coefficient")
     if a <= 0:
         raise ValueError(f"coefficient must be positive; got {coefficient}")
+    # A NaN passes this and is then dropped by the max() against the threshold stress, so
+    # the allowable range comes back as an invented near-zero rather than as a refusal.
+    require_finite(life_cycles, name="life_cycles")
     if life_cycles <= 0:
         raise ValueError(f"life_cycles must be positive; got {life_cycles}")
     if exponent >= 0:
@@ -865,6 +868,9 @@ def weld_detail_allowable_stress_range(
     dsc = _require_stress(detail_category, "detail_category")
     if dsc <= 0:
         raise ValueError(f"detail_category must be positive; got {detail_category}")
+    # A NaN passes this and is then dropped by the max() against the threshold stress, so
+    # the allowable range comes back as an invented near-zero rather than as a refusal.
+    require_finite(life_cycles, name="life_cycles")
     if life_cycles <= 0:
         raise ValueError(f"life_cycles must be positive; got {life_cycles}")
     if life_cycles <= _WELD_N_D:
