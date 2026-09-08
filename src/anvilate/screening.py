@@ -635,7 +635,6 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     They are NOT_EVALUATED rather than absent, and each says what checking it would take.
     """
     entries = []
-    declared_mass = _declared_mass(spec)
     for field, reason in _UNSCREENED_CONSTRAINTS.items():
         declared = getattr(spec.constraints, field)
         if declared is None:
@@ -645,7 +644,12 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             entries.append(_envelope_entry(spec))
             continue
         detail = f"the spec declares {field} {stated}, and nothing screened it: {reason}"
-        if field == "max_mass" and declared_mass is not None:
+        # Computed here and not above the loop: `_declared_mass` weighs a plate through
+        # `plate_mass`, which is real pint arithmetic and a materials lookup, and it was
+        # running on every screen in the library — including the specs that declare no
+        # `max_mass` at all, which is most of them, and once per member of a structure.
+        declared_mass = _declared_mass(spec) if field == "max_mass" else None
+        if declared_mass is not None:
             mass, how = declared_mass
             # Stated, not compared. The status stays NOT_EVALUATED because this is the mass
             # of the declared solid and not of the part — putting a verdict on it is the

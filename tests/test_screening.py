@@ -1220,6 +1220,49 @@ def _envelope(x: str, y: str, z: str):
     return Envelope(x=_q(x), y=_q(y), z=_q(z))
 
 
+def test_the_declared_mass_is_not_weighed_when_no_bound_asks_for_it():
+    """`_declared_mass` goes through `plate_mass` — real pint arithmetic and a materials
+    lookup — and it was being called at the top of `_constraint_entries`, before anything
+    asked whether the document declares a `max_mass` at all. Most do not, and a structure
+    pays it once per member.
+
+    Counted rather than timed. A timing assertion measures the machine it runs on; what is
+    true regardless is that the plate is weighed exactly when a bound wants to know.
+    """
+    import anvilate.export.dxf as dxf_module
+
+    calls = []
+    real = dxf_module.plate_mass
+
+    def counting(**kwargs):
+        calls.append(kwargs)
+        return real(**kwargs)
+
+    from anvilate.spec import Envelope
+
+    dxf_module.plate_mass = counting
+    try:
+        # A document with no constraints at all is the weak case — the loop body never runs
+        # for it, so it passes against the eager version too. This one declares a *different*
+        # bound, so the entries are built and only the mass must not be.
+        screen_spec(
+            _base_plate_spec(
+                constraints=Constraints(
+                    envelope=Envelope(x=_q("1 m"), y=_q("1 m"), z=_q("1 m")),
+                    max_cost=Provenanced.stated(40.0),
+                )
+            )
+        )
+        assert calls == [], "the plate was weighed for a document that declares no max_mass"
+
+        screen_spec(
+            _base_plate_spec(constraints=Constraints(max_mass=Provenanced.stated(_q("20 kg"))))
+        )
+        assert len(calls) == 1, f"declaring max_mass weighed the plate {len(calls)} times"
+    finally:
+        dxf_module.plate_mass = real
+
+
 def test_a_comparison_labelled_deflection_that_is_not_a_length_is_left_alone():
     """`Comparison` requires its two sides to agree with *each other*, not to be a length.
 
