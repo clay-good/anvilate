@@ -524,7 +524,7 @@ def _base_plate_spec(**overrides) -> DesignSpec:
     return _spec(**base)
 
 
-def _cover_plate_spec(*, circular: bool, **overrides) -> DesignSpec:
+def _cover_plate_spec(*, circular: bool, element_params_override=None, **overrides) -> DesignSpec:
     """An access cover, given either a plan rectangle or a diameter — the two shapes are
     the same element type and only one of them is a solid this library can weigh."""
     params = {
@@ -536,6 +536,7 @@ def _cover_plate_spec(*, circular: bool, **overrides) -> DesignSpec:
     params.update(
         {"diameter": _q("400 mm")} if circular else {"length": _q("400 mm"), "width": _q("250 mm")}
     )
+    params.update(element_params_override or {})
     base = {
         "element_type": "cover_plate",
         "element_params": params,
@@ -1018,6 +1019,94 @@ def test_a_document_with_no_solid_to_weigh_says_so_and_states_no_mass():
     )
     stated = next(e for e in screen_spec(rectangular).entries if e.name == "constraint max_mass")
     assert "weighs" in stated.detail
+
+
+def _envelope(x: str, y: str, z: str):
+    from anvilate.spec import Envelope
+
+    return Envelope(x=_q(x), y=_q(y), z=_q(z))
+
+
+def test_a_solid_bigger_than_its_envelope_by_volume_cannot_fit_in_any_orientation():
+    """`constraint envelope` said "an envelope is checked against a built solid's bounding
+    box, and no geometry is generated from a spec today", and a `base_plate` declares its
+    bounding box: a width, a depth and a plate thickness.
+
+    Volume is the condition a rigid body cannot escape by turning, so exceeding it is a
+    FAIL rather than a gap.
+    """
+    spec = _base_plate_spec(
+        constraints=Constraints(envelope=_envelope("100 mm", "100 mm", "100 mm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint envelope")
+    assert entry.status is CheckStatus.FAIL
+    assert "2.25 times the envelope's volume" in entry.detail
+    assert "does not fit in any orientation" in entry.detail
+
+
+def test_a_solid_longer_than_the_envelopes_space_diagonal_cannot_fit_either():
+    """The condition volume cannot see: a 1000 x 1 x 1 mm strip has exactly the volume of a
+    10 mm cube and no way into it. The longest straight line a box contains is its space
+    diagonal, so nothing longer goes in at any angle.
+
+    This branch is here because the *obvious* second condition — shortest edge over the
+    envelope's longest — is unreachable: if `s0 > l2` then `s0*s1*s2 > l2**3 >= l0*l1*l2`
+    and the volume test has already fired. It was written that way first.
+    """
+    spec = _cover_plate_spec(
+        circular=False,
+        element_params_override={
+            "length": _q("1000 mm"),
+            "width": _q("1 mm"),
+            "thickness": _q("1 mm"),
+        },
+        constraints=Constraints(envelope=_envelope("10 mm", "10 mm", "10 mm")),
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint envelope")
+    assert entry.status is CheckStatus.FAIL
+    assert "17.32 mm space diagonal" in entry.detail
+    # And the volume test really did not fire — the two conditions are independent.
+    assert "times the envelope's volume" not in entry.detail
+
+
+def test_a_solid_that_misses_axis_aligned_but_tilts_in_is_not_called_a_failure():
+    """The mirror of a silent green, and just as wrong.
+
+    A 300 x 300 x 25 mm plate does not fit a 250 x 250 x 400 mm box on any axis and slides
+    in diagonally. Sorting both triples and comparing pairwise — the obvious test — answers
+    whether it fits *axis-aligned*, which is a different question, and reporting that as a
+    FAIL is a verdict against a part that fits.
+    """
+    spec = _base_plate_spec(
+        constraints=Constraints(envelope=_envelope("250 mm", "250 mm", "400 mm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint envelope")
+    assert entry.status is not CheckStatus.FAIL
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "does not fit axis-aligned" in entry.detail
+    assert "tilted is not screened" in entry.detail
+
+
+def test_fitting_the_envelope_axis_aligned_is_not_a_pass_either():
+    """Same reason `max_mass` is not one: the prism is what the document declares, not what
+    the part is made of."""
+    spec = _base_plate_spec(
+        constraints=Constraints(envelope=_envelope("400 mm", "400 mm", "100 mm"))
+    )
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint envelope")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "it fits axis-aligned" in entry.detail
+    assert "Not a pass either way" in entry.detail
+
+
+def test_an_envelope_on_an_element_with_no_prism_says_so():
+    """A lifting lug declares a width, a hole and a thickness and no second plan dimension,
+    so the document states no box to compare."""
+    spec = _lug_spec(constraints=Constraints(envelope=_envelope("10 mm", "10 mm", "10 mm")))
+    entry = next(e for e in screen_spec(spec).entries if e.name == "constraint envelope")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "nothing screened it" in entry.detail
+    assert "geometry" not in entry.detail
 
 
 def test_a_declared_wall_under_the_process_minimum_is_a_failure_and_not_a_gap():

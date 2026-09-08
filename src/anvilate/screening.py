@@ -55,6 +55,7 @@ import pkgutil
 import re
 from collections.abc import Callable, Mapping
 from functools import cache
+from math import sqrt
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -549,6 +550,28 @@ _PRISM_ELEMENTS: dict[str, tuple[str, str, str, str]] = {
 }
 
 
+def _declared_extents(spec: DesignSpec) -> tuple[Quantity, Quantity, Quantity] | None:
+    """The three edge lengths of the prism this document declares, or ``None``.
+
+    ``None`` when the element is not one of :data:`_PRISM_ELEMENTS`, or when it leaves one
+    of its plan dimensions unstated — a circular cover declares a ``diameter`` and no
+    ``length``, and this returns the extents of a rectangular prism or nothing.
+
+    `isinstance` and not `Quantity.model_validate`: `load_spec_yaml` has already turned
+    every dimension into a `Quantity`, so validating again would be a second front door onto
+    content this one already bounded — and `element_params` is typed `Mapping[str, Any]`, so
+    a caller who assembled a spec by hand and left a raw dict there gets nothing rather than
+    a parse of whatever they put in it.
+    """
+    fields = _PRISM_ELEMENTS.get(spec.element_type or "")
+    if fields is None or spec.element_params is None:
+        return None
+    values = [spec.element_params.get(name) for name in fields[:3]]
+    if not all(isinstance(value, Quantity) for value in values):
+        return None
+    return (values[0], values[1], values[2])
+
+
 def _declared_mass(spec: DesignSpec) -> tuple[Quantity, str] | None:
     """The mass of the solid this document declares, and how it was arrived at.
 
@@ -565,23 +588,14 @@ def _declared_mass(spec: DesignSpec) -> tuple[Quantity, str] | None:
     the mass "never computed and never mentioned", and a reader can do something with a
     stated 17.66 kg beside a 20 kg bound that they cannot do with silence.
     """
-    fields = _PRISM_ELEMENTS.get(spec.element_type or "")
-    if fields is None or spec.element_params is None:
+    extents = _declared_extents(spec)
+    if extents is None:
         return None
     from .export.dxf import plate_mass
 
-    width_field, depth_field, thickness_field, material_field = fields
-    params = spec.element_params
-    dimensions = [params.get(name) for name in (width_field, depth_field, thickness_field)]
-    # `isinstance` and not `Quantity.model_validate`: `load_spec_yaml` has already turned
-    # every dimension into a `Quantity`, so validating again would be a second front door
-    # onto content this one already bounded — and `element_params` is typed
-    # `Mapping[str, Any]`, so a caller who assembled a spec by hand and left a raw dict
-    # there gets no mass stated rather than a parse of whatever they put in it.
-    if not all(isinstance(value, Quantity) for value in dimensions):
-        return None
-    width, depth, thickness = dimensions
-    reference = params.get(material_field)
+    width, depth, thickness = extents
+    material_field = _PRISM_ELEMENTS[spec.element_type or ""][3]
+    reference = (spec.element_params or {}).get(material_field)
     if not isinstance(reference, str):
         return None
     try:
@@ -620,6 +634,9 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         if declared is None:
             continue
         stated = getattr(declared, "value", declared)
+        if field == "envelope":
+            entries.append(_envelope_entry(spec))
+            continue
         detail = f"the spec declares {field} {stated}, and nothing screened it: {reason}"
         if field == "max_mass" and declared_mass is not None:
             mass, how = declared_mass
@@ -638,6 +655,93 @@ def _constraint_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             )
         )
     return entries
+
+
+def _envelope_entry(spec: DesignSpec) -> ScorecardEntry:
+    """`constraints.envelope` against the prism this document declares.
+
+    **Only what is true in every orientation is a failure.** The obvious test — sort both
+    triples and compare pairwise — answers whether the solid fits *axis-aligned*, and that
+    is not the same question: a 300 x 300 x 25 mm plate does not fit a 250 x 250 x 400 mm
+    box on any axis and slides in diagonally, tilted. Reporting that as a FAIL would be a
+    verdict against a part that fits, which is the mirror of a silent green and just as
+    wrong. So the axis-aligned comparison is stated as evidence, and only two conditions
+    are called failures, because a rigid body cannot escape either by turning:
+
+    * its volume exceeds the envelope's, or
+    * its **longest** edge exceeds the envelope's **space diagonal** — the longest straight
+      line the box contains, so nothing longer fits in it at any angle.
+
+    The obvious second condition, "its shortest edge exceeds the envelope's longest", is
+    **unreachable** and was written here before that was noticed: if `s0 > l2` then, since
+    `s0 <= s1 <= s2` and `l0 <= l1 <= l2`, `s0*s1*s2 > l2**3 >= l0*l1*l2` — the volume test
+    has already fired. The diagonal is independent of volume and catches what volume cannot:
+    a 1 x 1 x 1000 mm rod has exactly the volume of a 10 mm cube and no way into it.
+
+    Clearing both is not a pass either, for the reason `max_mass` is not one: the prism is
+    what the document declares, not what the part is made of.
+    """
+    envelope = spec.constraints.envelope
+    box = f"{envelope.x} x {envelope.y} x {envelope.z}"
+    extents = _declared_extents(spec)
+    if extents is None:
+        return ScorecardEntry(
+            name="constraint envelope",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"the spec declares envelope {box}, and nothing screened it: "
+                f"{_UNSCREENED_CONSTRAINTS['envelope']}"
+            ),
+        )
+
+    # One unit, named once, because `Quantity` refuses comparison between two quantities
+    # and is right to: this is where the unit being compared in gets written down.
+    solid = sorted(value.to("mm").magnitude for value in extents)
+    limits = sorted(value.to("mm").magnitude for value in (envelope.x, envelope.y, envelope.z))
+    declared = " x ".join(str(value) for value in extents)
+
+    solid_volume = solid[0] * solid[1] * solid[2]
+    limit_volume = limits[0] * limits[1] * limits[2]
+    if solid_volume > limit_volume:
+        return ScorecardEntry(
+            name="constraint envelope",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the spec declares envelope {box} and a solid larger than it: {declared} "
+                f"is {solid_volume / limit_volume:.3g} times the envelope's volume, so it "
+                f"does not fit in any orientation"
+            ),
+        )
+    diagonal = sqrt(limits[0] ** 2 + limits[1] ** 2 + limits[2] ** 2)
+    if solid[2] > diagonal:
+        return ScorecardEntry(
+            name="constraint envelope",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the spec declares envelope {box} and a solid longer than it: the longest "
+                f"edge of {declared} is over the envelope's {diagonal:.4g} mm space "
+                f"diagonal, so it does not fit in any orientation"
+            ),
+        )
+
+    fits = all(edge <= limit for edge, limit in zip(solid, limits, strict=True))
+    aligned = (
+        "and it fits axis-aligned"
+        if fits
+        else (
+            "and it does not fit axis-aligned — whether it goes in tilted is not screened, "
+            "which is a real placement and not a technicality for a thin plate"
+        )
+    )
+    return ScorecardEntry(
+        name="constraint envelope",
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"the spec declares envelope {box}, the solid this document does declare is "
+            f"{declared} {aligned}. Not a pass either way: a document declares the element "
+            f"its checks need, not everything the part is made of"
+        ),
+    )
 
 
 def _combination_entry(spec: DesignSpec) -> ScorecardEntry | None:
