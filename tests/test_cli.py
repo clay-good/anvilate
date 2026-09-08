@@ -14,12 +14,14 @@ a merge gate must not go green on it.
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import pytest
 
@@ -407,6 +409,97 @@ def test_an_artifact_that_needs_geometry_is_refused_by_name(spec_file, artifact)
     assert code == EXIT_UNBUILT
     assert out == ""
     assert artifact in err and "openspec/specs/" in err
+
+
+def test_qif_results_are_produced_from_a_spec_file_alone(tmp_path):
+    """The finding this path exists because of: `export --artifact qif` was refused, and the
+    reason given was that "QIF results carry measured characteristics against a built part".
+
+    `export_qif_results` takes a `BundleSections` and touches no geometry — which is what
+    `artifact-export` asks of it, what `docs/quality-interchange.md` is written about, and
+    what `examples/lug_scorecard_as_qif.py` has shipped since the module landed. The command
+    was refusing a capability the library had.
+    """
+    from anvilate.export.qif import QIF_NAMESPACE, qif_schema_issues
+
+    path = tmp_path / "lug.yaml"
+    path.write_text(_LUG_SPEC, encoding="utf-8")
+    code, out, err = _run("export", "--artifact", "qif", str(path))
+    assert code == EXIT_OK, err
+    assert qif_schema_issues(out) == [], out[:400]
+
+    root = ET.fromstring(out)
+    assert root.tag == f"{{{QIF_NAMESPACE}}}QIFDocument"
+    # Every check on the card crossed, which is the property the whole mapping exists for.
+    characteristics = root.findall(
+        f".//{{{QIF_NAMESPACE}}}CharacteristicItems/*",
+    )
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    assert len(characteristics) == len(screen_spec(load_spec_yaml(_LUG_SPEC)).entries)
+    # And the watermark rode along: this is a screen, and the document says so on its face.
+    scope = root.findtext(f"{{{QIF_NAMESPACE}}}Header/{{{QIF_NAMESPACE}}}Scope")
+    assert "not a certified analysis" in scope
+
+
+def test_the_qif_spec_digest_is_the_documents_and_not_the_files(tmp_path):
+    """Two YAML files that differ only in formatting are the same spec revision.
+
+    The digest goes in the header as the traceability `artifact-export` asks for, and the
+    MCP surface holds the parsed document rather than the file it came from — so a digest
+    over the file's bytes would make the two surfaces disagree about one revision the day
+    the tool serves this format.
+    """
+    plain = tmp_path / "a.yaml"
+    plain.write_text(_LUG_SPEC, encoding="utf-8")
+    reformatted = tmp_path / "b.yaml"
+    reformatted.write_text(_LUG_SPEC.replace(": ", ":  ") + "\n\n", encoding="utf-8")
+
+    digests = []
+    for path in (plain, reformatted):
+        code, out, _err = _run("export", "--artifact", "qif", str(path))
+        assert code == EXIT_OK
+        digests.append(re.search(r"spec digest (sha256:[0-9a-f]{64})", out).group(1))
+    assert digests[0] == digests[1], digests
+
+
+def test_a_card_that_does_not_pass_gets_no_qif_and_is_told_what_to_do(spec_file):
+    """The export gate applies to QIF and does not apply to the bundle, and the difference
+    is the point: the bundle is the evidence a part failed, and a characteristic list is a
+    statement about a part somebody may measure.
+
+    `ExportRefused` ends with "Pass override=True", which is a remedy for a caller holding
+    the library and none at all for one holding a shell. The refusal has to name what is
+    unmet *and* something this caller can do.
+    """
+    code, out, err = _run("export", "--artifact", "qif", str(spec_file))
+    assert out == "", "a refused export printed a document anyway"
+    # The card could not be evaluated, so that is the code — the same one the same spec gets
+    # from the same command asking for the bundle.
+    assert code == EXIT_NOT_EVALUATED
+    bundle_code, _bundle_out, _bundle_err = _run(
+        "export", "--artifact", "evidence-bundle", str(spec_file)
+    )
+    assert code == bundle_code
+    assert "export is gated on the acceptance checks passing" in err
+    assert "T1 analytical" in err, "the refusal does not name what is unmet"
+    assert "--artifact evidence-bundle" in err, "the refusal names no remedy at this surface"
+
+
+def test_the_qif_json_format_carries_the_document_and_its_digest(tmp_path):
+    """`--format json` is for the script that wants the whole thing, and for QIF the whole
+    thing is an XML document plus a digest naming the bytes it was handed."""
+    path = tmp_path / "lug.yaml"
+    path.write_text(_LUG_SPEC, encoding="utf-8")
+    code, out, _err = _run("export", "--artifact", "qif", "--format", "json", str(path))
+    assert code == EXIT_OK
+    payload = json.loads(out)
+    assert payload["status"] == "pass"
+    entry = payload["documents"][0]
+    assert entry["format"] == "qif" and entry["name"] == "padeye"
+    assert entry["qif"].startswith("<?xml")
+    assert entry["sha256"] == hashlib.sha256(entry["qif"].encode("utf-8")).hexdigest()
 
 
 def test_the_artifact_list_is_the_mcp_tools_own():

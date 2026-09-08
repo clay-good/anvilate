@@ -9,6 +9,18 @@ characteristics, each with a requirement, an evaluated actual, and a status. Tha
 [QIF](https://qifstandards.org/) — ISO 23952 / ANSI QIF 3.0 — whose schemas are published
 free of charge. `export_qif_results` writes the evidence bundle out in it.
 
+**From a spec file, without writing any Python:**
+
+```bash
+anvilate export --artifact qif part.yaml > part.qif
+```
+
+That command was refused until recently, on the stated reasoning that "QIF results carry
+measured characteristics against a built part". They do not — this whole page is about the
+other thing they carry — and the shell was turning away a capability the library had
+shipped, documented and exampled. See [the headless CLI](headless-cli.md) for the export
+gate at that surface: a card that does not pass gets no QIF, and there is no `--override`.
+
 ```python
 from anvilate.export.gate import authorize_export
 from anvilate.export.qif import export_qif_results

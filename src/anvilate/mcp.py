@@ -1275,15 +1275,26 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     # Two surfaces cannot report an artifact as unbuilt in one place and buildable in the
     # other if they read the same dict, and the keys are already the format names this
     # tool's enum publishes.
-    from .cli import _UNBUILT_ARTIFACTS
+    #
+    # It is `_UNSERVED_OVER_MCP` and not `_UNBUILT_ARTIFACTS` because the two surfaces do
+    # not refuse the same set, and they never did — what changed is that the difference is
+    # now stated. A DXF waits on built geometry at both. QIF waits on nothing at the shell,
+    # which serves it; here it waits on this tool's published result, whose payload is the
+    # evidence bundle *document*. Naming that as the reason keeps the parity test honest:
+    # the surfaces still read one table, and it now says a true thing about each.
+    from .cli import _UNSERVED_OVER_MCP as _UNBUILT_ARTIFACTS
     from .scorecard import Scorecard
     from .spec import parse_spec
 
     artifact = arguments["format"]
     if artifact in _UNBUILT_ARTIFACTS:
         raise _Unavailable(
+            # The tail names what this tool does serve. It used to say "the evidence bundle
+            # needs no geometry and is served", which read as the reason rather than as the
+            # alternative — true of a DXF and wrong about QIF, whose own reason is nothing to
+            # do with geometry.
             f"export_artifact cannot produce {artifact}: {_UNBUILT_ARTIFACTS[artifact]} "
-            f"The evidence bundle needs no geometry and is served."
+            f"The evidence bundle is the format this tool serves."
         )
 
     handle = arguments["subject"]

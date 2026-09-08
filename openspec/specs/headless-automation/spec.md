@@ -100,9 +100,17 @@ Every build SHALL record a provenance graph — input spec hash, database versio
 The MCP tool surface SHALL be able to produce the evidence bundle for a screening result it
 is given, because that artifact needs no built geometry: the CLI produces it from a spec file
 today by screening the spec and rolling the card up, and the tool has that card through its
-subject handle. Artifacts that do need built geometry — a QIF results file, a DXF — SHALL
-continue to be refused with that reason, and the refusal SHALL name what the operation waits
-on rather than reporting the request as malformed.
+subject handle. An artifact that does need built geometry — a DXF — SHALL continue to be
+refused with that reason, and every refusal SHALL name what that operation is actually
+waiting on rather than reporting the request as malformed.
+
+**A refusal SHALL state the reason that is true of the artifact it refuses.** QIF results
+were refused at both surfaces as needing built geometry, and they do not: the export layer
+produces them from a screened card, which is what `artifact-export` requires of it. The shell
+serves them. This surface does not yet, and the reason is its own published result — whose
+payload is the evidence bundle *document* — rather than anything about geometry. Where two
+surfaces refuse different sets, each SHALL say why **it** refuses, and neither SHALL inherit
+the other's reason.
 
 The produced bundle SHALL be **returned and not written**. The tool SHALL NOT accept a
 destination path, and SHALL NOT create a file. Where a bundle ends up is the client's
@@ -124,9 +132,16 @@ case. This surface grants no override, and no artifact leaves it unwatermarked.
 
 #### Scenario: An artifact that needs geometry is still refused
 
-- **WHEN** the same client asks the same tool for a QIF results file or a DXF
+- **WHEN** the same client asks the same tool for a DXF
 - **THEN** the call is refused as unavailable, naming built geometry as what it waits on,
   rather than answered with a file drawn from nothing
+
+#### Scenario: An artifact this surface cannot carry is refused for that reason
+
+- **WHEN** the same client asks the same tool for a QIF results file
+- **THEN** the call is refused as unavailable, naming this tool's published result shape as
+  what it waits on and naming the shell command that produces the document today — and not
+  claiming that QIF needs built geometry, which it does not
 
 #### Scenario: A card that does not pass is still exported, and says so
 

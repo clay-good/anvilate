@@ -10,18 +10,23 @@ MCP server.
 is backed as well: only ``build`` is refused, and it is refused by name with what it waits
 on. ``check`` compiles a spec document and screens it,
 which is exactly the path :func:`anvilate.screening.screen_spec` already serves over MCP.
-``export`` serves the one artifact that needs no geometry — the evidence bundle, which is
-assembled from a scorecard — and refuses the two that do.
+``export`` serves the artifacts that need no geometry — the evidence bundle, and QIF results
+(ISO 23952), both assembled from a screened card — and refuses the one that does.
 
-That split was got wrong first: ``export`` was refused whole, on the reasoning that it
-"writes a downstream artifact from a built part". True of a DXF and of QIF results, false of
-the evidence bundle, which the MCP tool's own format enumeration has always listed beside
-them. A refusal wide enough to cover something that works is as misleading as a missing one.
+That split was got wrong twice, the same way each time. First ``export`` was refused whole,
+on the reasoning that it "writes a downstream artifact from a built part": true of a DXF,
+false of the evidence bundle. Then QIF stayed refused on the same reasoning, and that was
+false too — ``export_qif_results`` takes a ``BundleSections`` and touches no geometry, which
+is what ``artifact-export`` asks of it and what ``docs/quality-interchange.md`` is written
+about. A refusal wide enough to cover something that works is as misleading as a missing
+one, and the second time it hid a capability the library had shipped, documented and
+exampled.
 
-``build`` and ``diff`` do need a built part, so each is refused *by name, with the reason*
-rather than left as an unknown command. A CLI that answers "unknown command: build" tells a
-script author they typed it wrong; the honest answer is that the operation is specified,
-unbuilt, and here is what it is waiting on.
+``build`` does need a built part, so it is refused *by name, with the reason* rather than
+left as an unknown command. A CLI that answers "unknown command: build" tells a script
+author they typed it wrong; the honest answer is that the operation is specified, unbuilt,
+and here is what it is waiting on. ``diff`` runs — only its mass, volume and
+centre-of-gravity deltas wait on geometry, and the output says so where they would be.
 
 **The bundle goes to stdout, and that is not an oversight.** Every artifact-emitting entry
 point in this package takes a mandatory ``ExportAuthorization`` (see
@@ -117,20 +122,44 @@ _DIFF_NEEDS_GEOMETRY = (
     "mass, volume and centre-of-gravity deltas need two built parts. See " + _GEOMETRY_SPEC + "."
 )
 
-# The artifacts `export` knows about, and which of them a spec file alone can produce. The
-# two that cannot each say what they are waiting on, in the same words `_UNBUILT` uses,
-# because a caller asking for a DXF is owed the same answer as one asking for a build.
-_UNBUILT_ARTIFACTS = {
+# What a spec file alone genuinely cannot produce, and what it waits on — in the same words
+# `_UNBUILT` uses, because a caller asking for a DXF is owed the same answer as one asking
+# for a build. A DXF is a drawing of a shape, and there is no shape.
+#
+# **QIF used to be on this list, and the reason given for it was not true.** It said "QIF
+# results carry measured characteristics against a built part", and
+# `anvilate.export.qif.export_qif_results` takes a `BundleSections` and touches no geometry
+# at all: `artifact-export` asks the layer to export "a validated part's scorecard and
+# evidence" as QIF, `docs/quality-interchange.md` is written about exactly that crossing,
+# and `examples/lug_scorecard_as_qif.py` produces a schema-valid document from a scorecard.
+# A refusal wide enough to cover something that works is as misleading as a missing one —
+# which is the same mistake, one level down, that this module's own docstring records
+# `export` being refused whole for.
+_NEEDS_GEOMETRY = {
     "dxf": (
         "a DXF is drawn from built geometry, and there is no built part to draw. "
         "See " + _GEOMETRY_SPEC + "."
     ),
+}
+
+# Served here and not yet over MCP, with the reason it waits on stated as the thing it
+# really is. `export_artifact` publishes a result whose payload is the evidence bundle
+# *document* — a JSON object with its own schema — and a QIF results file is XML. Serving it
+# there is a change to a published tool result, which is a decision to make in a diff about
+# the protocol surface rather than one to arrive at by removing a line here.
+_NOT_YET_OVER_MCP = {
     "qif": (
-        "QIF results carry measured characteristics against a built part. "
-        "See " + _GEOMETRY_SPEC + "."
+        "the export tool's published result carries the evidence bundle document, and QIF "
+        "results are an XML file, so serving them here is a change to the tool's result "
+        "shape. `anvilate export --artifact qif` produces the document at the shell today."
     ),
 }
-_ARTIFACTS = ("evidence-bundle", *sorted(_UNBUILT_ARTIFACTS))
+
+# What each surface refuses. The shell refuses what cannot be produced at all; the tool
+# refuses that, plus what its own published result cannot yet carry.
+_UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
+_UNSERVED_OVER_MCP = {**_NEEDS_GEOMETRY, **_NOT_YET_OVER_MCP}
+_ARTIFACTS = ("evidence-bundle", *sorted(_UNSERVED_OVER_MCP))
 
 
 class _Parser(argparse.ArgumentParser):
@@ -265,10 +294,11 @@ def _build_parser() -> argparse.ArgumentParser:
     export = commands.add_parser(
         "export",
         help="write a downstream artifact from a screened spec",
-        description="Render the evidence bundle for every spec given, or every spec under "
+        description="Render the chosen artifact for every spec given, or every spec under "
         "a directory. The exit code is the bundle roll-up, which is never better than its "
         "worst section: 0 when every section passed, 1 when one failed, 2 when one could "
-        "not be evaluated. An artifact needing a built part is refused with 4.",
+        "not be evaluated. QIF results are gated on the card passing, as `artifact-export` "
+        "asks; an artifact needing a built part is refused with 4.",
     )
     export.add_argument(
         "spec",
@@ -280,7 +310,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--artifact",
         choices=_ARTIFACTS,
         default="evidence-bundle",
-        help="which artifact; only the evidence bundle needs no geometry",
+        help="which artifact; the evidence bundle and QIF results need no geometry",
     )
     export.add_argument(
         "--format", choices=("text", "json"), default="text", help="how to render it"
@@ -886,8 +916,96 @@ def _render_verification(report, statement: dict) -> str:
     return "\n".join(lines)
 
 
+def _qif(results, *, worst, fmt: str, out, err) -> int:
+    """``export --artifact qif``: the same sections, in ISO 23952 rather than in the bundle.
+
+    **The export gate applies here and it does not at the bundle.** `artifact-export` gates
+    CAD artifacts on the acceptance checks passing, and a QIF results file is one — it is
+    the document a quality system measures a part against. The evidence bundle is the
+    evidence *including* the evidence that a part failed, which is why it is printed for any
+    verdict; a characteristic list is a statement about a part that may be built from it.
+    So a card that does not pass is refused here, in the gate's own words, and the exit code
+    is the card's — the same code the same spec gets from the same command asking for the
+    bundle, because the exit code is about the screening either way.
+
+    There is no ``--override``. `authorize_export(card, override=True)` exists so that
+    exporting past a failing card is a deliberate act by somebody who has read the card, and
+    a flag on a CI-facing command is the opposite of that. Adding one is a decision to make
+    with `artifact-export` open, not a convenience to fall into.
+    """
+    from .attestation import EnvironmentBOM, canonical_json, sha256_hex
+    from .export.gate import ExportRefused, authorize_export
+    from .export.qif import export_qif_results
+
+    # One BOM for the run: it describes the environment that produced the documents, and
+    # rebuilding it per spec would let two documents from one invocation disagree about it.
+    bom = EnvironmentBOM.of_this_environment()
+    documents: list[tuple[Path, Any, str]] = []
+    for path, spec, sections in results:
+        try:
+            authorization = authorize_export(sections.scorecard)
+        except ExportRefused as refused:
+            # `ExportRefused` ends with "Pass override=True to export anyway", which is a
+            # remedy for somebody holding the library and none at all for somebody holding a
+            # shell — this command has no override, deliberately. So the refusal keeps the
+            # part that says what is unmet and gains the part a caller here can act on.
+            print(
+                f"anvilate export --artifact qif: {path}: {refused}\n"
+                f"anvilate export has no override: exporting past a failing card is a "
+                f"deliberate act by somebody who has read it. "
+                f"`--artifact evidence-bundle` is served whatever the verdict and carries "
+                f"the failure.",
+                file=err,
+            )
+            return EXIT_CODES[worst]
+        documents.append(
+            (
+                path,
+                spec,
+                export_qif_results(
+                    sections,
+                    part_name=spec.name,
+                    # The digest of the spec's own canonical JSON, not of the file's bytes:
+                    # two YAML files that differ only in whitespace are the same revision,
+                    # and the MCP surface holds the document rather than the file it came
+                    # from. One definition, so the two surfaces cannot disagree.
+                    spec_digest="sha256:"
+                    + sha256_hex(canonical_json(spec.model_dump(mode="json")).encode("utf-8")),
+                    bom=bom,
+                    authorization=authorization,
+                ),
+            )
+        )
+
+    if fmt == "json":
+        payload = {
+            "status": worst.value,
+            "documents": [
+                {
+                    "path": str(path),
+                    "name": spec.name,
+                    "format": "qif",
+                    "qif": document,
+                    "sha256": sha256_hex(document.encode("utf-8")),
+                }
+                for path, spec, document in documents
+            ],
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+    else:
+        for index, (path, _spec, document) in enumerate(documents):
+            if index:
+                print("", file=out)
+            if len(documents) > 1:
+                # An XML comment, because the run separator has to survive being redirected
+                # into a file a QIF reader opens.
+                print(f"<!-- {path} -->", file=out)
+            print(document, end="" if document.endswith("\n") else "\n", file=out)
+    return EXIT_CODES[worst]
+
+
 def _export(args: argparse.Namespace, *, out, err) -> int:
-    """``export``, for the one artifact a spec file alone can produce."""
+    """``export``, for the artifacts a spec file alone can produce."""
     from .bundle import BundleSections, combinations_for
 
     if args.artifact in _UNBUILT_ARTIFACTS:
@@ -936,6 +1054,9 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     # for a repository got N blocks and had to find the worst by scanning them. The exit
     # code carried it, and a verdict only an exit code carries is one nobody reads in a log.
     worst = _worst_status(sections for _p, _s, sections in results)
+
+    if args.artifact == "qif":
+        return _qif(results, worst=worst, fmt=args.format, out=out, err=err)
 
     if args.format == "json":
         payload = {

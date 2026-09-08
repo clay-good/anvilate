@@ -192,19 +192,19 @@ def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
     assert at_the_shell["status"] == CheckStatus.NOT_EVALUATED.value
 
 
-def test_the_two_formats_that_need_geometry_are_refused_in_the_same_words():
-    """`dxf` and `qif` are unbuilt on both surfaces, and neither invents its own reason.
+def test_a_format_neither_surface_can_produce_is_refused_in_the_same_words():
+    """`dxf` is unbuilt on both surfaces, and neither invents its own reason.
 
     The MCP handler imports the CLI's table rather than restating it, so this is really a
     check that it still does: a second copy of "what a DXF waits on" is a sentence that goes
     stale in one place and not the other, and a client reading the MCP refusal and a user
     reading the shell one would then be told different things about the same gap.
     """
-    from anvilate.cli import _UNBUILT_ARTIFACTS, EXIT_UNBUILT
+    from anvilate.cli import _NEEDS_GEOMETRY, EXIT_UNBUILT
 
     handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
-    assert set(_UNBUILT_ARTIFACTS) == {"dxf", "qif"}
-    for artifact, reason in sorted(_UNBUILT_ARTIFACTS.items()):
+    assert set(_NEEDS_GEOMETRY) == {"dxf"}
+    for artifact, reason in sorted(_NEEDS_GEOMETRY.items()):
         error = _mcp("export_artifact", {"subject": handle, "format": artifact})["error"]
         # -32000 and not -32602: an unbuilt operation is not an argument the caller can fix,
         # and a client that retries an INVALID_PARAMS with a better argument would loop.
@@ -214,14 +214,37 @@ def test_the_two_formats_that_need_geometry_are_refused_in_the_same_words():
         assert code == EXIT_UNBUILT
         assert reason in err
 
-    # And the format the enum publishes that is *not* in that table is the one served, so a
-    # third unbuilt format cannot be added without this failing.
+
+def test_the_surfaces_refuse_different_sets_and_each_says_why_it_refuses():
+    """The two are not obliged to serve the same artifacts — they are obliged to be honest.
+
+    QIF was refused at both, in one sentence, saying it "carries measured characteristics
+    against a built part". That is false: `export_qif_results` takes a `BundleSections`. The
+    shell serves it now; the tool still does not, because its published result carries the
+    evidence bundle *document* and QIF results are XML. So the table is two tables, each
+    entry a true statement, and the MCP refusal for `qif` may not claim geometry — the
+    failure mode being guarded against is one surface inheriting the other's excuse.
+    """
+    from anvilate.cli import _NEEDS_GEOMETRY, _NOT_YET_OVER_MCP, _UNSERVED_OVER_MCP
+
+    assert set(_UNSERVED_OVER_MCP) == set(_NEEDS_GEOMETRY) | set(_NOT_YET_OVER_MCP)
+    assert not set(_NEEDS_GEOMETRY) & set(_NOT_YET_OVER_MCP), "a reason cannot be both"
+
+    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
+    message = _mcp("export_artifact", {"subject": handle, "format": "qif"})["error"]["message"]
+    assert _NOT_YET_OVER_MCP["qif"] in message
+    assert "geometry" not in message and "built part" not in message
+    # And it names the surface that does serve it, so the refusal is one a client can act on.
+    assert "anvilate export --artifact qif" in message
+
+    # The formats the enum publishes that are *not* refused over MCP are the served ones, so
+    # a new unbuilt format cannot be added without this failing.
     published = set(
         {t.name: t for t in tool_catalog()}["export_artifact"].input_schema["properties"]["format"][
             "enum"
         ]
     )
-    assert published - set(_UNBUILT_ARTIFACTS) == {"evidence_bundle"}
+    assert published - set(_UNSERVED_OVER_MCP) == {"evidence_bundle"}
 
 
 def _hostile_documents():

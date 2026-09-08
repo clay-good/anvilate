@@ -494,7 +494,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
       rather than the model being taken at its word.
     """
     from anvilate.bundle import SCREENING_DISCLAIMER
-    from anvilate.cli import _UNBUILT_ARTIFACTS
+    from anvilate.cli import _UNSERVED_OVER_MCP
     from anvilate.mcp import Gate, handle_request, tool_catalog
 
     emitting = [tool for tool in tool_catalog() if Gate.WATERMARK in tool.gates]
@@ -507,11 +507,14 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     )
 
     published = set(tool.input_schema["properties"]["format"]["enum"])
-    gated_cad = published & set(_UNBUILT_ARTIFACTS)
+    gated_cad = published & set(_UNSERVED_OVER_MCP)
     assert gated_cad == {"dxf", "qif"}, published
 
-    # The CAD half: refused today, and each exporter takes the authorization as a required
-    # keyword, so neither can be wired here without one.
+    # The CAD half over *this* surface: refused here, and each exporter takes the
+    # authorization as a required keyword, so neither can be wired here without one. QIF is
+    # served at the shell now, and `_qif` in `anvilate.cli` calls `authorize_export` and
+    # lets `ExportRefused` end the command — the gate is discharged there by taking it,
+    # which is what this assertion is about wherever the exporter is called from.
     for symbol_path in (
         "anvilate.export.dxf:export_plate_dxf",
         "anvilate.export.qif:export_qif_results",

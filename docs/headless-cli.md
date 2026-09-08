@@ -484,26 +484,65 @@ roll-up, then every check with its detail and its citation, then the spec those 
 were computed from, then the disclaimer. The spec block is the YAML you can paste back into
 `anvilate check`: a reviewer holding only this output can re-run the analysis and get the
 same card, which is the scenario `artifact-export` asks for and a test now performs. See
-[the evidence bundle](evidence-bundle.md) for why the roll-up still exists. A DXF or a
-QIF results file does need a built part, and each is refused by name:
+[the evidence bundle](evidence-bundle.md) for why the roll-up still exists. A DXF does need
+a built part, and it is refused by name:
 
 ```text
 anvilate export --artifact dxf: a DXF is drawn from built geometry, and there is no built
 part to draw. See openspec/specs/geometry-generation.
 ```
 
+**QIF results come out of the same command, and used to be refused beside the DXF.**
+
+```bash
+anvilate export --artifact qif part.yaml > part.qif
+```
+
+The reason given for refusing them was that "QIF results carry measured characteristics
+against a built part", and that is not true: `export_qif_results` takes a `BundleSections`
+and touches no geometry, which is what [`artifact-export`](../openspec/specs/artifact-export/spec.md)
+asks of it, what [quality interchange](quality-interchange.md) is written about, and what
+`examples/lug_scorecard_as_qif.py` has shipped since the module landed. The command was
+refusing a capability the library already had — the same mistake, one level down, as
+refusing `export` whole.
+
+**The export gate applies here and does not apply to the bundle.** A QIF results file is a
+CAD artifact in `artifact-export`'s sense: it is the document a quality system measures a
+part against. The evidence bundle is the evidence *including* the evidence that a part
+failed, which is why it prints for any verdict. So a card that does not pass gets no QIF,
+in the gate's own words plus a remedy the shell has:
+
+```text
+anvilate export --artifact qif: bracket.yaml: export is gated on the acceptance checks
+passing, and these did not: T1 analytical. …
+anvilate export has no override: exporting past a failing card is a deliberate act by
+somebody who has read it. `--artifact evidence-bundle` is served whatever the verdict and
+carries the failure.
+```
+
+There is no `--override`. `authorize_export(card, override=True)` exists so that exporting
+past a failing card is a deliberate act by somebody who read the card, and a flag on a
+CI-facing command is the opposite of that.
+
+The spec digest in the document's header is over the spec's own canonical JSON, not over the
+file's bytes: two YAML files differing only in whitespace are one revision, and the MCP
+surface holds the parsed document rather than the file it came from.
+
 The three artifact names are the same three `export_artifact`'s published MCP schema
 declares, held equal by a test — a CLI offering a fourth, or silently dropping one, is a
-surface saying something different from the contract. The two surfaces now agree on more
-than the names: `export_artifact` returns the same bundle document for the same spec, the
-two are compared by value in `tests/test_surface_parity.py`, and the MCP handler reads the
-refusal reasons above out of this module rather than restating them. The difference that
-remains is where the document goes — the CLI prints it, and the tool returns it and writes
-nothing at all, because a path an MCP client names is a capability the server does not
-grant. Dropping one is how this went wrong
-the first time: `export` was refused whole on the reasoning that it "writes a downstream
-artifact from a built part", which is true of a DXF and false of the bundle. A refusal wide
-enough to cover something that works is as misleading as a missing one.
+surface saying something different from the contract. The two surfaces agree on the names,
+and on the bundle: `export_artifact` returns the same bundle document for the same spec, and
+the two are compared by value in `tests/test_surface_parity.py`. Where the document goes
+differs — the CLI prints it, the tool returns it and writes nothing at all, because a path
+an MCP client names is a capability the server does not grant.
+
+**They no longer refuse the same set, and each says why *it* refuses.** The shell serves
+QIF; the tool does not yet, because its published result's payload is the evidence bundle
+document and a QIF results file is XML — a change to a published tool result, which is a
+decision about the protocol surface rather than a line to delete. Both refusal reasons still
+live in `anvilate.cli` and are read from there rather than restated, and a test asserts the
+MCP refusal for `qif` does not claim geometry: a surface inheriting the other's excuse is how
+this went wrong twice.
 
 **The bundle goes to stdout, and that is deliberate.** Every artifact-emitting entry point
 in the package takes a mandatory `ExportAuthorization` ([export gating](export-gating.md)),
