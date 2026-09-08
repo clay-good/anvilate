@@ -102,16 +102,24 @@ permission — the permission is the `authorization` the exporter already requir
 
 ## What keeps it there
 
-Four ratchets, each written so that a plausible way around the gate fails the build rather
+Five ratchets, each written so that a plausible way around the gate fails the build rather
 than passing quietly:
 
 - Every public export entry point whose body writes a file or serializes a document must
-  take a mandatory `authorization`. The scan finds the members itself, so a new exporter is
-  in scope the moment it is written; the exemption list is checked in the other direction
-  too, so a name on it that starts emitting an artifact fails.
-- Every `saveas` call anywhere in the export package — private helpers included — must sit
+  take a mandatory `authorization`. The scan walks the package rather than naming its
+  modules, so an exporter added in a *new* module is in scope the day it lands; the
+  exemption list is checked in the other direction too, so a name on it that starts
+  emitting an artifact fails.
+- Every artifact write anywhere in the export package — private helpers included — must sit
   in a function that takes an authorization, so the write cannot be moved one frame down out
   of the public scan's sight.
+- **The list of what counts as a write is itself attacked.** It read `saveas` and nothing
+  else for as long as the package held one CAD writer, and that was the gate's real width: a
+  public `export_plate_svg` calling `Path(path).write_text(...)` with no authorization
+  parameter passed the whole suite, both ratchets above included. The list now covers
+  `write_text`, `write_bytes`, a zip member, a JSON dump and a bare `open` — the idioms a
+  3MF writer (a zip) and a STEP writer (text) are written with — and a test asserts each one
+  is still detected, because a detector that stops matching is a gate that passes.
 - The MCP tool that declares the validation and watermark gates is resolved through its
   `backing` symbol, which must require an authorization. "The MCP surface grants no bypass"
   stops being a sentence in a spec and becomes a claim that can fail.

@@ -17,7 +17,9 @@ the CAD exporters, an unomittable disclaimer on the evidence bundle — so
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
+import pkgutil
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -25,9 +27,6 @@ import pytest
 
 from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
 from anvilate.bundle import BundleSections
-from anvilate.export import dxf as dxf_module
-from anvilate.export import gate as gate_module
-from anvilate.export import qif as qif_module
 from anvilate.export.dxf import (
     Hole,
     export_feature_control_frame_dxf,
@@ -50,6 +49,7 @@ from anvilate.units import Quantity
 
 _NS = {"q": QIF_NAMESPACE}
 _REPO = Path(__file__).resolve().parent.parent
+_EXPORT_PACKAGE = _REPO / "src" / "anvilate" / "export"
 
 
 def _q(text: str) -> Quantity:
@@ -368,10 +368,46 @@ _NOT_AN_ARTIFACT_WRITER = {
 }
 
 
+# How a function in this package puts an artifact into the world. Two entries were enough
+# while the package held one CAD writer and one document writer, and that is exactly as far
+# as the gate reached: a public `export_plate_svg` doing `Path(path).write_text(...)` with
+# no authorization parameter passed the whole suite, both ratchets below included. The next
+# exporters on the roadmap — a 3MF writer (a zip) and a STEP writer (text) — are written
+# with these idioms and not with `saveas`.
+_ARTIFACT_WRITES = (
+    "saveas(",  # ezdxf
+    "ET.tostring(",  # an XML document returned as a string
+    "tostring(",  # the same, imported directly
+    ".write_text(",
+    ".write_bytes(",
+    ".writestr(",  # zipfile — 3MF and any other package format
+    "json.dump",  # dump and dumps both
+    "ZipFile(",
+    "open(",  # the last resort, and the one a helper reaches for first
+)
+
+
+def _export_modules() -> list:
+    """Every module in ``anvilate.export``, discovered rather than listed.
+
+    Naming three of the package's four modules is how a scan comes to have a smaller scope
+    than the sentence above it claims. Walking the package means a module added tomorrow is
+    in scope the day it lands, which is the only day anybody would think to add it here.
+    """
+    package = importlib.import_module("anvilate.export")
+    modules = [
+        importlib.import_module(f"anvilate.export.{info.name}")
+        for info in pkgutil.iter_modules(package.__path__)
+    ]
+    on_disk = {path.stem for path in _EXPORT_PACKAGE.glob("*.py")} - {"__init__"}
+    assert {module.__name__.rsplit(".", 1)[-1] for module in modules} == on_disk
+    return modules
+
+
 def _export_entry_points() -> dict[str, object]:
     """Every public callable the export package exposes, by module-qualified name."""
     found: dict[str, object] = {}
-    for module in (dxf_module, qif_module, gate_module):
+    for module in _export_modules():
         for name in getattr(module, "__all__", ()):
             value = getattr(module, name)
             if inspect.isfunction(value):
@@ -385,8 +421,11 @@ def _writes_a_file_or_document(function) -> bool:
     Source reading rather than a hand-kept list: the question is whether *this* function
     emits something, and the answer is in its body.
     """
-    source = inspect.getsource(function)
-    return "saveas(" in source or "ET.tostring(" in source
+    return _emits(inspect.getsource(function))
+
+
+def _emits(source: str) -> bool:
+    return any(idiom in source for idiom in _ARTIFACT_WRITES)
 
 
 def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization():
@@ -537,25 +576,65 @@ def test_the_sandbox_gate_is_declared_and_undischarged():
     )
 
 
-def test_no_exporter_module_writes_a_file_outside_a_gated_entry_point():
-    """A private helper that calls ``saveas`` would be an export the ratchet cannot see.
+def _functions_that_emit() -> list[tuple[str, ast.FunctionDef, set[str]]]:
+    """Every function in the export package whose body writes an artifact.
 
-    The scan above only reads public ``__all__`` members. This one reads the whole module
-    tree and requires every ``saveas`` call to sit inside a function that takes an
-    authorization, so the gate cannot be walked around by moving the write one frame down.
+    Lines are sliced out of a file read once. ``ast.get_source_segment`` re-scans the whole
+    file per call, which is quadratic in a 1,000-line module and was most of this file's
+    runtime before the idiom list grew.
     """
-    for path in sorted((_REPO / "src" / "anvilate" / "export").glob("*.py")):
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
+    out: list[tuple[str, ast.FunctionDef, set[str]]] = []
+    for path in sorted(_EXPORT_PACKAGE.glob("*.py")):
+        text = path.read_text()
+        lines = text.splitlines()
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
-            body = ast.get_source_segment(path.read_text(), node) or ""
-            if "saveas(" not in body:
+            body = "\n".join(lines[node.lineno - 1 : node.end_lineno])
+            if not _emits(body):
                 continue
             names = {argument.arg for argument in node.args.args + node.args.kwonlyargs}
-            assert "authorization" in names, (
-                f"{path.name}:{node.name} writes a file and takes no authorization"
-            )
+            out.append((f"{path.name}:{node.name}", node, names))
+    return out
+
+
+def test_no_exporter_module_writes_a_file_outside_a_gated_entry_point():
+    """A private helper that writes a file would be an export the ratchet cannot see.
+
+    The scan above only reads public ``__all__`` members. This one reads the whole module
+    tree and requires every artifact write to sit inside a function that takes an
+    authorization, so the gate cannot be walked around by moving the write one frame down.
+
+    It used to look for ``saveas`` alone, which is one library's spelling of one format's
+    write. Every other way of putting bytes on disk — ``write_text``, ``write_bytes``, a
+    zip member, a bare ``open`` — went straight past it, and past the ``__all__`` scan too.
+    """
+    emitters = _functions_that_emit()
+    # Attack the gate: a detector that matched nothing would pass this test in silence.
+    assert len(emitters) >= 4, f"the sweep found only {len(emitters)} writers"
+    for label, _node, names in emitters:
+        assert "authorization" in names, f"{label} writes a file and takes no authorization"
+
+
+def test_the_write_detector_sees_a_write_that_is_not_the_one_it_was_written_for():
+    """The gate above is only as wide as `_ARTIFACT_WRITES`, so that list is the thing to
+    attack. Each idiom is a way an exporter has actually been written or will be: `saveas`
+    is ezdxf's, `write_text` is what a STEP writer uses, `writestr` is what a 3MF writer
+    uses. A list that no longer matches the code it describes is a gate that passes."""
+    for source in (
+        "    doc.saveas(out_path)",
+        "    return ET.tostring(root, encoding='unicode')",
+        "    Path(path).write_text(body)",
+        "    out.write_bytes(payload)",
+        "    archive.writestr('3D/3dmodel.model', xml)",
+        "    json.dumps(document)",
+        "    with ZipFile(path, 'w') as archive:",
+        "    with open(path, 'w') as handle:",
+    ):
+        assert _emits(source), source
+    # And it is not a detector that says yes to everything.
+    for source in ("    return width * height", "    raise ValueError('no')"):
+        assert not _emits(source), source
 
 
 # ------------------------------------------------------- the other half of the watermark
