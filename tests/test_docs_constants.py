@@ -12,6 +12,7 @@ constant re-transcribed on either side fails.
 
 from __future__ import annotations
 
+import pathlib
 import re
 from pathlib import Path
 
@@ -1776,6 +1777,61 @@ def test_the_headless_cli_page_quotes_the_document_bounds_and_the_data_they_clea
     citations = _evidence_references() | conftest._observed_citations()
     assert "half of that" in page, "the citation ratchet sentence on headless-cli.md has moved"
     assert len(max(citations, key=len)) * 2 <= _LONGEST_CITED
+
+
+def test_the_effectivity_pages_debt_arithmetic_is_the_ratchets_own():
+    """The page leads a section with "Three of the twenty-two are paid off" and closes it
+    with "the remaining nineteen". Three numbers, none of them held to anything.
+
+    `docs/api/editionless-citations.txt` is the ratchet and it only shrinks, so the day a
+    fourth is versioned the file drops to eighteen and all three of these are wrong at once
+    — on the page whose whole subject is that a citation nobody re-read is worse than none.
+    The paid-off count is not stored anywhere, so it is derived the only way it can be: the
+    total the page states, less the entries still on the list.
+    """
+    root = pathlib.Path(__file__).resolve().parent.parent
+    listed = [
+        line.strip()
+        for line in (root / "docs" / "api" / "editionless-citations.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    assert len(listed) > 5, "the editionless-citation list came back implausibly short"
+
+    page = re.sub(r"\s+", " ", _page("standards-effectivity.md"))
+    spelled = {
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "eighteen": 18,
+        "nineteen": 19,
+        "twenty": 20,
+        "twenty-one": 21,
+        "twenty-two": 22,
+        "twenty-three": 23,
+    }
+    claim = re.search(r"\*\*([A-Za-z-]+) of the ([a-z-]+) are paid off\*\*", page)
+    assert claim is not None, "the paid-off sentence on standards-effectivity.md has moved"
+    remaining = re.search(r"The remaining ([a-z-]+) stay listed", page)
+    assert remaining is not None, "the remaining-debt sentence on the page has moved"
+
+    paid, total, left = (
+        spelled[claim.group(1).lower()],
+        spelled[claim.group(2)],
+        spelled[remaining.group(1)],
+    )
+    assert left == len(listed), (
+        f"the page says {remaining.group(1)} references stay listed; the ratchet holds "
+        f"{len(listed)}"
+    )
+    assert paid + left == total, (
+        f"the page's own arithmetic does not close: {paid} paid off plus {left} remaining "
+        f"is not {total}"
+    )
+    # The sentence above it states the same total, and two numbers for one thing is how a
+    # page comes to disagree with itself.
+    assert f"to {claim.group(2)} the day the gate started reading the whole library" in page
 
 
 def test_the_effectivity_page_quotes_the_two_bounds_that_make_the_scan_bounded():

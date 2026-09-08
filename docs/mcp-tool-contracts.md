@@ -1,7 +1,7 @@
 # The MCP tool surface: eight operations, two dispatch modes
 
 **An agent driving Anvilate over MCP gets typed documents, not prose — and knows before it
-calls whether the answer arrives in the reply or through a task handle.**
+calls whether an answer can arrive in the reply at all.**
 
 This page describes the tool *contracts*, which were pinned before the server existed — the
 cheapest moment to change a tool surface is before a client has integrated against it. **The

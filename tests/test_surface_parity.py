@@ -218,6 +218,59 @@ def test_a_format_neither_surface_can_produce_is_refused_in_the_same_words():
         assert reason in err
 
 
+def test_no_live_document_promises_an_answer_arriving_through_a_task_handle():
+    """The third page-level claim of the same session, and the one a gate on tool
+    descriptions could not see.
+
+    `build_part` and `run_fea_validation` stopped publishing "the call returns a task
+    handle" once it was established that this server answers no task method — and
+    `mcp-tool-contracts.md` went on opening with an agent that "knows before it calls whether
+    the answer arrives in the reply or through a task handle". Neither ever does. A gate over
+    `tool_catalog()` cannot see a sentence on a page, which is where the claim had been
+    sitting the whole time.
+    """
+    from anvilate.mcp import METHOD_NOT_FOUND, Dispatch, handle_request, tool_catalog
+
+    # The fact the claim is about: there is no task method to arrive through.
+    assert (
+        handle_request({"jsonrpc": "2.0", "id": 1, "method": "tasks/get", "params": {}})["error"][
+            "code"
+        ]
+        == METHOD_NOT_FOUND
+    )
+    assert any(t.dispatch is Dispatch.TASK for t in tool_catalog()), (
+        "no tool is task-dispatched any more, so this gate is about nothing"
+    )
+
+    promise = re.compile(r"(?:returns?|arrives?|through|via|get)\s+(?:a\s+)?task handle", re.I)
+    assert promise.search("the call returns a task handle")
+    assert promise.search("whether the answer arrives in the reply or through a task handle")
+    assert not promise.search("the operation is dispatched as a task rather than answered")
+
+    paths = [
+        *sorted((_REPO / "docs").rglob("*.md")),
+        *sorted((_REPO / "openspec" / "specs").rglob("*.md")),
+        *sorted((_REPO / "src" / "anvilate").rglob("*.py")),
+        _REPO / "README.md",
+    ]
+    mentions = [p for p in paths if "task" in p.read_text(encoding="utf-8").lower()]
+    assert len(mentions) >= 3, f"only {[p.name for p in mentions]} mention a task at all"
+    # Line-scoped, not file-scoped. The one legitimate mention is a comment in
+    # `anvilate.mcp` recording the sentence that used to ship; exempting the whole file for
+    # it would exempt every future line in the module that publishes the surface.
+    offenders = []
+    for path in mentions:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if "which no call ever does" in line:
+                continue
+            match = promise.search(line)
+            if match:
+                offenders.append(f"{path.relative_to(_REPO)}:{number}: {match.group()}")
+    assert offenders == [], (
+        f"this server returns no task handle to anybody, and these promise one: {offenders}"
+    )
+
+
 def test_no_live_document_says_the_mcp_server_is_unbuilt():
     """It is built. `anvilate-mcp` runs it on stdio and four of eight operations dispatch.
 
