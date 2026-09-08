@@ -101,8 +101,8 @@ QIF_VERSION = "3.0.0"
 SAFETY_FACTOR_UNIT = "safetyFactor"
 
 # The standards bodies QIF enumerates. A citation whose leading token is one of these is
-# written as the enumerated organization; everything else (ASTM, AISC, AA, a handbook)
-# goes through OtherStandardsOrganization, which is what the schema provides it for.
+# written as the enumerated organization; a body outside the list (ASTM, AISC, AA) goes
+# through OtherStandardsOrganization, which is what the schema provides it for.
 _QIF_ORGANIZATIONS = frozenset(
     {
         "AIAG",
@@ -287,6 +287,38 @@ def _unique_names(names: Sequence[str]) -> list[str]:
     return out
 
 
+# What an issuing body looks like when a citation names one: an acronym, in the citation's
+# own capitalisation. The case matters. Matching a case-folded leading word against the
+# enumeration above reads "din rail mounting bracket" as a citation issued by DIN and "aws
+# weld symbol convention" as one issued by AWS — the token spells a body, the sentence does
+# not name one. At least two capitals so a bare part number ("A36 plate") is not a body, and
+# digits and underscores allowed because W3C and GOST_R are both on QIF's own list.
+_ORGANIZATION_TOKEN = re.compile(r"^(?=(?:[^A-Z]*[A-Z]){2})[A-Z][A-Z0-9_]{1,7}$")
+
+# What goes in Organization when the citation names no issuing body — a handbook, a bundled
+# table, a lab measurement. The element is required by the schema (StandardType sequences
+# Organization before Designator with no minOccurs), so there is no honest silence
+# available; this says the thing QIF cannot say structurally. It is deliberately not the
+# citation itself: Title already carries that, and a reader grouping standards by publisher
+# would otherwise get one publisher per citation, each named with a whole sentence.
+_UNSTATED_ORGANIZATION = "not stated — the citation names no issuing body"
+
+
+def _organization_token(*candidates: str) -> str | None:
+    """The issuing body a citation names, or ``None`` when none of them names one.
+
+    The leading word of each candidate in turn, with an edition or grade suffix cut off it
+    ("AISC-360" is AISC, "ASTM A36/A36M-19" is ASTM). The source string is asked first
+    because it is the text that names a standard; the designator is a record *name*, which
+    for a material is "Aluminium 6061-T6" and names no body at all.
+    """
+    for text in candidates:
+        token = text.split(" ", 1)[0].split("-", 1)[0].split("/", 1)[0]
+        if _ORGANIZATION_TOKEN.match(token):
+            return token
+    return None
+
+
 class _Ids:
     """The document's QIF id counter. Ids are unique across the whole file."""
 
@@ -303,15 +335,26 @@ class _Ids:
 
 
 def _standard_element(parent: ET.Element, ids: _Ids, source: str, designator: str) -> str:
-    """One citation as a QIF ``Standard``, returning its id."""
+    """One citation as a QIF ``Standard``, returning its id.
+
+    ``Organization`` is the issuing body, not the citation: the schema documents it as
+    "the name of the organization issuing the standard, e.g. ASME, ISO as enumerations,
+    or 'Acme Widget' as a string", and ``Title`` right below already carries the citation
+    text. Writing the source sentence into both made every non-enumerated citation its own
+    publisher — "ASTM A36 specified minimum (specification minimum)" as an organization
+    name — so a quality system grouping a bundle's standards by who issued them got one
+    group per lookup.
+    """
     identifier = ids.take()
     standard = _sub(parent, "Standard", id=identifier)
     organization = _sub(standard, "Organization")
-    leading = source.split(" ", 1)[0].split("-", 1)[0].upper()
-    if leading in _QIF_ORGANIZATIONS:
-        _sub(organization, "StandardsOrganizationEnum", leading)
+    body = _organization_token(source, designator)
+    if body is None:
+        _sub(organization, "OtherStandardsOrganization", _UNSTATED_ORGANIZATION)
+    elif body in _QIF_ORGANIZATIONS:
+        _sub(organization, "StandardsOrganizationEnum", body)
     else:
-        _sub(organization, "OtherStandardsOrganization", source)
+        _sub(organization, "OtherStandardsOrganization", body)
     _sub(standard, "Designator", designator)
     _sub(standard, "Title", source)
     return identifier

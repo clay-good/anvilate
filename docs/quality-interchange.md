@@ -100,6 +100,16 @@ becomes a `Software` entry — so the file records which Anvilate, against which
 databases, screened which spec revision. The header's `Scope` line states plainly that
 these are T1 screening results and not a certified analysis or a physical inspection.
 
+**A `Standard`'s `Organization` is the issuing body, and only the issuing body.** The
+schema documents the element as "ASME, ISO as enumerations, or 'Acme Widget' as a string",
+and QIF enumerates nineteen bodies; a citation issued by one outside that list (ASTM, AISC,
+AA) names it as a string instead. The body has to be written as an acronym in the citation
+to be read as one — case-folding the leading word first turns a note about a *din rail*
+into a standard published by DIN. When a citation names no body at all — a bundled table, a
+handbook — the document says so in as many words rather than repeating the citation, which
+`Title` already carries: an organization named with a whole sentence puts every lookup in a
+group of its own for any consumer that sorts a bundle's standards by publisher.
+
 Every verdict in the bundle crosses: the analysis scorecard, the
 [typed-callout](typed-callouts.md) layer's own scorecard, and the
 [verification plan](verification-planning.md)'s items and unresolved coverage — each tagged

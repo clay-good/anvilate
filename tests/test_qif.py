@@ -15,6 +15,7 @@ reconstructs the verdicts from there.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -29,6 +30,7 @@ from anvilate.export.qif import (
     _QIF_DATUM_MODIFIER,
     _QIF_DEFINITION_TYPE,
     _QIF_MATERIAL_MODIFIER,
+    _QIF_ORGANIZATIONS,
     _ZONE_SHAPE,
     QIF_NAMESPACE,
     SAFETY_FACTOR_UNIT,
@@ -290,10 +292,95 @@ def test_citations_become_standards_with_the_right_organization():
     assert (
         standards[0].findtext("q:Organization/q:StandardsOrganizationEnum", namespaces=_NS) == "ISO"
     )
+    # The "other" branch names the body, not the citation. Asserting only that the element
+    # is present is what let this ship reading
+    # "ASTM A36 specified minimum (specification minimum)" as an organization name.
     assert (
         standards[1].findtext("q:Organization/q:OtherStandardsOrganization", namespaces=_NS)
-        is not None
+        == "ASTM"
     )
+
+
+def test_no_standard_states_its_whole_citation_as_the_issuing_organization():
+    """`Organization` and `Title` are different questions, and the schema documents the
+    first as "e.g. ASME, ISO as enumerations, or 'Acme Widget' as a string". A publisher
+    named with the citation sentence puts every lookup in its own group for any consumer
+    that sorts a bundle's standards by who issued them."""
+    for standard in ET.fromstring(_export()).findall("./q:StandardsDefinitions/q:Standard", _NS):
+        organization = standard.findtext(
+            "q:Organization/q:OtherStandardsOrganization", namespaces=_NS
+        )
+        if organization is None:
+            continue
+        assert organization != standard.findtext("q:Title", namespaces=_NS)
+        assert " " not in organization.split("—")[0].strip()
+
+
+def test_a_lowercase_word_that_spells_a_body_is_not_read_as_that_body():
+    """The detection used to case-fold the leading word before matching it against QIF's
+    enumeration, so a citation describing a *din rail* was published, on the face of the
+    document, by DIN. The token has to be written as an acronym to be one."""
+    sections = BundleSections(
+        scorecard=_card(),
+        citations=(
+            SourceRecord(
+                ref="rail",
+                kind="component",
+                name="din rail mount",
+                sources=("din rail mounting, 35 mm top hat",),
+            ),
+        ),
+    )
+    organization = ET.fromstring(_export(sections)).findall(
+        "./q:StandardsDefinitions/q:Standard", _NS
+    )[1][0]
+    assert organization.findtext("q:StandardsOrganizationEnum", namespaces=_NS) is None
+    assert "din" not in (
+        organization.findtext("q:OtherStandardsOrganization", namespaces=_NS) or ""
+    )
+
+
+def test_a_citation_naming_no_issuing_body_says_so_rather_than_inventing_one():
+    """A bundled table and a handbook table name no publisher. QIF requires `Organization`,
+    so the document has to say something; what it must not do is present the citation text
+    as a publisher, which reads as a claim about provenance nobody made."""
+    sections = BundleSections(
+        scorecard=_card(),
+        citations=(
+            SourceRecord(
+                ref="AA-6061-T6",
+                kind="material",
+                name="Aluminium 6061-T6",
+                sources=("Aluminum Design Manual 2020, Table A.3.4",),
+            ),
+        ),
+    )
+    standard = ET.fromstring(_export(sections)).findall("./q:StandardsDefinitions/q:Standard", _NS)[
+        1
+    ]
+    assert (
+        standard.findtext("q:Organization/q:OtherStandardsOrganization", namespaces=_NS)
+        == "not stated — the citation names no issuing body"
+    )
+    # The citation itself is not lost — it is in the element that is for it.
+    assert standard.findtext("q:Title", namespaces=_NS).startswith("Aluminum Design Manual")
+
+
+def test_the_designator_names_the_body_when_the_source_string_does_not():
+    """A record's sources can be a bare "bundled table" while its name is the standard.
+    Reading only the source threw away a body the record was carrying in plain sight."""
+    sections = BundleSections(
+        scorecard=_card(),
+        citations=(
+            SourceRecord(
+                ref="lug", kind="component", name="ASME BTH-1", sources=("bundled table",)
+            ),
+        ),
+    )
+    standard = ET.fromstring(_export(sections)).findall("./q:StandardsDefinitions/q:Standard", _NS)[
+        1
+    ]
+    assert standard.findtext("q:Organization/q:StandardsOrganizationEnum", namespaces=_NS) == "ASME"
 
 
 def test_the_document_status_rolls_up_at_the_bundles_precedence():
@@ -1269,6 +1356,43 @@ def test_every_qif_name_this_module_emits_exists_in_the_published_schema():
         assert f'name="{planar}"' in published
     for element in ("MaterialCondition", "ZoneShape", "TangentPlane", "FreeState"):
         assert f'name="{element}"' in published, element
+
+    # The standards bodies, both directions. One direction alone is half a gate: a name we
+    # emit that the schema dropped writes an invalid document, and a body the schema added
+    # that we do not know sends a perfectly ordinary ASME citation down the "other" branch
+    # as a free string, where nothing filtering by issuing body will find it.
+    block = re.search(
+        r'<xs:simpleType name="StandardsOrganizationEnumType">.*?</xs:simpleType>',
+        published,
+        re.DOTALL,
+    )
+    assert block is not None, "the standards-organization enumeration has moved in the schema"
+    assert set(re.findall(r'<xs:enumeration value="([^"]+)"/>', block.group())) == set(
+        _QIF_ORGANIZATIONS
+    )
+
+
+def test_the_pages_count_of_enumerated_bodies_is_the_modules_own():
+    """`docs/quality-interchange.md` argues from the size of QIF's enumeration and names
+    three bodies outside it. Both halves expire the moment the list moves, and a number in
+    prose has nothing holding it."""
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs")
+        .joinpath("quality-interchange.md")
+        .read_text()
+        .split()
+    )
+    claim = re.search(
+        r"QIF enumerates (\w+) bodies; a citation issued by one outside "
+        r"that list \(([^)]+)\)",
+        page,
+    )
+    assert claim is not None, "the standards-organization paragraph on the quality page has moved"
+    spelled = {"nineteen": 19, "twenty": 20, "eighteen": 18}
+    assert spelled[claim.group(1)] == len(_QIF_ORGANIZATIONS)
+    outside = [body.strip() for body in claim.group(2).split(",")]
+    assert len(outside) == 3
+    assert not set(outside) & _QIF_ORGANIZATIONS
 
 
 def test_a_count_that_is_not_a_count_is_a_complaint_and_not_a_crash():
