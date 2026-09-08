@@ -140,8 +140,9 @@ case. This surface grants no override, and no artifact leaves it unwatermarked.
 
 - **WHEN** the same client asks the same tool for a QIF results file
 - **THEN** the call is refused as unavailable, naming this tool's published result shape as
-  what it waits on and naming the shell command that produces the document today — and not
-  claiming that QIF needs built geometry, which it does not
+  what it waits on and naming the shell command that produces the document today. The reason
+  SHALL be the one true of this surface, and SHALL NOT be borrowed from the artifact that is
+  refused beside it for a different reason
 
 #### Scenario: A card that does not pass is still exported, and says so
 

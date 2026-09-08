@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,8 @@ import pytest
 from anvilate.cli import EXIT_BAD_REQUEST, EXIT_CODES, run
 from anvilate.mcp import handle_request, stateless_gaps, tool_catalog
 from anvilate.scorecard import CheckStatus
+
+_REPO = Path(__file__).resolve().parent.parent
 
 _SPEC = """
 anvilate_spec: "1.1.0"
@@ -213,6 +216,63 @@ def test_a_format_neither_surface_can_produce_is_refused_in_the_same_words():
         code, _out, err = _cli("export", "--artifact", artifact, "unused.yaml")
         assert code == EXIT_UNBUILT
         assert reason in err
+
+
+def test_no_live_document_says_qif_results_need_built_geometry():
+    """The claim that shipped in five places at once, and the reason it is worth a gate.
+
+    "QIF results carry measured characteristics against a built part" was in `cli.py`, and
+    the same idea in `headless-automation`'s spec, the MCP integration page and the tool
+    contracts page. `export_qif_results` takes a `BundleSections` and touches no geometry,
+    so every one of them was wrong together — and prose is where it came back after the code
+    was fixed, because nothing reads prose.
+
+    `openspec/changes/archive/` is exempt on purpose: an archived change is a record of what
+    was decided then, and editing it would be rewriting the history rather than the claim.
+    """
+    roots = [
+        _REPO / "src" / "anvilate",
+        _REPO / "docs",
+        _REPO / "openspec" / "specs",
+        _REPO / "README.md",
+    ]
+    paths = []
+    for root in roots:
+        paths.extend(sorted(root.rglob("*.md")) if root.is_dir() else [root])
+        if root.is_dir():
+            paths.extend(sorted(root.rglob("*.py")))
+    # Attack the gate: a corpus that stopped finding the pages would pass in silence.
+    mentions = [p for p in paths if "qif" in p.read_text(encoding="utf-8").lower()]
+    assert len(mentions) >= 5, f"only {[p.name for p in mentions]} mention QIF at all"
+
+    # The claim, not the two words near each other. A keyword pair flags
+    # "A DXF waits on built geometry at both. QIF waits on nothing at the shell", which says
+    # the right thing — and a gate a true sentence trips is one somebody turns off. `[^.]`
+    # keeps the match inside a single sentence, which is what makes that line pass.
+    claim = re.compile(
+        r"qif[^.]{0,90}?\b(needs?|requires?|carr(?:y|ies)|drawn from|against|measured "
+        r"against)\b[^.]{0,50}?\bbuilt (?:geometry|part|solid)|"
+        r"qif[^.]{0,90}?\bdrawn from geometry",
+        re.IGNORECASE,
+    )
+    offenders = []
+    for path in mentions:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if "not true" in line.lower():
+                continue  # a line saying the claim is false is the fix, not the defect
+            if claim.search(line):
+                offenders.append(f"{path.relative_to(_REPO)}: {line.strip()[:110]}")
+
+    # Attack the detector: it has to still recognise the sentence that shipped.
+    assert claim.search("QIF results carry measured characteristics against a built part.")
+    assert claim.search("refuses `dxf` and `qif`, which are drawn from geometry")
+    assert not claim.search(
+        "A DXF waits on built geometry at both. QIF waits on nothing at the shell"
+    )
+    assert offenders == [], (
+        "these say a QIF results file needs built geometry, and it does not — it crosses "
+        f"from a screened card: {offenders}"
+    )
 
 
 def test_the_surfaces_refuse_different_sets_and_each_says_why_it_refuses():

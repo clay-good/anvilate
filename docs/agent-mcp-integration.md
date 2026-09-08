@@ -277,11 +277,15 @@ task-dispatched: build_part, run_fea_validation
   behind them is not, and the message names what it waits on — `render_viewport` and
   `measure_geometry` both wait on built geometry. Retrying is pointless; a result invented
   there would be indistinguishable from a real one.
-- **`-32000`, that format is not built.** The narrower version of the same fact, and the one
-  place a tool is dispatched while part of what it publishes is not: `export_artifact` serves
-  `evidence_bundle` and refuses `dxf` and `qif`, which are drawn from geometry. It is not
-  `-32602`, so do not retry with a different argument — retry with a different *format*, or
-  not at all.
+- **`-32000`, that format is not served here.** The narrower version of the same fact, and
+  the one place a tool is dispatched while part of what it publishes is not: `export_artifact`
+  serves `evidence_bundle` and refuses `dxf` and `qif` — **for two different reasons, and the
+  message gives you the one that applies.** A DXF is drawn from built geometry, and there is
+  none. QIF results are not: they cross from a screened card, and `anvilate export --artifact
+  qif` writes one at the shell today. What they wait on *here* is this tool's published
+  result, whose payload is the evidence bundle document, where a QIF results file is XML. It
+  is not `-32602`, so do not retry with a different argument — retry with a different
+  *format*, or at the shell, or not at all.
 
   This used to be a different refusal. Four tools named nothing in their input to act on, so
   they could not be served by a server with no memory between calls — an open contract

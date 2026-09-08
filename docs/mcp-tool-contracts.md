@@ -285,9 +285,15 @@ Three things about it are decisions rather than details:
   evidence that a part failed, and it carries the screening disclaimer and its own status in
   every case. `anvilate export` does the same at the shell; a surface that refused here
   would be the one that will not tell you.
-- **`dxf` and `qif` are refused per format, from the CLI's own table.** The handler imports
-  `_UNBUILT_ARTIFACTS` rather than restating it, so the two surfaces cannot report different
-  reasons for the same gap.
+- **`dxf` and `qif` are refused per format, from the CLI's own tables.** The handler imports
+  them rather than restating them, so the two surfaces cannot report different reasons for
+  the same gap. It is two tables because the two surfaces do not refuse the same set and
+  never did: `_NEEDS_GEOMETRY` is what neither can produce — a DXF — and `_NOT_YET_OVER_MCP`
+  is what the shell serves and this tool cannot yet carry. QIF was in the first for a while,
+  on the reasoning that it "carries measured characteristics against a built part", which is
+  not true of a document the export layer builds from a `BundleSections`. A test asserts the
+  MCP refusal for `qif` does not claim geometry — one surface inheriting the other's excuse
+  is how that shipped.
 
 ## The result is held to the same contract as the request
 
