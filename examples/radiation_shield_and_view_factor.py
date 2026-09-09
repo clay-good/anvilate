@@ -60,7 +60,7 @@ def radiation_geometry() -> dict[str, float]:
 def main() -> None:
     d = radiation_geometry()
     print(f"crossed-strings view factor F12: {d['view_factor_1_to_2']:.3f}")
-    print(f"reciprocity F21 (1 m^2 -> 2 m^2): {d['reciprocity_view_factor_2_to_1']:.3f}")
+    print(f"reciprocity F21 (1 m² -> 2 m²): {d['reciprocity_view_factor_2_to_1']:.3f}")
     print(
         f"3 radiation shields cut flux to: {d['shield_reduction_factor']:.0%} "
         f"of the unshielded value"

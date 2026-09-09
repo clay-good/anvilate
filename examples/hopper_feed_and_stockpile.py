@@ -62,7 +62,7 @@ def main() -> None:
     print(f"outlet for a 10 kg/s feed: {d['outlet_diameter_mm']:.0f} mm")
     print(f"rate that outlet passes: {d['discharge_rate_kg_s']:.1f} kg/s")
     print(
-        f"stockpile at R=10 m, 35 deg repose: {d['stockpile_volume_m3']:.0f} m^3 "
+        f"stockpile at R=10 m, 35 deg repose: {d['stockpile_volume_m3']:.0f} m³ "
         f"(~{d['stockpile_tonnes']:.0f} t)"
     )
 

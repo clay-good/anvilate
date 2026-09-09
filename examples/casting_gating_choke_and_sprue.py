@@ -61,7 +61,7 @@ def gating_design() -> dict[str, float]:
 
 def main() -> None:
     d = gating_design()
-    print(f"choke area for a 5 s fill: {d['choke_area_mm2']:.0f} mm^2")
+    print(f"choke area for a 5 s fill: {d['choke_area_mm2']:.0f} mm²")
     print(f"fill time it produces: {d['fill_time_s']:.1f} s")
     print(
         f"sprue taper ratio (top/base): {d['sprue_taper_ratio']:.2f} "

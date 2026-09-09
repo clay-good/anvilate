@@ -4,9 +4,9 @@ Sunlight carries momentum, so it pushes on a sail — feebly per square metre, b
 large, reflective sail with no propellant at all. The photon momentum sets the scale, the radiation
 pressure is that momentum flux, and multiplying by the sail area gives the usable thrust.
 
-In full sunlight (the solar constant, 1361 W/m^2), a single 500 nm photon carries about 1.3e-27
+In full sunlight (the solar constant, 1361 W/m²), a single 500 nm photon carries about 1.3e-27
 kg·m/s of momentum. A perfectly reflecting surface feels a radiation pressure of about 9.1
-micropascals — twice what an absorber feels, because it also recoils the reflected light. A 100 m^2
+micropascals — twice what an absorber feels, because it also recoils the reflected light. A 100 m²
 reflective sail therefore gets about 0.9 mN of thrust: tiny, but relentless and free. This example
 reports the photon momentum, the radiation pressure on a mirror, and the force on the sail.
 
@@ -47,7 +47,7 @@ def main() -> None:
     d = solar_sail_thrust()
     print(f"photon momentum (500 nm): {d['photon_momentum_kg_m_s']:.3e} kg m/s")
     print(f"radiation pressure (mirror): {d['radiation_pressure_upa']:.2f} uPa")
-    print(f"force on 100 m^2 sail: {d['sail_force_mn']:.2f} mN")
+    print(f"force on 100 m² sail: {d['sail_force_mn']:.2f} mN")
 
 
 if __name__ == "__main__":

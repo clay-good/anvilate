@@ -69,9 +69,9 @@ def condenser_duty() -> dict[str, float]:
 
 def main() -> None:
     d = condenser_duty()
-    print(f"vertical plate (1 m): {d['plate_coefficient']:.0f} W/m^2K")
-    print(f"horizontal tube (25 mm): {d['tube_coefficient']:.0f} W/m^2K (shorter film -> higher)")
-    print(f"condensate rate over 2 m^2 of tube: {d['condensate_rate_kg_s']:.2f} kg/s")
+    print(f"vertical plate (1 m): {d['plate_coefficient']:.0f} W/m²K")
+    print(f"horizontal tube (25 mm): {d['tube_coefficient']:.0f} W/m²K (shorter film -> higher)")
+    print(f"condensate rate over 2 m² of tube: {d['condensate_rate_kg_s']:.2f} kg/s")
 
 
 if __name__ == "__main__":

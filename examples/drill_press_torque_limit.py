@@ -31,7 +31,7 @@ from anvilate.units import Quantity
 DRILL_DIAMETER = Quantity.parse("12 mm")
 FEED_PER_REVOLUTION = Quantity.parse("0.2 mm")
 SPINDLE_SPEED = Quantity.parse("600 revolution/minute")
-SPECIFIC_CUTTING_ENERGY = Quantity.parse("2000 MPa")  # steel, ~2 J/mm^3
+SPECIFIC_CUTTING_ENERGY = Quantity.parse("2000 MPa")  # steel, ~2 J/mm³
 SPINDLE_TORQUE_LIMIT = Quantity.parse("10 N·m")
 
 
@@ -62,7 +62,7 @@ def drill_duty() -> dict[str, float]:
 
 def main() -> None:
     d = drill_duty()
-    print(f"removal rate: {d['removal_rate_cm3_min']:.1f} cm^3/min")
+    print(f"removal rate: {d['removal_rate_cm3_min']:.1f} cm³/min")
     print(f"spindle torque: {d['torque_nm']:.1f} N·m (press rated 10 N·m)")
     print(
         f"feed ceiling at that rating: {d['feed_ceiling_mm']:.2f} mm/rev "

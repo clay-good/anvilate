@@ -4,8 +4,8 @@ Newton's law of gravitation ties a body's mass to everything around it: the forc
 another mass, the gravity felt at its surface, and — through the standard gravitational parameter
 μ = G·M — the speed of anything orbiting it. This example runs that chain for Earth.
 
-Earth's mass of 5.972e24 kg gives a surface gravity of about 9.82 m/s^2 (the familiar g) and a
-standard gravitational parameter of about 3.986e14 m^3/s^2. Feeding that μ into the circular-orbit
+Earth's mass of 5.972e24 kg gives a surface gravity of about 9.82 m/s² (the familiar g) and a
+standard gravitational parameter of about 3.986e14 m³/s². Feeding that μ into the circular-orbit
 relation, a satellite skimming 400 km up (orbital radius ~6,771 km) must travel about 7,672 m/s. The
 same law gives the pull between two 1,000 kg masses a metre apart — a mere 6.7e-5 N, showing how
 feeble gravity is between everyday objects. This example reports the surface gravity, the
@@ -51,8 +51,8 @@ def earth_gravity_chain() -> dict[str, float]:
 
 def main() -> None:
     d = earth_gravity_chain()
-    print(f"surface gravity: {d['surface_gravity_m_s2']:.2f} m/s^2")
-    print(f"gravitational parameter: {d['gravitational_parameter_m3_s2']:.4e} m^3/s^2")
+    print(f"surface gravity: {d['surface_gravity_m_s2']:.2f} m/s²")
+    print(f"gravitational parameter: {d['gravitational_parameter_m3_s2']:.4e} m³/s²")
     print(f"low-orbit speed (400 km): {d['low_orbit_speed_m_s']:.0f} m/s")
     print(f"pull between two 1,000 kg masses a metre apart: {d['everyday_pull_n']:.2e} N")
 

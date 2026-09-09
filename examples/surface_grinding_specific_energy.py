@@ -54,13 +54,13 @@ def grinding_pass() -> dict[str, float]:
 
 def main() -> None:
     d = grinding_pass()
-    print(f"specific removal rate Q'_w: {d['specific_removal_rate_mm2_s']:.1f} mm^3/(mm*s)")
+    print(f"specific removal rate Q'_w: {d['specific_removal_rate_mm2_s']:.1f} mm³/(mm·s)")
     print(
         f"equivalent chip thickness h_eq: {d['equivalent_chip_thickness_um']:.3f} um "
         f"(-> {d['equivalent_chip_thickness_fast_um']:.3f} um at a 60 m/s wheel)"
     )
     print(
-        f"specific energy u: {d['specific_energy_j_mm3']:.0f} J/mm^3 "
+        f"specific energy u: {d['specific_energy_j_mm3']:.0f} J/mm³ "
         f"(~10x a turning cut -> grinding governs on heat, not force)"
     )
 

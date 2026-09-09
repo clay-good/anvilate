@@ -70,7 +70,7 @@ def ecm_operating_point() -> dict[str, float]:
 
 def main() -> None:
     d = ecm_operating_point()
-    print(f"removal rate: {d['removal_rate_cm3_min']:.2f} cm^3/min")
+    print(f"removal rate: {d['removal_rate_cm3_min']:.2f} cm³/min")
     print(f"feed rate: {d['feed_rate_mm_min']:.2f} mm/min")
     print(
         f"equilibrium gap: {d['gap_mm']:.2f} mm "

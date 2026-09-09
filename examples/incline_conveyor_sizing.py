@@ -57,8 +57,8 @@ def main() -> None:
     c = conveyor_sizing()
     print(f"throughput      : {c['throughput_tph']:.0f} tonnes/hour of crushed rock")
     print(
-        f"belt speed      : {c['belt_speed_ms']:.1f} m/s on a 0.05 m^2 profile "
-        f"(vs {c['narrow_belt_speed_ms']:.1f} m/s on a narrow 0.033 m^2)"
+        f"belt speed      : {c['belt_speed_ms']:.1f} m/s on a 0.05 m² profile "
+        f"(vs {c['narrow_belt_speed_ms']:.1f} m/s on a narrow 0.033 m²)"
     )
     print(f"lift power (30 m): {c['lift_power_kw']:.0f} kW -- irreducible, before any friction")
     print("  -> throughput picks the belt width; the lift sets the floor on drive power")

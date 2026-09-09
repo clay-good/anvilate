@@ -1522,6 +1522,60 @@ def _lever_inventory() -> tuple[dict[str, set[tuple[str, str]]], set[str]]:
     return recorded, without
 
 
+def test_the_screen_census_finds_every_function_that_returns_a_card():
+    """The attack on the census the lever gates rest on: it discovers screens by NAME.
+
+    `_SCREEN_NAME` is a heuristic — `^screen_` or `_scorecard$` — and the premise it stands
+    in for is "a public entry point that judges something and returns a card". A screen
+    named any other way would be outside the inventory, outside its gates, and outside the
+    count the shipped agent skill quotes, with nothing failing.
+
+    So the premise is checked directly: every public function in the analysis library and
+    the packs whose RETURN ANNOTATION mentions a Scorecard must be in the census, and the
+    census must not name a function that returns something else. They agree exactly today,
+    at 51 — including two that return a tuple of entries rather than a card.
+    """
+    import anvilate.packs as packs_pkg
+
+    returns_a_card: set[str] = set()
+    sources = [(f"anvilate.analysis.{name}", name) for name in sorted(_module_names())]
+    sources += [
+        (f"anvilate.packs.{info.name}", info.name)
+        for info in pkgutil.iter_modules(packs_pkg.__path__)
+        if not info.name.startswith("_")
+    ]
+    for dotted, short in sources:
+        module = importlib.import_module(dotted)
+        for symbol in getattr(module, "__all__", ()):
+            function = getattr(module, symbol, None)
+            if not inspect.isfunction(function):
+                continue
+            try:
+                annotation = inspect.signature(function, eval_str=True).return_annotation
+            except Exception:  # noqa: BLE001 — an unresolvable annotation is not a screen
+                continue
+            if "Scorecard" in repr(annotation):
+                returns_a_card.add(f"{short}.{symbol}")
+
+    census = set(_public_screens())
+    assert len(returns_a_card) >= 45, (
+        f"only {len(returns_a_card)} card-returning functions were found by annotation; the "
+        f"reader has stopped resolving return types and this check is comparing two "
+        f"heuristics to each other"
+    )
+    unnamed = sorted(returns_a_card - census)
+    assert not unnamed, (
+        "these public functions return a scorecard but are not named like a screen, so the "
+        "repair-lever inventory and its gates never see them. Rename them `screen_*` or "
+        "`*_scorecard`, or widen `_SCREEN_NAME`:\n  " + "\n  ".join(unnamed)
+    )
+    not_a_screen = sorted(census - returns_a_card)
+    assert not not_a_screen, (
+        "these are named like a screen but do not return a scorecard, so the census is "
+        f"padded with things the inventory cannot describe: {not_a_screen}"
+    )
+
+
 def test_every_public_screen_records_whether_it_offers_a_repair_lever():
     """A screen with no lever is a recorded gap, not an oversight.
 

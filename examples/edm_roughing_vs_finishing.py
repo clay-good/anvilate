@@ -68,7 +68,7 @@ def main() -> None:
         s = d[name]
         print(
             f"{name:>9}: {s['energy_mj']:.2f} mJ/spark, duty {s['duty_factor']:.0%}, "
-            f"MRR {s['mrr_mm3_min']:.2f} mm^3/min"
+            f"MRR {s['mrr_mm3_min']:.2f} mm³/min"
         )
     print("  -> big sparks cut fast and rough; small sparks finish fine and slow")
 

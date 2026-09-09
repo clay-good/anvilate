@@ -64,7 +64,7 @@ def feeder_rating() -> dict[str, float]:
 
 def main() -> None:
     d = feeder_rating()
-    print(f"at 45 rpm: {d['rated_volume_m3_h']:.1f} m^3/h ({d['rated_mass_t_h']:.1f} t/h)")
+    print(f"at 45 rpm: {d['rated_volume_m3_h']:.1f} m³/h ({d['rated_mass_t_h']:.1f} t/h)")
     print(f"speed for a 15 t/h target: {d['speed_for_target_rpm']:.0f} rpm")
 
 

@@ -9029,7 +9029,7 @@ def test_no_example_prints_a_unit_the_way_the_machine_writes_it():
     # number. Matching a bare `X * Y` anywhere caught a printed FORMULA — "roof
     # proportional (SigmaF/SigmaW * wpx)" — which is a symbol name doing exactly what a
     # symbol name should.
-    machine_unit = re.compile(r"\d\s*[a-zA-Z][\w]*\s*(?:\*\*\s*-?\d+|\*\s*[a-zA-Z])")
+    machine_unit = re.compile(r"\d\s*[a-zA-Z][\w]*\s*(?:(?:\*\*|\^)\s*-?\d+|\*\s*[a-zA-Z])")
     offenders: list[str] = []
     lines_read = 0
     for path in sorted(_EXAMPLES.glob("*.py")):
@@ -9053,13 +9053,28 @@ def test_no_example_prints_a_unit_the_way_the_machine_writes_it():
         f"only {lines_read} printed lines were read across the corpus; the sweep has "
         f"stopped running the examples"
     )
-    for spelling in ("72727.3 mm ** 3", "nameplate torque: 392.437 m * N", "1500 mm**2"):
+    # `^` as well as `**`: the sweep's own premise check — every line a LOOSER reading
+    # flags that this one does not — turned up 18, seventeen of them ASCII formulas
+    # ("phi*Pn", "K*eps^n", "s/sqrt(10)") that are right as they are, and one unit:
+    # "specific removal rate Q'_w: 4.0 mm^3/(mm*s)".
+    for spelling in (
+        "72727.3 mm ** 3",
+        "nameplate torque: 392.437 m * N",
+        "1500 mm**2",
+        "4.0 mm^3/(mm*s)",
+    ):
         assert machine_unit.search(spelling), (
             f"the detector no longer matches {spelling!r}, one of the lines it was written for"
         )
-    assert not machine_unit.search("roof proportional (SigmaF/SigmaW * wpx) : 250 kN"), (
-        "the detector is matching a printed formula again, not a unit"
-    )
+    for formula in (
+        "roof proportional (SigmaF/SigmaW * wpx) : 250 kN",
+        "freezing time   : 3.7 min (Chvorinov, t = B*M^2)",
+        "flow stress      : 508 MPa (Hollomon, K*eps^n)",
+        "column design strength phi*Pn : 1451 kN",
+    ):
+        assert not machine_unit.search(formula), (
+            f"the detector is matching a printed FORMULA again, not a unit: {formula!r}"
+        )
     assert not offenders, (
         "these examples print a unit the way the machine writes it, in output a person "
         "reads. Render it with `anvilate.units.render(..., pretty=True)`:\n  "

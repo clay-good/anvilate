@@ -52,7 +52,7 @@ def main() -> None:
     print(f"bare-coil field (1000 turns/m, 2 A): {d['coil_field_mt']:.1f} mT")
     print(f"magnetic pressure at 1 T pole: {d['pole_pressure_mpa']:.2f} MPa")
     print(
-        f"holding force on a 100 cm^2 pole: {d['holding_force_kn']:.1f} kN "
+        f"holding force on a 100 cm² pole: {d['holding_force_kn']:.1f} kN "
         f"(~{d['holding_force_kn'] * 1000 / 9.80665:.0f} kg)"
     )
 

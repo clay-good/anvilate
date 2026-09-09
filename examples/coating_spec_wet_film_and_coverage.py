@@ -47,8 +47,8 @@ def main() -> None:
     d = coating_spec()
     print("Epoxy coating spec, 125 um DFT at 60% volume solids:")
     print(f"  wet film to apply   : {d['wet_film_um']:.0f} um")
-    print(f"  theoretical coverage: {d['coverage_m2_per_L']:.1f} m^2/L")
-    print(f"  paint for 400 m^2   : {d['paint_litres']:.0f} L (theoretical, before losses)")
+    print(f"  theoretical coverage: {d['coverage_m2_per_L']:.1f} m²/L")
+    print(f"  paint for 400 m²   : {d['paint_litres']:.0f} L (theoretical, before losses)")
 
 
 if __name__ == "__main__":
