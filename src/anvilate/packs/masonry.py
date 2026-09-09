@@ -20,7 +20,7 @@ from ..analysis import (
     masonry_combined_stress_ratio,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -154,4 +154,41 @@ def screen_masonry_wall(
     combined_entry = ScorecardEntry.from_safety_factor(
         "combined axial + flexure", computed=combined_sf, required=required_safety_factor
     ).model_copy(update={"reference": _COMBINED_REFERENCE, "derivation": combined_derivation})
+    if axial_entry.status is CheckStatus.FAIL:
+        # The allowable is fixed by the masonry and the slenderness, so the demand is what
+        # moves: f_a = F_a/margin. It is the one lever of the two the caller sets that the
+        # gravity check depends on at all.
+        axial_entry = axial_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "axial_stress",
+                    direction=Direction.DECREASE,
+                    value=fa_allow / required_safety_factor,
+                    unit="MPa",
+                    provenance="slenderness-reduced allowable, at the required margin",
+                )
+            }
+        )
+    if combined_entry.status is CheckStatus.FAIL:
+        # The unity check adds two demands, f_a/F_a + f_b/F_b, so neither is the lever on
+        # its own: this solves for the AXIAL demand holding the flexural one, because
+        # flexure comes from the wind or earth pressure the wall is there to resist while
+        # the gravity share is what a designer redistributes. It can come out at or below
+        # zero — the flexural term alone can fill the unity budget — and then no axial
+        # relief reaches it and the check offers nothing, as the feeder's drop does.
+        headroom = 1.0 / required_safety_factor - (
+            wall.flexural_stress.to("MPa").magnitude / allowable_flexural.to("MPa").magnitude
+        )
+        if headroom > 0.0:
+            combined_entry = combined_entry.model_copy(
+                update={
+                    "repair_hint": RepairHint.solved(
+                        "axial_stress",
+                        direction=Direction.DECREASE,
+                        value=fa_allow * headroom,
+                        unit="MPa",
+                        provenance=("unity check solved for the axial share at the flexure given"),
+                    )
+                }
+            )
     return Scorecard(entries=(axial_entry, combined_entry))

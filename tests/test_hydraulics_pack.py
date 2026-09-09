@@ -93,6 +93,49 @@ def test_pipe_run_passes_with_enough_head_fails_without():
     assert slipped.status is CheckStatus.FAIL
 
 
+def test_a_pipe_run_short_of_head_names_the_head_it_needs():
+    """The head is the lever with a closed form; the pipe is the one without.
+
+    A larger bore cuts both losses and always helps, but there is no formula for the
+    diameter that lands the margin — the friction factor is a Colebrook solve in a
+    Reynolds number that moves with it. So the head gets a value; the sweep below is what
+    makes the diameter safe to speak of at all.
+    """
+    from anvilate.scorecard import Direction
+
+    starved = screen_pipe_run(_pipe(available_head=_q("2 m"))).entries[0]
+    assert starved.status is CheckStatus.FAIL
+    hint = starved.repair_hint
+    assert (hint.parameter, hint.direction, hint.unit) == (
+        "available_head",
+        Direction.INCREASE,
+        "m",
+    )
+    # The value is the loss itself: the losses do not depend on the head available, so the
+    # answer is exact and the ratio lands on 1.
+    assert hint.corrective_value == pytest.approx(2.0 / starved.safety_factor, rel=1e-9)
+    repaired = screen_pipe_run(
+        _pipe(available_head=Quantity(magnitude=hint.corrective_value, unit="m"))
+    ).entries[0]
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(1.0, rel=1e-9)
+    assert repaired.repair_hint is None
+
+    # The direction claimed for the pipe, swept rather than asserted: the margin rises with
+    # the bore across two decades, so "a bigger pipe helps" holds everywhere it is said.
+    factors = [
+        screen_pipe_run(_pipe(diameter=Quantity(magnitude=d, unit="mm"), available_head=_q("2 m")))
+        .entries[0]
+        .safety_factor
+        for d in (20, 25, 32, 40, 50, 65, 80, 100, 125, 150, 200, 300, 500)
+    ]
+    assert factors == sorted(factors)
+    assert factors[0] < 1.0 < factors[-1]
+
+    # A run with head to spare is offered nothing.
+    assert screen_pipe_run(_pipe()).entries[0].repair_hint is None
+
+
 def test_the_two_required_margins_are_pinned_not_merely_implied():
     """Both defaults could be moved anywhere in (1.05, 1.40) and no test noticed.
 

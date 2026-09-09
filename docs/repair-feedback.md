@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 55 public screens.
-There are 26 levers across 16 of them, and 39 recorded as having none yet — each
+There are 28 levers across 18 of them, and 37 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -86,6 +86,8 @@ owes the reader:
 | `screen_gusset_plate` | block shear | `net_shear_area` ↑ | solved — holding the tension area the bolt gauge fixes |
 | `screen_feeder` | voltage drop | `conductor_area` ↑ | solved — the resistive half only, **and sometimes not at all** |
 | `screen_feeder` | conductor ampacity | `conductor_ampacity` ↑ | solved — the line current at the margin |
+| `screen_pipe_run` | head budget | `available_head` ↑ | solved — the loss the pipe consumes |
+| `screen_masonry_wall` | axial, combined | `axial_stress` ↓ | solved — two answers, and the unity one can run out |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the

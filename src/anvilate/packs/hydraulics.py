@@ -25,7 +25,7 @@ from ..analysis import (
     reynolds_number,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -244,4 +244,25 @@ def screen_pipe_run(pipe: PipeRun) -> Scorecard:
     entry = ScorecardEntry.from_safety_factor(
         "head budget", computed=ratio, required=1.0
     ).model_copy(update={"reference": _PIPE_REFERENCE, "derivation": pipe_derivation})
+    if entry.status is CheckStatus.FAIL:
+        # The head the source must supply is the loss the pipe and fittings consume, at the
+        # margin — exact, because the losses do not depend on the head available.
+        #
+        # The other lever is the pipe. A larger bore cuts both losses (friction goes as
+        # 1/d^5 through the velocity and the diameter itself, minor losses as 1/d^4), so the
+        # direction is safe to declare — swept from 20 mm to 500 mm on the run in
+        # tests/test_hydraulics_pack.py, monotone throughout — but there is no closed form
+        # for it: the friction factor is a Colebrook solve in a Reynolds number that moves
+        # with the diameter. So the pipe gets a DIRECTION and the head gets a value.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "available_head",
+                    direction=Direction.INCREASE,
+                    value=total_loss,
+                    unit="m",
+                    provenance="head the pipe and fittings consume, which the source must beat",
+                )
+            }
+        )
     return Scorecard(entries=(entry,))
