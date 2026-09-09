@@ -621,6 +621,27 @@ def test_masonry_wall_scorecard_example_combined_governs():
     assert "combined axial + flexure" in w["design_failures"]
 
 
+def test_transmission_shaft_example_is_governed_by_windup_not_strength():
+    namespace = runpy.run_path(str(_EXAMPLES / "transmission_shaft_scorecard.py"))
+    limits = namespace["shaft_limits"]()
+    assert limits["status"] == "fail"
+    factors = limits["factors"]
+    # Strength and fatigue are comfortable; the fourth-power check is the one that fails,
+    # which is the whole claim the example is written to make.
+    assert factors["combined bending and torsion"] > 2.0
+    assert factors["rotating-shaft fatigue"] > 2.0
+    assert factors["torsional twist"] < 1.0
+    wanted = limits["wanted"]
+    assert wanted["torsional twist"] == max(wanted.values())
+    _assert_narrates(
+        "transmission_shaft_scorecard.py",
+        factors["combined bending and torsion"],
+        factors["rotating-shaft fatigue"],
+        factors["torsional twist"],
+        wanted["combined bending and torsion"],
+    )
+
+
 def test_pump_duty_scorecard_example_sound_passes_marginal_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_duty_scorecard.py"))
     d = namespace["duty_scorecards"]()

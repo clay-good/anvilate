@@ -18,8 +18,11 @@ lighting designer, screening a layout's task illuminance against its energy-code
 power density; and :mod:`anvilate.packs.ventilation` serves the HVAC/IAQ
 engineer, screening a zone's ASHRAE 62.1 outdoor air and its air-change rate;
 and :mod:`anvilate.packs.electrical` serves the electrical designer, screening a
-feeder's voltage drop and conductor ampacity. Each screen rolls its results into
-a scorecard.
+feeder's voltage drop and conductor ampacity; and
+:mod:`anvilate.packs.machinery` serves the machine designer, screening a
+transmission shaft against the three limits that size one and disagree about it
+— static distortion energy, rotating-shaft fatigue and torsional windup. Each
+screen rolls its results into a scorecard.
 """
 
 from __future__ import annotations

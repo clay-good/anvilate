@@ -1862,3 +1862,59 @@ def test_the_effectivity_page_quotes_the_two_bounds_that_make_the_scan_bounded()
     claim = re.search(r"a citation is at most ([\d,]+) characters", page)
     assert claim is not None, "the citation bound sentence on standards-effectivity.md has moved"
     assert int(claim.group(1).replace(",", "")) == _LONGEST_CITED
+
+
+def test_the_machinery_page_table_is_the_screens_own_three_answers():
+    """The page's whole argument is that the three limits give three different diameters.
+
+    So the table is read back off the page and put to the screen: the safety factors at the
+    declared 40 mm, and the diameter each check asks for. A figure re-transcribed on either
+    side fails, and so does the ordering the page argues from — that windup, not strength,
+    is what sizes this shaft.
+    """
+    from anvilate.packs.machinery import TransmissionShaft, screen_shaft
+    from anvilate.units import Quantity
+
+    page = _page("machinery-screening.md")
+    rows = {
+        name.strip(): (float(factor), float(diameter))
+        for name, factor, diameter in re.findall(
+            r"^\| ([a-z][a-z\- ]+) \| ([\d.]+) \| ([\d.]+) mm \|$", page, re.M
+        )
+    }
+    assert len(rows) == 3, f"the machinery page's table has moved: {rows}"
+
+    def shaft(diameter: str) -> TransmissionShaft:
+        return TransmissionShaft(
+            diameter=Quantity.parse(diameter),
+            bending_moment=Quantity.parse("250 N*m"),
+            torque=Quantity.parse("400 N*m"),
+            yield_strength=Quantity.parse("370 MPa"),
+            length=Quantity.parse("600 mm"),
+            shear_modulus=Quantity.parse("79.3 GPa"),
+            allowable_twist=Quantity.parse("0.5 degree"),
+            endurance_limit=Quantity.parse("200 MPa"),
+            ultimate_strength=Quantity.parse("690 MPa"),
+        )
+
+    declared = {e.name: e for e in screen_shaft(shaft("40 mm")).entries}
+    # Undersized, so every check fails and every lever is on one card.
+    wanted = {
+        e.name: e.repair_hint.corrective_value
+        for e in screen_shaft(shaft("10 mm")).entries
+        if e.repair_hint is not None
+    }
+    for name, (factor, diameter) in rows.items():
+        assert factor == pytest.approx(declared[name].safety_factor, abs=0.005), name
+        assert diameter == pytest.approx(wanted[name], abs=0.005), name
+
+    # The claim the page is written to make, held as an ordering rather than as prose.
+    assert max(rows, key=lambda name: rows[name][1]) == "torsional twist"
+
+    twisted = re.search(r"ships at ([\d.]+) mm and twists ([\d.]+) degrees", page)
+    assert twisted is not None, "the machinery page's undersized-shaft sentence has moved"
+    strength_diameter, stated_twist = (float(value) for value in twisted.groups())
+    assert strength_diameter == pytest.approx(wanted["combined bending and torsion"], abs=0.005)
+    rebuilt = {e.name: e for e in screen_shaft(shaft(f"{strength_diameter} mm")).entries}
+    twist = rebuilt["torsional twist"]
+    assert stated_twist == pytest.approx(0.5 / twist.safety_factor, abs=0.05)

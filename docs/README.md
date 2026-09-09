@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Forty-six pages, arranged by what you are trying to do. The [README](../README.md) is the
+Forty-seven pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
@@ -27,6 +27,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Geotechnical](geotechnical-screening.md) · [Hydraulics](hydraulics-screening.md) | Foundations, walls, seepage; pipes, channels, pumps. |
 | [Pressure equipment](pressure-equipment.md) · [Process piping](process-piping.md) | ASME VIII Div 1, ASME B31.3. |
 | [Lifting devices](lifting-devices.md) · [Industrial covers](industrial-covers.md) | ASME BTH-1; flat covers and guard panels. |
+| [Machinery](machinery-screening.md) | Rotating shafts: strength, fatigue and windup. |
 | [Building services](building-services-screening.md) | Noise dose, lighting, ventilation, feeders. |
 | [Thermal](thermal-screening.md) · [Weld fatigue](weld-fatigue-screening.md) · [Fitness-for-service](fitness-for-service-screening.md) · [Embodied carbon](embodied-carbon-screening.md) | Resistance networks, EN 1993-1-9 detail categories, FAD assessment, EN 15978. |
 

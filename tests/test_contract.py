@@ -2037,6 +2037,7 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
         geotechnical,
         hydraulics,
         lighting,
+        machinery,
         masonry,
         noise_exposure,
         ventilation,
@@ -2198,6 +2199,22 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
                     provided_outdoor_airflow=q("300 L/s"),
                     room_volume=q("900 m**3"),
                     required_air_changes=1.0,
+                )
+            ),
+        ),
+        (
+            "shaft",
+            machinery.screen_shaft(
+                machinery.TransmissionShaft(
+                    diameter=q("40 mm"),
+                    bending_moment=q("250 N*m"),
+                    torque=q("400 N*m"),
+                    yield_strength=q("370 MPa"),
+                    length=q("600 mm"),
+                    shear_modulus=q("79.3 GPa"),
+                    allowable_twist=q("0.5 degree"),
+                    endurance_limit=q("200 MPa"),
+                    ultimate_strength=q("690 MPa"),
                 )
             ),
         ),
