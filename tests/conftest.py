@@ -261,6 +261,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         return
 
     _report_render_truth(session, full_run=False)
+    _report_typesetting(session, full_run=False)
 
     option = session.config.option
     filtered = bool(
@@ -357,6 +358,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # and can never fail, which is how a ratchet stops meaning anything. Only a full run
     # can tell a retired check from one this selection did not reach.
     _report_render_truth(session, full_run=True)
+    _report_typesetting(session, full_run=True)
 
     stale = _stale_registry_lines(coverage, registry)
     if stale:
@@ -1158,5 +1160,76 @@ def _report_render_truth(session, *, full_run: bool) -> None:
         print(
             "\nRENDER TRUTH: substituted lines that do not evaluate to the result printed "
             "under them:\n  " + "\n  ".join(sorted(set(disagreeing)))
+        )
+        session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# The typesetting sweep, session-wide, for the same reason the render-truth one is.
+#
+# `test_every_declared_derivation_typesets` in test_contract.py holds the MathML renderer
+# against the hand-written card sample. A formula the renderer declines falls back to plain
+# text — honest, but it is a submittal document losing the stacked fractions and exponents
+# that make it readable — and the sample could not see 2,500 of the lines the suite builds.
+# Sixteen of them were being declined, in three families, each one a formula whose exponent
+# or operator is the whole point:
+#
+#   * `(P_crd/P_y)^0.6` and `F_c^(1/3)·F_e^(2/3)` — a CARET exponent. The grammar took `**`
+#     and the superscript digits and not the spelling the DSM and aluminium checks use.
+#   * `min(1, 4.51·655^-0.265)` — the Marin surface factor. `min` is a word operator the
+#     derivation module declares, and to this grammar it was three italic letters.
+#
+# Both are in the grammar now, and this is the gate that would have said so.
+
+
+def _typesetting_findings() -> tuple[int, list[str]]:
+    """Every distinct derivation line the suite built, put to the MathML renderer."""
+    from xml.etree import ElementTree as ET
+
+    from anvilate.report.mathml import formula_to_mathml
+
+    seen: set[str] = set()
+    declined: list[str] = []
+    typeset = 0
+    for entry in _library_entries.values():
+        derivation = getattr(entry, "derivation", None)
+        if derivation is None:
+            continue
+        for line in derivation.lines():
+            if line in seen:
+                continue
+            seen.add(line)
+            math = formula_to_mathml(line)
+            if math is None:
+                declined.append(f"{entry.name}: {line}")
+                continue
+            # Valid XML, or the report is not a document a browser can open.
+            ET.fromstring(math)
+            typeset += 1
+    return typeset, declined
+
+
+def _report_typesetting(session, *, full_run: bool) -> None:
+    """Fail the run when a derivation the library builds will not typeset.
+
+    Split the same way the render-truth sweep is: a declined line is positive evidence about
+    what this run reached and fails on any selection; the floor is a claim about reach and
+    needs a full run.
+    """
+    typeset, declined = _typesetting_findings()
+    if full_run:
+        if typeset < 2000:
+            print(
+                f"\nTYPESETTING: only {typeset} derivation lines were rendered; the suite "
+                f"builds far more, and a sweep that stops finding its subject passes"
+            )
+            session.exitstatus = 1
+        return
+    if declined:
+        print(
+            "\nTYPESETTING: derivations the MathML renderer declined, so a submittal "
+            "document shows them as a line of plain text. Widen the grammar in "
+            "src/anvilate/report/mathml.py, or reword the formula:\n  "
+            + "\n  ".join(sorted(set(declined)))
         )
         session.exitstatus = 1

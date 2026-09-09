@@ -986,6 +986,36 @@ def test_a_formula_outside_the_grammar_is_declined_not_guessed(formula):
     assert formula_to_mathml(formula) is None
 
 
+def test_a_caret_exponent_and_a_word_operator_typeset():
+    """Two spellings the grammar did not take, both of them the point of their formula.
+
+    `(P_crd/P_y)^0.6` is the Direct Strength Method's distortional curve and
+    `F_c^(1/3)·F_e^(2/3)` the aluminium weld-affected blend; `min(1, 4.51·S_u^-0.265)` is
+    the Marin surface factor. Sixteen lines across those three families were declined and
+    rendered as plain text in a submittal document, and the sample-based gate could not see
+    any of them.
+
+    A caret is NOT normalised to `**`: the round trip compares the tree written back out
+    against the author's own string, so the spelling has to survive.
+    """
+    from xml.etree import ElementTree as ET
+
+    for formula in (
+        "P_nd = (1 \u2212 0.25\u00b7(P_crd/P_y)^0.6)\u00b7(P_crd/P_y)^0.6\u00b7P_y",
+        "F_rc = F_c^(1/3)\u00b7F_e^(2/3)",
+        "k_a = min(1, 4.51\u00b7655^-0.265)",
+        "x = max(a, b, c)",
+    ):
+        math = formula_to_mathml(formula)
+        assert math is not None, formula
+        ET.fromstring(math)
+
+    # `min` is an upright operator, not the product of three italic symbols.
+    assert 'mathvariant="normal"' in (formula_to_mathml("k_a = min(1, x)") or "")
+    # And a name that merely starts with those letters is still a name.
+    assert "mathvariant" not in (formula_to_mathml("y = minimum\u00b7x") or "")
+
+
 def test_a_unit_with_a_fractional_exponent_typesets_and_round_trips():
     """`MPa\u2070\u22c5\u2075` — the AGMA elastic coefficient C_p is in \u221aMPa.
 

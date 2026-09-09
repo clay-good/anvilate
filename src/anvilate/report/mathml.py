@@ -82,6 +82,12 @@ def _superscript_run(token: str) -> str | None:
     return digits
 
 
+# The two word operators `anvilate.derivation` declares. They are parsed as CALLS rather
+# than as three italic letters beside a group, which is what a bare name followed by a
+# parenthesis would otherwise become — and `min` is also a unit to anything reading the
+# line as a quantity, so the two readers of a formula have to agree about it.
+_WORD_FUNCTIONS = frozenset({"min", "max"})
+
 _PRODUCT = ("·", "*")
 _SUM = ("+", "-", "−")
 
@@ -166,7 +172,7 @@ def _tokenize(text: str) -> list[str]:
                 index += 1
             tokens.append(run)
             continue
-        if char in {*_PRODUCT, *_SUM, "/", "(", ")", "√"}:
+        if char in {*_PRODUCT, *_SUM, "/", "(", ")", ",", "√", "^"}:
             tokens.append(char)
             index += 1
             continue
@@ -229,9 +235,15 @@ class _Parser:
     def _power(self) -> _Node:
         node = self._atom()
         token = self._peek()
-        if token == "**":
+        if token in {"**", "^"}:
+            # A caret is the same operator with a different spelling, and the spelling has
+            # to survive: the round trip compares the tree written back out against the
+            # author's own string, so a `^` normalised to `**` would fail the comparison and
+            # fall back to plain text — which is exactly what used to happen. Six DSM and
+            # Marin lines fell out of the grammar this way, each of them a formula whose
+            # exponent is the whole point (`(P_crd/P_y)^0.6`, `F_c^(1/3)·F_e^(2/3)`).
             self._take()
-            return _Node("power", "**", (node, self._power()))
+            return _Node("power", token, (node, self._power()))
         if token is not None and token[0] in _SUPERSCRIPT_DIGITS:
             digits = _superscript_run(token)
             if digits is None:
@@ -259,6 +271,15 @@ class _Parser:
             return _Node("group", "", (inner,))
         if token[0].isdigit():
             return _Node("number", token)
+        if token in _WORD_FUNCTIONS and self._peek() == "(":
+            self._take()
+            arguments = [self._sum()]
+            while self._peek() == ",":
+                self._take()
+                arguments.append(self._sum())
+            if self._take() != ")":
+                raise _ParseError(f"unbalanced parentheses after {token}")
+            return _Node("call", token, tuple(arguments))
         if _is_name_char(token[0]):
             return _Node("name", token)
         raise _ParseError(f"{token!r} cannot start an expression")
@@ -277,7 +298,9 @@ def _unparse(node: _Node) -> str:
     if node.kind == "superscript":
         return f"{_unparse(node.children[0])}{node.text}"
     if node.kind == "power":
-        return f"{_unparse(node.children[0])}**{_unparse(node.children[1])}"
+        return f"{_unparse(node.children[0])}{node.text}{_unparse(node.children[1])}"
+    if node.kind == "call":
+        return f"{node.text}({', '.join(_unparse(child) for child in node.children)})"
     return f"{_unparse(node.children[0])}{node.text}{_unparse(node.children[1])}"
 
 
@@ -325,6 +348,7 @@ def _is_unit_only(node: _Node) -> bool:
         return _is_unit_only(node.children[0])
     if node.kind == "binary" and node.text in {"", "·", "*", "/"}:
         return all(_is_unit_only(child) for child in node.children)
+    # A call is arithmetic, never a unit: `min(1, x)` in a denominator is a real fraction.
     return False
 
 
@@ -363,6 +387,11 @@ def _emit(node: _Node, *, unwrap: bool = False) -> str:
             f"<msup><mrow>{_emit(node.children[0])}</mrow>"
             f"<mrow>{_emit(node.children[1], unwrap=True)}</mrow></msup>"
         )
+    if node.kind == "call":
+        # An upright `mi` for the function name, which is what distinguishes an operator
+        # from the product of three italic symbols m, i and n.
+        separated = "<mo>,</mo>".join(_emit(child) for child in node.children)
+        return f'<mi mathvariant="normal">{escape(node.text)}</mi><mo>(</mo>{separated}<mo>)</mo>'
     left, right = node.children
     if node.text == "/" and _is_unit_only(right) and _carries_a_value(left):
         # A unit's own slash, written the way a unit is written.

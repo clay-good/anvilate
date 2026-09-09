@@ -333,6 +333,15 @@ question is answered rather than open):
   and four checks that were *not evaluated* carried a derivation anyway, printing a result
   of 0.0 over a line reading `n = F / 0`. A check that could not run now carries no worked
   line at all.
+- **Every derivation the suite builds is typeset, not a sample of them.** The same widening,
+  applied to the MathML renderer: 2,656 distinct lines. Sixteen were being declined and
+  rendered as plain text in a submittal document, in three families whose *exponent or
+  operator is the whole point* — the Direct Strength Method's `(P_crd/P_y)^0.6`, the
+  aluminium weld-affected blend `F_c^(1/3)·F_e^(2/3)`, and the Marin surface factor
+  `min(1, 4.51·S_u^-0.265)`. The grammar took `**` and the superscript digits and not the
+  caret, and read `min` as three italic letters. Both are in it now, and a caret is not
+  normalised to `**`: the round trip compares the tree written back out against the author's
+  own string, so the spelling has to survive.
 - **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
   US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
   force over SI area against a US stress, inside one equals sign.
