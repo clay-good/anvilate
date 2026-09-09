@@ -880,6 +880,30 @@ def screen_column_member(
         allowable=critical,
         required=required_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_COMPRESSION, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # A DIRECTION, not a value, and the reason is the §E3 curve's two branches. In the
+        # elastic one the critical stress goes as 1/L² and the length that reaches the
+        # margin would be L·√(SF/required) exactly — but a length short enough to clear the
+        # check often lands in the INELASTIC branch, where F_cr = 0.658^(F_y/F_e)·F_y has
+        # no closed inverse. A value that is right only when the answer happens to stay on
+        # one side of λ = 4.71√(E/F_y) is worse than a direction that is right everywhere.
+        #
+        # And it IS right everywhere: the margin falls monotonically with the unbraced
+        # length across both branches, swept in tests/test_structural.py. Bracing a column
+        # is the standard fix, and the unbraced length — unlike a beam's span, which the
+        # architecture fixes — is what that decision changes.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.directional(
+                    "length",
+                    direction=Direction.DECREASE,
+                    provenance=(
+                        "AISC §E3 margin, monotone in the unbraced length through both "
+                        "branches — no closed inverse across the inelastic one"
+                    ),
+                )
+            }
+        )
     return disclosed(
         Scorecard(entries=(entry,)),
         column_allowable,

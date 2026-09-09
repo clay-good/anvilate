@@ -1975,6 +1975,60 @@ def test_concrete_bearing_confinement_is_capped_at_two():
     assert "2.12" in card.entries[0].detail
 
 
+def test_an_overlong_column_is_told_to_brace_and_not_told_a_number():
+    """A DIRECTION, and the reason is the §E3 curve's two branches.
+
+    In the elastic branch the critical stress goes as 1/L² and the length that reaches the
+    margin would be L·√(SF/required) exactly — but a length short enough to clear the check
+    often lands in the INELASTIC branch, where F_cr = 0.658^(F_y/F_e)·F_y has no closed
+    inverse. A value right only when the answer happens to stay on one side of the
+    λ = 4.71√(E/F_y) transition is worse than a direction right everywhere.
+
+    A direction is a claim about the whole domain, so it is swept rather than asserted:
+    the margin falls monotonically with the unbraced length across BOTH branches, which
+    the check's own name reports as it crosses.
+    """
+    from anvilate.scorecard import Direction
+
+    section = CrossSection(
+        area=_q("2500 mm**2"),
+        second_moment=_q("2.1e6 mm**4"),
+        section_modulus=_q("42000 mm**3"),
+        extreme_fibre=_q("50 mm"),
+    )
+
+    def column(length: float) -> ColumnMember:
+        return ColumnMember(
+            name="col",
+            section=section,
+            length=Quantity(magnitude=length, unit="m"),
+            axial_load=_q("60 kN"),
+            material="ASTM-A36",
+        )
+
+    slender = screen_column_member(column(8.0), required_safety_factor=1.67).entries[0]
+    assert slender.status is CheckStatus.FAIL
+    hint = slender.repair_hint
+    assert (hint.parameter, hint.direction) == ("length", Direction.DECREASE)
+    assert hint.corrective_value is None, "the inelastic branch has no closed inverse"
+
+    lengths = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0)
+    cards = [
+        screen_column_member(column(x), required_safety_factor=1.67).entries[0] for x in lengths
+    ]
+    factors = [e.safety_factor for e in cards]
+    assert factors == sorted(factors, reverse=True), "the direction is claimed over all of this"
+    # The sweep really does cross the transition the docstring is about.
+    regimes = {"inelastic" in e.name for e in cards}
+    assert regimes == {True, False}
+
+    # A braced column is offered nothing.
+    assert (
+        screen_column_member(column(3.0), required_safety_factor=1.67).entries[0].repair_hint
+        is None
+    )
+
+
 def test_each_bolted_check_names_the_knob_that_is_its_own_and_not_the_bolt():
     """Three knobs that do not agree, and the bolt is the one that fights back.
 
