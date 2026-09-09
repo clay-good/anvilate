@@ -4,9 +4,10 @@ An isotropic elastic material is fully described by any two of its elastic const
 modulus E, Poisson's ratio nu, the shear modulus G, the bulk modulus K, and the Lame parameters —
 and the rest follow from closed-form relations. Converting between them is the routine that turns a
 datasheet E and nu into the K and G a finite-element solver or the wave-speed relations of
-:mod:`anvilate.analysis.elastic_waves` need. (The shear modulus G = E/(2(1+nu)) is already available
-on a materials-database :class:`~anvilate.standards.materials.Material`; these are the complementary
-conversions.)
+:mod:`anvilate.analysis.elastic_waves` need. (The bulk and shear moduli are also available
+directly on a materials-database :class:`~anvilate.standards.materials.Material`, which derives
+them from its stored E and nu; these are the same relations as free functions, for an E and nu
+from anywhere.)
 
 The bulk modulus, resistance to uniform compression, is K = E/(3*(1 - 2*nu)) — it diverges as nu
 approaches 0.5 (an incompressible material). The Lame first parameter is
@@ -23,6 +24,7 @@ from ..units import Quantity, require_finite
 __all__ = [
     "bulk_modulus_from_youngs_poisson",
     "lame_first_parameter",
+    "shear_modulus_from_youngs_poisson",
     "youngs_modulus_from_bulk_shear",
 ]
 
@@ -63,6 +65,30 @@ def lame_first_parameter(*, elastic_modulus: Quantity, poisson_ratio: float) -> 
         magnitude=e * poisson_ratio / ((1.0 + poisson_ratio) * (1.0 - 2.0 * poisson_ratio)),
         unit="Pa",
     )
+
+
+def shear_modulus_from_youngs_poisson(
+    *, elastic_modulus: Quantity, poisson_ratio: float
+) -> Quantity:
+    """The shear modulus, G = E/(2*(1 + nu)).
+
+    The resistance to shape change at constant volume, from the ``elastic_modulus`` E (Young's
+    modulus) and ``poisson_ratio`` nu: G = E/(2*(1 + nu)). It is the third member of the isotropic
+    triple this module converts between — with :func:`bulk_modulus_from_youngs_poisson` it feeds
+    :func:`youngs_modulus_from_bulk_shear` straight back to E, and it is the G the shear-wave speed
+    of :mod:`anvilate.analysis.elastic_waves` and the torsion formulas of
+    :mod:`anvilate.analysis.torsion` take as given. For a typical metal (nu ~ 0.3) it is about
+    E/2.6. Returns G in Pa.
+
+    Source: Timoshenko & Goodier, *Theory of Elasticity*, isotropic elastic constants.
+    """
+    _check(elastic_modulus, "[pressure]", "elastic_modulus")
+    e = elastic_modulus.to("Pa").magnitude
+    if e <= 0:
+        raise ValueError("elastic_modulus must be positive")
+    if not -1.0 < poisson_ratio < 0.5:
+        raise ValueError("poisson_ratio must be in (-1, 0.5)")
+    return Quantity(magnitude=e / (2.0 * (1.0 + poisson_ratio)), unit="Pa")
 
 
 def youngs_modulus_from_bulk_shear(*, bulk_modulus: Quantity, shear_modulus: Quantity) -> Quantity:

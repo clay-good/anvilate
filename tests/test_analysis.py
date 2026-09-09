@@ -23571,6 +23571,159 @@ def test_turbomachinery_isentropic_efficiency_and_actual_discharge():
         )
 
 
+def test_turbine_polytropic_efficiency_mirrors_the_compressor_reader():
+    """The compressor half had four functions and the turbine half two. This is the reader
+    that made the turbine conversion testable at all: without it the only way back from an
+    exhaust temperature was the isentropic efficiency, which is that temperature's own
+    algebra and so cannot disagree with anything."""
+    from anvilate.analysis import (
+        isentropic_expansion_temperature,
+        turbine_actual_discharge_temperature,
+        turbine_polytropic_efficiency,
+    )
+
+    inlet, ratio, gamma = _q("1400 K"), 12.0, 1.33
+    # An ideal expansion runs at eta_p = 1: the exhaust is the isentropic one.
+    ideal = isentropic_expansion_temperature(
+        inlet_temperature=inlet, expansion_ratio=ratio, heat_capacity_ratio=gamma
+    )
+    assert turbine_polytropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=ideal,
+        expansion_ratio=ratio,
+        heat_capacity_ratio=gamma,
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # A real stage leaves the gas hotter, and reads back below 1.
+    real = turbine_actual_discharge_temperature(
+        inlet_temperature=inlet, isentropic_outlet_temperature=ideal, isentropic_efficiency=0.9
+    )
+    efficiency = turbine_polytropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=real,
+        expansion_ratio=ratio,
+        heat_capacity_ratio=gamma,
+    )
+    assert 0.0 < efficiency < 1.0
+    # T2a = T1*r^(-x*eta_p) is the relation, stated independently of the functions above.
+    assert real.to("K").magnitude == pytest.approx(
+        1400.0 * ratio ** (-((gamma - 1.0) / gamma) * efficiency), rel=1e-12
+    )
+
+    # Guardrails: an expansion must cool, and the ratio and gamma must both exceed 1.
+    with pytest.raises(ValueError, match="must be below inlet_temperature"):
+        turbine_polytropic_efficiency(
+            inlet_temperature=inlet,
+            actual_outlet_temperature=inlet,
+            expansion_ratio=ratio,
+            heat_capacity_ratio=gamma,
+        )
+    with pytest.raises(ValueError, match="expansion_ratio must exceed 1"):
+        turbine_polytropic_efficiency(
+            inlet_temperature=inlet,
+            actual_outlet_temperature=real,
+            expansion_ratio=1.0,
+            heat_capacity_ratio=gamma,
+        )
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        turbine_polytropic_efficiency(
+            inlet_temperature=inlet,
+            actual_outlet_temperature=real,
+            expansion_ratio=ratio,
+            heat_capacity_ratio=1.0,
+        )
+
+
+def test_isentropic_expansion_temperature_is_the_producer_the_turbine_half_lacked():
+    """Three public functions here consume an isentropic outlet temperature, and the only
+    producer was the compression relation — which refuses a pressure ratio below 1, so a
+    turbine user had none at all."""
+    from anvilate.analysis import (
+        adiabatic_discharge_temperature,
+        isentropic_expansion_temperature,
+    )
+
+    inlet, ratio, gamma = _q("1400 K"), 12.0, 1.33
+    exhaust = isentropic_expansion_temperature(
+        inlet_temperature=inlet, expansion_ratio=ratio, heat_capacity_ratio=gamma
+    )
+    assert exhaust.to("K").magnitude == pytest.approx(
+        1400.0 * ratio ** (-(gamma - 1.0) / gamma), rel=1e-12
+    )
+    assert exhaust.to("K").magnitude < inlet.to("K").magnitude
+
+    # It undoes the compression relation exactly: compress by r, expand by r, and you are back.
+    compressed = adiabatic_discharge_temperature(
+        inlet_temperature=inlet, pressure_ratio=ratio, heat_capacity_ratio=gamma
+    )
+    assert isentropic_expansion_temperature(
+        inlet_temperature=compressed, expansion_ratio=ratio, heat_capacity_ratio=gamma
+    ).to("K").magnitude == pytest.approx(inlet.to("K").magnitude, rel=1e-12)
+
+    # The compression form is the one that cannot serve an expansion — the gap this closes.
+    with pytest.raises(ValueError, match="pressure_ratio must exceed 1"):
+        adiabatic_discharge_temperature(
+            inlet_temperature=inlet, pressure_ratio=1.0 / ratio, heat_capacity_ratio=gamma
+        )
+    with pytest.raises(ValueError, match="expansion_ratio must exceed 1"):
+        isentropic_expansion_temperature(
+            inlet_temperature=inlet, expansion_ratio=1.0, heat_capacity_ratio=gamma
+        )
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        isentropic_expansion_temperature(
+            inlet_temperature=inlet, expansion_ratio=ratio, heat_capacity_ratio=1.0
+        )
+    with pytest.raises(ValueError, match="inlet_temperature must be a"):
+        isentropic_expansion_temperature(
+            inlet_temperature=_q("1400 kg"), expansion_ratio=ratio, heat_capacity_ratio=gamma
+        )
+
+
+def test_turbine_actual_discharge_temperature_mirrors_the_compressor_form():
+    """The expansion mirror of the compressor's actual-discharge relation. A real turbine
+    gives up less work than the ideal, so it leaves the gas HOTTER than isentropic — the
+    opposite sign to the compressor, and the reason the two cannot share one function."""
+    from anvilate.analysis import (
+        turbine_actual_discharge_temperature,
+        turbine_isentropic_efficiency,
+    )
+
+    inlet, isentropic = _q("1200 K"), _q("700 K")
+    t2a = turbine_actual_discharge_temperature(
+        inlet_temperature=inlet,
+        isentropic_outlet_temperature=isentropic,
+        isentropic_efficiency=0.88,
+    )
+    assert t2a.to("K").magnitude == pytest.approx(1200 - 0.88 * 500, rel=1e-12)
+    assert t2a.to("K").magnitude == pytest.approx(760.0, rel=1e-12)
+    assert t2a.to("K").magnitude > isentropic.to("K").magnitude
+
+    # It inverts the efficiency exactly.
+    assert turbine_isentropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=t2a,
+        isentropic_outlet_temperature=isentropic,
+    ) == pytest.approx(0.88, rel=1e-12)
+    # A perfect turbine exhausts exactly at the isentropic temperature.
+    assert turbine_actual_discharge_temperature(
+        inlet_temperature=inlet, isentropic_outlet_temperature=isentropic, isentropic_efficiency=1.0
+    ).to("K").magnitude == pytest.approx(700.0, rel=1e-12)
+
+    # Guardrails: an expansion cannot end hotter than it started, and eta is in (0, 1].
+    with pytest.raises(ValueError, match="must not exceed inlet_temperature"):
+        turbine_actual_discharge_temperature(
+            inlet_temperature=_q("700 K"),
+            isentropic_outlet_temperature=_q("1200 K"),
+            isentropic_efficiency=0.88,
+        )
+    with pytest.raises(ValueError, match="isentropic_efficiency must be in"):
+        turbine_actual_discharge_temperature(
+            inlet_temperature=inlet,
+            isentropic_outlet_temperature=isentropic,
+            isentropic_efficiency=0.0,
+        )
+
+
 def test_polytropic_efficiency_reheat_effect_flips_between_compressor_and_turbine():
     from anvilate.analysis import (
         compressor_isentropic_from_polytropic,
@@ -28080,6 +28233,7 @@ def test_elastic_constants_bulk_lame_and_youngs_conversions():
     from anvilate.analysis import (
         bulk_modulus_from_youngs_poisson,
         lame_first_parameter,
+        shear_modulus_from_youngs_poisson,
         youngs_modulus_from_bulk_shear,
     )
 
@@ -28098,10 +28252,18 @@ def test_elastic_constants_bulk_lame_and_youngs_conversions():
         "Pa"
     ).magnitude == pytest.approx(0.0, abs=1e-3)
 
-    # E = 9KG/(3K+G) round-trips: from K and G=E/2(1+nu) recover E.
-    g = Quantity(magnitude=200.0 / (2 * 1.3), unit="GPa")
+    # G = E/(2(1+nu)); steel -> ~76.9 GPa, about E/2.6.
+    g = shear_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=0.3)
+    assert g.to("Pa").magnitude == pytest.approx(200e9 / (2 * 1.3), rel=1e-12)
+    assert g.to("GPa").magnitude == pytest.approx(76.923, abs=0.01)
+    # An incompressible material (nu -> 0.5) shears at E/3, and a nu of 0 at E/2.
+    assert shear_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=0.0).to(
+        "GPa"
+    ).magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # E = 9KG/(3K+G) round-trips: from K and G recover E, both sides from the same E and nu.
     e = youngs_modulus_from_bulk_shear(bulk_modulus=k, shear_modulus=g)
-    assert e.to("GPa").magnitude == pytest.approx(200.0, rel=1e-6)
+    assert e.to("GPa").magnitude == pytest.approx(200.0, rel=1e-9)
 
     # Guardrails: poisson in (-1, 0.5), positive moduli, dimensions checked.
     with pytest.raises(ValueError, match="poisson_ratio must be in"):
@@ -28110,6 +28272,10 @@ def test_elastic_constants_bulk_lame_and_youngs_conversions():
         youngs_modulus_from_bulk_shear(bulk_modulus=_q("0 GPa"), shear_modulus=g)
     with pytest.raises(ValueError, match="elastic_modulus must be a"):
         bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 kg"), poisson_ratio=0.3)
+    with pytest.raises(ValueError, match="poisson_ratio must be in"):
+        shear_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=-1.0)
+    with pytest.raises(ValueError, match="elastic_modulus must be positive"):
+        shear_modulus_from_youngs_poisson(elastic_modulus=_q("0 GPa"), poisson_ratio=0.3)
 
 
 def test_rayleigh_wave_runs_slower_than_shear_and_never_catches_it():

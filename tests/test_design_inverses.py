@@ -149,6 +149,9 @@ ROUND_TRIPPED = frozenset(
         "dc_dc_converter.buck_minimum_inductance_for_ccm",
         "thermal.fouling_factor_from_coefficients",
         "belt.belt_speed_for_max_power",
+        "elastic_constants.bulk_modulus_from_youngs_poisson",
+        "isentropic_efficiency.compressor_isentropic_from_polytropic",
+        "isentropic_efficiency.turbine_isentropic_from_polytropic",
     }
 )
 
@@ -2070,3 +2073,101 @@ def test_belt_speed_for_max_power_is_the_speed_that_maximises_the_power():
     for factor in (0.8, 0.95, 1.05, 1.2):
         off = Quantity(magnitude=factor * best.to("m/s").magnitude, unit="m/s")
         assert power(off) < peak
+
+
+def test_bulk_modulus_from_youngs_poisson_lands_youngs_modulus_again():
+    """The isotropic triple has to close on itself: K and G computed from the same E and
+    nu must give that E back. Before `shear_modulus_from_youngs_poisson` existed there was
+    no public G to feed the return leg, and this pair could not be written."""
+    from anvilate.analysis import (
+        bulk_modulus_from_youngs_poisson,
+        shear_modulus_from_youngs_poisson,
+        youngs_modulus_from_bulk_shear,
+    )
+
+    modulus, poisson = _q("200 GPa"), 0.3
+    bulk = bulk_modulus_from_youngs_poisson(elastic_modulus=modulus, poisson_ratio=poisson)
+    shear = shear_modulus_from_youngs_poisson(elastic_modulus=modulus, poisson_ratio=poisson)
+    assert youngs_modulus_from_bulk_shear(bulk_modulus=bulk, shear_modulus=shear).to(
+        "GPa"
+    ).magnitude == pytest.approx(modulus.to("GPa").magnitude, rel=1e-12)
+    # It closes across the whole admissible range of nu, not just at the metal's 0.3.
+    for nu in (-0.5, 0.0, 0.25, 0.45, 0.499):
+        pair = {"elastic_modulus": modulus, "poisson_ratio": nu}
+        assert youngs_modulus_from_bulk_shear(
+            bulk_modulus=bulk_modulus_from_youngs_poisson(**pair),
+            shear_modulus=shear_modulus_from_youngs_poisson(**pair),
+        ).to("GPa").magnitude == pytest.approx(modulus.to("GPa").magnitude, rel=1e-9)
+
+
+def test_compressor_isentropic_from_polytropic_lands_the_polytropic_efficiency():
+    """The conversion closes through the temperatures: the isentropic efficiency it
+    returns, run out to an actual discharge temperature, must read back as the polytropic
+    efficiency it started from."""
+    from anvilate.analysis import (
+        adiabatic_discharge_temperature,
+        compressor_actual_discharge_temperature,
+        compressor_isentropic_from_polytropic,
+        compressor_polytropic_efficiency,
+    )
+
+    inlet, ratio, gamma, polytropic = _q("300 K"), 7.0, 1.4, 0.86
+    isentropic = compressor_isentropic_from_polytropic(
+        pressure_ratio=ratio, polytropic_efficiency=polytropic, heat_capacity_ratio=gamma
+    )
+    # The reheat effect: on compression the whole-machine value is the worse of the two.
+    assert isentropic < polytropic
+    ideal_outlet = adiabatic_discharge_temperature(
+        inlet_temperature=inlet, pressure_ratio=ratio, heat_capacity_ratio=gamma
+    )
+    actual_outlet = compressor_actual_discharge_temperature(
+        inlet_temperature=inlet,
+        isentropic_outlet_temperature=ideal_outlet,
+        isentropic_efficiency=isentropic,
+    )
+    assert compressor_polytropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=actual_outlet,
+        pressure_ratio=ratio,
+        heat_capacity_ratio=gamma,
+    ) == pytest.approx(polytropic, rel=1e-12)
+
+
+def test_turbine_isentropic_from_polytropic_lands_the_turbine_efficiency():
+    """The expansion half of the same conversion, and the sign of the reheat effect flips:
+    a turbine's whole-machine efficiency beats its stages'. The isentropic exhaust comes
+    from the adiabatic relation with the pressure ratio INVERTED (an expansion cools)."""
+    from anvilate.analysis import (
+        isentropic_expansion_temperature,
+        turbine_actual_discharge_temperature,
+        turbine_isentropic_efficiency,
+        turbine_isentropic_from_polytropic,
+        turbine_polytropic_efficiency,
+    )
+
+    inlet, ratio, gamma, polytropic = _q("1400 K"), 12.0, 1.33, 0.89
+    isentropic = turbine_isentropic_from_polytropic(
+        pressure_ratio=ratio, polytropic_efficiency=polytropic, heat_capacity_ratio=gamma
+    )
+    assert isentropic > polytropic
+    ideal_exhaust = isentropic_expansion_temperature(
+        inlet_temperature=inlet, expansion_ratio=ratio, heat_capacity_ratio=gamma
+    )
+    assert ideal_exhaust.to("K").magnitude < inlet.to("K").magnitude
+    actual_exhaust = turbine_actual_discharge_temperature(
+        inlet_temperature=inlet,
+        isentropic_outlet_temperature=ideal_exhaust,
+        isentropic_efficiency=isentropic,
+    )
+    assert turbine_polytropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=actual_exhaust,
+        expansion_ratio=ratio,
+        heat_capacity_ratio=gamma,
+    ) == pytest.approx(polytropic, rel=1e-12)
+    # The efficiency the exhaust implies is the isentropic one the conversion returned.
+    assert turbine_isentropic_efficiency(
+        inlet_temperature=inlet,
+        actual_outlet_temperature=actual_exhaust,
+        isentropic_outlet_temperature=ideal_exhaust,
+    ) == pytest.approx(isentropic, rel=1e-12)

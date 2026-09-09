@@ -314,7 +314,9 @@ modules:
 - :mod:`~anvilate.analysis.isentropic_efficiency` — turbomachinery isentropic and polytropic
   efficiency: the compressor η_c = (T₂ₛ − T₁)/(T₂ₐ − T₁) and turbine η_t = (T₁ − T₂ₐ)/(T₁ − T₂ₛ)
   that bridge the reversible ideal to a real stage, the actual discharge temperature
-  T₂ₐ = T₁ + (T₂ₛ − T₁)/η_c a real compressor reaches, and the polytropic (small-stage) efficiency
+  T₂ₐ = T₁ + (T₂ₛ − T₁)/η_c a real compressor reaches and its turbine mirror
+  T₂ₐ = T₁ − η_t·(T₁ − T₂ₛ), the isentropic exhaust T₂ₛ = T₁·r^(−(γ−1)/γ) that mirror needs,
+  and the polytropic (small-stage) efficiency
   with its isentropic conversion (η_c < η_p on compression, η_t > η_p on expansion)
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
@@ -850,8 +852,9 @@ modules:
   balance-grade permissible eccentricity;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.elastic_constants` — isotropic elastic-constant conversions: the bulk
-  modulus K = E/(3(1−2ν)), the Lamé first parameter λ = Eν/((1+ν)(1−2ν)), and Young's modulus from
-  bulk and shear E = 9KG/(3K+G) — the constants an FEA solver or the wave-speed relations need
+  modulus K = E/(3(1−2ν)), the shear modulus G = E/(2(1+ν)), the Lamé first parameter
+  λ = Eν/((1+ν)(1−2ν)), and Young's modulus from bulk and shear E = 9KG/(3K+G) — the constants an
+  FEA solver or the wave-speed relations need
 - :mod:`~anvilate.analysis.elastic_waves` — elastic wave speeds in solids: the thin-bar longitudinal
   speed √(E/ρ), the shear (transverse) speed √(G/ρ), and the bulk P-wave speed √((K+4G/3)/ρ) — the
   velocities behind ultrasonic NDT and P/S-wave seismology
@@ -1760,6 +1763,7 @@ from .edm import (
 from .elastic_constants import (
     bulk_modulus_from_youngs_poisson,
     lame_first_parameter,
+    shear_modulus_from_youngs_poisson,
     youngs_modulus_from_bulk_shear,
 )
 from .elastic_waves import (
@@ -2237,8 +2241,11 @@ from .isentropic_efficiency import (
     compressor_isentropic_efficiency,
     compressor_isentropic_from_polytropic,
     compressor_polytropic_efficiency,
+    isentropic_expansion_temperature,
+    turbine_actual_discharge_temperature,
     turbine_isentropic_efficiency,
     turbine_isentropic_from_polytropic,
+    turbine_polytropic_efficiency,
 )
 from .journal_bearing import (
     journal_bearing_minimum_film_thickness,
@@ -4463,6 +4470,7 @@ __all__ = [
     "edm_material_removal_rate",
     "bulk_modulus_from_youngs_poisson",
     "lame_first_parameter",
+    "shear_modulus_from_youngs_poisson",
     "youngs_modulus_from_bulk_shear",
     "bar_wave_speed",
     "rayleigh_wave_speed",
@@ -4901,6 +4909,9 @@ __all__ = [
     "compressor_isentropic_efficiency",
     "turbine_isentropic_efficiency",
     "compressor_actual_discharge_temperature",
+    "turbine_actual_discharge_temperature",
+    "isentropic_expansion_temperature",
+    "turbine_polytropic_efficiency",
     "compressor_polytropic_efficiency",
     "compressor_isentropic_from_polytropic",
     "turbine_isentropic_from_polytropic",

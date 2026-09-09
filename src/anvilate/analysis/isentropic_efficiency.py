@@ -14,7 +14,9 @@ compressor's efficiency is the ideal temperature rise over the actual one,
 over the ideal one, η_t = (T₁ − T₂ₐ)/(T₁ − T₂ₛ) ≤ 1 (the real machine ends up hotter too, having
 given up less work). Running the compressor relation backward gives the actual discharge temperature
 a real stage reaches from its isentropic value (T₂ₛ from
-:func:`~anvilate.analysis.gas_compression.adiabatic_discharge_temperature`) and its efficiency.
+:func:`~anvilate.analysis.gas_compression.adiabatic_discharge_temperature`) and its efficiency; the
+turbine mirror runs the other way, and takes its T₂ₛ from :func:`isentropic_expansion_temperature`
+because the compression form refuses a pressure ratio below 1.
 
 The last three functions add the polytropic (small-stage) efficiency, the companion an overall
 pressure ratio hides. Because a compressor reheats the gas as it works, the isentropic efficiency
@@ -35,6 +37,9 @@ __all__ = [
     "compressor_isentropic_efficiency",
     "turbine_isentropic_efficiency",
     "compressor_actual_discharge_temperature",
+    "turbine_actual_discharge_temperature",
+    "isentropic_expansion_temperature",
+    "turbine_polytropic_efficiency",
     "compressor_polytropic_efficiency",
     "compressor_isentropic_from_polytropic",
     "turbine_isentropic_from_polytropic",
@@ -160,6 +165,70 @@ def compressor_actual_discharge_temperature(
     return Quantity(magnitude=t2a, unit="K")
 
 
+def isentropic_expansion_temperature(
+    *,
+    inlet_temperature: Quantity,
+    expansion_ratio: float,
+    heat_capacity_ratio: float = 1.4,
+) -> Quantity:
+    """The isentropic exhaust temperature of an expansion, T₂ₛ = T₁·r^(−(γ−1)/γ).
+
+    The reversible temperature a gas falls to across a turbine, from the ``inlet_temperature`` T₁,
+    the ``expansion_ratio`` r = p₁/p₂ (inlet over outlet, greater than 1), and the
+    ``heat_capacity_ratio`` γ. It is the T₂ₛ that :func:`turbine_isentropic_efficiency` and
+    :func:`turbine_actual_discharge_temperature` both take as given — the expansion mirror of
+    :func:`~anvilate.analysis.gas_compression.adiabatic_discharge_temperature`, which refuses a
+    ratio below 1 because it is written for compression. Returns the isentropic exhaust
+    temperature in kelvin.
+
+    Source: Cengel & Boles, *Thermodynamics: An Engineering Approach*, isentropic processes of
+    ideal gases.
+    """
+    require_finite(expansion_ratio, name="expansion_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
+    _check(inlet_temperature, "[temperature]", "inlet_temperature")
+    t1 = inlet_temperature.to("K").magnitude
+    if t1 <= 0:
+        raise ValueError("inlet_temperature must be positive (absolute)")
+    if expansion_ratio <= 1.0:
+        raise ValueError(f"expansion_ratio must exceed 1 (expansion); got {expansion_ratio}")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
+    return Quantity(magnitude=t1 * expansion_ratio ** (-exponent), unit="K")
+
+
+def turbine_actual_discharge_temperature(
+    *,
+    inlet_temperature: Quantity,
+    isentropic_outlet_temperature: Quantity,
+    isentropic_efficiency: float,
+) -> Quantity:
+    """A turbine's actual exhaust temperature, T₂ₐ = T₁ − η_t·(T₁ − T₂ₛ).
+
+    The expansion mirror of :func:`compressor_actual_discharge_temperature`: the real exhaust
+    temperature a stage reaches, T₂ₐ = T₁ − η_t·(T₁ − T₂ₛ), from the ``inlet_temperature`` T₁, the
+    ``isentropic_outlet_temperature`` T₂ₛ (from :func:`isentropic_expansion_temperature`), and the
+    ``isentropic_efficiency`` η_t. A real turbine gives up less work than the ideal, so it leaves
+    the gas *hotter* than T₂ₛ — the exhaust temperature a recuperator, a waste-heat boiler, or the
+    next stage of a reheat cycle actually sees. Returns the actual exhaust temperature in kelvin.
+
+    Source: Cengel & Boles, *Thermodynamics: An Engineering Approach*, turbine isentropic
+    efficiency.
+    """
+    _check(inlet_temperature, "[temperature]", "inlet_temperature")
+    _check(isentropic_outlet_temperature, "[temperature]", "isentropic_outlet_temperature")
+    t1 = inlet_temperature.to("K").magnitude
+    t2s = isentropic_outlet_temperature.to("K").magnitude
+    if t1 <= 0 or t2s <= 0:
+        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    if t2s > t1:
+        raise ValueError("isentropic_outlet_temperature must not exceed inlet_temperature")
+    if not 0.0 < isentropic_efficiency <= 1.0:
+        raise ValueError(f"isentropic_efficiency must be in (0, 1]; got {isentropic_efficiency}")
+    return Quantity(magnitude=t1 - isentropic_efficiency * (t1 - t2s), unit="K")
+
+
 def compressor_polytropic_efficiency(
     *,
     inlet_temperature: Quantity,
@@ -190,6 +259,42 @@ def compressor_polytropic_efficiency(
         raise ValueError("heat_capacity_ratio must exceed 1")
     exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return exponent * log(pressure_ratio) / log(t2a / t1)
+
+
+def turbine_polytropic_efficiency(
+    *,
+    inlet_temperature: Quantity,
+    actual_outlet_temperature: Quantity,
+    expansion_ratio: float,
+    heat_capacity_ratio: float = 1.4,
+) -> float:
+    """A turbine's polytropic efficiency, η_p = ln(T₁/T₂ₐ)/[(γ−1)/γ·ln r].
+
+    The expansion mirror of :func:`compressor_polytropic_efficiency`: the small-stage efficiency
+    read from the actual temperature drop, η_p = ln(T₁/T₂ₐ)/[(γ−1)/γ·ln(r)], from the
+    ``inlet_temperature`` T₁, the ``actual_outlet_temperature`` T₂ₐ, the ``expansion_ratio``
+    r = p₁/p₂, and the ``heat_capacity_ratio`` γ. Like its compression twin it is the fair basis
+    for comparing stages, because it does not carry the pressure ratio's reheat effect the way the
+    whole-machine isentropic value does. All temperatures must be absolute. Returns the
+    dimensionless polytropic efficiency.
+
+    Source: Cengel & Boles, *Thermodynamics: An Engineering Approach*, polytropic (small-stage)
+    efficiency.
+    """
+    _check(inlet_temperature, "[temperature]", "inlet_temperature")
+    _check(actual_outlet_temperature, "[temperature]", "actual_outlet_temperature")
+    t1 = inlet_temperature.to("K").magnitude
+    t2a = actual_outlet_temperature.to("K").magnitude
+    if t1 <= 0 or t2a <= 0:
+        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    if t2a >= t1:
+        raise ValueError("actual_outlet_temperature must be below inlet_temperature")
+    if expansion_ratio <= 1.0:
+        raise ValueError("expansion_ratio must exceed 1")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError("heat_capacity_ratio must exceed 1")
+    exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
+    return log(t1 / t2a) / (exponent * log(expansion_ratio))
 
 
 def compressor_isentropic_from_polytropic(
