@@ -986,6 +986,27 @@ def test_a_formula_outside_the_grammar_is_declined_not_guessed(formula):
     assert formula_to_mathml(formula) is None
 
 
+def test_a_unit_with_a_fractional_exponent_typesets_and_round_trips():
+    """`MPa\u2070\u22c5\u2075` — the AGMA elastic coefficient C_p is in \u221aMPa.
+
+    The superscript run used to stop at the decimal point, the dot operator matched nothing
+    in the grammar, and the whole derivation fell back to a line of plain text in the
+    report. Both halves are pinned: the exponent reaches MathML as 0.5, and a run that is
+    not a number is still declined rather than typeset as `.` or `0..5`.
+    """
+    from xml.etree import ElementTree as ET
+
+    math = formula_to_mathml("C_p = 190.27 MPa\u2070\u22c5\u2075")
+    assert math is not None
+    ET.fromstring(math)
+    assert "0.5" in math
+
+    assert formula_to_mathml("C_p = 190.27 MPa\u22c5") is None
+    assert formula_to_mathml("C_p = 190.27 MPa\u2070\u22c5\u2075\u22c5\u2075") is None
+    # The whole-number case is untouched.
+    assert formula_to_mathml("A = d\u00b2") is not None
+
+
 def test_the_round_trip_guard_is_what_stops_a_wrong_rendering(monkeypatch):
     """Attack the guard: make the parse tree write back out as something else.
 

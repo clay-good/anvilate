@@ -1923,7 +1923,7 @@ def test_every_repair_lever_names_something_the_caller_can_move():
     assert checked >= 8, f"only {checked} levers were checked; the inventory holds more"
 
 
-_UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?"
+_UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+(?:\.\d+)?)?"
 # A compound unit is one token, not the first of several: "20.83 kN*m" and "5.2 kg/m**3"
 # have to be captured whole, or the tail migrates out of the parentheses and lands in
 # whatever operator follows.
@@ -2199,6 +2199,28 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
                     provided_outdoor_airflow=q("300 L/s"),
                     room_volume=q("900 m**3"),
                     required_air_changes=1.0,
+                )
+            ),
+        ),
+        (
+            "gear mesh",
+            machinery.screen_gear_mesh(
+                machinery.SpurGearMesh(
+                    pinion_teeth=18,
+                    gear_teeth=54,
+                    module=q("2 mm"),
+                    face_width=q("40 mm"),
+                    pressure_angle=20.0,
+                    pinion_torque=q("180 N*m"),
+                    bending_geometry_factor=0.34,
+                    contact_geometry_factor=0.115,
+                    allowable_bending_stress=q("250 MPa"),
+                    allowable_contact_stress=q("1100 MPa"),
+                    pinion_modulus=q("207 GPa"),
+                    gear_modulus=q("207 GPa"),
+                    overload_factor=1.25,
+                    dynamic_factor=1.3,
+                    load_distribution_factor=1.2,
                 )
             ),
         ),
@@ -2640,6 +2662,29 @@ def test_every_pack_that_writes_a_derivation_is_in_the_render_truth_sample():
     )
 
 
+_SUPERSCRIPT = str.maketrans(
+    "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079\u22c5", "0123456789."
+)
+
+
+def _superscript_exponents(expression: str) -> str:
+    """``MPa\u2070\u22c5\u2075`` as ``MPa**0.5``, so a fractional-power unit survives the parse.
+
+    The three whole-number superscripts were replaced one glyph at a time, which reads a
+    unit's exponent and a symbol's identically and is right for both. A FRACTIONAL exponent
+    is not one glyph: ``\u2070\u22c5\u2075`` is three, and the value-unit pattern captured
+    ``190.27 MPa`` and left the exponent standing outside the parentheses. The line then
+    parsed cleanly into the wrong dimension and was dropped by the conversion below, which
+    used to be silent — an elastic coefficient in \u221aMPa went unchecked in both unit
+    systems while the gate cleared its floor.
+    """
+    return re.sub(
+        r"([A-Za-z\u00b5\u03a9])([\u2070\u00b9\u00b2\u00b3\u2074-\u2079\u22c5]+)",
+        lambda found: found.group(1) + "**" + found.group(2).translate(_SUPERSCRIPT),
+        expression,
+    )
+
+
 def _expand_roots(expression: str) -> str:
     """Rewrite every \u221a(...) in a substituted line as (...)**0.5, matching parentheses.
 
@@ -2662,6 +2707,35 @@ def _expand_roots(expression: str) -> str:
         else:  # pragma: no cover - an unbalanced radical is not a derivation we build
             return expression.replace("\u221a", "", 1)
     return expression
+
+
+def test_the_render_truth_gate_can_actually_see_a_fractional_unit_exponent():
+    """The sibling mechanism, and it was broken in the same shape as the radical.
+
+    A unit with a fractional power renders as three glyphs — ``MPa\u2070\u22c5\u2075`` — and
+    the value-unit pattern captured ``190.27 MPa``, leaving the exponent outside the
+    parentheses. The line then parsed cleanly into ``kN**0.5/mm``, and the conversion to the
+    printed ``MPa`` failed and was **silently skipped**, so the AGMA elastic coefficient's
+    whole derivation went unchecked in both unit systems while the gate cleared its floor.
+
+    Two things are asserted here because two things were wrong: that the exponent survives
+    into the expression, and that the conversion failure is now reported rather than dropped.
+    """
+    from anvilate.units.registry import UREG
+
+    assert _superscript_exponents("190.27 MPa\u2070\u22c5\u2075") == "190.27 MPa**0.5"
+    assert _superscript_exponents("d\u00b3") == "d**3"
+    assert _superscript_exponents("2 * 3") == "2 * 3"
+
+    line = _VALUE_UNIT.sub(r"(\1 \2)", _superscript_exponents("190.27 MPa\u2070\u22c5\u2075"))
+    assert line == "(190.27 MPa**0.5)", line
+    assert UREG.parse_expression(line).to(UREG.Unit("MPa**0.5")).magnitude == pytest.approx(190.27)
+
+    # Without the rewrite the exponent is stranded and the dimension is wrong. That used to
+    # reach the conversion and be dropped; the assertion the gate now makes is that such a
+    # line is named, so this pins the wrong dimension rather than the silence.
+    stranded = _VALUE_UNIT.sub(r"(\1 \2)", "190.27 MPa\u2070\u22c5\u2075")
+    assert stranded.startswith("(190.27 MPa)"), stranded
 
 
 def test_the_render_truth_gate_can_actually_see_a_square_root():
@@ -2721,6 +2795,7 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
     checked = 0
     mismatches: list[str] = []
     unparsed: list[str] = []
+    unconvertible: list[str] = []
     for label, derivation in derivations:
         if derivation.unresolved_symbols():
             continue
@@ -2728,6 +2803,8 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
             substituted = derivation.substituted(system=system)
             _, _, rhs = substituted.partition(" = ")
             expression = rhs.replace("\u00b7", "*").replace("\u2212", "-")
+            # A unit's fractional exponent first, while its glyphs are still adjacent.
+            expression = _superscript_exponents(expression)
             expression = expression.replace("\u00b2", "**2").replace("\u00b3", "**3")
             expression = expression.replace("\u2074", "**4")
             expression = _expand_roots(expression)
@@ -2747,7 +2824,15 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
             unit = printed[match.end() :].strip().replace("\u00b7", "*")
             try:
                 actual = value.to(UREG.Unit(unit)).magnitude
-            except Exception:  # pragma: no cover - dimensionally odd lines are skipped
+            except Exception as exc:
+                # NOT a skip. A line that will not convert to the unit printed under it is
+                # a line in the wrong dimension, which is the strongest form of the drift
+                # this gate exists to catch — and skipping it reports coverage the gate
+                # does not have, the same way the unparsed branch above would.
+                unconvertible.append(
+                    f"{label} [{system.value}]: {substituted} -> printed in {unit}, "
+                    f"line is {value.units} ({exc})"
+                )
                 continue
             checked += 1
             # The printed result carries its own precision, so the tolerance is a little
@@ -2763,6 +2848,10 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
         "skips what it cannot read reports coverage it does not have — this is how both "
         "§H1.1 derivations went unchecked in both unit systems while the gate still "
         "cleared its floor:\n  " + "\n  ".join(unparsed)
+    )
+    assert not unconvertible, (
+        "substituted lines that evaluate to a different dimension than the result printed "
+        "under them:\n  " + "\n  ".join(unconvertible)
     )
     assert checked >= 20, f"only {checked} substituted lines were checkable"
     assert not mismatches, (

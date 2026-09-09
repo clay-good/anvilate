@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/spur_gear_mesh/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'spur_gear_mesh': the fields a Design Spec puts in `element_params` when it declares `element_type: spur_gear_mesh`. Generated from anvilate.packs.machinery.SpurGearMesh.",
+  "properties": {
+    "allowable_bending_stress": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "allowable_contact_stress": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "bending_geometry_factor": {
+      "title": "Bending Geometry Factor",
+      "type": "number"
+    },
+    "contact_geometry_factor": {
+      "title": "Contact Geometry Factor",
+      "type": "number"
+    },
+    "dynamic_factor": {
+      "default": 1.0,
+      "title": "Dynamic Factor",
+      "type": "number"
+    },
+    "face_width": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "gear_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "gear_teeth": {
+      "title": "Gear Teeth",
+      "type": "integer"
+    },
+    "load_distribution_factor": {
+      "default": 1.0,
+      "title": "Load Distribution Factor",
+      "type": "number"
+    },
+    "minimum_contact_ratio": {
+      "default": 1.2,
+      "title": "Minimum Contact Ratio",
+      "type": "number"
+    },
+    "module": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "overload_factor": {
+      "default": 1.0,
+      "title": "Overload Factor",
+      "type": "number"
+    },
+    "pinion_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "pinion_teeth": {
+      "title": "Pinion Teeth",
+      "type": "integer"
+    },
+    "pinion_torque": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "pressure_angle": {
+      "title": "Pressure Angle",
+      "type": "number"
+    },
+    "rim_thickness_factor": {
+      "default": 1.0,
+      "title": "Rim Thickness Factor",
+      "type": "number"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "size_factor": {
+      "default": 1.0,
+      "title": "Size Factor",
+      "type": "number"
+    },
+    "surface_condition_factor": {
+      "default": 1.0,
+      "title": "Surface Condition Factor",
+      "type": "number"
+    }
+  },
+  "required": [
+    "pinion_teeth",
+    "gear_teeth",
+    "module",
+    "face_width",
+    "pressure_angle",
+    "pinion_torque",
+    "bending_geometry_factor",
+    "contact_geometry_factor",
+    "allowable_bending_stress",
+    "allowable_contact_stress",
+    "pinion_modulus",
+    "gear_modulus"
+  ],
+  "title": "SpurGearMesh",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

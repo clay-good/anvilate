@@ -61,6 +61,27 @@ _SUPERSCRIPT_DIGITS = {
     "⁹": "9",
 }
 
+# The decimal point inside a superscript exponent. `MPa\u2070\u22c5\u2075` is how a unit
+# with a fractional power renders — the AGMA elastic coefficient C_p is in \u221aMPa — and
+# without this the run stopped at the point, the dot operator tokenised as nothing the
+# grammar knows, and the whole derivation fell back to a line of plain text in the report.
+_SUPERSCRIPT_POINT = "\u22c5"
+
+
+def _superscript_run(token: str) -> str | None:
+    """``\u2070\u22c5\u2075`` as ``"0.5"``, or ``None`` when the run is not a number.
+
+    A run is not automatically an exponent: a stray point, or two of them, is outside the
+    grammar and has to fall back rather than reach MathML as ``.`` or ``0..5``.
+    """
+    digits = "".join(
+        "." if char == _SUPERSCRIPT_POINT else _SUPERSCRIPT_DIGITS.get(char, "") for char in token
+    )
+    if not digits or digits.startswith(".") or digits.endswith(".") or digits.count(".") > 1:
+        return None
+    return digits
+
+
 _PRODUCT = ("·", "*")
 _SUM = ("+", "-", "−")
 
@@ -107,7 +128,9 @@ def _tokenize(text: str) -> list[str]:
             continue
         if char in _SUPERSCRIPT_DIGITS:
             run = ""
-            while index < len(text) and text[index] in _SUPERSCRIPT_DIGITS:
+            while index < len(text) and (
+                text[index] in _SUPERSCRIPT_DIGITS or text[index] == _SUPERSCRIPT_POINT
+            ):
                 run += text[index]
                 index += 1
             tokens.append(run)
@@ -210,8 +233,10 @@ class _Parser:
             self._take()
             return _Node("power", "**", (node, self._power()))
         if token is not None and token[0] in _SUPERSCRIPT_DIGITS:
+            digits = _superscript_run(token)
+            if digits is None:
+                raise _ParseError(f"{token!r} is not an exponent")
             self._take()
-            digits = "".join(_SUPERSCRIPT_DIGITS[char] for char in token)
             return _Node("superscript", token, (node, _Node("number", digits)))
         return node
 

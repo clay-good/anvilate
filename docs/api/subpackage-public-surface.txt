@@ -70,7 +70,9 @@ packs.industrial.PlateEdge
 packs.industrial.screen_cover_plate
 packs.lighting.LightingInstallation
 packs.lighting.screen_lighting
+packs.machinery.SpurGearMesh
 packs.machinery.TransmissionShaft
+packs.machinery.screen_gear_mesh
 packs.machinery.screen_shaft
 packs.masonry.MasonryWall
 packs.masonry.screen_masonry_wall

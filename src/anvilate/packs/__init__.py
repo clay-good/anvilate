@@ -21,8 +21,10 @@ and :mod:`anvilate.packs.electrical` serves the electrical designer, screening a
 feeder's voltage drop and conductor ampacity; and
 :mod:`anvilate.packs.machinery` serves the machine designer, screening a
 transmission shaft against the three limits that size one and disagree about it
-— static distortion energy, rotating-shaft fatigue and torsional windup. Each
-screen rolls its results into a scorecard.
+— static distortion energy, rotating-shaft fatigue and torsional windup — and a
+spur gear mesh against AGMA bending, pitting, contact ratio and undercut, which
+four are moved by three different parameters. Each screen rolls its results into
+a scorecard.
 """
 
 from __future__ import annotations

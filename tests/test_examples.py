@@ -642,6 +642,19 @@ def test_transmission_shaft_example_is_governed_by_windup_not_strength():
     )
 
 
+def test_gear_mesh_example_names_two_different_modules():
+    namespace = runpy.run_path(str(_EXAMPLES / "gear_mesh_scorecard.py"))
+    limits = namespace["mesh_limits"]()
+    assert limits["status"] == "fail"
+    levers = limits["levers"]
+    bending = levers["tooth-root bending"]
+    pitting = levers["surface pitting"]
+    assert bending[0] == pitting[0] == "module"
+    # Two answers from one knob, which is the example's whole claim.
+    assert pitting[1] > bending[1]
+    _assert_narrates("gear_mesh_scorecard.py", bending[1], pitting[1])
+
+
 def test_pump_duty_scorecard_example_sound_passes_marginal_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_duty_scorecard.py"))
     d = namespace["duty_scorecards"]()

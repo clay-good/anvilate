@@ -1918,3 +1918,51 @@ def test_the_machinery_page_table_is_the_screens_own_three_answers():
     rebuilt = {e.name: e for e in screen_shaft(shaft(f"{strength_diameter} mm")).entries}
     twist = rebuilt["torsional twist"]
     assert stated_twist == pytest.approx(0.5 / twist.safety_factor, abs=0.05)
+
+
+def test_the_machinery_pages_gear_table_is_the_screens_own_four_answers():
+    """The gear half of the page, held the same way, plus the two modules it argues from.
+
+    The page's claim is that the module enters the bending stress twice and the pitting
+    stress once, so the same shortfall names two different modules. That is two numbers in
+    prose, and both are put to the screen.
+    """
+    from anvilate.packs.machinery import SpurGearMesh, screen_gear_mesh
+    from anvilate.units import Quantity
+
+    page = _page("machinery-screening.md")
+    rows = {
+        name.strip(): float(factor)
+        for name, factor in re.findall(r"^\| ([a-z][a-z\- ]+) \| ([\d.]+) \| .*↑?.*\|$", page, re.M)
+    }
+    mesh = SpurGearMesh(
+        pinion_teeth=18,
+        gear_teeth=54,
+        module=Quantity.parse("2 mm"),
+        face_width=Quantity.parse("40 mm"),
+        pressure_angle=20.0,
+        pinion_torque=Quantity.parse("180 N*m"),
+        bending_geometry_factor=0.34,
+        contact_geometry_factor=0.115,
+        allowable_bending_stress=Quantity.parse("250 MPa"),
+        allowable_contact_stress=Quantity.parse("1100 MPa"),
+        pinion_modulus=Quantity.parse("207 GPa"),
+        gear_modulus=Quantity.parse("207 GPa"),
+        overload_factor=1.25,
+        dynamic_factor=1.3,
+        load_distribution_factor=1.2,
+    )
+    entries = {e.name: e for e in screen_gear_mesh(mesh).entries}
+    for name in ("tooth-root bending", "surface pitting", "contact ratio", "undercut"):
+        assert name in rows, f"the gear table on machinery-screening.md lost {name!r}"
+        assert rows[name] == pytest.approx(entries[name].safety_factor, abs=0.005), name
+
+    stated = re.search(r"([\d.]+) mm for bending, ([\d.]+) mm for pitting", page)
+    assert stated is not None, "the two-modules sentence on machinery-screening.md has moved"
+    bending, pitting = (float(value) for value in stated.groups())
+    assert bending == pytest.approx(
+        entries["tooth-root bending"].repair_hint.corrective_value, abs=0.005
+    )
+    assert pitting == pytest.approx(
+        entries["surface pitting"].repair_hint.corrective_value, abs=0.005
+    )

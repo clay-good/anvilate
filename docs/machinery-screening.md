@@ -66,3 +66,55 @@ fillet or shoulder, are applied before the value arrives, because they are prope
 the shaft's surface and geometry rather than of the loads the model carries.
 
 See [`examples/transmission_shaft_scorecard.py`](../examples/transmission_shaft_scorecard.py).
+
+## Spur gear meshes
+
+The same shape one level up: four checks, and this time they are moved by **three different
+parameters**, so a mesh failing two of them cannot be fixed by moving one number.
+
+```python
+from anvilate.packs.machinery import SpurGearMesh, screen_gear_mesh
+from anvilate.units import Quantity
+
+mesh = SpurGearMesh(
+    pinion_teeth=18, gear_teeth=54,
+    module=Quantity.parse("2 mm"),
+    face_width=Quantity.parse("40 mm"),
+    pressure_angle=20.0,                                 # degrees
+    pinion_torque=Quantity.parse("180 N*m"),
+    bending_geometry_factor=0.34,                        # AGMA Y_J, from the charts
+    contact_geometry_factor=0.115,                       # AGMA I
+    allowable_bending_stress=Quantity.parse("250 MPa"),
+    allowable_contact_stress=Quantity.parse("1100 MPa"),
+    pinion_modulus=Quantity.parse("207 GPa"),
+    gear_modulus=Quantity.parse("207 GPa"),
+    overload_factor=1.25, dynamic_factor=1.3, load_distribution_factor=1.2,
+)
+card = screen_gear_mesh(mesh, required_safety_factor=1.2)
+```
+
+| Check | Safety factor | What moves it |
+| --- | --- | --- |
+| tooth-root bending | 0.35 | `module` ↑ — and σ goes as **1/m²** |
+| surface pitting | 0.53 | `module` ↑ — but σ_c goes as **1/m** |
+| contact ratio | 1.37 | `pressure_angle` ↓; the module cannot move it at all |
+| undercut | 1.00 | `pinion_teeth` ↑, to a whole count |
+
+**The module enters twice, and that is the trap.** At a fixed pinion torque the tangential
+load is `W_t = 2·T/(m·N₁)`, so it *falls* as the module grows. Bending stress therefore goes
+as 1/m² and pitting as 1/m, and the two checks name two different modules for the same
+shortfall — 3.71 mm for bending, 4.50 mm for pitting. The library's
+`agma_module_for_bending_stress` inverts at a fixed tangential load and is **not** the hint
+here; delegating to it would name a module far past the margin.
+
+**The contact ratio is scale-invariant.** Every length in it is a multiple of the module, so
+a bigger gear does nothing at all. What moves it is the tooth form: the contact ratio falls
+monotonically with pressure angle across 14.5°–30° (swept in the test suite), so the hint is
+directional on `pressure_angle` rather than a solved value.
+
+**A geometric threshold takes no design margin on top.** The contact ratio and the undercut
+limit are judged against their own thresholds, not against `required_safety_factor`:
+screening them at 1.2 would silently demand a contact ratio of 1.44 and 22 teeth where the
+standard asks for 1.2 and 18.
+
+See [`examples/gear_mesh_scorecard.py`](../examples/gear_mesh_scorecard.py).

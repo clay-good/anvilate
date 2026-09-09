@@ -27,10 +27,16 @@ from __future__ import annotations
 from pydantic import ConfigDict
 
 from ..analysis import (
+    agma_bending_stress,
+    agma_contact_stress,
+    gear_pitch_diameter,
+    gear_tangential_load,
+    minimum_teeth_to_avoid_undercut,
     shaft_diameter_de_goodman,
     shaft_diameter_for_bending_torsion,
     shaft_twist_angle,
     shaft_von_mises_stress,
+    spur_gear_contact_ratio,
 )
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
@@ -38,13 +44,19 @@ from ..units import Quantity
 from ._guarded import GuardedInputs
 
 __all__ = [
+    "SpurGearMesh",
     "TransmissionShaft",
+    "screen_gear_mesh",
     "screen_shaft",
 ]
 
 _STATIC_REFERENCE = "Shigley §7-4 shaft design for stress (distortion energy)"
 _TWIST_REFERENCE = "Shigley shaft deflection, θ = T·L/(G·J)"
 _FATIGUE_REFERENCE = "Shigley Eq. 7-8, DE-Goodman rotating-shaft fatigue"
+_BENDING_REFERENCE = "AGMA 2001 / ISO 6336 tooth-root bending stress"
+_PITTING_REFERENCE = "AGMA 2001 / ISO 6336 pitting resistance"
+_CONTACT_RATIO_REFERENCE = "Shigley, transverse contact ratio for smooth load transfer"
+_UNDERCUT_REFERENCE = "Shigley, rack-generation undercut limit N_min = 2·k/sin²φ"
 
 
 class TransmissionShaft(GuardedInputs):
@@ -338,5 +350,365 @@ def screen_shaft(
             _static_entry(shaft, required_safety_factor),
             _twist_entry(shaft, required_safety_factor),
             _fatigue_entry(shaft, required_safety_factor),
+        )
+    )
+
+
+class SpurGearMesh(GuardedInputs):
+    """A standard spur-gear mesh and its screen inputs.
+
+    ``pinion_teeth`` N₁ and ``gear_teeth`` N₂ with ``module`` m and ``pressure_angle`` φ (in
+    degrees) fix the geometry; ``face_width`` b and ``pinion_torque`` T fix the loading. The
+    two AGMA geometry factors and the two allowable stresses are the caller's, from the
+    charts and the material's rating — this screen rates the mesh, it does not look a gear
+    steel up. So are the derating factors, each defaulting to 1.0 and each a decision:
+    leaving ``dynamic_factor`` at 1.0 says the mesh is quiet and slow, which for a real
+    drive it is not.
+
+    ``minimum_contact_ratio`` is the transverse contact ratio the mesh has to reach for the
+    load to hand over smoothly from one tooth pair to the next; 1.2 is the usual floor and
+    anything at or under 1.0 is a mesh that stops carrying load between teeth.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    pinion_teeth: int
+    gear_teeth: int
+    module: Quantity
+    face_width: Quantity
+    pressure_angle: float
+    pinion_torque: Quantity
+    bending_geometry_factor: float
+    contact_geometry_factor: float
+    allowable_bending_stress: Quantity
+    allowable_contact_stress: Quantity
+    pinion_modulus: Quantity
+    gear_modulus: Quantity
+    minimum_contact_ratio: float = 1.2
+    overload_factor: float = 1.0
+    dynamic_factor: float = 1.0
+    size_factor: float = 1.0
+    load_distribution_factor: float = 1.0
+    rim_thickness_factor: float = 1.0
+    surface_condition_factor: float = 1.0
+
+
+def _mesh_loads(mesh: SpurGearMesh) -> tuple[Quantity, Quantity]:
+    """The pinion pitch diameter and the tangential load the torque puts on the tooth."""
+    pitch_diameter = gear_pitch_diameter(module=mesh.module, teeth=mesh.pinion_teeth)
+    return pitch_diameter, gear_tangential_load(
+        torque=mesh.pinion_torque, pitch_diameter=pitch_diameter
+    )
+
+
+def _bending_entry(mesh: SpurGearMesh, required_safety_factor: float) -> ScorecardEntry:
+    """AGMA tooth-root bending stress against the allowable."""
+    pitch_diameter, tangential = _mesh_loads(mesh)
+    stress = agma_bending_stress(
+        tangential_load=tangential,
+        module=mesh.module,
+        face_width=mesh.face_width,
+        geometry_factor=mesh.bending_geometry_factor,
+        overload_factor=mesh.overload_factor,
+        dynamic_factor=mesh.dynamic_factor,
+        size_factor=mesh.size_factor,
+        load_distribution_factor=mesh.load_distribution_factor,
+        rim_thickness_factor=mesh.rim_thickness_factor,
+    )
+    sigma = stress.to("MPa").magnitude
+    allowable = mesh.allowable_bending_stress.to("MPa").magnitude
+    safety = allowable / sigma if sigma > 0 else None
+    derivation = Derivation(
+        symbolic="σ = W_t·K_o·K_v·K_s·K_H·K_B/(b·m·Y_J)",
+        inputs=(
+            SymbolValue(
+                symbol="W_t",
+                description="tangential tooth load, 2·T/d₁",
+                value=tangential,
+                unit="N",
+            ),
+            SymbolValue(symbol="b", description="face width", value=mesh.face_width, unit="mm"),
+            SymbolValue(symbol="m", description="transverse module", value=mesh.module, unit="mm"),
+            SymbolValue(
+                symbol="Y_J",
+                description="AGMA bending geometry (J) factor",
+                value=mesh.bending_geometry_factor,
+            ),
+            SymbolValue(symbol="K_o", description="overload factor", value=mesh.overload_factor),
+            SymbolValue(symbol="K_v", description="dynamic factor", value=mesh.dynamic_factor),
+            SymbolValue(symbol="K_s", description="size factor", value=mesh.size_factor),
+            SymbolValue(
+                symbol="K_H",
+                description="load distribution factor",
+                value=mesh.load_distribution_factor,
+            ),
+            SymbolValue(
+                symbol="K_B", description="rim thickness factor", value=mesh.rim_thickness_factor
+            ),
+        ),
+        result=SymbolValue(
+            symbol="σ", description="tooth-root bending stress", value=stress, unit="MPa"
+        ),
+        citation=_BENDING_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "tooth-root bending", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _BENDING_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # `agma_module_for_bending_stress` is NOT the hint. It solves at a FIXED tangential
+        # load, and this screen's given is the pinion TORQUE — so W_t = 2·T/(m·N₁) shrinks
+        # as the module grows and the module enters the stress twice: σ ∝ 1/m². The
+        # library's inverse would name a module that lands the mesh well past the margin,
+        # and naming a value that is not the least one is how a hint stops being usable.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "module",
+                    direction=Direction.INCREASE,
+                    value=mesh.module.to("mm").magnitude
+                    * (sigma * required_safety_factor / allowable) ** 0.5,
+                    unit="mm",
+                    provenance="σ ∝ 1/m² at a fixed pinion torque, solved at the margin",
+                )
+            }
+        )
+    return entry
+
+
+def _pitting_entry(mesh: SpurGearMesh, required_safety_factor: float) -> ScorecardEntry:
+    """AGMA pitting-resistance (contact) stress against the allowable."""
+    pitch_diameter, tangential = _mesh_loads(mesh)
+    stress = agma_contact_stress(
+        tangential_load=tangential,
+        pinion_pitch_diameter=pitch_diameter,
+        face_width=mesh.face_width,
+        geometry_factor=mesh.contact_geometry_factor,
+        modulus_pinion=mesh.pinion_modulus,
+        modulus_gear=mesh.gear_modulus,
+        overload_factor=mesh.overload_factor,
+        dynamic_factor=mesh.dynamic_factor,
+        size_factor=mesh.size_factor,
+        load_distribution_factor=mesh.load_distribution_factor,
+        surface_condition_factor=mesh.surface_condition_factor,
+    )
+    sigma = stress.to("MPa").magnitude
+    allowable = mesh.allowable_contact_stress.to("MPa").magnitude
+    safety = allowable / sigma if sigma > 0 else None
+    derivation = Derivation(
+        symbolic="σ_c = C_p·√(W_t·K_o·K_v·K_s·K_H·C_f/(d₁·b·I))",
+        inputs=(
+            SymbolValue(
+                symbol="C_p",
+                description="elastic coefficient from the two moduli and Poisson ratios",
+                value=Quantity(magnitude=_elastic_coefficient(mesh), unit="MPa**0.5"),
+                unit="MPa**0.5",
+            ),
+            SymbolValue(
+                symbol="W_t", description="tangential tooth load", value=tangential, unit="N"
+            ),
+            SymbolValue(
+                symbol="d₁",
+                description="pinion pitch diameter, m·N₁",
+                value=pitch_diameter,
+                unit="mm",
+            ),
+            SymbolValue(symbol="b", description="face width", value=mesh.face_width, unit="mm"),
+            SymbolValue(
+                symbol="I",
+                description="AGMA pitting geometry (I) factor",
+                value=mesh.contact_geometry_factor,
+            ),
+            SymbolValue(symbol="K_o", description="overload factor", value=mesh.overload_factor),
+            SymbolValue(symbol="K_v", description="dynamic factor", value=mesh.dynamic_factor),
+            SymbolValue(symbol="K_s", description="size factor", value=mesh.size_factor),
+            SymbolValue(
+                symbol="K_H",
+                description="load distribution factor",
+                value=mesh.load_distribution_factor,
+            ),
+            SymbolValue(
+                symbol="C_f",
+                description="surface condition factor",
+                value=mesh.surface_condition_factor,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="σ_c", description="surface contact stress", value=stress, unit="MPa"
+        ),
+        citation=_PITTING_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "surface pitting", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _PITTING_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # W_t/d₁ = 2·T/(m·N₁)² at a fixed torque, and it is the only place the module
+        # reaches, so σ_c ∝ 1/m — a FIRST power where bending is a second. That is why the
+        # two checks name two different modules, and why the pitting one is the larger jump
+        # for the same shortfall.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "module",
+                    direction=Direction.INCREASE,
+                    value=mesh.module.to("mm").magnitude
+                    * sigma
+                    * required_safety_factor
+                    / allowable,
+                    unit="mm",
+                    provenance="σ_c ∝ 1/m at a fixed pinion torque, solved at the margin",
+                )
+            }
+        )
+    return entry
+
+
+def _elastic_coefficient(mesh: SpurGearMesh) -> float:
+    """C_p in √MPa, recovered from the stress the library computes at a unit mesh.
+
+    Written this way rather than as a second copy of the formula: a derivation line that
+    restates an expression the module already owns is the duplication the render-truth gate
+    exists to catch, one level up.
+    """
+    unit_load = Quantity(magnitude=1.0, unit="N")
+    unit_length = Quantity(magnitude=1.0, unit="mm")
+    reference = agma_contact_stress(
+        tangential_load=unit_load,
+        pinion_pitch_diameter=unit_length,
+        face_width=unit_length,
+        geometry_factor=1.0,
+        modulus_pinion=mesh.pinion_modulus,
+        modulus_gear=mesh.gear_modulus,
+    )
+    return reference.to("MPa").magnitude
+
+
+def _contact_ratio_entry(mesh: SpurGearMesh) -> ScorecardEntry:
+    """The transverse contact ratio against the mesh's own declared floor.
+
+    Judged against 1.0 on the *ratio to the declared floor*, not against the stress checks'
+    safety factor: a contact ratio is a geometric threshold for smooth load transfer, and
+    demanding 1.5× of a threshold is demanding a different threshold.
+    """
+    ratio = spur_gear_contact_ratio(
+        module=mesh.module,
+        pinion_teeth=mesh.pinion_teeth,
+        gear_teeth=mesh.gear_teeth,
+        pressure_angle=mesh.pressure_angle,
+    )
+    derivation = Derivation(
+        symbolic="U = m_p/m_min",
+        inputs=(
+            SymbolValue(
+                symbol="m_p",
+                description=(
+                    f"transverse contact ratio of a {mesh.pinion_teeth}/{mesh.gear_teeth} "
+                    f"mesh at {mesh.pressure_angle:g}°"
+                ),
+                value=ratio,
+            ),
+            SymbolValue(
+                symbol="m_min",
+                description="the contact ratio this mesh declares it needs",
+                value=mesh.minimum_contact_ratio,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="U",
+            description="contact ratio as a multiple of the declared floor",
+            value=ratio / mesh.minimum_contact_ratio,
+        ),
+        citation=_CONTACT_RATIO_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "contact ratio", computed=ratio / mesh.minimum_contact_ratio, required=1.0
+    ).model_copy(update={"reference": _CONTACT_RATIO_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # The module is NOT the lever here and this is the interesting part of the check:
+        # the contact ratio is scale-invariant — every length in it is a multiple of m — so
+        # a bigger gear does nothing. What moves it is the tooth form, and a lower pressure
+        # angle raises it monotonically over the whole practical range (swept in
+        # tests/test_machinery_pack.py). Directional and not solved: the closed form runs
+        # through the base-circle geometry and does not invert.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.directional(
+                    "pressure_angle",
+                    direction=Direction.DECREASE,
+                    provenance=(
+                        "contact ratio falls monotonically with pressure angle over "
+                        "14.5°-30°; the module cannot move it at all"
+                    ),
+                )
+            }
+        )
+    return entry
+
+
+def _undercut_entry(mesh: SpurGearMesh) -> ScorecardEntry:
+    """The pinion tooth count against the rack-generation undercut limit."""
+    least = minimum_teeth_to_avoid_undercut(pressure_angle=mesh.pressure_angle)
+    derivation = Derivation(
+        symbolic="U = N₁/N_min",
+        inputs=(
+            SymbolValue(symbol="N₁", description="pinion tooth count", value=mesh.pinion_teeth),
+            SymbolValue(
+                symbol="N_min",
+                description=(
+                    f"fewest teeth that generate without undercut at "
+                    f"{mesh.pressure_angle:g}°, ⌈2·k/sin²φ⌉"
+                ),
+                value=least,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="U",
+            description="pinion teeth as a multiple of the undercut limit",
+            value=mesh.pinion_teeth / least,
+        ),
+        citation=_UNDERCUT_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "undercut", computed=mesh.pinion_teeth / least, required=1.0
+    ).model_copy(update={"reference": _UNDERCUT_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "pinion_teeth",
+                    direction=Direction.INCREASE,
+                    value=float(least),
+                    unit="teeth",
+                    provenance="rack-generation limit ⌈2·k/sin²φ⌉ itself",
+                    whole=True,
+                )
+            }
+        )
+    return entry
+
+
+def screen_gear_mesh(
+    mesh: SpurGearMesh,
+    *,
+    required_safety_factor: float = 1.2,
+) -> Scorecard:
+    """Screen a :class:`SpurGearMesh` for strength, pitting and tooth form, and return its card.
+
+    Screens AGMA tooth-root bending and pitting resistance against
+    ``required_safety_factor`` (1.2, the usual minimum on a rated gear), and the transverse
+    contact ratio and the undercut limit against their own thresholds — a geometric
+    threshold takes no design margin on top. Returns a
+    :class:`~anvilate.scorecard.Scorecard` with a cited entry for each.
+
+    **The four checks are moved by three different parameters.** Bending and pitting both
+    take ``module``, at a second power and a first; the contact ratio is scale-invariant and
+    takes only the pressure angle; and undercut takes the pinion tooth count. A mesh that
+    fails on more than one of them cannot be fixed by moving one number.
+    """
+    return Scorecard(
+        entries=(
+            _bending_entry(mesh, required_safety_factor),
+            _pitting_entry(mesh, required_safety_factor),
+            _contact_ratio_entry(mesh),
+            _undercut_entry(mesh),
         )
     )

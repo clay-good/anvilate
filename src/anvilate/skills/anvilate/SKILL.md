@@ -149,7 +149,7 @@ A failing check MAY carry a `repair_hint` naming the parameter and the direction
 where a design inverse exists it solves for the value that lands at the required margin
 — one call instead of a search. Reach for the inverse before you start guessing sizes.
 
-Not every screen offers one: 26 of the library's 56 screens do, and
+Not every screen offers one: 27 of the library's 57 screens do, and
 `docs/api/repair-levers.txt` records the decision for every one of them. When a check
 carries no hint, read its own numbers and reach for the inverse yourself, as below —
 do not read the silence as "nothing can be done".

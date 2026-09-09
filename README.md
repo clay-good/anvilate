@@ -119,7 +119,7 @@ never a pass. See [screening a document](docs/spec-screening.md).
 
 ## What you can do today
 
-493 runnable examples, each executed in CI so they stay honest. A few:
+494 runnable examples, each executed in CI so they stay honest. A few:
 
 | Run this | What it shows |
 |---|---|
@@ -191,7 +191,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,365 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,383 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -206,7 +206,7 @@ clause it came from.
 | **[Geotechnical](docs/geotechnical-screening.md)** | Rankine earth pressure, Terzaghi bearing capacity, consolidation settlement, retaining-wall stability, slope stability. |
 | **[Hydraulics](docs/hydraulics-screening.md)** | Darcy-Weisbach pipe flow, open-channel Manning flow, pump sizing and affinity laws, differential-pressure metering, fluid statics. |
 | **[Building services](docs/building-services-screening.md)** | A worker's OSHA noise dose, lighting, ventilation, and NEC feeder sizing — where the current comes from the power, the voltage *and* the power factor together, since using the kW figure directly is the classic undersizing. |
-| **[Machinery](docs/machinery-screening.md)** | Rotating shafts on Shigley's three limits at once — static distortion energy, DE-Goodman fatigue and torsional windup. They go as d³, d³ against a different allowable, and d⁴, so they name three different diameters; the worked example's shaft, sized on strength alone, leaves at 28.65 mm and twists five times its allowance. |
+| **[Machinery](docs/machinery-screening.md)** | Rotating shafts and spur gear meshes, each on every limit that sizes them at once. A shaft's three go as d³, d³ against a different allowable, and d⁴, so they name three different diameters; a mesh's four are moved by three different parameters, and its contact ratio cannot be moved by making the gear bigger at all. |
 | **[Masonry](docs/masonry-screening.md)** | TMS 402 allowable-stress design: the gravity check and the out-of-plane one interact, and it is the unity ratio rather than either stress that sizes the wall. |
 | **[Timber](docs/timber-screening.md)** | NDS adjustment factors and the beam stability factor C_L — a 2×12 rafter with 42% in hand on bending stress has C_L = 0.402 unbraced, and one strut at midspan is not enough. |
 | **[Cold-formed steel](docs/cold-formed-steel.md)** | AISI S100 effective width and the Direct Strength Method — one lipped channel at three unbraced lengths governs in three *different* buckling modes, and a thicker web fixes the first while doing nothing for the third. |
