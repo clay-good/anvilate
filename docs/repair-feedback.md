@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 55 public screens.
-There are 33 levers across 21 of them, and 34 recorded as having none yet — each
+There are 34 levers across 22 of them, and 33 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -92,6 +92,7 @@ owes the reader:
 | `screen_lighting` | lighting power density | `input_watts_per_luminaire` ↓ | solved — the lever the other check does not fight |
 | `screen_pump_duty` | motor rating, NPSH | `motor_rating` ↑, `npsh_available` ↑ | solved — the duty's shaft power, the pump's required NPSH |
 | `screen_noise_exposure` | noise dose | `exposure_duration` ↓ | solved — the permissible time at the combined level |
+| `screen_cover_plate` | plate bending, flatness | `thickness` ↑ | solved — **twice**, at two different powers |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -105,6 +106,12 @@ The two plate rows are the case where the levers differ *between entries on one 
 shear yielding is checked on the gross section and rupture through the holes, so a hint
 that named one area for both would tell a detailer to grow the wrong thing — a wrong
 answer, not a vague one.
+
+The cover plate is the case where **one lever solves to two different numbers**. A plate's
+peak stress goes as 1/t² and its centre deflection as 1/t³, so the bending check asks for
+t·√(required/SF) and the flatness check for t·(δ/limit)^(1/3) — and the flatness one has no
+safety factor to scale from at all, because a deflection check is a length against a
+length. The cover needs the larger; a card publishing one would leave the other failing.
 
 The two lighting rows are the case where the checks **pull in opposite directions on the
 same knob**. Illuminance rises with the luminaire count and so does the power density, so a

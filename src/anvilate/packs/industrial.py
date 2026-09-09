@@ -35,7 +35,7 @@ from ..analysis import (
     strength_scorecard,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard
 from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
 from ._guarded import DESIGN_BASIS, GuardedInputs, design_allowable, disclosed
@@ -251,15 +251,30 @@ def screen_cover_plate(
             ),
             citation=reference,
         )
-    entries = [
-        strength_scorecard(
-            f"{plate.name} plate bending",
-            stress=result.max_bending_stress,
-            allowable=plate_allowable.quantity,
-            required=required_safety_factor,
-            unavailable_detail=plate_allowable.note,
-        ).model_copy(update=bending_update)
-    ]
+    bending = strength_scorecard(
+        f"{plate.name} plate bending",
+        stress=result.max_bending_stress,
+        allowable=plate_allowable.quantity,
+        required=required_safety_factor,
+        unavailable_detail=plate_allowable.note,
+    ).model_copy(update=bending_update)
+    if bending.status is CheckStatus.FAIL and bending.safety_factor:
+        # Peak stress goes as 1/t², so the safety factor goes as t² and the thickness that
+        # reaches the margin is t·√(required/SF). The flatness check below solves the same
+        # lever to a different answer, because its own power is 3.
+        bending = bending.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "thickness",
+                    direction=Direction.INCREASE,
+                    value=plate.thickness.to("mm").magnitude
+                    * (required_safety_factor / bending.safety_factor) ** 0.5,
+                    unit="mm",
+                    provenance="peak bending stress, which goes as 1/t²",
+                )
+            }
+        )
+    entries = [bending]
     if plate.deflection_limit is not None:
         flatness_update: dict = {"reference": reference}
         deflection_work = result.deflection_derivation(reference)
@@ -267,13 +282,37 @@ def screen_cover_plate(
             flatness_update["derivation"] = deflection_work
         else:
             flatness_update["underived"] = result.underived
-        entries.append(
-            deflection_scorecard(
-                f"{plate.name} flatness",
-                deflection=result.max_deflection,
-                limit=plate.deflection_limit,
-            ).model_copy(update=flatness_update)
-        )
+        flatness = deflection_scorecard(
+            f"{plate.name} flatness",
+            deflection=result.max_deflection,
+            limit=plate.deflection_limit,
+        ).model_copy(update=flatness_update)
+        if flatness.status is CheckStatus.FAIL:
+            # The lever is the same thickness the bending check names, and the POWER is
+            # not: a plate's peak stress goes as 1/t² and its centre deflection as 1/t³.
+            # (Measured, not assumed — halving the thickness of this cover multiplies the
+            # stress by exactly 4 and the deflection by exactly 8.) So the two checks solve
+            # to different thicknesses off the same plate, and the cover needs the larger.
+            #
+            # This one has no safety factor to scale from — a deflection check is a length
+            # against a length — so the ratio comes from the deflection and the limit.
+            flatness = flatness.model_copy(
+                update={
+                    "repair_hint": RepairHint.solved(
+                        "thickness",
+                        direction=Direction.INCREASE,
+                        value=plate.thickness.to("mm").magnitude
+                        * (
+                            result.max_deflection.to("mm").magnitude
+                            / plate.deflection_limit.to("mm").magnitude
+                        )
+                        ** (1.0 / 3.0),
+                        unit="mm",
+                        provenance="centre deflection, which goes as 1/t³",
+                    )
+                }
+            )
+        entries.append(flatness)
     if plate.min_frequency is not None:
         mass_per_area = Quantity(
             magnitude=record.density.quantity.to("kg/m**3").magnitude

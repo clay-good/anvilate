@@ -44,6 +44,7 @@ geotechnical.screen_shallow_footing -> width (directional)
 hydraulics.screen_pipe_run -> available_head (solved)
 hydraulics.screen_pump_duty -> motor_rating (solved)
 hydraulics.screen_pump_duty -> npsh_available (solved)
+industrial.screen_cover_plate -> thickness (solved)
 lighting.screen_lighting -> input_watts_per_luminaire (solved)
 lighting.screen_lighting -> luminaire_count (solved)
 masonry.screen_masonry_wall -> axial_stress (solved)
@@ -81,7 +82,6 @@ fatigue.goodman_scorecard
 fatigue.soderberg_scorecard
 fatigue.weld_fatigue_scorecard
 fracture.fad_scorecard
-industrial.screen_cover_plate
 lifting_device.bth1_fatigue_scorecard
 lifting_device.bth1_member_scorecard
 lifting_device.bth1_pin_plate_scorecard

@@ -66,6 +66,59 @@ def test_circular_covers_dispatch_by_edge_condition():
     assert clamped.entries[0].reference == "Timoshenko plate theory"
 
 
+def test_one_lever_two_powers_and_the_cover_needs_the_larger():
+    """Both checks name the thickness, and they solve to DIFFERENT thicknesses.
+
+    A plate's peak stress goes as 1/t² and its centre deflection as 1/t³ — measured here,
+    not assumed — so the bending check asks for t·√(required/SF) and the flatness check for
+    t·(δ/limit)^(1/3). The flatness one has no safety factor to scale from at all: a
+    deflection check is a length against a length.
+
+    The cover needs the larger of the two, and this asserts that the smaller one leaves the
+    other check failing, which is why both are published rather than the governing one.
+    """
+    from anvilate.scorecard import Direction
+
+    def cover(thickness: str) -> CoverPlate:
+        return _rect(
+            PlateEdge.CLAMPED,
+            pressure=_q("0.35 MPa"),
+            thickness=_q(thickness),
+            length=_q("600 mm"),
+            width=_q("400 mm"),
+            deflection_limit=_q("1.2 mm"),
+        )
+
+    card = screen_cover_plate(cover("6 mm"), required_safety_factor=1.5)
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert all(e.status is CheckStatus.FAIL for e in card.entries)
+    assert {h.parameter for h in hints.values()} == {"thickness"}
+    assert all(h.direction is Direction.INCREASE for h in hints.values())
+    assert hints["cover flatness"].corrective_value != pytest.approx(
+        hints["cover plate bending"].corrective_value, rel=1e-3
+    ), "one power for both would make these the same number"
+
+    # The powers themselves, off the ratio each hint implies.
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert hints["cover plate bending"].corrective_value == pytest.approx(
+        6.0 * (1.5 / bending.safety_factor) ** 0.5, rel=1e-9
+    )
+
+    governing = max(h.corrective_value for h in hints.values())
+    repaired = screen_cover_plate(cover(f"{governing} mm"), required_safety_factor=1.5)
+    assert all(e.status is CheckStatus.PASS for e in repaired.entries)
+    assert all(e.repair_hint is None for e in repaired.entries)
+
+    # At the SMALLER of the two answers the other check is still failing.
+    partial = screen_cover_plate(
+        cover(f"{min(h.corrective_value for h in hints.values())} mm"),
+        required_safety_factor=1.5,
+    )
+    statuses = {e.name: e.status for e in partial.entries}
+    assert statuses["cover flatness"] is CheckStatus.PASS
+    assert statuses["cover plate bending"] is CheckStatus.FAIL
+
+
 def test_deflection_limit_adds_the_flatness_screen():
     # Without a limit there is one entry; with a 2 mm limit the SS cover's
     # 3.21 mm centre deflection fails the flatness screen.
