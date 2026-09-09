@@ -32,6 +32,7 @@
 
 ## round-tripped
 accumulator.accumulator_size_for_volume -> accumulator.accumulator_usable_volume
+acoustics.doppler_velocity_from_shift -> acoustics.doppler_shifted_frequency
 antenna.dish_diameter_for_gain -> antenna.aperture_antenna_gain
 axial.required_axial_area -> axial.axial_stress
 beam.aisc_bearing_length_for_web_yielding -> beam.aisc_web_local_yielding_strength
@@ -44,11 +45,14 @@ centrifugal_casting.centrifugal_speed_for_g_factor -> centrifugal_casting.centri
 chain.minimum_sprocket_teeth_for_chordal_variation -> chain.chordal_speed_variation
 clutch.disc_clutch_force_for_torque -> clutch.disc_clutch_torque
 column.euler_second_moment_for_load -> column.euler_buckling_load
+combustion.equivalence_ratio_from_excess_air -> combustion.equivalence_ratio
 control_valve.required_flow_coefficient -> control_valve.valve_flow_rate
 conveyor.belt_speed_for_capacity -> conveyor.conveyor_mass_flow
+cyclotron.cyclotron_mass_from_frequency -> cyclotron.cyclotron_frequency
 dc_dc_converter.boost_duty_cycle_for_output -> dc_dc_converter.boost_output_voltage
 dc_dc_converter.buck_boost_duty_cycle_for_output -> dc_dc_converter.buck_boost_output_voltage
 dc_dc_converter.buck_duty_cycle_for_output -> dc_dc_converter.buck_output_voltage
+dynamics.damping_ratio_from_half_power_bandwidth -> dynamics.quality_factor
 dynamics.damping_ratio_from_log_decrement -> dynamics.logarithmic_decrement
 dynamics.isolator_natural_frequency_for_transmissibility -> dynamics.transmissibility
 dynamics.isolator_static_deflection_for_transmissibility -> dynamics.transmissibility
@@ -56,6 +60,7 @@ dynamics.natural_frequency_from_deflection -> dynamics.natural_frequency
 electrical.line_current_for_power -> electrical.three_phase_power
 electroplating.electroplating_time_for_thickness -> electroplating.electroplating_deposition_thickness
 energy_storage.current_from_c_rate -> energy_storage.c_rate
+energy_storage.discharge_time_from_c_rate -> energy_storage.c_rate
 fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
 fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
 fastener.torque_for_preload -> fastener.bolt_preload_from_torque
@@ -67,23 +72,31 @@ gaussian_beam.beam_waist_for_divergence -> gaussian_beam.beam_divergence_half_an
 gear.agma_module_for_bending_stress -> gear.agma_bending_stress
 gear.gear_module_for_center_distance -> gear.gear_center_distance
 gear.lewis_module_for_bending_stress -> gear.lewis_bending_stress
+hall_effect.hall_flux_density_from_voltage -> hall_effect.hall_voltage
 hydro_power.hydro_flow_for_power -> hydro_power.hydro_turbine_power
 interference.interference_for_contact_pressure -> interference.interference_fit
 keys.key_length_for_torque -> keys.key_shear_stress
 level_turn.bank_angle_for_load_factor -> level_turn.load_factor_from_bank_angle
 level_turn.bank_angle_for_turn_rate -> level_turn.turn_rate
+level_turn.load_factor_from_bank_angle -> level_turn.bank_angle_for_load_factor
 machining.feed_for_surface_roughness -> machining.theoretical_surface_roughness
 machining.spindle_speed_for_cutting_speed -> machining.cutting_speed
 mass_energy.mass_from_energy -> mass_energy.rest_energy
+momentum.coefficient_of_restitution_from_rebound -> momentum.rebound_height
 open_channel.minimum_specific_energy_rectangular -> open_channel.specific_energy
+optical_interference.wavelength_from_fringe_spacing -> optical_interference.double_slit_fringe_spacing
+photometry.luminous_flux_from_power -> photometry.luminous_efficacy
 photon.photon_wavelength_from_energy -> photon.photon_energy
 piezoelectric.piezoelectric_force_from_charge -> piezoelectric.piezoelectric_charge
 pipe_flow.hagen_poiseuille_radius_for_flow -> pipe_flow.hagen_poiseuille_flow_rate
 plate.clamped_circular_plate_thickness_for_pressure -> plate.clamped_circular_plate_uniform_load
+polarization.malus_angle_for_intensity -> polarization.malus_transmitted_intensity
 pressure_vessel.asme_b313_pipe_wall_thickness -> pressure_vessel.asme_b313_pipe_pressure
 pressure_vessel.thin_wall_thickness_for_pressure -> pressure_vessel.thin_wall_cylinder
 projectile.projectile_launch_angle_for_range -> projectile.projectile_range
+radar.radial_velocity_from_doppler -> radar.radar_doppler_shift
 radiation_shielding.shield_thickness_for_transmission -> radiation_shielding.radiation_transmission_fraction
+radioactivity.decay_constant_from_half_life -> radioactivity.remaining_activity
 radioactivity.time_for_activity_decay -> radioactivity.remaining_activity
 reactive_circuit.capacitance_for_reactance -> reactive_circuit.capacitive_reactance
 reactive_circuit.inductance_for_reactance -> reactive_circuit.inductive_reactance
@@ -96,16 +109,21 @@ screw_conveyor.screw_conveyor_speed_for_capacity -> screw_conveyor.screw_conveyo
 section.required_section_modulus -> section.bending_stress
 spectroscopy.concentration_from_absorbance -> spectroscopy.absorbance
 spring.helical_spring_active_coils_for_rate -> spring.helical_spring_rate
+strain_gauge.strain_from_bridge_output -> strain_gauge.wheatstone_bridge_output
 thermal.counterflow_ntu_for_effectiveness -> thermal.counterflow_effectiveness
 thermal.fin_array_count_for_resistance -> thermal.fin_array_thermal_resistance
 thermal.heat_exchanger_area_for_duty -> thermal.heat_exchanger_duty
 thermal.parallel_flow_ntu_for_effectiveness -> thermal.parallel_flow_effectiveness
 thermal.shell_and_tube_ntu_for_effectiveness -> thermal.shell_and_tube_effectiveness
 thermal.wien_temperature_from_peak -> thermal.wien_peak_wavelength
+torsion.power_from_torque -> torsion.torque_from_power
 torsion.shaft_diameter_for_bending_torsion -> torsion.shaft_von_mises_stress
 torsion.shaft_diameter_for_torque -> torsion.shaft_torsional_stress
+torsion.torque_from_power -> torsion.power_from_torque
 transmission_line.reflection_coefficient_from_vswr -> transmission_line.voltage_standing_wave_ratio
 ventilation.airflow_for_air_changes -> ventilation.air_changes_per_hour
+wave.frequency_from_wavelength -> wave.wave_speed
+wave.wavelength_from_frequency -> wave.wave_speed
 wear.sliding_distance_for_wear_depth -> wear.archard_wear_depth
 weld.fillet_weld_leg_for_load -> weld.fillet_weld_throat_stress
 welding_heat.weld_travel_speed_for_heat_input -> welding_heat.weld_heat_input
@@ -113,7 +131,6 @@ wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bend
 
 ## not yet paired (each is a candidate by name; some are conversions, not design inverses)
 acid_base.buffer_ratio_for_ph
-acoustics.doppler_velocity_from_shift
 acoustics.sound_power_level_from_intensity
 acoustics.sound_pressure_from_power_level
 antenna.max_line_of_sight_range
@@ -123,54 +140,42 @@ belt.belt_speed_for_max_power
 boiling.minimum_film_boiling_heat_flux
 bulk_solids.beverloo_orifice_for_rate
 casting.riser_modulus_for_feeding
-combustion.equivalence_ratio_from_excess_air
 combustion.excess_air_from_flue_oxygen
 composite.fiber_volume_fraction_from_weight_fraction
-cyclotron.cyclotron_mass_from_frequency
 data_converter.oversampling_ratio_for_bits
 dc_dc_converter.buck_minimum_inductance_for_ccm
 drilling.drilling_feed_for_torque_limit
 dynamics.angular_acceleration_from_torque
-dynamics.damping_ratio_from_half_power_bandwidth
 dynamics.quality_factor_from_half_power_bandwidth
 elastic_constants.bulk_modulus_from_youngs_poisson
 elastic_constants.youngs_modulus_from_bulk_shear
 electrical.capacitance_for_reactive_power
-energy_storage.discharge_time_from_c_rate
 exergy.irreversibility_from_entropy_generation
 fastener.bolt_preload_from_torque
 gear.minimum_teeth_to_avoid_undercut
 gear.profile_shift_sum_for_center_distance
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.required_spread_footing_area
-hall_effect.hall_flux_density_from_voltage
 hall_petch.hall_petch_grain_diameter_for_yield
 illumination.illuminance_for_target_luminance
 injection_molding.max_projected_area_for_clamp
 isentropic_efficiency.compressor_isentropic_from_polytropic
 isentropic_efficiency.turbine_isentropic_from_polytropic
-level_turn.load_factor_from_bank_angle
 lifting_device.service_class_for_cycles
 living_hinge.living_hinge_web_length_for_strain
-momentum.coefficient_of_restitution_from_rebound
 noise_figure.noise_factor_from_figure
 op_amp.rise_time_from_bandwidth
-optical_interference.wavelength_from_fringe_spacing
 orbital_mechanics.semi_major_axis_from_apsides
 packed_bed.minimum_fluidization_velocity
-photometry.luminous_flux_from_power
 plate.base_plate_thickness_for_bearing
 pneumatics.air_receiver_volume_for_demand
-polarization.malus_angle_for_intensity
 projectile.projectile_range_from_height
 quantum.minimum_energy_uncertainty
 quantum.minimum_momentum_uncertainty
 quantum.minimum_position_uncertainty
 radar.max_unambiguous_range
 radar.max_unambiguous_velocity
-radar.radial_velocity_from_doppler
 radiation_pressure.radiation_pressure_from_intensity
-radioactivity.decay_constant_from_half_life
 reaction_kinetics.first_order_time_for_conversion
 resistance_welding.spot_weld_current_for_heat
 road_curve.minimum_curve_radius
@@ -180,14 +185,9 @@ shot_peening.peening_time_for_coverage
 solar_pv.pv_array_size_for_load
 spectroscopy.transmittance_from_absorbance
 strain_gauge.gauge_strain_from_resistance
-strain_gauge.strain_from_bridge_output
 stress.max_shear_stress_plane
 temperature_sensor.thermocouple_temperature_from_voltage
 thermal.fouling_factor_from_coefficients
 thermal.heat_exchanger_effectiveness_from_temperatures
 thermoforming.thermoforming_sheet_gauge_for_wall
 torsion.hollow_shaft_diameter_for_bending_torsion
-torsion.power_from_torque
-torsion.torque_from_power
-wave.frequency_from_wavelength
-wave.wavelength_from_frequency

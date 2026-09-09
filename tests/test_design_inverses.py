@@ -109,6 +109,24 @@ ROUND_TRIPPED = frozenset(
         "pipe_flow.hagen_poiseuille_radius_for_flow",
         "thermal.wien_temperature_from_peak",
         "piezoelectric.piezoelectric_force_from_charge",
+        "wave.frequency_from_wavelength",
+        "wave.wavelength_from_frequency",
+        "torsion.torque_from_power",
+        "torsion.power_from_torque",
+        "level_turn.load_factor_from_bank_angle",
+        "momentum.coefficient_of_restitution_from_rebound",
+        "radar.radial_velocity_from_doppler",
+        "acoustics.doppler_velocity_from_shift",
+        "optical_interference.wavelength_from_fringe_spacing",
+        "hall_effect.hall_flux_density_from_voltage",
+        "cyclotron.cyclotron_mass_from_frequency",
+        "polarization.malus_angle_for_intensity",
+        "strain_gauge.strain_from_bridge_output",
+        "photometry.luminous_flux_from_power",
+        "combustion.equivalence_ratio_from_excess_air",
+        "dynamics.damping_ratio_from_half_power_bandwidth",
+        "radioactivity.decay_constant_from_half_life",
+        "energy_storage.discharge_time_from_c_rate",
     }
 )
 
@@ -1405,3 +1423,250 @@ def test_piezoelectric_force_from_charge_lands_the_charge():
     assert piezoelectric_charge(force=force, charge_coefficient=coefficient).to(
         "nC"
     ).magnitude == pytest.approx(target.to("nC").magnitude, rel=1e-12)
+
+
+def test_frequency_from_wavelength_lands_the_wave_speed():
+    from anvilate.analysis import frequency_from_wavelength, wave_speed
+
+    medium, wavelength = _q("1500 m/s"), _q("3 m")
+    frequency = frequency_from_wavelength(wavelength=wavelength, wave_speed=medium)
+    assert wave_speed(frequency=frequency, wavelength=wavelength).to(
+        "m/s"
+    ).magnitude == pytest.approx(medium.to("m/s").magnitude, rel=1e-12)
+
+
+def test_wavelength_from_frequency_lands_the_wave_speed():
+    from anvilate.analysis import wave_speed, wavelength_from_frequency
+
+    medium, frequency = _q("343 m/s"), _q("440 Hz")
+    wavelength = wavelength_from_frequency(frequency=frequency, wave_speed=medium)
+    assert wave_speed(frequency=frequency, wavelength=wavelength).to(
+        "m/s"
+    ).magnitude == pytest.approx(medium.to("m/s").magnitude, rel=1e-12)
+    # Wavelength is inverse in frequency at a fixed speed: an octave up is half as long.
+    octave = wavelength_from_frequency(frequency=_q("880 Hz"), wave_speed=medium)
+    assert octave.to("mm").magnitude == pytest.approx(
+        0.5 * wavelength.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_torque_from_power_and_power_from_torque_invert_each_other():
+    """The two halves of P = T·ω are each other's forward, so the pair is round-tripped in
+    both directions — an error in either one alone breaks both assertions."""
+    from anvilate.analysis import power_from_torque, torque_from_power
+
+    speed = _q("1750 rpm")
+    power = _q("15 kW")
+    torque = torque_from_power(power=power, rotational_speed=speed)
+    assert power_from_torque(torque=torque, rotational_speed=speed).to(
+        "kW"
+    ).magnitude == pytest.approx(power.to("kW").magnitude, rel=1e-12)
+
+    delivered = power_from_torque(torque=_q("80 N*m"), rotational_speed=speed)
+    assert torque_from_power(power=delivered, rotational_speed=speed).to(
+        "N*m"
+    ).magnitude == pytest.approx(80.0, rel=1e-12)
+    # Torque for a fixed power goes inversely with speed: half the shaft speed, twice the torque.
+    halved = torque_from_power(power=power, rotational_speed=_q("875 rpm"))
+    assert halved.to("N*m").magnitude == pytest.approx(2.0 * torque.to("N*m").magnitude, rel=1e-12)
+
+
+def test_load_factor_from_bank_angle_lands_the_bank_angle():
+    """Both halves speak degrees, not radians — a 60 degree bank is the textbook 2 g, and
+    reading the pair in radians would have it at 1.0001 g and still round-trip."""
+    from anvilate.analysis import bank_angle_for_load_factor, load_factor_from_bank_angle
+
+    bank = 60.0
+    load_factor = load_factor_from_bank_angle(bank_angle=bank)
+    assert load_factor == pytest.approx(2.0, rel=1e-12)
+    assert bank_angle_for_load_factor(load_factor=load_factor) == pytest.approx(bank, rel=1e-12)
+
+
+def test_coefficient_of_restitution_from_rebound_lands_the_rebound_height():
+    from anvilate.analysis import coefficient_of_restitution_from_rebound, rebound_height
+
+    drop, bounce = _q("1.2 m"), _q("0.75 m")
+    restitution = coefficient_of_restitution_from_rebound(drop_height=drop, rebound_height=bounce)
+    assert rebound_height(drop_height=drop, coefficient_of_restitution=restitution).to(
+        "mm"
+    ).magnitude == pytest.approx(bounce.to("mm").magnitude, rel=1e-12)
+
+
+def test_radial_velocity_from_doppler_lands_the_doppler_shift():
+    from anvilate.analysis import radar_doppler_shift, radial_velocity_from_doppler
+
+    transmit, shift = _q("10 GHz"), _q("1.5 kHz")
+    velocity = radial_velocity_from_doppler(transmit_frequency=transmit, doppler_shift=shift)
+    assert radar_doppler_shift(transmit_frequency=transmit, radial_velocity=velocity).to(
+        "kHz"
+    ).magnitude == pytest.approx(shift.to("kHz").magnitude, rel=1e-12)
+
+
+def test_doppler_velocity_from_shift_lands_the_shifted_frequency():
+    """The acoustic inverse solves for the SOURCE speed with the observer at rest, so the
+    forward has to be called with a zero observer velocity for the pair to close."""
+    from anvilate.analysis import doppler_shifted_frequency, doppler_velocity_from_shift
+
+    emitted, heard, sound = _q("1000 Hz"), _q("1080 Hz"), _q("343 m/s")
+    source_speed = doppler_velocity_from_shift(
+        source_frequency=emitted, observed_frequency=heard, speed_of_sound=sound
+    )
+    assert doppler_shifted_frequency(
+        source_frequency=emitted,
+        speed_of_sound=sound,
+        source_velocity=source_speed,
+        observer_velocity=_q("0 m/s"),
+    ).to("Hz").magnitude == pytest.approx(heard.to("Hz").magnitude, rel=1e-12)
+    # A pitch drop is a receding source, so the recovered closing speed is negative.
+    receding = doppler_velocity_from_shift(
+        source_frequency=emitted, observed_frequency=_q("940 Hz"), speed_of_sound=sound
+    )
+    assert receding.to("m/s").magnitude < 0.0
+
+
+def test_wavelength_from_fringe_spacing_lands_the_fringe_spacing():
+    from anvilate.analysis import double_slit_fringe_spacing, wavelength_from_fringe_spacing
+
+    bench = {"slit_separation": _q("0.25 mm"), "screen_distance": _q("1.8 m")}
+    spacing = _q("4.2 mm")
+    wavelength = wavelength_from_fringe_spacing(fringe_spacing=spacing, **bench)
+    assert double_slit_fringe_spacing(wavelength=wavelength, **bench).to(
+        "mm"
+    ).magnitude == pytest.approx(spacing.to("mm").magnitude, rel=1e-12)
+
+
+def test_hall_flux_density_from_voltage_lands_the_hall_voltage():
+    from anvilate.analysis import hall_flux_density_from_voltage, hall_voltage
+
+    element = {
+        "current": _q("5 mA"),
+        "carrier_density": _q("1e22 1/m**3"),
+        "thickness": _q("50 um"),
+    }
+    reading = _q("2.4 mV")
+    flux = hall_flux_density_from_voltage(hall_voltage=reading, **element)
+    assert hall_voltage(flux_density=flux, **element).to("mV").magnitude == pytest.approx(
+        reading.to("mV").magnitude, rel=1e-12
+    )
+
+
+def test_cyclotron_mass_from_frequency_lands_the_cyclotron_frequency():
+    from anvilate.analysis import cyclotron_frequency, cyclotron_mass_from_frequency
+
+    ion = {"charge": _q("1.602176634e-19 C"), "magnetic_flux_density": _q("7 T")}
+    orbit = _q("1.2 MHz")
+    mass = cyclotron_mass_from_frequency(frequency=orbit, **ion)
+    assert cyclotron_frequency(mass=mass, **ion).to("MHz").magnitude == pytest.approx(
+        orbit.to("MHz").magnitude, rel=1e-12
+    )
+
+
+def test_malus_angle_for_intensity_lands_the_transmitted_intensity():
+    """arccos has two roots per period; the inverse must return the one in [0, pi/2] that
+    an analyzer is actually set to, and the forward has to land on it."""
+    from math import pi
+
+    from anvilate.analysis import malus_angle_for_intensity, malus_transmitted_intensity
+
+    incident, target = _q("10 W/m**2"), _q("2.5 W/m**2")
+    angle = malus_angle_for_intensity(incident_intensity=incident, transmitted_intensity=target)
+    assert 0.0 <= angle <= pi / 2.0
+    assert angle == pytest.approx(pi / 3.0, rel=1e-12)
+    assert malus_transmitted_intensity(incident_intensity=incident, angle=angle).to(
+        "W/m**2"
+    ).magnitude == pytest.approx(target.to("W/m**2").magnitude, rel=1e-12)
+
+
+def test_strain_from_bridge_output_lands_the_bridge_reading():
+    from anvilate.analysis import strain_from_bridge_output, wheatstone_bridge_output
+
+    bridge = {"gauge_factor": 2.1, "active_arms": 2}
+    reading = 1.4e-3
+    strain = strain_from_bridge_output(output_ratio=reading, **bridge)
+    assert wheatstone_bridge_output(strain=strain, **bridge) == pytest.approx(reading, rel=1e-12)
+    # The arm count is load-bearing: a full bridge reads the same strain at half the microstrain.
+    full = strain_from_bridge_output(output_ratio=reading, gauge_factor=2.1, active_arms=4)
+    assert full == pytest.approx(0.5 * strain, rel=1e-12)
+
+
+def test_luminous_flux_from_power_lands_the_efficacy():
+    from anvilate.analysis import luminous_efficacy, luminous_flux_from_power
+
+    power, efficacy = _q("18 W"), _q("115 lm/W")
+    flux = luminous_flux_from_power(electrical_power=power, luminous_efficacy=efficacy)
+    assert luminous_efficacy(luminous_flux=flux, electrical_power=power).to(
+        "lm/W"
+    ).magnitude == pytest.approx(efficacy.to("lm/W").magnitude, rel=1e-12)
+
+
+def test_equivalence_ratio_from_excess_air_lands_the_air_fuel_equivalence_ratio():
+    """The excess-air form and the air-fuel-ratio form must agree, and the actual ratio is
+    taken from the public sibling rather than rebuilt as stoich*(1 + EA) here."""
+    from anvilate.analysis import (
+        actual_air_fuel_ratio,
+        equivalence_ratio,
+        equivalence_ratio_from_excess_air,
+    )
+
+    stoichiometric, excess_air = 17.2, 0.2
+    phi = equivalence_ratio_from_excess_air(excess_air_fraction=excess_air)
+    actual = actual_air_fuel_ratio(
+        stoichiometric_air_fuel_ratio=stoichiometric, excess_air_fraction=excess_air
+    )
+    assert equivalence_ratio(
+        stoichiometric_air_fuel_ratio=stoichiometric, actual_air_fuel_ratio=actual
+    ) == pytest.approx(phi, rel=1e-12)
+    # No excess air is stoichiometric, whichever way it is stated.
+    assert equivalence_ratio_from_excess_air(excess_air_fraction=0.0) == pytest.approx(1.0)
+
+
+def test_damping_ratio_from_half_power_bandwidth_lands_the_quality_factor():
+    """The half-power measurement gives Q and zeta from the same two frequencies, and the
+    two readings have to be the same resonance: Q = 1/(2*zeta)."""
+    from anvilate.analysis import (
+        damping_ratio_from_half_power_bandwidth,
+        quality_factor,
+        quality_factor_from_half_power_bandwidth,
+    )
+
+    peak = {"resonant_frequency": _q("25 Hz"), "half_power_bandwidth": _q("1.2 Hz")}
+    zeta = damping_ratio_from_half_power_bandwidth(**peak)
+    assert quality_factor(damping_ratio=zeta) == pytest.approx(
+        quality_factor_from_half_power_bandwidth(**peak), rel=1e-12
+    )
+
+
+def test_decay_constant_from_half_life_lands_the_mean_lifetime_activity():
+    """The decay constant is the reciprocal of the mean lifetime, so at t = 1/lambda the
+    decay law must have taken the source to exactly A0/e."""
+    from math import e
+
+    from anvilate.analysis import decay_constant_from_half_life, remaining_activity
+
+    half_life = _q("5.27 year")
+    decay_constant = decay_constant_from_half_life(half_life=half_life)
+    mean_lifetime = Quantity(
+        magnitude=1.0 / decay_constant.to("1/s").magnitude,
+        unit="s",
+    )
+    initial = _q("40 GBq")
+    assert remaining_activity(
+        initial_activity=initial, elapsed_time=mean_lifetime, half_life=half_life
+    ).to("GBq").magnitude == pytest.approx(initial.to("GBq").magnitude / e, rel=1e-12)
+
+
+def test_discharge_time_from_c_rate_lands_the_rated_capacity():
+    """The ideal runtime is the time in which the C-rate current removes exactly the rated
+    capacity, so the charge drawn over it reads back as the same C-rate."""
+    from anvilate.analysis import c_rate, current_from_c_rate, discharge_time_from_c_rate
+
+    capacity = _q("100 A*h")
+    rate = 0.5
+    runtime = discharge_time_from_c_rate(c_rate=rate)
+    current = current_from_c_rate(c_rate=rate, capacity=capacity)
+    drawn = Quantity(
+        magnitude=current.to("A").magnitude * runtime.to("hour").magnitude,
+        unit="A*h",
+    )
+    assert drawn.to("A*h").magnitude == pytest.approx(capacity.to("A*h").magnitude, rel=1e-12)
+    assert c_rate(current=current, capacity=drawn) == pytest.approx(rate, rel=1e-12)
