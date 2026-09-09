@@ -127,6 +127,22 @@ ROUND_TRIPPED = frozenset(
         "dynamics.damping_ratio_from_half_power_bandwidth",
         "radioactivity.decay_constant_from_half_life",
         "energy_storage.discharge_time_from_c_rate",
+        "acid_base.buffer_ratio_for_ph",
+        "bulk_solids.beverloo_orifice_for_rate",
+        "drilling.drilling_feed_for_torque_limit",
+        "hall_petch.hall_petch_grain_diameter_for_yield",
+        "illumination.illuminance_for_target_luminance",
+        "injection_molding.max_projected_area_for_clamp",
+        "living_hinge.living_hinge_web_length_for_strain",
+        "pneumatics.air_receiver_volume_for_demand",
+        "resistance_welding.spot_weld_current_for_heat",
+        "shear_spinning.shear_spinning_half_angle_for_thickness",
+        "shot_peening.peening_time_for_coverage",
+        "solar_pv.pv_array_size_for_load",
+        "temperature_sensor.thermocouple_temperature_from_voltage",
+        "thermoforming.thermoforming_sheet_gauge_for_wall",
+        "quantum.minimum_position_uncertainty",
+        "electrical.capacitance_for_reactive_power",
     }
 )
 
@@ -1670,3 +1686,245 @@ def test_discharge_time_from_c_rate_lands_the_rated_capacity():
     )
     assert drawn.to("A*h").magnitude == pytest.approx(capacity.to("A*h").magnitude, rel=1e-12)
     assert c_rate(current=current, capacity=drawn) == pytest.approx(rate, rel=1e-12)
+
+
+def test_buffer_ratio_for_ph_lands_the_henderson_hasselbalch_ph():
+    """The inverse returns a RATIO, so the round trip picks an acid concentration and
+    scales it — which is what the ratio means, not a rebuild of the formula."""
+    from anvilate.analysis import buffer_ratio_for_ph, henderson_hasselbalch_ph
+
+    pka, target = 4.76, 5.5
+    ratio = buffer_ratio_for_ph(pka=pka, ph=target)
+    acid = _q("0.1 mol/L")
+    base = Quantity(magnitude=ratio * acid.to("mol/L").magnitude, unit="mol/L")
+    assert henderson_hasselbalch_ph(
+        pka=pka, conjugate_base_concentration=base, weak_acid_concentration=acid
+    ) == pytest.approx(target, rel=1e-12)
+    # A pH at the pKa is the 1:1 buffer, whatever the acid.
+    assert buffer_ratio_for_ph(pka=pka, ph=pka) == pytest.approx(1.0, rel=1e-12)
+
+
+def test_beverloo_orifice_for_rate_lands_the_discharge_rate():
+    from anvilate.analysis import beverloo_discharge_rate, beverloo_orifice_for_rate
+
+    material = {"particle_diameter": _q("3 mm"), "bulk_density": _q("780 kg/m**3")}
+    target = _q("2.5 kg/s")
+    orifice = beverloo_orifice_for_rate(mass_flow=target, **material)
+    assert beverloo_discharge_rate(orifice_diameter=orifice, **material).to(
+        "kg/s"
+    ).magnitude == pytest.approx(target.to("kg/s").magnitude, rel=1e-12)
+    # The shape factor is not decoration: it moves the answer, so it must be carried.
+    blunt = beverloo_orifice_for_rate(mass_flow=target, shape_factor=2.0, **material)
+    assert blunt.to("mm").magnitude > orifice.to("mm").magnitude
+
+
+def test_drilling_feed_for_torque_limit_lands_the_torque_limit():
+    from anvilate.analysis import drilling_feed_for_torque_limit, drilling_torque
+
+    job = {"specific_cutting_energy": _q("2.1 GPa"), "drill_diameter": _q("12 mm")}
+    limit = _q("18 N*m")
+    feed = drilling_feed_for_torque_limit(torque_limit=limit, **job)
+    assert drilling_torque(feed_per_revolution=feed, **job).to("N*m").magnitude == pytest.approx(
+        limit.to("N*m").magnitude, rel=1e-12
+    )
+    # The d**2 is the whole point: twice the drill, a quarter of the feed at the same torque.
+    bigger = drilling_feed_for_torque_limit(
+        torque_limit=limit,
+        specific_cutting_energy=_q("2.1 GPa"),
+        drill_diameter=_q("24 mm"),
+    )
+    assert bigger.to("mm").magnitude == pytest.approx(0.25 * feed.to("mm").magnitude, rel=1e-12)
+
+
+def test_hall_petch_grain_diameter_for_yield_lands_the_yield_strength():
+    from anvilate.analysis import hall_petch_grain_diameter_for_yield, hall_petch_yield_strength
+
+    material = {
+        "friction_stress": _q("70 MPa"),
+        "strengthening_coefficient": _q("0.6 MPa*m**0.5"),
+    }
+    target = _q("250 MPa")
+    grain = hall_petch_grain_diameter_for_yield(yield_strength=target, **material)
+    assert hall_petch_yield_strength(grain_diameter=grain, **material).to(
+        "MPa"
+    ).magnitude == pytest.approx(target.to("MPa").magnitude, rel=1e-12)
+
+
+def test_illuminance_for_target_luminance_lands_the_surface_luminance():
+    from anvilate.analysis import diffuse_surface_luminance, illuminance_for_target_luminance
+
+    reflectance = 0.55
+    target = _q("120 cd/m**2")
+    illuminance = illuminance_for_target_luminance(target_luminance=target, reflectance=reflectance)
+    assert diffuse_surface_luminance(illuminance=illuminance, reflectance=reflectance).to(
+        "cd/m**2"
+    ).magnitude == pytest.approx(target.to("cd/m**2").magnitude, rel=1e-12)
+    # A darker finish costs light in inverse proportion to its reflectance.
+    dark = illuminance_for_target_luminance(target_luminance=target, reflectance=0.11)
+    assert dark.to("lux").magnitude == pytest.approx(
+        5.0 * illuminance.to("lux").magnitude, rel=1e-12
+    )
+
+
+def test_max_projected_area_for_clamp_lands_the_clamp_force():
+    from anvilate.analysis import injection_clamp_force, max_projected_area_for_clamp
+
+    pressure = _q("35 MPa")
+    tonnage = _q("2500 kN")
+    area = max_projected_area_for_clamp(clamp_force=tonnage, cavity_pressure=pressure)
+    assert injection_clamp_force(projected_area=area, cavity_pressure=pressure).to(
+        "kN"
+    ).magnitude == pytest.approx(tonnage.to("kN").magnitude, rel=1e-12)
+
+
+def test_living_hinge_web_length_for_strain_lands_the_fold_strain():
+    from anvilate.analysis import living_hinge_fold_strain, living_hinge_web_length_for_strain
+
+    hinge = {"web_thickness": _q("0.4 mm"), "fold_angle": 90.0}
+    permissible = 0.06
+    length = living_hinge_web_length_for_strain(permissible_strain=permissible, **hinge)
+    assert living_hinge_fold_strain(web_length=length, **hinge) == pytest.approx(
+        permissible, rel=1e-12
+    )
+    # The fold angle is carried, not defaulted away: a full 180 degree fold needs twice the web.
+    flat = living_hinge_web_length_for_strain(
+        web_thickness=_q("0.4 mm"), permissible_strain=permissible, fold_angle=180.0
+    )
+    assert flat.to("mm").magnitude == pytest.approx(2.0 * length.to("mm").magnitude, rel=1e-12)
+
+
+def test_air_receiver_volume_for_demand_lands_the_holdup_time():
+    from anvilate.analysis import air_receiver_holdup_time, air_receiver_volume_for_demand
+
+    system = {
+        "net_demand": _q("1.8 m**3/min"),
+        "max_pressure": _q("8 bar"),
+        "min_pressure": _q("6 bar"),
+        "atmospheric_pressure": _q("101.325 kPa"),
+    }
+    target = _q("45 s")
+    volume = air_receiver_volume_for_demand(holdup_time=target, **system)
+    assert air_receiver_holdup_time(receiver_volume=volume, **system).to(
+        "s"
+    ).magnitude == pytest.approx(target.to("s").magnitude, rel=1e-12)
+
+
+def test_spot_weld_current_for_heat_lands_the_joule_heat():
+    from anvilate.analysis import spot_weld_current_for_heat, spot_weld_heat_generated
+
+    schedule = {"contact_resistance": _q("100 uohm"), "weld_time": _q("0.2 s")}
+    target = _q("900 J")
+    current = spot_weld_current_for_heat(target_heat=target, **schedule)
+    assert spot_weld_heat_generated(weld_current=current, **schedule).to(
+        "J"
+    ).magnitude == pytest.approx(target.to("J").magnitude, rel=1e-12)
+    # Heat is quadratic in current, so a quarter of the weld time costs only twice the amps.
+    quicker = spot_weld_current_for_heat(
+        target_heat=target, contact_resistance=_q("100 uohm"), weld_time=_q("0.05 s")
+    )
+    assert quicker.to("kA").magnitude == pytest.approx(2.0 * current.to("kA").magnitude, rel=1e-12)
+
+
+def test_shear_spinning_half_angle_for_thickness_lands_the_spun_wall():
+    from anvilate.analysis import (
+        shear_spinning_half_angle_for_thickness,
+        shear_spinning_wall_thickness,
+    )
+
+    blank, target = _q("6 mm"), _q("3 mm")
+    angle = shear_spinning_half_angle_for_thickness(blank_thickness=blank, final_thickness=target)
+    assert angle == pytest.approx(30.0, rel=1e-12)
+    assert shear_spinning_wall_thickness(blank_thickness=blank, half_cone_angle=angle).to(
+        "mm"
+    ).magnitude == pytest.approx(target.to("mm").magnitude, rel=1e-12)
+
+
+def test_peening_time_for_coverage_lands_the_coverage():
+    from anvilate.analysis import peening_coverage, peening_time_for_coverage
+
+    rate = _q("0.15 1/s")
+    target = 0.98
+    exposure = peening_time_for_coverage(coverage_rate=rate, target_coverage=target)
+    assert peening_coverage(coverage_rate=rate, exposure_time=exposure) == pytest.approx(
+        target, rel=1e-12
+    )
+    # The law is asymptotic: the last two points of coverage cost as long again as the first 98.
+    doubled = peening_time_for_coverage(coverage_rate=rate, target_coverage=0.9996)
+    assert doubled.to("s").magnitude == pytest.approx(2.0 * exposure.to("s").magnitude, rel=1e-9)
+
+
+def test_pv_array_size_for_load_lands_the_daily_energy():
+    from anvilate.analysis import pv_array_size_for_load, pv_daily_energy
+
+    site = {"peak_sun_hours": _q("4.6 hour"), "derate_factor": 0.78}
+    target = _q("18 kW*hour")
+    rating = pv_array_size_for_load(daily_energy_demand=target, **site)
+    assert pv_daily_energy(rated_power=rating, **site).to("kW*hour").magnitude == pytest.approx(
+        target.to("kW*hour").magnitude, rel=1e-12
+    )
+
+
+def test_thermocouple_temperature_from_voltage_lands_the_seebeck_emf():
+    """The cold junction is the whole trick: the pair only closes if the inverse adds the
+    reference temperature back, so the test puts the reference well away from zero."""
+    from anvilate.analysis import thermocouple_temperature_from_voltage, thermocouple_voltage
+
+    junction = {
+        "seebeck_coefficient": _q("41 uV/K"),
+        "reference_temperature": _q("298.15 K"),
+    }
+    reading = _q("12.5 mV")
+    temperature = thermocouple_temperature_from_voltage(thermocouple_voltage=reading, **junction)
+    assert thermocouple_voltage(measured_temperature=temperature, **junction).to(
+        "mV"
+    ).magnitude == pytest.approx(reading.to("mV").magnitude, rel=1e-12)
+    # A zero EMF is the cold junction's own temperature, not absolute zero.
+    assert thermocouple_temperature_from_voltage(thermocouple_voltage=_q("0 mV"), **junction).to(
+        "K"
+    ).magnitude == pytest.approx(298.15, rel=1e-12)
+
+
+def test_thermoforming_sheet_gauge_for_wall_lands_the_average_wall():
+    from anvilate.analysis import (
+        thermoforming_average_wall_thickness,
+        thermoforming_sheet_gauge_for_wall,
+    )
+
+    draw = 3.4
+    target = _q("0.9 mm")
+    gauge = thermoforming_sheet_gauge_for_wall(minimum_wall_thickness=target, areal_draw_ratio=draw)
+    assert thermoforming_average_wall_thickness(sheet_thickness=gauge, areal_draw_ratio=draw).to(
+        "mm"
+    ).magnitude == pytest.approx(target.to("mm").magnitude, rel=1e-12)
+
+
+def test_minimum_position_and_momentum_uncertainty_invert_each_other():
+    """Heisenberg at the equality is its own inverse, so the pair closes both ways."""
+    from anvilate.analysis import minimum_momentum_uncertainty, minimum_position_uncertainty
+
+    # Both quantities are far below approx's default abs=1e-12 in their SI units, so the
+    # round trip is asserted as a ratio to 1 — a scaled unit would only move the momentum.
+    spread = _q("1e-10 m")
+    momentum = minimum_momentum_uncertainty(position_uncertainty=spread)
+    recovered = minimum_position_uncertainty(momentum_uncertainty=momentum)
+    assert recovered.to("m").magnitude / spread.to("m").magnitude == pytest.approx(1.0, rel=1e-12)
+
+    momentum_spread = _q("5e-25 kg*m/s")
+    position = minimum_position_uncertainty(momentum_uncertainty=momentum_spread)
+    closed = minimum_momentum_uncertainty(position_uncertainty=position)
+    assert closed.to("kg*m/s").magnitude / momentum_spread.to("kg*m/s").magnitude == pytest.approx(
+        1.0, rel=1e-12
+    )
+
+
+def test_capacitance_for_reactive_power_lands_the_reactive_power():
+    """The forward is in another module: the sized capacitor's reactance comes from
+    :func:`capacitive_reactance`, and a capacitor across V draws V**2/X_c by definition."""
+    from anvilate.analysis import capacitance_for_reactive_power, capacitive_reactance
+
+    supply = {"voltage": _q("400 V"), "frequency": _q("50 Hz")}
+    target = _q("25 kVA")
+    capacitance = capacitance_for_reactive_power(reactive_power=target, **supply)
+    reactance = capacitive_reactance(capacitance=capacitance, frequency=supply["frequency"])
+    drawn = supply["voltage"].to("V").magnitude ** 2 / reactance.to("ohm").magnitude
+    assert drawn / 1000.0 == pytest.approx(target.to("kVA").magnitude, rel=1e-12)
