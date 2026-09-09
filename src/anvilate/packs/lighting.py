@@ -13,11 +13,13 @@ the caller's cited values; the arithmetic is the pack's.
 
 from __future__ import annotations
 
+from math import ceil
+
 from pydantic import ConfigDict
 
 from ..analysis import lighting_power_density, lumen_method_illuminance
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -151,4 +153,41 @@ def screen_lighting(
     lpd_entry = ScorecardEntry.from_safety_factor(
         "lighting power density", computed=lpd_sf, required=required_safety_factor
     ).model_copy(update={"reference": _LPD_REFERENCE, "derivation": lpd_derivation})
+    # The two checks pull in OPPOSITE DIRECTIONS on the same knob: illuminance rises with
+    # the luminaire count and the power density rises with it too. A card that answered
+    # both with the count would tell a designer to add luminaires and remove them.
+    #
+    # So each names the lever that is actually its own. A dim room needs more fittings —
+    # an integer count, so the answer is the LEAST one that meets the margin, rounded up.
+    # An over-budget install needs fittings that draw less for the same lumens, which is
+    # the specification decision behind an LPD failure and the one that does not undo the
+    # illuminance check.
+    if illuminance_entry.status is CheckStatus.FAIL and illuminance_sf:
+        illuminance_entry = illuminance_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "luminaire_count",
+                    direction=Direction.INCREASE,
+                    value=float(
+                        ceil(installation.luminaire_count * required_safety_factor / illuminance_sf)
+                    ),
+                    provenance="least whole luminaire count that reaches the task level",
+                    whole=True,
+                )
+            }
+        )
+    if lpd_entry.status is CheckStatus.FAIL and lpd_sf:
+        lpd_entry = lpd_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "input_watts_per_luminaire",
+                    direction=Direction.DECREASE,
+                    value=installation.input_watts_per_luminaire.to("W").magnitude
+                    * lpd_sf
+                    / required_safety_factor,
+                    unit="W",
+                    provenance="allowance shared over the fittings the room needs",
+                )
+            }
+        )
     return Scorecard(entries=(illuminance_entry, lpd_entry))

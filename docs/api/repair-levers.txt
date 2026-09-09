@@ -42,7 +42,12 @@ geotechnical.screen_infinite_slope -> slope_angle (directional)
 geotechnical.screen_retaining_wall -> vertical_load (solved)
 geotechnical.screen_shallow_footing -> width (directional)
 hydraulics.screen_pipe_run -> available_head (solved)
+hydraulics.screen_pump_duty -> motor_rating (solved)
+hydraulics.screen_pump_duty -> npsh_available (solved)
+lighting.screen_lighting -> input_watts_per_luminaire (solved)
+lighting.screen_lighting -> luminaire_count (solved)
 masonry.screen_masonry_wall -> axial_stress (solved)
+noise_exposure.screen_noise_exposure -> exposure_duration (solved)
 pressure_vessel.asme_b313_pressure_scorecard -> nominal_wall (solved)
 structural.screen_base_plate -> plate_thickness (solved)
 structural.screen_gusset_plate -> net_shear_area (solved)
@@ -76,19 +81,16 @@ fatigue.goodman_scorecard
 fatigue.soderberg_scorecard
 fatigue.weld_fatigue_scorecard
 fracture.fad_scorecard
-hydraulics.screen_pump_duty
 industrial.screen_cover_plate
 lifting_device.bth1_fatigue_scorecard
 lifting_device.bth1_member_scorecard
 lifting_device.bth1_pin_plate_scorecard
 lifting_device.screen_lifter_device
-lighting.screen_lighting
 loads.combination_scorecard
 nds_timber.nds_bearing_scorecard
 nds_timber.nds_bending_scorecard
 nds_timber.nds_compression_scorecard
 nds_timber.nds_shear_scorecard
-noise_exposure.screen_noise_exposure
 pressure_vessel.asme_appendix_2_flange_stress_scorecard
 pressure_vessel.asme_b313_branch_reinforcement_scorecard
 pressure_vessel.asme_ug37_reinforcement_scorecard

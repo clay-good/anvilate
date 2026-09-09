@@ -36,6 +36,42 @@ def test_noise_exposure_niosh_is_stricter_than_osha():
     assert niosh < osha
 
 
+def test_an_over_dose_shift_names_the_hours_it_may_run():
+    """The level belongs to the machines; the time belongs to the shift.
+
+    Job rotation is the administrative control the hierarchy reaches for once the
+    engineering ones are exhausted, and it is the only one of the two this model holds. The
+    dose is linear in the time, so the permissible shift is exact.
+    """
+    from anvilate.scorecard import Direction
+
+    exposure = WorkerNoiseExposure(machine_levels=(92.0, 90.0), exposure_duration=_q("6 hour"))
+    (entry,) = screen_noise_exposure(exposure).entries
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert (hint.parameter, hint.direction, hint.unit) == (
+        "exposure_duration",
+        Direction.DECREASE,
+        "hour",
+    )
+    # Exactly the dose the shift is over by.
+    assert hint.corrective_value == pytest.approx(6.0 * entry.safety_factor, rel=1e-9)
+
+    (shortened,) = screen_noise_exposure(
+        WorkerNoiseExposure(
+            machine_levels=(92.0, 90.0),
+            exposure_duration=Quantity(magnitude=hint.corrective_value, unit="hour"),
+        )
+    ).entries
+    assert shortened.status is CheckStatus.PASS
+    assert shortened.safety_factor == pytest.approx(1.0, rel=1e-9)
+    assert shortened.repair_hint is None
+
+    # A stricter criterion asks for a shorter shift, not the same one.
+    stricter = screen_noise_exposure(exposure, criterion_level=85.0, exchange_rate=3.0)
+    assert stricter.entries[0].repair_hint.corrective_value < hint.corrective_value
+
+
 def test_quiet_exposure_passes_with_margin():
     exposure = WorkerNoiseExposure(machine_levels=(80.0,), exposure_duration=_q("8 hour"))
     card = screen_noise_exposure(exposure)

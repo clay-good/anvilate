@@ -28,6 +28,65 @@ def _install(**overrides) -> LightingInstallation:
     return LightingInstallation(**fields)
 
 
+def test_the_two_lighting_checks_name_the_lever_that_is_actually_theirs():
+    """They pull in OPPOSITE directions on the same knob, and the card says so.
+
+    Illuminance rises with the luminaire count; so does the power density. A card that
+    answered both with the count would tell a designer to add fittings and remove them. So
+    a dim room is told how many fittings it needs — an integer, so the LEAST one that
+    reaches the level — and an over-budget install is told how few watts each may draw,
+    which is the specification decision behind an LPD failure and the one that does not
+    undo the other check.
+    """
+    from anvilate.scorecard import Direction
+
+    dim = screen_lighting(_install(luminaire_count=12))
+    illuminance = next(e for e in dim.entries if e.name == "task illuminance")
+    assert illuminance.status is CheckStatus.FAIL
+    hint = illuminance.repair_hint
+    assert (hint.parameter, hint.direction) == ("luminaire_count", Direction.INCREASE)
+    count = int(hint.corrective_value)
+    assert hint.corrective_value == float(count), "a luminaire count is a whole number"
+
+    # The least count that holds: it passes at N and fails at N − 1. "Passes at N" alone
+    # would be satisfied by any number that rounded the wrong way.
+    at_n = next(
+        e
+        for e in screen_lighting(_install(luminaire_count=count)).entries
+        if e.name == "task illuminance"
+    )
+    at_less = next(
+        e
+        for e in screen_lighting(_install(luminaire_count=count - 1)).entries
+        if e.name == "task illuminance"
+    )
+    assert at_n.status is CheckStatus.PASS
+    assert at_less.status is CheckStatus.FAIL
+
+    # The power check names watts, not the count, and its answer lands the allowance.
+    hungry = screen_lighting(_install(input_watts_per_luminaire=_q("45 W")))
+    power = next(e for e in hungry.entries if e.name == "lighting power density")
+    assert power.status is CheckStatus.FAIL
+    watts = power.repair_hint
+    assert (watts.parameter, watts.direction, watts.unit) == (
+        "input_watts_per_luminaire",
+        Direction.DECREASE,
+        "W",
+    )
+    repaired = next(
+        e
+        for e in screen_lighting(
+            _install(input_watts_per_luminaire=Quantity(magnitude=watts.corrective_value, unit="W"))
+        ).entries
+        if e.name == "lighting power density"
+    )
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(1.0, rel=1e-9)
+
+    # A balanced install is offered nothing at all.
+    assert all(e.repair_hint is None for e in screen_lighting(_install()).entries)
+
+
 def test_balanced_layout_passes_both_checks():
     card = screen_lighting(_install())
     assert card.status is CheckStatus.PASS

@@ -22,7 +22,7 @@ from ..analysis import (
     sound_level_sum,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -116,4 +116,20 @@ def screen_noise_exposure(
     entry = ScorecardEntry.from_safety_factor(
         "noise dose", computed=dose_sf, required=required_safety_factor
     ).model_copy(update={"reference": reference, "derivation": dose_derivation})
+    if entry.status is CheckStatus.FAIL:
+        # The level is the machines'; the time is the shift. Shortening the exposure — job
+        # rotation — is the administrative control the hierarchy reaches for once the
+        # engineering ones are exhausted, and it is the only one of the two this model
+        # holds. The dose is linear in the time, so the permissible shift is exact.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "exposure_duration",
+                    direction=Direction.DECREASE,
+                    value=permissible.to("hour").magnitude / required_safety_factor,
+                    unit="hour",
+                    provenance="permissible time at the combined level, at the margin",
+                )
+            }
+        )
     return Scorecard(entries=(entry,))

@@ -276,6 +276,16 @@ def test_a_solved_hint_is_placed_clear_of_the_margin_not_on_it():
     # A directional hint has no value to place.
     assert RepairHint.directional("t", direction=Direction.INCREASE).corrective_value is None
 
+    # A COUNT is not nudged. Its inverse rounds up to the least whole number that meets the
+    # margin, which already clears the boundary, and 19.000000000019 luminaires is not an
+    # answer — which is exactly what the lighting hint published before this existed.
+    counted = RepairHint.solved("n", direction=Direction.INCREASE, value=19.0, whole=True)
+    assert counted.corrective_value == 19.0
+    assert RepairHint.solved("n", direction=Direction.INCREASE, value=19.0).corrective_value > 19.0
+    # And `whole` is a claim the caller has to have earned.
+    with pytest.raises(ValueError, match="must be integral"):
+        RepairHint.solved("n", direction=Direction.INCREASE, value=19.4, whole=True)
+
 
 def test_repair_hint_corrective_value_round_trips_through_the_inverse():
     # The hint's value must actually satisfy the forward check at the required

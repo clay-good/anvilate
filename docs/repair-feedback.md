@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 55 public screens.
-There are 28 levers across 18 of them, and 37 recorded as having none yet — each
+There are 33 levers across 21 of them, and 34 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -88,6 +88,10 @@ owes the reader:
 | `screen_feeder` | conductor ampacity | `conductor_ampacity` ↑ | solved — the line current at the margin |
 | `screen_pipe_run` | head budget | `available_head` ↑ | solved — the loss the pipe consumes |
 | `screen_masonry_wall` | axial, combined | `axial_stress` ↓ | solved — two answers, and the unity one can run out |
+| `screen_lighting` | task illuminance | `luminaire_count` ↑ | solved — the least WHOLE count that reaches it |
+| `screen_lighting` | lighting power density | `input_watts_per_luminaire` ↓ | solved — the lever the other check does not fight |
+| `screen_pump_duty` | motor rating, NPSH | `motor_rating` ↑, `npsh_available` ↑ | solved — the duty's shaft power, the pump's required NPSH |
+| `screen_noise_exposure` | noise dose | `exposure_duration` ↓ | solved — the permissible time at the combined level |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -101,6 +105,15 @@ The two plate rows are the case where the levers differ *between entries on one 
 shear yielding is checked on the gross section and rupture through the holes, so a hint
 that named one area for both would tell a detailer to grow the wrong thing — a wrong
 answer, not a vague one.
+
+The two lighting rows are the case where the checks **pull in opposite directions on the
+same knob**. Illuminance rises with the luminaire count and so does the power density, so a
+card that answered both with the count would tell a designer to add fittings and remove
+them. Each names the lever that is actually its own: a dim room needs more fittings, and an
+over-budget install needs fittings that draw less for the same lumens. The count is also
+the library's only **whole-number** lever — its inverse rounds up to the least count that
+meets the margin, and `RepairHint.solved(..., whole=True)` skips the boundary nudge for it,
+because 19.000000000019 luminaires is not an answer.
 
 The feeder's drop row is the one where the lever can be **out of reach**. Only the
 resistive half of ΔV = √3·I·(R·cosφ + X·sinφ) shrinks with the conductor; the reactance is

@@ -121,6 +121,7 @@ class RepairHint(StatableModel):
         value: float,
         unit: str | None = None,
         provenance: str | None = None,
+        whole: bool = False,
     ) -> RepairHint:
         """A hint whose corrective value a design inverse supplied.
 
@@ -139,7 +140,22 @@ class RepairHint(StatableModel):
 
         The nudge is applied on the absolute value, so it moves a negative corrective value
         the right way too, and it leaves an exact zero alone.
+
+        ``whole`` turns it off for a COUNT. A luminaire count is not a continuous quantity:
+        its inverse rounds up to the least whole number that meets the margin, which already
+        clears the boundary, and 19.000000000019 luminaires is not an answer. The value must
+        actually be integral, or the caller has rounded nothing and is claiming they did.
         """
+        if whole:
+            if value != int(value):
+                raise ValueError(f"a whole corrective value must be integral; got {value}")
+            return cls(
+                parameter=parameter,
+                direction=direction,
+                corrective_value=float(int(value)),
+                unit=unit,
+                provenance=provenance,
+            )
         step = abs(value) * _MARGIN_NUDGE
         nudged = value + step if direction is Direction.INCREASE else value - step
         return cls(

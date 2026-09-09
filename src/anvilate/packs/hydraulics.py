@@ -150,6 +150,34 @@ def screen_pump_duty(
     npsh_entry = ScorecardEntry.from_safety_factor(
         "NPSH margin", computed=npsh_sf, required=npsh_margin_factor
     ).model_copy(update={"reference": _NPSH_REFERENCE, "derivation": npsh_derivation})
+    if motor_entry.status is CheckStatus.FAIL:
+        # The shaft power is the duty's, not the motor's, so the rating is what moves and
+        # the margin it must clear is the service factor.
+        motor_entry = motor_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "motor_rating",
+                    direction=Direction.INCREASE,
+                    value=shaft * motor_service_factor,
+                    unit="kW",
+                    provenance="shaft power the duty needs, at the service factor",
+                )
+            }
+        )
+    if npsh_entry.status is CheckStatus.FAIL:
+        # NPSH_r belongs to the pump; NPSH_a belongs to the suction — the lift, the losses
+        # and the vapour pressure — which is the side an installation can change.
+        npsh_entry = npsh_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "npsh_available",
+                    direction=Direction.INCREASE,
+                    value=npsh_r * npsh_margin_factor,
+                    unit="m",
+                    provenance="pump's required NPSH, at the margin factor",
+                )
+            }
+        )
     return Scorecard(entries=(motor_entry, npsh_entry))
 
 
