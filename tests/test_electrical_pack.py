@@ -66,6 +66,80 @@ def test_undersized_conductor_fails_on_ampacity_not_drop():
     assert names["voltage drop"].status is CheckStatus.PASS
 
 
+def test_a_failing_feeder_solves_the_conductor_it_needs():
+    """Two checks, two different levers — and the drop's lever can be out of reach.
+
+    Ampacity moves with the conductor's rating; the drop moves with its area, but only
+    through the RESISTIVE half. The reactance is the run's geometry and does not shrink,
+    so the split has to be made before the solve, not after.
+    """
+    from anvilate.scorecard import Direction
+
+    long_thin = _feeder(
+        one_way_length=_q("220 m"),
+        conductor_area=_q("16 mm**2"),
+        conductor_ampacity=_q("45 A"),
+    )
+    card = screen_feeder(long_thin)
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert all(e.status is CheckStatus.FAIL for e in card.entries)
+    assert hints["voltage drop"].parameter == "conductor_area"
+    assert hints["conductor ampacity"].parameter == "conductor_ampacity"
+    assert all(h.direction is Direction.INCREASE for h in hints.values())
+
+    repaired = screen_feeder(
+        _feeder(
+            one_way_length=_q("220 m"),
+            conductor_area=Quantity(magnitude=hints["voltage drop"].corrective_value, unit="mm**2"),
+            conductor_ampacity=Quantity(
+                magnitude=hints["conductor ampacity"].corrective_value, unit="A"
+            ),
+        )
+    )
+    assert all(e.status is CheckStatus.PASS for e in repaired.entries)
+    for entry in repaired.entries:
+        assert entry.safety_factor == pytest.approx(1.0, rel=1e-9)
+        assert entry.repair_hint is None
+
+    # With a reactance in the run the area has to grow FURTHER than the purely resistive
+    # answer, because only part of the drop shrinks with it.
+    with_reactance = screen_feeder(
+        _feeder(
+            one_way_length=_q("220 m"),
+            conductor_area=_q("16 mm**2"),
+            conductor_ampacity=_q("45 A"),
+            reactance=_q("0.05 ohm"),
+        )
+    )
+    reactive_hint = next(e.repair_hint for e in with_reactance.entries if e.name == "voltage drop")
+    assert reactive_hint.corrective_value > hints["voltage drop"].corrective_value
+
+
+def test_a_drop_the_reactance_alone_blows_gets_no_hint_at_all():
+    """A lever that cannot reach is worse than silence.
+
+    √3·I·X·sinφ does not shrink with the conductor, so on a reactive run it can exceed the
+    whole allowance on its own. No conductor size fixes that — the answer is a different
+    route, power-factor correction, or a higher distribution voltage — and the check says
+    so by offering nothing rather than naming an area that would not work.
+    """
+    reactive = screen_feeder(
+        _feeder(
+            one_way_length=_q("220 m"),
+            conductor_area=_q("16 mm**2"),
+            conductor_ampacity=_q("45 A"),
+            reactance=_q("0.4 ohm"),
+        )
+    )
+    drop = next(e for e in reactive.entries if e.name == "voltage drop")
+    assert drop.status is CheckStatus.FAIL
+    assert drop.repair_hint is None
+    # The ampacity check is untouched by the reactance and still names its lever, so the
+    # silence above is about the drop and not about the card giving up.
+    ampacity = next(e for e in reactive.entries if e.name == "conductor ampacity")
+    assert ampacity.repair_hint is not None
+
+
 def test_references_cite_the_nec():
     card = screen_feeder(_feeder())
     refs = " ".join(e.reference or "" for e in card.entries)

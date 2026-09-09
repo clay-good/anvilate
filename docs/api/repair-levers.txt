@@ -25,6 +25,8 @@
 
 ## levers
 dynamics.isolation_scorecard -> frequency_ratio (solved)
+electrical.screen_feeder -> conductor_ampacity (solved)
+electrical.screen_feeder -> conductor_area (solved)
 geotechnical.screen_driven_pile -> length (solved)
 geotechnical.screen_infinite_slope -> pore_pressure (solved)
 geotechnical.screen_infinite_slope -> slope_angle (directional)
@@ -56,7 +58,6 @@ cold_formed_steel.dsm_scorecard
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard
 dynamics.isolator_selection_scorecard
-electrical.screen_feeder
 embodied_carbon.embodied_carbon_scorecard
 fatigue.gerber_scorecard
 fatigue.goodman_scorecard

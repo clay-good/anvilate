@@ -21,7 +21,7 @@ from ..analysis import (
     voltage_drop_three_phase,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -172,4 +172,81 @@ def screen_feeder(
     ampacity_entry = ScorecardEntry.from_safety_factor(
         "conductor ampacity", computed=ampacity_sf, required=required_safety_factor
     ).model_copy(update={"reference": _AMPACITY_REFERENCE, "derivation": ampacity_derivation})
+    if ampacity_entry.status is CheckStatus.FAIL:
+        ampacity_entry = ampacity_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "conductor_ampacity",
+                    direction=Direction.INCREASE,
+                    value=amps * required_safety_factor,
+                    unit="A",
+                    provenance="the line current the run carries, at the required margin",
+                )
+            }
+        )
+    if drop_entry.status is CheckStatus.FAIL:
+        drop_entry = _area_for_drop(
+            drop_entry,
+            feeder=feeder,
+            current=current,
+            drop=drop,
+            resistance=resistance,
+            reactance=reactance,
+            required=required_safety_factor,
+        )
     return Scorecard(entries=(drop_entry, ampacity_entry))
+
+
+def _area_for_drop(
+    entry: ScorecardEntry,
+    *,
+    feeder: Feeder,
+    current: Quantity,
+    drop: Quantity,
+    resistance: Quantity,
+    reactance: Quantity,
+    required: float,
+) -> ScorecardEntry:
+    """The conductor area that brings the drop inside the limit — where one exists.
+
+    Only the resistive half of the drop moves with the conductor: R = ρ·L/A, while the
+    reactance is the run's geometry. ΔV(R) = k·R + c is affine in R, so the split is read
+    off two legal points — the drop the screen already computed, and the same call at half
+    the resistance. Asking for it at R = 0 would be one call instead of two, and
+    :func:`voltage_drop_three_phase` refuses that, rightly: a conductor has a resistance.
+
+    **The reactive half can eat the whole budget.** On a long run at a poor power factor
+    the √3·I·X·sinφ term alone can exceed the allowance, and then no conductor size
+    reaches it — the fix is a different route, power-factor correction, or a higher
+    distribution voltage, none of which is this parameter. The check keeps its FAIL and
+    offers NO hint, because a lever that cannot reach is worse than silence.
+    """
+    total = drop.to("V").magnitude
+    halved = (
+        voltage_drop_three_phase(
+            line_current=current,
+            resistance=Quantity(magnitude=resistance.to("ohm").magnitude / 2.0, unit="ohm"),
+            power_factor=feeder.power_factor,
+            reactance=reactance,
+        )
+        .to("V")
+        .magnitude
+    )
+    reactive = 2.0 * halved - total
+    allowance = feeder.line_voltage.to("V").magnitude * feeder.drop_limit_percent / 100.0 / required
+    resistive = total - reactive
+    if allowance - reactive <= 0.0 or resistive <= 0.0:
+        return entry
+    return entry.model_copy(
+        update={
+            "repair_hint": RepairHint.solved(
+                "conductor_area",
+                direction=Direction.INCREASE,
+                value=feeder.conductor_area.to("mm**2").magnitude
+                * resistive
+                / (allowance - reactive),
+                unit="mm**2",
+                provenance="the resistive half of the drop, which scales as 1/A",
+            )
+        }
+    )

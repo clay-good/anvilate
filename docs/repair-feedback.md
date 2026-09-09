@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 51 public screens.
-There are 24 levers across 15 of them, and 36 recorded as having none yet — each
+There are 26 levers across 16 of them, and 35 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -84,6 +84,8 @@ owes the reader:
 | `screen_tension_member` | gross yielding / net rupture | `gross_area` ↑ / `net_area` ↑ | solved — a different area per limit state |
 | `screen_welded_connection` | throat shear | `leg_size` ↑ | solved — `fillet_weld_leg_for_load` |
 | `screen_gusset_plate` | block shear | `net_shear_area` ↑ | solved — holding the tension area the bolt gauge fixes |
+| `screen_feeder` | voltage drop | `conductor_area` ↑ | solved — the resistive half only, **and sometimes not at all** |
+| `screen_feeder` | conductor ampacity | `conductor_ampacity` ↑ | solved — the line current at the margin |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -97,6 +99,15 @@ The two plate rows are the case where the levers differ *between entries on one 
 shear yielding is checked on the gross section and rupture through the holes, so a hint
 that named one area for both would tell a detailer to grow the wrong thing — a wrong
 answer, not a vague one.
+
+The feeder's drop row is the one where the lever can be **out of reach**. Only the
+resistive half of ΔV = √3·I·(R·cosφ + X·sinφ) shrinks with the conductor; the reactance is
+the run's geometry. On a reactive run the √3·I·X·sinφ term alone can exceed the whole
+allowance, and then no conductor size fixes it — the answer is a different route,
+power-factor correction, or a higher distribution voltage. The check keeps its `FAIL` and
+offers **nothing**, because a lever that cannot reach is worse than silence. A test asserts
+the ampacity hint on the same card is still there, so the silence reads as being about the
+drop rather than about the card giving up.
 
 The gusset row is the one where the solve is **not** a scaling. Block shear adds two
 areas, `R_n = F_u·(0.6·A_nv + A_nt)`, so neither is the lever on its own and the tension
