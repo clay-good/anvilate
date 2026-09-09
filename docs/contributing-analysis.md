@@ -156,11 +156,20 @@ Two corollaries worth internalizing:
 
 ### A non-finite input is refused, not compared
 
-**Every public analysis function refuses a NaN or an infinity rather than answering one.**
-That is a property of the whole surface now, held by
+**A public analysis function refuses a NaN or an infinity rather than answering one, and
+the gate holds that over most of the surface — not all of it.** It is held by
 `test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash`, which binds
-1,431 of the library's 1,746 public functions and substitutes each poison value one
-parameter at a time.
+1,480 of the library's 1,746 public functions and substitutes each poison value one
+parameter at a time. The remaining 266 are not exempt — they are unreached, which is a
+different thing, and the share is itself gated by
+`test_the_probe_population_covers_the_share_of_the_surface_it_claims_to`. It has to be:
+the binder builds a call out of a function's own declarations, so a guard it cannot talk
+its way past drops the function silently. Thirty-eight — every bearing defect frequency,
+every flywheel stress, the gear mesh frequencies, the pump displacements, the cutting
+speeds — sat outside all three probes because the refusal of a bare `Hz` for a rotational
+speed is a `ValueError` the binder had no reader for, and a floor on the population's
+*size* cannot see a hole. If you add a refusal in a new style, teach the binder to read
+it.
 
 Write `require_finite(value, name="value")`, not a comparison. **Every comparison with NaN
 is False**, so `if x <= 0: raise` is a no-op against one — and what happens next is rarely a

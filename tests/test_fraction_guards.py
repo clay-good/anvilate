@@ -77,7 +77,8 @@ from anvilate.analysis import (
     weld_heat_input,
     wind_turbine_rotor_thrust,
 )
-from anvilate.units import Quantity
+from anvilate.units import Quantity, UnitError
+from anvilate.units.rotation import angular_speed_rad_per_s
 from conftest import parsed_source, source_text
 
 Q = Quantity.parse
@@ -1099,6 +1100,12 @@ _RELATIONS = (
     (re.compile(r"\b([a-z_]{3,})\b[^.;]{0,50}?and below (?:the )?\b([a-z_]{3,})\b"), False),
 )
 _WANTED_DIMENSION = re.compile(r"\b([a-z_]{3,})\b must be an? (\S*\[[^;]*?\S) quantity")
+# The parameter named by anvilate.units.rotation's refusal of a bare inverse time. The
+# message is one sentence and then the remedy, so the anchor is the remedy: a message
+# that merely mentions rpm in passing is not this refusal.
+_AMBIGUOUS_SPEED = re.compile(
+    r"\b([a-z_]{3,})\b was given as .*?cannot tell.*?apart from rad/s", re.S
+)
 
 
 def _which_to_scale(message: str, arguments: dict) -> str | None:
@@ -1111,6 +1118,25 @@ def _which_to_scale(message: str, arguments: dict) -> str | None:
         if first in arguments and second in arguments:
             return first if raise_the_first else second
     return None
+
+
+def _which_speed_needs_an_angle(message: str) -> str | None:
+    """The rotational-speed parameter an ``AmbiguousRotationalSpeedError`` names.
+
+    ``UnitError`` is a ``ValueError``, so this refusal arrived in the handler above and
+    none of the three readers there could make anything of it — the function fell out of
+    the population with nothing recorded. That silently excluded **38 functions**, the
+    whole rotating half of the library: every bearing defect frequency, every flywheel
+    stress, the gear mesh frequencies, the pump and motor displacements, the cutting
+    speeds. Not one of them was reached by the non-finite, junk, or positivity probes,
+    and the gates' own attack — a floor on the population size — cannot see a hole of any
+    size, because 1,431 is comfortably over 1,400.
+
+    The refusal names the parameter and says what to pass ("use 'rpm'"), which is the
+    same contract the other readers work under: take the refusal at its word.
+    """
+    found = _AMBIGUOUS_SPEED.search(message)
+    return found.group(1) if found else None
 
 
 def _which_dimension_it_wanted(message: str) -> tuple[str, str] | None:
@@ -1197,6 +1223,10 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                                 if isinstance(held, Quantity)
                                 else number
                             )
+                            continue
+                        spinning = _which_speed_needs_an_angle(message)
+                        if spinning is not None and spinning in arguments:
+                            arguments[spinning] = Quantity(magnitude=100.0, unit="rpm")
                             continue
                         wanted_dimension = _which_dimension_it_wanted(message)
                         if wanted_dimension is not None and wanted_dimension[0] in arguments:
@@ -1354,7 +1384,18 @@ def test_the_contributing_pages_non_finite_promise_is_the_gates_own():
 
     named = re.search(r"held by `(test_[a-z_]+)`", page)
     assert named is not None, "the non-finite section no longer names the gate that holds it"
-    assert named.group(1) in globals(), f"{named.group(1)} is named on the page and does not exist"
+    # Every test the page names, not only the first: the section grew a second gate — the
+    # one holding the COVERAGE — and a regex that reads one name cannot see the other go
+    # stale. Both of these live in this module; a name from elsewhere belongs to its own
+    # page's gate, so this is scoped to the ones this file owns.
+    quoted = {
+        name
+        for name in re.findall(r"`(test_[a-z_]+)`", page)
+        if name.startswith("test_the_probe") or name == named.group(1)
+    }
+    assert len(quoted) >= 2, f"the section names only {sorted(quoted)}"
+    missing = sorted(name for name in quoted if name not in globals())
+    assert not missing, f"named on the page and does not exist: {missing}"
 
     bound = re.search(r"binds ([\d,]+) of the library's ([\d,]+) public functions", page)
     assert bound is not None, "the section's function counts have moved"
@@ -1376,6 +1417,14 @@ def test_the_contributing_pages_non_finite_promise_is_the_gates_own():
         )
     )
     assert total == public, f"the page says {total:,} public functions; there are {public:,}"
+
+    # The page also states the difference in words — "the remaining 266 are not exempt" —
+    # and a number a reader can arrive at by subtraction is still a number nothing holds.
+    remaining = re.search(r"remaining ([\d,]+) are not exempt", page)
+    assert remaining is not None, "the section no longer states how many it does not reach"
+    assert int(remaining.group(1).replace(",", "")) == public - reached, (
+        f"the page says {remaining.group(1)} functions are unreached; {public - reached:,} are"
+    )
 
     helpers = re.search(r"`_require` \((\d+) modules\) and `_check` \((\d+)\)", page)
     assert helpers is not None, "the helper counts on the page have moved"
@@ -1462,3 +1511,109 @@ def test_every_copy_of_a_physical_constant_is_the_si_value():
         if held != _SI_VALUE[name]
     ]
     assert wrong == [], f"these are not the SI value: {wrong}"
+
+
+def _names_an_angle(value: object) -> bool:
+    """Whether a bound argument is a rotational speed the rotation guard would accept.
+
+    Asked of the library rather than spelled here: the first draft matched the substring
+    "rev", and `Quantity(unit="rpm").unit` is "rpm" — no "rev" in it — so the marker read
+    zero while the reader was working perfectly. The unit the binder passes is an
+    implementation choice (rpm today, rad/s or turn/s are as valid), and what this is
+    actually asserting is that the argument got past the ambiguous-speed refusal.
+    """
+    if not isinstance(value, Quantity) or not value.has_dimension("1/[time]"):
+        return False
+    try:
+        angular_speed_rad_per_s(value, name="probe")
+    except UnitError:
+        return False
+    return True
+
+
+def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
+    """A floor on the SHARE of the public surface, and a census of what is left out.
+
+    Each of the three probe gates above attacks itself with a floor on the population
+    size. A floor on an absolute count cannot see a hole. Thirty-eight functions — the
+    whole rotating half of the library, every bearing defect frequency, every flywheel
+    stress, the gear mesh frequencies, the pump and motor displacements, the cutting
+    speeds — sat outside the population because ``UnitError`` is a ``ValueError``, so the
+    ambiguous-rotational-speed refusal arrived in the binder's handler and none of its
+    three message-readers could make anything of it. The function fell out with nothing
+    recorded, and 1,431 is comfortably over the floor of 1,400.
+
+    So the coverage is stated as a fraction, the exclusions are censused by cause, and
+    the reader added for that refusal has to still be doing something: a regex that
+    stopped matching would put those 38 back outside every probe and every count here
+    would go on passing. The first draft of it silently matched nothing — it required two
+    spaces where the message has one — and the whole file stayed green.
+    """
+    population = _uniformly_callable()
+    reached = {label for label, _, _ in population}
+
+    surface = []
+    for info in pkgutil.iter_modules(analysis.__path__):
+        if info.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"anvilate.analysis.{info.name}")
+        for name in getattr(module, "__all__", ()):
+            if inspect.isfunction(getattr(module, name, None)):
+                surface.append(f"{info.name}.{name}")
+
+    assert len(surface) >= 1700, f"the surface scan found only {len(surface)} functions"
+    share = len(reached) / len(surface)
+    assert share >= 0.84, (
+        f"the probes reach {len(reached):,} of {len(surface):,} public analysis functions "
+        f"({share:.1%}); the gates above are written as claims about the whole surface, so "
+        "a drop here is a claim quietly narrowing"
+    )
+
+    # The exclusions by cause. `unbuildable` is a signature the binder cannot make a call
+    # out of at all — a Sequence, a model, a string discriminator — and is decided by
+    # reading the signature rather than by counting. `unpersuaded` is the bucket the
+    # rotational-speed hole lived in: a call the binder CAN build and a guard it could not
+    # talk its way past. That one is capped, and the cap only ever ratchets down.
+    unbuildable, unpersuaded = [], []
+    for label in sorted(set(surface) - reached):
+        module_name, function_name = label.split(".", 1)
+        module = importlib.import_module(f"anvilate.analysis.{module_name}")
+        parameters = list(inspect.signature(getattr(module, function_name)).parameters.values())
+        if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
+            unbuildable.append(label)
+            continue
+        exotic = [
+            p
+            for p in parameters
+            if p.default is inspect.Parameter.empty
+            and (
+                p.annotation
+                if isinstance(p.annotation, str)
+                else getattr(p.annotation, "__name__", "")
+            )
+            not in ("Quantity", "float", "int")
+        ]
+        (unbuildable if exotic else unpersuaded).append(label)
+
+    assert len(unpersuaded) <= 190, (
+        f"{len(unpersuaded)} functions take an all-quantity/number call the binder can "
+        "build and still refuse it — the bucket the rotational-speed hole was in. Teach "
+        f"the binder to read the new refusal rather than raising this cap: {unpersuaded[:10]}"
+    )
+    assert len(unbuildable) <= 80, (
+        f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
+        "this is growing, the probes are covering less of each new module"
+    )
+
+    # And the reader that closed the rotational hole is still closing it. Nothing else in
+    # this file can tell a working regex from a dead one.
+    spinning = [
+        label
+        for label, _, arguments in population
+        if any(_names_an_angle(value) for value in arguments.values())
+    ]
+    assert len(spinning) >= 35, (
+        f"only {len(spinning)} functions in the population were bound through the "
+        "ambiguous-rotational-speed refusal; the reader that answers it has stopped "
+        "matching, and the rotating half of the library is outside every probe again"
+    )
