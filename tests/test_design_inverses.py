@@ -143,6 +143,12 @@ ROUND_TRIPPED = frozenset(
         "thermoforming.thermoforming_sheet_gauge_for_wall",
         "quantum.minimum_position_uncertainty",
         "electrical.capacitance_for_reactive_power",
+        "fastener.bolt_preload_from_torque",
+        "battery_peukert.peukert_exponent_from_two_rates",
+        "reaction_kinetics.first_order_time_for_conversion",
+        "dc_dc_converter.buck_minimum_inductance_for_ccm",
+        "thermal.fouling_factor_from_coefficients",
+        "belt.belt_speed_for_max_power",
     }
 )
 
@@ -1928,3 +1934,139 @@ def test_capacitance_for_reactive_power_lands_the_reactive_power():
     reactance = capacitive_reactance(capacitance=capacitance, frequency=supply["frequency"])
     drawn = supply["voltage"].to("V").magnitude ** 2 / reactance.to("ohm").magnitude
     assert drawn / 1000.0 == pytest.approx(target.to("kVA").magnitude, rel=1e-12)
+
+
+def test_bolt_preload_from_torque_and_torque_for_preload_invert_each_other():
+    """The two halves of T = K*F*d are each other's forward, so the pair closes both
+    ways; the nut factor is set away from its default so a dropped K cannot pass."""
+    from anvilate.analysis import bolt_preload_from_torque, torque_for_preload
+
+    thread = {"nominal_diameter": _q("10 mm"), "nut_factor": 0.18}
+    target = _q("22 kN")
+    torque = torque_for_preload(preload=target, **thread)
+    assert bolt_preload_from_torque(torque=torque, **thread).to("kN").magnitude == pytest.approx(
+        target.to("kN").magnitude, rel=1e-12
+    )
+
+    applied = _q("45 N*m")
+    preload = bolt_preload_from_torque(torque=applied, **thread)
+    assert torque_for_preload(preload=preload, **thread).to("N*m").magnitude == pytest.approx(
+        applied.to("N*m").magnitude, rel=1e-12
+    )
+    # A slicker thread develops more preload for the same torque, in inverse proportion.
+    lubricated = bolt_preload_from_torque(
+        torque=applied, nominal_diameter=_q("10 mm"), nut_factor=0.09
+    )
+    assert lubricated.to("kN").magnitude == pytest.approx(
+        2.0 * preload.to("kN").magnitude, rel=1e-12
+    )
+
+
+def test_peukert_exponent_from_two_rates_reproduces_both_discharge_tests():
+    """The exponent is fitted from two measurements, so the round trip has to land BOTH
+    of them: a fit that reproduces only the test it was rated at says nothing."""
+    from anvilate.analysis import peukert_exponent_from_two_rates, peukert_runtime
+
+    low, low_time = _q("5 A"), _q("20 hour")
+    high, high_time = _q("25 A"), _q("3.2 hour")
+    exponent = peukert_exponent_from_two_rates(
+        current_low=low, runtime_low=low_time, current_high=high, runtime_high=high_time
+    )
+    assert exponent > 1.0
+    # The pack is rated at the low-current test: that current for that time.
+    rated = Quantity(magnitude=low.to("A").magnitude * low_time.to("hour").magnitude, unit="A*h")
+    battery = {"rated_capacity": rated, "rated_current": low, "peukert_exponent": exponent}
+    assert peukert_runtime(discharge_current=low, **battery).to("hour").magnitude == pytest.approx(
+        low_time.to("hour").magnitude, rel=1e-12
+    )
+    assert peukert_runtime(discharge_current=high, **battery).to("hour").magnitude == pytest.approx(
+        high_time.to("hour").magnitude, rel=1e-12
+    )
+
+
+def test_first_order_time_for_conversion_lands_the_remaining_concentration():
+    from anvilate.analysis import first_order_concentration, first_order_time_for_conversion
+
+    rate = _q("0.045 1/min")
+    conversion = 0.9
+    duration = first_order_time_for_conversion(rate_constant=rate, conversion=conversion)
+    initial = _q("2 mol/L")
+    left = first_order_concentration(
+        initial_concentration=initial, rate_constant=rate, time=duration
+    )
+    assert left.to("mol/L").magnitude / initial.to("mol/L").magnitude == pytest.approx(
+        1.0 - conversion, rel=1e-12
+    )
+    # Each further nine costs the same increment again.
+    two_nines = first_order_time_for_conversion(rate_constant=rate, conversion=0.99)
+    assert two_nines.to("min").magnitude == pytest.approx(
+        2.0 * duration.to("min").magnitude, rel=1e-12
+    )
+
+
+def test_buck_minimum_inductance_for_ccm_lands_the_boundary_ripple():
+    """Continuous conduction ends where the ripple is twice the load current, so the
+    critical inductance must be the one that produces exactly that ripple."""
+    from anvilate.analysis import buck_inductor_ripple_current, buck_minimum_inductance_for_ccm
+
+    output, load, duty = _q("5 V"), _q("2 A"), 0.4
+    switching = _q("250 kHz")
+    inductance = buck_minimum_inductance_for_ccm(
+        output_voltage=output, load_current=load, duty_cycle=duty, switching_frequency=switching
+    )
+    supply = Quantity(magnitude=output.to("V").magnitude / duty, unit="V")
+    ripple = buck_inductor_ripple_current(
+        input_voltage=supply,
+        output_voltage=output,
+        inductance=inductance,
+        switching_frequency=switching,
+    )
+    assert ripple.to("A").magnitude == pytest.approx(2.0 * load.to("A").magnitude, rel=1e-12)
+
+
+def test_fouling_factor_from_coefficients_lands_the_fouled_coefficient():
+    """The whole round trip runs through the public U: a fouling allowance is added to the
+    clean wall, and reading the two coefficients back must recover exactly that allowance."""
+    from anvilate.analysis import (
+        fouling_factor_from_coefficients,
+        overall_heat_transfer_coefficient,
+    )
+
+    wall = {
+        "inside_coefficient": _q("3200 W/(m**2*K)"),
+        "outside_coefficient": _q("1100 W/(m**2*K)"),
+        "wall_thickness": _q("2 mm"),
+        "wall_conductivity": _q("16 W/(m*K)"),
+    }
+    allowance = _q("0.0004 m**2*K/W")
+    clean = overall_heat_transfer_coefficient(**wall)
+    service = overall_heat_transfer_coefficient(inside_fouling_factor=allowance, **wall)
+    assert fouling_factor_from_coefficients(
+        clean_coefficient=clean, service_coefficient=service
+    ).to("m**2*K/W").magnitude == pytest.approx(allowance.to("m**2*K/W").magnitude, rel=1e-12)
+
+
+def test_belt_speed_for_max_power_is_the_speed_that_maximises_the_power():
+    """An optimum, not an equality: the contract is that the transmitted power at v* beats
+    the power either side of it, and that the centrifugal tension there is exactly T1/3."""
+    from anvilate.analysis import (
+        belt_centrifugal_tension,
+        belt_max_transmissible_force_at_speed,
+        belt_speed_for_max_power,
+    )
+
+    belt = {"tight_tension": _q("1800 N"), "linear_density": _q("0.35 kg/m")}
+    grip = {"friction_coefficient": 0.4, "wrap_angle": 3.0}
+    best = belt_speed_for_max_power(**belt)
+    assert belt_centrifugal_tension(linear_density=belt["linear_density"], belt_speed=best).to(
+        "N"
+    ).magnitude == pytest.approx(belt["tight_tension"].to("N").magnitude / 3.0, rel=1e-12)
+
+    def power(speed: Quantity) -> float:
+        force = belt_max_transmissible_force_at_speed(belt_speed=speed, **belt, **grip)
+        return force.to("N").magnitude * speed.to("m/s").magnitude
+
+    peak = power(best)
+    for factor in (0.8, 0.95, 1.05, 1.2):
+        off = Quantity(magnitude=factor * best.to("m/s").magnitude, unit="m/s")
+        assert power(off) < peak

@@ -30,15 +30,35 @@
 # its round-trip test reassembled the formula by hand instead of calling anything.
 # `fin_array_thermal_resistance` is that forward now, and the pair is a real one.
 
+# REFUSED PAIRINGS. A candidate that looks pairable but does not close belongs in the
+# unpaired list with its reason recorded here, so the next reader does not spend the
+# afternoon rediscovering it:
+#
+#   data_converter.oversampling_ratio_for_bits <-> oversampling_snr_gain — one side uses
+#     20*log10(2) and the other the textbook 6.02 dB per bit. A conversion with a constant
+#     seam in it is not a round trip.
+#   road_curve.minimum_curve_radius <-> banked_curve_max_speed — AASHTO's R_min = v^2/(g*(e+f))
+#     drops the (1 - e*f) coupling that the sliding-speed relation keeps, so they are two
+#     models of the same curve. At 100 km/h, e = 0.08, f = 0.14 the round trip lands 0.56%
+#     fast. Both are right; neither inverts the other.
+#   stress.max_shear_stress_plane — a forward, not an inverse. Its tau_max is taken over all
+#     three principals including the zero out-of-plane one, so it equals the in-plane
+#     (sigma_1 - sigma_2)/2 only when the two in-plane principals straddle zero.
+#   torsion.hollow_shaft_diameter_for_bending_torsion — no public von Mises stress accepts a
+#     bore, so there is nothing for the hollow sizing to land on. The solid twin's forward
+#     takes one diameter.
+
 ## round-tripped
 accumulator.accumulator_size_for_volume -> accumulator.accumulator_usable_volume
 acid_base.buffer_ratio_for_ph -> acid_base.henderson_hasselbalch_ph
 acoustics.doppler_velocity_from_shift -> acoustics.doppler_shifted_frequency
 antenna.dish_diameter_for_gain -> antenna.aperture_antenna_gain
 axial.required_axial_area -> axial.axial_stress
+battery_peukert.peukert_exponent_from_two_rates -> battery_peukert.peukert_runtime
 beam.aisc_bearing_length_for_web_yielding -> beam.aisc_web_local_yielding_strength
 beam.fastener_spacing_for_shear_flow -> beam.shear_flow
 bearing.bearing_rating_for_life -> bearing.bearing_basic_rating_life
+belt.belt_speed_for_max_power -> belt.belt_max_transmissible_force_at_speed
 belt.belt_tight_tension_for_power -> belt.belt_transmitted_power
 brake.band_brake_tight_tension_for_torque -> brake.band_brake_torque
 bulk_solids.beverloo_orifice_for_rate -> bulk_solids.beverloo_discharge_rate
@@ -54,6 +74,7 @@ cyclotron.cyclotron_mass_from_frequency -> cyclotron.cyclotron_frequency
 dc_dc_converter.boost_duty_cycle_for_output -> dc_dc_converter.boost_output_voltage
 dc_dc_converter.buck_boost_duty_cycle_for_output -> dc_dc_converter.buck_boost_output_voltage
 dc_dc_converter.buck_duty_cycle_for_output -> dc_dc_converter.buck_output_voltage
+dc_dc_converter.buck_minimum_inductance_for_ccm -> dc_dc_converter.buck_inductor_ripple_current
 drilling.drilling_feed_for_torque_limit -> drilling.drilling_torque
 dynamics.damping_ratio_from_half_power_bandwidth -> dynamics.quality_factor
 dynamics.damping_ratio_from_log_decrement -> dynamics.logarithmic_decrement
@@ -66,6 +87,7 @@ electroplating.electroplating_time_for_thickness -> electroplating.electroplatin
 energy_storage.current_from_c_rate -> energy_storage.c_rate
 energy_storage.discharge_time_from_c_rate -> energy_storage.c_rate
 fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
+fastener.bolt_preload_from_torque -> fastener.torque_for_preload
 fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
 fastener.torque_for_preload -> fastener.bolt_preload_from_torque
 fatigue.basquin_stress_for_life -> fatigue.basquin_cycles_to_failure
@@ -108,6 +130,7 @@ radar.radial_velocity_from_doppler -> radar.radar_doppler_shift
 radiation_shielding.shield_thickness_for_transmission -> radiation_shielding.radiation_transmission_fraction
 radioactivity.decay_constant_from_half_life -> radioactivity.remaining_activity
 radioactivity.time_for_activity_decay -> radioactivity.remaining_activity
+reaction_kinetics.first_order_time_for_conversion -> reaction_kinetics.first_order_concentration
 reactive_circuit.capacitance_for_reactance -> reactive_circuit.capacitive_reactance
 reactive_circuit.inductance_for_reactance -> reactive_circuit.inductive_reactance
 rectifier.filter_capacitance_for_ripple -> rectifier.capacitor_filter_ripple_voltage
@@ -127,6 +150,7 @@ strain_gauge.strain_from_bridge_output -> strain_gauge.wheatstone_bridge_output
 temperature_sensor.thermocouple_temperature_from_voltage -> temperature_sensor.thermocouple_voltage
 thermal.counterflow_ntu_for_effectiveness -> thermal.counterflow_effectiveness
 thermal.fin_array_count_for_resistance -> thermal.fin_array_thermal_resistance
+thermal.fouling_factor_from_coefficients -> thermal.overall_heat_transfer_coefficient
 thermal.heat_exchanger_area_for_duty -> thermal.heat_exchanger_duty
 thermal.parallel_flow_ntu_for_effectiveness -> thermal.parallel_flow_effectiveness
 thermal.shell_and_tube_ntu_for_effectiveness -> thermal.shell_and_tube_effectiveness
@@ -149,21 +173,17 @@ wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bend
 acoustics.sound_power_level_from_intensity
 acoustics.sound_pressure_from_power_level
 antenna.max_line_of_sight_range
-battery_peukert.peukert_exponent_from_two_rates
 beam.max_transverse_shear_stress
-belt.belt_speed_for_max_power
 boiling.minimum_film_boiling_heat_flux
 casting.riser_modulus_for_feeding
 combustion.excess_air_from_flue_oxygen
 composite.fiber_volume_fraction_from_weight_fraction
 data_converter.oversampling_ratio_for_bits
-dc_dc_converter.buck_minimum_inductance_for_ccm
 dynamics.angular_acceleration_from_torque
 dynamics.quality_factor_from_half_power_bandwidth
 elastic_constants.bulk_modulus_from_youngs_poisson
 elastic_constants.youngs_modulus_from_bulk_shear
 exergy.irreversibility_from_entropy_generation
-fastener.bolt_preload_from_torque
 gear.minimum_teeth_to_avoid_undercut
 gear.profile_shift_sum_for_center_distance
 geotechnical.allowable_bearing_from_ultimate
@@ -182,12 +202,10 @@ quantum.minimum_momentum_uncertainty
 radar.max_unambiguous_range
 radar.max_unambiguous_velocity
 radiation_pressure.radiation_pressure_from_intensity
-reaction_kinetics.first_order_time_for_conversion
 road_curve.minimum_curve_radius
 sheetmetal.minimum_bend_radius
 spectroscopy.transmittance_from_absorbance
 strain_gauge.gauge_strain_from_resistance
 stress.max_shear_stress_plane
-thermal.fouling_factor_from_coefficients
 thermal.heat_exchanger_effectiveness_from_temperatures
 torsion.hollow_shaft_diameter_for_bending_torsion
