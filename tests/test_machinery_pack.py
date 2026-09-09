@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from anvilate.analysis import (
@@ -10,12 +12,15 @@ from anvilate.analysis import (
     gear_pitch_diameter,
     gear_tangential_load,
     shaft_diameter_de_goodman,
+    spring_shear_stress,
 )
 from anvilate.packs.machinery import (
+    HelicalCompressionSpring,
     RollingBearing,
     ShaftKey,
     SpurGearMesh,
     TransmissionShaft,
+    screen_compression_spring,
     screen_gear_mesh,
     screen_rolling_bearing,
     screen_shaft,
@@ -540,3 +545,158 @@ def test_a_static_factor_is_not_stacked_on_the_life_checks_margin():
     assert strict["bearing rating life"].safety_factor == pytest.approx(
         relaxed["bearing rating life"].safety_factor
     )
+
+
+def _coil(**overrides) -> HelicalCompressionSpring:
+    fields = {
+        "wire_diameter": _q("3 mm"),
+        "mean_coil_diameter": _q("24 mm"),
+        "active_coils": 10.0,
+        "total_coils": 12.0,
+        "free_length": _q("120 mm"),
+        "operating_force": _q("120 N"),
+        "shear_modulus": _q("79.3 GPa"),
+        "elastic_modulus": _q("207 GPa"),
+        "allowable_shear_stress": _q("700 MPa"),
+    }
+    fields.update(overrides)
+    return HelicalCompressionSpring(**fields)
+
+
+def test_the_spring_card_pins_its_stress_and_its_travel():
+    """Derived here from the published forms, not read back off the screen.
+
+    C = D/d = 8, K_W = (4C−1)/(4C−4) + 0.615/C = 1.18402, τ = K_W·8·F·D/(π·d³); the rate is
+    k = G·d⁴/(8·D³·N_a) and the solid length N_t·d.
+    """
+    names = _named(screen_compression_spring(_coil()))
+    assert set(names) == {"coil shear stress", "solid-height clearance", "lateral buckling"}
+    index = 24.0 / 3.0
+    wahl = (4 * index - 1) / (4 * index - 4) + 0.615 / index
+    tau = wahl * 8 * 120.0 * 24.0 / (math.pi * 3.0**3)
+    assert names["coil shear stress"].safety_factor == pytest.approx(700.0 / tau, rel=1e-9)
+
+    rate = 79300.0 * 3.0**4 / (8 * 24.0**3 * 10.0)
+    travel = 120.0 / rate
+    assert names["solid-height clearance"].safety_factor == pytest.approx(
+        (120.0 - 12.0 * 3.0) / travel, rel=1e-9
+    )
+    # This coil is short enough to be absolutely stable, which is a pass with a reason and
+    # no number: there is no critical deflection to be a multiple of.
+    assert names["lateral buckling"].status is CheckStatus.PASS
+    assert names["lateral buckling"].safety_factor is None
+    assert "absolutely stable" in names["lateral buckling"].detail
+
+
+def test_the_two_length_checks_pull_the_free_length_opposite_ways():
+    """The reason a spring is screened as one card.
+
+    A long slender coil buckles and asks to be shortened; the same coil at a working force
+    runs out of travel before solid and asks to be lengthened. Both hints are on one card,
+    and a caller who acted on either alone would make the other worse.
+    """
+    coil = _coil(
+        wire_diameter=_q("1.6 mm"),
+        mean_coil_diameter=_q("12 mm"),
+        active_coils=38.0,
+        total_coils=40.0,
+        free_length=_q("150 mm"),
+        operating_force=_q("90 N"),
+        allowable_shear_stress=_q("900 MPa"),
+    )
+    entries = _named(screen_compression_spring(coil))
+    assert all(entry.status is CheckStatus.FAIL for entry in entries.values())
+    clearance = entries["solid-height clearance"].repair_hint
+    buckling = entries["lateral buckling"].repair_hint
+    assert clearance is not None and buckling is not None
+    assert clearance.parameter == buckling.parameter == "free_length"
+    assert clearance.direction is Direction.INCREASE
+    assert buckling.direction is Direction.DECREASE
+
+
+def test_the_clearance_lever_is_the_least_free_length_that_clears_it():
+    coil = _coil(free_length=_q("45 mm"))
+    entry = _named(screen_compression_spring(coil))["solid-height clearance"]
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert hint is not None and hint.parameter == "free_length" and hint.unit == "mm"
+    repaired = coil.model_copy(
+        update={"free_length": Quantity(magnitude=hint.corrective_value, unit="mm")}
+    )
+    assert (
+        _named(screen_compression_spring(repaired))["solid-height clearance"].status
+        is CheckStatus.PASS
+    )
+    under = coil.model_copy(
+        update={"free_length": Quantity(magnitude=hint.corrective_value * 0.999, unit="mm")}
+    )
+    assert (
+        _named(screen_compression_spring(under))["solid-height clearance"].status
+        is CheckStatus.FAIL
+    )
+
+
+def test_thicker_wire_always_helps_the_coil_stress_over_the_practical_index_band():
+    """The sweep behind the directional hint, and the reason it is not solved.
+
+    τ goes as 1/d³ at a fixed coil diameter, which would invert — but the Wahl factor is a
+    function of C = D/d and RISES as the wire thickens, so the closed solve is not the
+    answer this screen would give back. The claim the hint makes is that the d³ still wins,
+    and it is checked across every spring index from 4 to 12.
+
+    Swept over the analysis function rather than the screen, deliberately: 700 synthetic
+    springs put through a scorecard would land 700 arbitrary substituted lines in the
+    session-wide render-truth corpus, where a force of 500 N printed as 0.112 kip loses
+    enough precision to look like a mismatch. The screen's own monotonicity is checked below
+    on the sizes a spring is actually made in.
+    """
+    for mean in (10.0, 24.0, 60.0, 150.0):
+        for force in (50.0, 500.0, 2000.0):
+            previous = None
+            for step in range(60):
+                wire = mean / 12.0 + (mean / 4.0 - mean / 12.0) * step / 60.0
+                stress = (
+                    spring_shear_stress(
+                        force=Quantity(magnitude=force, unit="N"),
+                        mean_coil_diameter=Quantity(magnitude=mean, unit="mm"),
+                        wire_diameter=Quantity(magnitude=wire, unit="mm"),
+                    )
+                    .to("MPa")
+                    .magnitude
+                )
+                if previous is not None:
+                    assert stress < previous, (mean, force, wire)
+                previous = stress
+
+
+def test_the_screens_own_stress_margin_rises_with_the_wire():
+    """The same claim where the caller meets it: on the card, at stock wire sizes."""
+    previous = None
+    for wire in ("2 mm", "2.5 mm", "3 mm", "3.5 mm", "4 mm", "5 mm"):
+        factor = _named(screen_compression_spring(_coil(wire_diameter=_q(wire))))[
+            "coil shear stress"
+        ].safety_factor
+        if previous is not None:
+            assert factor > previous, wire
+        previous = factor
+
+
+def test_a_buckling_lever_only_appears_once_the_coil_can_buckle():
+    """An absolutely stable coil carries no hint, because there is nothing to move."""
+    stable = _named(screen_compression_spring(_coil()))["lateral buckling"]
+    assert stable.repair_hint is None
+    slender = _named(
+        screen_compression_spring(
+            _coil(active_coils=20.0, total_coils=22.0, free_length=_q("200 mm"))
+        )
+    )["lateral buckling"]
+    assert slender.status is CheckStatus.FAIL
+    assert slender.repair_hint is not None
+    assert slender.repair_hint.direction is Direction.DECREASE
+    # And moving that way is what improves it.
+    shorter = _named(
+        screen_compression_spring(
+            _coil(active_coils=20.0, total_coils=22.0, free_length=_q("170 mm"))
+        )
+    )["lateral buckling"]
+    assert shorter.safety_factor > slender.safety_factor

@@ -986,6 +986,37 @@ def test_a_formula_outside_the_grammar_is_declined_not_guessed(formula):
     assert formula_to_mathml(formula) is None
 
 
+def test_the_render_truth_tolerance_reads_the_exponents_in_its_own_line():
+    """A flat 1% is not "the inputs' own rounding", and a cubed input proves it.
+
+    A 4 mm spring wire prints as `0.157 in` — three significant figures — and cubed that is
+    a 1.1% error before anything else in the line rounds. The gate reported it as a
+    mismatch, which is the gate being wrong about a line that is right. The slack is read
+    off the line now: each printed decimal contributes half its last place, and an exponent
+    multiplies that contribution.
+
+    Both directions matter. A linear line must NOT get looser, or a real defect walks
+    through the widening this fixes.
+    """
+    from render_truth import Reading, _rounding_slack, disagrees
+
+    cubed = "τ = 1.2525·8·0.0270 kip·0.945 in/(π·(0.157 in)³)"
+    linear = "n = 124.0 MPa / 100.0 MPa"
+    assert _rounding_slack(cubed) > 0.011
+    assert _rounding_slack(linear) < 0.001
+
+    # The line above, right, is accepted; the same line 3% out is still a finding.
+    assert not disagrees(Reading(cubed, value=21.03, expected=20.8))
+    assert disagrees(Reading(cubed, value=21.42, expected=20.8))
+    # And the linear line keeps the 1% floor rather than the slack it computes.
+    assert not disagrees(Reading(linear, value=1.245, expected=1.24))
+    assert disagrees(Reading(linear, value=1.26, expected=1.24))
+
+    # A whole-number coefficient has no last place and must contribute nothing, or every
+    # formula with an 8 in it gets slack it has not earned.
+    assert _rounding_slack("y = 8·3·2") == 0.0
+
+
 def test_a_caret_exponent_and_a_word_operator_typeset():
     """Two spellings the grammar did not take, both of them the point of their formula.
 

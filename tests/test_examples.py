@@ -657,6 +657,16 @@ def test_drive_train_example_passes_the_shaft_and_fails_its_neighbours():
     _assert_narrates("drive_train_scorecard.py", factors["key side bearing"], hours)
 
 
+def test_compression_spring_example_names_one_knob_and_two_directions():
+    namespace = runpy.run_path(str(_EXAMPLES / "compression_spring_scorecard.py"))
+    limits = namespace["spring_limits"]()
+    assert limits["status"] == "fail"
+    levers = limits["levers"]
+    assert levers["solid-height clearance"] == ("free_length", "increase")
+    assert levers["lateral buckling"] == ("free_length", "decrease")
+    _assert_narrates("compression_spring_scorecard.py", limits["clearance_length"])
+
+
 def test_gear_mesh_example_names_two_different_modules():
     namespace = runpy.run_path(str(_EXAMPLES / "gear_mesh_scorecard.py"))
     limits = namespace["mesh_limits"]()

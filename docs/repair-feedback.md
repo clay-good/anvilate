@@ -55,8 +55,8 @@ isolator frequency ratio already did.
 
 ### Every screen records whether it has a lever
 
-`docs/api/repair-levers.txt` holds the decision for all 59 public screens.
-There are 50 levers across 29 of them, and 30 recorded as having none yet — each
+`docs/api/repair-levers.txt` holds the decision for all 60 public screens.
+There are 53 levers across 30 of them, and 30 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -135,6 +135,7 @@ owes the reader:
 | `screen_bolted_connection` | bolt shear / bearing / tear-out | `bolt_diameter` ↑ / `plate_thickness` ↑ / `edge_distance` ↑ | solved — three knobs, and the bolt fights the edge |
 | `screen_column_member` | AISC §E3 buckling | `length` ↓ | **directional** — no closed inverse across the inelastic branch |
 | `screen_shaft` | strength / fatigue / twist | `diameter` ↑ | solved — **three times**, at d³, d³ and d⁴, and they disagree |
+| `screen_compression_spring` | coil shear / clearance / buckling | `wire_diameter` ↑ / `free_length` ↑ / `free_length` ↓ | **the same knob, opposite ways**: clearance wants a longer spring and buckling a shorter one |
 | `screen_shaft_key` | key shear / side bearing | `key_length` ↑ | solved — a different length per limit state |
 | `screen_rolling_bearing` | rating life / static capacity | `dynamic_load_rating` ↑ / `static_load_rating` ↑ | solved — the catalogue rating, because a bearing is selected and not machined |
 | `screen_gear_mesh` | bending / pitting / contact ratio / undercut | `module` ↑ / `pressure_angle` ↓ / `pinion_teeth` ↑ | solved twice at two different powers, **directional** on the angle, and a whole count |

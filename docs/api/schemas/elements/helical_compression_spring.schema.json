@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/helical_compression_spring/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'helical_compression_spring': the fields a Design Spec puts in `element_params` when it declares `element_type: helical_compression_spring`. Generated from anvilate.packs.machinery.HelicalCompressionSpring.",
+  "properties": {
+    "active_coils": {
+      "title": "Active Coils",
+      "type": "number"
+    },
+    "allowable_shear_stress": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "elastic_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "end_condition_constant": {
+      "default": 0.5,
+      "title": "End Condition Constant",
+      "type": "number"
+    },
+    "free_length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "mean_coil_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "operating_force": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "shear_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "total_coils": {
+      "title": "Total Coils",
+      "type": "number"
+    },
+    "wire_diameter": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "wire_diameter",
+    "mean_coil_diameter",
+    "active_coils",
+    "total_coils",
+    "free_length",
+    "operating_force",
+    "shear_modulus",
+    "elastic_modulus",
+    "allowable_shear_stress"
+  ],
+  "title": "HelicalCompressionSpring",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

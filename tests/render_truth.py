@@ -193,12 +193,53 @@ def read_line(derivation: object, system: object) -> Reading | None:
     return Reading(substituted, value=float(actual), expected=float(match.group(1)))
 
 
+_NUMBER = re.compile(r"-?\d+\.\d+")
+# A parenthesised quantity carrying an exponent: `(0.157 in)³`, `(40.00 mm)**3`, `(2.5)^2`.
+# Matching the number and its unit separately is what this must NOT do — a greedy unit run
+# walks straight past the next factor and attaches the exponent to the wrong number.
+_POWERED = re.compile(r"\((-?\d+\.\d+)[^()]*\)\s*(?:\*\*|\^)?\s*([⁰¹²³⁴-⁹]+|\d+(?:\.\d+)?)")
+
+_SUPERSCRIPT_ONLY = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
+
+
+def _relative_half_place(number: str) -> float:
+    """Half the last printed place of ``number``, relative to the number itself."""
+    value = abs(float(number))
+    if value == 0.0:
+        return 0.0
+    return 0.5 * 10.0 ** -len(number.partition(".")[2]) / value
+
+
+def _rounding_slack(substituted: str) -> float:
+    """How far the line's own printed inputs can move the answer, as a fraction.
+
+    The tolerance used to be a flat 1%, described as "the result's last place plus slack for
+    the inputs' own rounding" — and it was not that, it was a guess that happened to cover
+    the corpus. A line that CUBES a printed length does not stay inside it: a 4 mm wire
+    prints as `0.157 in`, three significant figures, and cubed that is a 1% error on its own
+    before anything else in the line rounds. A gate whose tolerance ignores the exponents in
+    the line it is reading either misses a real defect on a linear line or reports one on a
+    cubed line, and this repository met the second the day a spring shipped.
+
+    So the slack is read off the line: every printed decimal contributes half its last place
+    relative to itself, and a parenthesised quantity under an exponent contributes that many
+    times over. A whole number is a coefficient — the 8 in `8·F·D` — and has no last place.
+    """
+    slack = sum(_relative_half_place(number) for number in _NUMBER.findall(substituted))
+    for number, exponent in _POWERED.findall(substituted):
+        power = float(exponent.translate(_SUPERSCRIPT_ONLY))
+        slack += (power - 1.0) * _relative_half_place(number)
+    return slack
+
+
 def disagrees(reading: Reading) -> bool:
     """Whether the line and the number printed under it are further apart than rounding.
 
-    The printed result carries its own precision, so the tolerance is a little over its last
-    place plus slack for the inputs' own rounding.
+    The printed result carries its own precision and each printed input carries its own, and
+    an exponent multiplies the second. The floor of 1% is kept because it covers the result
+    itself and every line whose inputs are printed generously.
     """
     if reading.value is None or reading.expected is None:
         return False
-    return abs(reading.value - reading.expected) > max(abs(reading.expected) * 0.01, 5e-4)
+    tolerance = max(abs(reading.expected) * max(0.01, _rounding_slack(reading.substituted)), 5e-4)
+    return abs(reading.value - reading.expected) > tolerance

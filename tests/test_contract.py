@@ -2205,6 +2205,22 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
             ),
         ),
         (
+            "compression spring",
+            machinery.screen_compression_spring(
+                machinery.HelicalCompressionSpring(
+                    wire_diameter=q("3 mm"),
+                    mean_coil_diameter=q("24 mm"),
+                    active_coils=20.0,
+                    total_coils=22.0,
+                    free_length=q("200 mm"),
+                    operating_force=q("120 N"),
+                    shear_modulus=q("79.3 GPa"),
+                    elastic_modulus=q("207 GPa"),
+                    allowable_shear_stress=q("700 MPa"),
+                )
+            ),
+        ),
+        (
             "shaft key",
             machinery.screen_shaft_key(
                 machinery.ShaftKey(

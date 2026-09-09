@@ -28,6 +28,7 @@ from pydantic import ConfigDict
 
 from ..analysis import (
     BALL_BEARING_LIFE_EXPONENT,
+    SPRING_END_PARALLEL_PLATES,
     agma_bending_stress,
     agma_contact_stress,
     bearing_equivalent_dynamic_load,
@@ -37,6 +38,9 @@ from ..analysis import (
     bearing_static_safety_factor,
     gear_pitch_diameter,
     gear_tangential_load,
+    helical_spring_buckling,
+    helical_spring_rate,
+    helical_spring_solid_length,
     key_bearing_stress,
     key_length_for_torque,
     key_shear_stress,
@@ -45,18 +49,23 @@ from ..analysis import (
     shaft_diameter_for_bending_torsion,
     shaft_twist_angle,
     shaft_von_mises_stress,
+    spring_index,
+    spring_shear_stress,
     spur_gear_contact_ratio,
+    wahl_factor,
 )
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
 __all__ = [
+    "HelicalCompressionSpring",
     "RollingBearing",
     "ShaftKey",
     "SpurGearMesh",
     "TransmissionShaft",
+    "screen_compression_spring",
     "screen_gear_mesh",
     "screen_rolling_bearing",
     "screen_shaft",
@@ -83,6 +92,9 @@ _KEY_BEARING_REFERENCE = "Shigley, parallel key side bearing on the half height"
 # stands. Reading the standards is how these become ISO citations.
 _BEARING_LIFE_REFERENCE = "Shigley, rolling-bearing rating life L10 = (C/P)^p"
 _BEARING_STATIC_REFERENCE = "Shigley, bearing static load rating s₀ = C₀/P₀"
+_SPRING_SHEAR_REFERENCE = "Shigley, Wahl-corrected helical spring shear stress"
+_SPRING_CLEARANCE_REFERENCE = "Shigley, clash allowance above solid height"
+_SPRING_BUCKLING_REFERENCE = "Shigley, absolute stability and critical deflection of a coil"
 
 
 class TransmissionShaft(GuardedInputs):
@@ -1098,5 +1110,297 @@ def screen_rolling_bearing(
         entries=(
             _bearing_life_entry(unit, required_safety_factor),
             _bearing_static_entry(unit),
+        )
+    )
+
+
+class HelicalCompressionSpring(GuardedInputs):
+    """A round-wire helical compression spring, and its screen inputs.
+
+    ``wire_diameter`` d and ``mean_coil_diameter`` D set the coil; ``active_coils`` N_a
+    carries the rate and ``total_coils`` N_t sets the solid height. ``free_length`` L₀ and
+    ``operating_force`` F say what it is asked to do, and ``allowable_shear_stress`` is the
+    caller's — a music-wire allowable is a function of the wire size and the standard it is
+    drawn to, and this screen rates the spring rather than looking a wire up.
+
+    ``end_condition_constant`` α is how the ends are held: 0.5 for a spring squared and
+    ground between parallel plates, 0.707 fixed-hinged, 1 hinged-hinged, 2 clamped-free. The
+    constants are in :mod:`anvilate.analysis.spring`, and the default is the common case
+    rather than the safe one — a spring on a floating seat is not built between plates.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    wire_diameter: Quantity
+    mean_coil_diameter: Quantity
+    active_coils: float
+    total_coils: float
+    free_length: Quantity
+    operating_force: Quantity
+    shear_modulus: Quantity
+    elastic_modulus: Quantity
+    allowable_shear_stress: Quantity
+    end_condition_constant: float = SPRING_END_PARALLEL_PLATES
+
+
+def _spring_deflection(coil: HelicalCompressionSpring) -> Quantity:
+    """The axial deflection the operating force produces, y = F/k."""
+    rate = helical_spring_rate(
+        mean_coil_diameter=coil.mean_coil_diameter,
+        wire_diameter=coil.wire_diameter,
+        active_coils=coil.active_coils,
+        shear_modulus=coil.shear_modulus,
+    )
+    return Quantity(
+        magnitude=coil.operating_force.to("N").magnitude / rate.to("N/mm").magnitude, unit="mm"
+    )
+
+
+def _spring_shear_entry(
+    coil: HelicalCompressionSpring, required_safety_factor: float
+) -> ScorecardEntry:
+    """Wahl-corrected torsional shear in the wire at the operating force."""
+    stress = spring_shear_stress(
+        force=coil.operating_force,
+        mean_coil_diameter=coil.mean_coil_diameter,
+        wire_diameter=coil.wire_diameter,
+    )
+    index = spring_index(
+        mean_coil_diameter=coil.mean_coil_diameter, wire_diameter=coil.wire_diameter
+    )
+    tau = stress.to("MPa").magnitude
+    allowable = coil.allowable_shear_stress.to("MPa").magnitude
+    safety = allowable / tau if tau > 0 else None
+    derivation = Derivation(
+        symbolic="τ = K_W·8·F·D/(π·d³)",
+        inputs=(
+            SymbolValue(
+                symbol="K_W",
+                description=f"Wahl curvature-and-shear factor at a spring index C = {index:.3g}",
+                value=wahl_factor(index),
+            ),
+            SymbolValue(
+                symbol="F", description="operating force", value=coil.operating_force, unit="N"
+            ),
+            SymbolValue(
+                symbol="D",
+                description="mean coil diameter",
+                value=coil.mean_coil_diameter,
+                unit="mm",
+            ),
+            SymbolValue(
+                symbol="d", description="wire diameter", value=coil.wire_diameter, unit="mm"
+            ),
+        ),
+        result=SymbolValue(
+            symbol="τ", description="torsional shear stress in the wire", value=stress, unit="MPa"
+        ),
+        citation=_SPRING_SHEAR_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "coil shear stress", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _SPRING_SHEAR_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # DIRECTIONAL, and the reason is the Wahl factor. τ goes as 1/d³ at a fixed coil
+        # diameter, which would invert — but K_W is a function of C = D/d and RISES as the
+        # wire thickens, so the closed solve is not the answer the screen would give back.
+        # Thicker wire still wins across the whole practical band, which is swept in
+        # tests/test_machinery_pack.py and is what the scope on this hint states.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.directional(
+                    "wire_diameter",
+                    direction=Direction.INCREASE,
+                    provenance=(
+                        "τ falls monotonically with wire diameter over a spring index of "
+                        "4 to 12; the Wahl factor rises as the wire thickens and the d³ "
+                        "still wins"
+                    ),
+                )
+            }
+        )
+    return entry
+
+
+def _spring_clearance_entry(
+    coil: HelicalCompressionSpring, required_safety_factor: float
+) -> ScorecardEntry:
+    """Room left between the operating deflection and solid height."""
+    solid = helical_spring_solid_length(
+        total_coils=coil.total_coils, wire_diameter=coil.wire_diameter
+    )
+    deflection = _spring_deflection(coil)
+    available = coil.free_length.to("mm").magnitude - solid.to("mm").magnitude
+    used = deflection.to("mm").magnitude
+    # A spring already shorter than solid is not a spring with a small margin; it is a
+    # geometry that cannot exist, and it is the caller's arithmetic that is wrong.
+    safety = available / used if used > 0 and available > 0 else None
+    derivation = Derivation(
+        symbolic="n = (L₀ − L_s)/y",
+        inputs=(
+            SymbolValue(symbol="L₀", description="free length", value=coil.free_length, unit="mm"),
+            SymbolValue(
+                symbol="L_s",
+                description="solid length, N_t·d",
+                value=solid,
+                unit="mm",
+            ),
+            SymbolValue(
+                symbol="y",
+                description="deflection at the operating force, F/k",
+                value=deflection,
+                unit="mm",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="n",
+            description="available travel as a multiple of the travel used",
+            value=safety if safety is not None else 0.0,
+        ),
+        citation=_SPRING_CLEARANCE_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "solid-height clearance", computed=safety, required=required_safety_factor
+    ).model_copy(
+        update={
+            "reference": _SPRING_CLEARANCE_REFERENCE,
+            "derivation": derivation if safety is not None else None,
+        }
+    )
+    if entry.status is CheckStatus.FAIL:
+        # Exact: the solid length and the deflection are both fixed by the wire and the
+        # rate, neither of which the free length touches.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "free_length",
+                    direction=Direction.INCREASE,
+                    value=solid.to("mm").magnitude + required_safety_factor * used,
+                    unit="mm",
+                    provenance="solid length plus the required multiple of the travel used",
+                )
+            }
+        )
+    return entry
+
+
+def _spring_buckling_entry(coil: HelicalCompressionSpring) -> ScorecardEntry:
+    """Lateral buckling of the coil at the operating deflection.
+
+    Judged against 1.0 and not against the stress checks' margin: the critical deflection is
+    where the spring goes sideways, and asking for a multiple of it is asking for a different
+    criterion. A spring below the absolute-stability threshold cannot buckle at any
+    deflection up to solid, and that is a pass with a reason rather than a number.
+    """
+    buckling = helical_spring_buckling(
+        free_length=coil.free_length,
+        mean_coil_diameter=coil.mean_coil_diameter,
+        elastic_modulus=coil.elastic_modulus,
+        shear_modulus=coil.shear_modulus,
+        end_condition_constant=coil.end_condition_constant,
+    )
+    deflection = _spring_deflection(coil)
+    if buckling.absolutely_stable or buckling.critical_deflection is None:
+        # No formula, and the check says so on itself rather than leaving a blank where a
+        # worked line goes. There is no quotient here: the slenderness fell below the
+        # absolute-stability threshold and the criterion has nothing left to compare.
+        return ScorecardEntry(
+            name="lateral buckling",
+            status=CheckStatus.PASS,
+            detail=(
+                f"absolutely stable: an effective slenderness of "
+                f"{buckling.effective_slenderness:.3g} is below the threshold, so the coil "
+                f"cannot buckle at any deflection up to solid"
+            ),
+            reference=_SPRING_BUCKLING_REFERENCE,
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason=(
+                    "an absolutely stable coil has no critical deflection to be a multiple "
+                    "of; the verdict is the slenderness compared with the threshold, which "
+                    "is a comparison and not an arithmetic line"
+                ),
+            ),
+        )
+    critical = buckling.critical_deflection.to("mm").magnitude
+    used = deflection.to("mm").magnitude
+    safety = critical / used if used > 0 else None
+    derivation = Derivation(
+        symbolic="n = y_cr/y",
+        inputs=(
+            SymbolValue(
+                symbol="y_cr",
+                description=(
+                    f"deflection at which the coil goes sideways, at an effective "
+                    f"slenderness λ_eff = α·L₀/D = {buckling.effective_slenderness:.3g}"
+                ),
+                value=buckling.critical_deflection,
+                unit="mm",
+            ),
+            SymbolValue(
+                symbol="y",
+                description="deflection at the operating force, F/k",
+                value=deflection,
+                unit="mm",
+            ),
+        ),
+        result=SymbolValue(
+            symbol="n",
+            description="critical deflection as a multiple of the deflection used",
+            value=safety if safety is not None else 0.0,
+        ),
+        citation=_SPRING_BUCKLING_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "lateral buckling", computed=safety, required=1.0
+    ).model_copy(
+        update={
+            "reference": _SPRING_BUCKLING_REFERENCE,
+            "derivation": derivation if safety is not None else None,
+        }
+    )
+    if entry.status is CheckStatus.FAIL:
+        # And this is the point of screening the two together: the clearance check asks for
+        # a LONGER spring and this one asks for a shorter one. Directional rather than
+        # solved because the critical deflection moves with the free length through the
+        # slenderness, and the closed form does not invert.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.directional(
+                    "free_length",
+                    direction=Direction.DECREASE,
+                    provenance=(
+                        "critical deflection falls monotonically as the free length "
+                        "grows; the clearance check pulls this parameter the other way"
+                    ),
+                )
+            }
+        )
+    return entry
+
+
+def screen_compression_spring(
+    coil: HelicalCompressionSpring,
+    *,
+    required_safety_factor: float = 1.2,
+) -> Scorecard:
+    """Screen a :class:`HelicalCompressionSpring` and return its scorecard.
+
+    Screens the Wahl-corrected coil shear stress against the allowable and the solid-height
+    clearance against ``required_safety_factor`` (1.2, the usual clash allowance), and the
+    lateral buckling at the operating deflection against its own criterion — a critical
+    deflection is where the coil goes sideways, and a multiple of it is a different
+    criterion.
+
+    **The two length checks pull the free length in opposite directions.** Clearance asks
+    for a longer spring and buckling for a shorter one, so a coil that fails both cannot be
+    fixed by moving one number in one direction, and the card says so rather than leaving
+    the caller to discover it by trying.
+    """
+    return Scorecard(
+        entries=(
+            _spring_shear_entry(coil, required_safety_factor),
+            _spring_clearance_entry(coil, required_safety_factor),
+            _spring_buckling_entry(coil),
         )
     )

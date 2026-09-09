@@ -189,3 +189,49 @@ unchanged across them. Inventing an edition would manufacture exactly the confid
 citation the [effectivity ratchet](standards-effectivity.md) exists to prevent.
 
 See [`examples/drive_train_scorecard.py`](../examples/drive_train_scorecard.py).
+
+## Helical compression springs
+
+Three checks again, and this time **two of them pull the same knob in opposite directions**.
+
+```python
+from anvilate.packs.machinery import HelicalCompressionSpring, screen_compression_spring
+from anvilate.units import Quantity
+
+coil = HelicalCompressionSpring(
+    wire_diameter=Quantity.parse("1.6 mm"),
+    mean_coil_diameter=Quantity.parse("12 mm"),
+    active_coils=38.0, total_coils=40.0,
+    free_length=Quantity.parse("150 mm"),
+    operating_force=Quantity.parse("90 N"),
+    shear_modulus=Quantity.parse("79.3 GPa"),
+    elastic_modulus=Quantity.parse("207 GPa"),
+    allowable_shear_stress=Quantity.parse("900 MPa"),
+)
+card = screen_compression_spring(coil, required_safety_factor=1.2)
+```
+
+| Check | Safety factor | What it asks for |
+| --- | --- | --- |
+| coil shear stress | 1.12 | `wire_diameter` ↑ |
+| solid-height clearance | 0.95 | `free_length` ↑, to 173.17 mm |
+| lateral buckling | 0.12 | `free_length` ↓ |
+
+**The clearance check wants a longer spring and the buckling check wants a shorter one.** A
+caller who acted on either hint alone would make the other worse, and that is the whole
+reason the three are on one card rather than in three calls. What actually fixes this coil
+is a different wire and fewer turns, which is a redesign — and the card is what says so.
+
+**The shear hint is directional, not solved, and the reason is the Wahl factor.** τ goes as
+1/d³ at a fixed coil diameter, which would invert; but K_W is a function of the spring index
+C = D/d and *rises* as the wire thickens, so the closed solve is not the answer the screen
+would give back. Thicker wire still wins across the whole practical band — swept at every
+spring index from 4 to 12 in the test suite — and that is what the hint claims and no more.
+
+**An absolutely stable coil passes with a reason and no number.** Below the slenderness
+threshold there is no critical deflection to be a multiple of, so the entry carries an
+`Underived` saying the verdict is a comparison rather than an arithmetic line. Buckling is
+judged against its own criterion and not against `required_safety_factor`: the critical
+deflection is where the coil goes sideways, and a multiple of it is a different criterion.
+
+See [`examples/compression_spring_scorecard.py`](../examples/compression_spring_scorecard.py).

@@ -25,7 +25,9 @@ transmission shaft against the three limits that size one and disagree about it
 spur gear mesh against AGMA bending, pitting, contact ratio and undercut, which
 four are moved by three different parameters, and the shaft's two neighbours a
 card of its own cannot see: the key that drives it and the bearing that holds
-it. Each screen rolls its results into a scorecard.
+it, plus a helical compression spring whose clearance and buckling checks pull
+its free length in opposite directions. Each screen rolls its results into a
+scorecard.
 """
 
 from __future__ import annotations

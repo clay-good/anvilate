@@ -2034,3 +2034,49 @@ def test_the_machinery_pages_drive_train_figures_are_the_screens_own():
     rating = re.search(r"names ([\d.]+) kN as the least C", flat)
     assert rating is not None, "the least-C sentence on machinery-screening.md has moved"
     assert float(rating.group(1)) == pytest.approx(life.repair_hint.corrective_value, abs=0.005)
+
+
+def test_the_machinery_pages_spring_table_is_the_screens_own_three_answers():
+    """The spring half, including the free length the clearance check asks for.
+
+    The page's argument is that two checks name the same parameter and disagree about the
+    direction, so the directions are read back off the page too — a table that said both
+    arrows the same way would be arguing the opposite of what the screen does.
+    """
+    from anvilate.packs.machinery import HelicalCompressionSpring, screen_compression_spring
+    from anvilate.units import Quantity
+
+    page = _page("machinery-screening.md")
+    flat = " ".join(page.split())
+    rows = {
+        name.strip(): (float(factor), arrow.strip())
+        for name, factor, arrow in re.findall(
+            r"^\| ([a-z][a-z\- ]+) \| ([\d.]+) \| (`\w+` [↑↓].*?) \|$", page, re.M
+        )
+    }
+    coil = HelicalCompressionSpring(
+        wire_diameter=Quantity.parse("1.6 mm"),
+        mean_coil_diameter=Quantity.parse("12 mm"),
+        active_coils=38.0,
+        total_coils=40.0,
+        free_length=Quantity.parse("150 mm"),
+        operating_force=Quantity.parse("90 N"),
+        shear_modulus=Quantity.parse("79.3 GPa"),
+        elastic_modulus=Quantity.parse("207 GPa"),
+        allowable_shear_stress=Quantity.parse("900 MPa"),
+    )
+    entries = {e.name: e for e in screen_compression_spring(coil).entries}
+    for name in ("coil shear stress", "solid-height clearance", "lateral buckling"):
+        assert name in rows, f"the spring table on machinery-screening.md lost {name!r}"
+        factor, arrow = rows[name]
+        assert factor == pytest.approx(entries[name].safety_factor, abs=0.005), name
+        hint = entries[name].repair_hint
+        assert hint is not None
+        assert f"`{hint.parameter}`" in arrow, name
+        assert ("↑" if hint.direction.value == "increase" else "↓") in arrow, name
+
+    stated = re.search(r"`free_length` ↑, to ([\d.]+) mm", flat)
+    assert stated is not None, "the clearance length on machinery-screening.md has moved"
+    assert float(stated.group(1)) == pytest.approx(
+        entries["solid-height clearance"].repair_hint.corrective_value, abs=0.005
+    )
