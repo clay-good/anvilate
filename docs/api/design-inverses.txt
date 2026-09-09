@@ -48,26 +48,42 @@ electroplating.electroplating_time_for_thickness -> electroplating.electroplatin
 fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
 fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
 fastener.torque_for_preload -> fastener.bolt_preload_from_torque
+fatigue.basquin_stress_for_life -> fatigue.basquin_cycles_to_failure
+flow_measurement.differential_pressure_for_flow -> flow_measurement.obstruction_meter_flow_rate
+gear.agma_module_for_bending_stress -> gear.agma_bending_stress
+gear.gear_module_for_center_distance -> gear.gear_center_distance
+gear.lewis_module_for_bending_stress -> gear.lewis_bending_stress
 hydro_power.hydro_flow_for_power -> hydro_power.hydro_turbine_power
 keys.key_length_for_torque -> keys.key_shear_stress
 level_turn.bank_angle_for_load_factor -> level_turn.load_factor_from_bank_angle
 machining.spindle_speed_for_cutting_speed -> machining.cutting_speed
 mass_energy.mass_from_energy -> mass_energy.rest_energy
 photon.photon_wavelength_from_energy -> photon.photon_energy
+plate.clamped_circular_plate_thickness_for_pressure -> plate.clamped_circular_plate_uniform_load
 pressure_vessel.asme_b313_pipe_wall_thickness -> pressure_vessel.asme_b313_pipe_pressure
 pressure_vessel.thin_wall_thickness_for_pressure -> pressure_vessel.thin_wall_cylinder
 radiation_shielding.shield_thickness_for_transmission -> radiation_shielding.radiation_transmission_fraction
 radioactivity.time_for_activity_decay -> radioactivity.remaining_activity
 reactive_circuit.capacitance_for_reactance -> reactive_circuit.capacitive_reactance
 reactive_circuit.inductance_for_reactance -> reactive_circuit.inductive_reactance
+rectifier.filter_capacitance_for_ripple -> rectifier.capacitor_filter_ripple_voltage
 reinforced_concrete.rc_stirrup_spacing_for_shear -> reinforced_concrete.rc_shear_reinforcement_strength
 reinforced_concrete.rc_tension_steel_for_moment -> reinforced_concrete.rc_beam_nominal_moment
+reliability.weibull_life_for_reliability -> reliability.weibull_reliability
 screw_conveyor.screw_conveyor_speed_for_capacity -> screw_conveyor.screw_conveyor_volumetric_capacity
 section.required_section_modulus -> section.bending_stress
 spectroscopy.concentration_from_absorbance -> spectroscopy.absorbance
 spring.helical_spring_active_coils_for_rate -> spring.helical_spring_rate
+thermal.counterflow_ntu_for_effectiveness -> thermal.counterflow_effectiveness
 thermal.fin_array_count_for_resistance -> thermal.fin_array_thermal_resistance
+thermal.heat_exchanger_area_for_duty -> thermal.heat_exchanger_duty
+thermal.parallel_flow_ntu_for_effectiveness -> thermal.parallel_flow_effectiveness
+thermal.shell_and_tube_ntu_for_effectiveness -> thermal.shell_and_tube_effectiveness
 torsion.shaft_diameter_for_torque -> torsion.shaft_torsional_stress
+ventilation.airflow_for_air_changes -> ventilation.air_changes_per_hour
+wear.sliding_distance_for_wear_depth -> wear.archard_wear_depth
+weld.fillet_weld_leg_for_load -> weld.fillet_weld_throat_stress
+welding_heat.weld_travel_speed_for_heat_input -> welding_heat.weld_heat_input
 wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bending_stress
 
 ## not yet paired (each is a candidate by name; some are conversions, not design inverses)
@@ -109,14 +125,9 @@ energy_storage.current_from_c_rate
 energy_storage.discharge_time_from_c_rate
 exergy.irreversibility_from_entropy_generation
 fastener.bolt_preload_from_torque
-fatigue.basquin_stress_for_life
 fire_protection.sprinkler_pressure_for_flow
-flow_measurement.differential_pressure_for_flow
 flywheel.flywheel_inertia_for_fluctuation
 gaussian_beam.beam_waist_for_divergence
-gear.agma_module_for_bending_stress
-gear.gear_module_for_center_distance
-gear.lewis_module_for_bending_stress
 gear.minimum_teeth_to_avoid_undercut
 gear.profile_shift_sum_for_center_distance
 geotechnical.allowable_bearing_from_ultimate
@@ -144,7 +155,6 @@ photometry.luminous_flux_from_power
 piezoelectric.piezoelectric_force_from_charge
 pipe_flow.hagen_poiseuille_radius_for_flow
 plate.base_plate_thickness_for_bearing
-plate.clamped_circular_plate_thickness_for_pressure
 pneumatics.air_receiver_volume_for_demand
 polarization.malus_angle_for_intensity
 projectile.projectile_launch_angle_for_range
@@ -158,8 +168,6 @@ radar.radial_velocity_from_doppler
 radiation_pressure.radiation_pressure_from_intensity
 radioactivity.decay_constant_from_half_life
 reaction_kinetics.first_order_time_for_conversion
-rectifier.filter_capacitance_for_ripple
-reliability.weibull_life_for_reliability
 resistance_welding.spot_weld_current_for_heat
 road_curve.minimum_curve_radius
 rocket_propulsion.thrust_from_coefficient
@@ -172,12 +180,8 @@ strain_gauge.gauge_strain_from_resistance
 strain_gauge.strain_from_bridge_output
 stress.max_shear_stress_plane
 temperature_sensor.thermocouple_temperature_from_voltage
-thermal.counterflow_ntu_for_effectiveness
 thermal.fouling_factor_from_coefficients
-thermal.heat_exchanger_area_for_duty
 thermal.heat_exchanger_effectiveness_from_temperatures
-thermal.parallel_flow_ntu_for_effectiveness
-thermal.shell_and_tube_ntu_for_effectiveness
 thermal.wien_temperature_from_peak
 thermoforming.thermoforming_sheet_gauge_for_wall
 torsion.hollow_shaft_diameter_for_bending_torsion
@@ -185,9 +189,5 @@ torsion.power_from_torque
 torsion.shaft_diameter_for_bending_torsion
 torsion.torque_from_power
 transmission_line.reflection_coefficient_from_vswr
-ventilation.airflow_for_air_changes
 wave.frequency_from_wavelength
 wave.wavelength_from_frequency
-wear.sliding_distance_for_wear_depth
-weld.fillet_weld_leg_for_load
-welding_heat.weld_travel_speed_for_heat_input

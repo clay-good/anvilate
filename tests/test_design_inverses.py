@@ -68,6 +68,22 @@ ROUND_TRIPPED = frozenset(
         "screw_conveyor.screw_conveyor_speed_for_capacity",
         "spectroscopy.concentration_from_absorbance",
         "spring.helical_spring_active_coils_for_rate",
+        "weld.fillet_weld_leg_for_load",
+        "gear.lewis_module_for_bending_stress",
+        "gear.agma_module_for_bending_stress",
+        "gear.gear_module_for_center_distance",
+        "plate.clamped_circular_plate_thickness_for_pressure",
+        "wear.sliding_distance_for_wear_depth",
+        "reliability.weibull_life_for_reliability",
+        "fatigue.basquin_stress_for_life",
+        "welding_heat.weld_travel_speed_for_heat_input",
+        "flow_measurement.differential_pressure_for_flow",
+        "ventilation.airflow_for_air_changes",
+        "rectifier.filter_capacitance_for_ripple",
+        "thermal.heat_exchanger_area_for_duty",
+        "thermal.counterflow_ntu_for_effectiveness",
+        "thermal.parallel_flow_ntu_for_effectiveness",
+        "thermal.shell_and_tube_ntu_for_effectiveness",
     }
 )
 
@@ -668,3 +684,300 @@ def test_time_for_activity_decay_lands_the_required_activity():
     ).to("MBq").magnitude == pytest.approx(target.to("MBq").magnitude, rel=1e-12)
     # A quarter of the activity is exactly two half-lives.
     assert elapsed.to("hour").magnitude == pytest.approx(12.0, rel=1e-12)
+
+
+def test_fillet_weld_leg_for_load_lands_the_allowable_throat_shear():
+    """The leg a load needs, fed back through the throat stress it was sized against.
+
+    The safety factor is the half a pairing can quietly drop: at SF = 1 the two formulas
+    round-trip whether or not the inverse ever read it, so the margin is exercised here
+    and the answer has to land at the allowable *divided by* it.
+    """
+    from anvilate.analysis import fillet_weld_leg_for_load, fillet_weld_throat_stress
+
+    joint = {"force": _q("240 kN"), "length": _q("400 mm")}
+    allowable, margin = _q("124 MPa"), 1.6
+    leg = fillet_weld_leg_for_load(
+        allowable_shear=allowable, required_safety_factor=margin, **joint
+    )
+    assert fillet_weld_throat_stress(leg_size=leg, **joint).to("MPa").magnitude == pytest.approx(
+        allowable.to("MPa").magnitude / margin, rel=1e-12
+    )
+    # And at SF = 1 it lands on the allowable itself, which is the sizing contract.
+    unmargined = fillet_weld_leg_for_load(allowable_shear=allowable, **joint)
+    assert fillet_weld_throat_stress(leg_size=unmargined, **joint).to(
+        "MPa"
+    ).magnitude == pytest.approx(allowable.to("MPa").magnitude, rel=1e-12)
+
+
+def test_lewis_module_for_bending_stress_lands_the_allowable_root_stress():
+    from anvilate.analysis import lewis_bending_stress, lewis_module_for_bending_stress
+
+    tooth = {
+        "tangential_load": _q("3.2 kN"),
+        "face_width": _q("40 mm"),
+        "form_factor": 0.322,
+    }
+    allowable = _q("120 MPa")
+    module = lewis_module_for_bending_stress(allowable_stress=allowable, **tooth)
+    assert lewis_bending_stress(module=module, **tooth).to("MPa").magnitude == pytest.approx(
+        allowable.to("MPa").magnitude, rel=1e-12
+    )
+    # A coarser tooth is a stronger one: halving the allowable stress doubles the module.
+    softer = lewis_module_for_bending_stress(allowable_stress=_q("60 MPa"), **tooth)
+    assert softer.to("mm").magnitude == pytest.approx(2.0 * module.to("mm").magnitude, rel=1e-12)
+
+
+def test_agma_module_for_bending_stress_carries_every_derating_factor():
+    """All five derating factors default to 1.0, so a pairing that dropped them would
+    still round-trip on the defaults. Each is set away from 1 here, and the module is
+    checked to have actually moved because of them."""
+    from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
+
+    mesh = {
+        "tangential_load": _q("3.2 kN"),
+        "face_width": _q("40 mm"),
+        "geometry_factor": 0.38,
+    }
+    derating = {
+        "overload_factor": 1.25,
+        "dynamic_factor": 1.4,
+        "size_factor": 1.05,
+        "load_distribution_factor": 1.3,
+        "rim_thickness_factor": 1.1,
+    }
+    allowable = _q("210 MPa")
+    module = agma_module_for_bending_stress(allowable_stress=allowable, **mesh, **derating)
+    assert agma_bending_stress(module=module, **mesh, **derating).to(
+        "MPa"
+    ).magnitude == pytest.approx(allowable.to("MPa").magnitude, rel=1e-12)
+    # The derating is the whole difference between this and the Lewis-shaped sizing.
+    undertated = agma_module_for_bending_stress(allowable_stress=allowable, **mesh)
+    assert undertated.to("mm").magnitude < module.to("mm").magnitude
+
+
+def test_gear_module_for_center_distance_lands_the_housing_centre():
+    from anvilate.analysis import gear_center_distance, gear_module_for_center_distance
+
+    teeth = {"pinion_teeth": 19, "gear_teeth": 61}
+    center = _q("200 mm")
+    module = gear_module_for_center_distance(center_distance=center, **teeth)
+    assert gear_center_distance(module=module, **teeth).to("mm").magnitude == pytest.approx(
+        center.to("mm").magnitude, rel=1e-12
+    )
+    # 2·200/80 is a standard 5 mm module, which is the point of asking the question.
+    assert module.to("mm").magnitude == pytest.approx(5.0, rel=1e-12)
+    # More teeth into the same centre distance is a finer module.
+    finer = gear_module_for_center_distance(center_distance=center, pinion_teeth=25, gear_teeth=75)
+    assert finer.to("mm").magnitude < module.to("mm").magnitude
+
+
+def test_clamped_circular_plate_thickness_lands_the_allowable_rim_stress():
+    from anvilate.analysis import (
+        clamped_circular_plate_thickness_for_pressure,
+        clamped_circular_plate_uniform_load,
+    )
+
+    cover = {"pressure": _q("0.4 MPa"), "diameter": _q("600 mm")}
+    allowable, margin = _q("165 MPa"), 1.5
+    thickness = clamped_circular_plate_thickness_for_pressure(
+        allowable_stress=allowable, required_safety_factor=margin, **cover
+    )
+    result = clamped_circular_plate_uniform_load(
+        thickness=thickness, elastic_modulus=_q("200 GPa"), **cover
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        allowable.to("MPa").magnitude / margin, rel=1e-12
+    )
+    # The sizing is a strength one and the forward carries the stiffness seam with it,
+    # so the round trip is only meaningful while thin-plate theory still applies.
+    assert result.is_small_deflection
+
+
+def test_sliding_distance_for_wear_depth_lands_the_wear_allowance():
+    from anvilate.analysis import archard_wear_depth, sliding_distance_for_wear_depth
+
+    contact = {
+        "wear_coefficient": 1.2e-4,
+        "contact_pressure": _q("2.5 MPa"),
+        "hardness": _q("1.9 GPa"),
+    }
+    allowance = _q("0.5 mm")
+    distance = sliding_distance_for_wear_depth(allowable_depth=allowance, **contact)
+    assert archard_wear_depth(sliding_distance=distance, **contact).to(
+        "mm"
+    ).magnitude == pytest.approx(allowance.to("mm").magnitude, rel=1e-12)
+    # Wear is linear in distance, so twice the allowance is twice the life.
+    doubled = sliding_distance_for_wear_depth(allowable_depth=_q("1 mm"), **contact)
+    assert doubled.to("m").magnitude == pytest.approx(2.0 * distance.to("m").magnitude, rel=1e-12)
+
+
+def test_weibull_life_for_reliability_lands_the_survival_fraction():
+    from anvilate.analysis import weibull_life_for_reliability, weibull_reliability
+
+    population = {"characteristic_life": _q("8000 hour"), "shape": 1.8}
+    target = 0.90
+    life = weibull_life_for_reliability(reliability=target, **population)
+    assert weibull_reliability(time=life, **population) == pytest.approx(target, rel=1e-12)
+    # R = 1/e returns the characteristic life exactly, for any shape — which is what
+    # makes eta "characteristic". Checked at a different beta so the anchor is not the
+    # round trip again in disguise.
+    from math import e
+
+    anchor = weibull_life_for_reliability(
+        reliability=1.0 / e, characteristic_life=_q("8000 hour"), shape=3.4
+    )
+    assert anchor.to("hour").magnitude == pytest.approx(8000.0, rel=1e-12)
+
+
+def test_basquin_stress_for_life_lands_the_target_life():
+    from anvilate.analysis import basquin_cycles_to_failure, basquin_stress_for_life
+
+    curve = {"coefficient": _q("1200 MPa"), "exponent": -0.085}
+    target = 5.0e5
+    amplitude = basquin_stress_for_life(life_cycles=target, **curve)
+    assert basquin_cycles_to_failure(stress_amplitude=amplitude, **curve) == pytest.approx(
+        target, rel=1e-9
+    )
+    # A longer target life is a lower allowable amplitude (b is negative).
+    assert (
+        basquin_stress_for_life(life_cycles=5.0e6, **curve).to("MPa").magnitude
+        < amplitude.to("MPa").magnitude
+    )
+
+
+def test_weld_travel_speed_for_heat_input_lands_the_qualified_heat_input():
+    """The thermal efficiency defaults to 1.0, so it is set to a real process value here
+    — a pair that round-trips only on the default is half a pair."""
+    from anvilate.analysis import weld_heat_input, weld_travel_speed_for_heat_input
+
+    arc = {
+        "arc_voltage": _q("26 V"),
+        "welding_current": _q("240 A"),
+        "thermal_efficiency": 0.8,
+    }
+    target = _q("1.2 kJ/mm")
+    speed = weld_travel_speed_for_heat_input(heat_input=target, **arc)
+    assert weld_heat_input(travel_speed=speed, **arc).to("kJ/mm").magnitude == pytest.approx(
+        target.to("kJ/mm").magnitude, rel=1e-12
+    )
+    # Faster travel is less heat into the joint, which is the control a welder has.
+    cooler = weld_travel_speed_for_heat_input(heat_input=_q("0.8 kJ/mm"), **arc)
+    assert cooler.to("mm/s").magnitude > speed.to("mm/s").magnitude
+
+
+def test_differential_pressure_for_flow_lands_the_meter_reading():
+    from anvilate.analysis import differential_pressure_for_flow, obstruction_meter_flow_rate
+
+    meter = {
+        "discharge_coefficient": 0.61,
+        "throat_diameter": _q("50 mm"),
+        "pipe_diameter": _q("100 mm"),
+        "density": _q("998 kg/m**3"),
+    }
+    target = _q("0.012 m**3/s")
+    drop = differential_pressure_for_flow(flow_rate=target, **meter)
+    assert obstruction_meter_flow_rate(pressure_drop=drop, **meter).to(
+        "m**3/s"
+    ).magnitude == pytest.approx(target.to("m**3/s").magnitude, rel=1e-12)
+    # Delta-p goes as Q squared, so doubling the flow quadruples the transmitter range.
+    quadrupled = differential_pressure_for_flow(flow_rate=_q("0.024 m**3/s"), **meter)
+    assert quadrupled.to("kPa").magnitude == pytest.approx(
+        4.0 * drop.to("kPa").magnitude, rel=1e-12
+    )
+
+
+def test_airflow_for_air_changes_lands_the_required_change_rate():
+    from anvilate.analysis import air_changes_per_hour, airflow_for_air_changes
+
+    room = _q("200 m**3")
+    target = 6.0
+    airflow = airflow_for_air_changes(air_changes_per_hour=target, room_volume=room)
+    assert air_changes_per_hour(airflow=airflow, room_volume=room) == pytest.approx(
+        target, rel=1e-12
+    )
+    # The docstring's own worked example: six changes an hour in 200 m³ is 1,200 m³/h.
+    assert airflow.to("m**3/hour").magnitude == pytest.approx(1200.0, rel=1e-12)
+
+
+def test_filter_capacitance_for_ripple_lands_the_target_ripple():
+    from anvilate.analysis import capacitor_filter_ripple_voltage, filter_capacitance_for_ripple
+
+    supply = {"load_current": _q("1.5 A"), "frequency": _q("60 Hz")}
+    target = _q("1.2 V")
+    capacitance = filter_capacitance_for_ripple(ripple_voltage=target, **supply)
+    assert capacitor_filter_ripple_voltage(capacitance=capacitance, **supply).to(
+        "V"
+    ).magnitude == pytest.approx(target.to("V").magnitude, rel=1e-12)
+    # Halving the ripple doubles the capacitor, which is why tight ripple gets expensive.
+    tighter = filter_capacitance_for_ripple(ripple_voltage=_q("0.6 V"), **supply)
+    assert tighter.to("F").magnitude == pytest.approx(
+        2.0 * capacitance.to("F").magnitude, rel=1e-12
+    )
+
+
+def test_heat_exchanger_area_for_duty_lands_the_required_duty():
+    from anvilate.analysis import heat_exchanger_area_for_duty, heat_exchanger_duty
+
+    service = {
+        "overall_coefficient": _q("850 W/(m**2*K)"),
+        "log_mean_temperature_difference": _q("24 delta_degC"),
+    }
+    target = _q("450 kW")
+    area = heat_exchanger_area_for_duty(duty=target, **service)
+    assert heat_exchanger_duty(area=area, **service).to("kW").magnitude == pytest.approx(
+        target.to("kW").magnitude, rel=1e-12
+    )
+
+
+def test_counterflow_ntu_for_effectiveness_lands_every_branch():
+    """Three closed forms hide behind one signature — C_r = 1, C_r = 0, and the general
+    case — so a round trip at one capacity ratio leaves two of them unchecked."""
+    from anvilate.analysis import counterflow_effectiveness, counterflow_ntu_for_effectiveness
+
+    for capacity_ratio in (0.0, 0.45, 1.0):
+        target = 0.72
+        ntu = counterflow_ntu_for_effectiveness(effectiveness=target, capacity_ratio=capacity_ratio)
+        assert counterflow_effectiveness(ntu=ntu, capacity_ratio=capacity_ratio) == pytest.approx(
+            target, rel=1e-12
+        )
+    # A balanced exchanger is the hardest to make effective, so it needs the most size.
+    assert counterflow_ntu_for_effectiveness(
+        effectiveness=0.72, capacity_ratio=1.0
+    ) > counterflow_ntu_for_effectiveness(effectiveness=0.72, capacity_ratio=0.0)
+
+
+def test_parallel_flow_ntu_for_effectiveness_lands_the_target_effectiveness():
+    from anvilate.analysis import (
+        parallel_flow_effectiveness,
+        parallel_flow_ntu_for_effectiveness,
+    )
+
+    for capacity_ratio in (0.0, 0.45):
+        target = 0.55
+        ntu = parallel_flow_ntu_for_effectiveness(
+            effectiveness=target, capacity_ratio=capacity_ratio
+        )
+        assert parallel_flow_effectiveness(ntu=ntu, capacity_ratio=capacity_ratio) == pytest.approx(
+            target, rel=1e-12
+        )
+
+
+def test_shell_and_tube_ntu_for_effectiveness_lands_the_target_effectiveness():
+    from anvilate.analysis import (
+        shell_and_tube_effectiveness,
+        shell_and_tube_ntu_for_effectiveness,
+    )
+
+    for capacity_ratio in (0.0, 0.45):
+        target = 0.55
+        ntu = shell_and_tube_ntu_for_effectiveness(
+            effectiveness=target, capacity_ratio=capacity_ratio
+        )
+        assert shell_and_tube_effectiveness(
+            ntu=ntu, capacity_ratio=capacity_ratio
+        ) == pytest.approx(target, rel=1e-12)
+    # One shell pass has a ceiling the counterflow form does not, and the sizing form
+    # refuses above it rather than returning a size that cannot work.
+    with pytest.raises(ValueError, match="one shell pass cannot exceed"):
+        shell_and_tube_ntu_for_effectiveness(effectiveness=0.9, capacity_ratio=0.45)
