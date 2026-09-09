@@ -1016,6 +1016,15 @@ def test_the_render_truth_tolerance_reads_the_exponents_in_its_own_line():
     # formula with an 8 in it gets slack it has not earned.
     assert _rounding_slack("y = 8·3·2") == 0.0
 
+    # And a DECIMAL coefficient contributes nothing either, which is the correction the
+    # first draft of this needed. A load factor is exact — the code states 1.4, it is not a
+    # measurement rounded to two figures — and reading it as rounded handed the ASCE
+    # combination line 37% of tolerance off nothing but its own factors. What separates
+    # them is the unit: a printed quantity carries one and a coefficient does not.
+    assert _rounding_slack("U = 1.4 \u00b7 60 + 1.3 \u00b7 180 + 1.0 \u00b7 30") == 0.0
+    assert _rounding_slack("k_a = min(1, 4.51\u00b7655^-0.265)") == 0.0
+    assert _rounding_slack("\u03c3 = 3\u00b7(3 + 0.3)\u00b70.0500 MPa") > 0.0
+
 
 def test_a_caret_exponent_and_a_word_operator_typeset():
     """Two spellings the grammar did not take, both of them the point of their formula.

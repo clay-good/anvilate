@@ -342,6 +342,19 @@ question is answered rather than open):
   caret, and read `min` as three italic letters. Both are in it now, and a caret is not
   normalised to `**`: the round trip compares the tree written back out against the author's
   own string, so the spelling has to survive.
+- **The tolerance is read off the line, not guessed.** The comparison used to allow a flat
+  1%, described as the result's last place plus slack for the inputs' own rounding — and it
+  was not that, it was a number that happened to cover the corpus. A line that *cubes* a
+  printed length does not stay inside it: a 4 mm spring wire prints as `0.157 in`, three
+  significant figures, and cubed that is a 1.1% error before anything else in the line
+  rounds, so the gate reported a mismatch on a line that was right. Each printed **quantity**
+  now contributes half its last place relative to itself, times whatever exponent stands on
+  it. A bare decimal is a coefficient the formula states — a load factor, a Poisson ratio,
+  an exponent — and it is exact; counting those as rounded handed an ASCE load combination
+  37% of tolerance off nothing but its own factors. Across 1,976 lines the widest tolerance
+  any line earns today is 1.5%, and a line that buys more than 3% fails: either the model
+  has started over-counting again, or the report is printing too few figures for a reviewer
+  to check the line at all.
 - **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
   US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
   force over SI area against a US stress, inside one equals sign.

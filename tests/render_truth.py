@@ -193,11 +193,18 @@ def read_line(derivation: object, system: object) -> Reading | None:
     return Reading(substituted, value=float(actual), expected=float(match.group(1)))
 
 
-_NUMBER = re.compile(r"-?\d+\.\d+")
-# A parenthesised quantity carrying an exponent: `(0.157 in)³`, `(40.00 mm)**3`, `(2.5)^2`.
-# Matching the number and its unit separately is what this must NOT do — a greedy unit run
+# A printed QUANTITY: a number with a unit after it. That distinction is the whole rule —
+# `0.157 in` is a length rounded to whatever the report chose to display, and the `1.4` in a
+# load combination is a code coefficient the formula states exactly. The first draft of this
+# counted both, which handed `U = 1.4·60 + 1.3·180 + 1.0·30` a 37% tolerance off nothing but
+# its own load factors: a gate that would accept a third of an answer.
+_QUANTITY = re.compile(r"(-?\d+\.\d+)\s+[A-Za-zµΩ%]")
+# The same, parenthesised and carrying an exponent: `(0.157 in)³`, `(40.00 mm)**3`. Matching
+# the number and its unit as separate groups is what this must NOT do — a greedy unit run
 # walks straight past the next factor and attaches the exponent to the wrong number.
-_POWERED = re.compile(r"\((-?\d+\.\d+)[^()]*\)\s*(?:\*\*|\^)?\s*([⁰¹²³⁴-⁹]+|\d+(?:\.\d+)?)")
+_POWERED = re.compile(
+    r"\((-?\d+\.\d+)\s+[A-Za-zµΩ%][^()]*\)\s*(?:\*\*|\^)?\s*([⁰¹²³⁴-⁹]+|\d+(?:\.\d+)?)"
+)
 
 _SUPERSCRIPT_ONLY = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
 
@@ -211,7 +218,7 @@ def _relative_half_place(number: str) -> float:
 
 
 def _rounding_slack(substituted: str) -> float:
-    """How far the line's own printed inputs can move the answer, as a fraction.
+    """How far the line's own printed quantities can move the answer, as a fraction.
 
     The tolerance used to be a flat 1%, described as "the result's last place plus slack for
     the inputs' own rounding" — and it was not that, it was a guess that happened to cover
@@ -221,15 +228,16 @@ def _rounding_slack(substituted: str) -> float:
     the line it is reading either misses a real defect on a linear line or reports one on a
     cubed line, and this repository met the second the day a spring shipped.
 
-    So the slack is read off the line: every printed decimal contributes half its last place
-    relative to itself, and a parenthesised quantity under an exponent contributes that many
-    times over. A whole number is a coefficient — the 8 in `8·F·D` — and has no last place.
+    So the slack is read off the line, and only from the numbers that are actually ROUNDED:
+    a printed quantity contributes half its last place relative to itself, times whatever
+    exponent stands on it. A bare decimal is a coefficient the formula states — a load
+    factor, a Poisson ratio, an exponent — and it is exact.
     """
-    slack = sum(_relative_half_place(number) for number in _NUMBER.findall(substituted))
+    slack = sum(_relative_half_place(number) for number in _QUANTITY.findall(substituted))
     for number, exponent in _POWERED.findall(substituted):
         power = float(exponent.translate(_SUPERSCRIPT_ONLY))
         slack += (power - 1.0) * _relative_half_place(number)
-    return slack
+    return max(slack, 0.0)
 
 
 def disagrees(reading: Reading) -> bool:

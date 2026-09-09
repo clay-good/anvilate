@@ -1097,17 +1097,24 @@ def _editionless_citations(citations: set[str]) -> set[str]:
 # So it runs off the same collector the derivation-coverage and effectivity ratchets read,
 # and cannot be narrower than the library it audits. It costs about 2.3 s at session end
 # for the ~3,900 readings a full run produces, measured — a sweep this wide is worth
-# knowing the price of.
+# knowing the price of. The typesetting sweep beside it costs 0.35 s for 8,000-odd lines.
 
 
-def _render_truth_findings() -> tuple[int, list[str], list[str]]:
+def _render_truth_findings() -> tuple[int, list[str], list[str], list[str]]:
     """Every distinct substituted line the suite built, read and compared."""
     from anvilate.units import UnitSystem
-    from render_truth import disagrees, read_line
+    from render_truth import _rounding_slack, disagrees, read_line
 
     seen: set[str] = set()
     unreadable: list[str] = []
     disagreeing: list[str] = []
+    # The self-attack on the tolerance itself. It is computed from the line's own printed
+    # figures, and a model that starts over-counting buys the gate away without failing
+    # anything — the first draft of it read a load combination's own factors as rounded
+    # measurements and handed that line 37% of slack. Across 1,976 lines the widest earned
+    # today is 1.5%, so anything past 3% is either that mistake coming back or a report
+    # printing too few figures for a reader to check the line at all.
+    slack: list[str] = []
     checked = 0
     for entry in _library_entries.values():
         derivation = getattr(entry, "derivation", None)
@@ -1127,7 +1134,13 @@ def _render_truth_findings() -> tuple[int, list[str], list[str]]:
                 )
             else:
                 checked += 1
-    return checked, unreadable, disagreeing
+                earned = _rounding_slack(reading.substituted)
+                if earned > 0.03:
+                    slack.append(
+                        f"{entry.name}: {reading.substituted} — its printed figures leave "
+                        f"{earned * 100:.1f}% of doubt"
+                    )
+    return checked, unreadable, disagreeing, slack
 
 
 def _report_render_truth(session, *, full_run: bool) -> None:
@@ -1139,7 +1152,7 @@ def _report_render_truth(session, *, full_run: bool) -> None:
     derivation is the moment the answer is most useful. The FLOOR is a claim about what the
     sweep failed to reach, and only a full run can make it.
     """
-    checked, unreadable, disagreeing = _render_truth_findings()
+    checked, unreadable, disagreeing, slack = _render_truth_findings()
     # A collector that stops collecting, or an evaluator that starts refusing everything,
     # would otherwise report a clean sweep of nothing — the failure every other census in
     # this repository guards.
@@ -1162,6 +1175,15 @@ def _report_render_truth(session, *, full_run: bool) -> None:
         print(
             "\nRENDER TRUTH: substituted lines that do not evaluate to the result printed "
             "under them:\n  " + "\n  ".join(sorted(set(disagreeing)))
+        )
+        session.exitstatus = 1
+    if slack:
+        print(
+            "\nRENDER TRUTH: these lines buy more tolerance from their own printed figures "
+            "than any line in this library has earned. Either the tolerance model has "
+            "started counting exact coefficients as rounded measurements, or the report is "
+            "printing too few figures for a reviewer to check the line:\n  "
+            + "\n  ".join(sorted(set(slack)))
         )
         session.exitstatus = 1
 
