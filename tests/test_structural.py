@@ -1975,6 +1975,92 @@ def test_concrete_bearing_confinement_is_capped_at_two():
     assert "2.12" in card.entries[0].detail
 
 
+def test_screen_structure_carries_every_lever_its_members_offer():
+    """The aggregator's card is where a whole-structure caller reads its repairs.
+
+    `screen_structure` dispatches each member through the same registry a top-level element
+    goes through and concatenates the entries, so its levers are its members' — which is
+    why the inventory records ten rows against it. Nothing checked that they arrive: a
+    member screen could stop hinting, or the aggregator could rebuild an entry and drop the
+    hint, and every per-member test would still pass.
+    """
+    members = [
+        ShearPlate(
+            name="tab",
+            gross_shear_area=_q("1200 mm**2"),
+            net_shear_area=_q("900 mm**2"),
+            load=_q("400 kN"),
+            material="ASTM-A36",
+        ),
+        WeldedConnection(
+            name="seat",
+            leg_size=_q("5 mm"),
+            weld_length=_q("250 mm"),
+            load=_q("180 kN"),
+            electrode_strength=_q("490 MPa"),
+        ),
+        ConcreteBearing(
+            name="ped",
+            bearing_area=_q("40000 mm**2"),
+            support_area=_q("900000 mm**2"),
+            concrete_strength=_q("25 MPa"),
+            load=_q("6000 kN"),
+        ),
+        BoltedConnection(
+            name="splice",
+            bolt_diameter=_q("12 mm"),
+            plate_thickness=_q("8 mm"),
+            load=_q("90 kN"),
+            bolt_material="ASTM-A36",
+            plate_material="ASTM-A36",
+            shear_planes=1,
+            edge_distance=_q("20 mm"),
+        ),
+        TensionMember(
+            name="brace",
+            gross_area=_q("2000 mm**2"),
+            net_area=_q("1500 mm**2"),
+            load=_q("500 kN"),
+            material="ASTM-A36",
+        ),
+        LiftingLug(
+            name="lug",
+            width=_q("120 mm"),
+            hole_diameter=_q("40 mm"),
+            thickness=_q("8 mm"),
+            load=_q("120 kN"),
+            material="ASTM-A36",
+        ),
+    ]
+    card = screen_structure(members, required_safety_factor=1.5)
+    hinted = {e.name: e.repair_hint for e in card.entries if e.repair_hint is not None}
+    assert card.status is CheckStatus.FAIL
+    # Every lever the inventory records against `screen_structure`, arriving through the
+    # dispatch — which is a chain of isinstance branches, so a member type dropped from it
+    # loses its hints silently.
+    assert {h.parameter for h in hinted.values()} == {
+        "gross_shear_area",
+        "net_shear_area",
+        "leg_size",
+        "bearing_area",
+        "bolt_diameter",
+        "plate_thickness",
+        "edge_distance",
+        "gross_area",
+        "net_area",
+        "thickness",
+    }
+
+    # Every hint is the one the member's own screen would have given, unchanged.
+    alone = {
+        e.name: e.repair_hint
+        for e in screen_shear_plate(members[0], required_safety_factor=1.5).entries
+    }
+    for name, hint in alone.items():
+        assert hinted[name].corrective_value == pytest.approx(hint.corrective_value, rel=1e-12)
+        assert hinted[name].provenance == hint.provenance
+
+
 def test_an_overlong_column_is_told_to_brace_and_not_told_a_number():
     """A DIRECTION, and the reason is the §E3 curve's two branches.
 

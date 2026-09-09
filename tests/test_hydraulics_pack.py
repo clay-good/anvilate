@@ -93,6 +93,43 @@ def test_pipe_run_passes_with_enough_head_fails_without():
     assert slipped.status is CheckStatus.FAIL
 
 
+def test_a_pump_duty_names_the_motor_and_the_suction_it_needs():
+    """Two checks, two sides of the installation.
+
+    The shaft power is the duty's and NPSH_r is the pump's, so neither is a knob. What an
+    installation changes is the motor it buys and the suction it gives the pump — the lift,
+    the losses and the vapour pressure that make up NPSH_a.
+    """
+    from anvilate.scorecard import Direction
+
+    card = screen_pump_duty(
+        _duty(motor_rating=_q("9 kW"), npsh_available=_q("3 m"), npsh_required=_q("4 m"))
+    )
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert all(e.status is CheckStatus.FAIL for e in card.entries)
+    assert hints["motor rating"].parameter == "motor_rating"
+    assert hints["NPSH margin"].parameter == "npsh_available"
+    assert all(h.direction is Direction.INCREASE for h in hints.values())
+
+    repaired = screen_pump_duty(
+        _duty(
+            motor_rating=Quantity(magnitude=hints["motor rating"].corrective_value, unit="kW"),
+            npsh_available=Quantity(magnitude=hints["NPSH margin"].corrective_value, unit="m"),
+            npsh_required=_q("4 m"),
+        )
+    )
+    assert all(e.status is CheckStatus.PASS for e in repaired.entries)
+    assert all(e.repair_hint is None for e in repaired.entries)
+    # Each lands on its own required margin, which are different numbers: the motor on its
+    # service factor and the suction on the NPSH margin factor.
+    by_name = {e.name: e for e in repaired.entries}
+    assert by_name["motor rating"].safety_factor == pytest.approx(1.0, rel=1e-9)
+    assert by_name["NPSH margin"].safety_factor == pytest.approx(1.1, rel=1e-9)
+
+    # A well-matched duty is offered nothing.
+    assert all(e.repair_hint is None for e in screen_pump_duty(_duty()).entries)
+
+
 def test_a_pipe_run_short_of_head_names_the_head_it_needs():
     """The head is the lever with a closed form; the pipe is the one without.
 

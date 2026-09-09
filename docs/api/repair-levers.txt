@@ -50,6 +50,14 @@
 # direction with no closed inverse), and the three pressure-vessel screens were filed
 # there when they belong under 1. Read the signature.
 
+# A THIRD KIND, `aggregated`, for a screen that FORWARDS a lever rather than computing
+# one. `screen_structure` dispatches each member and concatenates their entries, so its ten
+# rows are its members', arriving unchanged. They are recorded because a reader of that
+# card gets them, and they are labelled because the value sweep in tests/test_contract.py
+# would otherwise demand a test that notices a wrong value there — and the value is the
+# member screen's to be wrong about. An `aggregated` row has to name a parameter some other
+# screen offers, or the label is a way of ducking the sweep.
+#
 # `solved` and `directional` are not interchangeable. A solved lever claims a value; a
 # directional one claims only a sign, which is a claim about the check's shape over its
 # whole domain and has to be swept before it is declared. `screen_infinite_slope` carries
@@ -84,17 +92,17 @@ structural.screen_gusset_plate -> net_shear_area (solved)
 structural.screen_lifting_lug -> thickness (solved)
 structural.screen_shear_plate -> gross_shear_area (solved)
 structural.screen_shear_plate -> net_shear_area (solved)
-structural.screen_structure -> bearing_area (solved)
-structural.screen_structure -> bolt_diameter (solved)
-structural.screen_structure -> edge_distance (solved)
-structural.screen_structure -> gross_area (solved)
-structural.screen_structure -> gross_shear_area (solved)
-structural.screen_structure -> leg_size (solved)
-structural.screen_structure -> length (directional)
-structural.screen_structure -> net_area (solved)
-structural.screen_structure -> net_shear_area (solved)
-structural.screen_structure -> plate_thickness (solved)
-structural.screen_structure -> thickness (solved)
+structural.screen_structure -> bearing_area (aggregated)
+structural.screen_structure -> bolt_diameter (aggregated)
+structural.screen_structure -> edge_distance (aggregated)
+structural.screen_structure -> gross_area (aggregated)
+structural.screen_structure -> gross_shear_area (aggregated)
+structural.screen_structure -> leg_size (aggregated)
+structural.screen_structure -> length (aggregated)
+structural.screen_structure -> net_area (aggregated)
+structural.screen_structure -> net_shear_area (aggregated)
+structural.screen_structure -> plate_thickness (aggregated)
+structural.screen_structure -> thickness (aggregated)
 structural.screen_tension_member -> gross_area (solved)
 structural.screen_tension_member -> net_area (solved)
 structural.screen_welded_connection -> leg_size (solved)

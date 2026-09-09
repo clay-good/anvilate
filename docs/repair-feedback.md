@@ -62,6 +62,21 @@ connection and the column member were all filed as "no single knob" and all thre
 out to have one; three pressure-vessel screens were filed there when they take a
 already-computed value. The file says so.
 
+A third kind, `aggregated`, marks a screen that FORWARDS a lever rather than computing
+one: `screen_structure` dispatches each member and concatenates their entries, so its ten
+rows are its members', arriving unchanged. The label exempts those rows from the
+wrong-value sweep below — the value belongs to the screen that computed it — and is itself
+gated, because an `aggregated` row that names a parameter no other screen offers would be
+a way of ducking that sweep.
+
+**And every solved lever's value is swept.** These gates check that a lever is recorded and
+that the screen builds it; they cannot check that anyone would notice if the number were
+wrong, which is a solved hint's whole claim. So `RepairHint.solved` is made to return a
+value 5% off — and 5% the other way, since a test asserting only "larger than before" would
+survive one direction — and some test naming both the screen and the parameter has to fail.
+It found two gaps the moment it was written: a screen wired with no test at all, and an
+aggregator whose pass-through nothing checked.
+
 The gate reads it both directions. A recorded lever must actually be constructed by
 that screen (resolved through the module's own call graph, because the hint is usually
 built in a helper the screen calls), every lever a screen constructs must be recorded,

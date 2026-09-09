@@ -1582,6 +1582,138 @@ def test_the_screen_census_finds_every_function_that_returns_a_card():
     )
 
 
+def _tests_exercising_a_lever() -> dict[str, list[tuple[str, str]]]:
+    """For each recorded lever, the (module, test) pairs that name its screen AND parameter."""
+    wanted = {
+        (screen.split(".", 1)[1], parameter)
+        for screen, levers in _lever_inventory()[0].items()
+        for parameter, _ in levers
+    }
+    found: dict[str, list[tuple[str, str]]] = {f"{s}:{p}": [] for s, p in wanted}
+    for path in sorted((_REPO / "tests").glob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.FunctionDef) and node.name.startswith("test_")):
+                continue
+            names = {
+                child.id if isinstance(child, ast.Name) else child.attr
+                for child in ast.walk(node)
+                if isinstance(child, (ast.Name, ast.Attribute))
+            }
+            literals = {
+                child.value
+                for child in ast.walk(node)
+                if isinstance(child, ast.Constant) and isinstance(child.value, str)
+            }
+            for screen, parameter in wanted:
+                if screen in names and (parameter in literals or parameter in names):
+                    found[f"{screen}:{parameter}"].append((path.stem, node.name))
+    return found
+
+
+def test_every_solved_repair_lever_has_a_test_that_notices_a_wrong_value():
+    """A hint test that passes with the wrong number is worth nothing.
+
+    The same argument as the design-inverse sweep, one layer up: these gates check that a
+    lever is RECORDED and that the screen builds it. They cannot check that anybody would
+    notice if the value were wrong — and a solved hint's whole claim is the value.
+
+    So every solved lever is swept: `RepairHint.solved` is made to return a value 5% off
+    (and 5% the other way, since a test asserting only "> the original" would survive one
+    direction), and some test that names both the screen and the parameter has to fail.
+    """
+    import importlib
+
+    from anvilate.scorecard import RepairHint
+
+    by_lever = _tests_exercising_a_lever()
+    inventory = _lever_inventory()[0]
+    # `directional` publishes no value to be wrong about; `aggregated` forwards one whose
+    # correctness belongs to the screen that computed it.
+    directional = {
+        f"{screen.split('.', 1)[1]}:{parameter}"
+        for screen, levers in inventory.items()
+        for parameter, kind in levers
+        if kind in ("directional", "aggregated")
+    }
+    # ...and that label has to be earned: an aggregated parameter must be one some OTHER
+    # screen offers, or it is a way of ducking the sweep for a lever nothing else computes.
+    computed = {
+        parameter
+        for screen, levers in inventory.items()
+        for parameter, kind in levers
+        if kind != "aggregated"
+    }
+    orphaned = sorted(
+        f"{screen} -> {parameter}"
+        for screen, levers in inventory.items()
+        for parameter, kind in levers
+        if kind == "aggregated" and parameter not in computed
+    )
+    assert not orphaned, (
+        "these levers are labelled `aggregated` but no other screen computes them, so the "
+        "label exempts a value nothing checks:\n  " + "\n  ".join(orphaned)
+    )
+    untested = sorted(k for k, v in by_lever.items() if not v and k not in directional)
+    assert not untested, (
+        "no test names both the screen and the parameter of these solved levers, so "
+        "nothing is checking the value they publish:\n  " + "\n  ".join(untested)
+    )
+
+    original = RepairHint.solved.__func__
+    # A one-element list because the closure below reads it and the sweep rewrites
+    # it: a plain name here reads as unused to the linter and rebinds nothing.
+    factor = [1.0]
+
+    def wrong(cls, parameter, *, direction, value, unit=None, provenance=None, whole=False):
+        moved = value * factor[0]
+        if whole:
+            moved = float(int(moved)) if moved == int(moved) else float(int(moved) + 1)
+        return original(
+            cls,
+            parameter,
+            direction=direction,
+            value=moved,
+            unit=unit,
+            provenance=provenance,
+            whole=whole,
+        )
+
+    survivors: list[str] = []
+    swept = 0
+    RepairHint.solved = classmethod(wrong)
+    try:
+        for lever, tests in sorted(by_lever.items()):
+            if lever in directional or not tests:
+                continue
+            swept += 1
+            noticed = False
+            for module_name, test_name in tests:
+                module = importlib.import_module(module_name)
+                for scale in (1.05, 0.95):
+                    factor[0] = scale
+                    try:
+                        getattr(module, test_name)()
+                    except Exception:  # noqa: BLE001 — any failure is the test noticing
+                        noticed = True
+                        break
+                if noticed:
+                    break
+            if not noticed:
+                survivors.append(f"{lever}  [{', '.join(n for _, n in tests)}]")
+    finally:
+        RepairHint.solved = classmethod(original)
+
+    assert swept >= 25, (
+        f"only {swept} solved levers were swept; the inventory holds more, and a sweep "
+        f"that stops finding its subject passes"
+    )
+    assert not survivors, (
+        "these levers publish a value that no test would notice being wrong:\n  "
+        + "\n  ".join(survivors)
+    )
+
+
 def test_no_repair_provenance_repeats_the_article_the_renderer_supplies():
     """The report writes "— from the ", and two provenances began with "the".
 
@@ -1690,10 +1822,21 @@ def test_every_recorded_repair_lever_is_one_the_screen_actually_offers():
         built = by_path[path].get(symbol, set())
         resolved += len(built)
         claimed = recorded.get(qualified, set())
+        # An `aggregated` row forwards a member's lever, so it matches whichever kind the
+        # resolver actually found for that parameter — the screen does not decide it.
+        aggregated = {p for p, kind in claimed if kind == "aggregated"}
+        claimed = {(p, k) for p, k in claimed if p not in aggregated} | {
+            (p, k) for p, k in built if p in aggregated
+        }
         for parameter, kind in sorted(claimed - built):
             wrong.append(f"{qualified} -> {parameter} ({kind})")
         for parameter, kind in sorted(built - claimed):
             unrecorded.append(f"{qualified} -> {parameter} ({kind})")
+        missing_source = sorted(aggregated - {p for p, _ in built})
+        assert not missing_source, (
+            f"{qualified} records these as aggregated but does not forward them at all: "
+            f"{missing_source}"
+        )
     # FIRST, and counting what the RESOLVER found rather than what the file says. Counting
     # the file's own rows here would have been a floor on the wrong quantity: it cannot
     # move when the call-graph walk stops working, which is the failure it is guarding.
