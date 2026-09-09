@@ -32,7 +32,14 @@ value rather than inventing one. A hint only rides on a `FAIL` entry — it is
 dropped from a passing check even if you pass one.
 
 Repair turns from a search into a single solve: apply `hint.corrective_value` and
-the forward check lands at exactly the required margin. See
+the forward check lands at the required margin — and passes. `RepairHint.solved`
+places the value one part in 10^12 into the passing side rather than exactly on the
+boundary, because a check passes on `computed >= required` and a screen re-run at a
+corrective value recomputes its safety factor down a different arithmetic path than
+the solve came up. Landing on the boundary leaves the verdict to float noise, and
+that is not hypothetical: the base-plate hint solves t·√(required/SF), and the square
+root left the repaired plate at a safety factor of 1.9999999999999996 against a
+required 2.0 — the fix this library named was itself a `FAIL`. See
 [`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
 
 ### Declaring a lever, and when not to

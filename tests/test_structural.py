@@ -1451,10 +1451,27 @@ def test_thin_base_plate_bending_hint_repairs_in_one_solve():
     bearing = next(e for e in card.entries if "concrete bearing" in e.name)
     assert bearing.repair_hint is None
 
-    # Rebuild at the hint thickness: the bending check lands on the required margin.
+    # Rebuild at the hint thickness: the bending check lands on the required margin AND
+    # comes back green. The verdict is the assertion that matters and it was missing —
+    # the exact solve t*sqrt(required/SF) landed at 1.9999999999999996 against a required
+    # 2.0, so the plate this library named as the fix was itself a FAIL, under a test
+    # that checked the safety factor to nine figures and never asked for the status.
     repaired = screen_base_plate(_plate(f"{hint.corrective_value} mm"), required_safety_factor=2.0)
     repaired_bending = next(e for e in repaired.entries if "bending" in e.name)
+    assert repaired_bending.status is CheckStatus.PASS
     assert repaired_bending.safety_factor == pytest.approx(2.0, rel=1e-9)
+    assert repaired_bending.repair_hint is None
+    # And the exact solve, without the nudge `RepairHint.solved` applies, does not.
+    exact = 10.0 * (2.0 / bending.safety_factor) ** 0.5
+    assert exact < hint.corrective_value
+    assert (
+        next(
+            e
+            for e in screen_base_plate(_plate(f"{exact} mm"), required_safety_factor=2.0).entries
+            if "bending" in e.name
+        ).status
+        is CheckStatus.FAIL
+    )
 
 
 def test_base_plate_bending_rejects_partial_plate_details():

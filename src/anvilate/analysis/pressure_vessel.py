@@ -1931,12 +1931,10 @@ def _wall_repair_hint(
     two deductions this check made, undone in the same order. Anything else names a wall
     that fails the check it was solved from.
 
-    The exact solve is then lifted by one part in 10^12. The check passes on
-    ``computed >= required`` and the rating is recomputed from the wall rather than
-    compared to it, so the exact answer lands on either side of the margin by float noise
-    — a 4 mm line solved for 7.203 mm came back FAIL at a safety factor of
-    0.9999999999999997. A part in 10^12 of a pipe wall is 7 femtometres; it is below every
-    physical scale in the problem and above the noise that was flipping the verdict.
+    :meth:`RepairHint.solved` then lifts the answer clear of the margin: the check
+    recomputes a rating from the wall rather than comparing to it, so an exactly-solved
+    wall lands on either side of ``>=`` by float noise. This one came back FAIL at a
+    safety factor of 0.9999999999999997 before that nudge existed.
     """
     if entry.status is not CheckStatus.FAIL:
         return entry
@@ -1953,7 +1951,7 @@ def _wall_repair_hint(
     )
     if corrosion_allowance is not None:
         required += corrosion_allowance.to("mm").magnitude
-    nominal = required / (1.0 - mill_tolerance_fraction) * (1.0 + 1e-12)
+    nominal = required / (1.0 - mill_tolerance_fraction)
     return entry.model_copy(
         update={
             "repair_hint": RepairHint.solved(

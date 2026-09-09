@@ -83,6 +83,14 @@ class Direction(StrEnum):
     DECREASE = "decrease"
 
 
+# How far past the exact solve a hinted corrective value is placed, as a fraction of
+# itself. Small enough to be physically meaningless at any scale this library works at (a
+# part in 10^12 of a 17 mm plate is 17 picometres) and large enough to clear the float
+# noise that was landing exact solves on the failing side of `>=`. It is a module
+# constant rather than a class attribute because pydantic claims underscored class names.
+_MARGIN_NUDGE = 1e-12
+
+
 class RepairHint(StatableModel):
     """How to move a failing check back into bounds.
 
@@ -114,11 +122,30 @@ class RepairHint(StatableModel):
         unit: str | None = None,
         provenance: str | None = None,
     ) -> RepairHint:
-        """A hint whose corrective value a design inverse supplied."""
+        """A hint whose corrective value a design inverse supplied.
+
+        The value is placed one part in 10^12 PAST the exact solve, in the direction that
+        improves the margin. It has to be: a check passes on ``computed >= required``, and
+        a screen re-run at an exactly-solved value recomputes its safety factor down a
+        different arithmetic path than the solve came up. Land on the boundary and which
+        side you finish on is float noise.
+
+        It was not noise in one direction. The base-plate bending hint solves
+        t·sqrt(required/SF); the square root left the repaired plate at a safety factor of
+        1.9999999999999996 against a required 2.0, so the plate this library named as the
+        fix came back FAIL. The test on it asserted the safety factor was 2.0 to nine
+        figures and never asked for the verdict. A linear solve (the lug, the retaining
+        wall) happened to land exactly and hid the problem.
+
+        The nudge is applied on the absolute value, so it moves a negative corrective value
+        the right way too, and it leaves an exact zero alone.
+        """
+        step = abs(value) * _MARGIN_NUDGE
+        nudged = value + step if direction is Direction.INCREASE else value - step
         return cls(
             parameter=parameter,
             direction=direction,
-            corrective_value=value,
+            corrective_value=nudged,
             unit=unit,
             provenance=provenance,
         )

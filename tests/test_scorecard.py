@@ -221,6 +221,33 @@ def test_scorecard_collects_repair_hints_from_its_failures():
     assert [h.parameter for h in hints] == ["t"]
 
 
+def test_a_solved_hint_is_placed_clear_of_the_margin_not_on_it():
+    """A check passes on `computed >= required`, and a screen re-run at a corrective value
+    recomputes its safety factor down a different arithmetic path than the solve came up.
+    Land exactly on the boundary and which side you finish on is float noise — which is
+    how the base-plate hint came to name a plate that failed. `solved` places the value one
+    part in 10^12 into the passing side, in whichever direction improves the margin."""
+    increase = RepairHint.solved("t", direction=Direction.INCREASE, value=17.0, unit="mm")
+    decrease = RepairHint.solved("u", direction=Direction.DECREASE, value=17.0, unit="kPa")
+    assert increase.corrective_value > 17.0
+    assert decrease.corrective_value < 17.0
+    assert increase.corrective_value == pytest.approx(17.0, rel=1e-9)
+    assert decrease.corrective_value == pytest.approx(17.0, rel=1e-9)
+
+    # The step is taken on the ABSOLUTE value, so a negative corrective value moves the
+    # same way a positive one does. Scaling by (1 + eps) would push it the wrong way.
+    below_zero = RepairHint.solved("z", direction=Direction.INCREASE, value=-4.0)
+    assert below_zero.corrective_value > -4.0
+
+    # An exact zero has no scale to step by, and is left alone rather than made negative:
+    # a drainage hint of "to 0 kPa" must not come back as -0.000000000001 kPa.
+    zero = RepairHint.solved("u", direction=Direction.DECREASE, value=0.0)
+    assert zero.corrective_value == 0.0
+
+    # A directional hint has no value to place.
+    assert RepairHint.directional("t", direction=Direction.INCREASE).corrective_value is None
+
+
 def test_repair_hint_corrective_value_round_trips_through_the_inverse():
     # The hint's value must actually satisfy the forward check at the required
     # margin — a real design inverse, solved once, not searched.
