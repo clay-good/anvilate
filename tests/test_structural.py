@@ -1975,6 +1975,73 @@ def test_concrete_bearing_confinement_is_capped_at_two():
     assert "2.12" in card.entries[0].detail
 
 
+def test_the_bearing_lever_solves_in_whichever_confinement_branch_it_lands_in():
+    """ACI 318 §22.8.3 has two branches and they solve differently.
+
+    Below A₂/4 the √(A₂/A₁) confinement is capped at 2 and the capacity is LINEAR in the
+    plate area; above it the confinement fades as the plate grows and the capacity goes as
+    √A₁. Growing a small plate can carry it out of the capped branch, so "scale A₁ by the
+    shortfall" is wrong under either formula on its own — and the answers differ by more
+    than rounding.
+    """
+    from anvilate.scorecard import Direction
+
+    def pedestal(area: float, load: str) -> ConcreteBearing:
+        return ConcreteBearing(
+            name="pedestal",
+            bearing_area=Quantity(magnitude=area, unit="mm**2"),
+            support_area=_q("900000 mm**2"),
+            concrete_strength=_q("25 MPa"),
+            load=_q(load),
+        )
+
+    # Capped: the demand needs 141,176 mm², which is still under A₂/4 = 225,000.
+    capped = screen_concrete_bearing(pedestal(40000, "6000 kN"), required_safety_factor=1.0)
+    hint = capped.entries[0].repair_hint
+    assert capped.status is CheckStatus.FAIL
+    assert (hint.parameter, hint.direction, hint.unit) == (
+        "bearing_area",
+        Direction.INCREASE,
+        "mm**2",
+    )
+    assert hint.corrective_value < 900000 / 4, "this answer is in the capped branch"
+    assert hint.corrective_value == pytest.approx(6000e3 / (0.85 * 25 * 2), rel=1e-9)
+
+    # Uncapped: the demand needs 354,325 mm², past A₂/4, where the confinement has faded.
+    uncapped = screen_concrete_bearing(pedestal(200000, "12000 kN"), required_safety_factor=1.0)
+    far = uncapped.entries[0].repair_hint
+    assert far.corrective_value > 900000 / 4, "this answer is in the uncapped branch"
+    assert far.corrective_value == pytest.approx((12000e3 / (0.85 * 25)) ** 2 / 900000, rel=1e-9)
+    # The capped formula would have named a plate 25% smaller, which does not carry it.
+    naive = 12000e3 / (0.85 * 25 * 2)
+    assert naive < far.corrective_value
+    assert (
+        screen_concrete_bearing(pedestal(naive, "12000 kN"), required_safety_factor=1.0).status
+        is CheckStatus.FAIL
+    )
+
+    for area, load in ((40000.0, "6000 kN"), (200000.0, "12000 kN")):
+        card = screen_concrete_bearing(pedestal(area, load), required_safety_factor=1.0)
+        repaired = screen_concrete_bearing(
+            pedestal(card.entries[0].repair_hint.corrective_value, load),
+            required_safety_factor=1.0,
+        )
+        assert repaired.status is CheckStatus.PASS
+        assert repaired.entries[0].safety_factor == pytest.approx(1.0, rel=1e-9)
+        assert repaired.entries[0].repair_hint is None
+
+    # AND THE LEVER RUNS OUT. A plate cannot be wider than its support, so the most this
+    # footing can ever carry is 0.85·f′c·A₂ = 19,125 kN. Past that no plate reaches it, and
+    # the check offers nothing rather than naming an area the model would refuse.
+    hopeless = screen_concrete_bearing(pedestal(200000, "19500 kN"), required_safety_factor=1.0)
+    assert hopeless.status is CheckStatus.FAIL
+    assert hopeless.entries[0].repair_hint is None
+    # A hair under the ceiling still gets an answer, so the silence is the ceiling and not
+    # a rounding away from it.
+    reachable = screen_concrete_bearing(pedestal(200000, "19000 kN"), required_safety_factor=1.0)
+    assert reachable.entries[0].repair_hint is not None
+
+
 def test_concrete_bearing_uses_partial_confinement():
     # A2 = 90000 (300x300): sqrt(2.25) = 1.5 (below the cap); Bn = 1275 kN;
     # vs 800 kN -> SF 1.59, below the 2.0 requirement -> FAIL.

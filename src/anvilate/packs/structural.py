@@ -1495,6 +1495,43 @@ class LiftingLug(GuardedInputs):
         return self
 
 
+def _bearing_area_hint(
+    *, a1: float, a2: float, fc: float, load_n: float, required: float
+) -> RepairHint | None:
+    """The plate area that carries the load, across BOTH confinement regimes — or nothing.
+
+    ACI 318 §22.8.3 is B_n = 0.85·f′c·A₁·min(√(A₂/A₁), 2), and the two branches solve
+    differently. Below A₂/4 the cap is binding and the capacity is LINEAR in A₁; above it
+    the confinement fades as the plate grows and the capacity goes as √A₁. Growing a small
+    plate can carry it out of the capped branch, so the answer is not "scale A₁ by the
+    shortfall" under either formula on its own.
+
+    Writing the demand as ``target = load·required/(0.85·f′c)`` — the A₁·confinement the
+    load needs — the capped answer is target/2 and the uncapped one target²/A₂, and which
+    applies is decided by the same A₂/2 boundary in the target that A₂/4 is in A₁.
+
+    **And the lever runs out.** A₁ cannot exceed A₂ (a plate wider than its support is
+    refused at construction), so the most this footing can ever carry is 0.85·f′c·A₂. Past
+    that no plate reaches it — the answer is a bigger footing, stronger concrete or a
+    spread detail, none of which is this parameter — and the check offers nothing.
+    """
+    if load_n <= 0 or fc <= 0:
+        return None
+    target = load_n * required / (_ACI_BEARING_FRACTION * fc)
+    if target > a2:
+        return None
+    needed = target / _ACI_CONFINEMENT_CAP if target <= a2 / 2.0 else target**2 / a2
+    if needed <= a1:
+        return None
+    return RepairHint.solved(
+        "bearing_area",
+        direction=Direction.INCREASE,
+        value=needed,
+        unit="mm**2",
+        provenance=("ACI 318 §22.8.3 solved in the confinement branch the answer lands in"),
+    )
+
+
 def _with_area_hints(
     card: Scorecard, *, required: float, areas: dict[str, tuple[str, Quantity]]
 ) -> Scorecard:
@@ -2185,6 +2222,9 @@ def screen_concrete_bearing(
     confinement = min(unconfined, _ACI_CONFINEMENT_CAP)
     capacity_n = _ACI_BEARING_FRACTION * fc * a1 * confinement
     safety = capacity_n / load_n if load_n > 0 else None
+    bearing_hint = _bearing_area_hint(
+        a1=a1, a2=a2, fc=fc, load_n=load_n, required=required_safety_factor
+    )
     # The rendered formula has to be the one that was actually evaluated. Writing
     # √(A₂/A₁) while the §22.8.3 cap is binding prints a substituted line that does not
     # multiply out to the result under it — 25% high whenever A₂ > 4·A₁ — in the one
@@ -2228,6 +2268,8 @@ def screen_concrete_bearing(
     entry = ScorecardEntry.from_safety_factor(
         f"{bearing.name} concrete bearing", computed=safety, required=required_safety_factor
     ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL and bearing_hint is not None:
+        entry = entry.model_copy(update={"repair_hint": bearing_hint})
     return Scorecard(entries=(entry,))
 
 

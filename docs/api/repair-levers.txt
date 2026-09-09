@@ -39,8 +39,10 @@
 #      their elements carry; see the note above.
 #   3. A geometry with no single knob — the two reinforcement screens and the flange, the
 #      beam/column/beam-column members (whose section is a discrete choice from a table,
-#      not a value to solve for), the bolted connection (diameter, count and thickness at
-#      once), the concrete bearing (whose capacity changes regime at the confinement cap).
+#      not a value to solve for), and the bolted connection (diameter, count and thickness
+#      at once). The concrete bearing WAS in this list and is not any more: its two
+#      confinement regimes each solve in closed form, and which one applies is decided by
+#      the answer rather than the input.
 #      These are the ones worth revisiting: a lever here needs a decision about WHICH knob,
 #      not a formula.
 #   4. `loads.combination_scorecard`, where the lever is the design loads themselves.
@@ -70,10 +72,12 @@ masonry.screen_masonry_wall -> axial_stress (solved)
 noise_exposure.screen_noise_exposure -> exposure_duration (solved)
 pressure_vessel.asme_b313_pressure_scorecard -> nominal_wall (solved)
 structural.screen_base_plate -> plate_thickness (solved)
+structural.screen_concrete_bearing -> bearing_area (solved)
 structural.screen_gusset_plate -> net_shear_area (solved)
 structural.screen_lifting_lug -> thickness (solved)
 structural.screen_shear_plate -> gross_shear_area (solved)
 structural.screen_shear_plate -> net_shear_area (solved)
+structural.screen_structure -> bearing_area (solved)
 structural.screen_structure -> gross_area (solved)
 structural.screen_structure -> gross_shear_area (solved)
 structural.screen_structure -> leg_size (solved)
@@ -120,4 +124,3 @@ structural.screen_beam_column
 structural.screen_beam_member
 structural.screen_bolted_connection
 structural.screen_column_member
-structural.screen_concrete_bearing
