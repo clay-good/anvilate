@@ -84,6 +84,16 @@ ROUND_TRIPPED = frozenset(
         "thermal.counterflow_ntu_for_effectiveness",
         "thermal.parallel_flow_ntu_for_effectiveness",
         "thermal.shell_and_tube_ntu_for_effectiveness",
+        "beam.fastener_spacing_for_shear_flow",
+        "interference.interference_for_contact_pressure",
+        "dynamics.isolator_natural_frequency_for_transmissibility",
+        "energy_storage.current_from_c_rate",
+        "open_channel.minimum_specific_energy_rectangular",
+        "rocket_propulsion.thrust_from_coefficient",
+        "level_turn.bank_angle_for_turn_rate",
+        "projectile.projectile_launch_angle_for_range",
+        "transmission_line.reflection_coefficient_from_vswr",
+        "torsion.shaft_diameter_for_bending_torsion",
     }
 )
 
@@ -981,3 +991,166 @@ def test_shell_and_tube_ntu_for_effectiveness_lands_the_target_effectiveness():
     # refuses above it rather than returning a size that cannot work.
     with pytest.raises(ValueError, match="one shell pass cannot exceed"):
         shell_and_tube_ntu_for_effectiveness(effectiveness=0.9, capacity_ratio=0.45)
+
+
+def test_fastener_spacing_for_shear_flow_carries_the_flow_the_beam_develops():
+    """The spacing is sized against a flow the *forward* computes, so the pair is the join:
+    the fasteners at that spacing carry exactly the flow at that section, no more."""
+    from anvilate.analysis import fastener_spacing_for_shear_flow, shear_flow
+
+    section = {
+        "shear_force": _q("60 kN"),
+        "first_moment_of_area": _q("450000 mm**3"),
+        "second_moment_of_area": _q("120000000 mm**4"),
+    }
+    capacity = _q("18 kN")
+    flow = shear_flow(**section)
+    spacing = fastener_spacing_for_shear_flow(fastener_capacity=capacity, shear_flow=flow)
+    assert (flow.to("N/mm").magnitude * spacing.to("mm").magnitude) == pytest.approx(
+        capacity.to("N").magnitude, rel=1e-12
+    )
+    # Twice the capacity per fastener is twice the spacing, which is the sizing lever.
+    assert fastener_spacing_for_shear_flow(fastener_capacity=_q("36 kN"), shear_flow=flow).to(
+        "mm"
+    ).magnitude == pytest.approx(2.0 * spacing.to("mm").magnitude, rel=1e-12)
+
+
+def test_interference_for_contact_pressure_lands_the_required_contact_pressure():
+    from anvilate.analysis import interference_fit, interference_for_contact_pressure
+
+    joint = {
+        "interface_diameter": _q("60 mm"),
+        "hub_outer_diameter": _q("110 mm"),
+        "hub_modulus": _q("200 GPa"),
+        "hub_poisson": 0.3,
+        "shaft_modulus": _q("200 GPa"),
+        "shaft_poisson": 0.3,
+    }
+    target = _q("45 MPa")
+    interference = interference_for_contact_pressure(contact_pressure=target, **joint)
+    assert interference_fit(radial_interference=interference, **joint).contact_pressure.to(
+        "MPa"
+    ).magnitude == pytest.approx(target.to("MPa").magnitude, rel=1e-12)
+
+
+def test_isolator_natural_frequency_for_transmissibility_lands_the_isolation():
+    """The mount is sized in the undamped isolation region, so the round trip has to be
+    taken there — at a damping ratio of zero, which is the assumption the inverse makes."""
+    from anvilate.analysis import (
+        isolator_natural_frequency_for_transmissibility,
+        transmissibility,
+    )
+
+    forcing, target = _q("50 Hz"), 0.08
+    natural = isolator_natural_frequency_for_transmissibility(
+        forcing_frequency=forcing, transmissibility=target
+    )
+    ratio = forcing.to("Hz").magnitude / natural.to("Hz").magnitude
+    assert transmissibility(frequency_ratio=ratio, damping_ratio=0.0) == pytest.approx(
+        target, rel=1e-12
+    )
+    # Better isolation is a softer mount, which is the whole design move.
+    softer = isolator_natural_frequency_for_transmissibility(
+        forcing_frequency=forcing, transmissibility=0.02
+    )
+    assert softer.to("Hz").magnitude < natural.to("Hz").magnitude
+
+
+def test_current_from_c_rate_lands_the_required_c_rate():
+    from anvilate.analysis import c_rate, current_from_c_rate
+
+    capacity = _q("100 A*hour")
+    target = 0.5
+    current = current_from_c_rate(c_rate=target, capacity=capacity)
+    assert c_rate(current=current, capacity=capacity) == pytest.approx(target, rel=1e-12)
+    # C/2 on a 100 Ah cell is 50 A, which is what makes the rate a useful shorthand.
+    assert current.to("A").magnitude == pytest.approx(50.0, rel=1e-12)
+
+
+def test_minimum_specific_energy_rectangular_is_the_energy_at_critical_depth():
+    """E_min is the specific energy the channel has *at* its critical depth, so the pair
+    is checked by computing that depth and asking the forward what the energy there is."""
+    from anvilate.analysis import (
+        critical_depth_rectangular,
+        minimum_specific_energy_rectangular,
+        specific_energy,
+    )
+
+    channel = {"flow_rate": _q("12 m**3/s"), "channel_width": _q("4 m")}
+    minimum = minimum_specific_energy_rectangular(**channel)
+    depth = critical_depth_rectangular(**channel)
+    area = channel["channel_width"].to("m").magnitude * depth.to("m").magnitude
+    velocity = Quantity(magnitude=channel["flow_rate"].to("m**3/s").magnitude / area, unit="m/s")
+    assert specific_energy(depth=depth, velocity=velocity).to("m").magnitude == pytest.approx(
+        minimum.to("m").magnitude, rel=1e-12
+    )
+    # And it is exactly 3/2 of the critical depth, which is what "minimum" means here.
+    assert minimum.to("m").magnitude == pytest.approx(1.5 * depth.to("m").magnitude, rel=1e-12)
+
+
+def test_thrust_from_coefficient_lands_the_coefficient_it_was_given():
+    from anvilate.analysis import thrust_coefficient, thrust_from_coefficient
+
+    nozzle = {"chamber_pressure": _q("6 MPa"), "throat_area": _q("0.02 m**2")}
+    target = 1.55
+    thrust = thrust_from_coefficient(thrust_coefficient=target, **nozzle)
+    assert thrust_coefficient(thrust=thrust, **nozzle) == pytest.approx(target, rel=1e-12)
+
+
+def test_bank_angle_for_turn_rate_lands_the_required_turn_rate():
+    from anvilate.analysis import bank_angle_for_turn_rate, turn_rate
+
+    speed, target = _q("120 m/s"), _q("3 deg/s")
+    bank = bank_angle_for_turn_rate(speed=speed, turn_rate=target)
+    assert turn_rate(speed=speed, bank_angle=bank).to("deg/s").magnitude == pytest.approx(
+        target.to("deg/s").magnitude, rel=1e-12
+    )
+    # A tighter turn at the same speed needs more bank.
+    assert bank_angle_for_turn_rate(speed=speed, turn_rate=_q("6 deg/s")) > bank
+
+
+def test_projectile_launch_angle_for_range_lands_the_range_on_both_roots():
+    """Every range short of the maximum is reachable at two angles, and the inverse takes
+    a switch to pick. Both have to land it: a pair tested only on the default is half a
+    pair, and the high root is the one an artillery or a water-jet problem actually wants."""
+    from anvilate.analysis import projectile_launch_angle_for_range, projectile_range
+
+    speed, target = _q("40 m/s"), _q("120 m")
+    low = projectile_launch_angle_for_range(launch_speed=speed, target_range=target)
+    high = projectile_launch_angle_for_range(
+        launch_speed=speed, target_range=target, high_trajectory=True
+    )
+    for angle in (low, high):
+        assert projectile_range(launch_speed=speed, launch_angle=angle).to(
+            "m"
+        ).magnitude == pytest.approx(target.to("m").magnitude, rel=1e-12)
+    # The two roots straddle 45°, and they are complementary.
+    assert low < 45.0 < high
+    assert low + high == pytest.approx(90.0, rel=1e-12)
+
+
+def test_reflection_coefficient_from_vswr_lands_the_standing_wave_ratio():
+    from anvilate.analysis import reflection_coefficient_from_vswr, voltage_standing_wave_ratio
+
+    target = 2.5
+    gamma = reflection_coefficient_from_vswr(voltage_standing_wave_ratio=target)
+    assert voltage_standing_wave_ratio(reflection_coefficient=gamma) == pytest.approx(
+        target, rel=1e-12
+    )
+    # A perfect match is a VSWR of 1 and no reflection at all.
+    assert reflection_coefficient_from_vswr(voltage_standing_wave_ratio=1.0) == pytest.approx(
+        0.0, abs=1e-15
+    )
+
+
+def test_shaft_diameter_for_bending_torsion_lands_the_allowable_von_mises_stress():
+    from anvilate.analysis import shaft_diameter_for_bending_torsion, shaft_von_mises_stress
+
+    loads = {"bending_moment": _q("450 N*m"), "torque": _q("620 N*m")}
+    yield_strength, margin = _q("530 MPa"), 2.0
+    diameter = shaft_diameter_for_bending_torsion(
+        yield_strength=yield_strength, required_safety_factor=margin, **loads
+    )
+    assert shaft_von_mises_stress(diameter=diameter, **loads).to("MPa").magnitude == pytest.approx(
+        yield_strength.to("MPa").magnitude / margin, rel=1e-12
+    )
