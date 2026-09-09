@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 51 public screens.
-There are 13 levers across 11 of them, and 40 recorded as having none yet — each
+There are 21 levers across 13 of them, and 38 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -80,6 +80,8 @@ owes the reader:
 | `isolation_scorecard` | isolator transmissibility | `frequency_ratio` ↑ | solved — the DAMPED transmissibility inverse |
 | `junction_temperature_scorecard` | junction temperature rise | `thermal_resistance` ↓ | solved — `heatsink_thermal_resistance_required` |
 | `screen_ventilation` | outdoor air, air changes | `provided_outdoor_airflow` ↑ | solved — both, and they ask different amounts |
+| `screen_shear_plate` | shear yielding / shear rupture | `gross_shear_area` ↑ / `net_shear_area` ↑ | solved — a different area per limit state |
+| `screen_tension_member` | gross yielding / net rupture | `gross_area` ↑ / `net_area` ↑ | solved — a different area per limit state |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -88,6 +90,11 @@ demands; the wall to *order* is that plus the corrosion allowance, all divided b
 (1 − mill tolerance) — the same two deductions the check made, undone in the same
 order. Naming the pressure-design wall would name a pipe that still fails, and a test
 asserts exactly that.
+
+The two plate rows are the case where the levers differ *between entries on one card*:
+shear yielding is checked on the gross section and rupture through the holes, so a hint
+that named one area for both would tell a detailer to grow the wrong thing — a wrong
+answer, not a vague one.
 
 The junction row is the only lever in the library that points **down**, and the
 ventilation row is the only screen whose two checks share one knob: outdoor air and air

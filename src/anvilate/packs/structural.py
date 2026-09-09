@@ -1470,6 +1470,43 @@ class LiftingLug(GuardedInputs):
         return self
 
 
+def _with_area_hints(
+    card: Scorecard, *, required: float, areas: dict[str, tuple[str, Quantity]]
+) -> Scorecard:
+    """The card, with each failing entry carrying the area that reaches the margin.
+
+    Both shear-plate limit states and both tension-member ones are a capacity over a load
+    with the area as a plain multiplier, so the safety factor is linear in it and the area
+    that reaches the margin is A·required/computed. Each check names its OWN area: shear
+    yielding is on the gross section and rupture on the net one, and telling a detailer to
+    grow the gross plate when the holes are what failed is a wrong answer, not a vague one.
+
+    ``areas`` maps an entry name to that entry's ``(parameter, area)``; an entry not in it
+    keeps whatever hint it already had.
+    """
+    hinted = []
+    for entry in card.entries:
+        target = areas.get(entry.name)
+        if target is None or entry.status is not CheckStatus.FAIL or not entry.safety_factor:
+            hinted.append(entry)
+            continue
+        parameter, area = target
+        hinted.append(
+            entry.model_copy(
+                update={
+                    "repair_hint": RepairHint.solved(
+                        parameter,
+                        direction=Direction.INCREASE,
+                        value=area.to("mm**2").magnitude * required / entry.safety_factor,
+                        unit="mm**2",
+                        provenance=f"{parameter} inverse (capacity is linear in the area)",
+                    )
+                }
+            )
+        )
+    return card.model_copy(update={"entries": tuple(hinted)})
+
+
 def _thickness_repair_hint(entry: ScorecardEntry, thickness: Quantity, required: float):
     """A solved repair hint for a lug check that failed on thickness.
 
@@ -1754,72 +1791,82 @@ def screen_tension_member(
     net_stress = Quantity(magnitude=force / effective_net, unit="MPa")
     load_symbol = SymbolValue(symbol="P", description="axial tension", value=member.load)
     return disclosed(
-        Scorecard(
-            entries=(
-                strength_scorecard(
-                    f"{member.name} gross yielding",
-                    stress=gross_stress,
-                    allowable=yield_allowable.quantity,
-                    required=required_safety_factor,
-                    unavailable_detail=yield_allowable.note,
-                ).model_copy(
-                    update={
-                        "reference": _CLAUSE_TENSION,
-                        "derivation": Derivation(
-                            symbolic="σ_g = P / A_g",
-                            inputs=(
-                                load_symbol,
-                                SymbolValue(
-                                    symbol="A_g",
-                                    description="gross cross-sectional area",
-                                    value=member.gross_area,
+        _with_area_hints(
+            Scorecard(
+                entries=(
+                    strength_scorecard(
+                        f"{member.name} gross yielding",
+                        stress=gross_stress,
+                        allowable=yield_allowable.quantity,
+                        required=required_safety_factor,
+                        unavailable_detail=yield_allowable.note,
+                    ).model_copy(
+                        update={
+                            "reference": _CLAUSE_TENSION,
+                            "derivation": Derivation(
+                                symbolic="σ_g = P / A_g",
+                                inputs=(
+                                    load_symbol,
+                                    SymbolValue(
+                                        symbol="A_g",
+                                        description="gross cross-sectional area",
+                                        value=member.gross_area,
+                                    ),
                                 ),
-                            ),
-                            result=SymbolValue(
-                                symbol="σ_g",
-                                description="stress on the gross section",
-                                value=gross_stress,
-                            ),
-                            citation=_CLAUSE_TENSION,
-                        ),
-                    }
-                ),
-                strength_scorecard(
-                    f"{member.name} net rupture",
-                    stress=net_stress,
-                    allowable=ultimate_allowable.quantity,
-                    required=required_safety_factor,
-                    unavailable_detail=ultimate_allowable.note,
-                ).model_copy(
-                    update={
-                        "reference": _CLAUSE_TENSION,
-                        "derivation": Derivation(
-                            # The shear-lag factor U reduces the net area to the part of
-                            # the section the connection actually engages.
-                            symbolic="σ_n = P / (U · A_n)",
-                            inputs=(
-                                load_symbol,
-                                SymbolValue(
-                                    symbol="U",
-                                    description="shear-lag factor",
-                                    value=member.shear_lag_factor,
+                                result=SymbolValue(
+                                    symbol="σ_g",
+                                    description="stress on the gross section",
+                                    value=gross_stress,
                                 ),
-                                SymbolValue(
-                                    symbol="A_n",
-                                    description="net area through the connection",
-                                    value=member.net_area,
+                                citation=_CLAUSE_TENSION,
+                            ),
+                        }
+                    ),
+                    strength_scorecard(
+                        f"{member.name} net rupture",
+                        stress=net_stress,
+                        allowable=ultimate_allowable.quantity,
+                        required=required_safety_factor,
+                        unavailable_detail=ultimate_allowable.note,
+                    ).model_copy(
+                        update={
+                            "reference": _CLAUSE_TENSION,
+                            "derivation": Derivation(
+                                # The shear-lag factor U reduces the net area to the part of
+                                # the section the connection actually engages.
+                                symbolic="σ_n = P / (U · A_n)",
+                                inputs=(
+                                    load_symbol,
+                                    SymbolValue(
+                                        symbol="U",
+                                        description="shear-lag factor",
+                                        value=member.shear_lag_factor,
+                                    ),
+                                    SymbolValue(
+                                        symbol="A_n",
+                                        description="net area through the connection",
+                                        value=member.net_area,
+                                    ),
                                 ),
+                                result=SymbolValue(
+                                    symbol="σ_n",
+                                    description="stress on the effective net section",
+                                    value=net_stress,
+                                ),
+                                citation=_CLAUSE_TENSION,
                             ),
-                            result=SymbolValue(
-                                symbol="σ_n",
-                                description="stress on the effective net section",
-                                value=net_stress,
-                            ),
-                            citation=_CLAUSE_TENSION,
-                        ),
-                    }
-                ),
-            )
+                        }
+                    ),
+                )
+            ),
+            required=required_safety_factor,
+            areas={
+                f"{member.name} gross yielding": ("gross_area", member.gross_area),
+                # The rupture check runs on the EFFECTIVE net area U·A_n, and U is a
+                # property of the connection rather than a size to grow, so the area the
+                # detailer moves is the net one — and the linearity is the same either way.
+                f"{member.name} net rupture": ("net_area", member.net_area),
+            },
         ),
         yield_allowable,
         ultimate_allowable,
@@ -2215,73 +2262,80 @@ def screen_shear_plate(
     yield_sf = yield_capacity / load_n if load_n > 0 else None
     rupture_sf = rupture_capacity / load_n if load_n > 0 else None
     return disclosed(
-        Scorecard(
-            entries=(
-                ScorecardEntry.from_safety_factor(
-                    f"{plate.name} shear yielding",
-                    computed=yield_sf,
-                    required=required_safety_factor,
-                ).model_copy(
-                    update={
-                        "reference": _CLAUSE_SHEAR,
-                        "derivation": Derivation(
-                            # Yielding is checked on the gross area: the whole section
-                            # has to go plastic before the plate deforms.
-                            symbolic="R_n = 0.60 · F_y · A_gv",
-                            inputs=(
-                                SymbolValue(
-                                    symbol="F_y",
-                                    description="plate yield strength",
-                                    value=shear_yield.quantity,
+        _with_area_hints(
+            Scorecard(
+                entries=(
+                    ScorecardEntry.from_safety_factor(
+                        f"{plate.name} shear yielding",
+                        computed=yield_sf,
+                        required=required_safety_factor,
+                    ).model_copy(
+                        update={
+                            "reference": _CLAUSE_SHEAR,
+                            "derivation": Derivation(
+                                # Yielding is checked on the gross area: the whole section
+                                # has to go plastic before the plate deforms.
+                                symbolic="R_n = 0.60 · F_y · A_gv",
+                                inputs=(
+                                    SymbolValue(
+                                        symbol="F_y",
+                                        description="plate yield strength",
+                                        value=shear_yield.quantity,
+                                    ),
+                                    SymbolValue(
+                                        symbol="A_gv",
+                                        description="gross area resisting shear",
+                                        value=plate.gross_shear_area,
+                                    ),
                                 ),
-                                SymbolValue(
-                                    symbol="A_gv",
-                                    description="gross area resisting shear",
-                                    value=plate.gross_shear_area,
+                                result=SymbolValue(
+                                    symbol="R_n",
+                                    description="shear yielding capacity",
+                                    value=Quantity(magnitude=yield_capacity, unit="N"),
                                 ),
+                                citation=_CLAUSE_SHEAR,
                             ),
-                            result=SymbolValue(
-                                symbol="R_n",
-                                description="shear yielding capacity",
-                                value=Quantity(magnitude=yield_capacity, unit="N"),
-                            ),
-                            citation=_CLAUSE_SHEAR,
-                        ),
-                    }
-                ),
-                ScorecardEntry.from_safety_factor(
-                    f"{plate.name} shear rupture",
-                    computed=rupture_sf,
-                    required=required_safety_factor,
-                ).model_copy(
-                    update={
-                        "reference": _CLAUSE_SHEAR,
-                        "derivation": Derivation(
-                            # Rupture is checked on the net area, through the holes, and
-                            # against the ultimate rather than the yield strength.
-                            symbolic="R_n = 0.60 · F_u · A_nv",
-                            inputs=(
-                                SymbolValue(
-                                    symbol="F_u",
-                                    description="plate ultimate tensile strength",
-                                    value=shear_ultimate.quantity,
+                        }
+                    ),
+                    ScorecardEntry.from_safety_factor(
+                        f"{plate.name} shear rupture",
+                        computed=rupture_sf,
+                        required=required_safety_factor,
+                    ).model_copy(
+                        update={
+                            "reference": _CLAUSE_SHEAR,
+                            "derivation": Derivation(
+                                # Rupture is checked on the net area, through the holes, and
+                                # against the ultimate rather than the yield strength.
+                                symbolic="R_n = 0.60 · F_u · A_nv",
+                                inputs=(
+                                    SymbolValue(
+                                        symbol="F_u",
+                                        description="plate ultimate tensile strength",
+                                        value=shear_ultimate.quantity,
+                                    ),
+                                    SymbolValue(
+                                        symbol="A_nv",
+                                        description="net area resisting shear, through the holes",
+                                        value=plate.net_shear_area,
+                                    ),
                                 ),
-                                SymbolValue(
-                                    symbol="A_nv",
-                                    description="net area resisting shear, through the holes",
-                                    value=plate.net_shear_area,
+                                result=SymbolValue(
+                                    symbol="R_n",
+                                    description="shear rupture capacity",
+                                    value=Quantity(magnitude=rupture_capacity, unit="N"),
                                 ),
+                                citation=_CLAUSE_SHEAR,
                             ),
-                            result=SymbolValue(
-                                symbol="R_n",
-                                description="shear rupture capacity",
-                                value=Quantity(magnitude=rupture_capacity, unit="N"),
-                            ),
-                            citation=_CLAUSE_SHEAR,
-                        ),
-                    }
-                ),
-            )
+                        }
+                    ),
+                )
+            ),
+            required=required_safety_factor,
+            areas={
+                f"{plate.name} shear yielding": ("gross_shear_area", plate.gross_shear_area),
+                f"{plate.name} shear rupture": ("net_shear_area", plate.net_shear_area),
+            },
         ),
         shear_yield,
         shear_ultimate,

@@ -1697,6 +1697,88 @@ def test_overloaded_tension_member_yields():
     assert card.status is CheckStatus.FAIL
 
 
+def test_each_tension_limit_state_solves_its_own_area():
+    """Two checks, two DIFFERENT levers. Gross yielding is on the gross section and net
+    rupture through the holes, so a hint that named one area for both would tell a
+    detailer to grow the wrong thing — a wrong answer, not a vague one."""
+    card = screen_tension_member(
+        _tension(load="500 kN", shear_lag_factor=0.85), required_safety_factor=2.0
+    )
+    assert card.status is CheckStatus.FAIL
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert hints["brace_tie gross yielding"].parameter == "gross_area"
+    assert hints["brace_tie net rupture"].parameter == "net_area"
+    assert all(h.direction is Direction.INCREASE for h in hints.values())
+    assert all(h.unit == "mm**2" for h in hints.values())
+
+    # Capacity is linear in the area, so the answer is A·required/computed.
+    for entry in card.entries:
+        area = 2000.0 if "gross" in entry.name else 1500.0
+        assert entry.repair_hint.corrective_value == pytest.approx(
+            area * 2.0 / entry.safety_factor, rel=1e-9
+        )
+
+    # Applied, both checks pass at the required margin, and the hints are gone.
+    repaired = screen_tension_member(
+        TensionMember(
+            name="brace_tie",
+            gross_area=Quantity(
+                magnitude=hints["brace_tie gross yielding"].corrective_value, unit="mm**2"
+            ),
+            net_area=Quantity(
+                magnitude=hints["brace_tie net rupture"].corrective_value, unit="mm**2"
+            ),
+            load=_q("500 kN"),
+            material="ASTM-A36",
+            shear_lag_factor=0.85,
+        ),
+        required_safety_factor=2.0,
+    )
+    assert repaired.status is CheckStatus.PASS
+    for entry in repaired.entries:
+        assert entry.safety_factor == pytest.approx(2.0, rel=1e-9)
+        assert entry.repair_hint is None
+
+    # A passing member is offered nothing.
+    assert all(
+        e.repair_hint is None
+        for e in screen_tension_member(_tension(), required_safety_factor=2.0).entries
+    )
+
+
+def test_each_shear_plate_limit_state_solves_its_own_area():
+    plate = ShearPlate(
+        name="tab",
+        gross_shear_area=_q("1200 mm**2"),
+        net_shear_area=_q("900 mm**2"),
+        load=_q("400 kN"),
+        material="ASTM-A36",
+    )
+    card = screen_shear_plate(plate, required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert hints["tab shear yielding"].parameter == "gross_shear_area"
+    assert hints["tab shear rupture"].parameter == "net_shear_area"
+
+    repaired = screen_shear_plate(
+        plate.model_copy(
+            update={
+                "gross_shear_area": Quantity(
+                    magnitude=hints["tab shear yielding"].corrective_value, unit="mm**2"
+                ),
+                "net_shear_area": Quantity(
+                    magnitude=hints["tab shear rupture"].corrective_value, unit="mm**2"
+                ),
+            }
+        ),
+        required_safety_factor=1.5,
+    )
+    assert repaired.status is CheckStatus.PASS
+    for entry in repaired.entries:
+        assert entry.safety_factor == pytest.approx(1.5, rel=1e-9)
+        assert entry.repair_hint is None
+
+
 def test_tension_member_rejects_net_area_above_gross():
     with pytest.raises(ValidationError, match="cannot exceed gross_area"):
         TensionMember(

@@ -1407,6 +1407,11 @@ def _public_screens() -> dict[str, tuple[object, Path]]:
     return screens
 
 
+#: A hint whose parameter name is not a literal where it is built. The names come from
+#: the helper's callers instead — see `_levers_constructed`.
+_PARAMETERIZED = "\x00parameterized"
+
+
 def _levers_constructed(module_path: Path) -> dict[str, set[tuple[str, str]]]:
     """Per module-level function, the ``(parameter, kind)`` hints it can construct.
 
@@ -1420,11 +1425,13 @@ def _levers_constructed(module_path: Path) -> dict[str, set[tuple[str, str]]]:
     tree = ast.parse(module_path.read_text(encoding="utf-8"))
     direct: dict[str, set[tuple[str, str]]] = {}
     calls: dict[str, set[str]] = {}
+    passed: dict[str, dict[str, set[str]]] = {}
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         made: set[tuple[str, str]] = set()
         called: set[str] = set()
+        passed.setdefault(node.name, {})
         for child in ast.walk(node):
             if not isinstance(child, ast.Call):
                 continue
@@ -1435,20 +1442,52 @@ def _levers_constructed(module_path: Path) -> dict[str, set[tuple[str, str]]]:
                 and func.value.id == "RepairHint"
                 and func.attr in ("solved", "directional")
                 and child.args
-                and isinstance(child.args[0], ast.Constant)
             ):
-                made.add((child.args[0].value, func.attr))
+                if isinstance(child.args[0], ast.Constant):
+                    made.add((child.args[0].value, func.attr))
+                else:
+                    # A helper that takes the parameter NAME as data — `_with_area_hints`
+                    # builds one hint per limit state from a mapping. The name is not a
+                    # literal here; it is a literal at each CALL of this helper, so mark
+                    # the kind and pick the names up there.
+                    made.add((_PARAMETERIZED, func.attr))
             if isinstance(func, ast.Name):
                 called.add(func.id)
+                # The lever names a parameterized helper builds hints from, taken from
+                # this call's KEYWORD arguments only. Two filters, and both earn their
+                # place: the card being wrapped is a positional argument and carries every
+                # derivation symbol in the screen ("F_y", "A_gv", "R_n"), and an entry name
+                # ("tab shear yielding") is not identifier-shaped. So a helper that takes
+                # its lever names by keyword is verifiable and one that does not claims
+                # nothing — which fails as a lever the file records and the source cannot
+                # supply, rather than passing quietly.
+                passed[node.name].setdefault(func.id, set()).update(
+                    literal.value
+                    for keyword in child.keywords
+                    for literal in ast.walk(keyword)
+                    if isinstance(literal, ast.Constant)
+                    and isinstance(literal.value, str)
+                    and literal.value.isidentifier()
+                )
         direct[node.name] = made
         calls[node.name] = called
+        passed.setdefault(node.name, {})
 
     def resolve(name: str, seen: frozenset[str] = frozenset()) -> set[tuple[str, str]]:
         if name in seen or name not in direct:
             return set()
         found = set(direct[name])
         for callee in calls[name]:
-            found |= resolve(callee, seen | {name})
+            inherited = resolve(callee, seen | {name})
+            for parameter, kind in inherited:
+                if parameter is not _PARAMETERIZED:
+                    found.add((parameter, kind))
+                    continue
+                # The callee builds hints from names it is handed: take them from this
+                # call. A helper called with no identifier-shaped literal claims nothing,
+                # which shows up as a lever the file records and the source cannot supply.
+                for literal in passed[name].get(callee, set()):
+                    found.add((literal, kind))
         return found
 
     return {name: resolve(name) for name in direct}

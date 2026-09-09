@@ -33,8 +33,16 @@ geotechnical.screen_shallow_footing -> width (directional)
 pressure_vessel.asme_b313_pressure_scorecard -> nominal_wall (solved)
 structural.screen_base_plate -> plate_thickness (solved)
 structural.screen_lifting_lug -> thickness (solved)
+structural.screen_shear_plate -> gross_shear_area (solved)
+structural.screen_shear_plate -> net_shear_area (solved)
+structural.screen_structure -> gross_area (solved)
+structural.screen_structure -> gross_shear_area (solved)
+structural.screen_structure -> net_area (solved)
+structural.screen_structure -> net_shear_area (solved)
 structural.screen_structure -> plate_thickness (solved)
 structural.screen_structure -> thickness (solved)
+structural.screen_tension_member -> gross_area (solved)
+structural.screen_tension_member -> net_area (solved)
 thermal.junction_temperature_scorecard -> thermal_resistance (solved)
 ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
@@ -76,6 +84,4 @@ structural.screen_bolted_connection
 structural.screen_column_member
 structural.screen_concrete_bearing
 structural.screen_gusset_plate
-structural.screen_shear_plate
-structural.screen_tension_member
 structural.screen_welded_connection
