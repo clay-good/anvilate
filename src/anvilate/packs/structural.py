@@ -2157,7 +2157,16 @@ def screen_beam_column(
             description="available axial strength, buckling stress × area",
             value=Quantity(magnitude=axial_capacity, unit="N"),
         ),
-        SymbolValue(symbol="M_r", description="required flexural strength", value=member.moment),
+        # The MAGNITUDE. §H1.1 judges a moment on its size — the code takes |M_r| — and
+        # declaring the signed value put a hogging member's line at `8/9 · -17.70 kip·in /
+        # 46.10 kip·in` beside a printed interaction ratio of 0.840. Worked as written it
+        # gives 0.158, so a reviewer could not reproduce the number the card decided on.
+        SymbolValue(
+            symbol="M_r",
+            description="required flexural strength (magnitude; §H1.1 judges its size)",
+            value=Quantity(magnitude=abs(member.moment.to("N*mm").magnitude), unit="N*mm"),
+            unit="N*mm",
+        ),
         SymbolValue(
             symbol="M_c",
             description="available flexural strength, first yield F_y·S",

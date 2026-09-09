@@ -260,6 +260,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    _report_render_truth(session, full_run=False)
+
     option = session.config.option
     filtered = bool(
         getattr(option, "keyword", None)
@@ -354,6 +356,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # A registered clause nothing produces any more is a line that can never be paid off
     # and can never fail, which is how a ratchet stops meaning anything. Only a full run
     # can tell a retired check from one this selection did not reach.
+    _report_render_truth(session, full_run=True)
+
     stale = _stale_registry_lines(coverage, registry)
     if stale:
         print(
@@ -1065,3 +1069,94 @@ def _editionless_citations(citations: set[str]) -> set[str]:
         for text in citations
         if names_a_standard(text) is not None and parse_citation(text) is None
     }
+
+
+# ---------------------------------------------------------------------------
+# The render-truth sweep, session-wide.
+#
+# `tests/test_contract.py` already evaluates each substituted derivation line and compares
+# it with the number printed under it — over a HAND-WRITTEN sample of cards. That is the
+# right thing for an author writing one screen, and it is narrower than the library by
+# however much the list has fallen behind: 107 lines against the 1,900-odd the suite
+# actually builds. Everything below was invisible to it and none of it was hypothetical.
+#
+#   * `9·√3` in the three-point-bending deflection. pint DROPPED the radical over a bare
+#     number and used the 3, so every deflection line in this library evaluated 1.73x low.
+#   * `min(1, a·S_u^b)`, where pint reads `min` as a MINUTE and the line comes back in
+#     [time].
+#   * §H1.1's interaction and the BTH-1 and NDS margins declared a SIGNED demand while
+#     their code divides by its magnitude, so a hogging member's line read
+#     `8/9 · -17.70 kip·in/46.10 kip·in` beside a printed 0.840 and works out to 0.158.
+#   * Four checks that were NOT EVALUATED carried a derivation anyway, printing a result
+#     of 0.0 over a line reading `n = F / 0`.
+#
+# So it runs off the same collector the derivation-coverage and effectivity ratchets read,
+# and cannot be narrower than the library it audits. It costs about 2.3 s at session end
+# for the ~3,900 readings a full run produces, measured — a sweep this wide is worth
+# knowing the price of.
+
+
+def _render_truth_findings() -> tuple[int, list[str], list[str]]:
+    """Every distinct substituted line the suite built, read and compared."""
+    from anvilate.units import UnitSystem
+    from render_truth import disagrees, read_line
+
+    seen: set[str] = set()
+    unreadable: list[str] = []
+    disagreeing: list[str] = []
+    checked = 0
+    for entry in _library_entries.values():
+        derivation = getattr(entry, "derivation", None)
+        if derivation is None:
+            continue
+        for system in (UnitSystem.SI, UnitSystem.US):
+            reading = read_line(derivation, system)
+            if reading is None or reading.substituted in seen:
+                continue
+            seen.add(reading.substituted)
+            if reading.problem is not None:
+                unreadable.append(f"{entry.name}: {reading.substituted} — {reading.problem}")
+            elif disagrees(reading):
+                disagreeing.append(
+                    f"{entry.name}: {reading.substituted} -> printed {reading.expected}, "
+                    f"line evaluates to {reading.value:.6g}"
+                )
+            else:
+                checked += 1
+    return checked, unreadable, disagreeing
+
+
+def _report_render_truth(session, *, full_run: bool) -> None:
+    """Fail the run when a substituted line and the number under it do not agree.
+
+    Split by what the evidence is, the way the ratchets above are. A line that disagrees
+    with its own printed result is POSITIVE evidence about the lines this run reached, so it
+    fails on any selection — running `pytest tests/test_analysis.py` while writing a
+    derivation is the moment the answer is most useful. The FLOOR is a claim about what the
+    sweep failed to reach, and only a full run can make it.
+    """
+    checked, unreadable, disagreeing = _render_truth_findings()
+    # A collector that stops collecting, or an evaluator that starts refusing everything,
+    # would otherwise report a clean sweep of nothing — the failure every other census in
+    # this repository guards.
+    if full_run:
+        if checked < 1500:
+            print(
+                f"\nRENDER TRUTH: only {checked} substituted lines were checkable; the "
+                f"suite builds far more, and a sweep that stops finding its subject passes"
+            )
+            session.exitstatus = 1
+        return
+    if unreadable:
+        print(
+            "\nRENDER TRUTH: substituted lines the checker could not evaluate. A gate that "
+            "skips what it cannot read reports coverage it does not have:\n  "
+            + "\n  ".join(sorted(set(unreadable)))
+        )
+        session.exitstatus = 1
+    if disagreeing:
+        print(
+            "\nRENDER TRUTH: substituted lines that do not evaluate to the result printed "
+            "under them:\n  " + "\n  ".join(sorted(set(disagreeing)))
+        )
+        session.exitstatus = 1

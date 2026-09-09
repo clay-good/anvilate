@@ -1021,7 +1021,11 @@ def half_sine_shock_scorecard(
             # line for it. What this entry decides, though, is a quotient, and its one
             # non-obvious input is A: declared here with the ratio it was read at, so a
             # reviewer can take the amplification back to the spectrum and check it.
-            "derivation": Derivation(
+            # No derivation on a check that did not run: a zero pulse makes the quotient
+            # undefined and the line read `n = a_allow/(A·0)` under a printed 0.0.
+            "derivation": None
+            if computed is None
+            else Derivation(
                 symbolic="n = a_allow/(A·a₀)",
                 inputs=(
                     SymbolValue(
@@ -1051,7 +1055,7 @@ def half_sine_shock_scorecard(
                 result=SymbolValue(
                     symbol="n",
                     description="margin of the allowable over the peak response",
-                    value=computed if computed is not None else 0.0,
+                    value=computed,
                 ),
                 citation="half-sine shock response spectrum",
             ),

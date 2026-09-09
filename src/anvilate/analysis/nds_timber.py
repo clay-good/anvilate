@@ -162,7 +162,7 @@ def _nds_margin_derivation(
     applied_symbol: str,
     allowable_symbol: str,
     what: str,
-) -> Derivation:
+) -> Derivation | None:
     """The margin an NDS check is: the adjusted design value over the applied stress.
 
     Both figures reach these checks already formed — the stress from the member analysis,
@@ -170,7 +170,19 @@ def _nds_margin_derivation(
     meets its C factors. The quotient is the work done here, and the product behind the
     allowable is named in that symbol's gloss rather than shown as a term of a sum it is
     not part of.
+
+    ``None`` when the check was not evaluated. A zero applied stress makes the quotient
+    undefined, and what used to happen was a derivation showing a result of ``0.0`` over a
+    line reading ``n = F'_b / 0`` — a number the check did not compute, printed in a
+    submittal document beside a check that says it could not run.
+
+    **The applied stress is declared by its MAGNITUDE**, because that is what the quotient
+    divides by: these checks judge a compression on its size, so a member carrying −100 MPa
+    was shown a line reading ``n = 124.0 MPa / −100.0 MPa`` beside the number 1.24. Worked
+    as written that line gives −1.24, and a reviewer cannot reproduce the card from it.
     """
+    if computed is None:
+        return None
     return Derivation(
         symbolic=f"n = {allowable_symbol} / {applied_symbol}",
         inputs=(
@@ -185,8 +197,8 @@ def _nds_margin_derivation(
             ),
             SymbolValue(
                 symbol=applied_symbol,
-                description=f"applied {what}",
-                value=applied,
+                description=f"applied {what} (magnitude; the check judges it on its size)",
+                value=Quantity(magnitude=abs(applied.to("MPa").magnitude), unit="MPa"),
                 unit="MPa",
             ),
         ),
@@ -195,7 +207,7 @@ def _nds_margin_derivation(
             description=(
                 "margin against the adjusted design value; 1.0 is exactly the NDS allowable"
             ),
-            value=0.0 if computed is None else computed,
+            value=computed,
         ),
         citation="NDS",
     )

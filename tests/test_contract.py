@@ -1923,13 +1923,15 @@ def test_every_repair_lever_names_something_the_caller_can_move():
     assert checked >= 8, f"only {checked} levers were checked; the inventory holds more"
 
 
-_UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+(?:\.\d+)?)?"
-# A compound unit is one token, not the first of several: "20.83 kN*m" and "5.2 kg/m**3"
-# have to be captured whole, or the tail migrates out of the parentheses and lands in
-# whatever operator follows.
-_VALUE_UNIT = re.compile(
-    r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+(" + _UNIT_TOKEN + r"(?:\s*[*/]\s*" + _UNIT_TOKEN + r")*)"
-)
+# One evaluator, in `tests/render_truth.py`, shared with the session-wide sweep in
+# `conftest.py`. Two copies of a substitution this delicate is two things to keep in step,
+# and the sample here is the narrower reader of the two: what an author runs while writing
+# one screen, not the census.
+from render_truth import VALUE_UNIT as _VALUE_UNIT  # noqa: E402
+from render_truth import disagrees as _disagrees  # noqa: E402
+from render_truth import expand_roots as _expand_roots  # noqa: E402
+from render_truth import read_line as _read_line  # noqa: E402
+from render_truth import superscript_exponents as _superscript_exponents  # noqa: E402
 
 
 def _sample_derivations() -> list[tuple[str, object]]:
@@ -2692,53 +2694,6 @@ def test_every_pack_that_writes_a_derivation_is_in_the_render_truth_sample():
     )
 
 
-_SUPERSCRIPT = str.maketrans(
-    "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079\u22c5", "0123456789."
-)
-
-
-def _superscript_exponents(expression: str) -> str:
-    """``MPa\u2070\u22c5\u2075`` as ``MPa**0.5``, so a fractional-power unit survives the parse.
-
-    The three whole-number superscripts were replaced one glyph at a time, which reads a
-    unit's exponent and a symbol's identically and is right for both. A FRACTIONAL exponent
-    is not one glyph: ``\u2070\u22c5\u2075`` is three, and the value-unit pattern captured
-    ``190.27 MPa`` and left the exponent standing outside the parentheses. The line then
-    parsed cleanly into the wrong dimension and was dropped by the conversion below, which
-    used to be silent — an elastic coefficient in \u221aMPa went unchecked in both unit
-    systems while the gate cleared its floor.
-    """
-    return re.sub(
-        r"([A-Za-z\u00b5\u03a9])([\u2070\u00b9\u00b2\u00b3\u2074-\u2079\u22c5]+)",
-        lambda found: found.group(1) + "**" + found.group(2).translate(_SUPERSCRIPT),
-        expression,
-    )
-
-
-def _expand_roots(expression: str) -> str:
-    """Rewrite every \u221a(...) in a substituted line as (...)**0.5, matching parentheses.
-
-    Without this, pint parses "\u221a(A\u2082/A\u2081)" by quietly discarding the radical and using
-    the ratio itself — so a line with a square root in it evaluated to the wrong number
-    and the gate compared that wrong number against the printed result. It happened to
-    agree often enough to look fine, which is the worst way for a checker to be broken.
-    """
-    while (start := expression.find("\u221a(")) != -1:
-        depth = 0
-        for i in range(start + 1, len(expression)):
-            if expression[i] == "(":
-                depth += 1
-            elif expression[i] == ")":
-                depth -= 1
-                if depth == 0:
-                    inner = expression[start + 2 : i]
-                    expression = f"{expression[:start]}(({inner})**0.5){expression[i + 1 :]}"
-                    break
-        else:  # pragma: no cover - an unbalanced radical is not a derivation we build
-            return expression.replace("\u221a", "", 1)
-    return expression
-
-
 def test_the_render_truth_gate_can_actually_see_a_fractional_unit_exponent():
     """The sibling mechanism, and it was broken in the same shape as the radical.
 
@@ -2816,72 +2771,36 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
     line a reviewer is told to check.
     """
     from anvilate.units import UnitSystem
-    from anvilate.units.registry import UREG
 
     derivations = _sample_derivations()
     assert len(derivations) >= 10, "the sample got too small to be meaningful"
 
-    number = re.compile(r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)")
     checked = 0
     mismatches: list[str] = []
-    unparsed: list[str] = []
-    unconvertible: list[str] = []
+    unreadable: list[str] = []
     for label, derivation in derivations:
-        if derivation.unresolved_symbols():
-            continue
         for system in (UnitSystem.SI, UnitSystem.US):
-            substituted = derivation.substituted(system=system)
-            _, _, rhs = substituted.partition(" = ")
-            expression = rhs.replace("\u00b7", "*").replace("\u2212", "-")
-            # A unit's fractional exponent first, while its glyphs are still adjacent.
-            expression = _superscript_exponents(expression)
-            expression = expression.replace("\u00b2", "**2").replace("\u00b3", "**3")
-            expression = expression.replace("\u2074", "**4")
-            expression = _expand_roots(expression)
-            # Pint binds a bare "/ 4166666.67 mm**4" as a division by the NUMBER times
-            # the unit, so each value-unit pair has to be parenthesised before parsing.
-            expression = _VALUE_UNIT.sub(r"(\1 \2)", expression)
-            try:
-                value = UREG.parse_expression(expression)
-            except Exception as exc:
-                unparsed.append(f"{label} [{system.value}]: {substituted} ({exc})")
+            reading = _read_line(derivation, system)
+            if reading is None:
                 continue
-            printed = derivation.result.rendered(system=system)
-            match = number.match(printed)
-            if match is None:
-                continue
-            expected = float(match.group(1))
-            unit = printed[match.end() :].strip().replace("\u00b7", "*")
-            try:
-                actual = value.to(UREG.Unit(unit)).magnitude
-            except Exception as exc:
-                # NOT a skip. A line that will not convert to the unit printed under it is
-                # a line in the wrong dimension, which is the strongest form of the drift
-                # this gate exists to catch — and skipping it reports coverage the gate
-                # does not have, the same way the unparsed branch above would.
-                unconvertible.append(
-                    f"{label} [{system.value}]: {substituted} -> printed in {unit}, "
-                    f"line is {value.units} ({exc})"
+            if reading.problem is not None:
+                unreadable.append(
+                    f"{label} [{system.value}]: {reading.substituted} — {reading.problem}"
                 )
                 continue
             checked += 1
-            # The printed result carries its own precision, so the tolerance is a little
-            # over its last place plus slack for the inputs' own rounding.
-            if abs(actual - expected) > max(abs(expected) * 0.01, 5e-4):
+            if _disagrees(reading):
                 mismatches.append(
-                    f"{label} [{system.value}]: {substituted} -> printed {printed}, "
-                    f"line evaluates to {actual:.6g}"
+                    f"{label} [{system.value}]: {reading.substituted} -> printed "
+                    f"{reading.expected}, line evaluates to {reading.value:.6g}"
                 )
 
-    assert not unparsed, (
-        "substituted lines the checker could not evaluate. A render-truth gate that "
-        "skips what it cannot read reports coverage it does not have — this is how both "
-        "§H1.1 derivations went unchecked in both unit systems while the gate still "
-        "cleared its floor:\n  " + "\n  ".join(unparsed)
-    )
-    assert not unconvertible, (
-        "substituted lines that evaluate to a different dimension than the result printed "
-        "under them:\n  " + "\n  ".join(unconvertible)
+    assert not unreadable, (
+        "substituted lines the checker could not evaluate. A render-truth gate that skips "
+        "what it cannot read reports coverage it does not have — this is how both §H1.1 "
+        "derivations went unchecked in both unit systems while the gate still cleared its "
+        "floor, and how a fractional-power unit did it again a month later:\n  "
+        + "\n  ".join(unreadable)
     )
     assert checked >= 20, f"only {checked} substituted lines were checkable"
     assert not mismatches, (

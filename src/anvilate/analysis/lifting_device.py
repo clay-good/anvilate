@@ -282,28 +282,39 @@ def bth1_member_scorecard(
     # analysis, the allowable from BTH1Allowables — so the quotient IS the work done here.
     # What N_d did to the allowable happened upstream and is named in the gloss rather
     # than shown as a term, because it is not one.
-    derivation = Derivation(
-        symbolic="n = F / f",
-        inputs=(
-            SymbolValue(
-                symbol="F",
-                description=(
-                    f"Category {category.value} allowable stress, with the design factor "
-                    f"N_d = {category.design_factor:.2f} already inside it"
+    # No derivation on a check that did not run. A zero applied stress makes the quotient
+    # undefined, and the line used to read `n = F / 0` under a printed result of 0.0 — a
+    # number the check says it could not compute, in a submittal document.
+    derivation = (
+        None
+        if computed is None
+        else Derivation(
+            symbolic="n = F / f",
+            inputs=(
+                SymbolValue(
+                    symbol="F",
+                    description=(
+                        f"Category {category.value} allowable stress, with the design factor "
+                        f"N_d = {category.design_factor:.2f} already inside it"
+                    ),
+                    value=allowable,
+                    unit="MPa",
                 ),
-                value=allowable,
-                unit="MPa",
+                SymbolValue(
+                    symbol="f",
+                    description="applied stress in the member (magnitude; a compression is "
+                    "judged on its size)",
+                    value=Quantity(magnitude=applied, unit="MPa"),
+                    unit="MPa",
+                ),
             ),
-            SymbolValue(
-                symbol="f", description="applied stress in the member", value=stress, unit="MPa"
+            result=SymbolValue(
+                symbol="n",
+                description="margin against the BTH-1 allowable; 1.0 is exactly the allowable",
+                value=computed,
             ),
-        ),
-        result=SymbolValue(
-            symbol="n",
-            description="margin against the BTH-1 allowable; 1.0 is exactly the allowable",
-            value=computed if computed is not None else 0.0,
-        ),
-        citation=_CLAUSE_ALLOWABLES,
+            citation=_CLAUSE_ALLOWABLES,
+        )
     )
     return entry.model_copy(
         update={
@@ -389,31 +400,35 @@ def bth1_fatigue_scorecard(
         f"Service Class {service_class.value} ({band} load cycles): a stress range of "
         f"{applied:.4g} MPa against an allowable {limit:.4g} MPa"
     )
-    fatigue_derivation = Derivation(
-        symbolic="n = Δσ_a / Δσ",
-        inputs=(
-            SymbolValue(
-                symbol="Δσ_a",
-                description=(
-                    f"allowable stress range for Service Class {service_class.value} "
-                    f"({band} load cycles)"
+    fatigue_derivation = (
+        None
+        if computed is None
+        else Derivation(
+            symbolic="n = Δσ_a / Δσ",
+            inputs=(
+                SymbolValue(
+                    symbol="Δσ_a",
+                    description=(
+                        f"allowable stress range for Service Class {service_class.value} "
+                        f"({band} load cycles)"
+                    ),
+                    value=allowable_stress_range,
+                    unit="MPa",
                 ),
-                value=allowable_stress_range,
-                unit="MPa",
+                SymbolValue(
+                    symbol="Δσ",
+                    description="applied stress range (magnitude)",
+                    value=Quantity(magnitude=applied, unit="MPa"),
+                    unit="MPa",
+                ),
             ),
-            SymbolValue(
-                symbol="Δσ",
-                description="applied stress range",
-                value=stress_range,
-                unit="MPa",
+            result=SymbolValue(
+                symbol="n",
+                description="margin against the §3-4 allowable stress range",
+                value=computed,
             ),
-        ),
-        result=SymbolValue(
-            symbol="n",
-            description="margin against the §3-4 allowable stress range",
-            value=computed if computed is not None else 0.0,
-        ),
-        citation=_CLAUSE_SERVICE,
+            citation=_CLAUSE_SERVICE,
+        )
     )
     return entry.model_copy(
         update={

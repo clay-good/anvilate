@@ -321,7 +321,18 @@ question is answered rather than open):
   now widens for small values as well: a stress of 0.087 ksi used to print as `0.1 ksi`,
   a 15% error landing straight in the line a reviewer is told to check. The whole
   property — every substituted line evaluating to its own printed result — is asserted
-  across every derivation the packs build, in both unit systems.
+  across **every derivation the suite builds**, in both unit systems: roughly 1,900
+  distinct lines, read off the same session-wide collector the derivation-coverage and
+  effectivity ratchets read. It used to run over a hand-written sample of about 100 cards,
+  and the difference was not academic. Four things were wrong in the 1,800 the sample could
+  not see: the deflection lines all evaluated 1.73× low, because pint drops a radical
+  written over a bare number and read `9·√3` as 27; a `min(1, …)` line came back in
+  *minutes*, because `min` is a unit to pint; three checks declared a **signed** demand
+  while their arithmetic divides by its magnitude, so a hogging member's interaction line
+  read `8/9 · −17.70 kip·in / 46.10 kip·in` beside a printed 0.840 and works out to 0.158;
+  and four checks that were *not evaluated* carried a derivation anyway, printing a result
+  of 0.0 over a line reading `n = F / 0`. A check that could not run now carries no worked
+  line at all.
 - **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
   US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
   force over SI area against a US stress, inside one equals sign.
