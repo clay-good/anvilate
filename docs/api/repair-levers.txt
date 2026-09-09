@@ -17,6 +17,15 @@
 # keyword argument of the screen or a field of a model it takes, or it names something the
 # caller cannot move.
 #
+# AN AGGREGATOR'S LEVERS ARE ITS ELEMENTS'. `screening.screen_spec` — the library's
+# front door, the function `anvilate check` runs — dispatches each declared element
+# through a registry and returns their entries, hints and all. It is recorded here as
+# having no lever of its OWN, which is what the gate can resolve: the walk follows a
+# module's own call graph, and the registry hands back a callable rather than naming one.
+# A card from it carries whatever the element screens carry, and the four rows for
+# `screen_structure` are the same thing where the dispatch IS in one module and so
+# resolves.
+#
 # `solved` and `directional` are not interchangeable. A solved lever claims a value; a
 # directional one claims only a sign, which is a claim about the check's shape over its
 # whole domain and has to be swept before it is declared. `screen_infinite_slope` carries
@@ -54,6 +63,7 @@ ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 ## no lever recorded
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
+callouts.callout_scorecard
 cold_formed_steel.dsm_scorecard
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard
@@ -72,6 +82,7 @@ lifting_device.bth1_member_scorecard
 lifting_device.bth1_pin_plate_scorecard
 lifting_device.screen_lifter_device
 lighting.screen_lighting
+loads.combination_scorecard
 masonry.screen_masonry_wall
 nds_timber.nds_bearing_scorecard
 nds_timber.nds_bending_scorecard
@@ -81,6 +92,8 @@ noise_exposure.screen_noise_exposure
 pressure_vessel.asme_appendix_2_flange_stress_scorecard
 pressure_vessel.asme_b313_branch_reinforcement_scorecard
 pressure_vessel.asme_ug37_reinforcement_scorecard
+screening.screen_spec
+screening.screen_structure_element
 stress.strength_scorecard
 structural.screen_beam_column
 structural.screen_beam_member

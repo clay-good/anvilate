@@ -1398,6 +1398,11 @@ def _public_screens() -> dict[str, tuple[object, Path]]:
         for info in pkgutil.iter_modules(packs_pkg.__path__)
         if not info.name.startswith("_")
     ]
+    # And the top-level modules. Leaving them out was not a judgement call, it was the
+    # census being written while looking at the two places screens were known to live:
+    # `screening.screen_spec` is the LIBRARY'S FRONT DOOR — the function `anvilate check`
+    # runs — and it sat outside the inventory that says it covers every screen.
+    sources += [(f"anvilate.{name}", name) for name in _core_module_names()]
     for dotted, short in sources:
         module = importlib.import_module(dotted)
         path = Path(module.__file__)
@@ -1544,6 +1549,7 @@ def test_the_screen_census_finds_every_function_that_returns_a_card():
         for info in pkgutil.iter_modules(packs_pkg.__path__)
         if not info.name.startswith("_")
     ]
+    sources += [(f"anvilate.{name}", name) for name in _core_module_names()]
     for dotted, short in sources:
         module = importlib.import_module(dotted)
         for symbol in getattr(module, "__all__", ()):

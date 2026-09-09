@@ -44,8 +44,8 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 
 ### Every screen records whether it has a lever
 
-`docs/api/repair-levers.txt` holds the decision for all 51 public screens.
-There are 26 levers across 16 of them, and 35 recorded as having none yet — each
+`docs/api/repair-levers.txt` holds the decision for all 55 public screens.
+There are 26 levers across 16 of them, and 39 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
