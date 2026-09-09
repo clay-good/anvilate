@@ -152,6 +152,7 @@ ROUND_TRIPPED = frozenset(
         "elastic_constants.bulk_modulus_from_youngs_poisson",
         "isentropic_efficiency.compressor_isentropic_from_polytropic",
         "isentropic_efficiency.turbine_isentropic_from_polytropic",
+        "dynamics.isolator_frequency_ratio_for_transmissibility",
     }
 )
 
@@ -2171,3 +2172,27 @@ def test_turbine_isentropic_from_polytropic_lands_the_turbine_efficiency():
         actual_outlet_temperature=actual_exhaust,
         isentropic_outlet_temperature=ideal_exhaust,
     ) == pytest.approx(isentropic, rel=1e-12)
+
+
+def test_isolator_frequency_ratio_for_transmissibility_lands_the_damped_transmissibility():
+    """The damped inverse, swept across the damping range, because damping is exactly what
+    the older undamped form of this inverse drops: at 30% of critical the ratio it demands
+    is four times the undamped one, and the pair has to close at every value."""
+    from anvilate.analysis import isolator_frequency_ratio_for_transmissibility, transmissibility
+
+    for damping in (0.0, 0.02, 0.05, 0.1, 0.3, 0.6, 0.9):
+        for target in (0.9, 0.5, 0.1, 0.02):
+            ratio = isolator_frequency_ratio_for_transmissibility(
+                transmissibility=target, damping_ratio=damping
+            )
+            assert ratio > 2.0**0.5
+            assert transmissibility(frequency_ratio=ratio, damping_ratio=damping) == pytest.approx(
+                target, rel=1e-12
+            )
+
+    # Damping costs isolation, and the ratio it demands says how much.
+    undamped = isolator_frequency_ratio_for_transmissibility(
+        transmissibility=0.02, damping_ratio=0.0
+    )
+    damped = isolator_frequency_ratio_for_transmissibility(transmissibility=0.02, damping_ratio=0.3)
+    assert damped > 4.0 * undamped

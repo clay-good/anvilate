@@ -11243,6 +11243,80 @@ def test_transmissibility_isolation_crossover():
     assert tr_res == pytest.approx(sqrt(1 + (2 * 0.2) ** 2) / (2 * 0.2), rel=1e-12)
 
 
+def test_a_failing_isolation_check_solves_the_frequency_ratio_it_needs():
+    """The mount that fails now says which ratio passes, damping included.
+
+    The lever is the ratio itself — a softer mount at the same forcing — and every
+    failing ratio is below the solved one, including the ones under sqrt(2) that amplify.
+    The older undamped inverse in this module would name a ratio that misses by more the
+    more damping there is, so the hint uses the damped solve.
+    """
+    from anvilate.analysis import isolation_scorecard, isolator_frequency_ratio_for_transmissibility
+    from anvilate.scorecard import CheckStatus, Direction
+
+    target, damping = 0.05, 0.3
+    stiff = isolation_scorecard(
+        "mount",
+        frequency_ratio=3.0,
+        damping_ratio=damping,
+        required_transmissibility=target,
+    )
+    assert stiff.status is CheckStatus.FAIL
+    hint = stiff.repair_hint
+    assert hint is not None
+    assert hint.parameter == "frequency_ratio"
+    assert hint.direction is Direction.INCREASE
+
+    repaired = isolation_scorecard(
+        "mount",
+        frequency_ratio=hint.corrective_value,
+        damping_ratio=damping,
+        required_transmissibility=target,
+    )
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(1.0, rel=1e-9)
+    assert repaired.repair_hint is None
+
+    # The undamped inverse's ratio would NOT pass at this damping — the reason the hint
+    # solves the damped form rather than reusing the one that was already here.
+    undamped = isolator_frequency_ratio_for_transmissibility(
+        transmissibility=target, damping_ratio=0.0
+    )
+    assert undamped < hint.corrective_value
+    assert (
+        isolation_scorecard(
+            "mount",
+            frequency_ratio=undamped,
+            damping_ratio=damping,
+            required_transmissibility=target,
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # A mount in the amplification region fails too, and gets the same solved ratio.
+    amplifying = isolation_scorecard(
+        "mount", frequency_ratio=1.2, damping_ratio=damping, required_transmissibility=target
+    )
+    assert amplifying.status is CheckStatus.FAIL
+    assert amplifying.repair_hint.corrective_value == pytest.approx(
+        hint.corrective_value, rel=1e-12
+    )
+    # And so does the undamped-resonance case, whose detail could only say "move it".
+    resonant = isolation_scorecard(
+        "mount", frequency_ratio=1.0, damping_ratio=0.0, required_transmissibility=target
+    )
+    assert resonant.status is CheckStatus.FAIL
+    assert resonant.repair_hint is not None
+
+    # A passing mount carries no hint.
+    assert (
+        isolation_scorecard(
+            "mount", frequency_ratio=20.0, damping_ratio=damping, required_transmissibility=target
+        ).repair_hint
+        is None
+    )
+
+
 def test_isolation_scorecard_flags_the_amplification_region():
     from anvilate.analysis import isolation_scorecard
     from anvilate.scorecard import CheckStatus

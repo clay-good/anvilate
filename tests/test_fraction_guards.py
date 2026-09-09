@@ -1832,7 +1832,7 @@ def test_a_number_used_as_an_exponent_is_one_the_function_refuses_as_a_nan():
     of its module's own helpers, **and so must one reaching the base under a
     parameter-borne exponent**. A base under a *literal* exponent is left alone: `x ** 2`
     cannot eat a NaN, and 194 parameters sit under one propagating theirs correctly. That
-    covers all 1,750 public functions, including the 259 no binder can build a call for.
+    covers all 1,751 public functions, including the 259 no binder can build a call for.
     """
     unguarded, examined = _exponent_sites()
     assert examined >= 45, (

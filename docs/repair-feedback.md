@@ -61,6 +61,7 @@ owes the reader:
 | Screen | Check | Lever | Kind |
 | --- | --- | --- | --- |
 | `asme_b313_pressure_scorecard` | straight-pipe pressure | `nominal_wall` ↑ | solved — the B31.3 wall inverse, grossed back up |
+| `isolation_scorecard` | isolator transmissibility | `frequency_ratio` ↑ | solved — the DAMPED transmissibility inverse |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the

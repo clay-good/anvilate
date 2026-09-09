@@ -29,7 +29,14 @@ from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Comparison,
+    Direction,
+    LimitSense,
+    RepairHint,
+    ScorecardEntry,
+)
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
@@ -54,6 +61,7 @@ __all__ = [
     "critical_damping_coefficient",
     "transmissibility",
     "isolation_scorecard",
+    "isolator_frequency_ratio_for_transmissibility",
     "isolator_natural_frequency_for_transmissibility",
     "isolator_static_deflection_for_transmissibility",
     "isolator_selection_scorecard",
@@ -627,6 +635,7 @@ def isolation_scorecard(
                 "unbounded, there is no transmissibility to report. Supply the real "
                 "damping ratio, however small, or move the mount off the forcing frequency."
             ),
+            repair_hint=_isolation_repair_hint(required_transmissibility, damping_ratio),
         )
     tr = transmissibility(frequency_ratio=frequency_ratio, damping_ratio=damping_ratio)
     computed = float("inf") if tr == 0 else required_transmissibility / tr
@@ -648,7 +657,69 @@ def isolation_scorecard(
         )
     else:
         detail = f"transmissibility {tr:.3f} vs target {required_transmissibility:.2f}"
-    return entry.model_copy(update={"detail": detail})
+    update: dict[str, object] = {"detail": detail}
+    if entry.status is CheckStatus.FAIL:
+        update["repair_hint"] = _isolation_repair_hint(required_transmissibility, damping_ratio)
+    return entry.model_copy(update=update)
+
+
+def _isolation_repair_hint(required_transmissibility: float, damping_ratio: float) -> RepairHint:
+    """The frequency ratio that lands the target, for a mount that did not.
+
+    The lever is the ratio itself — a softer mount, a lower natural frequency, the same
+    forcing — and the direction is unambiguously up: transmissibility falls monotonically
+    with r past √2, and every failing ratio is below the solved one (a ratio under √2
+    amplifies, so it fails whatever the target). Solved with the damping kept in, because
+    the screen judges a damped mount: the undamped inverse would name a ratio that misses
+    by more the more damping there is.
+    """
+    return RepairHint.solved(
+        "frequency_ratio",
+        direction=Direction.INCREASE,
+        value=isolator_frequency_ratio_for_transmissibility(
+            transmissibility=required_transmissibility, damping_ratio=damping_ratio
+        ),
+        provenance="isolator_frequency_ratio_for_transmissibility (damped)",
+    )
+
+
+def isolator_frequency_ratio_for_transmissibility(
+    *, transmissibility: float, damping_ratio: float
+) -> float:
+    """The frequency ratio a target transmissibility needs, DAMPED.
+
+    The design inverse of :func:`transmissibility` with the damping kept in, where
+    :func:`isolator_natural_frequency_for_transmissibility` drops it: squaring
+    TR = √(1 + (2ζr)²)/√((1 − r²)² + (2ζr)²) and writing x = r², a = (2ζ)² gives a
+    quadratic in x,
+
+        TR²·x² + [TR²·(a − 2) − a]·x + (TR² − 1) = 0,
+
+    whose constant term is negative for any TR < 1, so exactly one root is positive and
+    r = √x is unambiguous. ``transmissibility`` TR must be in (0, 1) — above 1 the mount
+    amplifies and there is no isolation ratio to find — and ``damping_ratio`` ζ in [0, 1).
+
+    Damping costs isolation, and this is where you see how much: 2% of critical damping
+    reaches TR = 0.02 at r = 7.3, and 30% needs r = 30 — a mount thirty times softer than
+    the forcing frequency for the same result. Returns the dimensionless frequency ratio,
+    always above √2.
+
+    Source: Blevins, *Formulas for Dynamics, Acoustics and Vibration*, force
+    transmissibility of a damped single-degree-of-freedom isolator.
+    """
+    require_finite(transmissibility, name="transmissibility")
+    require_finite(damping_ratio, name="damping_ratio")
+    if not 0 < transmissibility < 1:
+        raise ValueError(
+            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}"
+        )
+    if not 0 <= damping_ratio < 1:
+        raise ValueError(f"damping_ratio must be in [0, 1); got {damping_ratio}")
+    a = (2.0 * damping_ratio) ** 2
+    squared = transmissibility**2
+    linear = squared * (a - 2.0) - a
+    discriminant = linear**2 - 4.0 * squared * (squared - 1.0)
+    return sqrt((-linear + sqrt(discriminant)) / (2.0 * squared))
 
 
 def isolator_natural_frequency_for_transmissibility(
