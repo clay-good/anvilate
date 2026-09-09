@@ -237,6 +237,12 @@ def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[s
         lines.extend(f"  {line}" for line in worked)
     else:
         lines.append(f"  [{section.fallback_label}]")
+    # And the fix, from the same `ReportSection.repair_line` the report renders. This block
+    # printed the failing check and the whole worked calculation and said nothing about the
+    # value that lands the margin, while the other three surfaces named it.
+    repair = section.repair_line()
+    if repair:
+        lines.append(f"    {repair}")
     return tuple(lines)
 
 

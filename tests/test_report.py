@@ -1364,11 +1364,7 @@ def test_a_repair_hint_carries_where_its_number_came_from():
     from a monotonicity declaration, and this is the document a reviewer signs. A hint with no
     provenance renders exactly as it did, which the second half holds.
     """
-    from anvilate.report.document import _repair_source
-
-    class _Section:
-        def __init__(self, entry):
-            self.entry = entry
+    from anvilate.report import ReportSection
 
     solved = ScorecardEntry.from_safety_factor(
         "lug tension",
@@ -1382,8 +1378,8 @@ def test_a_repair_hint_carries_where_its_number_came_from():
             provenance="lug thickness inverse (σ ∝ 1/t, so SF ∝ t)",
         ),
     )
-    assert _repair_source(_Section(solved)) == (
-        " — from the lug thickness inverse (σ ∝ 1/t, so SF ∝ t)"
+    assert ReportSection(entry=solved).repair_line() == (
+        "repair: increase thickness to 16 mm — from the lug thickness inverse (σ ∝ 1/t, so SF ∝ t)"
     )
 
     bare = ScorecardEntry.from_safety_factor(
@@ -1392,7 +1388,15 @@ def test_a_repair_hint_carries_where_its_number_came_from():
         required=2.0,
         repair_hint=RepairHint.directional("thickness", direction=Direction.INCREASE),
     )
-    assert _repair_source(_Section(bare)) == ""
+    assert ReportSection(entry=bare).repair_line() == "repair: increase thickness"
+
+    # A check with no hint renders no line at all, in every surface that asks.
+    assert (
+        ReportSection(
+            entry=ScorecardEntry.from_safety_factor("lug tension", computed=3.0, required=2.0)
+        ).repair_line()
+        == ""
+    )
 
 
 def test_a_negative_value_does_not_drop_a_formula_out_of_the_grammar():

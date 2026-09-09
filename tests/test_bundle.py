@@ -756,6 +756,51 @@ def test_the_exported_bundle_carries_every_check_and_the_rollup_does_not():
     assert document.rstrip().endswith(SCREENING_DISCLAIMER)
 
 
+def test_every_text_surface_that_prints_a_check_prints_its_repair():
+    """Four surfaces print a check; the bundle printed everything but the fix.
+
+    `anvilate check`, both forms of the calculation report, and this document all render
+    the same entry, and the bundle's block built its lines from the headline and the worked
+    calculation and stopped. So a reviewer holding the evidence document — the surface whose
+    reader has nothing else, as that block's own docstring says — saw the failing check, the
+    substituted formula and the clause, and not the value that lands the margin, while the
+    other three named it.
+
+    They all go through `ReportSection.repair_line` now, and this holds the four together.
+    """
+    from anvilate.report import CalculationReport, ReportSection
+    from anvilate.scorecard import Direction, RepairHint
+
+    entry = ScorecardEntry.from_safety_factor(
+        "lug tension",
+        computed=1.0,
+        required=2.0,
+        repair_hint=RepairHint.solved(
+            "thickness",
+            direction=Direction.INCREASE,
+            value=16.0,
+            unit="mm",
+            provenance="lug thickness inverse (σ ∝ 1/t, so SF ∝ t)",
+        ),
+    ).model_copy(update={"reference": "ASME BTH-1 §3-3"})
+    expected = ReportSection(entry=entry).repair_line()
+    assert "increase thickness to 16 mm" in expected
+    assert "lug thickness inverse" in expected
+
+    document = BundleSections(scorecard=Scorecard(entries=(entry,))).render_document()
+    assert expected in document, "the evidence document drops the repair hint"
+
+    report = CalculationReport(title="lug", sections=(ReportSection(entry=entry),))
+    assert expected in report.to_text()
+    assert "increase thickness to 16 mm" in report.to_html()
+    assert "lug thickness inverse" in report.to_html()
+
+    # A check with no hint adds no line anywhere: the surfaces stay identical to before.
+    plain = ScorecardEntry.from_safety_factor("lug tension", computed=3.0, required=2.0)
+    quiet = BundleSections(scorecard=Scorecard(entries=(plain,))).render_document()
+    assert "repair:" not in quiet
+
+
 def test_the_exported_json_carries_the_card_and_the_predicates_form_does_not():
     """The same split, in JSON. `to_json_dict` is hashed into `sections_json`."""
     sections = BundleSections(scorecard=_a_card_worth_reading())

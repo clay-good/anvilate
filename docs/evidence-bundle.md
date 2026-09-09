@@ -42,7 +42,7 @@ the analysis. So there are two renderings, and which one you want depends on who
 | | who reads it | what it carries |
 | --- | --- | --- |
 | `render()` / `to_json_dict()` | the attestation predicate | the roll-up over layers, the assumptions, the disclaimer |
-| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail, its clause and its worked calculation — or, where a check has none, the statement of why it has none — plus the spec they were computed from |
+| `render_document()` / `to_document_dict()` | a person, and both export surfaces | all of that, plus every check on the card with its detail, its clause and its worked calculation — or, where a check has none, the statement of why it has none — plus the repair hint a failing check carries, and the spec they were computed from |
 
 **The JSON document has a published contract**:
 [`evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json), generated from

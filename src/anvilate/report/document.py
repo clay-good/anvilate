@@ -121,18 +121,6 @@ _NONFINITE_TOKENS: dict[str, float] = {
 _NONFINITE_SPELLING = {"inf": "__nonfinite:inf__", "-inf": "__nonfinite:-inf__"}
 
 
-def _repair_source(section) -> str:
-    """Where a repair hint's number came from, as a clause to append to it.
-
-    Empty when the hint declares no provenance, so a hint without one renders exactly as it
-    did. The packs populate it with the inverse or the monotonicity argument behind the
-    value, and both renderings dropped it.
-    """
-    hint = section.entry.repair_hint
-    source = (hint.provenance or "").strip() if hint is not None else ""
-    return f" — from the {source}" if source else ""
-
-
 def _json_safe(value: object) -> object:
     """Encode non-finite floats as string tokens so the record is strict-JSON valid.
 
@@ -244,6 +232,21 @@ class ReportSection(StatableModel):
         status = entry.status.value.upper()
         return f"[{status}] {entry.name}: {self.verdict(system=system)}{fragile}{cite}"
 
+    def repair_line(self) -> str:
+        """The check's repair hint with the source of its number, or the empty string.
+
+        One definition for every surface that prints a check. Four print one — the CLI's
+        `check`, both forms of the calculation report, and the evidence bundle — and the
+        bundle printed the failing check, the worked calculation and nothing about the fix,
+        while the other three named the value that lands the margin. It is the surface
+        whose reader has nothing else, and the one that told them least.
+        """
+        hint = self.entry.repair_hint
+        if hint is None:
+            return ""
+        source = (hint.provenance or "").strip()
+        return f"repair: {hint}" + (f" — from the {source}" if source else "")
+
     @property
     def fallback_label(self) -> str:
         """The label over the inputs table, with the check's own reason when it states one.
@@ -348,13 +351,14 @@ class CalculationReport(StatableModel):
                         f"  ({item.description})"
                     )
             out.append(f"  {section.verdict(system=self.unit_system)}")
-            if section.entry.repair_hint is not None:
+            repair = section.repair_line()
+            if repair:
                 # With its provenance, which nothing rendered. The packs write a real
                 # sentence into it — "lug thickness inverse (σ ∝ 1/t, so SF ∝ t)" — and it
                 # is the difference between a value that solves the check exactly and a
                 # direction taken from a monotonicity declaration. This is the document a
                 # reviewer signs, so it is where that difference has to be legible.
-                out.append(f"  repair: {section.entry.repair_hint}{_repair_source(section)}")
+                out.append(f"  {repair}")
             unc = section.entry.uncertainty
             if unc is not None:
                 flag = " — FRAGILE" if section.entry.is_fragile() else ""
@@ -569,11 +573,9 @@ class CalculationReport(StatableModel):
                     )
                 out.append("</table>")
         out.append(f'<p class="detail">{escape(section.verdict(system=self.unit_system))}</p>')
-        if section.entry.repair_hint is not None:
-            out.append(
-                f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}'
-                f"{escape(_repair_source(section))}</p>"
-            )
+        repair = section.repair_line()
+        if repair:
+            out.append(f'<p class="repair">{escape(repair.capitalize())}</p>')
         unc = section.entry.uncertainty
         if unc is not None:
             fragile = section.entry.is_fragile()
