@@ -703,7 +703,11 @@ def _undercut_entry(mesh: SpurGearMesh) -> ScorecardEntry:
                     "pinion_teeth",
                     direction=Direction.INCREASE,
                     value=float(least),
-                    unit="teeth",
+                    # No unit. A tooth count is dimensionless, and `teeth` is a word the
+                    # unit registry cannot parse — a consumer converting the value would
+                    # raise on a number that is otherwise correct. The luminaire count and
+                    # the isolator frequency ratio say it the same way.
+                    unit=None,
                     provenance="rack-generation limit ⌈2·k/sin²φ⌉ itself",
                     whole=True,
                 )

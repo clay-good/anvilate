@@ -262,6 +262,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
     _report_render_truth(session, full_run=False)
     _report_typesetting(session, full_run=False)
+    _report_repair_hints(session, full_run=False)
 
     option = session.config.option
     filtered = bool(
@@ -359,6 +360,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # can tell a retired check from one this selection did not reach.
     _report_render_truth(session, full_run=True)
     _report_typesetting(session, full_run=True)
+    _report_repair_hints(session, full_run=True)
 
     stale = _stale_registry_lines(coverage, registry)
     if stale:
@@ -1231,5 +1233,77 @@ def _report_typesetting(session, *, full_run: bool) -> None:
             "document shows them as a line of plain text. Widen the grammar in "
             "src/anvilate/report/mathml.py, or reword the formula:\n  "
             + "\n  ".join(sorted(set(declined)))
+        )
+        session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# The repair-hint sweep.
+#
+# `docs/api/repair-levers.txt` and its gates in test_contract.py hold WHICH parameter each
+# screen names. What nothing held is whether the hint a caller actually receives is one they
+# can act on, and the first run of this found a corrective value labelled `teeth` — a unit
+# string the library's own registry cannot parse, so a consumer converting the value raises
+# on a number that is otherwise correct. A count is dimensionless and says so with no unit
+# at all, which is what the luminaire count and the isolator frequency ratio already do.
+#
+# The other three rules held on their first run and are here because they are the ones a
+# reader of a card relies on: a hint rides a FAIL and nothing else, its value is a finite
+# number, and it says where it came from.
+
+
+def _repair_hint_findings() -> tuple[int, list[str]]:
+    """Every distinct repair hint the suite built, checked for usability."""
+    from math import isfinite
+
+    from anvilate.scorecard import CheckStatus
+    from anvilate.units.registry import UREG
+
+    seen: set[tuple] = set()
+    findings: list[str] = []
+    hints = 0
+    for entry in _library_entries.values():
+        hint = getattr(entry, "repair_hint", None)
+        if hint is None:
+            continue
+        key = (entry.name, hint.parameter, hint.corrective_value, hint.unit)
+        if key in seen:
+            continue
+        seen.add(key)
+        hints += 1
+        where = f"{entry.name} -> {hint.parameter}"
+        if entry.status is not CheckStatus.FAIL:
+            findings.append(f"{where}: a hint on a {entry.status.value} check")
+        if not hint.provenance:
+            findings.append(f"{where}: no provenance, so a reader cannot check the value")
+        if hint.corrective_value is not None and not isfinite(hint.corrective_value):
+            findings.append(f"{where}: corrective value is {hint.corrective_value}")
+        if hint.unit is not None:
+            try:
+                UREG.Unit(hint.unit)
+            except Exception as exc:  # noqa: BLE001 - any refusal is the finding
+                findings.append(
+                    f"{where}: the corrective value is labelled {hint.unit!r}, which this "
+                    f"library cannot parse as a unit ({exc}). A dimensionless value — a "
+                    f"count, a ratio — carries no unit rather than a word"
+                )
+    return hints, findings
+
+
+def _report_repair_hints(session, *, full_run: bool) -> None:
+    """Fail the run when a repair hint is not one a caller can act on."""
+    hints, findings = _repair_hint_findings()
+    if full_run:
+        if hints < 150:
+            print(
+                f"\nREPAIR HINTS: only {hints} distinct hints were swept; the library "
+                f"offers far more, and a sweep that stops finding its subject passes"
+            )
+            session.exitstatus = 1
+        return
+    if findings:
+        print(
+            "\nREPAIR HINTS: these are not hints a caller can act on:\n  "
+            + "\n  ".join(sorted(set(findings)))
         )
         session.exitstatus = 1

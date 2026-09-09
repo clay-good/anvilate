@@ -272,7 +272,13 @@ def test_screen_gear_mesh_names_a_parameter_that_clears_each_failing_check(check
         return
     field = {"module": Quantity(magnitude=hint.corrective_value, unit="mm")}
     if hint.parameter == "pinion_teeth":
+        # A count is dimensionless and carries no unit: a word like "teeth" is not one the
+        # unit registry can parse, and a consumer converting the value would raise on a
+        # number that is otherwise correct.
+        assert hint.unit is None
         field = {"pinion_teeth": int(hint.corrective_value)}
+    else:
+        assert hint.unit == "mm"
     repaired = _named(screen_gear_mesh(mesh.model_copy(update=field)))[check]
     assert repaired.status is CheckStatus.PASS
     # And it is the LEAST such value: one step under it still fails.

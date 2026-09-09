@@ -42,6 +42,17 @@ root left the repaired plate at a safety factor of 1.9999999999999996 against a
 required 2.0 — the fix this library named was itself a `FAIL`. See
 [`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
 
+### A hint has to be one you can act on
+
+The inventory says *which* parameter each screen names. What it cannot say is whether the
+hint a caller receives is usable, so every repair hint the suite builds is swept at session
+end: it rides a `FAIL` and nothing else, its corrective value is a finite number, it says
+where the value came from, and — the one that was wrong — **its unit is one this library can
+parse**. A tooth count was labelled `teeth`, which is a word and not a unit, so a consumer
+converting the value raised on a number that was otherwise correct. A dimensionless
+value — a count, a ratio — carries no unit at all, which is what the luminaire count and the
+isolator frequency ratio already did.
+
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 59 public screens.
