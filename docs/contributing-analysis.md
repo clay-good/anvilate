@@ -60,6 +60,17 @@ The half-sine shock spectrum is the pattern: it is a derivation, not a transcrip
 its test integrates the ODE it claims to solve and compares, at seven values of τ/T. The
 NDS anchors state the whole hand solution in the docstring and assert its numbers.
 
+**Put the population floor before the finding, not after it.** A gate that compares what
+it discovered against something recorded — a manifest, an inventory, a declared set —
+inflates its own finding when the discovery breaks: an AST walk that stops finding tests
+makes every recorded pairing "unexercised", and the gate then blames 123 pairings for a
+broken reader. The floor that would have named the real cause never runs. Order the
+assertions from "did the measurement happen" to "what did it find", floor the quantity
+the discovery produces (not the one the file holds), and attack each assertion separately
+to check the message you get names the mutation you made. A sweep of this suite found the
+rule broken in exactly two places, both of that comparison shape; the other sixteen
+late floors are correctly placed backstops on findings that go vacuously empty.
+
 **Also assert what the number is not.** A verdict is not a value: a check tested only on
 its PASS/FAIL is unpinned, and mutation testing here has repeatedly found safety
 coefficients that could be doubled with a green suite.

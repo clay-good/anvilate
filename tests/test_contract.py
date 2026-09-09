@@ -1067,6 +1067,16 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
             }
             per_test.append(names)
 
+    # The reader has to have read something, and this goes BEFORE the check it protects,
+    # not after. An earlier draft said "if the AST walk stopped finding tests, every
+    # pairing above would pass vacuously" and put the floor last — but an empty walk makes
+    # every pairing UNEXERCISED, so the check below fails first and blames 122 pairings
+    # for a broken reader. A floor written after the finding it guards cannot fire.
+    assert len(per_test) >= 12, (
+        f"only {len(per_test)} round-trip tests were discovered — the reader has stopped "
+        f"reading, and nothing below is looking at the suite it thinks it is"
+    )
+
     unexercised: list[str] = []
     for inverse, forward in sorted(paired.items()):
         if inverse not in test_design_inverses.ROUND_TRIPPED:
@@ -1079,12 +1089,6 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
         "these pairings are declared in ROUND_TRIPPED but no single test in "
         "tests/test_design_inverses.py calls both halves, so the pairing recorded in "
         "docs/api/design-inverses.txt is a claim nobody checks:\n  " + "\n  ".join(unexercised)
-    )
-    # And the reader itself has to keep reading: if the AST walk stopped finding tests,
-    # every pairing above would pass vacuously.
-    assert len(per_test) >= 12, (
-        f"only {len(per_test)} round-trip tests were discovered — the reader has stopped "
-        f"reading, and the pairing check above is passing on an empty set"
     )
 
 
@@ -1207,6 +1211,15 @@ def test_every_recorded_pairing_notices_a_wrong_answer_from_its_inverse():
     to notice.
     """
     survivors, moved, untested = _sweep_pairings(_moving_wrapper)
+    # Before anything else: did the sweep run? An AST walk that stops finding tests leaves
+    # every pairing "untested", and the check below then blames the inventory for it.
+    # The count is of pairings WITH a test — `_tests_naming_both_halves` is keyed by
+    # pairing, so its length is the inventory's size and cannot move when the walk breaks.
+    with_a_test = sum(1 for tests in _tests_naming_both_halves().values() if tests)
+    assert with_a_test >= 120, (
+        f"the reader found round-trip tests for only {with_a_test} recorded pairings; it "
+        "has stopped reading the suite, and nothing below is measuring what it claims to"
+    )
     assert not untested, (
         "no round-trip test calls both halves of these recorded pairings, so the sweep "
         "could not run at all:\n  " + "\n  ".join(untested)
@@ -1225,8 +1238,7 @@ def test_every_recorded_pairing_notices_a_wrong_answer_from_its_inverse():
         + "\n  ".join(survivors)
     )
     assert len(moved) >= 120, (
-        f"only {len(moved)} pairings were swept; the inventory holds more, and a sweep "
-        f"that stops finding its subject passes"
+        f"only {len(moved)} pairings had their answer moved; the inventory holds more"
     )
 
 
