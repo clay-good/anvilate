@@ -71,6 +71,7 @@ def flow_stress_power_law(
     cold forging gets progressively harder to press. n ranges ~0.1–0.5 for annealed metals (0 is
     perfectly plastic). Feeds :func:`open_die_forging_load`. Returns the flow stress in MPa.
     """
+    require_finite(strain_hardening_exponent, name="strain_hardening_exponent")
     _check(strength_coefficient, "[pressure]", "strength_coefficient")
     k = strength_coefficient.to("MPa").magnitude
     if k <= 0:

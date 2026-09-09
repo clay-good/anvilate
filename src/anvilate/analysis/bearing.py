@@ -77,6 +77,7 @@ def bearing_cubic_mean_load(
     ``life_exponent`` p is 3 for ball bearings (the default) and 10/3 for roller bearings — use
     :data:`ROLLER_BEARING_LIFE_EXPONENT`. Returns the equivalent load as a force.
     """
+    require_finite(life_exponent, name="life_exponent")
     if not isinstance(duty_cycle, Sequence):
         raise ValueError(f"duty_cycle must be a sequence, not a single value; got {duty_cycle!r}")
     if len(duty_cycle) == 0:
@@ -350,6 +351,7 @@ def bearing_reliability_life_factor(
     ``reliability`` R must lie in (0, 1); at R = 0.90 a₁ = 1. A higher reliability
     buys a shorter usable life. Returns the dimensionless a₁ (≤ 1 for R ≥ 0.90).
     """
+    require_finite(weibull_slope, name="weibull_slope")
     if not 0.0 < reliability < 1.0:
         raise ValueError(f"reliability must lie in (0, 1); got {reliability}")
     if weibull_slope <= 0:

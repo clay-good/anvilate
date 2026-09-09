@@ -100,6 +100,8 @@ def larson_miller_rupture_life(
     service life. A hotter service temperature collapses the life sharply. Returns the
     rupture life in hours.
     """
+    require_finite(constant, name="constant")
+    require_finite(parameter, name="parameter")
     _require(temperature, "[temperature]", "temperature")
     t_kelvin = temperature.to("K").magnitude
     if t_kelvin <= 0:

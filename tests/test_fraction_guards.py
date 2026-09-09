@@ -1056,24 +1056,26 @@ def _declared_dimensions() -> dict[str, dict[str, str]]:
 _ASKS = (
     (
         re.compile(
-            r"\b([a-z_]{3,})\b[^.;]{0,40}?(?:must (?:lie|be) (?:in|within)|in) "
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,40}?(?:must (?:lie|be) (?:in|within)|in) "
             r"[\[(]\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*[\])]"
         ),
         lambda m: (m.group(1), (float(m.group(2)) + float(m.group(3))) / 2.0),
     ),
     (
         re.compile(
-            r"\b([a-z_]{3,})\b[^.;]{0,30}?must (?:exceed|be (?:greater|more) than|be above) "
-            r"(-?[\d.]+)"
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?"
+            r"must (?:exceed|be (?:greater|more) than|be above) (-?[\d.]+)"
         ),
         lambda m: (m.group(1), float(m.group(2)) + 1.0),
     ),
     (
-        re.compile(r"\b([a-z_]{3,})\b[^.;]{0,30}?must be at least (-?[\d.]+)"),
+        re.compile(r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?must be at least (-?[\d.]+)"),
         lambda m: (m.group(1), float(m.group(2))),
     ),
     (
-        re.compile(r"\b([a-z_]{3,})\b[^.;]{0,30}?must be (?:below|less than|under) (-?[\d.]+)"),
+        re.compile(
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?must be (?:below|less than|under) (-?[\d.]+)"
+        ),
         lambda m: (m.group(1), float(m.group(2)) - 0.5),
     ),
 )
@@ -1085,26 +1087,31 @@ _ASKS = (
 _RELATIONS = (
     (
         re.compile(
-            r"\b([a-z_]{3,})\b[^.;]{0,30}?must (?:exceed|be (?:greater|more) than|be above) "
-            r"\b([a-z_]{3,})\b"
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?"
+            r"must (?:exceed|be (?:greater|more) than|be above) \b([a-z_][a-z_0-9]{2,})\b"
         ),
         True,
     ),
     (
         re.compile(
-            r"\b([a-z_]{3,})\b[^.;]{0,40}?must be (?:less than|below|under) (?:the )?"
-            r"\b([a-z_]{3,})\b"
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,40}?must be (?:less than|below|under) (?:the )?"
+            r"\b([a-z_][a-z_0-9]{2,})\b"
         ),
         False,
     ),
-    (re.compile(r"\b([a-z_]{3,})\b[^.;]{0,50}?and below (?:the )?\b([a-z_]{3,})\b"), False),
+    (
+        re.compile(
+            r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,50}?and below (?:the )?\b([a-z_][a-z_0-9]{2,})\b"
+        ),
+        False,
+    ),
 )
-_WANTED_DIMENSION = re.compile(r"\b([a-z_]{3,})\b must be an? (\S*\[[^;]*?\S) quantity")
+_WANTED_DIMENSION = re.compile(r"\b([a-z_][a-z_0-9]{2,})\b must be an? (\S*\[[^;]*?\S) quantity")
 # The parameter named by anvilate.units.rotation's refusal of a bare inverse time. The
 # message is one sentence and then the remedy, so the anchor is the remedy: a message
 # that merely mentions rpm in passing is not this refusal.
 _AMBIGUOUS_SPEED = re.compile(
-    r"\b([a-z_]{3,})\b was given as .*?cannot tell.*?apart from rad/s", re.S
+    r"\b([a-z_][a-z_0-9]{2,})\b was given as .*?cannot tell.*?apart from rad/s", re.S
 )
 
 
@@ -1616,4 +1623,136 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
         f"only {len(spinning)} functions in the population were bound through the "
         "ambiguous-rotational-speed refusal; the reader that answers it has stopped "
         "matching, and the rotating half of the library is outside every probe again"
+    )
+
+
+def _exponent_sites() -> tuple[dict[str, list[str]], int]:
+    """Every public analysis function using a float or int parameter as an exponent
+    without ``require_finite`` on it, as ``{"module.function": [parameter, ...]}``.
+
+    Returned with the number of functions examined — every public one whose float or int
+    parameter reaches an exponent at all, guarded or not — because a census that stopped
+    finding its subject would report nothing wrong.
+
+    Resolved one hop through the module's own private helpers: a parameter handed to a
+    ``_check``-style function that calls ``require_finite`` on the matching argument is
+    guarded, and a detector that could not see that would report sites the library had
+    already closed at the shared helper, which is the fix pattern this repo prefers.
+    """
+    root = pathlib.Path(analysis.__path__[0])
+    unguarded: dict[str, list[str]] = {}
+    examined = 0
+    for path in sorted(root.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        tree = parsed_source(path)
+        helpers = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("_"):
+                names = _require_finite_arguments(node)
+                parameters = [a.arg for a in node.args.args + node.args.kwonlyargs]
+                helpers[node.name] = (parameters, {p for p in parameters if p in names})
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+                continue
+            numbers = {
+                a.arg
+                for a in node.args.kwonlyargs + node.args.args
+                if isinstance(a.annotation, ast.Name) and a.annotation.id in ("float", "int")
+            }
+            if not numbers:
+                continue
+            finite = _require_finite_arguments(node)
+            for call in ast.walk(node):
+                if not isinstance(call, ast.Call) or getattr(call.func, "id", "") not in helpers:
+                    continue
+                order, guarded = helpers[call.func.id]
+                for index, argument in enumerate(call.args):
+                    if (
+                        isinstance(argument, ast.Name)
+                        and index < len(order)
+                        and order[index] in guarded
+                    ):
+                        finite.add(argument.id)
+                # Positional only, and deliberately: nothing in the package hands a
+                # helper its guarded parameter by keyword today, so a keyword branch here
+                # would be a claim no run evaluates. A future one fails loudly as a false
+                # positive rather than sitting unexercised.
+            derived: dict[str, set[str]] = {}
+            for statement in ast.walk(node):
+                if (
+                    isinstance(statement, ast.Assign)
+                    and len(statement.targets) == 1
+                    and isinstance(statement.targets[0], ast.Name)
+                ):
+                    names = {n.id for n in ast.walk(statement.value) if isinstance(n, ast.Name)}
+                    if names & numbers:
+                        derived[statement.targets[0].id] = names & numbers
+            roots: set[str] = set()
+            for expression in ast.walk(node):
+                if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Pow):
+                    for name in ast.walk(expression.right):
+                        if isinstance(name, ast.Name):
+                            if name.id in numbers:
+                                roots.add(name.id)
+                            elif name.id in derived:
+                                roots |= derived[name.id]
+            if not roots:
+                continue
+            examined += 1
+            if roots - finite:
+                unguarded[f"{path.stem}.{node.name}"] = sorted(roots - finite)
+    return unguarded, examined
+
+
+def _require_finite_arguments(node: ast.FunctionDef) -> set[str]:
+    """The names this function body passes to ``require_finite``."""
+    return {
+        argument.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call)
+        and (
+            getattr(call.func, "id", "") == "require_finite"
+            or getattr(call.func, "attr", "") == "require_finite"
+        )
+        for argument in call.args
+        if isinstance(argument, ast.Name)
+    }
+
+
+def test_a_number_used_as_an_exponent_is_one_the_function_refuses_as_a_nan():
+    """``base ** nan`` is exactly ``1.0`` when the base is ``1.0``: the NaN VANISHES.
+
+    Every other trap in this file leaves a NaN somewhere a later guard can see. This one
+    deletes it, and what comes back is an ordinary number wearing the shape of an answer.
+    The probes above cannot find it, because they bind each parameter at one value and the
+    trap only springs where the base lands exactly on one — a point you have to *solve*
+    for, not sample. Eight did, and every one of them is a number an engineer would act on:
+
+    - `weibull_life_for_reliability(reliability=1/e, shape=nan)` returned the characteristic
+      life — 8,000 hours quoted as a B37 life, from a Weibull slope nobody supplied. R = 1/e
+      is not an obscure corner; it is the anchor the function's own docstring advertises.
+    - `basquin_stress_for_life(life_cycles=1, exponent=nan)` returned the fatigue-strength
+      coefficient itself, 1,200 MPa, as an allowable amplitude.
+    - `basquin_cycles_to_failure` at σ_a = a returned a life of exactly 1 cycle, and
+      `coffin_manson_reversals` at Δε_p/2 = εf' exactly 1 reversal.
+    - `weld_size_effect_factor` at the reference thickness returned 1.0 — no size penalty.
+    - `strain_life_total_amplitude` at one reversal, `paris_law_crack_growth_rate` at a
+      unit stress-intensity range, and `present_value` at a zero rate: all finite, all
+      wrong.
+
+    So the gate is static and total rather than a probe: a float or int parameter that
+    reaches an exponent must be handed to `require_finite`, in the function or through one
+    of its module's own helpers. That covers all 1,746 public functions, including the 266
+    no binder can build a call for.
+    """
+    unguarded, examined = _exponent_sites()
+    assert examined >= 45, (
+        f"the census found only {examined} functions raising something to a parameter-borne "
+        "power; it used to find 53, and a census that stops finding its subject passes"
+    )
+    assert unguarded == {}, (
+        "these use a number as an exponent without refusing a non-finite one first, and "
+        "`base ** nan` is 1.0 wherever the base is 1.0:\n  "
+        + "\n  ".join(f"{where}: {', '.join(names)}" for where, names in sorted(unguarded.items()))
     )

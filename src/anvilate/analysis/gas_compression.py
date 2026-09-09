@@ -129,6 +129,7 @@ def adiabatic_discharge_temperature(
     intercoolers — air taken from 15 °C to seven atmospheres in one shot leaves near 250 °C.
     Returns the discharge temperature in kelvin.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     if t1 <= 0:
@@ -190,6 +191,7 @@ def optimal_stage_pressure_ratio(*, overall_pressure_ratio: float, stages: int) 
     A three-stage machine at an overall 27:1, for instance, runs each stage at 3:1. Returns the
     dimensionless per-stage ratio.
     """
+    require_finite(stages, name="stages")
     if overall_pressure_ratio <= 1.0:
         raise ValueError(f"overall_pressure_ratio must exceed 1; got {overall_pressure_ratio}")
     if stages < 1:
@@ -215,6 +217,7 @@ def multistage_compression_power(
     the power falls toward the isothermal ideal (see :func:`isothermal_compression_power`); a single
     stage recovers :func:`adiabatic_compression_power`. Returns the power in watts.
     """
+    require_finite(stages, name="stages")
     _check(volumetric_flow, "[length]**3/[time]", "volumetric_flow")
     _check(inlet_pressure, "[pressure]", "inlet_pressure")
     q = volumetric_flow.to("m**3/s").magnitude

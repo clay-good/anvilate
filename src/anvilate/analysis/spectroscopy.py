@@ -63,6 +63,7 @@ def transmittance_from_absorbance(*, absorbance: float) -> float:
     0 passes everything, 1 passes 10%, 2 passes 1% — the logarithmic scale absorbance is defined on.
     Returns the transmittance as a plain float in (0, 1].
     """
+    require_finite(absorbance, name="absorbance")
     if absorbance < 0:
         raise ValueError("absorbance must be non-negative")
     return 10.0 ** (-absorbance)

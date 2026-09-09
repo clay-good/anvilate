@@ -136,6 +136,7 @@ def tackle_mechanical_advantage(
     η = 1 — friction always costs, so the actual advantage is always below the part
     count. Returns the dimensionless mechanical advantage.
     """
+    require_finite(supporting_parts, name="supporting_parts")
     n = _check_parts(supporting_parts)
     eta = _check_efficiency(sheave_efficiency)
     j = _check_lead_sheaves(lead_sheaves)

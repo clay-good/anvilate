@@ -123,6 +123,7 @@ def nucleate_boiling_heat_flux(
     the liquid and finish. The cube in ΔT_e makes the flux climb steeply — until the critical heat
     flux (:func:`critical_heat_flux`) caps it. Returns the flux in W/m**2.
     """
+    require_finite(fluid_exponent, name="fluid_exponent")
     prefactor, h_fg = _rohsenow_prefactor(
         liquid_viscosity, latent_heat, liquid_density, vapor_density, surface_tension
     )
@@ -177,6 +178,7 @@ def nucleate_boiling_excess_temperature(
     and, checked against the critical heat flux (:func:`critical_heat_flux`), how much superheat
     margin remains before burnout. Returns the excess temperature in K.
     """
+    require_finite(fluid_exponent, name="fluid_exponent")
     prefactor, h_fg = _rohsenow_prefactor(
         liquid_viscosity, latent_heat, liquid_density, vapor_density, surface_tension
     )

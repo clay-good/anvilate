@@ -63,6 +63,7 @@ def rocket_exhaust_velocity(
     hotter, lighter gas (higher R·T_c) and a larger expansion ratio p_c/p_e both raise it, so rocket
     nozzles are long and chambers run hot. Returns the exhaust velocity in m/s.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(chamber_temperature, "[temperature]", "chamber_temperature")
     _check(chamber_pressure, "[pressure]", "chamber_pressure")
     _check(exit_pressure, "[pressure]", "exit_pressure")
@@ -113,6 +114,7 @@ def nozzle_expansion_ratio(
     than Mach number, and agrees with it exactly at the implied exit Mach of 3.2095. Returns the
     area ratio as a plain float.
     """  # noqa: E501
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(chamber_pressure, "[pressure]", "chamber_pressure")
     _check(exit_pressure, "[pressure]", "exit_pressure")
     p_c = chamber_pressure.to("Pa").magnitude

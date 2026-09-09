@@ -159,8 +159,8 @@ Two corollaries worth internalizing:
 **A public analysis function refuses a NaN or an infinity rather than answering one, and
 the gate holds that over most of the surface — not all of it.** It is held by
 `test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash`, which binds
-1,480 of the library's 1,746 public functions and substitutes each poison value one
-parameter at a time. The remaining 266 are not exempt — they are unreached, which is a
+1,487 of the library's 1,746 public functions and substitutes each poison value one
+parameter at a time. The remaining 259 are not exempt — they are unreached, which is a
 different thing, and the share is itself gated by
 `test_the_probe_population_covers_the_share_of_the_surface_it_claims_to`. It has to be:
 the binder builds a call out of a function's own declarations, so a guard it cannot talk

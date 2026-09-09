@@ -305,6 +305,7 @@ def seismic_vertical_force_distribution(
     more of the force to the upper floors, where a tall building's whipping does the damage. The
     returned forces sum to the base shear. Returns a tuple of level forces in kN, one per story.
     """
+    require_finite(distribution_exponent, name="distribution_exponent")
     _check(base_shear, "[force]", "base_shear")
     v = base_shear.to("kN").magnitude
     if v <= 0:

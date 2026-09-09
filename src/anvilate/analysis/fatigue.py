@@ -687,6 +687,7 @@ def basquin_cycles_to_failure(
     negative (a steeper, more negative b spends life faster). Returns the life N in
     cycles.
     """
+    require_finite(exponent, name="exponent")
     sa = _require_stress(stress_amplitude, "stress_amplitude")
     a = _require_stress(coefficient, "coefficient")
     if sa <= 0:
@@ -712,6 +713,7 @@ def basquin_stress_for_life(
     be positive; a longer target life lowers the allowable amplitude. Returns the
     stress amplitude in MPa.
     """
+    require_finite(exponent, name="exponent")
     a = _require_stress(coefficient, "coefficient")
     if a <= 0:
         raise ValueError(f"coefficient must be positive; got {coefficient}")
@@ -740,6 +742,7 @@ def coffin_manson_reversals(
     ``fatigue_ductility_exponent`` c (negative, ~−0.5 to −0.7). Returns the number of reversals to
     failure 2N (two per cycle).
     """
+    require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
     if plastic_strain_amplitude <= 0:
         raise ValueError("plastic_strain_amplitude must be positive")
     if fatigue_ductility_coefficient <= 0:
@@ -770,6 +773,8 @@ def strain_life_total_amplitude(
     ``fatigue_ductility_coefficient`` εf' with ``fatigue_ductility_exponent`` c the plastic branch.
     Returns the dimensionless total strain amplitude Δε/2.
     """
+    require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
+    require_finite(fatigue_strength_exponent, name="fatigue_strength_exponent")
     sigma_f = _require_stress(fatigue_strength_coefficient, "fatigue_strength_coefficient")
     e = _require_stress(elastic_modulus, "elastic_modulus")
     if reversals <= 0:
@@ -907,6 +912,7 @@ def weld_size_effect_factor(
     (k_s = 1). Multiply the detail category by k_s before building the S-N curve.
     Returns the dimensionless factor.
     """
+    require_finite(exponent, name="exponent")
     _require_length(thickness, "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:

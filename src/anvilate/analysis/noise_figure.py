@@ -46,6 +46,7 @@ def noise_factor_from_figure(*, noise_figure_db: float) -> float:
     (noiseless); 3 dB is about 2 (the noise doubles). Returns the noise factor as a plain float
     (>= 1 for NF >= 0). NF must be non-negative (a passive-gain exception aside).
     """
+    require_finite(noise_figure_db, name="noise_figure_db")
     if noise_figure_db < 0:
         raise ValueError("noise_figure_db must be non-negative")
     return 10.0 ** (noise_figure_db / 10.0)

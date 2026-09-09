@@ -112,6 +112,7 @@ def shannon_minimum_eb_n0(*, spectral_efficiency: float) -> float:
     Packing more bits per hertz (higher η) demands rapidly more energy per bit. The
     ``spectral_efficiency`` η must be positive. Returns Eb/N0 as a linear ratio (10·log10 for dB).
     """
+    require_finite(spectral_efficiency, name="spectral_efficiency")
     if spectral_efficiency <= 0:
         raise ValueError("spectral_efficiency must be positive")
     return (2.0**spectral_efficiency - 1.0) / spectral_efficiency

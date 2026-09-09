@@ -59,6 +59,7 @@ def quantization_step(*, full_scale_voltage: Quantity, bits: float) -> Quantity:
     ``full_scale_voltage`` V_FS and the resolution ``bits`` N: LSB = V_FS/2^N. Each added bit halves
     the step, resolving finer detail. Returns the step voltage in V.
     """
+    require_finite(bits, name="bits")
     _check(full_scale_voltage, "[electric_potential]", "full_scale_voltage")
     v_fs = full_scale_voltage.to("V").magnitude
     if v_fs <= 0:
@@ -76,6 +77,7 @@ def quantization_noise_voltage(*, full_scale_voltage: Quantity, bits: float) -> 
     and the resolution ``bits`` N it is V_FS/(2^N·√12); dividing a full-scale sine's RMS by it gives
     back :func:`quantization_snr`. Returns the RMS noise voltage in V.
     """
+    require_finite(bits, name="bits")
     _check(full_scale_voltage, "[electric_potential]", "full_scale_voltage")
     v_fs = full_scale_voltage.to("V").magnitude
     if v_fs <= 0:
@@ -108,6 +110,7 @@ def oversampling_ratio_for_bits(*, extra_bits: float) -> float:
     is expensive past a bit or two. ``extra_bits`` is non-negative. Returns the required OSR
     as a plain float.
     """
+    require_finite(extra_bits, name="extra_bits")
     if extra_bits < 0:
         raise ValueError(f"extra_bits must be non-negative; got {extra_bits}")
     return 2.0 ** (2.0 * extra_bits)

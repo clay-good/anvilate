@@ -64,6 +64,8 @@ def buffer_ratio_for_ph(*, pka: float, ph: float) -> float:
     10. A buffer works well only within about ±1 pH unit of its pKa, where this ratio stays between
     ~0.1 and 10. Returns the dimensionless base-to-acid ratio as a plain float.
     """
+    require_finite(ph, name="ph")
+    require_finite(pka, name="pka")
     return 10.0 ** (ph - pka)
 
 

@@ -358,6 +358,7 @@ def permissible_exposure_time(
     Returns the permissible exposure time in hours (call ``.to("minute")`` for the short
     allowances a high level gives).
     """
+    require_finite(exchange_rate, name="exchange_rate")
     _check(criterion_duration, "[time]", "criterion_duration")
     # An infinite level makes the exponent infinite and `2.0 ** inf` overflows to a divide
     # by zero one line down.

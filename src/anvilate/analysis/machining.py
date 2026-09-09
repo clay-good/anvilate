@@ -121,6 +121,7 @@ def taylor_tool_life(
     large, life falls steeply as speed rises — the reason a modest speed cut runs far longer.
     Returns the tool life in minutes.
     """
+    require_finite(taylor_exponent, name="taylor_exponent")
     _check(cutting_speed, "[length]/[time]", "cutting_speed")
     _check(taylor_speed_constant, "[length]/[time]", "taylor_speed_constant")
     v = cutting_speed.to("m/min").magnitude

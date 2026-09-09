@@ -145,6 +145,7 @@ def stagnation_pressure_ratio(*, mach_number: float, heat_capacity_ratio: float)
     incompressible ½·ρ·V² form undercounts badly past about Mach 0.3), and the total-to-static ratio
     a nozzle or inlet is designed around. Returns the dimensionless ratio p₀/p (≥ 1).
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     temperature_ratio = stagnation_temperature_ratio(
         mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
     )
@@ -160,6 +161,7 @@ def stagnation_density_ratio(*, mach_number: float, heat_capacity_ratio: float) 
     isentropic set (and is consistent with them through the ideal-gas law, p₀/p = (ρ₀/ρ)·(T₀/T)).
     Returns the dimensionless ratio ρ₀/ρ (≥ 1).
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     temperature_ratio = stagnation_temperature_ratio(
         mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
     )
@@ -195,6 +197,7 @@ def critical_pressure_ratio(*, heat_capacity_ratio: float) -> float:
     the flow can go no faster, no matter how much further the pressure falls. Below this ratio the
     flow is choked (see :func:`choked_mass_flow_rate`). Returns the dimensionless pressure ratio.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     g = heat_capacity_ratio
@@ -220,6 +223,7 @@ def choked_mass_flow_rate(
     area, ``discharge_coefficient`` C_d (~0.85 for a nozzle), and ``heat_capacity_ratio`` γ /
     ``specific_gas_constant`` R the gas properties. Returns the choked mass flow in kg/s.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(stagnation_pressure, "[pressure]", "stagnation_pressure")
     _check(stagnation_temperature, "[temperature]", "stagnation_temperature")
     _check(orifice_area, "[area]", "orifice_area")
@@ -327,6 +331,7 @@ def normal_shock_stagnation_pressure_ratio(
     supersonic inlet pays and the reason strong shocks are avoided. Returns the total-pressure ratio
     (dimensionless, 0 to 1).
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     _require_supersonic(upstream_mach)
