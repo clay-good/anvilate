@@ -94,6 +94,21 @@ ROUND_TRIPPED = frozenset(
         "projectile.projectile_launch_angle_for_range",
         "transmission_line.reflection_coefficient_from_vswr",
         "torsion.shaft_diameter_for_bending_torsion",
+        "accumulator.accumulator_size_for_volume",
+        "antenna.dish_diameter_for_gain",
+        "beam.aisc_bearing_length_for_web_yielding",
+        "belt.belt_tight_tension_for_power",
+        "cam.cam_base_circle_for_pressure_angle",
+        "chain.minimum_sprocket_teeth_for_chordal_variation",
+        "dynamics.damping_ratio_from_log_decrement",
+        "electrical.line_current_for_power",
+        "fire_protection.sprinkler_pressure_for_flow",
+        "flywheel.flywheel_inertia_for_fluctuation",
+        "gaussian_beam.beam_waist_for_divergence",
+        "machining.feed_for_surface_roughness",
+        "pipe_flow.hagen_poiseuille_radius_for_flow",
+        "thermal.wien_temperature_from_peak",
+        "piezoelectric.piezoelectric_force_from_charge",
     }
 )
 
@@ -1154,3 +1169,239 @@ def test_shaft_diameter_for_bending_torsion_lands_the_allowable_von_mises_stress
     assert shaft_von_mises_stress(diameter=diameter, **loads).to("MPa").magnitude == pytest.approx(
         yield_strength.to("MPa").magnitude / margin, rel=1e-12
     )
+
+
+def test_accumulator_size_for_volume_lands_the_usable_volume():
+    from anvilate.analysis import accumulator_size_for_volume, accumulator_usable_volume
+
+    circuit = {
+        "precharge_pressure": _q("90 bar"),
+        "minimum_pressure": _q("120 bar"),
+        "maximum_pressure": _q("210 bar"),
+        "polytropic_exponent": 1.4,
+    }
+    target = _q("1.2 L")
+    size = accumulator_size_for_volume(required_volume=target, **circuit)
+    assert accumulator_usable_volume(total_volume=size, **circuit).to(
+        "L"
+    ).magnitude == pytest.approx(target.to("L").magnitude, rel=1e-12)
+
+
+def test_dish_diameter_for_gain_lands_the_required_gain():
+    """The aperture efficiency defaults to 1.0, so it is set to a real dish value — a pair
+    that round-trips only on a perfect aperture is half a pair."""
+    from math import pi
+
+    from anvilate.analysis import aperture_antenna_gain, dish_diameter_for_gain
+
+    wavelength, efficiency = _q("0.03 m"), 0.6
+    target = 10000.0
+    diameter = dish_diameter_for_gain(gain=target, wavelength=wavelength, efficiency=efficiency)
+    area = _q(f"{pi / 4.0 * diameter.to('m').magnitude ** 2} m**2")
+    assert aperture_antenna_gain(
+        aperture_area=area, wavelength=wavelength, efficiency=efficiency
+    ) == pytest.approx(target, rel=1e-12)
+
+
+def test_aisc_bearing_length_for_web_yielding_lands_the_required_reaction():
+    """`at_member_end` changes the constant (2.5k vs 5k), so both branches round-trip here:
+    a pair tested only at the interior is half a pair, and the end is the governing case."""
+    from anvilate.analysis import (
+        aisc_bearing_length_for_web_yielding,
+        aisc_web_local_yielding_strength,
+    )
+
+    web = {
+        "web_yield": _q("345 MPa"),
+        "web_thickness": _q("10 mm"),
+        "fillet_distance": _q("30 mm"),
+    }
+    # Above the clamp on both branches: the web alone spreads 517.5 kN at the interior and
+    # 258.75 kN at the end, and below that there is no bearing length to solve for.
+    target = _q("800 kN")
+    for at_end in (False, True):
+        length = aisc_bearing_length_for_web_yielding(
+            required_reaction=target, at_member_end=at_end, **web
+        )
+        assert aisc_web_local_yielding_strength(
+            bearing_length=length, at_member_end=at_end, **web
+        ).to("kN").magnitude == pytest.approx(target.to("kN").magnitude, rel=1e-12)
+    # And the documented exception to "exactly": a reaction the fillet spread already
+    # carries needs no bearing length, so the answer clamps to zero and the forward comes
+    # back HIGHER than asked rather than on it.
+    none_needed = aisc_bearing_length_for_web_yielding(
+        required_reaction=_q("400 kN"), at_member_end=False, **web
+    )
+    assert none_needed.to("mm").magnitude == 0.0
+    assert aisc_web_local_yielding_strength(
+        bearing_length=none_needed, at_member_end=False, **web
+    ).to("kN").magnitude == pytest.approx(517.5, rel=1e-12)
+    # The end has less web to spread into, so it needs the longer bearing.
+    at_end = aisc_bearing_length_for_web_yielding(
+        required_reaction=target, at_member_end=True, **web
+    )
+    interior = aisc_bearing_length_for_web_yielding(
+        required_reaction=target, at_member_end=False, **web
+    )
+    assert at_end.to("mm").magnitude > interior.to("mm").magnitude
+
+
+def test_belt_tight_tension_for_power_lands_the_transmitted_power():
+    """The forward takes both tensions and the inverse returns only the tight side, so the
+    slack side is taken from the library's own `belt_slack_tension` rather than
+    reassembled here from e^(mu*theta)."""
+    from anvilate.analysis import (
+        belt_slack_tension,
+        belt_tight_tension_for_power,
+        belt_transmitted_power,
+    )
+
+    drive = {"friction_coefficient": 0.35, "wrap_angle": 2.9}
+    speed, target = _q("18 m/s"), _q("15 kW")
+    tight = belt_tight_tension_for_power(power=target, belt_speed=speed, **drive)
+    slack = belt_slack_tension(tight_tension=tight, **drive)
+    assert belt_transmitted_power(tight_tension=tight, slack_tension=slack, belt_speed=speed).to(
+        "kW"
+    ).magnitude == pytest.approx(target.to("kW").magnitude, rel=1e-12)
+
+
+def test_cam_base_circle_for_pressure_angle_lands_the_peak_pressure_angle():
+    from anvilate.analysis import cam_base_circle_for_pressure_angle, cam_pressure_angle
+
+    motion = {"lift_gradient": _q("14 mm/rad"), "follower_displacement": _q("8 mm")}
+    target = 28.0
+    radius = cam_base_circle_for_pressure_angle(max_pressure_angle=target, **motion)
+    assert cam_pressure_angle(base_circle_radius=radius, **motion).to(
+        "deg"
+    ).magnitude == pytest.approx(target, rel=1e-12)
+    # Enlarging the base circle is the fix the docstring names, so a tighter limit is a
+    # bigger cam.
+    assert (
+        cam_base_circle_for_pressure_angle(max_pressure_angle=20.0, **motion).to("mm").magnitude
+        > radius.to("mm").magnitude
+    )
+
+
+def test_minimum_sprocket_teeth_for_chordal_variation_is_the_least_count_that_holds():
+    """An integer inverse cannot land exactly, so the contract is the *least* count that
+    meets the limit: it holds at N and fails at N − 1. An off-by-one that rounds the wrong
+    way satisfies "holds at N" on its own."""
+    from anvilate.analysis import (
+        chordal_speed_variation,
+        minimum_sprocket_teeth_for_chordal_variation,
+    )
+
+    target = 0.015
+    teeth = minimum_sprocket_teeth_for_chordal_variation(max_variation=target)
+    assert chordal_speed_variation(sprocket_teeth=teeth) <= target
+    assert chordal_speed_variation(sprocket_teeth=teeth - 1) > target
+
+
+def test_damping_ratio_from_log_decrement_lands_the_decrement():
+    from anvilate.analysis import damping_ratio_from_log_decrement, logarithmic_decrement
+
+    target = 0.42
+    zeta = damping_ratio_from_log_decrement(log_decrement=target)
+    assert logarithmic_decrement(damping_ratio=zeta) == pytest.approx(target, rel=1e-12)
+
+
+def test_line_current_for_power_lands_the_three_phase_power():
+    from anvilate.analysis import line_current_for_power, three_phase_power
+
+    supply = {"line_voltage": _q("400 V"), "power_factor": 0.87}
+    target = _q("22 kW")
+    current = line_current_for_power(real_power=target, **supply)
+    assert three_phase_power(line_current=current, **supply).to("kW").magnitude == pytest.approx(
+        target.to("kW").magnitude, rel=1e-12
+    )
+
+
+def test_sprinkler_pressure_for_flow_lands_the_required_discharge():
+    from anvilate.analysis import sprinkler_discharge, sprinkler_pressure_for_flow
+
+    k_factor = _q("80 L/(min*bar**0.5)")
+    target = _q("120 L/min")
+    pressure = sprinkler_pressure_for_flow(k_factor=k_factor, flow_rate=target)
+    assert sprinkler_discharge(k_factor=k_factor, pressure=pressure).to(
+        "L/min"
+    ).magnitude == pytest.approx(target.to("L/min").magnitude, rel=1e-12)
+    # Flow goes as the square root of pressure, so doubling the flow is four times the head.
+    quadrupled = sprinkler_pressure_for_flow(k_factor=k_factor, flow_rate=_q("240 L/min"))
+    assert quadrupled.to("bar").magnitude == pytest.approx(
+        4.0 * pressure.to("bar").magnitude, rel=1e-12
+    )
+
+
+def test_flywheel_inertia_for_fluctuation_lands_the_energy_swing():
+    from anvilate.analysis import flywheel_energy_fluctuation, flywheel_inertia_for_fluctuation
+
+    duty = {"mean_speed": _q("450 rpm"), "coefficient_of_fluctuation": 0.02}
+    target = _q("2400 J")
+    inertia = flywheel_inertia_for_fluctuation(energy_fluctuation=target, **duty)
+    assert flywheel_energy_fluctuation(inertia=inertia, **duty).to("J").magnitude == pytest.approx(
+        target.to("J").magnitude, rel=1e-12
+    )
+    # A tighter speed ripple costs inertia in inverse proportion.
+    tighter = flywheel_inertia_for_fluctuation(
+        energy_fluctuation=target, mean_speed=_q("450 rpm"), coefficient_of_fluctuation=0.01
+    )
+    assert tighter.to("kg*m**2").magnitude == pytest.approx(
+        2.0 * inertia.to("kg*m**2").magnitude, rel=1e-12
+    )
+
+
+def test_beam_waist_for_divergence_lands_the_divergence():
+    from anvilate.analysis import beam_divergence_half_angle, beam_waist_for_divergence
+
+    wavelength, target = _q("1064 nm"), 0.002
+    waist = beam_waist_for_divergence(divergence_half_angle=target, wavelength=wavelength)
+    assert beam_divergence_half_angle(beam_waist=waist, wavelength=wavelength) == pytest.approx(
+        target, rel=1e-12
+    )
+
+
+def test_feed_for_surface_roughness_lands_the_target_roughness():
+    from anvilate.analysis import feed_for_surface_roughness, theoretical_surface_roughness
+
+    nose = _q("0.8 mm")
+    target = _q("3.2 um")
+    feed = feed_for_surface_roughness(target_roughness=target, tool_nose_radius=nose)
+    assert theoretical_surface_roughness(feed=feed, tool_nose_radius=nose).to(
+        "um"
+    ).magnitude == pytest.approx(target.to("um").magnitude, rel=1e-12)
+
+
+def test_hagen_poiseuille_radius_for_flow_lands_the_required_flow():
+    from anvilate.analysis import hagen_poiseuille_flow_rate, hagen_poiseuille_radius_for_flow
+
+    line = {
+        "pressure_drop": _q("40 kPa"),
+        "viscosity": _q("0.001 Pa*s"),
+        "length": _q("2 m"),
+    }
+    target = _q("5 mL/s")
+    radius = hagen_poiseuille_radius_for_flow(flow_rate=target, **line)
+    assert hagen_poiseuille_flow_rate(radius=radius, **line).to("mL/s").magnitude == pytest.approx(
+        target.to("mL/s").magnitude, rel=1e-12
+    )
+
+
+def test_wien_temperature_from_peak_lands_the_peak_wavelength():
+    from anvilate.analysis import wien_peak_wavelength, wien_temperature_from_peak
+
+    target = _q("500 nm")
+    temperature = wien_temperature_from_peak(peak_wavelength=target)
+    assert wien_peak_wavelength(temperature=temperature).to("nm").magnitude == pytest.approx(
+        target.to("nm").magnitude, rel=1e-12
+    )
+
+
+def test_piezoelectric_force_from_charge_lands_the_charge():
+    from anvilate.analysis import piezoelectric_charge, piezoelectric_force_from_charge
+
+    coefficient = _q("300 pC/N")
+    target = _q("15 nC")
+    force = piezoelectric_force_from_charge(charge=target, charge_coefficient=coefficient)
+    assert piezoelectric_charge(force=force, charge_coefficient=coefficient).to(
+        "nC"
+    ).magnitude == pytest.approx(target.to("nC").magnitude, rel=1e-12)
