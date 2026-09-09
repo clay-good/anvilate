@@ -26,6 +26,25 @@
 # `screen_structure` are the same thing where the dispatch IS in one module and so
 # resolves.
 #
+# WHY THE OTHERS HAVE NONE. The 33 below fall into four kinds, and knowing which one a
+# screen is in is most of deciding whether it will ever get a lever:
+#
+#   1. The demand and the allowable are both the CALLER'S, computed upstream —
+#      `stress.strength_scorecard`, `beam.deflection_scorecard`, the three fatigue
+#      criteria, the four NDS timber checks, the DSM and FAD screens, the BTH-1 members.
+#      A stress is not a knob; the geometry that produced it is, and this screen never saw
+#      it. These are unlikely to gain one where they are.
+#   2. Aggregators — `screening.screen_spec`, `screen_structure_element`,
+#      `screen_lifter_device`, `callouts.callout_scorecard`. Their cards carry whatever
+#      their elements carry; see the note above.
+#   3. A geometry with no single knob — the two reinforcement screens and the flange, the
+#      beam/column/beam-column members (whose section is a discrete choice from a table,
+#      not a value to solve for), the bolted connection (diameter, count and thickness at
+#      once), the concrete bearing (whose capacity changes regime at the confinement cap).
+#      These are the ones worth revisiting: a lever here needs a decision about WHICH knob,
+#      not a formula.
+#   4. `loads.combination_scorecard`, where the lever is the design loads themselves.
+#
 # `solved` and `directional` are not interchangeable. A solved lever claims a value; a
 # directional one claims only a sign, which is a claim about the check's shape over its
 # whole domain and has to be swept before it is declared. `screen_infinite_slope` carries

@@ -50,6 +50,13 @@ figure gated against the file it describes. A screen without a lever is a gap so
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
 
+The 33 with none are classified in that file's header rather than left as a flat list:
+a demand and an allowable both computed upstream (a stress is not a knob, and the geometry
+that produced it is what the screen never saw), an aggregator whose card carries its
+elements' hints, a geometry with no single knob, or a load combination. The third kind is
+the one worth revisiting — a lever there needs a decision about *which* knob, not a
+formula.
+
 The gate reads it both directions. A recorded lever must actually be constructed by
 that screen (resolved through the module's own call graph, because the hint is usually
 built in a helper the screen calls), every lever a screen constructs must be recorded,
