@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 51 public screens.
-There are 11 levers across 9 of them, and 42 recorded as having none yet — each
+There are 13 levers across 11 of them, and 40 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -78,6 +78,8 @@ owes the reader:
 | --- | --- | --- | --- |
 | `asme_b313_pressure_scorecard` | straight-pipe pressure | `nominal_wall` ↑ | solved — the B31.3 wall inverse, grossed back up |
 | `isolation_scorecard` | isolator transmissibility | `frequency_ratio` ↑ | solved — the DAMPED transmissibility inverse |
+| `junction_temperature_scorecard` | junction temperature rise | `thermal_resistance` ↓ | solved — `heatsink_thermal_resistance_required` |
+| `screen_ventilation` | outdoor air, air changes | `provided_outdoor_airflow` ↑ | solved — both, and they ask different amounts |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -86,6 +88,12 @@ demands; the wall to *order* is that plus the corrosion allowance, all divided b
 (1 − mill tolerance) — the same two deductions the check made, undone in the same
 order. Naming the pressure-design wall would name a pipe that still fails, and a test
 asserts exactly that.
+
+The junction row is the only lever in the library that points **down**, and the
+ventilation row is the only screen whose two checks share one knob: outdoor air and air
+changes are both levered by the air delivered, and they ask for different amounts of it.
+The card publishes both numbers rather than the governing one, because a designer sizing
+a fan needs to see how far apart the two demands are.
 
 The last row of the geotechnical table is the other point. The infinite-slope factor divides by γ·z·sin(2β)/2, which
 peaks at β = 45°: below it, steepening costs margin, and above it the trend reverses.

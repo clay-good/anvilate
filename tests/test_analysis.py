@@ -11317,6 +11317,51 @@ def test_a_failing_isolation_check_solves_the_frequency_ratio_it_needs():
     )
 
 
+def test_a_failing_junction_check_solves_the_thermal_resistance_it_needs():
+    """The one lever in the library that points DOWN: a smaller path resistance is what
+    keeps a junction in budget, so the hint decreases rather than increases."""
+    from anvilate.analysis import junction_temperature_scorecard
+    from anvilate.scorecard import CheckStatus, Direction
+
+    duty = {
+        "power": _q("25 W"),
+        "allowable_temperature_rise": _q("85 K"),
+        "required": 1.2,
+    }
+    hot = junction_temperature_scorecard("driver", thermal_resistance=_q("4.5 K/W"), **duty)
+    assert hot.status is CheckStatus.FAIL
+    hint = hot.repair_hint
+    assert hint is not None
+    assert hint.parameter == "thermal_resistance"
+    assert hint.direction is Direction.DECREASE
+    assert hint.unit == "K/W"
+    # The budget is the rise the margin leaves, over the power: 85/(25*1.2).
+    assert hint.corrective_value == pytest.approx(85.0 / (25.0 * 1.2), rel=1e-9)
+
+    repaired = junction_temperature_scorecard(
+        "driver", thermal_resistance=Quantity(magnitude=hint.corrective_value, unit="K/W"), **duty
+    )
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(1.2, rel=1e-9)
+    assert repaired.repair_hint is None
+
+    # A part already in budget is offered nothing, and neither is one with no rise to
+    # screen — that entry is NOT_EVALUATED, and a hint on it would be a repair for a
+    # check that was never made.
+    assert (
+        junction_temperature_scorecard("driver", thermal_resistance=_q("2 K/W"), **duty).repair_hint
+        is None
+    )
+    idle = junction_temperature_scorecard(
+        "driver",
+        power=_q("0 W"),
+        thermal_resistance=_q("4.5 K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    )
+    assert idle.status is CheckStatus.NOT_EVALUATED
+    assert idle.repair_hint is None
+
+
 def test_isolation_scorecard_flags_the_amplification_region():
     from anvilate.analysis import isolation_scorecard
     from anvilate.scorecard import CheckStatus

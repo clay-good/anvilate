@@ -35,6 +35,8 @@ structural.screen_base_plate -> plate_thickness (solved)
 structural.screen_lifting_lug -> thickness (solved)
 structural.screen_structure -> plate_thickness (solved)
 structural.screen_structure -> thickness (solved)
+thermal.junction_temperature_scorecard -> thermal_resistance (solved)
+ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
 ## no lever recorded
 aluminum.aluminum_compression_scorecard
@@ -77,5 +79,3 @@ structural.screen_gusset_plate
 structural.screen_shear_plate
 structural.screen_tension_member
 structural.screen_welded_connection
-thermal.junction_temperature_scorecard
-ventilation.screen_ventilation

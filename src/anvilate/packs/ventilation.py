@@ -15,9 +15,13 @@ from __future__ import annotations
 
 from pydantic import ConfigDict
 
-from ..analysis import air_changes_per_hour, breathing_zone_outdoor_airflow
+from ..analysis import (
+    air_changes_per_hour,
+    airflow_for_air_changes,
+    breathing_zone_outdoor_airflow,
+)
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -125,6 +129,22 @@ def screen_ventilation(
     oa_entry = ScorecardEntry.from_safety_factor(
         "outdoor air", computed=oa_sf, required=required_safety_factor
     ).model_copy(update={"reference": _OUTDOOR_AIR_REFERENCE, "derivation": oa_derivation})
+    if oa_entry.status is CheckStatus.FAIL:
+        # Both checks in this card are levered by the same knob — the air actually
+        # delivered — and they ask different amounts of it. The card carries both numbers
+        # rather than one: the zone needs whichever is larger, and a reader who is told
+        # only the governing one cannot see how far apart the two demands are.
+        oa_entry = oa_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "provided_outdoor_airflow",
+                    direction=Direction.INCREASE,
+                    value=required_ls * required_safety_factor,
+                    unit="L/s",
+                    provenance="ASHRAE 62.1 breathing-zone airflow at the required margin",
+                )
+            }
+        )
 
     ach = air_changes_per_hour(airflow=zone.provided_outdoor_airflow, room_volume=zone.room_volume)
     ach_sf = ach / zone.required_air_changes if zone.required_air_changes > 0 else None
@@ -165,4 +185,21 @@ def screen_ventilation(
     ach_entry = ScorecardEntry.from_safety_factor(
         "air changes per hour", computed=ach_sf, required=required_safety_factor
     ).model_copy(update={"reference": _AIR_CHANGE_REFERENCE, "derivation": ach_derivation})
+    if ach_entry.status is CheckStatus.FAIL:
+        ach_entry = ach_entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "provided_outdoor_airflow",
+                    direction=Direction.INCREASE,
+                    value=airflow_for_air_changes(
+                        air_changes_per_hour=zone.required_air_changes * required_safety_factor,
+                        room_volume=zone.room_volume,
+                    )
+                    .to("L/s")
+                    .magnitude,
+                    unit="L/s",
+                    provenance="airflow_for_air_changes at the required margin",
+                )
+            }
+        )
     return Scorecard(entries=(oa_entry, ach_entry))

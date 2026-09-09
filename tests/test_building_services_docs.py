@@ -180,6 +180,59 @@ def test_the_ventilation_example_is_the_packs_own_answer():
     assert ratio == pytest.approx(claimed, abs=5e-3), (ratio, claimed)
 
 
+def test_a_failing_ventilation_zone_solves_the_airflow_both_checks_want():
+    """Two checks, one knob, two different demands — and the card carries both numbers.
+
+    Outdoor air and air changes are both levered by the air actually delivered, and they
+    ask for different amounts of it. Publishing only the governing one would hide how far
+    apart the two demands are, which is the thing a designer sizing a fan needs to see.
+    """
+    from anvilate.packs.ventilation import VentilationZone, screen_ventilation
+    from anvilate.scorecard import CheckStatus, Direction
+    from anvilate.units import Quantity
+
+    def zone(airflow: Quantity) -> VentilationZone:
+        return VentilationZone(
+            people_outdoor_rate=Quantity.parse("2.5 L/s"),
+            occupancy=20.0,
+            area_outdoor_rate=Quantity.parse("0.3 L/s/m**2"),
+            floor_area=Quantity.parse("120 m**2"),
+            zone_air_distribution_effectiveness=1.0,
+            provided_outdoor_airflow=airflow,
+            room_volume=Quantity.parse("360 m**3"),
+            required_air_changes=1.5,
+        )
+
+    starved = screen_ventilation(zone(Quantity.parse("50 L/s")))
+    hints = {entry.name: entry.repair_hint for entry in starved.entries}
+    assert all(entry.status is CheckStatus.FAIL for entry in starved.entries)
+    assert {hint.parameter for hint in hints.values()} == {"provided_outdoor_airflow"}
+    assert all(hint.direction is Direction.INCREASE for hint in hints.values())
+    # 2.5*20 + 0.3*120 = 86 L/s of outdoor air; 1.5 ACH of 360 m**3 is 150 L/s.
+    assert hints["outdoor air"].corrective_value == pytest.approx(86.0, rel=1e-9)
+    assert hints["air changes per hour"].corrective_value == pytest.approx(150.0, rel=1e-9)
+
+    # The zone needs the LARGER of the two, and at it both checks pass.
+    governing = max(hint.corrective_value for hint in hints.values())
+    repaired = screen_ventilation(zone(Quantity(magnitude=governing, unit="L/s")))
+    assert all(entry.status is CheckStatus.PASS for entry in repaired.entries)
+    assert all(entry.repair_hint is None for entry in repaired.entries)
+    # ...and at the SMALLER one, the check that asked for more is still failing — which is
+    # why both numbers are published rather than the first.
+    partial = screen_ventilation(
+        zone(Quantity(magnitude=min(h.corrective_value for h in hints.values()), unit="L/s"))
+    )
+    statuses = {entry.name: entry.status for entry in partial.entries}
+    assert statuses["outdoor air"] is CheckStatus.PASS
+    assert statuses["air changes per hour"] is CheckStatus.FAIL
+
+    # A required margin above 1 scales both demands.
+    strict = screen_ventilation(zone(Quantity.parse("50 L/s")), required_safety_factor=1.5)
+    strict_hints = {entry.name: entry.repair_hint for entry in strict.entries}
+    assert strict_hints["outdoor air"].corrective_value == pytest.approx(129.0, rel=1e-9)
+    assert strict_hints["air changes per hour"].corrective_value == pytest.approx(225.0, rel=1e-9)
+
+
 def test_the_feeder_example_is_the_packs_own_answer():
     from anvilate.packs.electrical import Feeder, screen_feeder
 

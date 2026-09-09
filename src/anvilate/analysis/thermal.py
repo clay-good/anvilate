@@ -23,7 +23,7 @@ from math import erf, exp, log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
-from ..scorecard import ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.temperature import temperature_difference_kelvin
 
@@ -1228,7 +1228,26 @@ def junction_temperature_scorecard(
     # 85 K allowable printed "junction rise 85.0 K vs 85.0 K allowable" on a FAIL.
     places = decimals_distinguishing(rise, allowable, minimum=1)
     detail = f"junction rise {rise:.{places}f} K vs {allowable:.{places}f} K allowable"
-    return entry.model_copy(update={"detail": detail})
+    update: dict[str, object] = {"detail": detail}
+    if entry.status is CheckStatus.FAIL:
+        # The lever is the path resistance, and the inverse for it already ships: the
+        # whole junction-to-ambient path may be no more resistive than the budget the
+        # margin leaves, which is what `heatsink_thermal_resistance_required` returns with
+        # no internal resistance declared. A LOWER resistance improves the margin, so this
+        # is the one hint in the library that points down.
+        update["repair_hint"] = RepairHint.solved(
+            "thermal_resistance",
+            direction=Direction.DECREASE,
+            value=heatsink_thermal_resistance_required(
+                power=power,
+                allowable_temperature_rise=Quantity(magnitude=allowable / required, unit="K"),
+            )
+            .to("K/W")
+            .magnitude,
+            unit="K/W",
+            provenance="heatsink_thermal_resistance_required at the required margin",
+        )
+    return entry.model_copy(update=update)
 
 
 def laminar_tube_convection_coefficient(
