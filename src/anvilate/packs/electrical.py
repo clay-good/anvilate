@@ -180,7 +180,7 @@ def screen_feeder(
                     direction=Direction.INCREASE,
                     value=amps * required_safety_factor,
                     unit="A",
-                    provenance="the line current the run carries, at the required margin",
+                    provenance="line current the run carries, at the required margin",
                 )
             }
         )
@@ -246,7 +246,7 @@ def _area_for_drop(
                 * resistive
                 / (allowance - reactive),
                 unit="mm**2",
-                provenance="the resistive half of the drop, which scales as 1/A",
+                provenance="resistive half of the drop, which scales as 1/A",
             )
         }
     )

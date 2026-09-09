@@ -1582,6 +1582,67 @@ def test_the_screen_census_finds_every_function_that_returns_a_card():
     )
 
 
+def test_no_repair_provenance_repeats_the_article_the_renderer_supplies():
+    """The report writes "— from the ", and two provenances began with "the".
+
+    Rendered on the page as "from the the resistive half of the drop" and "from the the
+    line current the run carries". Both were mine, written an hour apart, and nothing saw
+    them: every assertion about that line checks a substring that sits after the join. The
+    page did, on the first read.
+    """
+    provenances: list[tuple[str, str]] = []
+    for path, tree in library_sources():
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "RepairHint"
+            ):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "provenance":
+                    continue
+                value = keyword.value
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    provenances.append((path.name, value.value))
+                elif isinstance(value, ast.JoinedStr) and value.values:
+                    head = value.values[0]
+                    # An f-string opening with an interpolation cannot start with an
+                    # article, and its leading literal is the only part this can judge.
+                    if isinstance(head, ast.Constant) and isinstance(head.value, str):
+                        provenances.append((path.name, head.value))
+
+    assert len(provenances) >= 15, (
+        f"only {len(provenances)} repair provenances were read; the library writes more, "
+        f"and a census that stops finding its subject passes"
+    )
+    doubled = sorted(
+        f"{where}: {text}"
+        for where, text in provenances
+        if text.lower().startswith(("the ", "a ", "an "))
+    )
+    assert not doubled, (
+        'a repair hint\'s provenance is rendered after "— from the ", so one that opens '
+        "with an article says it twice:\n  " + "\n  ".join(doubled)
+    )
+    # And the sentence the renderer builds is the one this is about.
+    from anvilate.report import ReportSection
+    from anvilate.scorecard import Direction, RepairHint, ScorecardEntry
+
+    line = ReportSection(
+        entry=ScorecardEntry.from_safety_factor(
+            "c",
+            computed=1.0,
+            required=2.0,
+            repair_hint=RepairHint.solved(
+                "t", direction=Direction.INCREASE, value=1.0, provenance="worked example"
+            ),
+        )
+    ).repair_line()
+    assert line.endswith("— from the worked example"), line
+
+
 def test_every_public_screen_records_whether_it_offers_a_repair_lever():
     """A screen with no lever is a recorded gap, not an oversight.
 
