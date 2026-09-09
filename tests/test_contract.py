@@ -1252,6 +1252,249 @@ def test_the_wrong_answer_sweep_is_measuring_the_wrong_answer():
     )
 
 
+_LEVER_MANIFEST = _REPO / "docs" / "api" / "repair-levers.txt"
+#: A screen is a public entry point that judges something and returns a card.
+_SCREEN_NAME = re.compile(r"^screen_|_scorecard$")
+
+
+def _public_screens() -> dict[str, tuple[object, Path]]:
+    """Every public screen, as ``module.symbol`` -> (the function, its module's file).
+
+    The file comes back with the function because `geotechnical` is the name of BOTH an
+    analysis module and a pack, and resolving the path from the name alone silently read
+    the analysis one — losing every geotechnical lever while the gate stayed green.
+    """
+    import anvilate.packs as packs_pkg
+
+    screens: dict[str, tuple[object, Path]] = {}
+    sources = [(f"anvilate.analysis.{name}", name) for name in sorted(_module_names())]
+    sources += [
+        (f"anvilate.packs.{info.name}", info.name)
+        for info in pkgutil.iter_modules(packs_pkg.__path__)
+        if not info.name.startswith("_")
+    ]
+    for dotted, short in sources:
+        module = importlib.import_module(dotted)
+        path = Path(module.__file__)
+        for symbol in getattr(module, "__all__", ()):
+            if _SCREEN_NAME.search(symbol) and callable(getattr(module, symbol, None)):
+                screens[f"{short}.{symbol}"] = (getattr(module, symbol), path)
+    return screens
+
+
+def _levers_constructed(module_path: Path) -> dict[str, set[tuple[str, str]]]:
+    """Per module-level function, the ``(parameter, kind)`` hints it can construct.
+
+    Resolved through the module's own call graph: a screen almost never builds the hint
+    itself — `screen_lifting_lug` calls `_thickness_repair_hint`, `screen_base_plate`
+    builds it inline — so a check scoped to the screen's own body would see one of those
+    and not the other.
+    """
+    import ast
+
+    tree = ast.parse(module_path.read_text(encoding="utf-8"))
+    direct: dict[str, set[tuple[str, str]]] = {}
+    calls: dict[str, set[str]] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        made: set[tuple[str, str]] = set()
+        called: set[str] = set()
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "RepairHint"
+                and func.attr in ("solved", "directional")
+                and child.args
+                and isinstance(child.args[0], ast.Constant)
+            ):
+                made.add((child.args[0].value, func.attr))
+            if isinstance(func, ast.Name):
+                called.add(func.id)
+        direct[node.name] = made
+        calls[node.name] = called
+
+    def resolve(name: str, seen: frozenset[str] = frozenset()) -> set[tuple[str, str]]:
+        if name in seen or name not in direct:
+            return set()
+        found = set(direct[name])
+        for callee in calls[name]:
+            found |= resolve(callee, seen | {name})
+        return found
+
+    return {name: resolve(name) for name in direct}
+
+
+def _screen_module_path(qualified: str) -> Path:
+    module_name = qualified.split(".", 1)[0]
+    analysis = _REPO / "src" / "anvilate" / "analysis" / f"{module_name}.py"
+    return (
+        analysis
+        if analysis.exists()
+        else _REPO / "src" / "anvilate" / "packs" / f"{module_name}.py"
+    )
+
+
+def _lever_inventory() -> tuple[dict[str, set[tuple[str, str]]], set[str]]:
+    """The recorded levers per screen, and the screens recorded as having none."""
+    recorded: dict[str, set[tuple[str, str]]] = {}
+    without: set[str] = set()
+    for line in _LEVER_MANIFEST.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("## "):
+            continue
+        if " -> " in line:
+            screen, lever = line.split(" -> ", 1)
+            parameter, _, kind = lever.partition(" (")
+            recorded.setdefault(screen.strip(), set()).add(
+                (parameter.strip(), kind.rstrip(")").strip())
+            )
+        else:
+            without.add(line)
+    return recorded, without
+
+
+def test_every_public_screen_records_whether_it_offers_a_repair_lever():
+    """A screen with no lever is a recorded gap, not an oversight.
+
+    The repair layer is the difference between "this failed" and "move this, to here",
+    and it reached three of the library's screens before anyone counted. This is the
+    same contract design-inverses.txt holds over the inverses: a decision per screen,
+    written down, with a diff when it changes.
+    """
+    screens = _public_screens()
+    recorded, without = _lever_inventory()
+    listed = set(recorded) | without
+    assert len(screens) >= 45, (
+        f"only {len(screens)} public screens were discovered; the library has more, and a "
+        f"census that stops finding its subject passes"
+    )
+    assert not (set(recorded) & without), (
+        "these screens are recorded both as having a lever and as having none: "
+        f"{sorted(set(recorded) & without)}"
+    )
+    missing = sorted(set(screens) - listed)
+    assert not missing, (
+        "public screens with no line in docs/api/repair-levers.txt. Record the lever a "
+        "failing check offers ('<screen> -> <parameter> (solved|directional)'), or the "
+        "bare name if it offers none yet:\n  " + "\n  ".join(missing)
+    )
+    stale = sorted(listed - set(screens))
+    assert not stale, (
+        "docs/api/repair-levers.txt names screens that are no longer public:\n  "
+        + "\n  ".join(stale)
+    )
+
+
+def test_every_recorded_repair_lever_is_one_the_screen_actually_offers():
+    """Both directions: a recorded lever must be constructed, and a constructed one recorded."""
+    screens = _public_screens()
+    recorded, without = _lever_inventory()
+    by_path: dict[Path, dict[str, set[tuple[str, str]]]] = {}
+    wrong: list[str] = []
+    unrecorded: list[str] = []
+    resolved = 0
+    for qualified, (_, path) in sorted(screens.items()):
+        symbol = qualified.split(".", 1)[1]
+        if path not in by_path:
+            by_path[path] = _levers_constructed(path)
+        built = by_path[path].get(symbol, set())
+        resolved += len(built)
+        claimed = recorded.get(qualified, set())
+        for parameter, kind in sorted(claimed - built):
+            wrong.append(f"{qualified} -> {parameter} ({kind})")
+        for parameter, kind in sorted(built - claimed):
+            unrecorded.append(f"{qualified} -> {parameter} ({kind})")
+    # FIRST, and counting what the RESOLVER found rather than what the file says. Counting
+    # the file's own rows here would have been a floor on the wrong quantity: it cannot
+    # move when the call-graph walk stops working, which is the failure it is guarding.
+    assert resolved >= 8, (
+        f"the call-graph walk resolved only {resolved} repair hints across the whole "
+        f"library; it has stopped following the helper a screen builds its hint in, and "
+        f"every check below is comparing the file against an empty set"
+    )
+    assert not wrong, (
+        "these levers are recorded in docs/api/repair-levers.txt but the screen never "
+        "builds them — a wrong parameter, a wrong kind, or a hint that was removed:\n  "
+        + "\n  ".join(wrong)
+    )
+    assert not unrecorded, (
+        "these screens build a repair hint that docs/api/repair-levers.txt does not "
+        "record, so the file understates what the library offers:\n  " + "\n  ".join(unrecorded)
+    )
+    assert len(without) >= 1, "no screen is recorded as lacking a lever, which cannot be true"
+
+    # The docs page argues from these three numbers, and a count in prose expires the
+    # moment a lever is wired. Gate it against the file it describes, both figures.
+    page = (_REPO / "docs" / "repair-feedback.md").read_text(encoding="utf-8")
+    total_levers = sum(len(levers) for levers in recorded.values())
+    for figure, subject in (
+        (f"all {len(screens)} public screens", "screens"),
+        (f"{total_levers} levers across {len(recorded)} of them", "levers and their screens"),
+        (f"{len(without)} recorded as having none", "screens with no lever"),
+    ):
+        assert figure in page, (
+            f"docs/repair-feedback.md no longer says '{figure}' — the page's count of "
+            f"{subject} has drifted from docs/api/repair-levers.txt"
+        )
+
+
+def _movable_fields(annotation: object, depth: int = 2) -> set[str]:
+    """The field names a caller can set on ``annotation``, through containers and unions.
+
+    `screen_structure` takes a list of a union of eleven member models, and the lever it
+    offers belongs to one of those members — so an annotation walk that stops at the
+    parameter's own type reports it as unreachable when the caller sets it every day.
+    """
+    import typing
+
+    if depth < 0:
+        return set()
+    found: set[str] = set()
+    fields = getattr(annotation, "model_fields", None)
+    if fields:
+        found |= set(fields)
+        for field in fields.values():
+            found |= _movable_fields(field.annotation, depth - 1)
+    for argument in typing.get_args(annotation):
+        found |= _movable_fields(argument, depth - 1)
+    return found
+
+
+def test_every_repair_lever_names_something_the_caller_can_move():
+    """A lever the caller cannot act on is no better than silence.
+
+    The parameter has to be a keyword argument of the screen, or a field of a model the
+    screen takes — a hint naming an internal is a remedy nobody can apply.
+    """
+    screens = _public_screens()
+    recorded, _ = _lever_inventory()
+    unreachable: list[str] = []
+    checked = 0
+    for qualified, levers in sorted(recorded.items()):
+        function = screens[qualified][0]
+        # eval_str, because `from __future__ import annotations` makes every annotation a
+        # string and a check that skips strings checks nothing at all here.
+        signature = inspect.signature(function, eval_str=True)
+        movable = set(signature.parameters)
+        for parameter in signature.parameters.values():
+            movable |= _movable_fields(parameter.annotation)
+        for name, kind in sorted(levers):
+            checked += 1
+            if name not in movable:
+                unreachable.append(f"{qualified} -> {name} ({kind})")
+    assert not unreachable, (
+        "these repair levers name something that is neither an argument of the screen "
+        "nor a field of a model it takes, so the caller has nothing to change:\n  "
+        + "\n  ".join(unreachable)
+    )
+    assert checked >= 8, f"only {checked} levers were checked; the inventory holds more"
+
+
 _UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?"
 # A compound unit is one token, not the first of several: "20.83 kN*m" and "5.2 kg/m**3"
 # have to be captured whole, or the tail migrates out of the parentheses and lands in

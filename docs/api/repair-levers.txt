@@ -1,0 +1,81 @@
+# Repair levers: what a failing check on each screen tells the caller to move.
+#
+# A scorecard that says only "this failed" leaves the caller searching. A repair lever
+# names the parameter to move and the direction that improves the margin, and where a
+# design inverse exists it names the value that lands the required margin exactly
+# (docs/repair-feedback.md). This file records the decision for EVERY public screen, so
+# that a screen with no lever is a recorded gap rather than an oversight.
+#
+# Format: "<module>.<screen> -> <parameter> (solved|directional)" for a screen that emits
+# a lever, one line per lever; a bare "<module>.<screen>" for one that emits none yet. A
+# screen may appear more than once under `levers` and never in both sections.
+#
+# THE GATE READS BOTH DIRECTIONS (tests/test_contract.py). Every public screen must appear;
+# every recorded lever must actually be constructed by that screen — resolved through the
+# module's own call graph, because the hint is usually built in a helper the screen calls;
+# every lever a screen constructs must be recorded; and a lever's parameter must be a
+# keyword argument of the screen or a field of a model it takes, or it names something the
+# caller cannot move.
+#
+# `solved` and `directional` are not interchangeable. A solved lever claims a value; a
+# directional one claims only a sign, which is a claim about the check's shape over its
+# whole domain and has to be swept before it is declared. `screen_infinite_slope` carries
+# both, and its slope-angle direction is scoped to below 45 degrees because the trend
+# reverses above it.
+
+## levers
+dynamics.isolation_scorecard -> frequency_ratio (solved)
+geotechnical.screen_driven_pile -> length (solved)
+geotechnical.screen_infinite_slope -> pore_pressure (solved)
+geotechnical.screen_infinite_slope -> slope_angle (directional)
+geotechnical.screen_retaining_wall -> vertical_load (solved)
+geotechnical.screen_shallow_footing -> width (directional)
+pressure_vessel.asme_b313_pressure_scorecard -> nominal_wall (solved)
+structural.screen_base_plate -> plate_thickness (solved)
+structural.screen_lifting_lug -> thickness (solved)
+structural.screen_structure -> plate_thickness (solved)
+structural.screen_structure -> thickness (solved)
+
+## no lever recorded
+aluminum.aluminum_compression_scorecard
+beam.deflection_scorecard
+cold_formed_steel.dsm_scorecard
+dynamics.frequency_scorecard
+dynamics.half_sine_shock_scorecard
+dynamics.isolator_selection_scorecard
+electrical.screen_feeder
+embodied_carbon.embodied_carbon_scorecard
+fatigue.gerber_scorecard
+fatigue.goodman_scorecard
+fatigue.soderberg_scorecard
+fatigue.weld_fatigue_scorecard
+fracture.fad_scorecard
+hydraulics.screen_pipe_run
+hydraulics.screen_pump_duty
+industrial.screen_cover_plate
+lifting_device.bth1_fatigue_scorecard
+lifting_device.bth1_member_scorecard
+lifting_device.bth1_pin_plate_scorecard
+lifting_device.screen_lifter_device
+lighting.screen_lighting
+masonry.screen_masonry_wall
+nds_timber.nds_bearing_scorecard
+nds_timber.nds_bending_scorecard
+nds_timber.nds_compression_scorecard
+nds_timber.nds_shear_scorecard
+noise_exposure.screen_noise_exposure
+pressure_vessel.asme_appendix_2_flange_stress_scorecard
+pressure_vessel.asme_b313_branch_reinforcement_scorecard
+pressure_vessel.asme_ug37_reinforcement_scorecard
+stress.strength_scorecard
+structural.screen_beam_column
+structural.screen_beam_member
+structural.screen_bolted_connection
+structural.screen_column_member
+structural.screen_concrete_bearing
+structural.screen_gusset_plate
+structural.screen_shear_plate
+structural.screen_tension_member
+structural.screen_welded_connection
+thermal.junction_temperature_scorecard
+ventilation.screen_ventilation

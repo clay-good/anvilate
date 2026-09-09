@@ -42,6 +42,22 @@ root left the repaired plate at a safety factor of 1.9999999999999996 against a
 required 2.0 — the fix this library named was itself a `FAIL`. See
 [`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
 
+### Every screen records whether it has a lever
+
+`docs/api/repair-levers.txt` holds the decision for all 51 public screens.
+There are 11 levers across 9 of them, and 42 recorded as having none yet — each
+figure gated against the file it describes. A screen without a lever is a gap someone
+wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
+over the inverses.
+
+The gate reads it both directions. A recorded lever must actually be constructed by
+that screen (resolved through the module's own call graph, because the hint is usually
+built in a helper the screen calls), every lever a screen constructs must be recorded,
+the `solved`/`directional` kind must match the classmethod used, and the parameter must
+be a keyword argument of the screen or a field of a model it takes — walked through
+lists and unions, so `screen_structure`'s levers resolve to the member models a caller
+actually sets.
+
 ### Declaring a lever, and when not to
 
 A direction is a claim about the check's behavior, so it is declared only where it
