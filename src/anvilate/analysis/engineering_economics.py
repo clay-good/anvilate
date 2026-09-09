@@ -47,6 +47,7 @@ def present_value(*, future_value: float, rate: float, periods: float) -> float:
     the per-period ``rate`` i (a decimal, 0.08 for 8%): PV = F/(1+i)^n. It shrinks the further off
     and the higher the rate. Returns the present value as a plain float.
     """
+    require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
         raise ValueError("rate must be greater than -1")
@@ -61,6 +62,7 @@ def future_value(*, present_value: float, rate: float, periods: float) -> float:
     The value ``periods`` n in the future of a ``present_value`` P invested at the per-period
     ``rate`` i (a decimal): FV = P·(1+i)^n — compound growth. Returns the future value as a float.
     """
+    require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
         raise ValueError("rate must be greater than -1")
@@ -77,6 +79,7 @@ def annuity_present_value(*, payment: float, rate: float, periods: float) -> flo
     when i = 0). This is what values a loan, a lease, or a stream of savings. Returns the present
     value as a plain float.
     """
+    require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
         raise ValueError("rate must be greater than -1")
@@ -95,6 +98,7 @@ def annuity_future_value(*, payment: float, rate: float, periods: float) -> floa
     when i = 0). This is the sinking-fund result — how a regular saving grows into a target sum.
     Returns the future value as a plain float.
     """
+    require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
         raise ValueError("rate must be greater than -1")
@@ -113,6 +117,7 @@ def loan_payment(*, principal: float, rate: float, periods: float) -> float:
     equipment-loan installment, the inverse of the annuity present value. Returns the payment as a
     plain float.
     """
+    require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
         raise ValueError("rate must be greater than -1")
@@ -254,6 +259,8 @@ def declining_balance_depreciation(
     plain floats in consistent units. Returns the depreciation charged in that period as a plain
     float.
     """
+    require_finite(factor, name="factor")
+    require_finite(useful_life, name="useful_life")
     require_finite(period, name="period")
     if useful_life <= 0:
         raise ValueError("useful_life must be positive")

@@ -80,6 +80,7 @@ def weibull_life_for_reliability(
     Note the deliberate asymmetry with :func:`weibull_reliability`: reliability is a probability, so
     it is a plain float, while the life returned is a time. Returns the life in seconds.
     """
+    require_finite(reliability, name="reliability")
     require_finite(shape, name="shape")
     _check(characteristic_life, "[time]", "characteristic_life")
     eta = characteristic_life.to("s").magnitude
@@ -219,6 +220,7 @@ def k_out_of_n_reliability(
     redundancy. R in [0, 1]; ``total_units`` and ``required_units`` positive integers with k ≤ n.
     Returns the system reliability (0 to 1) as a plain float.
     """
+    require_finite(component_reliability, name="component_reliability")
     require_finite(total_units, name="total_units")
     if not 0.0 <= component_reliability <= 1.0:
         raise ValueError(f"component_reliability must be in [0, 1]; got {component_reliability}")

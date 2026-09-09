@@ -47,6 +47,7 @@ def otto_cycle_efficiency(*, compression_ratio: float, specific_heat_ratio: floa
     raising compression (until knock intervenes) is the efficiency lever. Returns the efficiency as
     a fraction.
     """
+    require_finite(compression_ratio, name="compression_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if compression_ratio <= 1:
         raise ValueError("compression_ratio must be greater than 1")
@@ -70,6 +71,8 @@ def diesel_cycle_efficiency(
     cycle — but diesels run much higher compression, so they win in practice. As r_c → 1 (heat added
     at constant volume) it reduces to the Otto efficiency. Returns the efficiency as a fraction.
     """
+    require_finite(compression_ratio, name="compression_ratio")
+    require_finite(cutoff_ratio, name="cutoff_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if compression_ratio <= 1:
         raise ValueError("compression_ratio must be greater than 1")
@@ -101,6 +104,7 @@ def brayton_cycle_efficiency(*, pressure_ratio: float, specific_heat_ratio: floa
     ratio raises efficiency, though the useful work peaks at a finite ratio the temperature limit
     sets — a trade this ideal form does not show. Returns the efficiency as a fraction.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if pressure_ratio <= 1:
         raise ValueError("pressure_ratio must be greater than 1")

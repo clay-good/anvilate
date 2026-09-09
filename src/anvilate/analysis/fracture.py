@@ -242,6 +242,7 @@ def paris_law_crack_growth_rate(
     as the crack lengthens. Δσ must be a stress, a a positive length, Y positive, and
     C and m positive. Returns da/dN in metres per cycle.
     """
+    require_finite(geometry_factor, name="geometry_factor")
     require_finite(paris_exponent, name="paris_exponent")
     _require(stress_range, "[pressure]", "stress_range")
     _require(crack_length, "[length]", "crack_length")
@@ -285,6 +286,7 @@ def paris_law_cycles_to_failure(
     a_f > a_i, and m must differ from 2 (the m = 2 case integrates to a logarithm and
     is not covered). Returns the dimensionless number of cycles.
     """
+    require_finite(geometry_factor, name="geometry_factor")
     require_finite(paris_exponent, name="paris_exponent")
     _require(stress_range, "[pressure]", "stress_range")
     _require(initial_crack_length, "[length]", "initial_crack_length")

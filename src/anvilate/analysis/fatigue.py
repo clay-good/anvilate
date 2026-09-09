@@ -742,6 +742,8 @@ def coffin_manson_reversals(
     ``fatigue_ductility_exponent`` c (negative, ~−0.5 to −0.7). Returns the number of reversals to
     failure 2N (two per cycle).
     """
+    require_finite(fatigue_ductility_coefficient, name="fatigue_ductility_coefficient")
+    require_finite(plastic_strain_amplitude, name="plastic_strain_amplitude")
     require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
     if plastic_strain_amplitude <= 0:
         raise ValueError("plastic_strain_amplitude must be positive")
@@ -773,6 +775,7 @@ def strain_life_total_amplitude(
     ``fatigue_ductility_coefficient`` εf' with ``fatigue_ductility_exponent`` c the plastic branch.
     Returns the dimensionless total strain amplitude Δε/2.
     """
+    require_finite(reversals, name="reversals")
     require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
     require_finite(fatigue_strength_exponent, name="fatigue_strength_exponent")
     sigma_f = _require_stress(fatigue_strength_coefficient, "fatigue_strength_coefficient")

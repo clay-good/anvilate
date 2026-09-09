@@ -98,6 +98,7 @@ def cstr_series_conversion_first_order(*, damkohler_number: float, stages: int) 
     :func:`pfr_conversion_first_order`, since (1 + Da/n)ⁿ → e^Da. Returns the conversion (0 to 1)
     as a plain float.
     """
+    require_finite(damkohler_number, name="damkohler_number")
     if damkohler_number < 0:
         raise ValueError("damkohler_number must be non-negative")
     require_finite(stages, name="stages")

@@ -195,6 +195,7 @@ def overconsolidated_at_rest_coefficient(
     or basement wall must be sized for. At OCR = 1 it recovers the Jaky value. Returns the
     dimensionless coefficient.
     """
+    require_finite(overconsolidation_ratio, name="overconsolidation_ratio")
     require_finite(friction_angle, name="friction_angle")
     _check_friction_angle(friction_angle)
     if overconsolidation_ratio < 1.0:

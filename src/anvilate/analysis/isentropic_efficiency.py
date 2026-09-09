@@ -206,6 +206,7 @@ def compressor_isentropic_from_polytropic(
     widens with the pressure ratio — why a high-ratio compressor's isentropic efficiency looks poor
     even with good stages. Returns the dimensionless isentropic efficiency.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     require_finite(polytropic_efficiency, name="polytropic_efficiency")
     if pressure_ratio <= 1.0:
@@ -232,6 +233,7 @@ def turbine_isentropic_from_polytropic(
     the reheat effect works the other way, so η_t > η_p and the gap grows with the pressure ratio.
     Returns the dimensionless isentropic efficiency.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     require_finite(polytropic_efficiency, name="polytropic_efficiency")
     if pressure_ratio <= 1.0:

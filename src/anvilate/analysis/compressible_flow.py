@@ -145,6 +145,7 @@ def stagnation_pressure_ratio(*, mach_number: float, heat_capacity_ratio: float)
     incompressible ½·ρ·V² form undercounts badly past about Mach 0.3), and the total-to-static ratio
     a nozzle or inlet is designed around. Returns the dimensionless ratio p₀/p (≥ 1).
     """
+    require_finite(mach_number, name="mach_number")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     temperature_ratio = stagnation_temperature_ratio(
         mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
@@ -161,6 +162,7 @@ def stagnation_density_ratio(*, mach_number: float, heat_capacity_ratio: float) 
     isentropic set (and is consistent with them through the ideal-gas law, p₀/p = (ρ₀/ρ)·(T₀/T)).
     Returns the dimensionless ratio ρ₀/ρ (≥ 1).
     """
+    require_finite(mach_number, name="mach_number")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     temperature_ratio = stagnation_temperature_ratio(
         mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
@@ -331,6 +333,7 @@ def normal_shock_stagnation_pressure_ratio(
     supersonic inlet pays and the reason strong shocks are avoided. Returns the total-pressure ratio
     (dimensionless, 0 to 1).
     """
+    require_finite(upstream_mach, name="upstream_mach")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")

@@ -198,6 +198,7 @@ def bearing_rating_for_life(
     (tenfold life needs about 2.15× the rating for a ball bearing) — but it climbs fast if the
     load is high. P must be positive, L10 and p positive. Returns the required rating in N.
     """
+    require_finite(required_life_millions, name="required_life_millions")
     _require(equivalent_load, "[force]", "equivalent_load")
     # `L10 ** (1 / p)` is exactly 1.0 for L10 = 1.0 whatever p is, so a NaN exponent
     # disappeared into a rating equal to the load.
@@ -351,6 +352,7 @@ def bearing_reliability_life_factor(
     ``reliability`` R must lie in (0, 1); at R = 0.90 a₁ = 1. A higher reliability
     buys a shorter usable life. Returns the dimensionless a₁ (≤ 1 for R ≥ 0.90).
     """
+    require_finite(reliability, name="reliability")
     require_finite(weibull_slope, name="weibull_slope")
     if not 0.0 < reliability < 1.0:
         raise ValueError(f"reliability must lie in (0, 1); got {reliability}")

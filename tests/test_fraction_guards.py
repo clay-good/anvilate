@@ -1688,15 +1688,30 @@ def _exponent_sites() -> tuple[dict[str, list[str]], int]:
                     names = {n.id for n in ast.walk(statement.value) if isinstance(n, ast.Name)}
                     if names & numbers:
                         derived[statement.targets[0].id] = names & numbers
+
+            def reaching(
+                side: ast.AST, numbers: set[str] = numbers, derived: dict = derived
+            ) -> set[str]:
+                found: set[str] = set()
+                for name in ast.walk(side):
+                    if isinstance(name, ast.Name):
+                        if name.id in numbers:
+                            found.add(name.id)
+                        elif name.id in derived:
+                            found |= derived[name.id]
+                return found
+
             roots: set[str] = set()
             for expression in ast.walk(node):
                 if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Pow):
-                    for name in ast.walk(expression.right):
-                        if isinstance(name, ast.Name):
-                            if name.id in numbers:
-                                roots.add(name.id)
-                            elif name.id in derived:
-                                roots |= derived[name.id]
+                    exponent = reaching(expression.right)
+                    roots |= exponent
+                    # The mirror, and it needs the exponent to be parameter-borne: `nan ** 0`
+                    # is 1.0, so a base carrying a NaN is DELETED wherever the exponent can
+                    # reach zero. A literal exponent cannot, so a base under `x ** 2` is left
+                    # alone — it propagates its NaN correctly and 194 parameters do.
+                    if exponent:
+                        roots |= reaching(expression.left)
             if not roots:
                 continue
             examined += 1
@@ -1741,10 +1756,20 @@ def test_a_number_used_as_an_exponent_is_one_the_function_refuses_as_a_nan():
       unit stress-intensity range, and `present_value` at a zero rate: all finite, all
       wrong.
 
+    **And the mirror: `nan ** 0` is 1.0 too**, so wherever the exponent can reach zero the
+    NaN in the BASE is deleted instead. Zero is an ordinary input at four of these — a
+    present value discounted over no periods, a perfectly plastic strain-hardening exponent,
+    a frictionless soil — and each returned a number from a poisoned one:
+    `present_value` and `future_value` handed back the amount they were given, from a NaN
+    interest rate; `flow_stress_power_law` the strength coefficient, from a NaN true strain;
+    `overconsolidated_at_rest_coefficient` exactly 1.0, from a NaN OCR.
+
     So the gate is static and total rather than a probe: a float or int parameter that
     reaches an exponent must be handed to `require_finite`, in the function or through one
-    of its module's own helpers. That covers all 1,746 public functions, including the 266
-    no binder can build a call for.
+    of its module's own helpers, **and so must one reaching the base under a
+    parameter-borne exponent**. A base under a *literal* exponent is left alone: `x ** 2`
+    cannot eat a NaN, and 194 parameters sit under one propagating theirs correctly. That
+    covers all 1,746 public functions, including the 259 no binder can build a call for.
     """
     unguarded, examined = _exponent_sites()
     assert examined >= 45, (
