@@ -26,29 +26,30 @@
 # `screen_structure` are the same thing where the dispatch IS in one module and so
 # resolves.
 #
-# WHY THE OTHERS HAVE NONE. The 33 below fall into four kinds, and knowing which one a
-# screen is in is most of deciding whether it will ever get a lever:
+# WHY THE OTHERS HAVE NONE. Three kinds, and knowing which one a screen is in is most of
+# deciding whether it will ever get a lever:
 #
-#   1. The demand and the allowable are both the CALLER'S, computed upstream —
-#      `stress.strength_scorecard`, `beam.deflection_scorecard`, the three fatigue
-#      criteria, the four NDS timber checks, the DSM and FAD screens, the BTH-1 members.
-#      A stress is not a knob; the geometry that produced it is, and this screen never saw
-#      it. These are unlikely to gain one where they are.
+#   1. The demand and the allowable are both the CALLER'S, computed upstream. This is
+#      almost all of them: `stress.strength_scorecard`, `beam.deflection_scorecard`, the
+#      three fatigue criteria, the four NDS timber checks, the DSM and FAD screens, the
+#      BTH-1 members, and the three pressure-vessel screens — which take a reinforcement
+#      area or a flange stress already worked out and judge it. A stress is not a knob; the
+#      geometry that produced it is, and these screens never saw it.
 #   2. Aggregators — `screening.screen_spec`, `screen_structure_element`,
 #      `screen_lifter_device`, `callouts.callout_scorecard`. Their cards carry whatever
-#      their elements carry; see the note above.
-#   3. A geometry with no single knob — the two reinforcement screens and the flange, the
-#      beam and beam-column members (whose section is a discrete choice from a table, not a
-#      value to solve for; the COLUMN left this list too, with a direction rather than a
-#      value — its unbraced length is a bracing decision, unlike a beam's span, which the
-#      architecture fixes). The concrete bearing and the bolted connection were BOTH
-#      in this list and are not any more — the bearing because its two confinement regimes
-#      each solve in closed form, the connection because its checks have three different
-#      knobs rather than none. A classification written quickly is a claim like any other.
-#      These are the ones worth revisiting: a lever here needs a decision about WHICH knob,
-#      not a formula.
-#   4. `loads.combination_scorecard`, where the lever is the design loads themselves.
+#      their elements carry; see the note above. And `loads.combination_scorecard`, where
+#      the lever is the design loads themselves.
+#   3. A geometry whose knob is not a number: `screen_beam_member` and
+#      `screen_beam_column`, whose section is a discrete choice from a table. A corrective
+#      value is a float, and "a bigger section" is not one.
 #
+# THIS LIST WAS WRONG WHEN IT WAS FIRST WRITTEN, in five of its six hardest cases, and it
+# is worth saying why. It was written from the screens' NAMES: the concrete bearing, the
+# bolted connection and the column member were filed as "no single knob" and all three
+# turned out to have one (two regimes that each solve; three knobs, one per check; a
+# direction with no closed inverse), and the three pressure-vessel screens were filed
+# there when they belong under 1. Read the signature.
+
 # `solved` and `directional` are not interchangeable. A solved lever claims a value; a
 # directional one claims only a sign, which is a claim about the check's shape over its
 # whole domain and has to be swept before it is declared. `screen_infinite_slope` carries
