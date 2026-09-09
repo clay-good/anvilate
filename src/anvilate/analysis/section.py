@@ -99,7 +99,8 @@ def required_section_modulus(
     σ_allow the material's allowable bending stress, and ``required_safety_factor`` n
     the margin on it (default 1.0, i.e.
     σ_allow already includes the margin). Returns the minimum Z in mm³; the moment
-    and stress are dimension-checked and ``n`` / ``allowable_stress`` must be
+    and stress are dimension-checked and ``required_safety_factor`` /
+    ``allowable_stress`` must be
     positive.
     """
     if not isinstance(bending_moment, Quantity):

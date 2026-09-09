@@ -230,7 +230,7 @@ def shaft_diameter_for_torque(
     ``allowable_shear`` τ_allow the material's allowable shear stress, and
     ``required_safety_factor`` n the margin on it (default 1.0). Returns the
     minimum diameter in mm; the torque and stress are dimension-checked and
-    ``n`` / ``allowable_shear`` must be positive.
+    ``required_safety_factor`` / ``allowable_shear`` must be positive.
     """
     _require(torque, "[force] * [length]", "torque")
     _require(allowable_shear, "[pressure]", "allowable_shear")
@@ -264,7 +264,8 @@ def shaft_diameter_for_bending_torsion(
     ``yield_strength`` S_y the material's yield stress, and
     ``required_safety_factor`` n the margin on yield (default 1.0). Returns the
     minimum diameter in mm; the moment/torque are dimension-checked torques, the
-    strength a pressure, and ``n`` / ``yield_strength`` must be positive. Pure
+    strength a pressure, and ``required_safety_factor`` / ``yield_strength``
+    must be positive. Pure
     torsion (M=0) does not reduce to :func:`shaft_diameter_for_torque`, which sizes
     on shear yield τ_allow rather than the von Mises tensile yield used here.
     """

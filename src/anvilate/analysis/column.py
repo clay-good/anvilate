@@ -130,7 +130,8 @@ def euler_second_moment_for_load(
     I must be chosen. ``design_load`` P is the service compression,
     ``required_safety_factor`` n the margin on the buckling load,
     ``effective_length_factor`` K the end condition. Returns the minimum I in mm⁴;
-    every quantity is dimension-checked and ``n``/``K`` must be positive.
+    every quantity is dimension-checked and ``required_safety_factor`` /
+    ``effective_length_factor`` must be positive.
 
     A screening size only — an intermediate (stubby) column may be governed by
     inelastic (Johnson) failure or yield instead, which this elastic form ignores.

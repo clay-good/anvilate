@@ -880,20 +880,63 @@ def test_the_compound_guard_exemptions_are_current_and_reasoned() -> None:
 
 # --- a docstring's own promise of positivity -----------------------------------------------
 
-_POSITIVITY_PROMISE = re.compile(
-    r"``([a-z_]+)``[^.]{0,80}?\bmust be (?:a )?(?:positive|strictly positive)\b", re.S
-)
+# The subject of "must be positive" is read a CLAUSE at a time. A gap that could cross
+# another ``name`` walked straight past the parameter the sentence is about:
+# "``shear_force`` must be a force and ``area`` an area; ``form_factor`` must be positive"
+# was recorded as a promise about `shear_force`. **37 of the 73 that reader produced were
+# about a different parameter than the one it named.**
+#
+# Blocking the gap at a backtick was the wrong repair: "``width`` b and ``height`` h ...
+# must be positive" is one promise about two parameters, and it dropped `width` — the
+# founding case of this whole gate. So: split on `.` and `;`, take the clause that carries
+# the phrase, and attribute it to every backticked name after the clause's LAST other
+# predicate. That keeps conjunctions ("b and h must be positive") and refuses the
+# list-then-a-different-claim shape ("``load`` is a force, ``allowable_shear`` a stress,
+# and both SF and τ_allow must be positive" -> `allowable_shear`, which is τ_allow).
+#
+# And the phrasing has to be a REQUIREMENT. "``moment`` M is positive when it opens the
+# curve" is a sign convention and "``force`` is a force, L and A are positive geometry" is
+# about the other two; neither is a promise, and both read as one under an `is positive`
+# alternative. `must be` is the word the library uses when it means the constraint.
+_PROMISE_CLAUSE = re.compile(r"[^.;]+")
+_PROMISE_PHRASE = re.compile(r"\bmust be (?:an? )?(?:strictly )?positive\b")
+_PROMISE_NAME = re.compile(r"``([a-z_]+)``")
+_PROMISE_OTHER_PREDICATE = re.compile(r"\bmust be\b|\bis\b|\bare\b")
+
+
+def _positivity_promises(docstring: str) -> set[str]:
+    """The parameters a docstring requires to be positive, one clause at a time."""
+    promised: set[str] = set()
+    for clause in _PROMISE_CLAUSE.finditer(" ".join(docstring.split())):
+        text = clause.group(0)
+        phrase = _PROMISE_PHRASE.search(text)
+        if phrase is None:
+            continue
+        head = text[: phrase.start()]
+        others = [found.end() for found in _PROMISE_OTHER_PREDICATE.finditer(head)]
+        promised |= {
+            found.group(1) for found in _PROMISE_NAME.finditer(head[others[-1] if others else 0 :])
+        }
+    return promised
 
 
 @cache
-def _promised_positive() -> list[tuple[str, str, object, dict]]:
+def _promised_positive() -> list[tuple[str, str, object, dict, bool]]:
     """Every public analysis function whose docstring names a parameter it calls positive.
 
-    Returned with the call this test can make: each parameter bound to 1.0 m or 1.0, which
-    is the shape :func:`probe_the_front_door`'s all-positive probe uses. A parameter this
-    cannot bind — a material reference, a named section — is reported rather than skipped.
+    Returned with the call to make it on, **taken from the one binder this file already
+    has**. It used to build its own, binding every ``Quantity`` to 1.0 m — the bug recorded
+    against the non-finite probe and left standing here. A pressure parameter poisoned with
+    a metre is refused for its DIMENSION, and the loop below reads a ValueError as the guard
+    working, so five functions were reported clean without ever being reached. Two bugs that
+    cancelled: the false attribution to `beam.max_transverse_shear_stress(shear_force)`
+    passed only because the gate was handing a length to something that wanted a force.
+
+    A promise naming something that is not a parameter of the function is a reading error,
+    not a claim, and the gate below asserts there are none rather than skipping them.
     """
     found = []
+    bound = {label: arguments for label, _, arguments in _uniformly_callable()}
     for info in pkgutil.iter_modules(analysis.__path__):
         if info.name.startswith("_"):
             continue
@@ -902,30 +945,14 @@ def _promised_positive() -> list[tuple[str, str, object, dict]]:
             function = getattr(module, name, None)
             if not inspect.isfunction(function) or not function.__doc__:
                 continue
-            claimed = {
-                match.group(1)
-                for match in _POSITIVITY_PROMISE.finditer(" ".join(function.__doc__.split()))
-            }
+            claimed = _positivity_promises(function.__doc__)
             if not claimed:
                 continue
-            arguments, bindable = {}, True
-            for parameter in inspect.signature(function).parameters.values():
-                annotation = parameter.annotation
-                spelled = (
-                    annotation
-                    if isinstance(annotation, str)
-                    else getattr(annotation, "__name__", "")
-                )
-                value = {"Quantity": Quantity.parse("1.0 m"), "float": 1.0, "int": 2}.get(spelled)
-                if value is not None:
-                    arguments[parameter.name] = value
-                elif parameter.default is inspect.Parameter.empty:
-                    bindable = False
-                    break
+            label = f"{info.name}.{name}"
+            arguments = bound.get(label, {})
+            signature = set(inspect.signature(function).parameters)
             for target in sorted(claimed):
-                found.append(
-                    (f"{info.name}.{name}", target, function, arguments if bindable else {})
-                )
+                found.append((label, target, function, arguments, target in signature))
     return found
 
 
@@ -944,13 +971,43 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
     Found by binding every public analysis function's parameters to 1.0 and substituting a
     negative one at a time; 42 functions accepted it, and these were the ones whose own
     docstring said they should not.
+
+    **The reader had been reading the wrong sentence.** Its gap between the parameter name
+    and "must be positive" could run across another ``name``, so it attributed the promise
+    to whichever backticked word came first: "``shear_force`` must be a force and ``area``
+    an area; ``form_factor`` must be positive" was recorded as a promise about
+    `shear_force`. 37 of the 73 it produced were about a parameter the docstring was not
+    talking about, and it swallowed as many real ones by matching an early name and
+    stopping there. It now reads a clause at a time (see `_positivity_promises`), finds 88,
+    and every one names a parameter of the function it sits on.
+
+    **And it had never reached several of the functions it reported clean**, because it
+    built its own call with every ``Quantity`` bound to one metre. A pressure poisoned with
+    a length is refused for its DIMENSION, and the loop below reads a ValueError as the
+    guard working. The two bugs cancelled: the false claim about
+    `max_transverse_shear_stress(shear_force)` passed only because the gate was handing a
+    length to a parameter that wanted a force. The bindings come from `_uniformly_callable`
+    now — one binder for the whole file.
+
+    Both halves are mutated: reverting the reader fails, and so does reverting the
+    bindings. So does dropping `width` from `beam._POSITIVE_DEFINITE`, which is the defect
+    this gate was written for and which the first repair of the reader had stopped seeing —
+    "``width`` b and ``height`` h ... must be positive" is one promise about two
+    parameters, and a rule that will not cross a backtick loses the first of them.
     """
     promises = _promised_positive()
     # Attack the gate: a regex that stopped matching the prose would report nothing wrong.
     assert len(promises) >= 60, f"only {len(promises)} docstring promises of positivity found"
+    # And the premise: a promise is about a PARAMETER. One naming something else means the
+    # reader has drifted off the sentence it is reading, which is how 37 of the 73 it used
+    # to find were attributed to a parameter the docstring was not talking about.
+    astray = sorted(
+        f"{label}({target})" for label, target, _, _, is_parameter in promises if not is_parameter
+    )
+    assert not astray, f"these promises name something that is not a parameter: {astray}"
 
     accepted, unprobed = [], []
-    for label, target, function, arguments in promises:
+    for label, target, function, arguments, _ in promises:
         if target not in arguments:
             unprobed.append(f"{label}({target})")
             continue
@@ -973,8 +1030,14 @@ def test_a_parameter_a_docstring_calls_positive_is_one_the_function_refuses_to_t
             accepted.append(f"{label}({target}={spelled}) returned a value")
 
     # The unprobed are named and counted, not skipped in silence: a binder that stopped
-    # reaching these functions would empty `accepted` and read as a clean run.
-    assert len(unprobed) <= 12, f"{len(unprobed)} promises could not be probed: {unprobed}"
+    # reaching these functions would empty `accepted` and read as a clean run. Floored as
+    # a share and as a count of promises actually exercised, because a cap on the misses
+    # is satisfied by finding fewer promises.
+    probed = len(promises) - len(unprobed)
+    assert probed >= 70, f"only {probed} of {len(promises)} promises were exercised"
+    assert probed / len(promises) >= 0.84, (
+        f"{len(unprobed)} of {len(promises)} promises could not be probed: {unprobed}"
+    )
     assert accepted == [], (
         "these docstrings promise a positive parameter and the function takes a "
         f"non-positive one: {accepted}"

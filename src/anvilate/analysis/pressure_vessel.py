@@ -248,7 +248,7 @@ def thin_wall_thickness_for_pressure(
     ``allowable_stress`` σ_allow the material's allowable, and
     ``required_safety_factor`` n the margin on it (default 1.0). Returns the
     minimum thickness in mm; the pressure/radius/stress are dimension-checked and
-    ``n`` / ``allowable_stress`` must be positive.
+    ``required_safety_factor`` / ``allowable_stress`` must be positive.
 
     A thin-wall (membrane) size, and the scope is enforced rather than delegated: when
     the required wall gives r/t < 10 the wall carries a genuine gradient, the membrane

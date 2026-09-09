@@ -88,7 +88,8 @@ def required_axial_area(
     load (magnitude; sign is irrelevant to the area), ``allowable_stress`` σ_allow
     the material's allowable, and ``required_safety_factor`` n the margin on it
     (default 1.0). Returns the minimum area in mm²; the load and stress are
-    dimension-checked and ``n`` / ``allowable_stress`` must be positive.
+    dimension-checked and ``required_safety_factor`` / ``allowable_stress``
+    must be positive.
 
     Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """

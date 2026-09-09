@@ -657,7 +657,8 @@ def clamped_circular_plate_thickness_for_pressure(
     σ_allow the material's allowable bending stress, and ``required_safety_factor``
     n the margin on it (default 1.0). Returns the minimum thickness in mm; a
     strength (stress) size — re-check the deflection separately if stiffness
-    governs. The pressure/diameter/stress are dimension-checked and ``n`` /
+    governs. The pressure/diameter/stress are dimension-checked and
+    ``required_safety_factor`` /
     ``allowable_stress`` must be positive.
     """
     _require(pressure, "[pressure]", "pressure")
