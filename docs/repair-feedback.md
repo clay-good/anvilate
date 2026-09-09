@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 51 public screens.
-There are 21 levers across 13 of them, and 38 recorded as having none yet — each
+There are 24 levers across 15 of them, and 36 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -82,6 +82,8 @@ owes the reader:
 | `screen_ventilation` | outdoor air, air changes | `provided_outdoor_airflow` ↑ | solved — both, and they ask different amounts |
 | `screen_shear_plate` | shear yielding / shear rupture | `gross_shear_area` ↑ / `net_shear_area` ↑ | solved — a different area per limit state |
 | `screen_tension_member` | gross yielding / net rupture | `gross_area` ↑ / `net_area` ↑ | solved — a different area per limit state |
+| `screen_welded_connection` | throat shear | `leg_size` ↑ | solved — `fillet_weld_leg_for_load` |
+| `screen_gusset_plate` | block shear | `net_shear_area` ↑ | solved — holding the tension area the bolt gauge fixes |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
@@ -95,6 +97,12 @@ The two plate rows are the case where the levers differ *between entries on one 
 shear yielding is checked on the gross section and rupture through the holes, so a hint
 that named one area for both would tell a detailer to grow the wrong thing — a wrong
 answer, not a vague one.
+
+The gusset row is the one where the solve is **not** a scaling. Block shear adds two
+areas, `R_n = F_u·(0.6·A_nv + A_nt)`, so neither is the lever on its own and the tension
+term does not scale with the shortfall: the answer is `A_nv = (SF·P/F_u − A_nt)/0.6`,
+holding the tension plane's width, which the bolt gauge fixes. `A_nv·required/computed`
+would be wrong, and by a lot.
 
 The junction row is the only lever in the library that points **down**, and the
 ventilation row is the only screen whose two checks share one knob: outdoor air and air

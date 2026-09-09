@@ -1697,6 +1697,69 @@ def test_overloaded_tension_member_yields():
     assert card.status is CheckStatus.FAIL
 
 
+def test_a_failing_weld_solves_the_leg_the_welder_lays_down():
+    """The lever is the leg, not the length: the length is the joint the detailer was
+    given, and a weld longer than its joint is not a repair."""
+    from anvilate.packs.structural import WeldedConnection, screen_welded_connection
+
+    def weld(leg: Quantity) -> WeldedConnection:
+        return WeldedConnection(
+            name="seat",
+            leg_size=leg,
+            weld_length=_q("250 mm"),
+            load=_q("180 kN"),
+            electrode_strength=_q("490 MPa"),
+        )
+
+    entry = screen_welded_connection(weld(_q("5 mm")), required_safety_factor=2.0).entries[0]
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert hint is not None
+    assert (hint.parameter, hint.direction, hint.unit) == ("leg_size", Direction.INCREASE, "mm")
+    # Throat shear is linear in the leg, so the leg scales with the shortfall.
+    assert hint.corrective_value == pytest.approx(5.0 * 2.0 / entry.safety_factor, rel=1e-9)
+
+    repaired = screen_welded_connection(
+        weld(Quantity(magnitude=hint.corrective_value, unit="mm")), required_safety_factor=2.0
+    ).entries[0]
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(2.0, rel=1e-9)
+    assert repaired.repair_hint is None
+
+
+def test_a_failing_gusset_solves_the_shear_area_at_the_bolt_gauge_given():
+    """Block shear adds two areas, so neither is the lever on its own. The hint solves for
+    the shear area holding the tension one, and the arithmetic is stated here rather than
+    scaled: the two areas do not share a multiplier, so A_nv is NOT A_nv·required/computed.
+    """
+    from anvilate.packs.structural import GussetPlate, screen_gusset_plate
+
+    def gusset(shear_area: Quantity) -> GussetPlate:
+        return GussetPlate(
+            name="gp",
+            net_shear_area=shear_area,
+            net_tension_area=_q("600 mm**2"),
+            load=_q("500 kN"),
+            material="ASTM-A36",
+        )
+
+    entry = screen_gusset_plate(gusset(_q("1200 mm**2")), required_safety_factor=2.0).entries[0]
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert hint.parameter == "net_shear_area"
+    # A36 F_u = 400 MPa: (2.0*500e3/400 - 600)/0.6.
+    assert hint.corrective_value == pytest.approx((2.0 * 500e3 / 400.0 - 600.0) / 0.6, rel=1e-9)
+    # The naive scaling would be wrong, and by a lot — the tension term does not scale.
+    assert hint.corrective_value != pytest.approx(1200.0 * 2.0 / entry.safety_factor, rel=1e-3)
+
+    repaired = screen_gusset_plate(
+        gusset(Quantity(magnitude=hint.corrective_value, unit="mm**2")), required_safety_factor=2.0
+    ).entries[0]
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(2.0, rel=1e-9)
+    assert repaired.repair_hint is None
+
+
 def test_each_tension_limit_state_solves_its_own_area():
     """Two checks, two DIFFERENT levers. Gross yielding is on the gross section and net
     rupture through the holes, so a hint that named one area for both would tell a

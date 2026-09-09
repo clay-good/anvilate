@@ -41,6 +41,7 @@ from ..analysis import (
     circular_area,
     deflection_scorecard,
     euler_critical_stress,
+    fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
@@ -1246,6 +1247,30 @@ def screen_welded_connection(
         allowable=allowable,
         required=required_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_WELD, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # The library's own sizing inverse, asked at the required margin. The leg is the
+        # lever rather than the length because the length is the joint the detailer was
+        # given and the leg is what the welder is told to lay down — and a weld longer
+        # than its joint is not a repair. Rounding UP to a standard leg is the caller's
+        # step; this is the least leg that meets the margin, which is what to round from.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "leg_size",
+                    direction=Direction.INCREASE,
+                    value=fillet_weld_leg_for_load(
+                        force=connection.load,
+                        length=connection.weld_length,
+                        allowable_shear=allowable,
+                        required_safety_factor=required_safety_factor,
+                    )
+                    .to("mm")
+                    .magnitude,
+                    unit="mm",
+                    provenance="fillet_weld_leg_for_load at the required margin",
+                )
+            }
+        )
     return Scorecard(entries=(entry,))
 
 
@@ -1714,6 +1739,26 @@ def screen_gusset_plate(
     entry = ScorecardEntry.from_safety_factor(
         f"{gusset.name} block shear", computed=safety, required=required_safety_factor
     ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # Block shear adds two areas, so neither is "the" lever on its own — the hint
+        # solves for the SHEAR area holding the tension one, because the tension plane's
+        # width is fixed by the bolt gauge while lengthening the connection (more bolts in
+        # the line) is what a detailer actually does. Rearranging
+        # R_n = F_u·(0.6·A_nv + A_nt) for A_nv at the required margin gives
+        # A_nv = (SF·P/F_u − A_nt)/0.6, and it cannot come out negative on a check that
+        # failed: the capacity was below the demand, so SF·P/F_u already exceeds A_nt.
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "net_shear_area",
+                    direction=Direction.INCREASE,
+                    value=(required_safety_factor * load_n / ultimate - tension_area)
+                    / _BLOCK_SHEAR_SHEAR_FRACTION,
+                    unit="mm**2",
+                    provenance="AISC J4.3 block shear solved for A_nv at the bolt gauge given",
+                )
+            }
+        )
     return disclosed(
         Scorecard(entries=(entry,)),
         gusset_allowable,
