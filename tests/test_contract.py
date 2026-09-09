@@ -1088,6 +1088,170 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
     )
 
 
+def _perturbed(value: object) -> object | None:
+    """The same value, moved. ``None`` means this kind of value cannot be moved."""
+    from anvilate.units import Quantity
+
+    if isinstance(value, Quantity):
+        return Quantity(magnitude=value.magnitude * 1.01, unit=str(value.unit))
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        return value * 1.01
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, tuple):
+        moved = tuple(_perturbed(item) for item in value)
+        return None if any(item is None for item in moved) else moved
+    return None
+
+
+def _moving_wrapper(function, seen: dict[str, str], label: str):
+    """``function``, with a wrong answer — every number it returns nudged off its value."""
+
+    def wrapper(**kwargs):
+        answer = function(**kwargs)
+        moved = _perturbed(answer)
+        if moved is not None:
+            seen[label] = type(answer).__name__
+            return moved
+        # A structured answer (the key-length inverse returns one): move every field.
+        fields = getattr(type(answer), "model_fields", None)
+        if fields and hasattr(answer, "model_copy"):
+            update = {
+                name: _perturbed(getattr(answer, name, None))
+                for name in fields
+                if _perturbed(getattr(answer, name, None)) is not None
+            }
+            if update:
+                seen[label] = f"{type(answer).__name__}({len(update)} fields)"
+                return answer.model_copy(update=update)
+        seen[label] = f"UNMOVED {type(answer).__name__}"
+        return answer
+
+    return wrapper
+
+
+def _tests_naming_both_halves() -> dict[str, list[str]]:
+    """For each recorded pairing, the round-trip tests that call both of its halves."""
+    import ast
+
+    paired, _ = _inverse_inventory()
+    tree = ast.parse((_REPO / "tests" / "test_design_inverses.py").read_text(encoding="utf-8"))
+    per_test = {
+        node.name: {
+            child.id if isinstance(child, ast.Name) else child.attr
+            for child in ast.walk(node)
+            if isinstance(child, (ast.Name, ast.Attribute))
+        }
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+    }
+    return {
+        inverse: [
+            name
+            for name, names in per_test.items()
+            if inverse.split(".", 1)[1] in names and forward.split(".", 1)[1] in names
+        ]
+        for inverse, forward in paired.items()
+    }
+
+
+def _sweep_pairings(wrap) -> tuple[list[str], dict[str, str], list[str]]:
+    """Replace each paired inverse with ``wrap(it)`` and report which pairings notice.
+
+    Returns the pairings that did not notice, what kind of answer each inverse returned,
+    and the pairings no test could be run for at all — kept apart from the survivors,
+    because "nothing noticed" and "nothing ran" are different failures.
+    """
+    import anvilate.analysis as analysis
+    import test_design_inverses
+
+    survivors: list[str] = []
+    seen: dict[str, str] = {}
+    untested: list[str] = []
+    for inverse, tests in sorted(_tests_naming_both_halves().items()):
+        if not tests:
+            untested.append(inverse)
+            continue
+        symbol = inverse.split(".", 1)[1]
+        original = getattr(analysis, symbol)
+        setattr(analysis, symbol, wrap(original, seen, inverse))
+        try:
+            noticed = False
+            for name in tests:
+                try:
+                    getattr(test_design_inverses, name)()
+                except Exception:  # noqa: BLE001 — any failure is the test noticing
+                    noticed = True
+                    break
+        finally:
+            setattr(analysis, symbol, original)
+        if not noticed:
+            survivors.append(f"{inverse}  [{', '.join(tests)}]")
+    return survivors, seen, untested
+
+
+def test_every_recorded_pairing_notices_a_wrong_answer_from_its_inverse():
+    """A round trip can close on nothing at all.
+
+    The pairing gates above check that a test names both halves. They cannot check that it
+    would fail if the inverse were wrong — and one written in this session would not have:
+    an expansion temperature fed to a turbine efficiency reader that is the same algebra
+    rearranged closes for ANY value, so the loop survived its own mutation, and so did the
+    function it ran through. The return leg has to read something the forward chain did not
+    supply.
+
+    So every recorded pairing is swept here: give the inverse a wrong answer — every number
+    it returns nudged 1% off, fields and all — and require some test that names both halves
+    to notice.
+    """
+    survivors, moved, untested = _sweep_pairings(_moving_wrapper)
+    assert not untested, (
+        "no round-trip test calls both halves of these recorded pairings, so the sweep "
+        "could not run at all:\n  " + "\n  ".join(untested)
+    )
+    # The sweep's own blind spot, checked FIRST: an answer this cannot move is a pairing it
+    # did not test, and it would otherwise be reported as a vacuous round trip — the true
+    # diagnosis (the perturbation is broken) hidden behind the wrong one.
+    unmoved = sorted(name for name, kind in moved.items() if kind.startswith("UNMOVED"))
+    assert not unmoved, (
+        "the perturbation could not move these inverses' answers, so they were swept "
+        "vacuously — teach _perturbed their return type:\n  " + "\n  ".join(unmoved)
+    )
+    assert not survivors, (
+        "these pairings are recorded as round-tripped, but their tests pass unchanged with "
+        "the inverse returning a wrong answer, so the round trip closes on nothing:\n  "
+        + "\n  ".join(survivors)
+    )
+    assert len(moved) >= 120, (
+        f"only {len(moved)} pairings were swept; the inventory holds more, and a sweep "
+        f"that stops finding its subject passes"
+    )
+
+
+def test_the_wrong_answer_sweep_is_measuring_the_wrong_answer():
+    """The attack on the gate above: with the inverse left ALONE, every pairing must
+    survive. If some pairing 'notices' an unchanged answer, its test is failing for a
+    reason that has nothing to do with the perturbation, and the sweep is measuring that
+    instead."""
+
+    def unchanged(function, seen: dict[str, str], label: str):
+        def wrapper(**kwargs):
+            answer = function(**kwargs)
+            seen[label] = type(answer).__name__
+            return answer
+
+        return wrapper
+
+    survivors, seen, untested = _sweep_pairings(unchanged)
+    assert seen and not untested
+    assert len(survivors) == len(seen), (
+        f"{len(seen) - len(survivors)} of {len(seen)} pairings failed with their inverse "
+        f"untouched, so the sweep above is not measuring the wrong answer it injects"
+    )
+
+
 _UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?"
 # A compound unit is one token, not the first of several: "20.83 kN*m" and "5.2 kg/m**3"
 # have to be captured whole, or the tail migrates out of the parentheses and lands in

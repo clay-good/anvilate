@@ -75,6 +75,15 @@ repaired = screen(part.model_copy(update={"thickness": hint.corrective_value}))
 assert repaired.safety_factor == pytest.approx(required)   # exactly, not "better"
 ```
 
+**And check that the round trip can fail.** A loop closed through a function that is the
+previous step's algebra rearranged holds for *any* value: an exhaust temperature turned
+back into the efficiency it was built from tests the two functions against each other and
+nothing against the conversion under test. Ask what the return leg reads that the forward
+chain did not supply; if the answer is nothing, find a reader that takes an independent
+input, or refuse the pairing and record why in `docs/api/design-inverses.txt`.
+`test_every_recorded_pairing_notices_a_wrong_answer_from_its_inverse` sweeps all of them:
+it gives each inverse a wrong answer and requires some test to notice.
+
 A repair hint without a closed-form inverse may name a direction instead — but a
 direction is a claim about the function's shape over its whole domain, so **sweep it
 before you declare it.** "Flatten the slope" is false above 45°, where the infinite-slope
