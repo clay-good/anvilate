@@ -554,6 +554,94 @@ def test_the_pressure_scorecard_boundaries_sit_exactly_where_the_clamp_puts_them
     )
 
 
+def test_the_b313_pressure_check_solves_the_wall_it_needs_rather_than_naming_a_direction():
+    """A failing pressure check now carries the NOMINAL wall that passes it.
+
+    The parameter a buyer moves is the wall they order, and that is two deductions away
+    from the wall the check rated: the inverse gives the pressure-design wall, then the
+    corrosion allowance goes back on and the mill under-tolerance is grossed back up. A
+    hint that named the pressure-design wall would name a pipe that fails.
+    """
+    from anvilate.analysis import (
+        AllowableStress,
+        asme_b313_pipe_wall_thickness,
+        asme_b313_pressure_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus, Direction
+
+    allowable = AllowableStress(
+        value=_q("138 MPa"), temperature=_q("293.15 K"), material="A106-B", source="Table A-1"
+    )
+    common = {
+        "design_temperature": _q("293.15 K"),
+        "outside_diameter": _q("114.3 mm"),
+        "allowable": allowable,
+        "corrosion_allowance": _q("1.5 mm"),
+    }
+    thin = asme_b313_pressure_scorecard(
+        "line", design_pressure=_q("12 MPa"), nominal_wall=_q("4 mm"), **common
+    )
+    assert thin.status is CheckStatus.FAIL
+    hint = thin.repair_hint
+    assert hint is not None
+    assert hint.parameter == "nominal_wall"
+    assert hint.direction is Direction.INCREASE
+
+    # The hinted wall PASSES, and lands on the margin rather than over it.
+    repaired = asme_b313_pressure_scorecard(
+        "line",
+        design_pressure=_q("12 MPa"),
+        nominal_wall=Quantity(magnitude=hint.corrective_value, unit="mm"),
+        **common,
+    )
+    assert repaired.status is CheckStatus.PASS
+    assert repaired.safety_factor == pytest.approx(1.0, rel=1e-9)
+    assert repaired.repair_hint is None
+
+    # Both deductions are undone, in that order — not the pressure-design wall itself.
+    design_wall = (
+        asme_b313_pipe_wall_thickness(
+            pressure=_q("12 MPa"), outside_diameter=_q("114.3 mm"), allowable_stress=_q("138 MPa")
+        )
+        .to("mm")
+        .magnitude
+    )
+    assert hint.corrective_value == pytest.approx((design_wall + 1.5) / 0.875, rel=1e-9)
+    # ...and naming the pressure-design wall instead would name a pipe that still fails.
+    assert (
+        asme_b313_pressure_scorecard(
+            "line",
+            design_pressure=_q("12 MPa"),
+            nominal_wall=Quantity(magnitude=design_wall, unit="mm"),
+            **common,
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # THE NUDGE EARNS ITS PLACE: the exact solve lands on the wrong side of `>=`. The
+    # check recomputes a rating from the wall instead of comparing to it, so the answer
+    # arrives a few parts in 10^16 light and the repaired card comes back FAIL.
+    exact = (design_wall + 1.5) / 0.875
+    assert exact < hint.corrective_value
+    assert (
+        asme_b313_pressure_scorecard(
+            "line",
+            design_pressure=_q("12 MPa"),
+            nominal_wall=Quantity(magnitude=exact, unit="mm"),
+            **common,
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # A passing check carries no hint at all.
+    assert (
+        asme_b313_pressure_scorecard(
+            "line", design_pressure=_q("2 MPa"), nominal_wall=_q("6 mm"), **common
+        ).repair_hint
+        is None
+    )
+
+
 def test_the_small_deflection_limit_sits_at_a_half_not_merely_below_five():
     """0.5 -> 5.0 was killed; 0.5 -> 0.75 was not, so the constant was pinned only loosely."""
     from anvilate.analysis.plate import PlateBendingResult

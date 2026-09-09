@@ -48,7 +48,22 @@ holds. The geotechnical pack is the worked case:
 | `screen_infinite_slope` | slope stability | `pore_pressure` ↓ | solved — FS is linear in u (drainage) |
 | `screen_infinite_slope` | slope stability | `slope_angle` ↓ | directional, **below 45° only** |
 
-The last row is the point. The infinite-slope factor divides by γ·z·sin(2β)/2, which
+The pressure-vessel check is the other worked case, and it shows what a solved hint
+owes the reader:
+
+| Screen | Check | Lever | Kind |
+| --- | --- | --- | --- |
+| `asme_b313_pressure_scorecard` | straight-pipe pressure | `nominal_wall` ↑ | solved — the B31.3 wall inverse, grossed back up |
+
+The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
+mill under-tolerance and the corrosion allowance. So the inverse's answer is not the
+hint. `asme_b313_pipe_wall_thickness` gives the pressure-design wall the service
+demands; the wall to *order* is that plus the corrosion allowance, all divided by
+(1 − mill tolerance) — the same two deductions the check made, undone in the same
+order. Naming the pressure-design wall would name a pipe that still fails, and a test
+asserts exactly that.
+
+The last row of the geotechnical table is the other point. The infinite-slope factor divides by γ·z·sin(2β)/2, which
 peaks at β = 45°: below it, steepening costs margin, and above it the trend reverses.
 "Flatten the slope" is false for a slope steeper than that, so past 45° the screen
 offers no hint at all. Silence is a legitimate answer; a direction that is wrong is

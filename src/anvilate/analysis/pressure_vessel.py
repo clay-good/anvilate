@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
 from .stress import von_mises_principal
@@ -1887,7 +1887,7 @@ def asme_b313_pressure_scorecard(
         ),
         citation=_CLAUSE_B313_PRESSURE_DESIGN,
     )
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(
         update={
             "reference": _CLAUSE_B313_PRESSURE_DESIGN,
             "derivation": derivation,
@@ -1897,6 +1897,75 @@ def asme_b313_pressure_scorecard(
             )
             if computed is not None
             else "not evaluated — no design pressure",
+        }
+    )
+    return _wall_repair_hint(
+        entry,
+        design_pressure=design_pressure,
+        outside_diameter=outside_diameter,
+        allowable_stress=allowable.value,
+        quality_factor=quality_factor,
+        coefficient_y=coefficient_y,
+        mill_tolerance_fraction=mill_tolerance_fraction,
+        corrosion_allowance=corrosion_allowance,
+    )
+
+
+def _wall_repair_hint(
+    entry: ScorecardEntry,
+    *,
+    design_pressure: Quantity,
+    outside_diameter: Quantity,
+    allowable_stress: Quantity,
+    quality_factor: float,
+    coefficient_y: float,
+    mill_tolerance_fraction: float,
+    corrosion_allowance: Quantity | None,
+) -> ScorecardEntry:
+    """The same entry, carrying the NOMINAL wall that would pass — or unchanged.
+
+    The check failed on a rating, and the parameter a buyer can move is the wall they
+    order. :func:`asme_b313_pipe_wall_thickness` gives the pressure-design wall the
+    service demands; the ordered wall has to be that plus the corrosion allowance, all
+    grossed back up by the mill under-tolerance the rating already took off — the same
+    two deductions this check made, undone in the same order. Anything else names a wall
+    that fails the check it was solved from.
+
+    The exact solve is then lifted by one part in 10^12. The check passes on
+    ``computed >= required`` and the rating is recomputed from the wall rather than
+    compared to it, so the exact answer lands on either side of the margin by float noise
+    — a 4 mm line solved for 7.203 mm came back FAIL at a safety factor of
+    0.9999999999999997. A part in 10^12 of a pipe wall is 7 femtometres; it is below every
+    physical scale in the problem and above the noise that was flipping the verdict.
+    """
+    if entry.status is not CheckStatus.FAIL:
+        return entry
+    required = (
+        asme_b313_pipe_wall_thickness(
+            pressure=design_pressure,
+            outside_diameter=outside_diameter,
+            allowable_stress=allowable_stress,
+            quality_factor=quality_factor,
+            coefficient_y=coefficient_y,
+        )
+        .to("mm")
+        .magnitude
+    )
+    if corrosion_allowance is not None:
+        required += corrosion_allowance.to("mm").magnitude
+    nominal = required / (1.0 - mill_tolerance_fraction) * (1.0 + 1e-12)
+    return entry.model_copy(
+        update={
+            "repair_hint": RepairHint.solved(
+                "nominal_wall",
+                direction=Direction.INCREASE,
+                value=nominal,
+                unit="mm",
+                provenance=(
+                    "ASME B31.3 §304.1.2 wall inverse, grossed up for the corrosion "
+                    "allowance and the mill under-tolerance"
+                ),
+            )
         }
     )
 
