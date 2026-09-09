@@ -30,7 +30,7 @@ from anvilate.analysis import disc_clutch_torque
 from anvilate.scorecard import Scorecard, ScorecardEntry
 from anvilate.units import Quantity
 
-ENGINE_TORQUE = Quantity.parse("90 N*m")
+ENGINE_TORQUE = Quantity.parse("90 N·m")
 SERVICE_FACTOR = 1.5
 SPRING_FORCE = Quantity.parse("2 kN")
 OUTER_RADIUS = Quantity.parse("70 mm")
@@ -73,7 +73,7 @@ def screen_stacked_clutch() -> Scorecard:
 
 
 def main() -> None:
-    print(f"design torque: {ENGINE_TORQUE.to('N*m').magnitude * SERVICE_FACTOR:.0f} N*m")
+    print(f"design torque: {ENGINE_TORQUE.to('N*m').magnitude * SERVICE_FACTOR:.0f} N·m")
     print("single plate (2 surfaces):")
     print(screen_single_plate_clutch().report())
     print("\nthree-plate stack (6 surfaces):")

@@ -24,7 +24,7 @@ from anvilate.analysis import (
     torque_from_power,
 )
 from anvilate.scorecard import Scorecard, ScorecardEntry
-from anvilate.units import Quantity
+from anvilate.units import Quantity, render
 
 POWER = Quantity.parse("30 kW")
 SPEED = Quantity.parse("730 rpm")
@@ -63,7 +63,7 @@ def screen_drivetrain_shaft() -> Scorecard:
 
 def main() -> None:
     torque = torque_from_power(power=POWER, rotational_speed=SPEED)
-    print(f"nameplate torque: {torque.to('N*m')}")
+    print(f"nameplate torque: {render(torque, unit='N*m', pretty=True)}")
     card = screen_drivetrain_shaft()
     for entry in card.entries:
         print(entry)

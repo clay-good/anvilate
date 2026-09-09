@@ -3,9 +3,9 @@
 A square HSS 300x300x9 (ASTM A992, F_y = 345 MPa) has a wide, relatively thin wall:
 its flange slenderness b/t = 30.3 lands in the noncompact range (between AISC's
 lambda_pf = 27.0 and lambda_rf = 33.7). A hand check that stops at the plastic moment
-M_p = F_y*Z reads 394.5 kN*m — but the compression flange buckles locally before the
+M_p = F_y*Z reads 394.5 kN·m — but the compression flange buckles locally before the
 section fully plastifies, and AISC 360-16 §F7 knocks the flexural strength down to
-367.6 kN*m, 7% lower. Section properties come from the verified tube helpers; the two
+367.6 kN·m, 7% lower. Section properties come from the verified tube helpers; the two
 new AISC strengths (§F7 flexure, §G5 shear) then screen the same section, and shear is
 shown to carry a large margin, as it does for nearly every compact-to-noncompact HSS.
 
@@ -74,8 +74,8 @@ def main() -> None:
     m_p = result["plastic_moment"].to("kN*m").magnitude
     m_n = result["flexural_strength"].to("kN*m").magnitude
     v_n = result["shear_strength"].to("kN").magnitude
-    print(f"naive plastic moment F_y*Z: {m_p:.1f} kN*m")
-    print(f"AISC F7 flexural strength : {m_n:.1f} kN*m  ({100 * (1 - m_n / m_p):.0f}% lower)")
+    print(f"naive plastic moment F_y*Z: {m_p:.1f} kN·m")
+    print(f"AISC F7 flexural strength : {m_n:.1f} kN·m  ({100 * (1 - m_n / m_p):.0f}% lower)")
     print(f"AISC G5 shear strength    : {v_n:.0f} kN")
 
 

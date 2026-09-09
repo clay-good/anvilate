@@ -61,8 +61,8 @@ WRAPS_PER_LAYER = 12
 LAYERS = 3
 REQUIRED_ROPE = Quantity.parse("20 m")
 
-NAIVE_WINCH_TORQUE = Quantity.parse("500 N*m")  # sized for the W/n = 5 kN estimate
-UPGRADED_WINCH_TORQUE = Quantity.parse("700 N*m")
+NAIVE_WINCH_TORQUE = Quantity.parse("500 N·m")  # sized for the W/n = 5 kN estimate
+UPGRADED_WINCH_TORQUE = Quantity.parse("700 N·m")
 
 
 def lead_line_tension() -> Quantity:
@@ -152,9 +152,9 @@ def main() -> None:
     naive = LOAD.to("kN").magnitude / SUPPORTING_PARTS
     print(f"naive lead line W/n: {naive:.2f} kN")
     print(f"actual lead line:    {lead.to('kN').magnitude:.2f} kN")
-    print("\nnaive 500 N*m winch:")
+    print("\nnaive 500 N·m winch:")
     print(screen_hoist_system().report())
-    print("\nupgraded 700 N*m winch:")
+    print("\nupgraded 700 N·m winch:")
     print(screen_upgraded_winch().report())
 
 

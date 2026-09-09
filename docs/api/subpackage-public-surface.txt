@@ -436,6 +436,7 @@ units.format.decimals_distinguishing
 units.format.decimals_for
 units.format.render
 units.format.render_dual
+units.format.unit_label
 units.quantity.DimensionError
 units.quantity.MissingUnitError
 units.quantity.Quantity
@@ -460,3 +461,4 @@ units.system.UnitSystem
 units.temperature.OffsetTemperatureError
 units.temperature.temperature_difference_kelvin
 units.temperature_difference_kelvin
+units.unit_label

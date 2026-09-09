@@ -65,7 +65,7 @@ def size_hydraulic_drive() -> dict[str, float]:
 def main() -> None:
     d = size_hydraulic_drive()
     print(f"pump flow  : {d['flow_lpm']:.1f} L/min  (50 cc/rev at 1500 rpm, 95% volumetric)")
-    print(f"motor torque: {d['torque_nm']:.0f} N*m  (200 bar across 50 cc/rev, 90% mechanical)")
+    print(f"motor torque: {d['torque_nm']:.0f} N·m  (200 bar across 50 cc/rev, 90% mechanical)")
     print(f"motor speed : {d['motor_rpm']:.0f} rpm  (set by the flow it is fed)")
     print("  -> one displacement figure sizes flow, torque, and speed end to end")
 

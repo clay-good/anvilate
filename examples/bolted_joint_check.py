@@ -60,9 +60,9 @@ def screen_bolted_joint() -> Scorecard:
 def main() -> None:
     # The tightening torque develops a preload (reported, not scored here).
     preload = bolt_preload_from_torque(
-        torque=Quantity.parse("20 N*m"), nominal_diameter=BOLT_DIAMETER
+        torque=Quantity.parse("20 N·m"), nominal_diameter=BOLT_DIAMETER
     )
-    print(f"bolt preload from 20 N*m: {preload.to('kN')}")
+    print(f"bolt preload from 20 N·m: {preload.to('kN')}")
     card = screen_bolted_joint()
     for entry in card.entries:
         print(entry)

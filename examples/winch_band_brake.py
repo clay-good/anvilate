@@ -33,7 +33,7 @@ from anvilate.analysis import (
 from anvilate.scorecard import Scorecard, ScorecardEntry
 from anvilate.units import Quantity
 
-REQUIRED_TORQUE = Quantity.parse("500 N*m")
+REQUIRED_TORQUE = Quantity.parse("500 N·m")
 DRUM_DIAMETER = Quantity.parse("300 mm")
 WRAP_ANGLE = 3.0 * pi / 2.0  # 270 degrees of contact, in radians
 FRICTION = 0.25  # molded lining on cast iron (manufacturer's data)
@@ -85,7 +85,7 @@ def screen_winch_brake() -> Scorecard:
 def main() -> None:
     tension = working_tension()
     torque = REQUIRED_TORQUE.to("N*m").magnitude
-    print(f"tight-side tension to hold {torque:.0f} N*m: {tension.to('N').magnitude:.0f} N")
+    print(f"tight-side tension to hold {torque:.0f} N·m: {tension.to('N').magnitude:.0f} N")
     print(screen_winch_brake().report())
 
 

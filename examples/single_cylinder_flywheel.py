@@ -98,20 +98,20 @@ def _screen(flywheel_inertia: Quantity) -> Scorecard:
 
 
 def screen_flywheel() -> Scorecard:
-    """Screen the 6.0 kg*m^2 flywheel: enough to hold the 2% speed fluctuation."""
+    """Screen the 6.0 kg·m² flywheel: enough to hold the 2% speed fluctuation."""
     return _screen(ADEQUATE_INERTIA)
 
 
 def screen_undersized_flywheel() -> Scorecard:
-    """Screen the 4.0 kg*m^2 flywheel: too light, the engine hunts."""
+    """Screen the 4.0 kg·m² flywheel: too light, the engine hunts."""
     return _screen(UNDERSIZED_INERTIA)
 
 
 def main() -> None:
     print(f"energy fluctuation ΔE: {energy_fluctuation().to('J').magnitude:.0f} J")
-    print("adequate flywheel (6.0 kg*m^2):")
+    print("adequate flywheel (6.0 kg·m²):")
     print(screen_flywheel().report())
-    print("\nundersized flywheel (4.0 kg*m^2):")
+    print("\nundersized flywheel (4.0 kg·m²):")
     print(screen_undersized_flywheel().report())
 
 

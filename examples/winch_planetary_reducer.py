@@ -1,7 +1,7 @@
 """Worked example: the gearbox ratio that could not be cut.
 
-A trailer winch drum needs 200 N*m to haul its load; the motor delivers
-55 N*m at 1440 rpm. Direct drive musters barely a quarter of the demand, so a
+A trailer winch drum needs 200 N·m to haul its load; the motor delivers
+55 N·m at 1440 rpm. Direct drive musters barely a quarter of the demand, so a
 single-stage planetary reducer goes between them — ring bolted to the case,
 sun on the motor, carrier on the drum — giving a (1 + N_r/N_s):1 reduction.
 
@@ -14,7 +14,7 @@ need (N_s + N_r) divisible by 3, and 140 is not — the second planet arrives at
 its slot out of phase and never drops in. The set that works is 4.6:1
 (sun 30, ring 108): 39-tooth planets, 138/3 assembles, and the Willis
 equation puts the drum at 313 rpm — enough mechanical advantage to clear the
-200 N*m demand with margin. A planetary ratio is a *tooth-count* choice, and
+200 N·m demand with margin. A planetary ratio is a *tooth-count* choice, and
 whole teeth and assembly phasing get a vote before torque does.
 
 Torque here is the ideal (loss-free) power balance T_out = T_in * (w_in/w_out);
@@ -34,8 +34,8 @@ from anvilate.analysis import (
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
 from anvilate.units import Quantity
 
-REQUIRED_DRUM_TORQUE = Quantity.parse("200 N*m")
-MOTOR_TORQUE = Quantity.parse("55 N*m")
+REQUIRED_DRUM_TORQUE = Quantity.parse("200 N·m")
+MOTOR_TORQUE = Quantity.parse("55 N·m")
 MOTOR_SPEED = Quantity.parse("1440 rpm")
 MIN_SAFETY_FACTOR = 1.2
 PLANET_COUNT = 3
@@ -121,7 +121,7 @@ def main() -> None:
     speed = drum_speed(sun_teeth, ring_teeth).to("rpm").magnitude
     torque = drum_torque(sun_teeth, ring_teeth).to("N*m").magnitude
     print(
-        f"chosen set: sun {sun_teeth} / ring {ring_teeth} -> drum {speed:.1f} rpm, {torque:.0f} N*m"
+        f"chosen set: sun {sun_teeth} / ring {ring_teeth} -> drum {speed:.1f} rpm, {torque:.0f} N·m"
     )
     print(screen_winch_reducer().report())
 

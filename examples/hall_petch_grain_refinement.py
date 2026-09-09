@@ -47,7 +47,7 @@ def grain_refinement_target() -> dict[str, float]:
 
 def main() -> None:
     d = grain_refinement_target()
-    print("Low-carbon steel, sigma_0 = 50 MPa, k = 0.74 MPa*sqrt(m):")
+    print("Low-carbon steel, sigma_0 = 50 MPa, k = 0.74 MPa·√m:")
     print(f"  yield at 40 um grain  : {d['current_yield_mpa']:.0f} MPa")
     print(f"  grain for 300 MPa     : {d['required_grain_um']:.1f} um")
 

@@ -22,7 +22,7 @@ from pydantic import ConfigDict, computed_field, model_validator
 from ._models import ItemCollection, Named, Provenance, StatableModel
 from .derivation import Derivation, DerivationAbsence, Underived
 from .uncertainty import MarginUncertainty
-from .units import Quantity, UnitSystem, decimals_distinguishing, render
+from .units import Quantity, UnitSystem, decimals_distinguishing, render, unit_label
 
 __all__ = [
     "CheckStatus",
@@ -168,7 +168,13 @@ class RepairHint(StatableModel):
     def __str__(self) -> str:
         if self.corrective_value is None:
             return f"{self.direction.value} {self.parameter}"
-        unit = f" {self.unit}" if self.unit else ""
+        # The unit goes through the library's own label formatter. Every hint that shipped
+        # before this carried a single-symbol unit ("mm", "kN"), which reads the same
+        # either way; the first compound one printed "increase gross_shear_area to
+        # 4000 mm**2" — machine syntax, in the document a reviewer signs. The VALUE stays
+        # at four significant figures rather than conventional precision, because a hint is
+        # a target to round up from and not a measurement.
+        unit = f" {unit_label(self.unit)}" if self.unit else ""
         return f"{self.direction.value} {self.parameter} to {self.corrective_value:.4g}{unit}"
 
 

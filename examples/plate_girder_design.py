@@ -6,7 +6,7 @@ girder is a 1500x8 mm web with 300x20 mm flanges (A992, F_y = 345 MPa):
 
   * In bending, the slender web cannot hold its share of stress and sheds it to the
     flanges, so §F5 debits the moment by R_pg = 0.944 — a 5.6% penalty a rolled-shape
-    calc never applies (M_n = R_pg*F_cr*S_x = 3884 kN*m vs 4114 without it).
+    calc never applies (M_n = R_pg*F_cr*S_x = 3884 kN·m vs 4114 without it).
   * In shear, once transverse stiffeners are added the buckled web carries diagonal
     tension like a truss, and §G2.2 tension-field action nearly doubles the shear
     capacity over the same web unstiffened (1468 kN vs 832 kN).
@@ -101,7 +101,7 @@ def main() -> None:
     caps = girder_capacities()
     r_pg = caps["bending_reduction"].magnitude
     print(f"R_pg bending reduction   : {r_pg:.3f}  ({100 * (1 - r_pg):.1f}% penalty)")
-    print(f"M_n flexural strength    : {caps['moment'].to('kN*m').magnitude:.0f} kN*m")
+    print(f"M_n flexural strength    : {caps['moment'].to('kN*m').magnitude:.0f} kN·m")
     vs = caps["stiffened_shear"].to("kN").magnitude
     vu = caps["unstiffened_shear"].to("kN").magnitude
     print(f"V_n shear, stiffened     : {vs:.0f} kN  (tension-field action)")

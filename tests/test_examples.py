@@ -5860,19 +5860,19 @@ def test_drivetrain_torsional_mode_example_stiffer_coupling_clears_the_firing_fr
     card = namespace["screen_drivetrain_mode"]()
     by_name = {e.name: e for e in card.entries}
     # The soft coupling puts the two-rotor mode too near the firing frequency.
-    assert by_name["soft coupling (20 kN*m/rad)"].status is CheckStatus.FAIL
-    assert "safety factor 0.64" in by_name["soft coupling (20 kN*m/rad)"].detail
+    assert by_name["soft coupling (20 kN·m/rad)"].status is CheckStatus.FAIL
+    assert "safety factor 0.64" in by_name["soft coupling (20 kN·m/rad)"].detail
     # Stiffening it lifts the mode above the excitation with margin.
-    assert by_name["stiff coupling (100 kN*m/rad)"].passed
-    assert "safety factor 1.42" in by_name["stiff coupling (100 kN*m/rad)"].detail
+    assert by_name["stiff coupling (100 kN·m/rad)"].passed
+    assert "safety factor 1.42" in by_name["stiff coupling (100 kN·m/rad)"].detail
     assert card.status is CheckStatus.FAIL
 
     # Both couplings' separation from the firing frequency, which the docstring quotes
     # for the soft one as a fraction rather than as a mode in hertz.
     _assert_narrates(
         "drivetrain_torsional_mode.py",
-        by_name["soft coupling (20 kN*m/rad)"].safety_factor * namespace["REQUIRED_SEPARATION"],
-        by_name["stiff coupling (100 kN*m/rad)"].safety_factor,
+        by_name["soft coupling (20 kN·m/rad)"].safety_factor * namespace["REQUIRED_SEPARATION"],
+        by_name["stiff coupling (100 kN·m/rad)"].safety_factor,
     )
 
 
@@ -7795,7 +7795,7 @@ def test_frame_interop_example_screens_forces_it_did_not_compute():
     joined = "\n".join(lines)
     assert "axial: 180 kN governing at 0 m" in joined
     # Each component governs at its own station.
-    assert "major_bending: 148 kN*m governing at 3 m" in joined
+    assert "major_bending: 148 kN·m governing at 3 m" in joined
     # Provenance names the tool, the version and the load case, and says Anvilate did not
     # compute these numbers.
     assert "Pynite 1.1.0" in joined
@@ -9006,6 +9006,64 @@ def test_every_example_runs_its_main_and_prints_something():
     assert not silent, (
         f"these examples run and print nothing, so following the quickstart with them shows "
         f"a reader an empty terminal: {silent}"
+    )
+
+
+def test_no_example_prints_a_unit_the_way_the_machine_writes_it():
+    """The corpus, read for `mm ** 2` where a document says `mm²`.
+
+    This library has a unit renderer that writes compound units the way a drawing does,
+    and three surfaces were not using it. `rc_floor_beam.py` printed both spellings in the
+    SAME SENTENCE — "Provided 1500 mm ** 2 develops M_n = 321 kN·m" — which is how visible
+    this is once anyone looks at the output rather than at the assertions about it.
+
+    Everything below `str(Quantity)` is machine-readable on purpose: that is the spelling a
+    spec card round-trips through and a parser reads back. The finding is a surface meant
+    for a person using it.
+    """
+    import contextlib
+    import io
+    import re
+
+    # A unit spelled the machine way, and only where a unit can be: immediately after a
+    # number. Matching a bare `X * Y` anywhere caught a printed FORMULA — "roof
+    # proportional (SigmaF/SigmaW * wpx)" — which is a symbol name doing exactly what a
+    # symbol name should.
+    machine_unit = re.compile(r"\d\s*[a-zA-Z][\w]*\s*(?:\*\*\s*-?\d+|\*\s*[a-zA-Z])")
+    offenders: list[str] = []
+    lines_read = 0
+    for path in sorted(_EXAMPLES.glob("*.py")):
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                namespace = runpy.run_path(str(path))
+                entry = namespace.get("main")
+                if callable(entry):
+                    entry()
+        except Exception:  # noqa: BLE001 — a broken example is the test above's finding
+            continue
+        for line in buffer.getvalue().splitlines():
+            lines_read += 1
+            if machine_unit.search(line):
+                offenders.append(f"{path.name}: {line.strip()}")
+
+    # The reader has to have read something: an example corpus that stopped printing, or a
+    # regex that stopped matching, would report nothing and pass.
+    assert lines_read >= 2000, (
+        f"only {lines_read} printed lines were read across the corpus; the sweep has "
+        f"stopped running the examples"
+    )
+    for spelling in ("72727.3 mm ** 3", "nameplate torque: 392.437 m * N", "1500 mm**2"):
+        assert machine_unit.search(spelling), (
+            f"the detector no longer matches {spelling!r}, one of the lines it was written for"
+        )
+    assert not machine_unit.search("roof proportional (SigmaF/SigmaW * wpx) : 250 kN"), (
+        "the detector is matching a printed formula again, not a unit"
+    )
+    assert not offenders, (
+        "these examples print a unit the way the machine writes it, in output a person "
+        "reads. Render it with `anvilate.units.render(..., pretty=True)`:\n  "
+        + "\n  ".join(offenders)
     )
 
 

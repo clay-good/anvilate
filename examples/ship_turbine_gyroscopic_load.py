@@ -57,8 +57,8 @@ def turbine_gyro_load() -> dict[str, float]:
 
 def main() -> None:
     d = turbine_gyro_load()
-    print(f"spin angular momentum: {d['spin_angular_momentum_nms']:.0f} N*m*s")
-    print(f"gyroscopic couple in a 6 deg/s turn: {d['reaction_moment_kn_m']:.1f} kN*m")
+    print(f"spin angular momentum: {d['spin_angular_momentum_nms']:.0f} N·m·s")
+    print(f"gyroscopic couple in a 6 deg/s turn: {d['reaction_moment_kn_m']:.1f} kN·m")
     print(
         f"that couple precesses the axis at {d['precession_rate_deg_s']:.1f} deg/s "
         f"-> matches the ship's turn"

@@ -1,13 +1,13 @@
 """Worked example: the three-stage reducer that missed on paper losses.
 
 A conveyor gearbox reduces a 3 kW motor at 1500 rpm through three gear stages to
-drive a drum that needs 650 N*m. The reduction is generous — 20/60, 20/60, and
+drive a drum that needs 650 N·m. The reduction is generous — 20/60, 20/60, and
 20/80 tooth pairs multiply to 36:1 — so the ideal output torque is
-19.1 N*m * 36 = 688 N*m, a comfortable 1.06 margin. On paper, done.
+19.1 N·m * 36 = 688 N·m, a comfortable 1.06 margin. On paper, done.
 
 But every mesh loses a little, and the losses compound. Three 97%-efficient
 stages do not keep 97%; they keep 0.97^3 = 91.3%. That drops the real output
-torque to 628 N*m, and the drum demand it cleared by 6% on paper it now misses
+torque to 628 N·m, and the drum demand it cleared by 6% on paper it now misses
 by 3% (0.97 margin). Nothing about the gearing changed — only the honesty of the
 torque budget did.
 
@@ -27,7 +27,7 @@ from anvilate.units import Quantity
 
 MOTOR_POWER = Quantity.parse("3 kW")
 MOTOR_SPEED = Quantity.parse("1500 rpm")
-DRUM_TORQUE_DEMAND = Quantity.parse("650 N*m")
+DRUM_TORQUE_DEMAND = Quantity.parse("650 N·m")
 
 DRIVER_TEETH = [20, 20, 20]
 DRIVEN_TEETH = [60, 60, 80]
@@ -61,7 +61,7 @@ def screen_reducer() -> Scorecard:
 
 def main() -> None:
     ideal, real = output_torques()
-    print(f"ideal {ideal:.0f} N*m, real {real:.0f} N*m (train efficiency {real / ideal:.1%})")
+    print(f"ideal {ideal:.0f} N·m, real {real:.0f} N·m (train efficiency {real / ideal:.1%})")
     print(screen_reducer().report())
 
 

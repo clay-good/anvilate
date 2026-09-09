@@ -221,6 +221,35 @@ def test_scorecard_collects_repair_hints_from_its_failures():
     assert [h.parameter for h in hints] == ["t"]
 
 
+def test_a_hint_spells_its_unit_the_way_a_document_does():
+    """Every hint that shipped before the plate levers carried a single-symbol unit — "mm",
+    "kN", "K/W" — which reads the same either way. The first compound one printed
+    "increase gross_shear_area to 4000 mm**2", machine syntax in the document a reviewer
+    signs, and the rendering-debt ratchet could not see it: it proves a `__str__` is
+    CALLED, not that it is called with the input that breaks it."""
+    assert (
+        str(RepairHint.solved("A_gv", direction=Direction.INCREASE, value=4000.0, unit="mm**2"))
+        == "increase A_gv to 4000 mm²"
+    )
+    assert (
+        str(RepairHint.solved("J", direction=Direction.INCREASE, value=1.5e5, unit="mm ** 4"))
+        == "increase J to 1.5e+05 mm⁴"
+    )
+    assert (
+        str(RepairHint.solved("T", direction=Direction.INCREASE, value=250.0, unit="m * N"))
+        == "increase T to 250 N·m"
+    )
+    # A simple unit is unchanged, and so is the four-significant-figure value: a hint is a
+    # target to round up from, not a measurement at conventional precision.
+    assert (
+        str(RepairHint.solved("t", direction=Direction.INCREASE, value=17.32050807, unit="mm"))
+        == "increase t to 17.32 mm"
+    )
+    assert str(RepairHint.solved("n", direction=Direction.INCREASE, value=4.0)) == (
+        "increase n to 4"
+    )
+
+
 def test_a_solved_hint_is_placed_clear_of_the_margin_not_on_it():
     """A check passes on `computed >= required`, and a screen re-run at a corrective value
     recomputes its safety factor down a different arithmetic path than the solve came up.

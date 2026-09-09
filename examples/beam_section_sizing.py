@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from anvilate.analysis import CrossSection, required_section_modulus, strength_scorecard
 from anvilate.scorecard import Scorecard
-from anvilate.units import Quantity
+from anvilate.units import Quantity, render
 
 MOMENT = Quantity.parse("8 kN*m")
 ALLOWABLE = Quantity.parse("165 MPa")  # steel allowable bending stress
@@ -64,7 +64,7 @@ def screen_beam_sections() -> Scorecard:
 
 
 def main() -> None:
-    print(f"required section modulus: {floor_section_modulus().to('mm**3')}")
+    print(f"required section modulus: {render(floor_section_modulus(), unit='mm**3', pretty=True)}")
     card = screen_beam_sections()
     for entry in card.entries:
         print(entry)

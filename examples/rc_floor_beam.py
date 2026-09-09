@@ -23,7 +23,7 @@ strength-reduction factor are theirs to apply on top. Run it directly
 from __future__ import annotations
 
 from anvilate.analysis import rc_beam_nominal_moment, rc_tension_steel_for_moment
-from anvilate.units import Quantity
+from anvilate.units import Quantity, render
 
 CONCRETE_STRENGTH = Quantity.parse("30 MPa")  # f'c
 STEEL_YIELD = Quantity.parse("420 MPa")  # f_y (Grade 420 bars)
@@ -58,9 +58,9 @@ def steel_for_demand() -> Quantity:
 
 def main() -> None:
     cap = beam_capacity().to("kN*m").magnitude
-    print(f"Provided {PROVIDED_STEEL} develops M_n = {cap:.0f} kN·m")
+    print(f"Provided {render(PROVIDED_STEEL, pretty=True)} develops M_n = {cap:.0f} kN·m")
     need = steel_for_demand().to("mm**2").magnitude
-    print(f"A {DEMAND_MOMENT} demand needs {need:.0f} mm² of tension steel")
+    print(f"A {render(DEMAND_MOMENT, pretty=True)} demand needs {need:.0f} mm² of tension steel")
 
 
 if __name__ == "__main__":

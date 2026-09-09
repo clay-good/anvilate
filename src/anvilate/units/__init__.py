@@ -7,7 +7,13 @@ dimensionally checked wherever a field pins an expected dimension.
 
 from __future__ import annotations
 
-from .format import decimals_distinguishing, decimals_for, render, render_dual
+from .format import (
+    decimals_distinguishing,
+    decimals_for,
+    render,
+    render_dual,
+    unit_label,
+)
 from .quantity import (
     DimensionError,
     MissingUnitError,
@@ -52,6 +58,7 @@ __all__ = [
     "temperature_difference_kelvin",
     "render",
     "render_dual",
+    "unit_label",
     "decimals_for",
     "decimals_distinguishing",
 ]

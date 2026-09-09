@@ -44,7 +44,7 @@ def main() -> None:
     d = chamber_pump_down()
     print("100 L chamber, 10 L/s pump, 1000 mbar -> 1 mbar:")
     print(f"  pump-down time        : {d['pump_down_time_s']:.0f} s")
-    print(f"  throughput at 1 mbar  : {d['throughput_mbar_l_per_s']:.1f} mbar*L/s")
+    print(f"  throughput at 1 mbar  : {d['throughput_mbar_l_per_s']:.1f} mbar·L/s")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ from pydantic import ConfigDict, model_validator
 from ._models import FrozenMap, Named, RevalidatedModel, cited
 from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
-from .units import Quantity, require_finite
+from .units import Quantity, require_finite, unit_label
 
 __all__ = [
     "ForceComponent",
@@ -408,6 +408,11 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
     )
 
 
+def _labelled(quantity: Quantity) -> str:
+    """A quantity with its unit spelled as a document spells it, magnitude untouched."""
+    return f"{quantity.magnitude:g} {unit_label(quantity.unit)}"
+
+
 def provenance_lines(
     *,
     demand: MemberDemand | None = None,
@@ -428,8 +433,15 @@ def provenance_lines(
             f"these numbers, it did not compute them)"
         )
         for component, station in sorted(demand.stations.items(), key=lambda kv: kv[0].value):
+            # These are provenance lines a reader reads beside the citation, and a bare
+            # Quantity writes its unit the way the machine does: "148 kN * m". The
+            # MAGNITUDE is left as the caller gave it — this line echoes numbers it was
+            # handed, and conventional precision would report a station at "0.000 m" —
+            # so only the unit label goes through the document formatter.
             lines.append(
-                f"  {component.value}: {demand.components[component]} governing at {station}"
+                f"  {component.value}: "
+                f"{_labelled(demand.components[component])} governing at "
+                f"{_labelled(station)}"
             )
     if section is not None:
         lines.append(

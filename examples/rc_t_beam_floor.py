@@ -79,8 +79,8 @@ def main() -> None:
     r = floor_beam_capacity()
     tm, ts = r["t_beam_moment_kn_m"], r["t_beam_strain"]
     wm, ws = r["web_only_moment_kn_m"], r["web_only_strain"]
-    print(f"T-beam   : M_n = {tm:.0f} kN*m, net tensile strain {ts:.3f}")
-    print(f"web only : M_n = {wm:.0f} kN*m, net tensile strain {ws:.3f}")
+    print(f"T-beam   : M_n = {tm:.0f} kN·m, net tensile strain {ts:.3f}")
+    print(f"web only : M_n = {wm:.0f} kN·m, net tensile strain {ws:.3f}")
     print("the slab flange adds strength and keeps the section ductile (eps_t >> 0.005)")
 
 

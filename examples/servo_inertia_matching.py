@@ -37,7 +37,7 @@ from anvilate.units import Quantity
 TABLE_INERTIA = Quantity.parse("0.05 kg*m**2")
 MOTOR_INERTIA = Quantity.parse("0.0002 kg*m**2")
 LOAD_ACCELERATION = Quantity.parse("200 rad/s**2")
-MOTOR_PEAK_TORQUE = Quantity.parse("3 N*m")
+MOTOR_PEAK_TORQUE = Quantity.parse("3 N·m")
 ALLOWABLE_INERTIA_RATIO = 10.0  # the servo drive's datasheet bound
 
 
@@ -94,7 +94,7 @@ def main() -> None:
             gear_ratio=i,
             load_angular_acceleration=LOAD_ACCELERATION,
         )
-        print(f"  {label}: {torque.to('N*m').magnitude:.2f} N*m at the motor")
+        print(f"  {label}: {torque.to('N*m').magnitude:.2f} N·m at the motor")
     print("\ndirect drive:")
     print(screen_direct_drive().report())
     print("\ninertia-matched drive:")

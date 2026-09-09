@@ -15,7 +15,7 @@ from .quantity import Quantity, _unit_object, display_unit
 from .registry import UREG
 from .system import UnitSystem
 
-__all__ = ["render", "render_dual", "decimals_for", "decimals_distinguishing"]
+__all__ = ["render", "render_dual", "decimals_for", "decimals_distinguishing", "unit_label"]
 
 # Decimals by dimensionality string. Falls through to a per-unit override below
 # and then to a default.
@@ -118,6 +118,19 @@ def decimals_distinguishing(value: float, reference: float, *, minimum: int = 2)
     return places
 
 
+def unit_label(unit: str) -> str:
+    """A unit spelling as a document writes it: ``"mm**2"`` -> ``"mm²"``, ``"m * N"`` -> ``"N·m"``.
+
+    The label half of :func:`render`, on its own, for the places that carry a unit beside a
+    number they format themselves. A repair hint is one: it prints its corrective value at
+    four significant figures rather than at conventional precision — it is a target to
+    round up from, not a measurement — but it was printing the unit as the machine writes
+    it, so a card told a detailer to "increase gross_shear_area to 4000 mm**2". In the
+    document a reviewer signs.
+    """
+    return display_unit(_engineering_order(f"{_unit_object(unit):~P}"))
+
+
 def render(
     quantity: Quantity,
     *,
@@ -140,8 +153,7 @@ def render(
         target = _system_unit(quantity, system)
     shown = quantity if target is None else quantity.to(target)
     places = decimals_for(shown.unit, shown.magnitude)
-    label = _engineering_order(f"{shown.pint.units:~P}") if pretty else shown.unit
-    label = display_unit(label)
+    label = unit_label(shown.unit) if pretty else display_unit(shown.unit)
     return f"{shown.magnitude:.{places}f} {label}"
 
 

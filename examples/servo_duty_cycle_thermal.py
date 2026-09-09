@@ -28,11 +28,11 @@ from anvilate.analysis import rms_torque_over_cycle
 from anvilate.scorecard import Scorecard, ScorecardEntry
 from anvilate.units import Quantity
 
-ACCEL_TORQUE = Quantity.parse("2 N*m")
+ACCEL_TORQUE = Quantity.parse("2 N·m")
 ACCEL_TIME = Quantity.parse("0.2 s")
 BRAKE_TIME = Quantity.parse("0.2 s")
-MOTOR_PEAK_TORQUE = Quantity.parse("3 N*m")
-MOTOR_CONTINUOUS_TORQUE = Quantity.parse("1.2 N*m")
+MOTOR_PEAK_TORQUE = Quantity.parse("3 N·m")
+MOTOR_CONTINUOUS_TORQUE = Quantity.parse("1.2 N·m")
 
 FAST_DWELL = Quantity.parse("0.6 s")  # a 1.0 s cycle
 RELAXED_DWELL = Quantity.parse("1.0 s")  # a 1.4 s cycle
@@ -40,7 +40,7 @@ RELAXED_DWELL = Quantity.parse("1.0 s")  # a 1.4 s cycle
 
 def _screen(dwell: Quantity) -> Scorecard:
     rms = rms_torque_over_cycle(
-        torques=[ACCEL_TORQUE, ACCEL_TORQUE, Quantity.parse("0 N*m")],
+        torques=[ACCEL_TORQUE, ACCEL_TORQUE, Quantity.parse("0 N·m")],
         durations=[ACCEL_TIME, BRAKE_TIME, dwell],
     )
     return Scorecard(
@@ -72,10 +72,10 @@ def screen_relaxed_cycle() -> Scorecard:
 def main() -> None:
     for label, dwell in (("fast (0.6 s dwell)", FAST_DWELL), ("relaxed (1.0 s)", RELAXED_DWELL)):
         rms = rms_torque_over_cycle(
-            torques=[ACCEL_TORQUE, ACCEL_TORQUE, Quantity.parse("0 N*m")],
+            torques=[ACCEL_TORQUE, ACCEL_TORQUE, Quantity.parse("0 N·m")],
             durations=[ACCEL_TIME, BRAKE_TIME, dwell],
         )
-        print(f"{label}: RMS torque {rms.to('N*m').magnitude:.2f} N*m")
+        print(f"{label}: RMS torque {rms.to('N*m').magnitude:.2f} N·m")
     print("\nfast cycle:")
     print(screen_fast_cycle().report())
     print("\nrelaxed cycle:")
