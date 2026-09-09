@@ -117,11 +117,24 @@ same contract against their own manifest,
 `- :mod:` bullet in the `anvilate` package docstring the way an analysis module needs one
 in `anvilate.analysis`'s.
 
+And the subpackages — `export`, `packs`, `report`, `skills`, `spec`, `standards`,
+`tolerance`, `units` — keep it against
+[`docs/api/subpackage-public-surface.txt`](api/subpackage-public-surface.txt). That file
+is new as of 2026-09-09, and the gap it closes is worth knowing about: the core gate
+enumerates `pkgutil.iter_modules(...)` and keeps `not m.ispkg`, so it walked past every
+package. Two thirds of the library grew its surface with a diff and the rest grew it as
+a side effect — 445 public names, including all 24 discipline-pack screens and every
+model they take.
+
 **Gates:** `test_public_surface_matches_manifest`,
 `test_package_aggregate_matches_module_alls`, `test_every_module_declares_its_public_surface`,
 `test_no_exported_symbol_shadows_its_own_module` (a function named after its own module
-shadows it, and the other gates structurally cannot see that), and the five `*_core_*`
-gates that hold the same line for the top-level modules.
+shadows it, and the other gates structurally cannot see that), the five `*_core_*`
+gates that hold the same line for the top-level modules, and
+`test_the_subpackage_public_surface_matches_its_manifest` with
+`test_the_manifest_contract_reaches_every_package_in_the_library` — the second reads the
+manifest files rather than the enumerator, because checking the enumerator against
+itself is a tautology that cannot fail.
 
 ## 7. Never bundle someone else's allowables
 

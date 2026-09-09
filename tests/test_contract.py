@@ -1252,6 +1252,119 @@ def test_the_wrong_answer_sweep_is_measuring_the_wrong_answer():
     )
 
 
+_SUBPACKAGE_MANIFEST = _REPO / "docs" / "api" / "subpackage-public-surface.txt"
+
+
+def _subpackage_names() -> list[str]:
+    """Every subpackage of ``anvilate`` except ``analysis``, which has its own manifest."""
+    return sorted(
+        info.name
+        for info in pkgutil.iter_modules(anvilate_pkg.__path__)
+        if info.ispkg and info.name != "analysis"
+    )
+
+
+def _subpackage_live_surface() -> tuple[set[str], int]:
+    """The public surface of the subpackages, and how many modules it was read from."""
+    surface: set[str] = set()
+    modules = 0
+    for package_name in _subpackage_names():
+        package = importlib.import_module(f"anvilate.{package_name}")
+        for symbol in getattr(package, "__all__", ()) or ():
+            surface.add(f"{package_name}.{symbol}")
+        modules += 1
+        for info in pkgutil.walk_packages(package.__path__, f"anvilate.{package_name}."):
+            module = importlib.import_module(info.name)
+            modules += 1
+            short = info.name[len("anvilate.") :]
+            for symbol in getattr(module, "__all__", ()) or ():
+                surface.add(f"{short}.{symbol}")
+    return surface, modules
+
+
+def test_every_subpackage_module_declares_its_public_surface():
+    for package_name in _subpackage_names():
+        package = importlib.import_module(f"anvilate.{package_name}")
+        for info in pkgutil.walk_packages(package.__path__, f"anvilate.{package_name}."):
+            module = importlib.import_module(info.name)
+            assert hasattr(module, "__all__"), (
+                f"{info.name} has no __all__; every shipped module must declare its public "
+                "surface explicitly, not leave it to whatever happens to be importable"
+            )
+
+
+def test_the_subpackage_public_surface_matches_its_manifest():
+    """The manifest contract reached the top-level modules and the analysis library only.
+
+    `core-public-surface.txt` walks `pkgutil.iter_modules(...)` and keeps `not m.ispkg`, so
+    it covers 25 modules and skips every package. `analysis` has its own manifest. That
+    left EIGHT subpackages — export, packs, report, skills, spec, standards, tolerance,
+    units — and 265 public symbols with no gate at all, including all 24 discipline-pack
+    screens and every model they take. Growing the public surface was a deliberate act
+    with a diff in two thirds of the library and a side effect in the rest.
+    """
+    live, modules = _subpackage_live_surface()
+    recorded = {
+        line.strip()
+        for line in _SUBPACKAGE_MANIFEST.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    # The walk itself, FIRST. A discovery that stops descending empties `live`, and the
+    # comparison below then reports every line in the file as a symbol that no longer
+    # exists — true of nothing, and it buries the actual failure under 445 names.
+    assert modules >= 45, (
+        f"only {modules} subpackage modules were walked; the library has more, and a "
+        f"manifest gate that stops finding modules passes on a subset"
+    )
+    assert len(live) >= 400, (
+        f"only {len(live)} subpackage public names were discovered against a manifest of "
+        f"{len(recorded)}; the walk has stopped reading __all__"
+    )
+    added = sorted(live - recorded)
+    removed = sorted(recorded - live)
+    assert not added, (
+        "public symbols in a subpackage module's __all__ with no line in "
+        "docs/api/subpackage-public-surface.txt:\n  " + "\n  ".join(added)
+    )
+    assert not removed, (
+        "docs/api/subpackage-public-surface.txt names symbols that no longer exist:\n  "
+        + "\n  ".join(removed)
+    )
+
+
+def test_the_manifest_contract_reaches_every_package_in_the_library():
+    """The attack on the gate above: it can only hold what it enumerates.
+
+    `analysis` is excluded because it has its own manifest — so that exclusion is checked,
+    not assumed, and a NEW subpackage lands in the gate above rather than in nobody's.
+    """
+    packages = {info.name for info in pkgutil.iter_modules(anvilate_pkg.__path__) if info.ispkg}
+    assert "analysis" in packages
+    # Comparing `packages` against `_subpackage_names()` would be a tautology — that
+    # function IS `packages` minus analysis, so the assertion could not fail whatever
+    # either side did. Read the FILES instead: every package must actually be represented
+    # in a manifest, which a package walked to nothing, or excluded by some future
+    # exclusion list, would not be.
+    subpackage_lines = {
+        line.strip()
+        for line in _SUBPACKAGE_MANIFEST.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    analysis_lines = _manifest_surface()
+    unrepresented = sorted(
+        name
+        for name in packages
+        if not (
+            any(line.startswith(f"{name}.") for line in subpackage_lines)
+            or (name == "analysis" and analysis_lines)
+        )
+    )
+    assert not unrepresented, (
+        "these packages have no line in any public-surface manifest, so their surface can "
+        f"grow without a diff: {unrepresented}"
+    )
+
+
 _LEVER_MANIFEST = _REPO / "docs" / "api" / "repair-levers.txt"
 #: A screen is a public entry point that judges something and returns a card.
 _SCREEN_NAME = re.compile(r"^screen_|_scorecard$")
