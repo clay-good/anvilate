@@ -792,8 +792,11 @@ def test_every_text_surface_that_prints_a_check_prints_its_repair():
 
     report = CalculationReport(title="lug", sections=(ReportSection(entry=entry),))
     assert expected in report.to_text()
-    assert "increase thickness to 16 mm" in report.to_html()
-    assert "lug thickness inverse" in report.to_html()
+    # The HTML raises the first letter and NOTHING else. `str.capitalize()` lowercases the
+    # rest, and the packs write real notation into the provenance — the page rendered
+    # "so sf ∝ t", which no assertion about it could see and one screenshot could.
+    assert expected[0].upper() + expected[1:] in report.to_html()
+    assert "SF ∝ t" in report.to_html()
 
     # A check with no hint adds no line anywhere: the surfaces stay identical to before.
     plain = ScorecardEntry.from_safety_factor("lug tension", computed=3.0, required=2.0)

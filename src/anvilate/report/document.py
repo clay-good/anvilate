@@ -575,7 +575,11 @@ class CalculationReport(StatableModel):
         out.append(f'<p class="detail">{escape(section.verdict(system=self.unit_system))}</p>')
         repair = section.repair_line()
         if repair:
-            out.append(f'<p class="repair">{escape(repair.capitalize())}</p>')
+            # Only the first letter. `str.capitalize()` lowercases the REST, and the packs
+            # write real notation into the provenance — "(σ ∝ 1/t, so SF ∝ t)" rendered as
+            # "so sf ∝ t" in the document a reviewer signs. Visible the moment the page was
+            # looked at, and invisible to every assertion about it.
+            out.append(f'<p class="repair">{escape(repair[0].upper() + repair[1:])}</p>')
         unc = section.entry.uncertainty
         if unc is not None:
             fragile = section.entry.is_fragile()
