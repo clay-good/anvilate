@@ -1975,6 +1975,75 @@ def test_concrete_bearing_confinement_is_capped_at_two():
     assert "2.12" in card.entries[0].detail
 
 
+def test_each_bolted_check_names_the_knob_that_is_its_own_and_not_the_bolt():
+    """Three knobs that do not agree, and the bolt is the one that fights back.
+
+    Bolt shear and bolt tension go as 1/d², so a bigger bolt is their answer. Plate bearing
+    goes as 1/(d·t) and is answered with the PLATE, because the diameter is the standard's
+    and the plate is the detailer's. Tear-out is the reason it matters: R_n is linear in the
+    clear distance l_c = e − d/2, so **a bigger bolt makes tear-out worse** — and this test
+    shows it doing exactly that.
+    """
+    from anvilate.scorecard import Direction
+
+    def splice(diameter: str = "12 mm", thickness: str = "8 mm", edge: str = "20 mm"):
+        return BoltedConnection(
+            name="splice",
+            bolt_diameter=_q(diameter),
+            plate_thickness=_q(thickness),
+            load=_q("90 kN"),
+            bolt_material="ASTM-A36",
+            plate_material="ASTM-A36",
+            shear_planes=1,
+            edge_distance=_q(edge),
+        )
+
+    card = screen_bolted_connection(splice(), required_safety_factor=2.0)
+    hints = {e.name: e.repair_hint for e in card.entries}
+    assert all(e.status is CheckStatus.FAIL for e in card.entries)
+    assert hints["splice bolt shear"].parameter == "bolt_diameter"
+    assert hints["splice plate bearing"].parameter == "plate_thickness"
+    assert hints["splice edge tear-out"].parameter == "edge_distance"
+    assert all(h.direction is Direction.INCREASE for h in hints.values())
+
+    # THE BOLT FIGHTS THE EDGE. Taking only the shear answer clears shear and leaves
+    # tear-out far worse than it was, because the clear distance is what shrank.
+    bolt_only = screen_bolted_connection(
+        splice(diameter=f"{hints['splice bolt shear'].corrective_value} mm"),
+        required_safety_factor=2.0,
+    )
+    by_name = {e.name: e for e in bolt_only.entries}
+    assert by_name["splice bolt shear"].safety_factor == pytest.approx(2.0, rel=1e-9)
+    assert by_name["splice edge tear-out"].status is CheckStatus.FAIL
+    assert (
+        by_name["splice edge tear-out"].safety_factor
+        < next(e for e in card.entries if e.name.endswith("tear-out")).safety_factor
+    )
+
+    # Each knob taken together clears the card.
+    repaired = screen_bolted_connection(
+        splice(
+            diameter=f"{hints['splice bolt shear'].corrective_value} mm",
+            thickness=f"{hints['splice plate bearing'].corrective_value} mm",
+            edge=f"{hints['splice edge tear-out'].corrective_value} mm",
+        ),
+        required_safety_factor=2.0,
+    )
+    assert repaired.status is CheckStatus.PASS
+    assert all(e.repair_hint is None for e in repaired.entries)
+
+    # The tear-out answer moves the CLEAR distance by the shortfall, not the edge distance:
+    # scaling e itself would leave the hole where it is and undershoot.
+    tear = next(e for e in card.entries if e.name.endswith("tear-out"))
+    clear = 20.0 - 12.0 / 2.0
+    assert hints["splice edge tear-out"].corrective_value == pytest.approx(
+        clear * 2.0 / tear.safety_factor + 6.0, rel=1e-9
+    )
+    assert hints["splice edge tear-out"].corrective_value != pytest.approx(
+        20.0 * 2.0 / tear.safety_factor, rel=1e-3
+    )
+
+
 def test_the_bearing_lever_solves_in_whichever_confinement_branch_it_lands_in():
     """ACI 318 §22.8.3 has two branches and they solve differently.
 

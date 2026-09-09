@@ -45,7 +45,7 @@ required 2.0 — the fix this library named was itself a `FAIL`. See
 ### Every screen records whether it has a lever
 
 `docs/api/repair-levers.txt` holds the decision for all 55 public screens.
-There are 36 levers across 23 of them, and 32 recorded as having none yet — each
+There are 41 levers across 24 of them, and 31 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.
@@ -101,6 +101,7 @@ owes the reader:
 | `screen_noise_exposure` | noise dose | `exposure_duration` ↓ | solved — the permissible time at the combined level |
 | `screen_cover_plate` | plate bending, flatness | `thickness` ↑ | solved — **twice**, at two different powers |
 | `screen_concrete_bearing` | ACI confined bearing | `bearing_area` ↑ | solved — in whichever confinement branch the answer lands in |
+| `screen_bolted_connection` | bolt shear / bearing / tear-out | `bolt_diameter` ↑ / `plate_thickness` ↑ / `edge_distance` ↑ | solved — three knobs, and the bolt fights the edge |
 
 The check rates the wall a pipe can be *relied* on to have: the ordered wall less the
 mill under-tolerance and the corrosion allowance. So the inverse's answer is not the

@@ -1168,11 +1168,68 @@ def screen_bolted_connection(
             )
         )
     return disclosed(
-        Scorecard(entries=tuple(entries)),
+        Scorecard(entries=tuple(_bolted_hints(entries, connection, required_safety_factor))),
         bolt_allowable,
         plate_allowable,
         plate_ultimate,
     )
+
+
+def _bolted_hints(
+    entries: list[ScorecardEntry], connection: BoltedConnection, required: float
+) -> list[ScorecardEntry]:
+    """Each failing bolted check named to the knob that is actually its own.
+
+    Three knobs, and they do not agree. Bolt shear and bolt tension both go as 1/d², so a
+    bigger bolt is their answer. Plate bearing goes as 1/(d·t), and the answer given here is
+    the PLATE, because the diameter is the shackle's or the standard's while the plate is
+    the detailer's. Tear-out is the reason that matters: R_n is linear in the clear distance
+    l_c = e − d/2, so **a bigger bolt makes tear-out worse**. A card that answered every
+    check with the diameter would hand a detailer a bolt that fails a check it just passed.
+
+    The combined tension+shear check is left alone: it moves with both the bolt and the
+    load and there is no single knob to name.
+    """
+    diameter = connection.bolt_diameter.to("mm").magnitude
+    thickness = connection.plate_thickness.to("mm").magnitude
+    hinted: list[ScorecardEntry] = []
+    for entry in entries:
+        if entry.status is not CheckStatus.FAIL or not entry.safety_factor:
+            hinted.append(entry)
+            continue
+        shortfall = required / entry.safety_factor
+        if entry.name.endswith(("bolt shear", "bolt tension")):
+            hint = RepairHint.solved(
+                "bolt_diameter",
+                direction=Direction.INCREASE,
+                value=diameter * shortfall**0.5,
+                unit="mm",
+                provenance="bolt stress, which goes as 1/d²",
+            )
+        elif entry.name.endswith("plate bearing"):
+            hint = RepairHint.solved(
+                "plate_thickness",
+                direction=Direction.INCREASE,
+                value=thickness * shortfall,
+                unit="mm",
+                provenance="bearing stress, which is linear in the plate thickness",
+            )
+        elif entry.name.endswith("edge tear-out") and connection.edge_distance is not None:
+            # R_n = 1.2·l_c·t·F_u is linear in l_c, and l_c is e − d/2, so the edge
+            # distance moves by the shortfall in the CLEAR distance, not in itself.
+            clear = connection.edge_distance.to("mm").magnitude - diameter / 2.0
+            hint = RepairHint.solved(
+                "edge_distance",
+                direction=Direction.INCREASE,
+                value=clear * shortfall + diameter / 2.0,
+                unit="mm",
+                provenance="clear distance to the hole, which the tear-out is linear in",
+            )
+        else:
+            hinted.append(entry)
+            continue
+        hinted.append(entry.model_copy(update={"repair_hint": hint}))
+    return hinted
 
 
 class WeldedConnection(GuardedInputs):
