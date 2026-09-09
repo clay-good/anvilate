@@ -145,9 +145,14 @@ checks pass" is a true sentence that reads as a passing part; do not write it.
 
 <!-- doctrine: inverse-first-repair -->
 
-A failing check carries a `repair_hint` naming the parameter and the direction. Where a
-design inverse exists, it solves for the value that lands exactly at the required margin
+A failing check MAY carry a `repair_hint` naming the parameter and the direction, and
+where a design inverse exists it solves for the value that lands at the required margin
 — one call instead of a search. Reach for the inverse before you start guessing sizes.
+
+Not every screen offers one: 15 of the library's 51 screens do, and
+`docs/api/repair-levers.txt` records the decision for every one of them. When a check
+carries no hint, read its own numbers and reach for the inverse yourself, as below —
+do not read the silence as "nothing can be done".
 
 ```python
 from anvilate.analysis.fastener import bolt_diameter_for_shear, bolt_shear_stress

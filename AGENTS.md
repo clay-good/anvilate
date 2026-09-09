@@ -35,9 +35,10 @@ expands on, in short:
 - **Not evaluated is not a pass.** A check that could not run is `NOT_EVALUATED`, a card
   containing one is never `passed`, and "two of three checks pass" is a true sentence that
   reads as a passing part.
-- **Inverse first repair.** A failing check carries a repair hint; where a design inverse
-  exists it solves for the value that lands exactly at the required margin. Use it before
-  guessing sizes, and say out loud when you round to a stock size.
+- **Inverse first repair.** A failing check may carry a repair hint; where a design
+  inverse exists it solves for the value that lands at the required margin. Use it before
+  guessing sizes, reach for the inverse yourself when a check offers no hint, and say out
+  loud when you round to a stock size.
 - **Confirm before use.** Values read from a requirements document or a calibration
   certificate are drafts. `release()` refuses until a named person confirms them — do not
   read the drafts directly, and never make the confirmation decision for the user.

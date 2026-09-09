@@ -140,9 +140,10 @@ _AGENTS_DOCTRINE = """\
 - **Not evaluated is not a pass.** A check that could not run is `NOT_EVALUATED`, a card
   containing one is never `passed`, and "two of three checks pass" is a true sentence that
   reads as a passing part.
-- **Inverse first repair.** A failing check carries a repair hint; where a design inverse
-  exists it solves for the value that lands exactly at the required margin. Use it before
-  guessing sizes, and say out loud when you round to a stock size.
+- **Inverse first repair.** A failing check may carry a repair hint; where a design
+  inverse exists it solves for the value that lands at the required margin. Use it before
+  guessing sizes, reach for the inverse yourself when a check offers no hint, and say out
+  loud when you round to a stock size.
 - **Confirm before use.** Values read from a requirements document or a calibration
   certificate are drafts. `release()` refuses until a named person confirms them — do not
   read the drafts directly, and never make the confirmation decision for the user.
@@ -565,6 +566,29 @@ def test_every_doctrine_states_its_rule_in_its_own_section(doctrine, sentence):
     assert sentence in sections[doctrine], (
         f"the {doctrine!r} section no longer states its rule. The sentence is compared "
         "exactly, because a rule can be inverted while the example under it still passes"
+    )
+
+
+def test_the_skills_count_of_screens_that_offer_a_hint_is_the_inventorys_own():
+    """The skill used to say a failing check CARRIES a repair hint, flatly.
+
+    It is true of 15 of the library's 51 screens. An agent told otherwise reads the
+    silence on the other 36 as "nothing can be done" — the same misreading the
+    not-evaluated doctrine exists to prevent, one layer down. The corrected sentence
+    quotes a count, so the count is held to the file that decides it.
+    """
+    inventory = Path(__file__).resolve().parents[1] / "docs" / "api" / "repair-levers.txt"
+    with_levers, without = set(), set()
+    for line in inventory.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        (with_levers if " -> " in line else without).add(line.split(" -> ")[0])
+    assert with_levers and without
+    claim = f"{len(with_levers)} of the library's {len(with_levers) + len(without)} screens do"
+    assert claim in skill_text(), (
+        f"the skill no longer says {claim!r}; docs/api/repair-levers.txt records "
+        f"{len(with_levers)} screens with a lever out of {len(with_levers) + len(without)}"
     )
 
 
