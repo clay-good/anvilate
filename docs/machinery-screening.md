@@ -118,3 +118,74 @@ screening them at 1.2 would silently demand a contact ratio of 1.44 and 22 teeth
 standard asks for 1.2 and 18.
 
 See [`examples/gear_mesh_scorecard.py`](../examples/gear_mesh_scorecard.py).
+
+## The shaft's neighbours: the key and the bearings
+
+A shaft that passes all three of its own limits says nothing about the joint that drives it
+or the bearings that hold it. Both are in the pack for the same reason the three shaft
+checks are on one card: they are the parts of a drive train that fail first and that a
+shaft's own scorecard cannot see.
+
+### The key
+
+```python
+from anvilate.packs.machinery import ShaftKey, screen_shaft_key
+from anvilate.units import Quantity
+
+key = ShaftKey(
+    shaft_diameter=Quantity.parse("40 mm"),
+    key_width=Quantity.parse("12 mm"),
+    key_height=Quantity.parse("8 mm"),
+    key_length=Quantity.parse("10 mm"),
+    torque=Quantity.parse("400 N*m"),
+    allowable_shear=Quantity.parse("100 MPa"),
+    allowable_bearing=Quantity.parse("180 MPa"),
+)
+card = screen_shaft_key(key, required_safety_factor=2.0)
+```
+
+Shear acts across the key's **width**, `τ = 2·T/(d·w·L)`, and side bearing on half its
+**height**, `σ_b = 4·T/(d·h·L)`. So the two limit states name two different lengths — 33.33
+mm and 55.56 mm for this key — and which one governs is a question about the key's
+proportions and its two allowables, not about the torque. It is the same shape as the shear
+plate's two areas, one level down.
+
+### The bearings
+
+```python
+from anvilate.packs.machinery import RollingBearing, screen_rolling_bearing
+from anvilate.units import Quantity
+
+unit = RollingBearing(
+    dynamic_load_rating=Quantity.parse("35.1 kN"),      # C, from the catalogue
+    static_load_rating=Quantity.parse("19.3 kN"),       # C0
+    radial_load=Quantity.parse("4.2 kN"),
+    axial_load=Quantity.parse("1.1 kN"),
+    radial_factor=0.56, axial_factor=1.45,              # X and Y, from the table
+    speed=Quantity.parse("1450 rpm"),
+    required_life_hours=Quantity.parse("20000 hour"),
+    required_static_factor=1.5,
+)
+card = screen_rolling_bearing(unit)
+```
+
+The equivalent dynamic load is `P = X·F_r + Y·F_a` = 3.95 kN, and `L₁₀ₕ = (C/P)^p·10⁶/(60·n)`
+reaches 8,084 hours against the 20,000 asked for — a factor of 0.40. **Both levers are
+catalogue ratings rather than dimensions**, because a bearing is selected and not machined:
+the card names 47.47 kN as the least C that reaches the life, which is a number a reader
+takes straight to the table.
+
+`life_exponent` is a field rather than a default the screen guesses: 3 for a ball bearing
+and 10/3 for a roller, and the same bearing rated as a roller reaches a substantially
+different life. The static check is judged against the bearing's own
+`required_static_factor` — s₀ is already a safety factor, and stacking the life check's
+margin on top of it asks for a rating no catalogue table is written against.
+
+**These two screens cite the textbook, not ISO 281 and ISO 76**, and that is deliberate. The
+rules are the standards' and `anvilate.analysis.bearing` records that provenance; but a
+scorecard entry naming a normative standard has to name its edition, and neither
+`L₁₀ = (C/P)^p` nor `s₀ = C₀/P₀` identifies which edition it came out of — they are
+unchanged across them. Inventing an edition would manufacture exactly the confidently-wrong
+citation the [effectivity ratchet](standards-effectivity.md) exists to prevent.
+
+See [`examples/drive_train_scorecard.py`](../examples/drive_train_scorecard.py).

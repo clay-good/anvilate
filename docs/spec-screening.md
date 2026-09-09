@@ -183,7 +183,7 @@ members can come from any of them — and it is the one element whose members ca
 several packs at once. A structure cannot be a member of a structure; list the members
 alongside the others.
 
-**The required safety factor comes from the document.** Thirteen of the twenty-six screens
+**The required safety factor comes from the document.** Thirteen of the twenty-eight screens
 are judged against one and have no default, so it is read from
 `constraints.min_safety_factor`. A spec that states none reports `NOT_EVALUATED` saying so
 rather than screening against a figure this library made up — a safety factor nobody stated

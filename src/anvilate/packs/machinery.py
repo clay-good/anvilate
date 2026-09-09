@@ -27,10 +27,19 @@ from __future__ import annotations
 from pydantic import ConfigDict
 
 from ..analysis import (
+    BALL_BEARING_LIFE_EXPONENT,
     agma_bending_stress,
     agma_contact_stress,
+    bearing_equivalent_dynamic_load,
+    bearing_equivalent_static_load,
+    bearing_life_hours,
+    bearing_rating_for_life,
+    bearing_static_safety_factor,
     gear_pitch_diameter,
     gear_tangential_load,
+    key_bearing_stress,
+    key_length_for_torque,
+    key_shear_stress,
     minimum_teeth_to_avoid_undercut,
     shaft_diameter_de_goodman,
     shaft_diameter_for_bending_torsion,
@@ -44,10 +53,14 @@ from ..units import Quantity
 from ._guarded import GuardedInputs
 
 __all__ = [
+    "RollingBearing",
+    "ShaftKey",
     "SpurGearMesh",
     "TransmissionShaft",
     "screen_gear_mesh",
+    "screen_rolling_bearing",
     "screen_shaft",
+    "screen_shaft_key",
 ]
 
 _STATIC_REFERENCE = "Shigley §7-4 shaft design for stress (distortion energy)"
@@ -57,6 +70,19 @@ _BENDING_REFERENCE = "AGMA 2001 / ISO 6336 tooth-root bending stress"
 _PITTING_REFERENCE = "AGMA 2001 / ISO 6336 pitting resistance"
 _CONTACT_RATIO_REFERENCE = "Shigley, transverse contact ratio for smooth load transfer"
 _UNDERCUT_REFERENCE = "Shigley, rack-generation undercut limit N_min = 2·k/sin²φ"
+_KEY_SHEAR_REFERENCE = "Shigley, parallel key shear across the width"
+_KEY_BEARING_REFERENCE = "Shigley, parallel key side bearing on the half height"
+# Cited to the textbook, deliberately, and it is worth saying why rather than leaving the
+# next reader to wonder. The two rules are ISO 281's and ISO 76's, and `analysis/bearing.py`
+# records that provenance in its own docstrings. A scorecard entry naming a normative
+# standard has to name its EDITION (docs/standards-effectivity.md), and nothing in this
+# repository identifies which edition of either these forms came out of: L10 = (C/P)^p with
+# p = 3 and 10/3, and s₀ = C₀/P₀, are unchanged across their editions. Inventing one would
+# manufacture exactly the confidently-wrong citation that ratchet exists to prevent, so the
+# entry cites the book the closed form is actually taken from, which is complete as it
+# stands. Reading the standards is how these become ISO citations.
+_BEARING_LIFE_REFERENCE = "Shigley, rolling-bearing rating life L10 = (C/P)^p"
+_BEARING_STATIC_REFERENCE = "Shigley, bearing static load rating s₀ = C₀/P₀"
 
 
 class TransmissionShaft(GuardedInputs):
@@ -710,5 +736,363 @@ def screen_gear_mesh(
             _pitting_entry(mesh, required_safety_factor),
             _contact_ratio_entry(mesh),
             _undercut_entry(mesh),
+        )
+    )
+
+
+class ShaftKey(GuardedInputs):
+    """A parallel key in a shaft-and-hub joint, and its screen inputs.
+
+    ``shaft_diameter`` d, ``key_width`` w, ``key_height`` h and ``key_length`` L describe the
+    key; ``torque`` T is what it transmits. The two allowables are the caller's, and they are
+    two different quantities against two different areas — shear across the key's width, and
+    side bearing on half its height.
+
+    A key is the weakest part of a drive on purpose: it is the cheap part that is meant to go
+    first. That is only true if somebody checked, and a shaft that passes every one of its
+    own limits tells you nothing about the joint that drives it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    shaft_diameter: Quantity
+    key_width: Quantity
+    key_height: Quantity
+    key_length: Quantity
+    torque: Quantity
+    allowable_shear: Quantity
+    allowable_bearing: Quantity
+
+
+def _key_length_hint(key: ShaftKey, required_safety_factor: float, mode: str) -> RepairHint:
+    """The key length one limit state needs at the required margin.
+
+    Solved by the library's own inverse with the allowables derated — a margin on the
+    allowable is exactly what a safety factor on this check means, and dividing there rather
+    than scaling the length afterwards keeps the two limit states' answers independent.
+    """
+    requirement = key_length_for_torque(
+        torque=key.torque,
+        shaft_diameter=key.shaft_diameter,
+        key_width=key.key_width,
+        key_height=key.key_height,
+        allowable_shear=Quantity(
+            magnitude=key.allowable_shear.to("MPa").magnitude / required_safety_factor,
+            unit="MPa",
+        ),
+        allowable_bearing=Quantity(
+            magnitude=key.allowable_bearing.to("MPa").magnitude / required_safety_factor,
+            unit="MPa",
+        ),
+    )
+    length = requirement.shear_length if mode == "shear" else requirement.bearing_length
+    return RepairHint.solved(
+        "key_length",
+        direction=Direction.INCREASE,
+        value=length.to("mm").magnitude,
+        unit="mm",
+        provenance=f"key_length_for_torque's {mode} length at the derated allowable",
+    )
+
+
+def _key_shear_entry(key: ShaftKey, required_safety_factor: float) -> ScorecardEntry:
+    """Shear across the key's width at the shaft surface."""
+    stress = key_shear_stress(
+        torque=key.torque,
+        shaft_diameter=key.shaft_diameter,
+        key_width=key.key_width,
+        key_length=key.key_length,
+    )
+    tau = stress.to("MPa").magnitude
+    allowable = key.allowable_shear.to("MPa").magnitude
+    safety = allowable / tau if tau > 0 else None
+    derivation = Derivation(
+        symbolic="τ = 2·T/(d·w·L)",
+        inputs=(
+            SymbolValue(
+                symbol="T", description="transmitted torque", value=key.torque, unit="N*mm"
+            ),
+            SymbolValue(
+                symbol="d", description="shaft diameter", value=key.shaft_diameter, unit="mm"
+            ),
+            SymbolValue(symbol="w", description="key width", value=key.key_width, unit="mm"),
+            SymbolValue(symbol="L", description="key length", value=key.key_length, unit="mm"),
+        ),
+        result=SymbolValue(
+            symbol="τ", description="shear stress across the key", value=stress, unit="MPa"
+        ),
+        citation=_KEY_SHEAR_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "key shear", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _KEY_SHEAR_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        entry = entry.model_copy(
+            update={"repair_hint": _key_length_hint(key, required_safety_factor, "shear")}
+        )
+    return entry
+
+
+def _key_bearing_entry(key: ShaftKey, required_safety_factor: float) -> ScorecardEntry:
+    """Side bearing on the half of the key standing proud of the shaft."""
+    stress = key_bearing_stress(
+        torque=key.torque,
+        shaft_diameter=key.shaft_diameter,
+        key_height=key.key_height,
+        key_length=key.key_length,
+    )
+    sigma = stress.to("MPa").magnitude
+    allowable = key.allowable_bearing.to("MPa").magnitude
+    safety = allowable / sigma if sigma > 0 else None
+    derivation = Derivation(
+        symbolic="σ_b = 4·T/(d·h·L)",
+        inputs=(
+            SymbolValue(
+                symbol="T", description="transmitted torque", value=key.torque, unit="N*mm"
+            ),
+            SymbolValue(
+                symbol="d", description="shaft diameter", value=key.shaft_diameter, unit="mm"
+            ),
+            SymbolValue(
+                symbol="h",
+                description="key height; half of it bears on the hub",
+                value=key.key_height,
+                unit="mm",
+            ),
+            SymbolValue(symbol="L", description="key length", value=key.key_length, unit="mm"),
+        ),
+        result=SymbolValue(
+            symbol="σ_b", description="side bearing stress on the key", value=stress, unit="MPa"
+        ),
+        citation=_KEY_BEARING_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "key side bearing", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _KEY_BEARING_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        entry = entry.model_copy(
+            update={"repair_hint": _key_length_hint(key, required_safety_factor, "bearing")}
+        )
+    return entry
+
+
+def screen_shaft_key(
+    key: ShaftKey,
+    *,
+    required_safety_factor: float = 2.0,
+) -> Scorecard:
+    """Screen a :class:`ShaftKey` for shear and side bearing, and return its scorecard.
+
+    Screens both limit states against ``required_safety_factor`` (2.0 on a key, whose
+    allowables are plain material strengths with no code margin in them). Returns a
+    :class:`~anvilate.scorecard.Scorecard` with a cited entry for each.
+
+    **The two checks name two different lengths**, in the same shape as the shear plate's
+    two areas: shear acts across the key's width and bearing on half its height, so which
+    one governs depends on the key's proportions rather than on the torque. A square key in
+    a soft hub is governed by bearing and a flat one by shear, and the card says which.
+    """
+    return Scorecard(
+        entries=(
+            _key_shear_entry(key, required_safety_factor),
+            _key_bearing_entry(key, required_safety_factor),
+        )
+    )
+
+
+class RollingBearing(GuardedInputs):
+    """A rolling-element bearing in a running application, and its screen inputs.
+
+    ``dynamic_load_rating`` C and ``static_load_rating`` C₀ are the catalogue's two ratings.
+    ``radial_load`` and ``axial_load`` are the loads on it, combined into an equivalent load
+    through the catalogue's ``radial_factor`` X and ``axial_factor`` Y — which are properties
+    of the bearing series and its load ratio, and are the caller's to read off the table.
+    ``speed`` and ``required_life_hours`` say what the application asks of it.
+
+    ``life_exponent`` is 3 for a ball bearing and 10/3 for a roller bearing, and it is worth
+    stating rather than defaulting: it is the exponent the whole life calculation turns on,
+    and the two answers differ by a factor of two at an ordinary load ratio.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    dynamic_load_rating: Quantity
+    static_load_rating: Quantity
+    radial_load: Quantity
+    axial_load: Quantity
+    radial_factor: float
+    axial_factor: float
+    speed: Quantity
+    required_life_hours: Quantity
+    life_exponent: float = BALL_BEARING_LIFE_EXPONENT
+    required_static_factor: float = 1.0
+
+
+def _bearing_life_entry(unit: RollingBearing, required_safety_factor: float) -> ScorecardEntry:
+    """The L10 rating life against the life the application asks for."""
+    equivalent = bearing_equivalent_dynamic_load(
+        radial_load=unit.radial_load,
+        axial_load=unit.axial_load,
+        radial_factor=unit.radial_factor,
+        axial_factor=unit.axial_factor,
+    )
+    life = bearing_life_hours(
+        dynamic_load_rating=unit.dynamic_load_rating,
+        equivalent_load=equivalent,
+        speed=unit.speed,
+        life_exponent=unit.life_exponent,
+    )
+    reached = life.to("hour").magnitude
+    wanted = unit.required_life_hours.to("hour").magnitude
+    safety = reached / wanted if wanted > 0 else None
+    # Revolutions, not hours, and the reason is worth stating. The textbook form
+    # L_10h = (C/P)^p*10^6/(60*n) carries a bare 60 that converts minutes to hours — a unit
+    # conversion written as a number — so the line cannot be evaluated as it stands. Worse,
+    # pint reads a revolution as 2*pi radians, so the near miss is a factor of 2*pi rather
+    # than an obvious one. Comparing revolutions to revolutions has neither problem, and the
+    # ratio is the same one: the speed is constant across both sides.
+    required_revolutions = wanted * 60.0 * unit.speed.to("rpm").magnitude
+    derivation = Derivation(
+        symbolic="U = (C/P)**p·10⁶/L_req",
+        inputs=(
+            SymbolValue(
+                symbol="C",
+                description="basic dynamic load rating from the catalogue",
+                value=unit.dynamic_load_rating,
+                unit="kN",
+            ),
+            SymbolValue(
+                symbol="P",
+                description="equivalent dynamic load, X·F_r + Y·F_a",
+                value=equivalent,
+                unit="kN",
+            ),
+            SymbolValue(
+                symbol="p",
+                description="life exponent; 3 for a ball bearing, 10/3 for a roller",
+                value=unit.life_exponent,
+            ),
+            SymbolValue(
+                symbol="L_req",
+                description=(
+                    f"the life asked for ({unit.required_life_hours}) as revolutions at "
+                    f"{unit.speed}"
+                ),
+                value=required_revolutions,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="U",
+            description=f"rating life as a multiple of the life asked for; L₁₀ₕ = {life}",
+            value=safety,
+        ),
+        citation=_BEARING_LIFE_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "bearing rating life", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _BEARING_LIFE_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        # The lever is the CATALOGUE RATING, not a dimension: a bearing is chosen, not
+        # machined, and catalogues are indexed by C. The hint names the least C that reaches
+        # the life at the margin, which is a number a reader looks up rather than a number
+        # they have to search for.
+        rating = bearing_rating_for_life(
+            equivalent_load=equivalent,
+            required_life_millions=wanted
+            * required_safety_factor
+            * 60.0
+            * unit.speed.to("rpm").magnitude
+            / 1.0e6,
+            life_exponent=unit.life_exponent,
+        )
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "dynamic_load_rating",
+                    direction=Direction.INCREASE,
+                    value=rating.to("kN").magnitude,
+                    unit="kN",
+                    provenance="bearing_rating_for_life at the required life and margin",
+                )
+            }
+        )
+    return entry
+
+
+def _bearing_static_entry(unit: RollingBearing) -> ScorecardEntry:
+    """The static load rating against the equivalent static load.
+
+    Judged against the bearing's own ``required_static_factor`` and not against the life
+    check's margin: s₀ is already a safety factor, and putting a second one on top of it
+    asks for a rating nobody's catalogue table is written against.
+    """
+    static_load = bearing_equivalent_static_load(
+        radial_load=unit.radial_load,
+        axial_load=unit.axial_load,
+        radial_factor=unit.radial_factor,
+        axial_factor=unit.axial_factor,
+    )
+    factor = bearing_static_safety_factor(
+        static_load_rating=unit.static_load_rating, equivalent_static_load=static_load
+    )
+    derivation = Derivation(
+        symbolic="s₀ = C₀/P₀",
+        inputs=(
+            SymbolValue(
+                symbol="C₀",
+                description="basic static load rating from the catalogue",
+                value=unit.static_load_rating,
+                unit="kN",
+            ),
+            SymbolValue(
+                symbol="P₀",
+                description="equivalent static load, X·F_r + Y·F_a",
+                value=static_load,
+                unit="kN",
+            ),
+        ),
+        result=SymbolValue(symbol="s₀", description="static load safety factor", value=factor),
+        citation=_BEARING_STATIC_REFERENCE,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "bearing static capacity",
+        computed=factor / unit.required_static_factor,
+        required=1.0,
+    ).model_copy(update={"reference": _BEARING_STATIC_REFERENCE, "derivation": derivation})
+    if entry.status is CheckStatus.FAIL:
+        entry = entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "static_load_rating",
+                    direction=Direction.INCREASE,
+                    value=static_load.to("kN").magnitude * unit.required_static_factor,
+                    unit="kN",
+                    provenance="equivalent static load at the declared s₀",
+                )
+            }
+        )
+    return entry
+
+
+def screen_rolling_bearing(
+    unit: RollingBearing,
+    *,
+    required_safety_factor: float = 1.0,
+) -> Scorecard:
+    """Screen a :class:`RollingBearing` for rating life and static capacity, and return its card.
+
+    Screens the L10 rating life against ``required_life_hours`` × ``required_safety_factor``
+    (1.0 — the life the application asks for is already the requirement), and the static
+    load rating against the bearing's own declared ``required_static_factor``. Returns a
+    :class:`~anvilate.scorecard.Scorecard` with a cited entry for each.
+
+    **Both levers are the catalogue's ratings rather than a dimension**, because a bearing is
+    selected and not machined: a failing entry names the least C, or the least C₀, that
+    clears its limit, which is what a reader takes to the table.
+    """
+    return Scorecard(
+        entries=(
+            _bearing_life_entry(unit, required_safety_factor),
+            _bearing_static_entry(unit),
         )
     )

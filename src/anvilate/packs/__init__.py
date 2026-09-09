@@ -23,8 +23,9 @@ feeder's voltage drop and conductor ampacity; and
 transmission shaft against the three limits that size one and disagree about it
 — static distortion energy, rotating-shaft fatigue and torsional windup — and a
 spur gear mesh against AGMA bending, pitting, contact ratio and undercut, which
-four are moved by three different parameters. Each screen rolls its results into
-a scorecard.
+four are moved by three different parameters, and the shaft's two neighbours a
+card of its own cannot see: the key that drives it and the bearing that holds
+it. Each screen rolls its results into a scorecard.
 """
 
 from __future__ import annotations

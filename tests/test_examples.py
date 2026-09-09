@@ -642,6 +642,21 @@ def test_transmission_shaft_example_is_governed_by_windup_not_strength():
     )
 
 
+def test_drive_train_example_passes_the_shaft_and_fails_its_neighbours():
+    namespace = runpy.run_path(str(_EXAMPLES / "drive_train_scorecard.py"))
+    train = namespace["drive_train"]()
+    assert train["statuses"] == {"shaft": "pass", "key": "fail", "bearing": "fail"}
+    # The example's claim is that nothing a failing check names is the shaft diameter.
+    assert "diameter" not in set(train["levers"].values())
+    factors = train["factors"]
+    # The card carries the life as a ratio, so the hours the docstring quotes are rebuilt
+    # here from the published law rather than read back off the rounded factor.
+    equivalent = 0.56 * 4.2 + 1.45 * 1.1
+    hours = (35.1 / equivalent) ** 3 * 1.0e6 / (60.0 * 1450.0)
+    assert factors["bearing rating life"] == pytest.approx(hours / 20000.0, abs=0.005)
+    _assert_narrates("drive_train_scorecard.py", factors["key side bearing"], hours)
+
+
 def test_gear_mesh_example_names_two_different_modules():
     namespace = runpy.run_path(str(_EXAMPLES / "gear_mesh_scorecard.py"))
     limits = namespace["mesh_limits"]()

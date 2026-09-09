@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/shaft_key/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'shaft_key': the fields a Design Spec puts in `element_params` when it declares `element_type: shaft_key`. Generated from anvilate.packs.machinery.ShaftKey.",
+  "properties": {
+    "allowable_bearing": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "allowable_shear": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "key_height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "key_length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "key_width": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "shaft_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "torque": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "shaft_diameter",
+    "key_width",
+    "key_height",
+    "key_length",
+    "torque",
+    "allowable_shear",
+    "allowable_bearing"
+  ],
+  "title": "ShaftKey",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/rolling_bearing/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'rolling_bearing': the fields a Design Spec puts in `element_params` when it declares `element_type: rolling_bearing`. Generated from anvilate.packs.machinery.RollingBearing.",
+  "properties": {
+    "axial_factor": {
+      "title": "Axial Factor",
+      "type": "number"
+    },
+    "axial_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "dynamic_load_rating": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "life_exponent": {
+      "default": 3.0,
+      "title": "Life Exponent",
+      "type": "number"
+    },
+    "radial_factor": {
+      "title": "Radial Factor",
+      "type": "number"
+    },
+    "radial_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "required_life_hours": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "required_static_factor": {
+      "default": 1.0,
+      "title": "Required Static Factor",
+      "type": "number"
+    },
+    "signed_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Signed Fields",
+      "type": "array"
+    },
+    "speed": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "static_load_rating": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "dynamic_load_rating",
+    "static_load_rating",
+    "radial_load",
+    "axial_load",
+    "radial_factor",
+    "axial_factor",
+    "speed",
+    "required_life_hours"
+  ],
+  "title": "RollingBearing",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

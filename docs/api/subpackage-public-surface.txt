@@ -70,10 +70,14 @@ packs.industrial.PlateEdge
 packs.industrial.screen_cover_plate
 packs.lighting.LightingInstallation
 packs.lighting.screen_lighting
+packs.machinery.RollingBearing
+packs.machinery.ShaftKey
 packs.machinery.SpurGearMesh
 packs.machinery.TransmissionShaft
 packs.machinery.screen_gear_mesh
+packs.machinery.screen_rolling_bearing
 packs.machinery.screen_shaft
+packs.machinery.screen_shaft_key
 packs.masonry.MasonryWall
 packs.masonry.screen_masonry_wall
 packs.noise_exposure.WorkerNoiseExposure

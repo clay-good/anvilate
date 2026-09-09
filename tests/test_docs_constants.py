@@ -1966,3 +1966,71 @@ def test_the_machinery_pages_gear_table_is_the_screens_own_four_answers():
     assert pitting == pytest.approx(
         entries["surface pitting"].repair_hint.corrective_value, abs=0.005
     )
+
+
+def test_the_machinery_pages_drive_train_figures_are_the_screens_own():
+    """The key's two lengths and the bearing's life, both quoted in prose on the page.
+
+    The page argues that the two key limit states name two DIFFERENT lengths and that the
+    bearing falls short of the life asked for. Three numbers carry that argument and none of
+    them is in a table, which is exactly where a figure goes stale unnoticed.
+    """
+    from anvilate.packs.machinery import (
+        RollingBearing,
+        ShaftKey,
+        screen_rolling_bearing,
+        screen_shaft_key,
+    )
+    from anvilate.units import Quantity
+
+    page = _page("machinery-screening.md")
+
+    key = ShaftKey(
+        shaft_diameter=Quantity.parse("40 mm"),
+        key_width=Quantity.parse("12 mm"),
+        key_height=Quantity.parse("8 mm"),
+        key_length=Quantity.parse("10 mm"),
+        torque=Quantity.parse("400 N*m"),
+        allowable_shear=Quantity.parse("100 MPa"),
+        allowable_bearing=Quantity.parse("180 MPa"),
+    )
+    lengths = {
+        entry.name: entry.repair_hint.corrective_value
+        for entry in screen_shaft_key(key).entries
+        if entry.repair_hint is not None
+    }
+    stated = re.search(r"([\d.]+) mm and ([\d.]+) mm for this key", " ".join(page.split()))
+    assert stated is not None, "the two-key-lengths sentence on machinery-screening.md has moved"
+    shear, bearing = (float(value) for value in stated.groups())
+    assert shear == pytest.approx(lengths["key shear"], abs=0.005)
+    assert bearing == pytest.approx(lengths["key side bearing"], abs=0.005)
+
+    unit = RollingBearing(
+        dynamic_load_rating=Quantity.parse("35.1 kN"),
+        static_load_rating=Quantity.parse("19.3 kN"),
+        radial_load=Quantity.parse("4.2 kN"),
+        axial_load=Quantity.parse("1.1 kN"),
+        radial_factor=0.56,
+        axial_factor=1.45,
+        speed=Quantity.parse("1450 rpm"),
+        required_life_hours=Quantity.parse("20000 hour"),
+        required_static_factor=1.5,
+    )
+    life = {e.name: e for e in screen_rolling_bearing(unit).entries}["bearing rating life"]
+    flat = " ".join(page.split())
+    quoted = re.search(
+        r"`P = X·F_r \+ Y·F_a` = ([\d.]+) kN, and .*? reaches ([\d,]+) hours against the "
+        r"([\d,]+) asked for — a factor of (\d+\.\d+)",
+        flat,
+    )
+    assert quoted is not None, "the bearing-life sentence on machinery-screening.md has moved"
+    load, hours, wanted, factor = quoted.groups()
+    assert float(load) == pytest.approx(3.947, abs=0.005)
+    assert float(hours.replace(",", "")) == pytest.approx(
+        float(wanted.replace(",", "")) * life.safety_factor, abs=1.0
+    )
+    assert float(factor) == pytest.approx(life.safety_factor, abs=0.005)
+
+    rating = re.search(r"names ([\d.]+) kN as the least C", flat)
+    assert rating is not None, "the least-C sentence on machinery-screening.md has moved"
+    assert float(rating.group(1)) == pytest.approx(life.repair_hint.corrective_value, abs=0.005)

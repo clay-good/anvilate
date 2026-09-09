@@ -5,16 +5,21 @@ from __future__ import annotations
 import pytest
 
 from anvilate.analysis import (
+    ROLLER_BEARING_LIFE_EXPONENT,
     agma_module_for_bending_stress,
     gear_pitch_diameter,
     gear_tangential_load,
     shaft_diameter_de_goodman,
 )
 from anvilate.packs.machinery import (
+    RollingBearing,
+    ShaftKey,
     SpurGearMesh,
     TransmissionShaft,
     screen_gear_mesh,
+    screen_rolling_bearing,
     screen_shaft,
+    screen_shaft_key,
 )
 from anvilate.scorecard import CheckStatus, Direction
 from anvilate.units import Quantity
@@ -367,3 +372,165 @@ def test_a_geometric_threshold_takes_no_design_margin_on_top():
     for name in ("contact ratio", "undercut"):
         assert _named(strict)[name].status is _named(relaxed)[name].status
         assert _named(strict)[name].safety_factor == _named(relaxed)[name].safety_factor
+
+
+def _key(**overrides) -> ShaftKey:
+    fields = {
+        "shaft_diameter": _q("40 mm"),
+        "key_width": _q("12 mm"),
+        "key_height": _q("8 mm"),
+        "key_length": _q("40 mm"),
+        "torque": _q("400 N*m"),
+        "allowable_shear": _q("100 MPa"),
+        "allowable_bearing": _q("180 MPa"),
+    }
+    fields.update(overrides)
+    return ShaftKey(**fields)
+
+
+def test_the_key_is_governed_by_bearing_and_pins_both_stresses():
+    """τ = 2·T/(d·w·L) = 41.667 MPa and σ_b = 4·T/(d·h·L) = 125 MPa, derived here.
+
+    The key is the part of a drive that is meant to fail first, and it is the part a shaft's
+    own card says nothing about: this shaft passes two of its three limits at 40 mm and its
+    key is over bearing at a required 2.0.
+    """
+    names = _named(screen_shaft_key(_key()))
+    assert set(names) == {"key shear", "key side bearing"}
+    assert names["key shear"].safety_factor == pytest.approx(100.0 / (41.6 + 2 / 30), rel=1e-9)
+    assert names["key side bearing"].safety_factor == pytest.approx(180.0 / 125.0, rel=1e-12)
+    assert names["key shear"].status is CheckStatus.PASS
+    assert names["key side bearing"].status is CheckStatus.FAIL
+
+
+@pytest.mark.parametrize(
+    ("check", "key"),
+    [
+        # A flat key is governed by shear, a square one in a soft hub by bearing, so both
+        # levers are reached rather than only the one this joint happens to hit.
+        ("key shear", _key(key_width=_q("4 mm"), key_height=_q("20 mm"))),
+        ("key side bearing", _key()),
+    ],
+)
+def test_screen_shaft_key_names_the_length_each_limit_state_needs(check, key):
+    entry = _named(screen_shaft_key(key))[check]
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert hint is not None and hint.parameter == "key_length"
+    assert hint.corrective_value is not None
+    repaired = key.model_copy(
+        update={"key_length": Quantity(magnitude=hint.corrective_value, unit="mm")}
+    )
+    assert _named(screen_shaft_key(repaired))[check].status is CheckStatus.PASS
+    under = key.model_copy(
+        update={"key_length": Quantity(magnitude=hint.corrective_value * 0.999, unit="mm")}
+    )
+    assert _named(screen_shaft_key(under))[check].status is CheckStatus.FAIL
+
+
+def test_the_two_key_limit_states_name_two_different_lengths():
+    """Shear acts across the width and bearing on half the height, so the proportions decide.
+
+    A key whose two lengths agreed would be a key where one of the two checks is redundant,
+    and the shape of this screen is the claim that neither is.
+    """
+    key = _key(key_length=_q("10 mm"))
+    lengths = {
+        entry.name: entry.repair_hint.corrective_value
+        for entry in screen_shaft_key(key).entries
+        if entry.repair_hint is not None
+    }
+    assert len(lengths) == 2
+    assert lengths["key shear"] != pytest.approx(lengths["key side bearing"], rel=1e-6)
+    # The ratio is 2·w·τ_allow/(h·σ_b) = 2·12·100/(8·180) = 1.667: the proportions AND the
+    # two allowables, which is why neither check can be inferred from the other.
+    assert lengths["key side bearing"] == pytest.approx(
+        lengths["key shear"] * 2.0 * 12.0 * 100.0 / (8.0 * 180.0), rel=1e-9
+    )
+
+
+def _bearing(**overrides) -> RollingBearing:
+    fields = {
+        "dynamic_load_rating": _q("35.1 kN"),
+        "static_load_rating": _q("19.3 kN"),
+        "radial_load": _q("4.2 kN"),
+        "axial_load": _q("1.1 kN"),
+        "radial_factor": 0.56,
+        "axial_factor": 1.45,
+        "speed": _q("1450 rpm"),
+        "required_life_hours": _q("20000 hour"),
+        "required_static_factor": 1.5,
+    }
+    fields.update(overrides)
+    return RollingBearing(**fields)
+
+
+def test_the_bearing_life_and_static_checks_are_pinned_to_their_own_arithmetic():
+    """P = 0.56·4.2 + 1.45·1.1 = 3.947 kN; L₁₀ₕ = (C/P)³·10⁶/(60·n), derived here.
+
+    The static check reads P₀ = max(F_r, X₀·F_r + Y₀·F_a) = 4.2 kN — the radial load alone
+    governs, which is the ISO 76 rule and not the same combination the life check uses.
+    """
+    names = _named(screen_rolling_bearing(_bearing()))
+    assert set(names) == {"bearing rating life", "bearing static capacity"}
+    equivalent = 0.56 * 4.2 + 1.45 * 1.1
+    hours = (35.1 / equivalent) ** 3 * 1.0e6 / (60.0 * 1450.0)
+    assert names["bearing rating life"].safety_factor == pytest.approx(hours / 20000.0, rel=1e-9)
+    assert names["bearing static capacity"].safety_factor == pytest.approx(
+        (19.3 / 4.2) / 1.5, rel=1e-9
+    )
+    assert names["bearing rating life"].status is CheckStatus.FAIL
+    assert names["bearing static capacity"].status is CheckStatus.PASS
+
+
+@pytest.mark.parametrize(
+    ("check", "parameter", "unit"),
+    [
+        ("bearing rating life", "dynamic_load_rating", _bearing()),
+        ("bearing static capacity", "static_load_rating", _bearing(static_load_rating=_q("5 kN"))),
+    ],
+)
+def test_screen_rolling_bearing_names_the_catalogue_rating_that_clears_each_check(
+    check, parameter, unit
+):
+    """A bearing is selected, not machined, so the lever is the rating a table is indexed by."""
+    entry = _named(screen_rolling_bearing(unit))[check]
+    assert entry.status is CheckStatus.FAIL
+    hint = entry.repair_hint
+    assert hint is not None and hint.parameter == parameter
+    assert hint.corrective_value is not None and hint.unit == "kN"
+    repaired = unit.model_copy(
+        update={parameter: Quantity(magnitude=hint.corrective_value, unit="kN")}
+    )
+    assert _named(screen_rolling_bearing(repaired))[check].status is CheckStatus.PASS
+    under = unit.model_copy(
+        update={parameter: Quantity(magnitude=hint.corrective_value * 0.999, unit="kN")}
+    )
+    assert _named(screen_rolling_bearing(under))[check].status is CheckStatus.FAIL
+
+
+def test_the_life_exponent_is_worth_stating_because_it_moves_the_answer():
+    """3 for a ball bearing, 10/3 for a roller: the exponent the whole calculation turns on.
+
+    It is a field rather than something the screen guesses, and this pins that the guess
+    would have mattered — the same bearing rated as a roller reaches a different life.
+    """
+    ball = _named(screen_rolling_bearing(_bearing()))["bearing rating life"].safety_factor
+    roller = _named(screen_rolling_bearing(_bearing(life_exponent=ROLLER_BEARING_LIFE_EXPONENT)))[
+        "bearing rating life"
+    ].safety_factor
+    assert roller > ball * 1.5, (ball, roller)
+
+
+def test_a_static_factor_is_not_stacked_on_the_life_checks_margin():
+    """s₀ is already a safety factor; screening it at the life margin asks for a second one."""
+    unit = _bearing()
+    strict = _named(screen_rolling_bearing(unit, required_safety_factor=3.0))
+    relaxed = _named(screen_rolling_bearing(unit, required_safety_factor=1.0))
+    assert (
+        strict["bearing static capacity"].safety_factor
+        == relaxed["bearing static capacity"].safety_factor
+    )
+    assert strict["bearing rating life"].safety_factor == pytest.approx(
+        relaxed["bearing rating life"].safety_factor
+    )

@@ -2203,6 +2203,36 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
             ),
         ),
         (
+            "shaft key",
+            machinery.screen_shaft_key(
+                machinery.ShaftKey(
+                    shaft_diameter=q("40 mm"),
+                    key_width=q("12 mm"),
+                    key_height=q("8 mm"),
+                    key_length=q("10 mm"),
+                    torque=q("400 N*m"),
+                    allowable_shear=q("100 MPa"),
+                    allowable_bearing=q("180 MPa"),
+                )
+            ),
+        ),
+        (
+            "rolling bearing",
+            machinery.screen_rolling_bearing(
+                machinery.RollingBearing(
+                    dynamic_load_rating=q("35.1 kN"),
+                    static_load_rating=q("19.3 kN"),
+                    radial_load=q("4.2 kN"),
+                    axial_load=q("1.1 kN"),
+                    radial_factor=0.56,
+                    axial_factor=1.45,
+                    speed=q("1450 rpm"),
+                    required_life_hours=q("20000 hour"),
+                    required_static_factor=1.5,
+                )
+            ),
+        ),
+        (
             "gear mesh",
             machinery.screen_gear_mesh(
                 machinery.SpurGearMesh(
