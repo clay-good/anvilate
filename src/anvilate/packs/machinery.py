@@ -673,8 +673,8 @@ def _contact_ratio_entry(mesh: SpurGearMesh) -> ScorecardEntry:
                     "pressure_angle",
                     direction=Direction.DECREASE,
                     provenance=(
-                        "contact ratio falls monotonically with pressure angle over "
-                        "14.5°-30°; the module cannot move it at all"
+                        "monotonic fall of the contact ratio with pressure angle "
+                        "across 14.5°-30°, which the module cannot move at all"
                     ),
                 )
             }
@@ -1215,9 +1215,9 @@ def _spring_shear_entry(
                     "wire_diameter",
                     direction=Direction.INCREASE,
                     provenance=(
-                        "τ falls monotonically with wire diameter over a spring index of "
-                        "4 to 12; the Wahl factor rises as the wire thickens and the d³ "
-                        "still wins"
+                        "monotonic fall of τ with wire diameter across a spring index "
+                        "of 4 to 12, the Wahl factor's rise as the wire thickens "
+                        "notwithstanding"
                     ),
                 )
             }
@@ -1373,8 +1373,8 @@ def _spring_buckling_entry(coil: HelicalCompressionSpring) -> ScorecardEntry:
                     "free_length",
                     direction=Direction.DECREASE,
                     provenance=(
-                        "critical deflection falls monotonically as the free length "
-                        "grows; the clearance check pulls this parameter the other way"
+                        "monotonic fall of the critical deflection as the free length "
+                        "grows, against which the clearance check pulls the other way"
                     ),
                 )
             }

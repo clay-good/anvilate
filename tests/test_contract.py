@@ -1715,12 +1715,21 @@ def test_every_solved_repair_lever_has_a_test_that_notices_a_wrong_value():
 
 
 def test_no_repair_provenance_repeats_the_article_the_renderer_supplies():
-    """The report writes "— from the ", and two provenances began with "the".
+    """The report writes "— from the ", so a provenance has to be a noun phrase.
 
-    Rendered on the page as "from the the resistive half of the drop" and "from the the
-    line current the run carries". Both were mine, written an hour apart, and nothing saw
-    them: every assertion about that line checks a substring that sits after the join. The
-    page did, on the first read.
+    Two ways it can fail, and this repository has met both by reading the rendered page.
+
+    It began with an article: "from the **the** resistive half of the drop", "from the
+    **the** line current the run carries". Both were mine, written an hour apart, and
+    nothing saw them, because every assertion about that line checks a substring sitting
+    after the join.
+
+    Or it was a SENTENCE rather than a phrase: "from the **τ falls monotonically with wire
+    diameter** over a spring index of 4 to 12". Three of the spring and gear hints read that
+    way in an exported evidence bundle. The tell is mechanical — a semicolon joins two
+    independent clauses, and a noun phrase naming where a value came from has no use for
+    one. All 44 provenances in the library are noun phrases; only those three carried a
+    semicolon, so the rule costs nothing and would have caught them.
     """
     provenances: list[tuple[str, str]] = []
     for path, tree in library_sources():
@@ -1753,6 +1762,12 @@ def test_no_repair_provenance_repeats_the_article_the_renderer_supplies():
         f"{where}: {text}"
         for where, text in provenances
         if text.lower().startswith(("the ", "a ", "an "))
+    )
+    sentences = sorted(f"{where}: {text}" for where, text in provenances if ";" in text)
+    assert not sentences, (
+        'a repair hint\'s provenance is rendered after "— from the ", so it is a noun '
+        "phrase naming where the value came from. A semicolon joins two independent "
+        "clauses, which means a sentence got in:\n  " + "\n  ".join(sentences)
     )
     assert not doubled, (
         'a repair hint\'s provenance is rendered after "— from the ", so one that opens '

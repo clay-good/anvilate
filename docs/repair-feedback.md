@@ -42,6 +42,16 @@ root left the repaired plate at a safety factor of 1.9999999999999996 against a
 required 2.0 — the fix this library named was itself a `FAIL`. See
 [`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
 
+### A provenance is a noun phrase, because the report supplies the article
+
+The rendered line is `repair: increase free_length to 173.2 mm — from the solid length plus
+the required multiple of the travel used`. The report writes `— from the `, so a provenance
+that begins with its own article renders "from the the resistive half of the drop", and a
+provenance that is a *sentence* renders "from the τ falls monotonically with wire diameter".
+Both have shipped, both were found by reading an exported artifact rather than by any
+assertion, and both are gated now — the second by the tell that a semicolon joins two
+independent clauses and a noun phrase has no use for one.
+
 ### A hint has to be one you can act on
 
 The inventory says *which* parameter each screen names. What it cannot say is whether the
