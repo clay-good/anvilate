@@ -263,6 +263,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     _report_render_truth(session, full_run=False)
     _report_typesetting(session, full_run=False)
     _report_repair_hints(session, full_run=False)
+    _report_machine_spellings(session, full_run=False)
 
     option = session.config.option
     filtered = bool(
@@ -361,6 +362,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     _report_render_truth(session, full_run=True)
     _report_typesetting(session, full_run=True)
     _report_repair_hints(session, full_run=True)
+    _report_machine_spellings(session, full_run=True)
 
     stale = _stale_registry_lines(coverage, registry)
     if stale:
@@ -1206,7 +1208,10 @@ def _report_render_truth(session, *, full_run: bool) -> None:
 # Both are in the grammar now, and this is the gate that would have said so.
 
 
-def _typesetting_findings() -> tuple[int, list[str]]:
+_NUMBER_TOKEN = re.compile(r"<mn>([^<]*)</mn>")
+
+
+def _typesetting_findings() -> tuple[int, list[str], list[str]]:
     """Every distinct derivation line the suite built, put to the MathML renderer."""
     from xml.etree import ElementTree as ET
 
@@ -1214,6 +1219,7 @@ def _typesetting_findings() -> tuple[int, list[str]]:
 
     seen: set[str] = set()
     declined: list[str] = []
+    mangled: list[str] = []
     typeset = 0
     for entry in _library_entries.values():
         derivation = getattr(entry, "derivation", None)
@@ -1229,8 +1235,23 @@ def _typesetting_findings() -> tuple[int, list[str]]:
                 continue
             # Valid XML, or the report is not a document a browser can open.
             ET.fromstring(math)
+            # A number token carrying a letter is the tokenizer having split a number in the
+            # wrong place, and **the round trip cannot see it**: the wrong tree writes back
+            # out as exactly the string it came from. `1.74e+09` used to become the number
+            # `1.74e` plus the number `09`, so a bearing's rating-life line typeset as
+            # "divided by 1.74e, plus 09" — a formula in a submittal document saying
+            # something the check did not. It took a person rendering the page to find it,
+            # which is the argument for this being a gate.
+            lettered = [
+                number
+                for number in _NUMBER_TOKEN.findall(math)
+                if any(char.isalpha() for char in number)
+            ]
+            if lettered:
+                mangled.append(f"{entry.name}: {line} — typeset with {lettered} as numbers")
+                continue
             typeset += 1
-    return typeset, declined
+    return typeset, declined, mangled
 
 
 def _report_typesetting(session, *, full_run: bool) -> None:
@@ -1240,7 +1261,7 @@ def _report_typesetting(session, *, full_run: bool) -> None:
     what this run reached and fails on any selection; the floor is a claim about reach and
     needs a full run.
     """
-    typeset, declined = _typesetting_findings()
+    typeset, declined, mangled = _typesetting_findings()
     if full_run:
         if typeset < 2000:
             print(
@@ -1249,6 +1270,14 @@ def _report_typesetting(session, *, full_run: bool) -> None:
             )
             session.exitstatus = 1
         return
+    if mangled:
+        print(
+            "\nTYPESETTING: these lines typeset with a number token carrying a letter, "
+            "which is the tokenizer splitting a number in the wrong place — and the "
+            "renderer's round trip cannot see it, because the wrong tree writes back out as "
+            "the string it came from:\n  " + "\n  ".join(sorted(set(mangled)))
+        )
+        session.exitstatus = 1
     if declined:
         print(
             "\nTYPESETTING: derivations the MathML renderer declined, so a submittal "
@@ -1327,5 +1356,96 @@ def _report_repair_hints(session, *, full_run: bool) -> None:
         print(
             "\nREPAIR HINTS: these are not hints a caller can act on:\n  "
             + "\n  ".join(sorted(set(findings)))
+        )
+        session.exitstatus = 1
+
+
+# ---------------------------------------------------------------------------
+# The machine-spelling sweep.
+#
+# `units.unit_label` exists because a repair hint printed `4000 mm**2` — a unit the way the
+# machine writes it — in a document a reviewer signs. A `StrEnum`'s value is the same kind
+# of thing: `simply_supported`, `quasi_static`, `as_forged` are identifiers, and
+# interpolating one into a sentence puts a snake_case token on the page. Sixteen rendered
+# descriptions read "peak bending moment, fixed_fixed beam under point load".
+#
+# The gate RESOLVES rather than matching a spelling: it collects every enum value the
+# package actually declares and looks for those, so a snake_case token that is a field name
+# the CLI is quoting back ("element_params do not build a BasePlate") is not a finding, and
+# a new enum is covered the day it ships. `units.spoken` is the fix at the interpolation.
+
+
+_WORD_SHAPED = re.compile(r"[a-z][a-z0-9]+(?:_[a-z][a-z0-9]+)+")
+
+
+def _declared_enum_values() -> set[str]:
+    """Every multi-word value declared by an enum anywhere in the package."""
+    import enum
+    import importlib
+    import pkgutil
+
+    import anvilate
+
+    values: set[str] = set()
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # noqa: BLE001 - an optional dependency is not this gate's subject
+            continue
+        for member in vars(module).values():
+            if isinstance(member, type) and issubclass(member, enum.Enum):
+                for item in member:
+                    # WORD-shaped values only. An enum whose value is a SYMBOL — the
+                    # aluminium strengths are `F_c`, `F_cy` — is the way an engineer writes
+                    # that symbol, and is house style everywhere else in these documents.
+                    # What this gate is about is an identifier standing where English does.
+                    if isinstance(item.value, str) and _WORD_SHAPED.fullmatch(item.value):
+                        values.add(item.value)
+    return values
+
+
+def _machine_spelling_findings() -> tuple[int, list[str]]:
+    """Every rendered text the suite built, checked for an enum's own spelling."""
+    declared = _declared_enum_values()
+    seen: set[tuple[str, str]] = set()
+    findings: list[str] = []
+    swept = 0
+    for entry in _library_entries.values():
+        texts = [("detail", entry.name, entry.detail)]
+        derivation = getattr(entry, "derivation", None)
+        if derivation is not None:
+            for symbol in (*derivation.inputs, derivation.result):
+                texts.append(("description", symbol.symbol, symbol.description))
+        for kind, where, text in texts:
+            if (kind, text) in seen:
+                continue
+            seen.add((kind, text))
+            swept += 1
+            # A value the text is QUOTING — in backticks or straight quotes — is the
+            # document's own key being read back, which is what a diagnostic should do.
+            for value in declared:
+                if re.search(rf"(?<![`'\"\w]){re.escape(value)}(?![`'\"\w])", text):
+                    findings.append(
+                        f"{kind} [{where}]: {value!r} is an enum's own spelling — "
+                        f"`units.spoken` is how a document writes it: {text[:80]!r}"
+                    )
+    return swept, findings
+
+
+def _report_machine_spellings(session, *, full_run: bool) -> None:
+    """Fail the run when a rendered text carries an identifier where English belongs."""
+    swept, findings = _machine_spelling_findings()
+    if full_run:
+        if swept < 1500:
+            print(
+                f"\nMACHINE SPELLINGS: only {swept} rendered texts were swept; the suite "
+                f"builds far more, and a sweep that stops finding its subject passes"
+            )
+            session.exitstatus = 1
+        return
+    if findings:
+        print(
+            "\nMACHINE SPELLINGS: these rendered texts carry an enum's own value where "
+            "English belongs:\n  " + "\n  ".join(sorted(set(findings)))
         )
         session.exitstatus = 1

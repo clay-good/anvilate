@@ -722,7 +722,8 @@ def test_beam_bending_derivation_names_the_load_case_behind_the_moment():
     assert derivation.symbolic == "σ_b = M · c / I"
     assert derivation.unresolved_symbols() == ()
     moment = next(item for item in derivation.inputs if item.symbol == "M")
-    assert "simply_supported" in moment.description
+    assert "simply-supported" in moment.description
+    assert "simply_supported" not in moment.description
     assert "distributed" in moment.description
     assert derivation.substituted() == "σ_b = 10.00 kN·m · 75.00 mm / 28125000.00 mm⁴"
 
@@ -1024,6 +1025,50 @@ def test_the_render_truth_tolerance_reads_the_exponents_in_its_own_line():
     assert _rounding_slack("U = 1.4 \u00b7 60 + 1.3 \u00b7 180 + 1.0 \u00b7 30") == 0.0
     assert _rounding_slack("k_a = min(1, 4.51\u00b7655^-0.265)") == 0.0
     assert _rounding_slack("\u03c3 = 3\u00b7(3 + 0.3)\u00b70.0500 MPa") > 0.0
+
+
+def test_spoken_leaves_the_choice_of_separator_to_the_caller():
+    """`fixed_pinned` is a compound adjective; `yield_strength` is a noun phrase.
+
+    Which separator is right is a fact about the sentence and not about the string, so
+    :func:`~anvilate.units.spoken` takes it and has no default. A single mechanical rule
+    would have written either "fixed pinned beam" or "specification-minimum", and both read
+    as a machine trying to speak.
+    """
+    from anvilate.units import spoken
+
+    assert spoken("fixed_pinned", joined_by="-") == "fixed-pinned"
+    assert spoken("as_forged", joined_by="-") == "as-forged"
+    assert spoken("yield_strength", joined_by=" ") == "yield strength"
+    assert spoken("specification_minimum", joined_by=" ") == "specification minimum"
+    # A value with nothing to join comes back unchanged rather than being decorated.
+    assert spoken("typical", joined_by=" ") == "typical"
+
+
+def test_scientific_notation_is_one_number_and_not_an_addition():
+    """`1.74e+09` used to typeset as "1.74e, plus 09" — and the round trip could not see it.
+
+    A bearing's rating life prints its required revolutions in scientific notation. The
+    tokenizer read `1.74e` as a number, `+` as an operator and `09` as another number, so
+    the report showed a fraction divided by 1.74e with 09 added to it: a formula in a
+    submittal document saying something the check did not. The parse tree wrote back out as
+    exactly the string it came from, so the round-trip guard passed it — it took rendering
+    the page and looking at it to find, which is why the sweep in conftest.py now checks for
+    a number token carrying a letter.
+    """
+    math = formula_to_mathml("U = x/1.74e+09")
+    assert math is not None
+    assert "<mn>1.74e</mn>" not in math
+    assert "<mo>+</mo>" not in math
+    # And it reads as what it means: 1.74 × 10⁹, with the leading zero of the exponent gone.
+    assert "<mn>1.74</mn><mo>\u00d7</mo><msup><mn>10</mn><mrow><mn>9</mn></mrow></msup>" in math
+
+    negative = formula_to_mathml("x = 2.5e-3\u00b7y")
+    assert negative is not None and "<mn>\u22123</mn>" in negative
+
+    # A trailing `e` with no exponent behind it is not scientific notation and is left alone.
+    plain = formula_to_mathml("z = 2e\u00b7x")
+    assert plain is not None and "<mn>2e</mn>" in plain
 
 
 def test_a_caret_exponent_and_a_word_operator_typeset():

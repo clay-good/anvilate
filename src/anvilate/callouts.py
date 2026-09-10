@@ -50,7 +50,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
-from .units import Quantity, require_finite
+from .units import Quantity, require_finite, spoken
 
 __all__ = [
     "MARIN_SURFACE_CITATION",
@@ -593,6 +593,8 @@ def _marin_work(finish: SurfaceFinish, ultimate_strength: Quantity, factor: floa
             )
         }
     a, b = MARIN_SURFACE_CONSTANTS_MPA[finish.method.value]
+    # A compound adjective in front of a noun: an *as-forged* surface.
+    named_finish = spoken(finish.method.value, joined_by="-")
     return {
         "derivation": Derivation(
             symbolic="k_a = min(1, a·S_u^b)",
@@ -600,16 +602,13 @@ def _marin_work(finish: SurfaceFinish, ultimate_strength: Quantity, factor: floa
                 SymbolValue(
                     symbol="a",
                     description=(
-                        f"Marin surface-finish coefficient for a {finish.method.value} "
-                        f"surface, S_u in MPa"
+                        f"Marin surface-finish coefficient, {named_finish} surface, S_u in MPa"
                     ),
                     value=a,
                 ),
                 SymbolValue(
                     symbol="b",
-                    description=(
-                        f"Marin surface-finish exponent for a {finish.method.value} surface"
-                    ),
+                    description=(f"Marin surface-finish exponent, {named_finish} surface"),
                     value=b,
                 ),
                 SymbolValue(

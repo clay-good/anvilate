@@ -15,7 +15,14 @@ from .quantity import Quantity, _unit_object, display_unit
 from .registry import UREG
 from .system import UnitSystem
 
-__all__ = ["render", "render_dual", "decimals_for", "decimals_distinguishing", "unit_label"]
+__all__ = [
+    "render",
+    "render_dual",
+    "decimals_for",
+    "decimals_distinguishing",
+    "spoken",
+    "unit_label",
+]
 
 # Decimals by dimensionality string. Falls through to a per-unit override below
 # and then to a default.
@@ -129,6 +136,27 @@ def unit_label(unit: str) -> str:
     document a reviewer signs.
     """
     return display_unit(_engineering_order(f"{_unit_object(unit):~P}"))
+
+
+def spoken(machine: str, *, joined_by: str) -> str:
+    """An enum's own spelling as a document writes it: ``"fixed_pinned"`` -> ``"fixed-pinned"``.
+
+    The sibling of :func:`unit_label`, for the other machine spelling that leaks into prose.
+    A ``StrEnum``'s value is an identifier — ``simply_supported``, ``quasi_static``,
+    ``as_forged`` — and interpolating one into a sentence puts a snake_case token in a
+    document a reviewer signs: "peak bending moment, fixed_fixed beam under point load".
+    Sixteen rendered descriptions read that way, across the beam supports, the shock regimes
+    and the Marin surface finishes, and a material-basis refusal read "AISI-4140
+    yield_strength is typical ... and specification_minimum was required".
+
+    ``joined_by`` has **no default, and that is the point**: which separator is right is a
+    fact about the sentence and not about the string. A beam support or a surface finish is
+    a compound adjective in front of a noun and takes a hyphen — a *fixed-pinned* beam, an
+    *as-forged* surface. A property or a basis is a noun phrase and takes a space — the
+    *yield strength*, a *specification minimum*. Nothing in ``simply_supported`` says which
+    of the two it is, so the caller says.
+    """
+    return machine.replace("_", joined_by)
 
 
 def render(

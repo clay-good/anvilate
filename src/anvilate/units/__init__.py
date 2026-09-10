@@ -12,6 +12,7 @@ from .format import (
     decimals_for,
     render,
     render_dual,
+    spoken,
     unit_label,
 )
 from .quantity import (
@@ -58,6 +59,7 @@ __all__ = [
     "temperature_difference_kelvin",
     "render",
     "render_dual",
+    "spoken",
     "unit_label",
     "decimals_for",
     "decimals_distinguishing",

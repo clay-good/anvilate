@@ -1702,7 +1702,7 @@ def test_require_basis_refuses_a_typical_value_where_a_minimum_is_demanded():
         name="yield strength",
     )
     assert allowed.to("MPa").magnitude == pytest.approx(250.0)
-    with pytest.raises(InsufficientBasis, match="requires at least specification_minimum"):
+    with pytest.raises(InsufficientBasis, match="requires at least specification minimum"):
         require_basis(
             database.get("AISI-4140").yield_strength,
             minimum,

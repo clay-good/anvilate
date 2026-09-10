@@ -86,7 +86,7 @@ from ..scorecard import (
     ScorecardEntry,
 )
 from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
-from ..units import Quantity
+from ..units import Quantity, spoken
 from ._guarded import (
     DESIGN_BASIS,
     DesignAllowable,
@@ -573,6 +573,8 @@ def screen_beam_member(
     yield_allowable = design_allowable(
         record, "yield_strength", material_id=member.material, basis=required_basis
     )
+    # A compound adjective in front of a noun: a *simply-supported* beam.
+    named_support = spoken(member.support.value, joined_by="-")
     entries = [
         strength_scorecard(
             f"{member.name} bending",
@@ -593,7 +595,7 @@ def screen_beam_member(
                         SymbolValue(
                             symbol="M",
                             description=(
-                                f"peak bending moment, {member.support.value} beam under "
+                                f"peak bending moment, {named_support} beam under "
                                 f"{member.load_type.value} load"
                             ),
                             value=result.max_moment,

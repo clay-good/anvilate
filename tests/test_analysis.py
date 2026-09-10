@@ -11558,7 +11558,10 @@ def test_half_sine_shock_scorecard_names_the_regime_beside_the_number():
 
     # Stiffening further, past the peak, improves it again — the non-monotonic middle.
     rigid = half_sine_shock_scorecard("shock", natural_frequency=_q("300 Hz"), **common)
-    assert "quasi_static" in rigid.detail
+    # The regime, as a document writes it. A `StrEnum` value is an identifier, and
+    # interpolating one puts `quasi_static` in a report a reviewer signs.
+    assert "quasi-static" in rigid.detail
+    assert "quasi_static" not in rigid.detail
     assert rigid.safety_factor > peak.safety_factor
 
     # No rating supplied is not a pass, and a zero pulse is not one either.

@@ -37,7 +37,7 @@ from ..scorecard import (
     RepairHint,
     ScorecardEntry,
 )
-from ..units import Quantity, decimals_distinguishing, require_finite
+from ..units import Quantity, decimals_distinguishing, require_finite, spoken
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
 
@@ -1006,10 +1006,12 @@ def half_sine_shock_scorecard(
     computed = None if response == 0 else allowable / response
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
     ratio = _shock_pulse_ratio(pulse_duration, natural_frequency)
+    # A compound adjective in front of a noun: a *quasi-static* response.
+    named_regime = spoken(regime.value, joined_by="-")
     return entry.model_copy(
         update={
             "detail": (
-                f"{regime.value} (τ/T = {ratio:.2f}), amplification {amplification:.2f}: "
+                f"{named_regime} (τ/T = {ratio:.2f}), amplification {amplification:.2f}: "
                 f"response {response / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g "
                 f"vs allowable "
                 f"{allowable / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g"
@@ -1038,7 +1040,7 @@ def half_sine_shock_scorecard(
                         symbol="A",
                         description=(
                             f"undamped maximax amplification from the half-sine shock "
-                            f"response spectrum at τ/T = {ratio:.3g} ({regime.value}); the "
+                            f"response spectrum at τ/T = {ratio:.3g} ({named_regime}); the "
                             f"larger of the residual and primary Duhamel branches, the "
                             f"second of which is a maximum over the stationary points "
                             f"inside the pulse"

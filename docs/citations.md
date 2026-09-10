@@ -127,7 +127,7 @@ from anvilate.standards import AllowableBasis, require_basis
 require_basis(record.yield_strength, AllowableBasis.SPECIFICATION_MINIMUM,
               material_id="AISI-4140", name="yield strength")
 # InsufficientBasis: AISI-4140 yield strength is typical (Shigley ... Table A-21), and
-#   this check requires at least specification_minimum ...
+#   this check requires at least specification minimum ...
 ```
 
 Every bundled strength is classified from **its own cited source**, not in bulk, and a
@@ -288,8 +288,8 @@ member = TensionMember(
     gross_area=Quantity.parse("500 mm**2"), net_area=Quantity.parse("450 mm**2"),
 )
 screen_tension_member(member, required_safety_factor=1.67)
-# [NOT_EVALUATED] tie gross yielding: not evaluated — AA-6061-T6 yield_strength is typical
-#   (ASM Aerospace Metals — 6061-T6), and this check requires at least specification_minimum
+# [NOT_EVALUATED] tie gross yielding: not evaluated — AA-6061-T6 yield strength is typical
+#   (ASM Aerospace Metals — 6061-T6), and this check requires at least specification minimum
 ```
 
 Every check the screen would have produced is still named. A consumer looking for "gross

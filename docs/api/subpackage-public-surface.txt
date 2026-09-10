@@ -446,6 +446,7 @@ units.format.decimals_distinguishing
 units.format.decimals_for
 units.format.render
 units.format.render_dual
+units.format.spoken
 units.format.unit_label
 units.quantity.DimensionError
 units.quantity.MissingUnitError
@@ -467,6 +468,7 @@ units.rotation.angular_speed_rad_per_s
 units.rotation.count_rate_per_second
 units.rotation.revolutions_per_minute
 units.rotation.revolutions_per_second
+units.spoken
 units.system.UnitSystem
 units.temperature.OffsetTemperatureError
 units.temperature.temperature_difference_kelvin

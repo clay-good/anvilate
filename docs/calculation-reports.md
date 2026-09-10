@@ -355,6 +355,23 @@ question is answered rather than open):
   any line earns today is 1.5%, and a line that buys more than 3% fails: either the model
   has started over-counting again, or the report is printing too few figures for a reviewer
   to check the line at all.
+- **Scientific notation is one number, and it used to typeset as an addition.** A bearing's
+  rating life prints its required revolutions as `1.74e+09`; the renderer read `1.74e` as a
+  number, `+` as an operator and `09` as another, so the report showed a fraction divided by
+  1.74e *with 09 added to it*. **The round-trip guard could not see it** — the wrong tree
+  writes back out as exactly the string it came from — so it took rendering the page and
+  looking at it. It reads as `1.74 × 10⁹` now, and the sweep fails any line that typesets a
+  number token carrying a letter.
+- **An enum's value is a machine spelling, like a unit's.** `units.unit_label` exists
+  because a repair hint printed `4000 mm**2` in a document a reviewer signs; sixteen
+  rendered descriptions read "peak bending moment, fixed_fixed beam under point load", and a
+  material-basis refusal read "AISI-4140 yield_strength is typical … and
+  specification_minimum was required". `units.spoken` is the fix, and it takes the separator
+  rather than choosing one: a beam support is a compound adjective and takes a hyphen
+  (*fixed-pinned*), a property or a basis is a noun phrase and takes a space (*yield
+  strength*), and nothing in the string says which. The sweep resolves against the enums the
+  package actually declares, so a field name a diagnostic is quoting back is not a finding
+  and a new enum is covered the day it ships.
 - **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
   US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
   force over SI area against a US stress, inside one equals sign.

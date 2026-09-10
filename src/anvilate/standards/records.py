@@ -15,7 +15,7 @@ from enum import StrEnum
 from pydantic import AfterValidator, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
-from ..units import DimensionError, Quantity
+from ..units import DimensionError, Quantity, spoken
 
 __all__ = [
     "AllowableBasis",
@@ -154,10 +154,19 @@ def require_basis(
     """
     if prop.citation.meets_basis(required):
         return prop.quantity
-    carried = "unclassified" if prop.citation.basis is None else prop.citation.basis.value
+    # The document's words, not the machine's. This refusal is rendered straight into a
+    # scorecard's detail — "AISI-4140 yield_strength is typical ... and
+    # specification_minimum was required" — so both the property name and the basis are
+    # spoken. `units.spoken` is the same rule `unit_label` applies to a unit.
+    carried = (
+        "unclassified"
+        if prop.citation.basis is None
+        else spoken(prop.citation.basis.value, joined_by=" ")
+    )
     raise InsufficientBasis(
-        f"{material_id} {name} is {carried} ({prop.citation.source}), and this check "
-        f"requires at least {required.value}. A typical value sits in the middle of the "
-        f"scatter, so roughly half the material is weaker than it; using one where a code "
-        f"demands a minimum overstates the capacity the material is sold with"
+        f"{material_id} {spoken(name, joined_by=' ')} is {carried} "
+        f"({prop.citation.source}), and this check requires at least "
+        f"{spoken(required.value, joined_by=' ')}. A typical value sits in the middle of "
+        f"the scatter, so roughly half the material is weaker than it; using one where a "
+        f"code demands a minimum overstates the capacity the material is sold with"
     )

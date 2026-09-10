@@ -80,7 +80,7 @@ from .standards.materials import (
 )
 from .tolerance.general import ToleranceClass, ToleranceRangeError, resolve_class
 from .tolerance.process import tolerance_is_achievable
-from .units import Quantity
+from .units import Quantity, spoken
 
 __all__ = [
     "Structure",
@@ -403,6 +403,8 @@ def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     FAIL that carries the source, never a hard limit stated without one.
     """
     process = spec.manufacturing.process.value
+    # A noun phrase in a sentence: "nothing to screen against the cnc milling floor".
+    named_process = spoken(process, joined_by=" ")
     if not spec.dimensions:
         return [
             ScorecardEntry(
@@ -410,7 +412,7 @@ def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 status=CheckStatus.NOT_EVALUATED,
                 detail=(
                     f"T2 was demanded and the spec declares no explicitly toleranced "
-                    f"dimension, so there is nothing to screen against the {process} floor"
+                    f"dimension, so there is nothing to screen against the {named_process} floor"
                 ),
             )
         ]

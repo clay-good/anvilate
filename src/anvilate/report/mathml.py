@@ -41,6 +41,7 @@ is a renderer for formulas this library writes:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
@@ -87,6 +88,11 @@ def _superscript_run(token: str) -> str | None:
 # parenthesis would otherwise become — and `min` is also a unit to anything reading the
 # line as a quantity, so the two readers of a formula have to agree about it.
 _WORD_FUNCTIONS = frozenset({"min", "max"})
+
+# `e+09`, `E-3`, `e5`: the tail of a number written in scientific notation.
+_SCIENTIFIC_TAIL = re.compile(r"[eE][+\u2212-]?\d+")
+# The same, split so the mantissa and the power of ten can be typeset as a product.
+_SCIENTIFIC = re.compile(r"^(-?\d+(?:\.\d+)?)[eE]([+\u2212-]?)0*(\d+)$")
 
 _PRODUCT = ("·", "*")
 _SUM = ("+", "-", "−")
@@ -156,6 +162,21 @@ def _tokenize(text: str) -> list[str]:
             ):
                 run += text[index]
                 index += 1
+            # Scientific notation is ONE number. `1.74e+09` used to tokenise as the number
+            # `1.74e`, a `+` and the number `09`, so a bearing's rating-life line typeset as
+            # "divided by 1.74e, plus 09" — a formula in a submittal document saying
+            # something the check did not. **The round trip cannot see it**: the wrong tree
+            # writes back out as exactly the string it came from, which is why this needed a
+            # person to render the page and look at it.
+            if (
+                index < len(text)
+                and text[index] in "eE"
+                and (exponent := _SCIENTIFIC_TAIL.match(text, index)) is not None
+            ):
+                run += exponent.group(0)
+                index = exponent.end()
+                tokens.append(run)
+                continue
             # A digit run that flows straight into letters is a name, not a number beside
             # a unit: "2A" is one symbol nobody declared, and calling it 2 times A would
             # invent an operator the formula does not contain.
@@ -370,6 +391,16 @@ def _emit(node: _Node, *, unwrap: bool = False) -> str:
     ``mfrac`` and an ``msqrt`` group their arguments by construction.
     """
     if node.kind == "number":
+        scientific = _SCIENTIFIC.match(node.text)
+        if scientific is not None:
+            # 1.74 × 10⁹, which is what the number means and what a reviewer reads. The
+            # node keeps the author's literal so the round trip still compares strings.
+            mantissa, sign, power = scientific.groups()
+            minus = "\u2212" if sign in {"-", "\u2212"} else ""
+            return (
+                f"<mn>{escape(mantissa)}</mn><mo>\u00d7</mo>"
+                f"<msup><mn>10</mn><mrow><mn>{minus}{escape(power)}</mn></mrow></msup>"
+            )
         return f"<mn>{escape(node.text)}</mn>"
     if node.kind == "name":
         return _name_element(node.text)

@@ -979,7 +979,10 @@ def _bearing_life_entry(unit: RollingBearing, required_safety_factor: float) -> 
             ),
             SymbolValue(
                 symbol="P",
-                description="equivalent dynamic load, X·F_r + Y·F_a",
+                description=(
+                    "equivalent dynamic load: the radial and axial loads combined "
+                    "through the catalogue's X and Y factors"
+                ),
                 value=equivalent,
                 unit="kN",
             ),
@@ -1062,7 +1065,7 @@ def _bearing_static_entry(unit: RollingBearing) -> ScorecardEntry:
             ),
             SymbolValue(
                 symbol="P₀",
-                description="equivalent static load, X·F_r + Y·F_a",
+                description=("equivalent static load, floored at the radial load itself"),
                 value=static_load,
                 unit="kN",
             ),

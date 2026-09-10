@@ -2617,7 +2617,10 @@ def test_a_code_cited_check_refuses_a_typical_basis_strength():
         # basis it carries, and what was asked for.
         assert "AA-6061-T6" in entry.detail
         assert "typical" in entry.detail
-        assert "specification_minimum" in entry.detail
+        # The document's words, not the machine's: an enum value interpolated raw puts a
+        # snake_case token in the detail a reviewer reads.
+        assert "specification minimum" in entry.detail
+        assert "specification_minimum" not in entry.detail
 
 
 def test_a_specification_minimum_material_screens_as_before():

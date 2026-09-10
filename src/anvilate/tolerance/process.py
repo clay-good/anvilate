@@ -14,7 +14,7 @@ import yaml
 from pydantic import ConfigDict
 
 from .._models import Provenance, RevalidatedModel
-from ..units import Quantity
+from ..units import Quantity, spoken
 from .general import ToleranceRangeError
 
 __all__ = [
@@ -67,7 +67,13 @@ class AchievabilityCheck(RevalidatedModel):
         d = self.demanded.to("mm").magnitude
         f = self.finest.to("mm").magnitude
         note = f" ({self.note})" if self.note.strip() else ""
-        return f"{self.process}: {d:.3f} mm demanded vs {f:.3f} mm floor — {verdict}{note}"
+        # The process, spoken. `self.process` is a `ManufacturingProcess` value — an
+        # identifier — and a card read "cnc_milling: 0.100 mm demanded" with the note
+        # beside it already saying "precision CNC milling". A noun phrase, so a space.
+        return (
+            f"{spoken(self.process, joined_by=' ')}: {d:.3f} mm demanded vs "
+            f"{f:.3f} mm floor — {verdict}{note}"
+        )
 
 
 _TABLE: dict | None = None
