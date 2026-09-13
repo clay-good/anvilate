@@ -80,41 +80,45 @@ class TaskStore:
         return record
 
     def attach_worker(self, task_id: str, pid: int) -> dict[str, Any]:
-        record = self.read(task_id)
-        if record["status"] not in _TERMINAL:
-            record["_pid"] = pid
-            record["lastUpdatedAt"] = _now()
-            self._write(task_id, record)
-        return record
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            if record["status"] not in _TERMINAL:
+                record["_pid"] = pid
+                record["lastUpdatedAt"] = _now()
+                self._write(task_id, record)
+            return record
 
     def update_message(self, task_id: str, message: str) -> None:
-        record = self.read(task_id)
-        if record["status"] in _TERMINAL:
-            return
-        record["statusMessage"] = message
-        record["lastUpdatedAt"] = _now()
-        self._write(task_id, record)
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            if record["status"] in _TERMINAL:
+                return
+            record["statusMessage"] = message
+            record["lastUpdatedAt"] = _now()
+            self._write(task_id, record)
 
     def complete(self, task_id: str, result: dict[str, Any], message: str) -> None:
-        record = self.read(task_id)
-        if record["status"] in _TERMINAL:
-            return
-        record.update(
-            status="completed",
-            statusMessage=message,
-            lastUpdatedAt=_now(),
-            result=result,
-        )
-        self._write(task_id, record)
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            if record["status"] in _TERMINAL:
+                return
+            record.update(
+                status="completed",
+                statusMessage=message,
+                lastUpdatedAt=_now(),
+                result=result,
+            )
+            self._write(task_id, record)
 
     def fail(self, task_id: str, error: dict[str, Any], message: str) -> None:
-        record = self.read(task_id)
-        if record["status"] in _TERMINAL:
-            return
-        record.update(
-            status="failed", statusMessage=message, lastUpdatedAt=_now(), error=error
-        )
-        self._write(task_id, record)
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            if record["status"] in _TERMINAL:
+                return
+            record.update(
+                status="failed", statusMessage=message, lastUpdatedAt=_now(), error=error
+            )
+            self._write(task_id, record)
 
     def cancel(self, task_id: str, result: dict[str, Any], message: str) -> None:
         """Record the cancellation result, then terminate the owned process group.
@@ -124,11 +128,18 @@ class TaskStore:
         cannot carry a result, while a completed task may carry a tool result whose domain
         status is ``not_evaluated``.
         """
-        record = self.read(task_id)
-        if record["status"] in _TERMINAL:
-            return
-        self.complete(task_id, result, message)
-        pid = record.get("_pid")
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            if record["status"] in _TERMINAL:
+                return
+            record.update(
+                status="completed",
+                statusMessage=message,
+                lastUpdatedAt=_now(),
+                result=result,
+            )
+            self._write(task_id, record)
+            pid = record.get("_pid")
         if not isinstance(pid, int) or pid <= 0:
             return
         if not self._owns_worker(pid, task_id):
@@ -172,6 +183,17 @@ class TaskStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a+") as lease:
             fcntl.flock(lease, fcntl.LOCK_EX)
+            yield
+
+    @contextmanager
+    def _record_lock(self, task_id: str):
+        """Serialize read-modify-write transitions across server and worker processes."""
+        import fcntl
+
+        path = self._path(task_id).with_suffix(".lock")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
             yield
 
     def _path(self, task_id: str) -> Path:

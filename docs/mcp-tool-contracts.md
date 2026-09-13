@@ -81,7 +81,8 @@ The durable record includes the original spec arguments and final result. It is 
 `ANVILATE_TASK_STORE` when configured, otherwise in Anvilate's local cache, and advertises
 `ttlMs: null`: this release performs no automatic eviction. Task IDs are 256-bit bearer
 handles and cannot be listed through MCP; storage permissions and retention remain an
-operator responsibility.
+operator responsibility. Every read-modify-write transition is serialized by a per-task
+lock, so worker completion cannot be replaced by a stale launcher or cancellation write.
 
 The failure this avoids has two symmetric halves, and both are real: expose everything as a
 task "for consistency" and an agent polls for a result that was ready before the first poll;

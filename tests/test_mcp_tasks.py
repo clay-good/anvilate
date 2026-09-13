@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 
 from anvilate._mcp_tasks import TaskStore
@@ -146,3 +147,44 @@ def test_task_handles_are_unguessable_and_not_content_addresses(tmp_path):
     second = store.create("run_fea_validation", {"spec": {}})
     assert first["taskId"] != second["taskId"]
     assert first["_nonce"] != second["_nonce"]
+
+
+def test_a_late_worker_attachment_cannot_overwrite_a_terminal_result(monkeypatch, tmp_path):
+    """Every task transition is one serialized read-modify-write operation.
+
+    The launcher attaches the PID just after spawning. A fast worker can finish during that
+    write; without the record lock, the launcher then restores its stale ``working`` copy
+    over the completed result and the handle polls forever.
+    """
+    store = TaskStore(tmp_path)
+    record = store.create("run_fea_validation", {"spec": {}})
+    task_id = record["taskId"]
+    attachment_is_ready_to_write = threading.Event()
+    allow_attachment_to_write = threading.Event()
+    original_write = store._write
+
+    def delayed_write(named_task: str, candidate: dict) -> None:
+        if candidate.get("_pid") == 12345 and candidate["status"] == "working":
+            attachment_is_ready_to_write.set()
+            assert allow_attachment_to_write.wait(2.0)
+        original_write(named_task, candidate)
+
+    monkeypatch.setattr(store, "_write", delayed_write)
+    attachment = threading.Thread(target=store.attach_worker, args=(task_id, 12345))
+    attachment.start()
+    assert attachment_is_ready_to_write.wait(2.0)
+
+    completion = threading.Thread(
+        target=store.complete,
+        args=(task_id, {"structuredContent": {"scorecard": {}}}, "Completed."),
+    )
+    completion.start()
+    time.sleep(0.05)
+    allow_attachment_to_write.set()
+    attachment.join(2.0)
+    completion.join(2.0)
+
+    assert not attachment.is_alive() and not completion.is_alive()
+    final = store.read(task_id)
+    assert final["status"] == "completed"
+    assert final["result"]["structuredContent"] == {"scorecard": {}}

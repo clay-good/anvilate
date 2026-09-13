@@ -56,6 +56,9 @@
       official cancelled-task shape cannot carry a result, while Anvilate's requirement says
       the affected checks must come back not evaluated, so cancellation completes the tool
       request with a scorecard whose T3 row is `NOT_EVALUATED` and says it was cancelled.
+      Per-task file locks serialize state transitions across the launcher, worker and another
+      server process; a deterministic race test holds the launcher before its PID write,
+      completes the worker, and proves the terminal result cannot be overwritten as working.
       `build_part` remains refused because task transport does not manufacture the sandboxed
       geometry generator it still waits on
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
