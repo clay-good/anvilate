@@ -35,6 +35,20 @@ _TASK_ID_PREFIX = "task_"
 _TERMINAL = frozenset({"completed", "cancelled", "failed"})
 
 
+def _progress(
+    activity: str, *, completed: int, total: int | None, indeterminate: bool
+) -> dict[str, Any]:
+    """Namespaced task progress that survives polling through another server process."""
+    return {
+        "dev.anvilate/progress": {
+            "activity": activity,
+            "completedUnits": completed,
+            "totalUnits": total,
+            "indeterminate": indeterminate,
+        }
+    }
+
+
 class UnknownTask(KeyError):
     """A task handle this store does not hold or cannot read."""
 
@@ -71,6 +85,9 @@ class TaskStore:
             "lastUpdatedAt": timestamp,
             "ttlMs": None,
             "pollIntervalMs": 250,
+            "_meta": _progress(
+                f"Queued {operation}.", completed=0, total=None, indeterminate=True
+            ),
             "_operation": operation,
             "_arguments": arguments,
             "_pid": None,
@@ -95,6 +112,9 @@ class TaskStore:
                 return
             record["statusMessage"] = message
             record["lastUpdatedAt"] = _now()
+            record["_meta"] = _progress(
+                message, completed=0, total=None, indeterminate=True
+            )
             self._write(task_id, record)
 
     def complete(self, task_id: str, result: dict[str, Any], message: str) -> None:
@@ -107,6 +127,7 @@ class TaskStore:
                 statusMessage=message,
                 lastUpdatedAt=_now(),
                 result=result,
+                _meta=_progress(message, completed=1, total=1, indeterminate=False),
             )
             self._write(task_id, record)
 
@@ -116,7 +137,11 @@ class TaskStore:
             if record["status"] in _TERMINAL:
                 return
             record.update(
-                status="failed", statusMessage=message, lastUpdatedAt=_now(), error=error
+                status="failed",
+                statusMessage=message,
+                lastUpdatedAt=_now(),
+                error=error,
+                _meta=_progress(message, completed=0, total=1, indeterminate=False),
             )
             self._write(task_id, record)
 
@@ -137,6 +162,7 @@ class TaskStore:
                 statusMessage=message,
                 lastUpdatedAt=_now(),
                 result=result,
+                _meta=_progress(message, completed=0, total=1, indeterminate=False),
             )
             self._write(task_id, record)
             pid = record.get("_pid")
@@ -164,7 +190,11 @@ class TaskStore:
 
     def public(self, task_id: str) -> dict[str, Any]:
         record = self.read(task_id)
-        return {key: value for key, value in record.items() if not key.startswith("_")}
+        return {
+            key: value
+            for key, value in record.items()
+            if key == "_meta" or not key.startswith("_")
+        }
 
     def worker_input(self, task_id: str, nonce: str) -> tuple[str, dict[str, Any]]:
         record = self.read(task_id)

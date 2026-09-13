@@ -77,6 +77,12 @@ The current task completes with a typed `not_evaluated` T3 row because no FEA so
 shipped yet. Cancellation terminates the worker process group and completes with the same
 domain verdict, explicitly naming cancellation, never as passing.
 
+Task responses carry namespaced structured progress in
+`_meta["dev.anvilate/progress"]`: the current activity, completed and total units, and an
+explicit `indeterminate` flag. No total is guessed while work is queued or running;
+terminal success is `1/1`, and failure or cancellation is `0/1` rather than a claim that
+the work completed.
+
 The durable record includes the original spec arguments and final result. It is stored under
 `ANVILATE_TASK_STORE` when configured, otherwise in Anvilate's local cache, and advertises
 `ttlMs: null`: this release performs no automatic eviction. Task IDs are 256-bit bearer

@@ -28,6 +28,11 @@ result, and `tasks/cancel` terminates the worker process group. Cancellation com
 a `not_evaluated` scorecard, not a passing card and not a nonstandard result on MCP's bare
 `cancelled` variant.
 
+Every task response also carries `_meta["dev.anvilate/progress"]` with `activity`,
+`completedUnits`, `totalUnits`, and `indeterminate`. Queued and running work has no invented
+total and is explicitly indeterminate; completion reports `1/1`, while failure or
+cancellation ends indeterminate progress at `0/1` without claiming the unit completed.
+
 Task records contain the original spec arguments and final result. They persist with
 `ttlMs: null` under `ANVILATE_TASK_STORE` when that environment variable is set, otherwise
 under Anvilate's local cache. This release does not evict them automatically; operators who

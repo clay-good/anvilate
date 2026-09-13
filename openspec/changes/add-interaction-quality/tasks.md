@@ -2,7 +2,10 @@
 
 ## 1. Progress and cancellation
 
-- [ ] 1.1 Progress channel: current activity, completed and total units, indeterminate flag
+- [x] 1.1 Progress channel: current activity, completed and total units, indeterminate flag
+      — MCP task responses carry all four under `_meta["dev.anvilate/progress"]`; queued
+      and running work is explicitly indeterminate with no invented total, terminal success
+      is 1/1, and cancellation or failure ends at 0/1 without claiming completion
 - [ ] 1.2 Threshold rule — any operation that can exceed it reports progress
 - [ ] 1.3 Estimates derived from completed same-kind work only, and labeled estimates
 - [ ] 1.4 Cancellation at any point; partial artifacts removed or marked partial

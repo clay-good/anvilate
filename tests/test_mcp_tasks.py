@@ -81,6 +81,12 @@ def test_fea_task_is_durable_before_return_and_retrievable_after_completion(
     assert created["status"] == "working"
     assert created["taskId"].startswith("task_") and len(created["taskId"]) == 69
     assert created["ttlMs"] is None
+    assert created["_meta"]["dev.anvilate/progress"] == {
+        "activity": "Queued run_fea_validation.",
+        "completedUnits": 0,
+        "totalUnits": None,
+        "indeterminate": True,
+    }
 
     # A separate store object can resolve it immediately. The handle is durable state, not
     # memory held by the handler that answered the tool call.
@@ -89,6 +95,12 @@ def test_fea_task_is_durable_before_return_and_retrievable_after_completion(
     completed = _poll_terminal(created["taskId"])
     assert completed["resultType"] == "complete"
     assert completed["status"] == "completed"
+    assert completed["_meta"]["dev.anvilate/progress"] == {
+        "activity": "Completed run_fea_validation.",
+        "completedUnits": 1,
+        "totalUnits": 1,
+        "indeterminate": False,
+    }
     tool_result = completed["result"]
     assert tool_result["isError"] is False
     card = tool_result["structuredContent"]["scorecard"]
@@ -109,6 +121,10 @@ def test_cancellation_terminates_the_worker_and_returns_not_evaluated(monkeypatc
     completed = _poll_terminal(task_id)
     assert completed["status"] == "completed"
     assert "Cancellation honored" in completed["statusMessage"]
+    cancelled_progress = completed["_meta"]["dev.anvilate/progress"]
+    assert cancelled_progress["completedUnits"] == 0
+    assert cancelled_progress["totalUnits"] == 1
+    assert cancelled_progress["indeterminate"] is False
     card = completed["result"]["structuredContent"]["scorecard"]
     assert card["status"] == "not_evaluated"
     assert "cancelled" in card["entries"][0]["detail"]
@@ -147,6 +163,21 @@ def test_task_handles_are_unguessable_and_not_content_addresses(tmp_path):
     second = store.create("run_fea_validation", {"spec": {}})
     assert first["taskId"] != second["taskId"]
     assert first["_nonce"] != second["_nonce"]
+
+
+def test_a_failed_task_finishes_progress_without_claiming_a_completed_unit(tmp_path):
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    store.fail(task_id, {"code": -32603, "message": "solver failed"}, "Failed.")
+
+    task = store.public(task_id)
+    assert task["status"] == "failed"
+    assert task["_meta"]["dev.anvilate/progress"] == {
+        "activity": "Failed.",
+        "completedUnits": 0,
+        "totalUnits": 1,
+        "indeterminate": False,
+    }
 
 
 def test_a_late_worker_attachment_cannot_overwrite_a_terminal_result(monkeypatch, tmp_path):
