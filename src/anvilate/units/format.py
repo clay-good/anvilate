@@ -135,7 +135,9 @@ def unit_label(unit: str) -> str:
     it, so a card told a detailer to "increase gross_shear_area to 4000 mm**2". In the
     document a reviewer signs.
     """
-    return display_unit(_engineering_order(f"{_unit_object(unit):~P}"))
+    # Normalize Pint's version-dependent Unicode product before looking for factors: 0.26
+    # changed the glyph from ``·`` to ``⋅``, which otherwise bypasses engineering order.
+    return _engineering_order(display_unit(f"{_unit_object(unit):~P}"))
 
 
 def spoken(machine: str, *, joined_by: str) -> str:

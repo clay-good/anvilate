@@ -127,11 +127,39 @@ def _friendly_dimension(dimensionality: Any) -> str:
 _LITRE = re.compile(
     r"(?<![A-Za-z0-9_])(Y|Z|E|P|T|G|M|k|h|da|d|c|m|µ|μ|u|n|p|f|a|z|y)?l(?![A-Za-z0-9_])"
 )
+_SUPERSCRIPT_DIGITS = frozenset("⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+
+def _stable_short_unit(label: str) -> str:
+    """Pint's machine spelling with its version-dependent micro glyph stabilized."""
+    return label.replace("μ", "µ")
 
 
 def display_unit(label: str) -> str:
-    """A unit label as a document writes it. Currently: the litre in its capital form."""
-    return _LITRE.sub(lambda match: f"{match.group(1) or ''}L", label)
+    """A stable unit label as a document writes it.
+
+    Pint 0.26 changed its Unicode product from the middle dot to the dot operator and its
+    micro prefix from the micro sign to Greek mu. Both are mathematically equivalent, but
+    neither is equivalent in a signed report or a line-based diff. Normalize those
+    dependency-controlled glyphs here, beside the existing litre normalization, so every
+    document surface keeps one spelling across supported Pint releases.
+    """
+    # The same ``⋅`` is also Pint's decimal point in a superscript exponent (``MPa⁰⋅⁵``).
+    # Preserve that case; it is a number, not a product separator.
+    stable = "".join(
+        "·"
+        if character == "⋅"
+        and not (
+            index > 0
+            and index + 1 < len(label)
+            and label[index - 1] in _SUPERSCRIPT_DIGITS
+            and label[index + 1] in _SUPERSCRIPT_DIGITS
+        )
+        else character
+        for index, character in enumerate(label)
+    )
+    stable = _stable_short_unit(stable)
+    return _LITRE.sub(lambda match: f"{match.group(1) or ''}L", stable)
 
 
 @lru_cache(maxsize=8192)
@@ -182,7 +210,7 @@ def _short_spelling(unit: str) -> str:
     recomputed through pint's formatter at each call. It was 2,400 `format_unit` calls and
     13% of the time to screen one lifting lug.
     """
-    return f"{_unit_object(unit):~}"
+    return _stable_short_unit(f"{_unit_object(unit):~}")
 
 
 @lru_cache(maxsize=8192)
@@ -303,7 +331,7 @@ class Quantity(RevalidatedModel):
             pq = offset
         if pq.dimensionless and not _is_angle(pq):
             raise MissingUnitError(f"{text!r} has no unit; a physical quantity must state its unit")
-        return cls(magnitude=pq.magnitude, unit=f"{pq.units:~}")
+        return cls(magnitude=pq.magnitude, unit=_stable_short_unit(f"{pq.units:~}"))
 
     @property
     def pint(self) -> pint.Quantity:

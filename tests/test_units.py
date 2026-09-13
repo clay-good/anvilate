@@ -555,7 +555,6 @@ _DELIBERATELY_INHERITED = {
     "__bool__": "no numeric meaning here — a quantity is a value object, never a truth value",
     "__repr__": "pydantic's, which shows the fields; `__str__` is the reader's rendering",
     "__new__": "object construction, not the numeric protocol",
-    "__getattribute__": "attribute access, not the numeric protocol",
     "__getformat__": "a CPython float internal, not part of any protocol a caller uses",
     "__getnewargs__": "pickling support, and a Quantity pickles correctly through pydantic",
 }
@@ -960,6 +959,16 @@ def test_a_unit_spelling_is_parsed_once_and_the_answers_do_not_move():
     assert Quantity.parse("1 m**2").to("mm ** 2").magnitude == pytest.approx(1e6)
 
 
+def test_document_unit_glyphs_are_stable_across_pint_unicode_variants():
+    """A dependency's typographic preference cannot create a report diff."""
+    from anvilate.units.quantity import display_unit
+
+    assert display_unit("mm⋅N") == "mm·N"
+    assert display_unit("μm") == "µm"
+    # Pint uses the dot operator as a decimal point inside superscript exponents too.
+    assert display_unit("MPa⁰⋅⁵") == "MPa⁰⋅⁵"
+
+
 def test_the_litre_is_displayed_as_a_capital_L():
     """The one unit whose lowercase symbol is a glyph away from a digit.
 
@@ -1045,13 +1054,14 @@ def test_the_dimensions_the_system_does_not_convert_are_the_ones_the_page_names(
             )
 
 
-def test_the_memoised_unit_helpers_answer_exactly_what_pint_answers():
+def test_the_memoised_unit_helpers_answer_the_stable_form_of_what_pint_answers():
     """The two caches behind `to()` and `has_dimension()`, held against the direct forms.
 
     Both replaced a per-call pint round trip with a lookup keyed on the unit spelling: the
     short spelling of a conversion target, and a unit's dimensionality. Each is only sound
     because the answer is a pure function of the spelling, and that is the thing to check —
-    a cache that returns a *different* answer is far worse than the cost it saved.
+    a cache that returns a *different* answer is far worse than the cost it saved. The one
+    deliberate normalization is Greek mu to the document's stable micro sign.
     """
     from anvilate.units.quantity import (
         _dimensionality_of_unit,
@@ -1093,6 +1103,7 @@ def test_the_memoised_unit_helpers_answer_exactly_what_pint_answers():
         "deg",
         "rad",
         "L/s",
+        "um",
         "W",
         "V",
         "A",
@@ -1102,7 +1113,7 @@ def test_the_memoised_unit_helpers_answer_exactly_what_pint_answers():
         quantity = Quantity(magnitude=1.0, unit=unit)
         assert _dimensionality_of_unit(unit) == quantity.pint.dimensionality, unit
         converted = quantity.pint.to(_unit_object(unit))
-        assert _short_spelling(unit) == f"{converted.units:~}", unit
+        assert _short_spelling(unit) == f"{converted.units:~}".replace("μ", "µ"), unit
 
 
 def test_has_dimension_asks_about_the_unit_without_building_a_quantity():

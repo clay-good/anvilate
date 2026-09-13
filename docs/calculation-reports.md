@@ -217,7 +217,9 @@ for a reviewer whose browser is in dark mode, which is a blank page rather than 
 report. That was true here until someone opened one and looked. Rendering is pure
 Python — no TeX, no browser, no network — and it is deterministic. The same inputs
 produce byte-identical HTML on every rebuild, which means a diff between two reports
-is an engineering change and never rendering noise.
+is an engineering change and never rendering noise. The unit renderer owns its document
+glyphs rather than accepting whatever a Pint release happens to choose: multiplication is
+always `·`, the micro prefix is always `µ`, and engineering moments remain force-first.
 
 ## The calc record
 
