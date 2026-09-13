@@ -59,6 +59,9 @@
       Per-task file locks serialize state transitions across the launcher, worker and another
       server process; a deterministic race test holds the launcher before its PID write,
       completes the worker, and proves the terminal result cannot be overwritten as working.
+      Expected refusals also retain their category across the subprocess boundary: invalid
+      task input is `-32602`, unavailable work is `-32000`, and `-32603` is reserved for a
+      genuine internal defect.
       `build_part` remains refused because task transport does not manufacture the sandboxed
       geometry generator it still waits on
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity

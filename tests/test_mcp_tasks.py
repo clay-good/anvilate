@@ -31,7 +31,7 @@ def _spec_document() -> dict:
     ).model_dump(mode="json")
 
 
-def _task_call() -> dict:
+def _task_call(spec: dict | None = None) -> dict:
     return handle_request(
         {
             "jsonrpc": "2.0",
@@ -39,7 +39,10 @@ def _task_call() -> dict:
             "method": "tools/call",
             "params": {
                 "name": "run_fea_validation",
-                "arguments": {"spec": _spec_document(), "convergence_tol": 1e-4},
+                "arguments": {
+                    "spec": _spec_document() if spec is None else spec,
+                    "convergence_tol": 1e-4,
+                },
                 "_meta": {
                     "io.modelcontextprotocol/clientCapabilities": {
                         "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -177,6 +180,40 @@ def test_a_failed_task_finishes_progress_without_claiming_a_completed_unit(tmp_p
         "completedUnits": 0,
         "totalUnits": 1,
         "indeterminate": False,
+    }
+
+
+def test_invalid_spec_is_a_task_refusal_not_an_internal_server_defect(monkeypatch, tmp_path):
+    """The worker preserves the handler's error category across the process boundary."""
+    monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
+    created = _task_call({})["result"]
+
+    failed = _poll_terminal(created["taskId"])
+    assert failed["status"] == "failed"
+    assert failed["error"]["code"] == -32602
+    assert "spec." in failed["error"]["message"]
+    assert "internal" not in failed["error"]["message"].lower()
+    progress = failed["_meta"]["dev.anvilate/progress"]
+    assert progress["completedUnits"] == 0
+    assert progress["indeterminate"] is False
+
+    # The other expected refusal keeps its distinct category too. Drive the worker in this
+    # process so the test can replace the future task handler with the unavailable branch.
+    import anvilate.mcp as mcp
+    from anvilate._mcp_tasks import _run_worker
+
+    def unavailable(_arguments):
+        raise mcp._Unavailable("the configured solver backend is unavailable")
+
+    monkeypatch.setitem(mcp._TASK_DISPATCH, "run_fea_validation", unavailable)
+    store = TaskStore(tmp_path)
+    record = store.create("run_fea_validation", {"spec": _spec_document()})
+    assert _run_worker(record["taskId"], record["_nonce"]) == 1
+    unavailable_task = store.public(record["taskId"])
+    assert unavailable_task["status"] == "failed"
+    assert unavailable_task["error"] == {
+        "code": -32000,
+        "message": "the configured solver backend is unavailable",
     }
 
 

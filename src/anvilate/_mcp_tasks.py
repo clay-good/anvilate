@@ -296,9 +296,30 @@ def _run_worker(task_id: str, nonce: str) -> int:
         with store.worker_lease(task_id):
             operation, arguments = store.worker_input(task_id, nonce)
             store.update_message(task_id, f"Running {operation}.")
-            from .mcp import _execute_task
+            from .mcp import (
+                INVALID_PARAMS,
+                TOOL_UNAVAILABLE,
+                _execute_task,
+                _InvalidArguments,
+                _Unavailable,
+            )
 
-            result = _execute_task(operation, arguments)
+            try:
+                result = _execute_task(operation, arguments)
+            except _InvalidArguments as refusal:
+                store.fail(
+                    task_id,
+                    {"code": INVALID_PARAMS, "message": str(refusal)},
+                    f"{operation} was refused.",
+                )
+                return 1
+            except _Unavailable as refusal:
+                store.fail(
+                    task_id,
+                    {"code": TOOL_UNAVAILABLE, "message": str(refusal)},
+                    f"{operation} is unavailable.",
+                )
+                return 1
             store.complete(task_id, result, f"Completed {operation}.")
     except UnknownTask:
         return 2

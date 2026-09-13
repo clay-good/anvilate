@@ -83,6 +83,10 @@ explicit `indeterminate` flag. No total is guessed while work is queued or runni
 terminal success is `1/1`, and failure or cancellation is `0/1` rather than a claim that
 the work completed.
 
+Expected handler refusals survive the subprocess boundary with their meaning intact. A
+task whose Design Spec is invalid ends `failed` with `-32602`, an unavailable operation
+uses `-32000`, and only an unexpected worker or handler failure uses `-32603`.
+
 The durable record includes the original spec arguments and final result. It is stored under
 `ANVILATE_TASK_STORE` when configured, otherwise in Anvilate's local cache, and advertises
 `ttlMs: null`: this release performs no automatic eviction. Task IDs are 256-bit bearer

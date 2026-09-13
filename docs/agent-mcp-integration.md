@@ -33,6 +33,11 @@ Every task response also carries `_meta["dev.anvilate/progress"]` with `activity
 total and is explicitly indeterminate; completion reports `1/1`, while failure or
 cancellation ends indeterminate progress at `0/1` without claiming the unit completed.
 
+A task that rejects its input finishes with `status: "failed"` and preserves the handler's
+error category. For example, a document that fails Design Spec validation carries error
+code `-32602`; it is not rewritten as `-32603`, which is reserved for an actual defect in
+the server. An unavailable task operation similarly retains `-32000`.
+
 Task records contain the original spec arguments and final result. They persist with
 `ttlMs: null` under `ANVILATE_TASK_STORE` when that environment variable is set, otherwise
 under Anvilate's local cache. This release does not evict them automatically; operators who
