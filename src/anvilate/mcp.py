@@ -14,12 +14,11 @@ compares it against what :mod:`anvilate.contracts` generates today. Bumping a sc
 without moving the tool contracts is therefore a build failure rather than an agent
 discovering at run time that the document it was promised is not the document it got.
 
-**Nothing here executes anything.** This is the contract half of the server, which is the
-half worth pinning before the server exists — the cheapest possible time to fix a tool
-surface is before a client has integrated against it. Every tool that is not yet backed by
-shipping code says so in one place (:attr:`ToolDefinition.backing` is ``None``), and every
-tool that *is* backed names the symbol, which CI resolves against the live importable
-surface. A renamed function fails the build instead of shipping as a promise.
+The catalog and request handler live together so the executable surface is checked against
+the contract it advertises. Every tool that is not yet backed by shipping code says so in
+one place (:attr:`ToolDefinition.backing` is ``None``), and every tool that *is* backed
+names the symbol, which CI resolves against the live importable surface. A renamed function
+fails the build instead of shipping as a promise.
 
 ## Which operations are tasks
 
@@ -49,6 +48,7 @@ from typing import Any, TextIO
 
 from pydantic import ConfigDict, Field, model_validator
 
+from ._mcp_tasks import TASKS_EXTENSION
 from ._models import Named, RevalidatedModel, _refusal_line
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
@@ -108,13 +108,6 @@ class Gate(StrEnum):
     VALIDATION = "validation"
     WATERMARK = "watermark"
 
-
-# What a task-dispatched operation waits on here. The dispatch decision is settled — an
-# unbounded run cannot be promised in a synchronous reply — and the transport that would
-# carry it is not built, which is a different fact and the one a client is stuck on.
-_TASKS_EXTENSION = (
-    "https://github.com/clay-good/anvilate/tree/main/openspec/changes/modernize-mcp-server"
-)
 
 # The operations the headless-automation spec requires the server to expose, at minimum.
 # `catalog_issues` checks the catalog against this set in both directions: a missing
@@ -508,6 +501,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             cost=Cost.UNBOUNDED,
             tiers=(ValidationTier.T3_FEA,),
+            backing="anvilate.screening:screen_spec",
             subject="spec",
         ),
         ToolDefinition(
@@ -687,6 +681,7 @@ METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 TOOL_UNAVAILABLE = -32000
+MISSING_REQUIRED_CLIENT_CAPABILITY = -32021
 
 PROTOCOL_REVISION = "2026-07-28"
 
@@ -902,6 +897,29 @@ def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, A
     return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
 
+def _client_supports_tasks(params: Mapping[str, Any]) -> bool:
+    """Whether this request declares the extension, with no remembered handshake."""
+    metadata = params.get("_meta")
+    if not isinstance(metadata, Mapping):
+        return False
+    capabilities = metadata.get("io.modelcontextprotocol/clientCapabilities")
+    if not isinstance(capabilities, Mapping):
+        return False
+    extensions = capabilities.get("extensions")
+    return isinstance(extensions, Mapping) and TASKS_EXTENSION in extensions
+
+
+def _task_params(request_id: Any, request: Mapping[str, Any]) -> tuple[str | None, dict | None]:
+    """Read the common task argument, returning an error payload when malformed."""
+    params = request.get("params")
+    if not isinstance(params, Mapping):
+        return None, _error(request_id, INVALID_PARAMS, "task params must be a JSON object")
+    task_id = params.get("taskId")
+    if not isinstance(task_id, str):
+        return None, _error(request_id, INVALID_PARAMS, "taskId must be a JSON string")
+    return task_id, None
+
+
 def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     """One JSON-RPC request to one JSON-RPC response, with no state between calls.
 
@@ -919,11 +937,10 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     the client was never waiting on does not. A message that is not an object at all has no
     ``id`` member to be missing, so that one is answered rather than dropped.
 
-    Three methods are served. ``initialize`` reports the protocol revision and the
-    capabilities this surface has. ``tools/list`` returns :func:`wire_definitions`.
-    ``tools/call`` validates the arguments against the tool's published input schema,
-    dispatches the operations that are wired — everything in :data:`_DISPATCH` — and holds
-    what comes back to the tool's published *output* schema before sending it.
+    ``initialize`` reports the protocol revision and capabilities. ``tools/list`` returns
+    :func:`wire_definitions`. ``tools/call`` validates the arguments against the published
+    input schema and dispatches bounded work directly. The Tasks extension adds
+    ``tasks/get``, ``tasks/update`` and ``tasks/cancel`` for backed unbounded work.
 
     **A call is checked at both ends against the same document the client was handed.**
     Arguments in by :func:`_argument_issues`, structured content out by
@@ -932,12 +949,11 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
 
     An operation with no handler is refused with that reason rather than answered, because
     a plausible-looking result for something nobody wired is indistinguishable from a real
-    one. Two further refusals are structural rather than "not built yet", and they are the
-    ones worth reading:
+    one. Two further boundaries are structural:
 
-    * **An unbounded tool cannot be called here at all.** ``build_part`` and
-      ``run_fea_validation`` are task-dispatched by declared cost; a synchronous
-      ``tools/call`` for one is refused with the reason rather than blocked on.
+    * **An unbounded tool requires negotiated task support.** ``run_fea_validation``
+      returns a durable handle only when the request declares the extension. ``build_part``
+      remains unavailable because no sandboxed geometry generator exists to launch.
     * **Every tool names what it acts on.** :func:`stateless_gaps` is empty and stays
       empty: a tool that named nothing was asking the server to remember its last call,
       which is a session, and four of them did. They take subject handles now — see
@@ -970,17 +986,65 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             "id": request_id,
             "result": {
                 "protocolVersion": PROTOCOL_REVISION,
-                "capabilities": {"tools": {"listChanged": False}},
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "extensions": {TASKS_EXTENSION: {}},
+                },
                 "serverInfo": {"name": "anvilate", "title": "Anvilate"},
             },
         }
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": wire_definitions()}}
+    if method in {"tasks/get", "tasks/update", "tasks/cancel"}:
+        from ._mcp_tasks import UnknownTask, task_store
+
+        task_id, malformed = _task_params(request_id, request)
+        if malformed is not None:
+            return malformed
+        assert task_id is not None
+        store = task_store()
+        try:
+            if method == "tasks/get":
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"resultType": "complete", **store.public(task_id)},
+                }
+            if method == "tasks/update":
+                responses = request["params"].get("inputResponses")
+                if not isinstance(responses, Mapping):
+                    return _error(
+                        request_id, INVALID_PARAMS, "inputResponses must be a JSON object"
+                    )
+                store.read(task_id)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"resultType": "complete"},
+                }
+            store.cancel(
+                task_id,
+                _task_call_result(_cancelled_fea_result()),
+                "Cancellation honored; T3 FEA was not evaluated.",
+            )
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"resultType": "complete"},
+            }
+        except UnknownTask as unknown:
+            return _error(request_id, INVALID_PARAMS, str(unknown.args[0]))
     if method != "tools/call":
         return _error(request_id, METHOD_NOT_FOUND, f"unknown method {method!r}")
 
-    params = request.get("params") or {}
+    params = request.get("params")
+    if params is None:
+        params = {}
+    if not isinstance(params, Mapping):
+        return _error(request_id, INVALID_PARAMS, "tool params must be a JSON object")
     name = params.get("name")
+    if not isinstance(name, str):
+        return _error(request_id, INVALID_PARAMS, "tool name must be a JSON string")
     tools = {tool.name: tool for tool in tool_catalog()}
     tool = tools.get(name)
     if tool is None:
@@ -994,20 +1058,23 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         return _error(request_id, INVALID_PARAMS, "; ".join(issues))
 
     if tool.dispatch is Dispatch.TASK:
-        # The second sentence is the half that was missing, and it is the half a client can
-        # act on. This server answers `initialize`, `tools/list` and `tools/call` and
-        # nothing else: there is no task method to fall back to, so "task-dispatched" on its
-        # own read as a pointer to a mechanism that is not here. Both tools' published
-        # descriptions said "the call returns a task handle", which no call ever does.
-        return _error(
-            request_id,
-            TOOL_UNAVAILABLE,
-            f"{tool.name} is task-dispatched because its cost is {tool.cost.value}; a "
-            f"synchronous tools/call cannot promise a reply for work bounded by a "
-            f"convergence criterion or by caller-supplied code. This server serves no task "
-            f"transport yet, so the operation cannot be reached here by any method — see "
-            f"{_TASKS_EXTENSION}",
-        )
+        if tool.name not in _TASK_DISPATCH:
+            return _error(
+                request_id,
+                TOOL_UNAVAILABLE,
+                f"{tool.name} is task-dispatched, but {_UNBUILT_TASKS[tool.name]}",
+            )
+        if not _client_supports_tasks(params):
+            return _error(
+                request_id,
+                MISSING_REQUIRED_CLIENT_CAPABILITY,
+                "Missing required client capability",
+                requiredCapabilities={"extensions": {TASKS_EXTENSION: {}}},
+            )
+        from ._mcp_tasks import launch_task
+
+        task = launch_task(tool.name, arguments)
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"resultType": "task", **task}}
     if not tool.is_stateless:
         return _error(
             request_id,
@@ -1071,14 +1138,16 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"{tool.name} produced a result its own published outputSchema rejects: "
             + "; ".join(wrong),
         )
+    return {"jsonrpc": "2.0", "id": request_id, "result": _task_call_result(structured)}
+
+
+def _task_call_result(structured: Mapping[str, Any]) -> dict[str, Any]:
+    """The CallToolResult shared by synchronous calls and completed task calls."""
+    document = dict(structured)
     return {
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": json.dumps(structured, sort_keys=True)}],
-            "structuredContent": structured,
-            "isError": bool(structured.get("errors")),
-        },
+        "content": [{"type": "text", "text": json.dumps(document, sort_keys=True)}],
+        "structuredContent": document,
+        "isError": bool(document.get("errors")),
     }
 
 
@@ -1359,6 +1428,84 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _cancelled_fea_result() -> dict[str, Any]:
+    """The domain result of stopping T3 work: unevaluated, never passed."""
+    from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="T3 FEA",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    "the task was cancelled before the converged finite-element checks "
+                    "completed; the worker process group was terminated and T3 was not "
+                    "evaluated"
+                ),
+            ),
+        )
+    )
+    return {"scorecard": card.model_dump(mode="json")}
+
+
+def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Run the T3 request in a worker, returning the honest current capability.
+
+    The task transport exists before the solver does. ``screen_spec`` owns the current T3
+    answer and reports it as ``NOT_EVALUATED`` rather than manufacturing a converged result.
+    Moving this call to a subprocess is still material: a future solver plugs into this one
+    task handler without changing the handle, polling, cancellation, or result contract.
+    """
+    from .screening import screen_spec
+    from .spec import SpecValidationError, parse_spec
+
+    try:
+        document = dict(arguments["spec"])
+        acceptance = dict(document.get("acceptance") or {})
+        acceptance["tiers"] = [ValidationTier.T3_FEA.value]
+        if "convergence_tol" in arguments:
+            acceptance["fea_convergence_tol"] = arguments["convergence_tol"]
+        document["acceptance"] = acceptance
+        spec = parse_spec(document)
+    except SpecValidationError as failure:
+        raise _InvalidArguments(
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
+        ) from failure
+    except (ValueError, TypeError, KeyError) as failure:
+        raise _InvalidArguments([f"spec: {failure}"]) from failure
+    card = screen_spec(spec)
+    entries = tuple(
+        entry.model_copy(
+            update={
+                "detail": (
+                    "the asynchronous T3 task completed, but this release ships no finite-"
+                    "element solver backend; T3 was not evaluated"
+                )
+            }
+        )
+        if entry.name == "T3 FEA"
+        else entry
+        for entry in card.entries
+    )
+    return {"scorecard": card.model_copy(update={"entries": entries}).model_dump(mode="json")}
+
+
+def _execute_task(operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Execute one catalogued task and return its final CallToolResult."""
+    tool = {candidate.name: candidate for candidate in tool_catalog()}.get(operation)
+    handler = _TASK_DISPATCH.get(operation)
+    if tool is None or handler is None:
+        raise RuntimeError(f"{operation!r} is not a dispatched task")
+    structured = handler(arguments)
+    wrong = result_issues(tool, structured)
+    if wrong:
+        raise RuntimeError(
+            f"{operation} produced a result its own published outputSchema rejects: "
+            + "; ".join(wrong)
+        )
+    return _task_call_result(structured)
+
+
 # What each undispatched tool is waiting on. A census in tests/test_mcp.py holds this against
 # the dispatch map, so a tool that stops being served, or starts, cannot leave a stale reason
 # behind — and one that is neither dispatched nor named here fails the build.
@@ -1371,6 +1518,17 @@ _UNBUILT: dict[str, str] = {
         "measuring a feature needs built geometry, and no geometry is generated from a spec "
         "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
     ),
+}
+
+_UNBUILT_TASKS: dict[str, str] = {
+    "build_part": (
+        "executing caller-supplied geometry code still waits on the sandboxed geometry "
+        "generator; no task is created for work this release cannot perform"
+    ),
+}
+
+_TASK_DISPATCH: dict[str, Any] = {
+    "run_fea_validation": _run_fea_validation_task,
 }
 
 # The operations wired to real code today. A tool absent from this map is refused with the

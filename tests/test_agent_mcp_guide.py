@@ -182,7 +182,7 @@ def test_the_contracts_page_backing_table_is_the_catalogs_own():
         assert claimed == expected, f"{name}: page says {claimed}, catalog says {expected}"
 
     backed = sum(1 for tool in catalog.values() if tool.backing)
-    words = {4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+    words = {3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
     unbacked = len(catalog) - backed
     assert f"{words[backed]} of the eight run today" in text, backed
     assert f"other {words[unbacked].lower()} say so with `None`" in text, unbacked

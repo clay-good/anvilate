@@ -60,6 +60,17 @@ _NONDETERMINISM = re.compile(
     r")\s*\("
 )
 
+# Task metadata is deliberately not an artifact: the 2026-07-28 MCP extension requires an
+# unguessable handle plus creation/update timestamps. Keep the exception to the exact calls
+# in the private task module so a wall clock cannot leak back into a signed document.
+_TASK_METADATA_NONDETERMINISM = {
+    "_mcp_tasks.py": (
+        "datetime.now(UTC)",
+        "secrets.token_hex(32)",
+        "secrets.compare_digest(",  # constant-time comparison, not random generation
+    ),
+}
+
 _SECRET = b"an unguessable local signing secret"
 
 
@@ -586,6 +597,9 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
         scanned += 1
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             if pattern.search(line):
+                allowed = _TASK_METADATA_NONDETERMINISM.get(str(path.relative_to(source)), ())
+                if any(call in line for call in allowed):
+                    continue
                 offenders.append(f"{path.relative_to(source)}:{number}: {line.strip()}")
     # A wrong root reads no files and reports no offenders, which is the shape this gate
     # would fail silently in — the determinism the content address rests on is the claim.

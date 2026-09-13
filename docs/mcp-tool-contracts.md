@@ -5,10 +5,9 @@ calls whether an answer can arrive in the reply at all.**
 
 This page describes the tool *contracts*, which were pinned before the server existed — the
 cheapest moment to change a tool surface is before a client has integrated against it. **The
-server is built now**: `anvilate-mcp` runs it on stdio, it answers `initialize`,
-`tools/list` and `tools/call`, and four of the eight operations are dispatched to real code.
-The other four are refused by name with what each waits on, which is what the rest of this
-page is about.
+server is built now**: `anvilate-mcp` runs it on stdio, answers the three core methods plus
+`tasks/get`, `tasks/update` and `tasks/cancel`, and five of the eight operations are backed.
+The other three are refused by name with what each waits on.
 
 ```python
 from anvilate.mcp import catalog_issues, tool_catalog, wire_definitions
@@ -28,12 +27,12 @@ is empty. The worked table is
 | `render_viewport` | synchronous | — | not built |
 | `measure_geometry` | synchronous | — | not built |
 | `run_validation` | synchronous | — | `anvilate.screening:screen_spec` |
-| `run_fea_validation` | task | — | not built |
+| `run_fea_validation` | task | — | `anvilate.screening:screen_spec` |
 | `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
 | `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
 
-Four of the eight run today. The other four say so with `None` rather than naming a symbol
-that does not exist, and the four that *are* backed name a dotted path CI resolves against
+Five of the eight run today. The other three say so with `None` rather than naming a symbol
+that does not exist, and the five that *are* backed name a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
 Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
 as nothing was wired and went on resolving after it was dispatched to the screen, so each
@@ -73,7 +72,16 @@ That is why the validation tier splits into two tools rather than one with a fla
 `run_validation` covers T0 geometry, T1 analytical and T2 manufacturability — all
 closed-form or a table lookup — and returns the scorecard in the reply. `run_fea_validation`
 covers T3, whose stopping condition is a convergence tolerance, and returns a handle. A
-cancelled run reports its affected checks as `not_evaluated`, never as passing.
+client declaring `io.modelcontextprotocol/tasks` polls that durable handle with `tasks/get`.
+The current task completes with a typed `not_evaluated` T3 row because no FEA solver is
+shipped yet. Cancellation terminates the worker process group and completes with the same
+domain verdict, explicitly naming cancellation, never as passing.
+
+The durable record includes the original spec arguments and final result. It is stored under
+`ANVILATE_TASK_STORE` when configured, otherwise in Anvilate's local cache, and advertises
+`ttlMs: null`: this release performs no automatic eviction. Task IDs are 256-bit bearer
+handles and cannot be listed through MCP; storage permissions and retention remain an
+operator responsibility.
 
 The failure this avoids has two symmetric halves, and both are real: expose everything as a
 task "for consistency" and an agent polls for a result that was ready before the first poll;
@@ -111,13 +119,10 @@ lands somebody has to decide what discharges it.
 
 ## Still open
 
-The server: the stateless skeleton on the 2026-07-28 revision, `structuredContent` results
-with preview-image attachments, and the Tasks extension wired to real subprocess cleanup.
-Gate parity is closed for the validation and watermark halves and open for the sandbox,
-which has no implementation to be held to anything yet. The claim that no
-deprecated protocol feature is used — server-initiated sampling — belongs there too: it is
-a property of what the server does, and a tool definition has no place to declare it, so
-asserting it here would be a check that reads prose rather than behavior.
+Preview-image attachments still wait on `render_viewport`; sandbox parity still waits on
+the geometry implementation behind `build_part`; registry publication and the external
+protocol conformance run remain release work. The Tasks extension itself is live and uses
+durable local records plus fixed subprocess workers, with no server-initiated sampling.
 
 ## Every tool names what it acts on
 
@@ -205,13 +210,12 @@ rather than a silent misread, because `additionalProperties` is false on every s
 
 `handle_request()` is a pure function from a decoded JSON-RPC request to the object to
 encode back, so a stdio loop, an HTTP handler and a test drive the same code. It serves
-`initialize`, `tools/list` and `tools/call`, and returns `None` for a notification, which
+`initialize`, `tools/list`, `tools/call`, `tasks/get`, `tasks/update` and `tasks/cancel`, and returns `None` for a notification, which
 the protocol says takes no response — including no error response.
 
-**Four operations are dispatched: `compile_spec`, `run_validation`, `read_scorecard` and
-`export_artifact`.** Those are the tools that are backed, bounded and servable statelessly
-all at once; the other four are refused for a structural reason — two are task-dispatched by
-declared cost, and two wait on built geometry — rather than for want of a handler.
+**Four operations are synchronous and `run_fea_validation` is task-dispatched.** The three
+remaining operations are refused because built geometry does not exist yet, rather than
+answered with plausible-looking placeholders.
 
 `compile_spec` answers with a spec or with the paths that stopped it. A document that does
 not validate comes back as a **result**, not a transport error: the output schema requires
@@ -247,8 +251,10 @@ Everything else ends in a refusal, and the kinds are worth separating:
   Until that was enforced, `T3_fea` was accepted on the synchronous tool, and a misspelled
   tier reached the spec parser and came back as `spec.acceptance.tiers.0` — sending a client
   to look at its *document* for a problem in a different argument.
-- **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
-  waited on, by its declared cost rather than by name.
+- **`-32021`, task capability missing.** The client did not declare the Tasks extension on
+  a call whose only valid response is a task handle.
+- **`-32000`, task operation unbuilt.** `build_part` is unbounded but still has no geometry
+  implementation to launch.
 - **`-32000`, stateless.** Empty today — every tool names its subject — and kept as the net
   for the next tool that stops declaring one.
 - **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does

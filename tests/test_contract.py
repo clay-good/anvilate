@@ -4914,6 +4914,11 @@ _FORBIDDEN_CALLS = frozenset(
 )
 _FORBIDDEN_CALL_PREFIXES = ("os.exec", "os.spawn", "os.posix_spawn", "os.fork", "runpy.run", "pty.")
 
+# The task transport launches one fixed module in a new process group. This is executable
+# infrastructure, but it is not a route from document content to a command: the operation
+# and its arguments stay in a task record consumed by Anvilate code, never in argv.
+_ALLOWED_PROCESS_IMPORTS = frozenset({("src/anvilate/_mcp_tasks.py", "subprocess")})
+
 
 def _RUNS_WHAT_IT_READS(target: str) -> bool:  # noqa: N802 - reads as the predicate it is
     return target in _FORBIDDEN_CALLS or target.startswith(_FORBIDDEN_CALL_PREFIXES)
@@ -4982,7 +4987,7 @@ def test_the_resolver_reads_a_call_written_the_other_way():
 
 
 def test_the_library_runs_nothing_it_reads():
-    """No `eval`, `exec`, `pickle`, `subprocess` or `os.system` anywhere in the package.
+    """No route from document content to `eval`, `exec`, `pickle` or a process command.
 
     Not a style rule. Anvilate is meant to be pointed at documents that arrived from
     somebody else, and every one of these turns "read a file" into "run what it says" if it
@@ -4990,9 +4995,9 @@ def test_the_library_runs_nothing_it_reads():
     at the moment the call is *added*, when the author still has the reason in front of
     them, rather than at the moment somebody finds a way to reach it.
 
-    `subprocess` is on the list even though a future FEA driver will need it — GPL solvers
-    are invoked out of process by design. That is a decision to make in a diff with the
-    sandboxing spec open, not one to arrive at by nobody noticing.
+    `subprocess` stays on the list with one narrow exception: the MCP task launcher invokes
+    its own fixed worker module. A separate test holds that argv to literals and confirms
+    no second process boundary appeared.
 
     **The call is judged on what it resolves to, not on how it is spelled.** This gate
     compared `ast.unparse(node.func)` against a set of dotted names, so it read `os.system(cmd)`
@@ -5021,7 +5026,8 @@ def test_the_library_runs_nothing_it_reads():
                     offenders.append(f"{where} calls {target} ({ast.unparse(node.func)})")
             elif isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS:
+                    allowed = (str(path.relative_to(_REPO)), alias.name) in _ALLOWED_PROCESS_IMPORTS
+                    if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS and not allowed:
                         offenders.append(f"{where} imports {alias.name}")
             elif isinstance(node, ast.ImportFrom) and node.module:
                 if node.module.split(".")[0] in _FORBIDDEN_IMPORTS:
@@ -5032,6 +5038,40 @@ def test_the_library_runs_nothing_it_reads():
         "these give the package a way to run what it reads. If one of them is deliberate, "
         f"it belongs in a diff with SECURITY.md updated in the same commit: {offenders}"
     )
+
+
+def test_the_task_worker_is_the_only_process_boundary():
+    """The task subprocess is fixed infrastructure, not a command assembled from a spec."""
+    import ast
+
+    src = _REPO / "src" / "anvilate"
+    process_imports: list[str] = []
+    for path in sorted(src.rglob("*.py")):
+        tree = parsed_source(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "subprocess":
+                        process_imports.append(str(path.relative_to(_REPO)))
+    assert process_imports == ["src/anvilate/_mcp_tasks.py"]
+
+    tree = parsed_source(src / "_mcp_tasks.py")
+    bindings = _import_bindings(tree)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _resolved_call(node, bindings).startswith("subprocess.")
+    ]
+    assert [_resolved_call(node, bindings) for node in calls] == ["subprocess.Popen"]
+    command = calls[0].args[0]
+    assert isinstance(command, ast.List)
+    assert ast.unparse(command.elts[0]) == "sys.executable"
+    assert [ast.literal_eval(item) for item in command.elts[1:3]] == [
+        "-m",
+        "anvilate._mcp_tasks",
+    ]
+    assert not any(keyword.arg == "shell" for keyword in calls[0].keywords)
 
 
 def test_a_dimension_guard_enforces_the_dimension_its_message_names():

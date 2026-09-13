@@ -48,7 +48,16 @@
       `anvilate.screening:screen_spec`, because an import check cannot tell a symbol a
       handler calls from one it merely resolves. The declaration is corrected and the named
       symbol is now replaced with one that raises, so the call has to raise through it
-- [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
+- [x] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup — the
+      2026-07-28 `io.modelcontextprotocol/tasks` extension is negotiated per request;
+      `run_fea_validation` returns a 256-bit durable handle, `tasks/get` reports the current
+      status and final typed tool result, `tasks/update` and `tasks/cancel` use the specified
+      acknowledgement shape, and cancellation terminates the worker process group. The
+      official cancelled-task shape cannot carry a result, while Anvilate's requirement says
+      the affected checks must come back not evaluated, so cancellation completes the tool
+      request with a scorecard whose T3 row is `NOT_EVALUATED` and says it was cancelled.
+      `build_part` remains refused because task transport does not manufacture the sandboxed
+      geometry generator it still waits on
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
       half is now testable and tested** (`tests/test_surface_parity.py`), because there is
       a CLI: this task was written when there was not, so "identical to CLI paths" named a

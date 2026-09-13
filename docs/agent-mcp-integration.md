@@ -8,22 +8,32 @@ The rules an agent must follow while doing any of this are the shipped
 [agent skill](agent-skill.md) — retrieval not recall, read the scorecard, `not_evaluated`
 is not a pass, screening is not certification. This page assumes them and covers the wire.
 
-## The loop, and the part of it that does not exist yet
+## The loop, and the geometry step that does not exist yet
 
 The loop a coding agent wants is *build, validate, read the scorecard, repair, repeat*.
-Two of those four steps are not callable today, and the reason is worth understanding
-before you write a client around them:
+The analytical loop is callable today. Geometry generation is the missing step:
 
 | Step | Tool | Today |
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
-| Build the part | `build_part` | Task-dispatched: it runs caller-supplied code, so its cost is unbounded. The Tasks extension is unbuilt. |
+| Build the part | `build_part` | Refused: the task transport exists, but the sandboxed geometry generator does not. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
-| Read the scorecard | `read_scorecard` | Refused. It takes no arguments and returns a scorecard, which means asking the server to remember the last call. |
+| Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
+| Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject handle returned by validation. |
 
-So the shape that works is two calls, not four: compile the document, then validate it and
-read the card **out of the validation reply**. There is no separate read step, because a
-separate read step is a session, and this server has none.
+Compile, validate, and read are separate stateless calls because every later call names its
+subject handle. T3 adds a durable task handle: `tools/call` returns immediately,
+`tasks/get` reports `statusMessage` progress and eventually carries the ordinary typed tool
+result, and `tasks/cancel` terminates the worker process group. Cancellation completes with
+a `not_evaluated` scorecard, not a passing card and not a nonstandard result on MCP's bare
+`cancelled` variant.
+
+Task records contain the original spec arguments and final result. They persist with
+`ttlMs: null` under `ANVILATE_TASK_STORE` when that environment variable is set, otherwise
+under Anvilate's local cache. This release does not evict them automatically; operators who
+handle sensitive specs should place that directory on appropriately protected storage and
+remove records according to their own retention policy. Task IDs are unguessable bearer
+handles and the server provides no operation that lists them.
 
 ## Connecting
 
@@ -230,7 +240,7 @@ one of those two readings is right. The line to copy is the status handling, not
 verdict — `not_evaluated` is a fourth value, and `status != "fail"` reads a check that could
 not run as one that passed.
 
-## The three refusals, and how to tell them apart
+## The refusals, and how to tell them apart
 
 ```python
 from anvilate.mcp import handle_request, stateless_gaps, tool_catalog
@@ -261,18 +271,17 @@ print(refusal("run_validation", {}))
 cannot be served statelessly: 
 task-dispatched: build_part, run_fea_validation
 (-32000, 'render_viewport is not dispatched yet: rendering an image needs built geometry')
-(-32000, 'build_part is task-dispatched because its cost is unbounded')
+(-32000, 'build_part is task-dispatched')
 (-32602, "run_validation requires 'spec'")
 ```
 
 - **`-32602` is yours to fix.** The arguments did not match the published `inputSchema`.
-- **`-32000`, task-dispatched.** Not a failure and not a retry: the operation's cost is
-  bounded by a convergence criterion or by your own code, so a synchronous call cannot
-  promise a reply. `build_part` and `run_fea_validation` are the two. Waiting or backing off
-  will not help, and neither will looking for a task method — **this server has none yet**,
-  so these two cannot be reached by any call it answers. The message says so and links the
-  change that would add one. Until then the dispatch mode is a statement about the
-  operation's cost, not a route you can take.
+- **`-32021`, task capability missing.** `run_fea_validation` can only return a task, and
+  the extension forbids that response unless this request declares
+  `io.modelcontextprotocol/tasks`. Add it under the request's client-capability metadata;
+  the error's `requiredCapabilities` gives the exact shape.
+- **`-32000`, task operation unbuilt.** `build_part` is correctly classified as unbounded,
+  but no task is created because there is no sandboxed geometry generator to execute.
 - **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
   behind them is not, and the message names what it waits on — `render_viewport` and
   `measure_geometry` both wait on built geometry. Retrying is pointless; a result invented

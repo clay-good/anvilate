@@ -242,12 +242,12 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. Four of the eight
-    operations are backed today; the other four say so with None rather than naming a
+    A dotted path in a table is a comment until something imports it. Five of the eight
+    operations are backed today; the other three say so with None rather than naming a
     symbol that does not exist.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 4, backed
+    assert len(backed) == 5, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -389,12 +389,32 @@ def _call(name: str, arguments: dict | None = None, request_id: int = 1) -> dict
     )
 
 
+def _task_call(name: str, arguments: dict | None = None, request_id: int = 1) -> dict:
+    return handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {
+                "name": name,
+                "arguments": arguments if arguments is not None else {},
+                "_meta": {
+                    "io.modelcontextprotocol/clientCapabilities": {
+                        "extensions": {"io.modelcontextprotocol/tasks": {}}
+                    }
+                },
+            },
+        }
+    )
+
+
 def test_initialize_reports_the_revision_the_contracts_were_written_to():
     result = handle_request({"jsonrpc": "2.0", "id": 1, "method": "initialize"})["result"]
     assert result["protocolVersion"] == PROTOCOL_REVISION
     assert result["capabilities"]["tools"]["listChanged"] is False, (
         "a stateless surface cannot notify a client that its tool list moved"
     )
+    assert "io.modelcontextprotocol/tasks" in result["capabilities"]["extensions"]
 
 
 def test_tools_list_serves_the_published_catalog_and_nothing_else():
@@ -416,6 +436,15 @@ def test_an_unknown_method_or_tool_is_a_method_not_found():
         == -32601
     )
     assert _call("polish_the_part")["error"]["code"] == -32601
+
+
+def test_tool_call_params_are_an_object_with_a_string_name():
+    for params, expected in (([], "params"), ({"name": 7}, "name"), ({}, "name")):
+        error = handle_request(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}
+        )["error"]
+        assert error["code"] == -32602
+        assert expected in error["message"]
 
 
 def test_arguments_are_checked_against_the_published_input_schema():
@@ -486,46 +515,33 @@ def test_a_boolean_is_not_a_number():
 
 
 def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
-    for name in ("build_part", "run_fea_validation"):
-        error = _call(name, {"spec": {}})["error"]
-        assert error["code"] == -32000
-        assert "task-dispatched" in error["message"]
+    unavailable = _call("build_part", {"spec": {}})["error"]
+    assert unavailable["code"] == -32000
+    assert "task-dispatched" in unavailable["message"]
+
+    missing_capability = _call("run_fea_validation", {"spec": {}})["error"]
+    assert missing_capability["code"] == -32021
+    assert missing_capability["data"]["requiredCapabilities"] == {
+        "extensions": {"io.modelcontextprotocol/tasks": {}}
+    }
     # And the refusal follows the declared cost, not a list of names.
     unbounded = {t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK}
     assert unbounded == {"build_part", "run_fea_validation"}
 
 
-def test_a_task_dispatched_refusal_says_there_is_no_task_transport_to_go_to():
-    """ "Task-dispatched" on its own points a client at a mechanism this server does not have.
-
-    `handle_request` answers `initialize`, `tools/list` and `tools/call` and nothing else, so
-    there is no task method to fall back to and these two operations cannot be reached by any
-    call the server answers. Both tools' published descriptions said "the call returns a task
-    handle", which no call has ever done — a client integrating against the contract was told
-    to expect a handle and got an error.
-    """
-    served = {"initialize", "tools/list", "tools/call"}
-    for method in ("tasks/create", "tasks/get", "tasks/result", "tasks/cancel"):
+def test_the_tasks_extension_serves_only_the_current_polling_methods():
+    served = {"initialize", "tools/list", "tools/call", "tasks/get", "tasks/update", "tasks/cancel"}
+    for method in ("tasks/create", "tasks/result", "tasks/list"):
         response = handle_request({"jsonrpc": "2.0", "id": 1, "method": method, "params": {}})
         assert response["error"]["code"] == METHOD_NOT_FOUND, method
-    # A floor under that: the methods it *does* answer still work, so the loop above is not
-    # passing because every method is refused.
-    for method in ("initialize", "tools/list"):
-        assert "result" in handle_request(
-            {"jsonrpc": "2.0", "id": 1, "method": method, "params": {}}
-        ), method
-
-    for name in ("build_part", "run_fea_validation"):
-        message = _call(name, {"spec": {}})["error"]["message"]
-        assert "no task transport yet" in message, name
-        assert "openspec/changes/modernize-mcp-server" in message, name
-
-    # And no published description may promise the handle the server cannot return.
-    for tool in tool_catalog():
-        assert "returns a task handle" not in tool.description, tool.name
-        if tool.dispatch is Dispatch.TASK:
-            assert "dispatched as a task" in tool.description, tool.name
-    assert served == {"initialize", "tools/list", "tools/call"}
+    assert served == {
+        "initialize",
+        "tools/list",
+        "tools/call",
+        "tasks/get",
+        "tasks/update",
+        "tasks/cancel",
+    }
 
 
 def test_every_tool_names_what_it_acts_on():
@@ -946,10 +962,10 @@ def test_an_exclusive_bound_is_exclusive():
     error = _call("run_fea_validation", {"spec": {}, "convergence_tol": 0})["error"]
     assert error["code"] == -32602
     assert "above 0" in error["message"]
-    # Above it, the call reaches the task-dispatch refusal.
+    # Above it, argument validation reaches extension negotiation.
     assert (
         _call("run_fea_validation", {"spec": {}, "convergence_tol": 1e-6})["error"]["code"]
-        == -32000
+        == -32021
     )
 
 
