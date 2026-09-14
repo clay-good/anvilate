@@ -6,7 +6,7 @@
 
 Anvilate is a **local-first, open-source** design tool for mechanical, structural, and industrial engineers. It runs the analytical screens you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, contact, thick-wall pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. No cloud, no LLM required, no account.
 
-> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. The natural-language front end, 3D geometry, FEA, and STEP export described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. The first 3D pattern builds a valid base-plate B-Rep and writes STEP. The wider geometry catalog, natural-language front end, FEA, and semantic AP242 export described under [Where this is going](#where-this-is-going) are still being built.
 
 ## Quickstart
 
@@ -16,7 +16,7 @@ Python 3.11+.
 git clone https://github.com/clay-good/anvilate.git
 cd anvilate
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[export]"      # drop [export] if you don't need DXF output
+pip install -e ".[geometry,export]"  # geometry adds B-Rep/STEP; export adds DXF
 ```
 
 Run any of the worked examples — every one is self-contained, needs no network, and prints its result: a scorecard for the screening examples, the computed values for the analysis ones.
@@ -120,6 +120,28 @@ a single element. Anything the document declares and no check reads — a `max_m
 tolerance band under a tier nobody demanded — comes back `not_evaluated` saying so, which is
 never a pass. See [screening a document](docs/spec-screening.md).
 
+## Build the first 3D pattern
+
+The audited `base_plate` pattern reads only the width, depth, and plate thickness declared
+in the spec. It produces one valid B-Rep solid, tags all six faces semantically, and writes a
+STEP file. Existing output is protected unless `--force` is explicit.
+
+```bash
+anvilate build examples/base_plate.spec.yaml --output base_plate.step
+```
+
+```text
+bp1: BUILT
+  STEP          base_plate.step
+  pattern       base_plate/1
+  volume        1.8e+06 mm³
+  semantic faces bottom, east, north, south, top, west
+```
+
+This is intentionally one narrow pattern, not a generic code executor. A different
+`element_type` exits 4 and names the missing audited pattern. See
+[geometry generation](openspec/specs/geometry-generation/spec.md).
+
 ## What you can do today
 
 496 runnable examples, each executed in CI so they stay honest. A few:
@@ -194,7 +216,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,451 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,477 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -255,7 +277,7 @@ Three cross-cutting layers keep a green from being a silent one.
 
 | | |
 | --- | --- |
-| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export`, `diff`, and `doctor`. `doctor` reports solver, geometry, local-model, viewport, and database readiness independently with a fix for every failure. Every command's `--help` includes a copyable example. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. The three size bounds hold for a **scorecard** read back too — out of a signed attestation or a subject store — and for every model one holds. |
+| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export`, `verify`, `diff`, and `doctor`. `build` writes STEP for audited geometry patterns; `doctor` proves whether its kernel and the other optional runtimes are ready. Every command's `--help` includes a copyable example. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. The three size bounds hold for a **scorecard** read back too — out of a signed attestation or a subject store — and for every model one holds. |
 | [MCP server](docs/agent-mcp-integration.md) | All of the pipeline's eight operations over stdio, as `anvilate-mcp` or `python -m anvilate.mcp`; closed-form checks reply synchronously, while T3 uses durable task handles with structured progress, serialized state transitions, typed refusals, and subprocess cancellation. |
 | [Published contracts](docs/published-contracts.md) | The Spec IR going in, scorecards, evidence bundles, and every completed CLI JSON result, as JSON Schema 2020-12 — generated from the models, and held by a gate that rejects both drift and a changed artifact under an unchanged version. |
 | [MCP tool contracts](docs/mcp-tool-contracts.md) | The same artifacts as tool definitions, whose schemas `$ref` the spec and scorecard at their versions rather than paraphrasing them, so the tool surface an agent reads cannot drift from the contract. |
@@ -267,7 +289,7 @@ Three cross-cutting layers keep a green from being a silent one.
 | --- | --- |
 | [Agent-driving evals](docs/agent-driving-evals.md) | Whether a given local model can drive this surface is a question only a measurement answers: completion, iterations and tool-call errors as three numbers, with deliberately no fourth that averages them. |
 | [A valid spec can still be the wrong spec](docs/valid-is-not-correct.md) | Constraining a small model's output to a schema takes validity from ~62% to 100% while taking accuracy *down* from ~20% to 11%. Schema validity, field correctness and the wrong-but-valid rate are three separate numbers. |
-| [Export targets](docs/export-targets.md) | Where the export layer is *pointed* — STEP AP242, 3MF — kept as a verification record with each claim marked confirmed or not, including the two that did not survive checking. None of it is shipped yet. |
+| [Export targets](docs/export-targets.md) | The plain STEP B-Rep writer that is shipped, and where richer AP242 PMI and 3MF export are *pointed* — kept as a verification record with each claim marked confirmed or not. |
 
 ### Start here
 

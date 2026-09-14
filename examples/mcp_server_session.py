@@ -3,13 +3,12 @@
 Everything else in this repository imports the library. This one starts the server the way
 a client does — ``python -m anvilate.mcp``, newline-delimited JSON over its stdin and
 stdout — and holds a short session with it: initialize, list the tools, compile a spec,
-run a validation, and try the two things it refuses.
+build a base plate, run a validation, and try a viewport operation it refuses.
 
-The refusals are the interesting half, and they are two different statements:
+The build and refusal are different statements:
 
-1. **``build_part`` is task-dispatched.** Its cost is unbounded because it executes
-   caller-supplied code, so a synchronous call cannot promise a reply and is refused
-   rather than blocked on.
+1. **``build_part`` synchronously builds the audited ``base_plate`` primitive.** It executes
+   no caller code and returns a published geometry summary with volume and semantic faces.
 2. **``render_viewport`` is not dispatched yet, and says what it waits on.** It names what
    it acts on — every tool does now, by taking a subject handle — so the contract is sound
    and what is missing is built geometry. "Not implemented" is not an answer a client can
@@ -53,7 +52,7 @@ _STORE_ENV = (
 
 
 def _requests() -> list[dict]:
-    """The session, in order: handshake, catalog, three real calls, two refusals."""
+    """The session: handshake, catalog, four real calls, and one refusal."""
     from anvilate.spec import (
         AcceptanceCriteria,
         DesignSpec,
@@ -73,6 +72,21 @@ def _requests() -> list[dict]:
         manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
         acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
     ).model_dump(mode="json")
+    build_document = {
+        **document,
+        "name": "bp1",
+        "element_type": "base_plate",
+        "element_params": {
+            "name": "bp1",
+            "width": {"magnitude": 300.0, "unit": "mm"},
+            "depth": {"magnitude": 240.0, "unit": "mm"},
+            "plate_thickness": {"magnitude": 25.0, "unit": "mm"},
+            "cantilever": {"magnitude": 50.0, "unit": "mm"},
+            "plate_material": "ASTM-A36",
+            "axial_load": {"magnitude": 200.0, "unit": "kN"},
+            "concrete_strength": {"magnitude": 25.0, "unit": "MPa"},
+        },
+    }
 
     def call(request_id: int, name: str, arguments: dict) -> dict:
         return {
@@ -89,7 +103,7 @@ def _requests() -> list[dict]:
         call(3, "compile_spec", {"document": document}),
         call(4, "compile_spec", {"document": {"name": "nameless"}}),
         call(5, "run_validation", {"spec": document}),
-        call(6, "build_part", {"spec": document}),
+        call(6, "build_part", {"spec": build_document}),
         call(7, "render_viewport", {"subject": "sha256:" + "a" * 64, "view": "iso"}),
     ]
 
@@ -167,10 +181,13 @@ def main() -> None:
     print(f"\nthe card came back with a handle: {handle[:20]}…")
     print(f"read_scorecard({handle[:13]}…) -> the same card: {read_back == card}")
 
-    print("\nand the two refusals, each saying a different thing:")
-    for request_id in (6, 7):
-        error = by_id[request_id]["error"]
-        print(f"  {error['code']}  {error['message'][:96]}")
+    geometry = by_id[6]["result"]["structuredContent"]["geometry"]
+    print(
+        f"\nbuild_part -> {geometry['pattern']}, {geometry['volumeMm3']:g} mm³, "
+        f"faces: {', '.join(geometry['faceTags'])}"
+    )
+    error = by_id[7]["error"]
+    print(f"\nviewport refusal -> {error['code']}  {error['message'][:96]}")
 
 
 if __name__ == "__main__":

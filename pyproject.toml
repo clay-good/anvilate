@@ -40,20 +40,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Deterministic B-Rep generation and STEP output. Keep this minor line pinned because the
+# generated topology and file writer are product behavior, not an interchangeable helper.
+geometry = ["build123d<0.12,>=0.11.1"]
 # DXF drawing export (ezdxf is MIT, pure-Python). The core stays dependency-light;
 # import anvilate.export.dxf only pulls ezdxf when this extra is installed.
 export = ["ezdxf>=1.1"]
 # `jsonschema` is a dev dependency and not a runtime one: it validates the published
 # JSON Schema artifacts against the 2020-12 meta-schema in CI, which is a check about
 # what Anvilate emits rather than something anvilate needs to run.
-dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21", "mypy>=1.11"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "ezdxf>=1.1",
+    "jsonschema>=4.21",
+    "mypy>=1.11",
+    "build123d<0.12,>=0.11.1",
+]
 
 [project.scripts]
 # The MCP server on stdio. No arguments and no configuration: the surface is the
 # published tool catalog and there is no state to lose across a restart.
 anvilate-mcp = "anvilate.mcp:main"
-# The headless CLI. Five of its six commands are backed; `build` is refused by name with
-# what it waits on, rather than reported as an unknown command.
+# The headless CLI. Six of its six commands are backed. `build` produces STEP for audited
+# geometry patterns and refuses an element whose pattern has not shipped rather than passing
+# it to arbitrary generated code.
 anvilate = "anvilate.cli:main"
 
 [project.urls]

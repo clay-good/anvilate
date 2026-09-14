@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
+from .geometry import GeometrySummary
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -44,7 +45,9 @@ __all__ = [
     "element_schema_version",
     "SCORECARD_SCHEMA_VERSION",
     "BUNDLE_SCHEMA_VERSION",
+    "GEOMETRY_SCHEMA_VERSION",
     "bundle_json_schema",
+    "geometry_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
     "schema_artifacts",
@@ -80,6 +83,9 @@ SCORECARD_SCHEMA_VERSION = "1.6.0"
 # document, and the gate refuses a changed schema under an unchanged version.
 BUNDLE_SCHEMA_VERSION = "1.1.0"
 
+# The kernel-independent geometry summary shared by CLI and MCP build results.
+GEOMETRY_SCHEMA_VERSION = "1.0.1"
+
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:
     """One model as a self-describing JSON Schema 2020-12 document.
@@ -113,6 +119,20 @@ def spec_json_schema() -> dict[str, Any]:
         description=(
             "Anvilate Design Spec IR: the typed, versioned description of a part that the "
             "screening pipeline consumes. Generated from anvilate.spec.DesignSpec."
+        ),
+    )
+
+
+def geometry_json_schema() -> dict[str, Any]:
+    """The serializable identity and kernel checks for one built solid."""
+    return _artifact(
+        GeometrySummary,
+        name="geometry-summary",
+        version=GEOMETRY_SCHEMA_VERSION,
+        description=(
+            "Anvilate geometry summary: the audited pattern, declared dimensions, semantic "
+            "face tags, and kernel-checked volume for one valid solid. Generated from "
+            "anvilate.geometry.GeometrySummary."
         ),
     )
 
@@ -264,6 +284,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "design-spec.schema.json": spec_json_schema(),
         "scorecard.schema.json": scorecard_json_schema(),
         "evidence-bundle.schema.json": bundle_json_schema(),
+        "geometry-summary.schema.json": geometry_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

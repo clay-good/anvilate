@@ -94,6 +94,8 @@ contracts.ELEMENT_SCHEMA_VERSIONS
 contracts.element_schema_version
 contracts.SCORECARD_SCHEMA_VERSION
 contracts.BUNDLE_SCHEMA_VERSION
+contracts.GEOMETRY_SCHEMA_VERSION
+contracts.geometry_json_schema
 contracts.SPEC_SCHEMA_VERSION
 contracts.schema_artifacts
 contracts.schema_issues
@@ -143,6 +145,15 @@ gdt.FrameModifier
 gdt.DatumReference
 gdt.FeatureControlFrame
 gdt.position_stack_contribution
+geometry.BASE_PLATE_PATTERN
+geometry.BuiltGeometry
+geometry.GeometryError
+geometry.GeometrySummary
+geometry.GeometryUnavailable
+geometry.UnsupportedGeometry
+geometry.build_base_plate
+geometry.build_spec
+geometry.write_step
 ingest.Bound
 ingest.ConfirmationState
 ingest.SignatureStatus

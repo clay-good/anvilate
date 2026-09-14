@@ -2,8 +2,8 @@
 
 A part described as a typed Design Spec is screened by closed-form checks that each cite the
 clause they came from, and the results roll up into one scorecard that never reports a silent
-green. The natural-language front end and the geometry pipeline the Design Spec is meant to
-drive are still being built; see "Where this is going" in the README.
+green. The natural-language front end and the wider geometry catalog are still being built;
+see "Where this is going" in the README.
 
 The implemented layers everything else builds on:
 
@@ -56,6 +56,8 @@ that already ran and does one more thing with them:
   designs that actually pass.
 - :mod:`anvilate.gdt` — semantic GD&T: a feature control frame as data, with
   Y14.5's grammar enforced at construction.
+- :mod:`anvilate.geometry` — audited Design Spec patterns built as valid B-Rep solids,
+  with stable semantic face tags and STEP output.
 - :mod:`anvilate.ingest` — requirement documents read into a draft spec, where an
   extracted value stays a draft until a named person confirms it.
 - :mod:`anvilate.interop` — the typed doorway for member forces and section

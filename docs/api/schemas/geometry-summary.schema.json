@@ -1,0 +1,53 @@
+{
+  "$id": "https://anvilate.dev/schemas/geometry-summary/1.0.1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate geometry summary: the audited pattern, declared dimensions, semantic face tags, and kernel-checked volume for one valid solid. Generated from anvilate.geometry.GeometrySummary.",
+  "properties": {
+    "dimensionsMm": {
+      "additionalProperties": {
+        "exclusiveMinimum": 0,
+        "type": "number"
+      },
+      "title": "Dimensionsmm",
+      "type": "object"
+    },
+    "faceTags": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Facetags",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "pattern": {
+      "const": "base_plate/1",
+      "title": "Pattern",
+      "type": "string"
+    },
+    "valid": {
+      "const": true,
+      "title": "Valid",
+      "type": "boolean"
+    },
+    "volumeMm3": {
+      "exclusiveMinimum": 0,
+      "title": "Volumemm3",
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "pattern",
+    "valid",
+    "volumeMm3",
+    "dimensionsMm",
+    "faceTags"
+  ],
+  "title": "GeometrySummary",
+  "type": "object",
+  "x-anvilate-version": "1.0.1"
+}

@@ -6,8 +6,8 @@ calls whether an answer can arrive in the reply at all.**
 This page describes the tool *contracts*, which were pinned before the server existed — the
 cheapest moment to change a tool surface is before a client has integrated against it. **The
 server is built now**: `anvilate-mcp` runs it on stdio, answers the three core methods plus
-`tasks/get`, `tasks/update` and `tasks/cancel`, and five of the eight operations are backed.
-The other three are refused by name with what each waits on.
+`tasks/get`, `tasks/update` and `tasks/cancel`, and six of the eight operations are backed.
+The other two are refused by name with what each waits on.
 
 ```python
 from anvilate.mcp import catalog_issues, tool_catalog, wire_definitions
@@ -23,7 +23,7 @@ is empty. The worked table is
 | Tool | Dispatch | Gates inherited | Backed today by |
 | --- | --- | --- | --- |
 | `compile_spec` | synchronous | — | `anvilate.spec:parse_spec` |
-| `build_part` | task | sandbox | not built |
+| `build_part` | synchronous | — | `anvilate.geometry:build_spec` |
 | `render_viewport` | synchronous | — | not built |
 | `measure_geometry` | synchronous | — | not built |
 | `run_validation` | synchronous | — | `anvilate.screening:screen_spec` |
@@ -31,8 +31,8 @@ is empty. The worked table is
 | `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
 | `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
 
-Five of the eight run today. The other three say so with `None` rather than naming a symbol
-that does not exist, and the five that *are* backed name a dotted path CI resolves against
+Six of the eight run today. The other two say so with `None` rather than naming a symbol
+that does not exist, and the six that *are* backed name a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
 Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
 as nothing was wired and went on resolving after it was dispatched to the screen, so each
@@ -44,7 +44,8 @@ This table is checked against `tool_catalog()` row by row.
 A tool that consumes a spec does not describe a spec. It `$ref`s
 `https://anvilate.dev/schemas/design-spec/1.3.0.json`, the artifact
 [published as JSON Schema 2020-12](published-contracts.md); a tool that returns a scorecard
-`$ref`s the scorecard at its version. The tool contract an agent reads and the
+`$ref`s the scorecard at its version. `build_part` returns the standalone geometry-summary
+contract rather than a bare object. The tool contract an agent reads and the
 structured-output constraint a compiler is decoded under therefore resolve to one document,
 which is the "one schema, two enforcement points" requirement made mechanical.
 
@@ -68,7 +69,9 @@ One rule, stated once and enforced, rather than assigned tool by tool:
 - **Unbounded cost** — the work is a function of a convergence criterion or of code the
   caller supplied. Task: handle, progress, cancellation.
 
-That is why the validation tier splits into two tools rather than one with a flag.
+The audited `base_plate` primitive is bounded by three declared dimensions and executes no
+caller code, so `build_part` replies synchronously. That is also why the validation tier
+splits into two tools rather than one with a flag.
 `run_validation` covers T0 geometry, T1 analytical and T2 manufacturability — all
 closed-form or a table lookup — and returns the scorecard in the reply. `run_fea_validation`
 covers T3, whose stopping condition is a convergence tolerance, and returns a handle. A
@@ -106,9 +109,9 @@ the runtime of code this library did not write.
 The MCP surface grants no bypass. That claim has to be visible in the definitions or it is
 only a sentence in a spec, so the gates are **derived from what an operation does**:
 executing caller-supplied code carries the sandbox, emitting an artifact carries the
-validation gate and the watermark. A tool cannot acquire a capability and forget the rule
-that goes with it, and CI asserts that every gate is still carried by at least one tool — a
-gate no tool declares is a rule the surface has quietly stopped inheriting.
+validation gate and the watermark. `build_part` does not claim the sandbox gate: it selects
+library-owned audited primitives and executes no code supplied in the document. The sandbox
+gate remains part of the contract for any future tool that does execute caller code.
 
 Two of the three gates now have code behind the declaration, and the parity is tested rather
 than described. `export_artifact` declares validation and watermark, and the parity is asked
@@ -122,16 +125,12 @@ shell flag is, and `{"format": "evidence_bundle"}` is snake_case because a JSON 
 is. The two vocabularies name the same artifacts and a parity test in
 `tests/test_surface_parity.py` compares them with the separator normalised away, so an
 artifact reachable from one door and not the other is a failure and not a discovery. A
-client that sends the shell's spelling gets `-32602` naming the three valid values. A single `backing` symbol used to
-answer for all three, which stopped being a question with one answer. The sandbox gate
-is the honest exception: `build_part` declares it, names no backing symbol because the
-operation is unbuilt, and a test asserts it stays that way, so the day an implementation
-lands somebody has to decide what discharges it.
+client that sends the shell's spelling gets `-32602` naming the three valid values. A single
+`backing` symbol used to answer for all three, which stopped being a question with one answer.
 
 ## Still open
 
-Preview-image attachments still wait on `render_viewport`; sandbox parity still waits on
-the geometry implementation behind `build_part`; registry publication and the external
+Preview-image attachments still wait on `render_viewport`; registry publication and the external
 protocol conformance run remain release work. The Tasks extension itself is live and uses
 durable local records plus fixed subprocess workers, with no server-initiated sampling.
 
@@ -163,7 +162,7 @@ instead of needing an edit.
 | Tool | Subject | Servable statelessly |
 | --- | --- | --- |
 | `compile_spec` | `document` | yes, and dispatched |
-| `build_part` | `spec` | yes (task-dispatched) |
+| `build_part` | `spec` | yes, and dispatched synchronously |
 | `run_validation` | `spec` | yes, and dispatched |
 | `run_fea_validation` | `spec` | yes (task-dispatched) |
 | `render_viewport` | `subject` | yes — waiting on built geometry |
@@ -264,8 +263,6 @@ Everything else ends in a refusal, and the kinds are worth separating:
   to look at its *document* for a problem in a different argument.
 - **`-32021`, task capability missing.** The client did not declare the Tasks extension on
   a call whose only valid response is a task handle.
-- **`-32000`, task operation unbuilt.** `build_part` is unbounded but still has no geometry
-  implementation to launch.
 - **`-32000`, stateless.** Empty today — every tool names its subject — and kept as the net
   for the next tool that stops declaring one.
 - **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does

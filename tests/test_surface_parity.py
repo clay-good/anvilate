@@ -122,19 +122,14 @@ def test_a_document_that_is_not_a_spec_is_refused_with_the_same_paths(tmp_path):
     assert "description" in over_the_wire
 
 
-def test_neither_surface_serves_an_operation_the_other_would_refuse_for_being_unbuilt():
-    """`build` is unbuilt on both, and each says so in its own vocabulary.
-
-    Derived from the declarations rather than listed: the MCP side from the tool's declared
-    cost, the CLI side from `_UNBUILT`, so an operation that becomes servable on one surface
-    and not the other fails here rather than shipping as a quiet asymmetry.
-    """
+def test_build_is_backed_on_both_surfaces():
+    """The audited pattern builder is not a quiet CLI/MCP asymmetry."""
     from anvilate.cli import _UNBUILT, _UNBUILT_ARTIFACTS
 
     unbuilt_at_the_shell = set(_UNBUILT) | set(_UNBUILT_ARTIFACTS)
-    assert "build" in unbuilt_at_the_shell
+    assert "build" not in unbuilt_at_the_shell
     over_mcp = {tool.name for tool in tool_catalog() if tool.backing is None}
-    assert "build_part" in over_mcp
+    assert "build_part" not in over_mcp
     assert "run_fea_validation" not in over_mcp
     # `diff` has no MCP tool at all — the catalog is the eight the spec names — so the CLI
     # is the only surface that mentions it, and it mentions it as unbuilt.
@@ -229,7 +224,7 @@ def test_live_documents_name_the_task_route_that_now_exists():
 
     tasks = {tool.name: tool for tool in tool_catalog() if tool.dispatch is Dispatch.TASK}
     assert tasks["run_fea_validation"].backing is not None
-    assert tasks["build_part"].backing is None
+    assert "build_part" not in tasks
 
     contracts = (_REPO / "docs" / "mcp-tool-contracts.md").read_text(encoding="utf-8")
     guide = (_REPO / "docs" / "agent-mcp-integration.md").read_text(encoding="utf-8")
@@ -239,7 +234,7 @@ def test_live_documents_name_the_task_route_that_now_exists():
 
 
 def test_no_live_document_says_the_mcp_server_is_unbuilt():
-    """It is built. `anvilate-mcp` runs it on stdio and four of eight operations dispatch.
+    """It is built. `anvilate-mcp` runs it on stdio and six of eight operations dispatch.
 
     Two pages said otherwise, in the same words, years apart in the writing: the tool
     contracts page opened with "The server itself is not built yet — which is exactly why the

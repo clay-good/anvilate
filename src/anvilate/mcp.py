@@ -163,6 +163,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 # reads has changed and neither release closes `additionalProperties`, so an old client keeps
 # working; it simply cannot see where the numbers came from.
 _BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
+_GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.0.1.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
@@ -359,10 +360,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             name="build_part",
             title="Build or regenerate the part",
             description=(
-                "Execute the part's generating program and return a geometry summary. The "
-                "program is caller-supplied code, so it runs sandboxed and its runtime is "
-                "bounded by nothing this library controls: the operation is dispatched as a "
-                "task rather than answered in a synchronous reply."
+                "Build the audited pattern selected by the Design Spec and return its B-Rep "
+                "geometry summary. The current registry supports base_plate. No caller code "
+                "is executed, so the bounded primitive build replies synchronously."
             ),
             input_schema=_object_schema(
                 {"spec": {"$ref": _SPEC_REF}},
@@ -370,15 +370,15 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             output_schema=_object_schema(
                 {
-                    "geometry": {"type": "object"},
+                    "geometry": {"$ref": _GEOMETRY_REF},
                     "warnings": {"type": "array", "items": {"type": "string"}},
                 },
                 required=["geometry", "warnings"],
             ),
-            cost=Cost.UNBOUNDED,
+            cost=Cost.BOUNDED,
             tiers=(ValidationTier.T0_GEOMETRY,),
-            executes_caller_code=True,
             subject="spec",
+            backing="anvilate.geometry:build_spec",
         ),
         ToolDefinition(
             name="render_viewport",
@@ -611,7 +611,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
         if required not in properties:
             issues.append(f"{where} requires {required!r}, which it does not define")
     for ref in sorted(_refs(schema)):
-        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF}:
+        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF, _GEOMETRY_REF}:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
                 "at its current version"
@@ -1253,6 +1253,31 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {"spec": document_json, "errors": [], "subject": handle}
 
 
+def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Build one audited Design Spec pattern and return its kernel-checked summary."""
+    from .geometry import GeometryError, GeometryUnavailable, UnsupportedGeometry, build_spec
+    from .spec import SpecValidationError, parse_spec
+
+    try:
+        spec = parse_spec(dict(arguments["spec"]))
+    except SpecValidationError as failure:
+        raise _InvalidArguments(
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
+        ) from failure
+    except (ValueError, TypeError, KeyError) as failure:
+        raise _InvalidArguments([f"spec: {failure}"]) from failure
+    try:
+        built = build_spec(spec)
+    except (GeometryUnavailable, UnsupportedGeometry) as failure:
+        raise _Unavailable(str(failure)) from failure
+    except GeometryError as failure:
+        raise _InvalidArguments([f"spec.element_params: {failure}"]) from failure
+    return {
+        "geometry": built.summary().model_dump(mode="json", by_alias=True),
+        "warnings": [],
+    }
+
+
 def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``run_validation``, dispatched to :func:`anvilate.screening.screen_spec`.
 
@@ -1520,12 +1545,7 @@ _UNBUILT: dict[str, str] = {
     ),
 }
 
-_UNBUILT_TASKS: dict[str, str] = {
-    "build_part": (
-        "executing caller-supplied geometry code still waits on the sandboxed geometry "
-        "generator; no task is created for work this release cannot perform"
-    ),
-}
+_UNBUILT_TASKS: dict[str, str] = {}
 
 _TASK_DISPATCH: dict[str, Any] = {
     "run_fea_validation": _run_fea_validation_task,
@@ -1534,6 +1554,7 @@ _TASK_DISPATCH: dict[str, Any] = {
 # The operations wired to real code today. A tool absent from this map is refused with the
 # reason rather than answered — see the refusal above.
 _DISPATCH: dict[str, Any] = {
+    "build_part": _build_part,
     "compile_spec": _compile_spec,
     "export_artifact": _export_artifact,
     "read_scorecard": _read_scorecard,

@@ -1,0 +1,17 @@
+anvilate_spec: "1.3.0"
+name: bp1
+description: A rectangular base plate for the audited geometry pattern.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: base_plate
+element_params:
+  name: bp1
+  width: {magnitude: 300.0, unit: mm}
+  depth: {magnitude: 240.0, unit: mm}
+  plate_thickness: {magnitude: 25.0, unit: mm}
+  cantilever: {magnitude: 50.0, unit: mm}
+  plate_material: ASTM-A36
+  axial_load: {magnitude: 200.0, unit: kN}
+  concrete_strength: {magnitude: 25.0, unit: MPa}
+acceptance: {tiers: [T1_analytical]}

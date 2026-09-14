@@ -75,6 +75,26 @@ constraints:
   min_safety_factor: {value: 2.0, origin: user_stated}
 """
 
+_BASE_PLATE_SPEC = """
+anvilate_spec: "1.3.0"
+name: bp1
+description: A rectangular column base plate.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+acceptance: {tiers: [T1_analytical]}
+element_type: base_plate
+element_params:
+  name: bp1
+  width: {magnitude: 300.0, unit: mm}
+  depth: {magnitude: 240.0, unit: mm}
+  plate_thickness: {magnitude: 25.0, unit: mm}
+  cantilever: {magnitude: 50.0, unit: mm}
+  plate_material: ASTM-A36
+  axial_load: {magnitude: 200.0, unit: kN}
+  concrete_strength: {magnitude: 25.0, unit: MPa}
+"""
+
 
 def _hostile_documents():
     """Documents that are valid per the schema and hostile to the screen, from the screening
@@ -270,10 +290,9 @@ def test_the_unbuilt_list_is_the_specs_own_minimum_minus_what_is_backed():
     works is as misleading as a missing one.
     """
     required = {"build", "check", "export", "diff"}
-    # `diff`'s spec-change half is backed too — its requirement says "two builds of a part
-    # (or a spec change)", and the parenthesis is what a merge gate reads. Only `build` has
-    # no half that a spec file alone can answer.
-    assert set(_UNBUILT) == required - {"check", "export", "diff"}
+    # Every named command has a backed path now. Build is intentionally pattern-limited,
+    # but a supported base_plate invocation produces the artifact rather than a refusal.
+    assert set(_UNBUILT) == required - {"build", "check", "export", "diff"}
 
 
 def test_a_missing_file_and_an_invalid_document_are_both_bad_requests(tmp_path):
@@ -528,6 +547,9 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
 
     qif_spec = tmp_path / "lug.yaml"
     qif_spec.write_text(_LUG_SPEC, encoding="utf-8")
+    build_spec = tmp_path / "base-plate.yaml"
+    build_spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    built_step = tmp_path / "base-plate.step"
     before, after = spec_pair
     invocations = (
         ("check", "check", "--format", "json", str(spec_file)),
@@ -543,6 +565,15 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         ),
         ("verify", *_verify_args(envelope), "--format", "json"),
         ("diff", "diff", "--format", "json", str(before), str(after)),
+        (
+            "build",
+            "build",
+            str(build_spec),
+            "--output",
+            str(built_step),
+            "--format",
+            "json",
+        ),
         ("doctor", "doctor", "--format", "json"),
     )
     schema = json.loads(
@@ -569,7 +600,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
     (
         (("check", "--format", "json"), EXIT_BAD_REQUEST, "check"),
         (("check", "absent.yaml", "--format=json"), EXIT_BAD_REQUEST, "check"),
-        (("build", "part.yaml", "--format", "json"), EXIT_UNBUILT, "build"),
+        (("build", "part.yaml", "--format", "json"), EXIT_BAD_REQUEST, "build"),
     ),
 )
 def test_a_json_refusal_is_data_and_preserves_the_human_diagnostic(
@@ -1231,12 +1262,11 @@ def test_a_regression_to_not_evaluated_still_fails_the_run(spec_pair, monkeypatc
     assert "pass → not_evaluated" in err
 
 
-def test_diff_is_no_longer_on_the_unbuilt_list():
-    """The list is the four the requirement names minus what is backed, and `diff`'s spec
-    half is backed now. Only its geometry half is not, and that is named in the output."""
+def test_every_required_command_has_a_backed_path():
+    """The four-command minimum is executable, while unsupported geometry stays explicit."""
     from anvilate.cli import _DIFF_NEEDS_GEOMETRY
 
-    assert set(_UNBUILT) == {"build"}
+    assert set(_UNBUILT) == set()
     assert "geometry-generation" in _DIFF_NEEDS_GEOMETRY
 
 
@@ -1390,28 +1420,77 @@ def test_a_deleted_check_is_not_worse_and_the_card_verdict_is_what_catches_it(
     assert code == EXIT_NOT_EVALUATED
 
 
-def test_an_unbuilt_operation_is_refused_by_name_however_it_is_invoked():
-    """`anvilate build part.yaml` is what a reader of the help types, and it used to fail
-    as a *usage error*.
+def test_build_writes_a_valid_step_and_reports_the_artifact(tmp_path):
+    pytest.importorskip("build123d")
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
 
-    "unrecognized arguments: part.yaml", exit 3 — which this CLI defines as *the request was
-    wrong*. The request was not wrong. The operation is specified and unbuilt, which is what
-    code 4 exists to say, and bare `anvilate build` said exactly that all along. There is no
-    invocation of an unbuilt operation that would be correct, so an argparse complaint about
-    the arguments can only send the caller looking in the wrong place.
-    """
-    for arguments in ([], ["part.yaml"], ["a.yaml", "b.yaml"], ["part.yaml", "--output", "x.step"]):
-        code, _out, err = _run("build", *arguments)
-        assert code == EXIT_UNBUILT, (arguments, code, err)
-        assert _UNBUILT["build"] in err, (arguments, err)
-        assert "unrecognized arguments" not in err, arguments
+    code, text, err = _run("build", str(spec), "--output", str(output))
+
+    assert code == EXIT_OK and err == ""
+    assert "bp1: BUILT" in text and "base_plate/1" in text
+    assert output.read_text(encoding="utf-8").startswith("ISO-10303-21;")
+
+
+def test_build_json_carries_geometry_identity_and_digest(tmp_path):
+    pytest.importorskip("build123d")
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+
+    code, raw, err = _run(
+        "build", str(spec), "--output", str(output), "--format", "json"
+    )
+    payload = json.loads(raw)
+
+    assert code == EXIT_OK and err == ""
+    assert payload["artifact"]["pattern"] == "base_plate/1"
+    assert payload["artifact"]["volume_mm3"] == pytest.approx(1_800_000)
+    assert payload["artifact"]["sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    assert payload["artifact"]["face_tags"] == [
+        "bottom",
+        "east",
+        "north",
+        "south",
+        "top",
+        "west",
+    ]
+
+
+def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
+    spec = tmp_path / "lug.yaml"
+    spec.write_text(_LUG_SPEC, encoding="utf-8")
+
+    code, out, err = _run("build", str(spec), "--output", str(tmp_path / "lug.step"))
+
+    assert code == EXIT_UNBUILT and out == ""
+    assert "lifting_lug" in err and "supported: base_plate" in err
+
+
+def test_build_does_not_replace_an_artifact_without_force(tmp_path):
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    output.write_text("keep me", encoding="utf-8")
+
+    code, out, err = _run("build", str(spec), "--output", str(output))
+
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "--force" in err
+    assert output.read_text(encoding="utf-8") == "keep me"
 
 
 def test_a_built_command_still_reports_a_usage_error_as_one():
     """The other half: swallowing arguments for the unbuilt command must not have taught
     the built ones to swallow theirs. A missing spec is still a bad request, not a verdict.
     """
-    for command, arguments in (("check", []), ("diff", ["only-one.yaml"]), ("verify", [])):
+    for command, arguments in (
+        ("build", []),
+        ("check", []),
+        ("diff", ["only-one.yaml"]),
+        ("verify", []),
+    ):
         # `ArgumentParser.error` raises rather than returning; `main` is what turns it into
         # an exit code, so the code is read off the SystemExit here as it is above.
         with pytest.raises(SystemExit) as refused:
@@ -1419,9 +1498,8 @@ def test_a_built_command_still_reports_a_usage_error_as_one():
         assert refused.value.code == EXIT_BAD_REQUEST, command
 
 
-def test_asking_an_unbuilt_command_for_help_is_not_a_failure():
-    """`--help` exits 0 everywhere, including here — asking what a command is waiting on is
-    not the same as invoking it."""
+def test_asking_build_for_help_is_not_a_failure():
+    """`--help` exits 0 for the built geometry command."""
     with pytest.raises(SystemExit) as asked:
         _run("build", "--help")
     assert asked.value.code == EXIT_OK
@@ -1566,11 +1644,13 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     }
     assert payload["status"] == "fail" and code == EXIT_FAILED and error == ""
     assert all(check["remedy"] for check in by_name.values() if check["status"] == "fail")
+    assert by_name["geometry kernel"]["status"] == "pass"
+    assert "build123d" in by_name["geometry kernel"]["detail"]
     assert by_name["database integrity"]["status"] == "pass"
     assert "material" in by_name["database integrity"]["detail"]
 
 
-@pytest.mark.parametrize("command", ["check", "diff", "verify", "export"])
+@pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export"])
 def test_every_backed_command_explains_its_own_exit_code(command):
     """The program help defers to these, so they have to say something."""
     text = _help(command)
@@ -1586,9 +1666,9 @@ def test_diff_help_says_its_zero_is_not_the_same_zero():
     assert "already failing" in text
 
 
-def test_the_unbuilt_command_still_says_what_it_waits_on_in_help():
+def test_the_program_help_names_the_backed_geometry_command():
     text = _help()
-    assert "geometry kernel" in text
+    assert "build an audited Design Spec geometry pattern as STEP" in text
 
 
 def test_the_card_names_the_governing_check(spec_file):

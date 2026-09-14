@@ -8,15 +8,15 @@ The rules an agent must follow while doing any of this are the shipped
 [agent skill](agent-skill.md) — retrieval not recall, read the scorecard, `not_evaluated`
 is not a pass, screening is not certification. This page assumes them and covers the wire.
 
-## The loop, and the geometry step that does not exist yet
+## The loop, with the first geometry pattern
 
 The loop a coding agent wants is *build, validate, read the scorecard, repair, repeat*.
-The analytical loop is callable today. Geometry generation is the missing step:
+The analytical loop and the first geometry pattern are callable today:
 
 | Step | Tool | Today |
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
-| Build the part | `build_part` | Refused: the task transport exists, but the sandboxed geometry generator does not. |
+| Build the part | `build_part` | **Dispatched synchronously** for `base_plate`; returns the published geometry summary. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
 | Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject handle returned by validation. |
@@ -273,15 +273,13 @@ def refusal(name, arguments):
 
 
 print(refusal("render_viewport", {"subject": "sha256:" + "a" * 64, "view": "iso"}))
-print(refusal("build_part", {"spec": {}}))
 print(refusal("run_validation", {}))
 ```
 
 ```text
 cannot be served statelessly: 
-task-dispatched: build_part, run_fea_validation
+task-dispatched: run_fea_validation
 (-32000, 'render_viewport is not dispatched yet: rendering an image needs built geometry')
-(-32000, 'build_part is task-dispatched')
 (-32602, "run_validation requires 'spec'")
 ```
 
@@ -290,8 +288,6 @@ task-dispatched: build_part, run_fea_validation
   the extension forbids that response unless this request declares
   `io.modelcontextprotocol/tasks`. Add it under the request's client-capability metadata;
   the error's `requiredCapabilities` gives the exact shape.
-- **`-32000`, task operation unbuilt.** `build_part` is correctly classified as unbounded,
-  but no task is created because there is no sandboxed geometry generator to execute.
 - **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
   behind them is not, and the message names what it waits on — `render_viewport` and
   `measure_geometry` both wait on built geometry. Retrying is pointless; a result invented

@@ -561,19 +561,15 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     assert bundle["status"] != "pass"
 
 
-def test_the_sandbox_gate_is_declared_and_undischarged():
-    """The honest half of parity: one declared gate has nothing behind it yet.
-
-    ``build_part`` declares the sandbox gate because it executes caller-supplied code, and
-    it names no backing symbol — the operation is unbuilt. Asserting that here means the
-    day a backing lands, this test fails and someone has to decide what discharges it,
-    rather than the tool quietly acquiring an implementation with no sandbox.
-    """
+def test_the_audited_builder_executes_no_caller_code_and_claims_no_sandbox():
+    """The primitive registry removes the capability that would require a sandbox."""
     from anvilate.mcp import Gate, tool_catalog
 
     sandboxed = [tool for tool in tool_catalog() if Gate.SANDBOX in tool.gates]
-    assert [tool.name for tool in sandboxed] == ["build_part"]
-    assert sandboxed[0].backing is None
+    build = next(tool for tool in tool_catalog() if tool.name == "build_part")
+    assert sandboxed == []
+    assert build.executes_caller_code is False
+    assert build.backing == "anvilate.geometry:build_spec"
     assert not any(
         "sandbox" in path.read_text()
         for path in (_REPO / "src" / "anvilate" / "export").glob("*.py")

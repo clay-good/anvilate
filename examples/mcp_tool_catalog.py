@@ -58,7 +58,7 @@ def main() -> None:
 
     tasks = [t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK]
     print(f"\ntask-dispatched: {tasks}")
-    assert tasks == ["build_part", "run_fea_validation"]
+    assert tasks == ["run_fea_validation"]
 
     # What a client actually receives for one tool. The scorecard is referenced, not
     # described: an agent that fetches that $id gets the same document the library writes.

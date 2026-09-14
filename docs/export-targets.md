@@ -5,10 +5,10 @@ aimed at an unverified claim is worse than no target.** This page records where 
 export layer is pointed, and, for each claim, whether it was confirmed from a primary source
 on **2026-08-22** or is carried as unverified.
 
-No export code exists yet for STEP or 3MF. This is a roadmap page with citations, not a
-description of shipped behavior. What *is* shipped is
-[DXF plate export](../src/anvilate/export/dxf.py) and
-[QIF Results](quality-interchange.md).
+A plain STEP B-Rep writer is now shipped through `anvilate build` for the audited
+`base_plate/1` pattern. It writes valid solid geometry; it does **not** claim AP242 semantic
+PMI conformance. AP242 PMI and 3MF remain roadmap targets. The other shipped formats are
+[DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 
 ## What was confirmed
 

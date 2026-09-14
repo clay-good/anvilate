@@ -214,6 +214,7 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
     # first poll, and its mirror: a client timing out on the one call that matters.
     synchronous = {t.name for t in tool_catalog() if t.dispatch is Dispatch.SYNCHRONOUS}
     assert synchronous == {
+        "build_part",
         "compile_spec",
         "render_viewport",
         "measure_geometry",
@@ -225,12 +226,13 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
 
 def test_the_gates_the_surface_inherits_are_declared_on_the_tools_that_need_them():
     by_name = {tool.name: tool for tool in tool_catalog()}
-    assert Gate.SANDBOX in by_name["build_part"].gates
+    assert Gate.SANDBOX not in by_name["build_part"].gates
+    assert by_name["build_part"].executes_caller_code is False
     assert by_name["export_artifact"].gates == frozenset({Gate.VALIDATION, Gate.WATERMARK})
-    # Every gate is carried by at least one tool. A gate no tool declares is a rule the
-    # MCP surface has quietly stopped inheriting.
+    # The two artifact gates are carried today. Sandbox remains a declared contract for a
+    # future caller-code tool, while the audited primitive builder deliberately needs none.
     carried = set().union(*(tool.gates for tool in tool_catalog()))
-    assert carried == set(Gate)
+    assert carried == {Gate.VALIDATION, Gate.WATERMARK}
 
 
 def test_a_definition_cannot_be_edited_after_it_is_approved():
@@ -242,12 +244,12 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. Five of the eight
-    operations are backed today; the other three say so with None rather than naming a
+    A dotted path in a table is a comment until something imports it. Six of the eight
+    operations are backed today; the other two say so with None rather than naming a
     symbol that does not exist.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 5, backed
+    assert len(backed) == 6, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -514,11 +516,7 @@ def test_a_boolean_is_not_a_number():
     assert _call("render_viewport", {"view": "iso", "width_px": True})["error"]["code"] == -32602
 
 
-def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
-    unavailable = _call("build_part", {"spec": {}})["error"]
-    assert unavailable["code"] == -32000
-    assert "task-dispatched" in unavailable["message"]
-
+def test_the_unbounded_validation_tool_requires_the_tasks_extension():
     missing_capability = _call("run_fea_validation", {"spec": {}})["error"]
     assert missing_capability["code"] == -32021
     assert missing_capability["data"]["requiredCapabilities"] == {
@@ -526,7 +524,7 @@ def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
     }
     # And the refusal follows the declared cost, not a list of names.
     unbounded = {t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK}
-    assert unbounded == {"build_part", "run_fea_validation"}
+    assert unbounded == {"run_fea_validation"}
 
 
 def test_the_tasks_extension_serves_only_the_current_polling_methods():
@@ -722,6 +720,47 @@ def _spec_document() -> dict:
         manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
         acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
     ).model_dump(mode="json")
+
+
+def _base_plate_document() -> dict:
+    document = _spec_document()
+    document.update(
+        {
+            "name": "bp1",
+            "element_type": "base_plate",
+            "element_params": {
+                "name": "bp1",
+                "width": {"magnitude": 300.0, "unit": "mm"},
+                "depth": {"magnitude": 240.0, "unit": "mm"},
+                "plate_thickness": {"magnitude": 25.0, "unit": "mm"},
+                "cantilever": {"magnitude": 50.0, "unit": "mm"},
+                "plate_material": "ASTM-A36",
+                "axial_load": {"magnitude": 200.0, "unit": "kN"},
+                "concrete_strength": {"magnitude": 25.0, "unit": "MPa"},
+            },
+        }
+    )
+    return document
+
+
+def test_build_part_returns_a_valid_semantically_tagged_geometry_summary():
+    pytest.importorskip("build123d")
+
+    result = _call("build_part", {"spec": _base_plate_document()})["result"]
+    geometry = result["structuredContent"]["geometry"]
+
+    assert result["isError"] is False
+    assert geometry["valid"] is True
+    assert geometry["pattern"] == "base_plate/1"
+    assert geometry["volumeMm3"] == pytest.approx(1_800_000)
+    assert geometry["faceTags"] == ["bottom", "east", "north", "south", "top", "west"]
+
+
+def test_build_part_refuses_a_spec_without_an_audited_pattern():
+    error = _call("build_part", {"spec": _spec_document()})["error"]
+
+    assert error["code"] == -32000
+    assert "<undeclared>" in error["message"] and "supported: base_plate" in error["message"]
 
 
 def test_compile_spec_round_trips_a_real_document():
@@ -1066,7 +1105,7 @@ def _released(name: str) -> dict:
 
 
 def _released_registry():
-    """The two published artifacts, addressable by the ``$id`` the tool schemas ``$ref``.
+    """The published artifacts, addressable by the ``$id`` the tool schemas ``$ref``.
 
     Deliberately the **released files**, not `spec_json_schema()`. A client resolves the
     versioned URL, which is what those files are; validating against the live model instead
@@ -1076,6 +1115,7 @@ def _released_registry():
 
     from anvilate.contracts import (
         BUNDLE_SCHEMA_VERSION,
+        GEOMETRY_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
     )
@@ -1090,6 +1130,7 @@ def _released_registry():
                 _released(f"design-spec-{SPEC_SCHEMA_VERSION}.json"),
                 _released(f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"),
                 _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
+                _released(f"geometry-summary-{GEOMETRY_SCHEMA_VERSION}.json"),
             )
         ]
     )
@@ -1114,6 +1155,8 @@ def _dispatched_arguments(tool_name: str) -> dict:
     document = _spec_document()
     if tool_name == "compile_spec":
         return {"document": document}
+    if tool_name == "build_part":
+        return {"spec": _base_plate_document()}
     if tool_name == "run_validation":
         return {"spec": document}
     handle = _call("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]

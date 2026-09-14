@@ -1,4 +1,4 @@
-"""The headless command line: five commands that are backed, and the one that is not.
+"""The headless command line: screening, geometry, evidence, verification, and diffing.
 
 `headless-automation` requires the CLI to expose every pipeline capability — "at minimum
 ``anvilate build``, ``anvilate check``, ``anvilate export``, ``anvilate diff`` — operating on
@@ -6,11 +6,12 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Four of the five are backed today**, and a sixth command, ``doctor``, reports runtime
-readiness: the fifth is ``verify`` from the attestation capability. Only ``build`` is
-refused, and it is refused by name with what it waits on. ``check`` compiles a spec document
-and screens it, which is exactly the path :func:`anvilate.screening.screen_spec` already
-serves over MCP.
+**Five of the five are backed today**; a sixth command, ``verify``, comes from the
+attestation capability. ``doctor`` reports which optional runtimes are present.
+``build`` now produces STEP for the first audited geometry pattern, ``base_plate``. Other
+element types are refused by name rather than sent through an unreviewed generic generator.
+``check`` compiles a spec document and screens it, which is exactly the path
+:func:`anvilate.screening.screen_spec` already serves over MCP.
 ``export`` serves the artifacts that need no geometry — the evidence bundle, and QIF results
 (ISO 23952), both assembled from a screened card — and refuses the one that does.
 
@@ -23,11 +24,8 @@ about. A refusal wide enough to cover something that works is as misleading as a
 one, and the second time it hid a capability the library had shipped, documented and
 exampled.
 
-``build`` does need a built part, so it is refused *by name, with the reason* rather than
-left as an unknown command. A CLI that answers "unknown command: build" tells a script
-author they typed it wrong; the honest answer is that the operation is specified, unbuilt,
-and here is what it is waiting on. ``diff`` runs — only its mass, volume and
-centre-of-gravity deltas wait on geometry, and the output says so where they would be.
+``diff`` runs — only its mass, volume and centre-of-gravity deltas wait on geometry, and the
+output says so where they would be.
 
 **The bundle goes to stdout, and that is not an oversight.** Every artifact-emitting entry
 point in this package takes a mandatory ``ExportAuthorization`` (see
@@ -113,15 +111,9 @@ _GEOMETRY_SPEC = (
     "https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation"
 )
 
-# What each unbuilt command is waiting on. Named individually because "not implemented" is
-# not an answer a script author can act on, and because the three are waiting on the same
-# thing for three different reasons.
-_UNBUILT = {
-    "build": (
-        "build runs the part's generating program, which needs a geometry kernel this "
-        "package does not ship. See " + _GEOMETRY_SPEC + "."
-    ),
-}
+# The command-level gap list. Empty now that every command has a backed path; kept as the
+# declaration the CLI/MCP parity gate reads.
+_UNBUILT: dict[str, str] = {}
 
 # The half of `diff` that needs a built part, named where the output would have shown it.
 _DIFF_NEEDS_GEOMETRY = (
@@ -172,7 +164,7 @@ _COMMAND_EXAMPLES = {
     "export": "anvilate export parts/ --format json",
     "verify": "anvilate verify bundle.dsse.json --artifact scorecard.json=scorecard.json",
     "diff": "anvilate diff before.yaml after.yaml --format json",
-    "build": "anvilate build part.yaml --format json",
+    "build": "anvilate build part.yaml --output part.step",
     "doctor": "anvilate doctor --format json",
 }
 
@@ -347,29 +339,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the report"
     )
 
-    for name, reason in _UNBUILT.items():
-        unbuilt = commands.add_parser(
-            name,
-            help=f"specified, unbuilt — {reason.split('.')[0]}",
-            description=reason,
-            epilog=f"Example: {_COMMAND_EXAMPLES[name]}",
-        )
-        unbuilt.add_argument(
-            "--format",
-            choices=("text", "json"),
-            default="text",
-            help="text for a person, json for a script that needs the refusal as data",
-        )
-        # Everything after the name is swallowed, because there is no invocation of an
-        # unbuilt operation that would be correct. `anvilate build part.yaml` — the thing a
-        # reader of the help above actually types — answered "unrecognized arguments" and
-        # exited 3, which this CLI defines as *the request was wrong*. The request was not
-        # wrong; the operation is unbuilt, and that is what code 4 is for.
-        unbuilt.add_argument(
-            "ignored",
-            nargs=argparse.REMAINDER,
-            help="accepted and ignored — the refusal is about the operation, not the arguments",
-        )
+    build = commands.add_parser(
+        "build",
+        help="build an audited Design Spec geometry pattern as STEP",
+        description="Build one Design Spec as a valid B-Rep and write STEP. The first "
+        "supported element type is base_plate; unsupported patterns exit 4 and name the "
+        "missing pattern. Exit 0 means the STEP was written; a bad spec or output exits 3, "
+        "and an unexpected kernel error exits 5. Existing files are not overwritten "
+        "unless --force is given.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['build']}",
+    )
+    build.add_argument("spec", type=Path, help="the Design Spec document to build")
+    build.add_argument("--output", type=Path, required=True, help="STEP file to write")
+    build.add_argument(
+        "--force", action="store_true", help="replace an existing output file deliberately"
+    )
+    build.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the result"
+    )
+
     return parser
 
 
@@ -416,9 +404,8 @@ def run(
         command_out = out
 
     try:
-        if args.command in _UNBUILT:
-            print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=command_err)
-            code = EXIT_UNBUILT
+        if args.command == "build":
+            code = _build(args, out=command_out, err=command_err)
         elif args.command == "export":
             code = _export(args, out=command_out, err=command_err)
         elif args.command == "verify":
@@ -459,7 +446,7 @@ def _wants_json(arguments: list[str]) -> bool:
 
 def _requested_command(arguments: list[str]) -> str:
     """Best command identity available before a malformed invocation can be parsed."""
-    commands = {"check", "verify", "diff", "export", *_UNBUILT}
+    commands = {"build", "check", "verify", "diff", "export", "doctor", *_UNBUILT}
     return next((argument for argument in arguments if argument in commands), "anvilate")
 
 
@@ -510,24 +497,18 @@ def _print_error(*, command: str, diagnostic: str, out) -> None:
 
 def _doctor(args: argparse.Namespace, *, out) -> int:
     """Report each required runtime capability independently and actionably."""
+    from importlib.metadata import PackageNotFoundError, version
+
     from .standards import default_standards_resolver
 
     specs = "https://github.com/clay-good/anvilate/tree/main/openspec/specs"
-    checks = [
+    checks: list[dict[str, Any]] = [
         {
             "name": "FEA solver",
             "status": "fail",
             "detail": "No FEA solver backend is shipped or configured in this release.",
             "remedy": (
                 f"Implement and configure the T3 backend specified in {specs}/validation-gauntlet."
-            ),
-        },
-        {
-            "name": "geometry kernel",
-            "status": "fail",
-            "detail": "No geometry kernel is shipped or configured in this release.",
-            "remedy": (
-                f"Install the kernel selected by {specs}/geometry-generation once implemented."
             ),
         },
         {
@@ -548,6 +529,37 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
             ),
         },
     ]
+    try:
+        from build123d import Box
+
+        probe = Box(1, 1, 1)
+        if not probe.is_valid or len(probe.solids()) != 1:
+            raise RuntimeError("the kernel probe did not produce one valid solid")
+        build123d_version = version("build123d")
+        ocp_version = version("cadquery-ocp-novtk")
+    except (ImportError, PackageNotFoundError, RuntimeError) as failure:
+        checks.insert(
+            1,
+            {
+                "name": "geometry kernel",
+                "status": "fail",
+                "detail": f"The build123d/OCCT geometry runtime is not ready: {failure}",
+                "remedy": "Install the geometry runtime with `pip install anvilate[geometry]`.",
+            },
+        )
+    else:
+        checks.insert(
+            1,
+            {
+                "name": "geometry kernel",
+                "status": "pass",
+                "detail": (
+                    f"build123d {build123d_version} with cadquery-ocp-novtk {ocp_version} "
+                    "produced one valid B-Rep probe solid."
+                ),
+                "remedy": None,
+            },
+        )
     resolver = default_standards_resolver()
     material_count = len(resolver.known_materials())
     component_count = len(resolver.known_components())
@@ -1495,6 +1507,75 @@ def _load(path: Path, *, err, command: str):
     except (ValueError, TypeError, KeyError) as failure:
         print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST
+
+
+def _build(args: argparse.Namespace, *, out, err) -> int:
+    """Build one supported Design Spec pattern and write a valid STEP solid."""
+    import hashlib
+
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        UnsupportedGeometry,
+        build_spec,
+        write_step,
+    )
+
+    if args.output.suffix.lower() not in {".step", ".stp"}:
+        print("anvilate build: --output must end in .step or .stp", file=err)
+        return EXIT_BAD_REQUEST
+    if not args.output.parent.is_dir():
+        print(f"anvilate build: output directory does not exist: {args.output.parent}", file=err)
+        return EXIT_BAD_REQUEST
+    if args.output.exists() and not args.force:
+        print(
+            f"anvilate build: output already exists: {args.output}; pass --force to replace it",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+
+    spec = _load(args.spec, err=err, command="build")
+    if isinstance(spec, int):
+        return spec
+    try:
+        built = build_spec(spec)
+    except (GeometryUnavailable, UnsupportedGeometry) as failure:
+        print(f"anvilate build: {failure}. See {_GEOMETRY_SPEC}.", file=err)
+        return EXIT_UNBUILT
+    except GeometryError as failure:
+        print(f"anvilate build: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+
+    try:
+        write_step(built, args.output)
+        digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
+    except OSError as failure:
+        print(f"anvilate build: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+
+    result = {
+        "name": spec.name,
+        "source": str(args.spec),
+        "artifact": {
+            "path": str(args.output),
+            "format": "step",
+            "sha256": digest,
+            "pattern": built.pattern,
+            "volume_mm3": built.volume_mm3,
+            "dimensions_mm": dict(built.dimensions_mm),
+            "face_tags": sorted(built.faces),
+        },
+    }
+    if args.format == "json":
+        print(json.dumps(machine_document("build", result), indent=2, sort_keys=True), file=out)
+    else:
+        print(f"{spec.name}: BUILT", file=out)
+        print(f"  STEP          {args.output}", file=out)
+        print(f"  pattern       {built.pattern}", file=out)
+        print(f"  volume        {built.volume_mm3:g} mm³", file=out)
+        print(f"  semantic faces {', '.join(sorted(built.faces))}", file=out)
+        print(f"  sha256        {digest}", file=out)
+    return EXIT_OK
 
 
 def _check(args: argparse.Namespace, *, out, err) -> int:

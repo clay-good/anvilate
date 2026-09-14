@@ -1,8 +1,9 @@
 # `anvilate` on the command line
 
-Three of the four commands `headless-automation` names are backed; `verify` from
-`evidence-attestation` and the environment self-check `doctor` are backed too. The one that
-is not is refused by name, with what it is waiting on.
+All four commands `headless-automation` names are backed; `verify` from
+`evidence-attestation` and the environment self-check `doctor` are backed too. Geometry is
+pattern-limited: `base_plate` builds today, and an element whose audited pattern has not
+shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
@@ -10,7 +11,7 @@ is not is refused by name, with what it is waiting on.
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
-| `build` | a spec | `--format` | nothing: it is specified and unbuilt, and exits 4 |
+| `build` | a spec | `--output`, `--force`, `--format` | a valid STEP artifact was written |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -313,7 +314,7 @@ stderr at all.
 one object per spec with its path, its name and its whole scorecard. A list whatever the
 count, because a shape that changes with the number of arguments is a shape every caller has
 to branch on, and the branch is wrong the first time a directory happens to hold exactly one
-spec. Every JSON-producing command also carries `schema` and `schema_version`; all six
+spec. Every JSON-producing command also carries `schema` and `schema_version`; all seven
 result shapes are published at
 [`cli-output.schema.json`](api/schemas/cli-output.schema.json).
 
@@ -322,9 +323,11 @@ result shapes are published at
 `anvilate doctor` checks the five runtime areas the onboarding contract names: FEA solver,
 geometry kernel, local model runtime, viewport prerequisites, and bundled database
 integrity. Each gets its own pass/fail line, and every failure carries a concrete next
-action. The current release honestly reports the first four as unbuilt and proves the fifth
-by loading the bundled resolver and counting its material and component designations.
-`--format json` emits the same report under CLI output schema 1.3.0.
+action. With the `geometry` extra installed, the kernel check builds a valid probe solid and
+reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
+remain explicit failures; database integrity is proved by loading the bundled resolver and
+counting its material and component designations. `--format json` emits the same report
+under CLI output schema 1.4.3.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -390,8 +393,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.2.0.json",
- "schema_version": "1.2.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.4.3.json",
+ "schema_version": "1.4.3", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -429,23 +432,19 @@ changed shape under the same version therefore fails CI.
 A refusal requested with `--format json` is data too. The established diagnostic remains on
 stderr, while stdout carries `outcome: "refused"`, the same diagnostic lines, exit code 3
 or 4, and a remedy. A gated export retains verdict code 1 or 2 in the same form. This also
-covers parser errors and `build`, even though those paths stop before a normal result exists;
-`build --help` documents the JSON option despite the operation itself remaining unbuilt.
+covers parser errors and unsupported build patterns, even though those paths stop before a
+normal result exists. A completed build has its own result variant carrying the pattern,
+dimensions, semantic face tags, kernel-computed volume, output path, and digest.
 Scripts therefore never have to switch back to scraping prose precisely when an invocation
 goes wrong. An unexpected defect uses the sibling `outcome: "error"` variant and exit code
 5, so a broken tool cannot be mistaken for a rejected input or a failing part.
 
-### An unbuilt operation is refused however it is invoked
+### A missing geometry pattern is refused by name
 
-`anvilate build` said what it was waiting on and exited 4. `anvilate build part.yaml` — the
-thing a reader of that help actually types — answered `unrecognized arguments: part.yaml`
-and exited 3, which this table defines as *the request was wrong*. The request was not
-wrong; the operation is unbuilt.
-
-There is no invocation of an unbuilt operation that would be correct, so everything after
-the command name is now accepted and ignored, and the answer is the same reason and the same
-code every time. `--help` still exits 0: asking what a command is waiting on is not invoking
-it. The built commands are untouched — a missing spec is still a bad request.
+`build` routes the spec's `element_type` through the audited pattern registry. A
+`base_plate` produces STEP; a `lifting_lug` currently exits 4 and says that no audited
+geometry pattern is registered for that tag. This keeps "the command is working" separate
+from "this pattern has shipped," without executing arbitrary code from a document.
 
 ### A code 3 has to say what to write
 
@@ -768,20 +767,23 @@ A different set of checks is not a worse set — the rule the exit code has alwa
 and what makes a deleted check visible instead is `verdict.worse`, which reads the card's own
 roll-up and cannot be deleted by deleting the checks.
 
-## The one that is refused
+## Build a STEP solid
 
-`build` needs a built part, and the geometry kernel is not in this package. It is a named
-subcommand that exits 4 and says what it is waiting on:
+Install the optional kernel and build the checked-in base-plate spec:
 
-```text
-anvilate build: build runs the part's generating program, which needs a geometry kernel
-this package does not ship. See openspec/specs/geometry-generation.
+```bash
+pip install -e ".[geometry]"
+anvilate build examples/base_plate.spec.yaml --output base_plate.step
 ```
 
-The alternative — leaving it out — makes the shell report `unknown command: build`, which
-tells a script author they typed it wrong. They did not; the operation is specified and
-unbuilt, and that is a different thing to be told. It is the same rule the
-[MCP surface](mcp-tool-contracts.md) follows for the operations it cannot serve.
+The `base_plate/1` pattern creates a box centered on XY with its bottom at Z=0, verifies
+that the kernel produced one valid positive-volume solid, and tags `top`, `bottom`, `north`,
+`south`, `east`, and `west`. The text result reports the volume and digest. `--format json`
+adds the declared dimensions and all semantic tags under the CLI output 1.4.3 contract.
+
+The writer refuses to replace an existing file unless `--force` is present. A `.step` or
+`.stp` suffix is required, and a missing output directory is a bad request rather than a
+part failure. Unsupported element types exit 4 and name the pattern that has not shipped.
 
 ## Running it in CI
 

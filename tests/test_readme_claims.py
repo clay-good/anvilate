@@ -871,13 +871,13 @@ def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
 # Each capability the README's status line calls unbuilt, and the words a one-line
 # description would claim it with. A synonym table rather than a substring of the README,
 # because "plain English" is how a description claims a "natural-language front end" and
-# "STEP/DXF" is how it claims "STEP export" — neither contains the other, and a gate that
+# "AP242 PMI" is how it claims "semantic AP242 export" — neither contains the other, and a gate that
 # looked for the README's own phrasing would have passed the very sentence that prompted it.
 _CLAIMED_BY = {
     "natural-language front end": ("plain english", "natural language", "natural-language"),
-    "3D geometry": ("3d ", "geometry kernel", "solid model"),
+    "wider geometry catalog": ("all geometry", "geometry catalog", "arbitrary solid"),
     "FEA": ("fea", "finite element"),
-    "STEP export": ("step/", "step ", " step", "parametric step"),
+    "semantic AP242 export": ("ap242", "semantic step", "step pmi"),
 }
 
 
@@ -903,9 +903,9 @@ def test_the_packaged_description_does_not_promise_what_the_readme_calls_unbuilt
 
     `pyproject.toml`'s `description` is the whole of what a reader sees before deciding to
     click. It said "plain English to physics-validated, parametric STEP/DXF" while the
-    README's own status line says the natural-language front end and STEP export "are still
-    being built" — the destination described as the product, in the one field with no room
-    for a caveat.
+    README's own status line says the natural-language front end and richer geometry/export
+    catalog "are still being built" — the destination described as the product, in the one
+    field with no room for a caveat.
 
     Same class as the `classifiers` that claimed one Python version while CI proved three:
     a metadata claim nobody gated.

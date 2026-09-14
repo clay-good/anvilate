@@ -7693,9 +7693,9 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     responses = namespace["session"]()
     by_id = {r.get("id"): r for r in responses}
 
-    # Eight messages in, seven responses out — the notification takes none — and then a
-    # ninth, sent only after the eighth answered: `read_scorecard` takes the handle
-    # `run_validation` returned, which is what makes this a session rather than a transcript.
+    # Eight messages in, seven responses from that batch — the notification takes none —
+    # and then an eighth response, sent only after validation answered: `read_scorecard`
+    # takes the handle `run_validation` returned, which makes this a session, not a transcript.
     assert len(namespace["_requests"]()) == 8
     assert len(responses) == 8
     assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
@@ -7713,9 +7713,9 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert [entry["status"] for entry in card["entries"]] == ["not_evaluated", "pass"]
     assert "declares no structural element type" in card["entries"][0]["detail"]
 
-    # Two refusals, each a different statement about why: one bounded by nothing this
-    # library controls, one whose contract is sound and whose operation is unbuilt.
-    assert "task-dispatched" in by_id[6]["error"]["message"]
+    # The geometry build is real; the viewport still names the missing operation.
+    geometry = by_id[6]["result"]["structuredContent"]["geometry"]
+    assert geometry["pattern"] == "base_plate/1" and geometry["valid"] is True
     assert "needs built geometry" in by_id[7]["error"]["message"]
 
     # And the round trip subjects exist for: the card came back with a handle, and reading
@@ -8838,8 +8838,8 @@ def test_mcp_tool_catalog_example_splits_the_surface_the_way_the_spec_states():
     assert len(lines) == 9
     assert lines[0].startswith("tool")
     body = "\n".join(lines[1:])
-    # The two task-dispatched operations, and the gates each surface inherits.
-    assert "build_part          task" in body
+    # The bounded build and the one task-dispatched operation.
+    assert "build_part          synchronous" in body
     assert "run_fea_validation  task" in body
     assert "export_artifact     synchronous   validation,watermark" in body
     # And the example's own assertions run, including the scorecard $ref.

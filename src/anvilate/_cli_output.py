@@ -12,17 +12,17 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from ._models import Named, RevalidatedModel
+from ._models import FrozenMap, Named, RevalidatedModel
 from .attestation import SignatureState
 from .bundle import BundleDocument
 from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.3.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.4.3"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.3.0.json"]
-SchemaVersion = Literal["1.3.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.4.3.json"]
+SchemaVersion = Literal["1.4.3"]
 
 
 class _WireModel(RevalidatedModel):
@@ -48,6 +48,29 @@ class CheckOutput(_WireModel):
     command: Literal["check"]
     status: CheckStatus
     specs: tuple[CheckedSpec, ...]
+
+
+class BuildArtifact(_WireModel):
+    path: str
+    format: Literal["step"]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    pattern: Literal["base_plate/1"]
+    volume_mm3: Annotated[float, Field(gt=0)]
+    dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
+        json_schema_extra={
+            "additionalProperties": {"type": "number", "exclusiveMinimum": 0}
+        }
+    )
+    face_tags: tuple[Named, ...]
+
+
+class BuildOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["build"]
+    name: Named
+    source: Named
+    artifact: BuildArtifact
 
 
 class EvidenceBundleOutputEntry(_WireModel):
@@ -202,7 +225,8 @@ class DoctorOutput(_WireModel):
 
 
 CliOutput = (
-    CheckOutput
+    BuildOutput
+    | CheckOutput
     | EvidenceBundleOutput
     | QifOutput
     | VerifyOutput

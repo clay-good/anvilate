@@ -1,19 +1,20 @@
-# The published contracts: Spec IR, scorecard and evidence bundle as JSON Schema
+# The published contracts: pipeline documents as JSON Schema
 
 **Anvilate's input and its outputs are now documents anything can validate, without
 importing Python.**
 
-The load-bearing data contracts are the Design Spec IR going in, and the scorecard and the
-evidence bundle coming out. As Python classes they are only checkable from Python; as JSON
-Schema 2020-12 they are checkable by a CAD add-in, a CI job, or an MCP client that has never
-heard of anvilate.
+The load-bearing data contracts are the Design Spec IR going in, and the geometry summary,
+scorecard, and evidence bundle coming out. As Python classes they are only checkable from
+Python; as JSON Schema 2020-12 they are checkable by a CAD add-in, a CI job, or an MCP client
+that has never heard of anvilate.
 
 | Artifact | What it describes | Version |
 | --- | --- | --- |
 | [`docs/api/schemas/design-spec.schema.json`](api/schemas/design-spec.schema.json) | the typed part description the pipeline consumes | the same number a spec file states in `anvilate_spec` |
 | [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `SCORECARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json) | every layer's contribution for one part, the roll-up, the scorecard and the spec | `BUNDLE_SCHEMA_VERSION` |
-| [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `check`, `export`, `verify`, and `diff` | `CLI_OUTPUT_SCHEMA_VERSION` |
+| [`docs/api/schemas/geometry-summary.schema.json`](api/schemas/geometry-summary.schema.json) | one valid solid's audited pattern, dimensions, volume, and semantic face tags | `GEOMETRY_SCHEMA_VERSION` |
+| [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and
 `test_the_contract_tables_versions_are_the_constants_own` holds them to the module. This row
