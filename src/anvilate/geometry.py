@@ -54,6 +54,7 @@ __all__ = [
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
     "PlanarContactCandidate",
+    "PlanarGapCandidate",
     "RenderedViewport",
     "StepValidationProperties",
     "StepInterfaceCandidates",
@@ -290,6 +291,28 @@ class PlanarContactCandidate(StatableModel):
         return self
 
 
+class PlanarGapCandidate(StatableModel):
+    """One projected overlap between separated opposing faces on different solids."""
+
+    id: Named
+    first_solid_id: Named
+    first_face_candidate_id: Named
+    second_solid_id: Named
+    second_face_candidate_id: Named
+    separation_mm: Annotated[FiniteFloat, Field(gt=0)]
+    overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
+    direction: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+    @model_validator(mode="after")
+    def _is_one_directed_pair(self) -> PlanarGapCandidate:
+        if self.first_solid_id == self.second_solid_id:
+            raise ValueError("a planar gap candidate must join two different solids")
+        direction_length = sqrt(sum(component**2 for component in self.direction))
+        if abs(direction_length - 1) > 1e-9:
+            raise ValueError("planar gap direction must be a unit vector")
+        return self
+
+
 class CylindricalMatingCandidate(StatableModel):
     """One coaxial bore/shaft pair measured between different imported solids."""
 
@@ -351,6 +374,7 @@ class StepInterfaceCandidates(StatableModel):
     solids: tuple[StepSolidCandidate, ...] = ()
     planar_faces: tuple[PlanarInterfaceCandidate, ...]
     planar_contacts: tuple[PlanarContactCandidate, ...] = ()
+    planar_gaps: tuple[PlanarGapCandidate, ...] = ()
     cylindrical_mates: tuple[CylindricalMatingCandidate, ...] = ()
     warnings: tuple[str, ...] = ()
 
@@ -637,7 +661,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     are ignored.
     """
     try:
-        from build123d import import_step
+        from build123d import Location, import_step
         from OCP.Message import Message  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
@@ -938,6 +962,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         )
     )
     contacts: list[PlanarContactCandidate] = []
+    gaps: list[PlanarGapCandidate] = []
     if len(solids) > 1:
         for (first_plane, first_candidate), (
             second_plane,
@@ -950,10 +975,11 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 or _dot(first_candidate.normal, second_candidate.normal) > -0.999999
             ):
                 continue
-            separation = abs(
-                _dot(_subtract(second_plane.center, first_plane.center), first_plane.normal)
+            signed_separation = _dot(
+                _subtract(second_plane.center, first_plane.center), first_plane.normal
             )
-            if separation > 1e-6:
+            separation = abs(signed_separation)
+            if separation > 1e-6 and signed_separation < 0:
                 continue
             endpoints = sorted(
                 (
@@ -962,7 +988,13 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 )
             )
             try:
-                overlap = first_plane.face & second_plane.face
+                aligned_second = second_plane.face
+                if separation > 1e-6:
+                    translation = tuple(
+                        -signed_separation * component for component in first_plane.normal
+                    )
+                    aligned_second = second_plane.face.moved(Location(translation))
+                overlap = first_plane.face & aligned_second
             except Exception as failure:
                 raise GeometryError(
                     f"could not measure planar overlap between {endpoints[0][1]} and "
@@ -980,14 +1012,38 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 "second_face": endpoints[1][1],
                 "overlap_area": overlap_area,
             }
-            contacts.append(
-                PlanarContactCandidate(
-                    id=_candidate_id("contact", signature),
+            if separation <= 1e-6:
+                contacts.append(
+                    PlanarContactCandidate(
+                        id=_candidate_id("contact", signature),
+                        first_solid_id=endpoints[0][0],
+                        first_face_candidate_id=endpoints[0][1],
+                        second_solid_id=endpoints[1][0],
+                        second_face_candidate_id=endpoints[1][1],
+                        overlap_area_mm2=overlap_area,
+                    )
+                )
+                continue
+            direction = (
+                first_candidate.normal
+                if endpoints[0] == (first_candidate.solid_id, first_candidate.id)
+                else second_candidate.normal
+            )
+            gap_signature = {
+                **signature,
+                "separation": round(separation, 9),
+                "direction": direction,
+            }
+            gaps.append(
+                PlanarGapCandidate(
+                    id=_candidate_id("planar-gap", gap_signature),
                     first_solid_id=endpoints[0][0],
                     first_face_candidate_id=endpoints[0][1],
                     second_solid_id=endpoints[1][0],
                     second_face_candidate_id=endpoints[1][1],
+                    separation_mm=round(separation, 9),
                     overlap_area_mm2=overlap_area,
+                    direction=direction,
                 )
             )
     cylindrical_mates: list[CylindricalMatingCandidate] = []
@@ -1045,6 +1101,9 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             "planar contacts report exact coplanar overlap only; they do not prove intended mating"
         )
         warnings.append(
+            "planar gaps report projected overlap and separation only; they do not judge clearance"
+        )
+        warnings.append(
             "cylindrical mates report measured signed clearance only; they do not judge fit"
         )
     result_data = {
@@ -1055,9 +1114,11 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     }
     if len(solids) > 1:
         contacts.sort(key=lambda contact: contact.id)
+        gaps.sort(key=lambda gap: gap.id)
         cylindrical_mates.sort(key=lambda mate: mate.id)
         result_data["solids"] = solid_candidates
         result_data["planar_contacts"] = tuple(contacts)
+        result_data["planar_gaps"] = tuple(gaps)
         result_data["cylindrical_mates"] = tuple(cylindrical_mates)
     return StepInterfaceCandidates.model_validate(result_data)
 

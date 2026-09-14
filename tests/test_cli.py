@@ -153,6 +153,15 @@ def _write_cylindrical_mate_step(path: Path, *, shaft_radius: float = 4.9) -> Pa
     return path
 
 
+def _write_planar_gap_step(path: Path) -> Path:
+    from build123d import Box, Compound, Location, export_step
+
+    base = Box(100, 80, 10)
+    separated = Box(20, 20, 20).moved(Location((40, 30, 16)))
+    export_step(Compound(children=[base, separated]), path)
+    return path
+
+
 @pytest.fixture
 def spec_file(tmp_path):
     path = tmp_path / "deck.yaml"
@@ -1636,6 +1645,7 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert "accepted" not in payload
     assert "solids" not in payload["candidates"]
     assert "cylindrical_mates" not in payload["candidates"]
+    assert "planar_gaps" not in payload["candidates"]
     assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
@@ -1855,6 +1865,31 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     )
     assert code == EXIT_OK and err == ""
     assert json.loads(passing_check_raw)["fit_check"]["status"] == "pass"
+
+
+def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
+    step = _write_planar_gap_step(tmp_path / "planar-gap.step")
+
+    code, raw, err = _run("interfaces", str(step), "--format", "json")
+    candidates = json.loads(raw)["candidates"]
+    gap = candidates["planar_gaps"][0]
+
+    assert code == EXIT_OK and err == ""
+    assert len(candidates["planar_gaps"]) == 1
+    assert gap["separation_mm"] == pytest.approx(1)
+    assert gap["overlap_area_mm2"] == pytest.approx(400)
+    assert sum(component**2 for component in gap["direction"]) == pytest.approx(1)
+
+    code, selected_raw, err = _run(
+        "interfaces", str(step), "--solid", gap["first_solid_id"], "--format", "json"
+    )
+    assert code == EXIT_OK and err == ""
+    assert json.loads(selected_raw)["candidates"]["planar_gaps"] == [gap]
+
+    code, text, err = _run("interfaces", str(step))
+    assert code == EXIT_OK and err == ""
+    assert "planar-gap-" in text
+    assert "gap 1 mm  projected overlap 400 mm²" in text
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):

@@ -43,6 +43,8 @@ faces on different solids is reported as a contact candidate with both solid/fac
 kernel-measured area; this is geometric evidence, not proof of design intent. A second pass
 with `--solid` narrows the summary, discovery, contacts, and acceptance to one exact ID; an
 unknown ID is refused with the available choices.
+Separated opposing planar faces with positive projected overlap are reported as gap
+candidates carrying their separation and direction. No maximum acceptable gap is inferred.
 Coaxial bore/shaft surfaces on different solids are reported separately with signed
 diametral clearance and axial engagement. The result is measured geometry, not a fit verdict.
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits

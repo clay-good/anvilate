@@ -177,6 +177,7 @@ geometry.CylindricalMatingCandidate
 geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.PlanarContactCandidate
+geometry.PlanarGapCandidate
 geometry.RenderedViewport
 geometry.StepInterfaceCandidates
 geometry.StepSolidCandidate

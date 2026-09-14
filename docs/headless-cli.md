@@ -627,7 +627,10 @@ and a confirmed result preserves it. The `solids` collection gives each ID's mea
 centroid, and axis-aligned minimum and maximum bounds, making opaque IDs recognizable without
 trusting STEP labels. For different solids whose planar faces oppose in the exact same plane,
 the kernel measures the common face and reports a contact candidate only when that overlap
-has positive area. A gap, however small, is not contact. One inward bore cylinder and one
+has positive area. A gap, however small, is not contact. Separated opposing faces with
+positive projected overlap are reported separately as a planar gap, carrying face and solid
+IDs, separation, overlap area, and a directed axis.
+The result does not impose a maximum acceptable gap. One inward bore cylinder and one
 outward shaft cylinder on different solids become a cylindrical mating candidate only when
 their axes coincide and their axial spans overlap. It carries both measured diameters, signed
 diametral clearance (`bore - shaft`), and axial engagement. A single-solid result omits the
@@ -644,6 +647,11 @@ the filter. A pattern belonging to another solid cannot be accepted through a fi
 A contact candidate retains both solid IDs, both face candidate IDs, and measured overlap
 area. It proves those imported faces overlap geometrically; it does not prove they were
 intended to mate, carry load, or have acceptable clearance.
+
+A planar gap candidate retains the same endpoints, plus the strictly positive face
+separation and projected overlap after translating one face onto the other's plane. Skewed,
+back-to-back, and projection-disjoint faces are excluded. It is geometric separation, not a
+clearance verdict.
 
 A cylindrical mating candidate similarly identifies both solids and both cylindrical
 surfaces, but does not choose an ISO 286 fit or declare clearance/interference acceptable.

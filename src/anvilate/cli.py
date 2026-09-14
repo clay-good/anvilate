@@ -1127,6 +1127,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         for contact in detected.planar_contacts
                         if args.solid in {contact.first_solid_id, contact.second_solid_id}
                     ),
+                    "planar_gaps": tuple(
+                        gap
+                        for gap in detected.planar_gaps
+                        if args.solid in {gap.first_solid_id, gap.second_solid_id}
+                    ),
                     "cylindrical_mates": tuple(
                         mate
                         for mate in detected.cylindrical_mates
@@ -1213,6 +1218,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             f"  {contact.id}  {contact.first_solid_id}/{contact.first_face_candidate_id} ↔ "
             f"{contact.second_solid_id}/{contact.second_face_candidate_id}  "
             f"overlap {contact.overlap_area_mm2:g} mm²",
+            file=out,
+        )
+    for gap in detected.planar_gaps:
+        print(
+            f"  {gap.id}  {gap.first_solid_id}/{gap.first_face_candidate_id} ↔ "
+            f"{gap.second_solid_id}/{gap.second_face_candidate_id}  "
+            f"gap {gap.separation_mm:g} mm  projected overlap {gap.overlap_area_mm2:g} mm²",
             file=out,
         )
     for mate in detected.cylindrical_mates:

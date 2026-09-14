@@ -783,6 +783,7 @@ def test_single_solid_interface_output_does_not_gain_a_solid_id(tmp_path):
     dumped = detected.model_dump(mode="json", exclude_unset=True)
 
     assert "solids" not in dumped
+    assert "planar_gaps" not in dumped
     assert all("solid_id" not in face for face in dumped["planar_faces"])
 
 
@@ -794,19 +795,27 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
     touching_path = tmp_path / "touching.step"
     reversed_path = tmp_path / "touching-reversed.step"
     separated_path = tmp_path / "separated.step"
+    separated_reversed_path = tmp_path / "separated-reversed.step"
     coplanar_disjoint_path = tmp_path / "coplanar-disjoint.step"
+    tilted_path = tmp_path / "tilted.step"
     export_step(Compound(children=[base, touching]), touching_path)
     export_step(Compound(children=[touching, base]), reversed_path)
-    export_step(Compound(children=[base, touching.moved(Location((0, 0, 1)))]), separated_path)
+    separated_box = touching.moved(Location((0, 0, 1)))
+    export_step(Compound(children=[base, separated_box]), separated_path)
+    export_step(Compound(children=[separated_box, base]), separated_reversed_path)
     export_step(
         Compound(children=[base, touching.moved(Location((100, 0, 0)))]),
         coplanar_disjoint_path,
     )
+    tilted = Box(20, 20, 20).moved(Location((40, 30, 16), (5, 0, 0)))
+    export_step(Compound(children=[base, tilted]), tilted_path)
 
     detected = detect_step_interfaces(touching_path)
     reversed_detected = detect_step_interfaces(reversed_path)
     separated = detect_step_interfaces(separated_path)
+    separated_reversed = detect_step_interfaces(separated_reversed_path)
     coplanar_disjoint = detect_step_interfaces(coplanar_disjoint_path)
+    tilted_detected = detect_step_interfaces(tilted_path)
 
     assert len(detected.planar_contacts) == 1
     contact = detected.planar_contacts[0]
@@ -821,6 +830,16 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
     assert not separated.planar_contacts
     assert not coplanar_disjoint.planar_contacts
     assert any("do not prove intended mating" in warning for warning in detected.warnings)
+    assert len(separated.planar_gaps) == 1
+    gap = separated.planar_gaps[0]
+    assert gap.separation_mm == pytest.approx(1)
+    assert gap.overlap_area_mm2 == pytest.approx(400)
+    assert sum(component**2 for component in gap.direction) == pytest.approx(1)
+    assert separated.planar_gaps == separated_reversed.planar_gaps
+    assert not detected.planar_gaps
+    assert not coplanar_disjoint.planar_gaps
+    assert not tilted_detected.planar_gaps
+    assert any("do not judge clearance" in warning for warning in separated.warnings)
 
     accepted = confirm_planar_contact(
         detected,
