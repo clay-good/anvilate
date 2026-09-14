@@ -31,7 +31,7 @@ from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
-from .spec import DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
+from .spec import CircularLocator, DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
 
 __all__ = [
@@ -44,6 +44,7 @@ __all__ = [
     "GeometryMeasurement",
     "GeometryUnavailable",
     "ConfirmedStepInterface",
+    "CircularFeatureCandidate",
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
     "RenderedViewport",
@@ -230,6 +231,16 @@ class HolePatternCandidate(StatableModel):
         return self
 
 
+class CircularFeatureCandidate(StatableModel):
+    """One concentric bore or boss that can locate a mating interface."""
+
+    id: Named
+    kind: Literal["bore", "boss"]
+    diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    axial_extent_mm: Annotated[FiniteFloat, Field(gt=0)]
+    center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+
 class PlanarInterfaceCandidate(StatableModel):
     """One planar mating-face candidate and any through-hole patterns it carries."""
 
@@ -238,6 +249,7 @@ class PlanarInterfaceCandidate(StatableModel):
     center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
     normal: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
     hole_patterns: tuple[HolePatternCandidate, ...] = ()
+    locating_features: tuple[CircularFeatureCandidate, ...] = ()
 
 
 class StepInterfaceCandidates(StatableModel):
@@ -270,6 +282,7 @@ class _DetectedPlane:
     center: _Point3D
     normal: _Point3D
     holes: list[tuple[float, _Point3D]]
+    circular_features: list[tuple[Literal["bore", "boss"], float, float, _Point3D]]
 
 
 def _coordinates(vector: Any) -> _Point3D:
@@ -383,6 +396,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             center=_coordinates(face.center()),
             normal=_coordinates(face.normal_at()),
             holes=[],
+            circular_features=[],
         )
         for face in planar
     ]
@@ -398,8 +412,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         along = _dot(_subtract(surface_point, axis_point), direction)
         axial_point = _point_along(axis_point, direction, along)
         radial = _subtract(surface_point, axial_point)
-        if _dot(radial, _coordinates(cylinder.normal_at())) >= 0:
-            continue  # an outside cylinder or boss, not a hole
+        inward = _dot(radial, _coordinates(cylinder.normal_at())) < 0
         circular_edges = [edge for edge in cylinder.edges() if edge.geom_type.name == "CIRCLE"]
         attached = []
         for index, plane in enumerate(planes):
@@ -412,16 +425,25 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         if len(attached) != 2:
             continue
         first, second = (planes[index] for index in attached)
-        if _dot(first.normal, second.normal) > -0.999999:
-            continue
         if abs(_dot(direction, first.normal)) < 0.999999:
             continue
-        for index in attached:
-            plane = planes[index]
-            denominator = _dot(direction, plane.normal)
-            distance = _dot(_subtract(plane.center, axis_point), plane.normal) / denominator
-            center = _point_along(axis_point, direction, distance)
-            plane.holes.append((float(radius), _rounded_point(center)))
+        extent = abs(_dot(_subtract(second.center, first.center), direction))
+        if extent <= 0:
+            continue
+        if inward and _dot(first.normal, second.normal) < -0.999999:
+            for index in attached:
+                plane = planes[index]
+                denominator = _dot(direction, plane.normal)
+                distance = _dot(_subtract(plane.center, axis_point), plane.normal) / denominator
+                center = _rounded_point(_point_along(axis_point, direction, distance))
+                plane.holes.append((float(radius), center))
+                plane.circular_features.append(("bore", float(radius), extent, center))
+        elif not inward and _dot(first.normal, second.normal) > 0.999999:
+            base = min((first, second), key=lambda plane: _dot(plane.center, plane.normal))
+            denominator = _dot(direction, base.normal)
+            distance = _dot(_subtract(base.center, axis_point), base.normal) / denominator
+            center = _rounded_point(_point_along(axis_point, direction, distance))
+            base.circular_features.append(("boss", float(radius), extent, center))
 
     candidates = []
     for plane in planes:
@@ -474,6 +496,34 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     hole_centers_mm=ordered_centers,
                 )
             )
+        locating_features = []
+        for kind, radius, extent, feature_center in plane.circular_features:
+            if not any(
+                sqrt(
+                    sum(
+                        (a - b) ** 2 for a, b in zip(feature_center, pattern.center_mm, strict=True)
+                    )
+                )
+                <= max(0.01, pattern.pitch_diameter_mm * 1e-4)
+                for pattern in patterns
+            ):
+                continue
+            signature = {
+                "face": face_id,
+                "kind": kind,
+                "diameter": round(2 * radius, 9),
+                "axial_extent": round(extent, 9),
+                "center": feature_center,
+            }
+            locating_features.append(
+                CircularFeatureCandidate(
+                    id=_candidate_id("locator", signature),
+                    kind=kind,
+                    diameter_mm=round(2 * radius, 9),
+                    axial_extent_mm=round(extent, 9),
+                    center_mm=feature_center,
+                )
+            )
         candidates.append(
             PlanarInterfaceCandidate(
                 id=face_id,
@@ -481,6 +531,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 center_mm=center,
                 normal=normal,
                 hole_patterns=tuple(sorted(patterns, key=lambda pattern: pattern.id)),
+                locating_features=tuple(sorted(locating_features, key=lambda feature: feature.id)),
             )
         )
     candidates.sort(
@@ -498,7 +549,8 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings=(
             "candidates are measured suggestions only; confirm one before creating an "
             "interface contract",
-            "this detector does not yet classify blind holes, counterbores, bosses, or pilot bores",
+            "this detector does not yet classify blind holes, counterbores, or "
+            "nonconcentric locators",
         ),
     )
 
@@ -510,6 +562,7 @@ def confirm_step_interface(
     name: str,
     mating_plane: str,
     confirmed_by: str,
+    locating_feature_id: str | None = None,
 ) -> ConfirmedStepInterface:
     """Accept one measured hole pattern as a downstream interface contract.
 
@@ -540,6 +593,18 @@ def confirm_step_interface(
             f"pattern candidate {pattern_id!r} was not found exactly once; available: {choices}"
         )
     face, pattern = matches[0]
+    locator = None
+    if locating_feature_id is not None:
+        locator_matches = [
+            feature for feature in face.locating_features if feature.id == locating_feature_id
+        ]
+        if len(locator_matches) != 1:
+            locator_choices = ", ".join(feature.id for feature in face.locating_features) or "none"
+            raise GeometryError(
+                f"locating feature {locating_feature_id!r} was not found on {face.id}; "
+                f"available: {locator_choices}"
+            )
+        locator = locator_matches[0]
     x_axis, y_axis, normal = _interface_basis(face.normal)
     hole_centers = tuple(
         (
@@ -577,6 +642,15 @@ def confirm_step_interface(
                     x_axis=x_axis,
                     y_axis=y_axis,
                     normal=normal,
+                ),
+                locator=(
+                    None
+                    if locator is None
+                    else CircularLocator(
+                        kind=locator.kind,
+                        diameter=Quantity(magnitude=locator.diameter_mm, unit="mm"),
+                        axial_extent=Quantity(magnitude=locator.axial_extent_mm, unit="mm"),
+                    )
                 ),
             ),
         )

@@ -107,7 +107,7 @@ def _spec(*, element_type: str = "base_plate", params=None) -> DesignSpec:
     )
 
 
-def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20))):
+def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20)), locator=None):
     from build123d import Align, Box, Cylinder, Location, export_step
 
     shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -116,6 +116,12 @@ def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20)
             Location((x, y, 0))
         )
         shape = shape - cutter
+    if locator == "bore":
+        shape = shape - Cylinder(15, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    elif locator == "boss":
+        shape = shape + Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((0, 0, 10))
+        )
     export_step(shape, path)
     return path
 
@@ -501,6 +507,7 @@ def test_step_interface_detection_finds_planar_faces_and_the_four_hole_circle(tm
     assert {face.normal for face in patterned} == {(0, 0, -1), (0, 0, 1)}
     assert len(patterned) == 2
     for face in patterned:
+        assert not face.locating_features
         pattern = face.hole_patterns[0]
         assert pattern.hole_count == 4
         assert pattern.hole_diameter_mm == pytest.approx(10)
@@ -564,6 +571,53 @@ def test_an_interface_candidate_cannot_be_accepted_without_a_named_person(tmp_pa
             mating_plane="motor_mount_face",
             confirmed_by="   ",
         )
+
+
+@pytest.mark.parametrize(("kind", "extent"), (("bore", 10), ("boss", 5)))
+def test_step_interface_detection_finds_and_confirms_a_concentric_locator(tmp_path, kind, extent):
+    detected = detect_step_interfaces(_four_hole_step(tmp_path / f"with-{kind}.step", locator=kind))
+    face = next(
+        face
+        for face in detected.planar_faces
+        if face.normal == (0, 0, 1) and face.hole_patterns and face.locating_features
+    )
+    feature = face.locating_features[0]
+
+    assert feature.kind == kind
+    assert feature.diameter_mm == pytest.approx(30)
+    assert feature.axial_extent_mm == pytest.approx(extent)
+    accepted = confirm_step_interface(
+        detected,
+        pattern_id=face.hole_patterns[0].id,
+        name="motor_mount",
+        mating_plane="motor_mount_face",
+        confirmed_by="R. Engineer",
+        locating_feature_id=feature.id,
+    )
+    assert accepted.contract.locator is not None
+    assert accepted.contract.locator.kind == kind
+    assert accepted.contract.locator.diameter.to("mm").magnitude == pytest.approx(30)
+    assert accepted.contract.locator.axial_extent.to("mm").magnitude == pytest.approx(extent)
+
+
+def test_step_interface_detection_does_not_call_an_off_center_boss_a_locator(tmp_path):
+    from build123d import Align, Box, Cylinder, Location, export_step
+
+    shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    for x in (-30, 30):
+        for y in (-20, 20):
+            shape -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+                Location((x, y, 0))
+            )
+    shape += Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+        Location((10, 0, 10))
+    )
+    path = tmp_path / "off-center-boss.step"
+    export_step(shape, path)
+
+    detected = detect_step_interfaces(path)
+
+    assert all(not face.locating_features for face in detected.planar_faces)
 
 
 def test_interface_confirmation_refuses_an_unknown_candidate_and_names_the_choices(tmp_path):

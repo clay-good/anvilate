@@ -110,7 +110,7 @@ def _run(*argv):
     return code, out.getvalue(), err.getvalue()
 
 
-def _write_four_hole_step(path: Path) -> Path:
+def _write_four_hole_step(path: Path, *, locator=None) -> Path:
     from build123d import Align, Box, Cylinder, Location, export_step
 
     shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -119,6 +119,12 @@ def _write_four_hole_step(path: Path) -> Path:
             shape = shape - Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
                 Location((x, y, 0))
             )
+    if locator == "bore":
+        shape = shape - Cylinder(15, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    elif locator == "boss":
+        shape = shape + Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((0, 0, 10))
+        )
     export_step(shape, path)
     return path
 
@@ -1682,6 +1688,38 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
 
     assert code == EXIT_BAD_REQUEST and out == ""
     assert "missing --confirmed-by" in err
+
+
+def test_interfaces_requires_and_carries_an_exact_locating_feature(tmp_path):
+    step = _write_four_hole_step(tmp_path / "motor-face.step", locator="bore")
+    _code, discovered, _err = _run("interfaces", str(step), "--format", "json")
+    faces = json.loads(discovered)["candidates"]["planar_faces"]
+    face = next(face for face in faces if face["hole_patterns"] and face["locating_features"])
+
+    code, raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept",
+        face["hole_patterns"][0]["id"],
+        "--locator",
+        face["locating_features"][0]["id"],
+        "--name",
+        "motor_mount",
+        "--mating-plane",
+        "motor_mount_face",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+
+    locator = json.loads(raw)["accepted"]["contract"]["locator"]
+    assert code == EXIT_OK and err == ""
+    assert locator == {
+        "kind": "bore",
+        "diameter": {"magnitude": pytest.approx(30), "unit": "mm"},
+        "axial_extent": {"magnitude": pytest.approx(10), "unit": "mm"},
+    }
 
 
 def test_interfaces_refuses_a_non_step_file_as_a_bad_request(tmp_path):

@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--accept`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
+| `interfaces` | a mating STEP | `--format`, `--accept`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -602,6 +602,7 @@ topology, not STEP mate metadata and not an LLM:
 anvilate interfaces mating.step
 anvilate interfaces mating.step --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
+  --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
   --confirmed-by "R. Engineer" --format json
 ```
@@ -624,13 +625,16 @@ Acceptance requires all four values: the exact pattern ID, the downstream contra
 semantic mating-plane tag, and the name of the person confirming the measurement. The JSON
 then adds `accepted`, containing the source digest and face/pattern IDs, `confirmed_by`, and
 the generated `InterfaceContract`; omitting any confirmation input exits 3 and emits no
+contract. A concentric through pilot bore or cylindrical boss is listed separately and is
+included only when its exact ID is supplied with `--locator`; it is never inferred into the
 contract. The contract includes a deterministic right-handed frame at the pattern center
 and every hole's in-plane `(x, y)` center, so a rectangular or clocked pattern is not reduced
 to diameter, count, and hole size. The frame's X axis is global +X projected onto the mating
 plane (global +Y is the fallback when needed); Y completes the right-handed frame. This
-first detector handles one valid solid, planar faces, and through holes whose
-equal-diameter centers fit one pitch circle. Blind holes, counterbores, bosses, pilot bores,
-assemblies, and free-form hole groups remain explicit limits in the output.
+first detector handles one valid solid, planar faces, through holes whose equal-diameter
+centers fit one pitch circle, concentric through pilot bores, and cylindrical bosses. Blind
+holes, counterbores, nonconcentric locators, assemblies, and free-form hole groups remain
+explicit limits in the output.
 
 ## `anvilate verify`
 

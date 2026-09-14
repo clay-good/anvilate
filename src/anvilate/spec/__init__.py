@@ -13,6 +13,7 @@ from .ir import (
     AcceptanceCriteria,
     ChainAnalysis,
     ChainLink,
+    CircularLocator,
     Constraints,
     DesignSpec,
     DimensionChain,
@@ -53,6 +54,7 @@ from .version import UnsupportedSchemaVersion, migrate_to_current
 
 __all__ = [
     "SCHEMA_VERSION",
+    "CircularLocator",
     "DesignSpec",
     "MaterialRef",
     "Manufacturing",

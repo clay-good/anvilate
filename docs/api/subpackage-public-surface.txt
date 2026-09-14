@@ -133,6 +133,7 @@ skills.skill_text
 spec.AcceptanceCriteria
 spec.ChainAnalysis
 spec.ChainLink
+spec.CircularLocator
 spec.Constraints
 spec.DesignSpec
 spec.DimensionChain
@@ -165,6 +166,7 @@ spec.dump_spec_yaml
 spec.ir.AcceptanceCriteria
 spec.ir.ChainAnalysis
 spec.ir.ChainLink
+spec.ir.CircularLocator
 spec.ir.Constraints
 spec.ir.DesignSpec
 spec.ir.DimensionChain

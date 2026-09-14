@@ -13,6 +13,7 @@ from anvilate.spec import (
     AcceptanceCriteria,
     ChainAnalysis,
     ChainLink,
+    CircularLocator,
     Constraints,
     DesignSpec,
     DimensionChain,
@@ -609,6 +610,15 @@ def test_hole_pattern_center_count_and_interface_frame_are_validated():
             x_axis=(1, 0, 0),
             y_axis=(0, -1, 0),
             normal=(0, 0, 1),
+        )
+
+
+def test_circular_locator_requires_positive_length_dimensions():
+    with pytest.raises(ValidationError, match="circular-locator diameter must be positive"):
+        CircularLocator(
+            kind="bore",
+            diameter=Quantity.parse("0 mm"),
+            axial_extent=Quantity.parse("10 mm"),
         )
 
 

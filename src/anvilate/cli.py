@@ -255,6 +255,11 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces.add_argument(
         "--confirmed-by", help="name of the person who reviewed and accepts the measured candidate"
     )
+    interfaces.add_argument(
+        "--locator",
+        metavar="FEATURE_ID",
+        help="also accept this exact concentric pilot-bore or boss candidate",
+    )
 
     check = commands.add_parser(
         "check",
@@ -997,6 +1002,9 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             file=err,
         )
         return EXIT_BAD_REQUEST
+    if args.locator is not None and args.accept is None:
+        print("anvilate interfaces: --locator requires --accept", file=err)
+        return EXIT_BAD_REQUEST
 
     try:
         detected = detect_step_interfaces(args.step)
@@ -1009,6 +1017,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 name=args.name,
                 mating_plane=args.mating_plane,
                 confirmed_by=args.confirmed_by,
+                locating_feature_id=args.locator,
             )
         )
     except GeometryUnavailable as failure:
@@ -1040,6 +1049,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             print(
                 f"    {pattern.id}  {pattern.hole_count} × ⌀{pattern.hole_diameter_mm:g} mm "
                 f"on ⌀{pattern.pitch_diameter_mm:g} mm pitch circle",
+                file=out,
+            )
+        for feature in face.locating_features:
+            print(
+                f"    {feature.id}  {feature.kind} ⌀{feature.diameter_mm:g} mm × "
+                f"{feature.axial_extent_mm:g} mm axial extent",
                 file=out,
             )
     for warning in detected.warnings:

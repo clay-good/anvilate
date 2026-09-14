@@ -60,6 +60,7 @@ __all__ = [
     "Interface",
     "InterfaceContract",
     "InterfaceFrame",
+    "CircularLocator",
     "HolePattern",
     "ToleranceDimension",
     "ChainLink",
@@ -199,6 +200,22 @@ class InterfaceFrame(_Base):
         return self
 
 
+class CircularLocator(_Base):
+    """A concentric bore or boss that locates a mating interface."""
+
+    kind: Literal["bore", "boss"]
+    diameter: Length
+    axial_extent: Length
+
+    @model_validator(mode="after")
+    def _positive_dimensions(self) -> CircularLocator:
+        for field in ("diameter", "axial_extent"):
+            value: Quantity = getattr(self, field)
+            if value.to("mm").magnitude <= 0:
+                raise ValueError(f"circular-locator {field} must be positive; got {value}")
+        return self
+
+
 class InterfaceContract(_Base):
     """A published, importable interface: the geometry a mating part designs against."""
 
@@ -206,6 +223,7 @@ class InterfaceContract(_Base):
     mating_plane: str  # semantic tag of the mating face
     pattern: HolePattern
     frame: InterfaceFrame | None = None
+    locator: CircularLocator | None = None
 
 
 class StandardComponentInterface(_Base):
@@ -615,12 +633,13 @@ class AcceptanceCriteria(_Base):
 # combination_basis, and the seismic parameters. 1.2.0 added element_type and
 # element_params. 1.3.0 added constraints.max_safety_factor, the top of the target band an
 # OVER_MARGIN verdict is measured against. 1.4.0 added optional interface frames and
-# in-plane hole centers, preserving a measured pattern's clocking. All additive, which is
+# in-plane hole centers, preserving a measured pattern's clocking. 1.5.0 added an optional
+# concentric circular locator (pilot bore or boss). All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.4.0"
+SCHEMA_VERSION = "1.5.0"
 
 
 class DesignSpec(_Base):

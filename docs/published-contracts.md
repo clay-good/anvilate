@@ -107,6 +107,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.5.0: a confirmed interface can carry its circular locator
+
+`InterfaceContract.locator` is an optional typed pilot bore or boss, with its diameter and
+axial extent. STEP discovery offers only circular features concentric with a fitted pattern,
+and confirmation names the exact locator ID separately; it is never selected by proximity
+alone. The candidate, confirmed-interface, evidence-bundle, and CLI schemas move with it.
+
 ### Design Spec 1.4.0: interface geometry keeps its coordinate frame
 
 `InterfaceContract.frame` locates a deterministic right-handed coordinate frame in the

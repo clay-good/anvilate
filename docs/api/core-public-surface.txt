@@ -162,6 +162,7 @@ geometry.GeometryMeasurement
 geometry.GeometrySummary
 geometry.GeometryUnavailable
 geometry.ConfirmedStepInterface
+geometry.CircularFeatureCandidate
 geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.RenderedViewport
