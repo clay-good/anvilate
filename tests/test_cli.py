@@ -532,6 +532,70 @@ def test_the_qif_json_format_carries_the_document_and_its_digest(tmp_path):
     assert entry["sha256"] == hashlib.sha256(entry["qif"].encode("utf-8")).hexdigest()
 
 
+def test_dxf_builds_the_audited_plate_and_streams_a_validated_cut_profile(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    from io import StringIO
+
+    path = tmp_path / "base-plate.yaml"
+    path.write_text(
+        _BASE_PLATE_SPEC + "constraints:\n  min_safety_factor: {value: 2.0, origin: user_stated}\n",
+        encoding="utf-8",
+    )
+    code, first, error = _run("export", "--artifact", "dxf", str(path))
+    assert code == EXIT_OK and error == ""
+    assert first == _run("export", "--artifact", "dxf", str(path))[1]
+
+    doc = ezdxf.read(StringIO(first))
+    entities = list(doc.modelspace())
+    assert [(entity.dxftype(), entity.dxf.layer) for entity in entities] == [
+        ("LWPOLYLINE", "OUTLINE")
+    ]
+    assert doc.header.custom_vars.get("ANVILATE_EXPORT_STATUS") == "VALIDATED"
+
+
+def test_dxf_json_carries_the_exact_document_and_digest(tmp_path):
+    path = tmp_path / "base-plate.yaml"
+    path.write_text(
+        _BASE_PLATE_SPEC + "constraints:\n  min_safety_factor: {value: 2.0, origin: user_stated}\n",
+        encoding="utf-8",
+    )
+    code, raw, error = _run("export", "--artifact", "dxf", "--format", "json", str(path))
+    assert code == EXIT_OK and error == ""
+    entry = json.loads(raw)["documents"][0]
+    assert entry["format"] == "dxf" and entry["name"] == "bp1"
+    assert entry["sha256"] == hashlib.sha256(entry["dxf"].encode("utf-8")).hexdigest()
+
+
+def test_a_card_that_does_not_pass_gets_no_dxf(spec_file):
+    code, out, error = _run("export", "--artifact", "dxf", str(spec_file))
+    assert code == EXIT_NOT_EVALUATED and out == ""
+    assert "export is gated" in error and "--artifact evidence-bundle" in error
+
+
+def test_dxf_names_the_missing_optional_export_runtime(monkeypatch):
+    from anvilate import screening
+    from anvilate.export import dxf
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    monkeypatch.setattr(
+        screening,
+        "screen_spec",
+        lambda _spec: Scorecard(
+            entries=(ScorecardEntry(name="probe", status=CheckStatus.PASS, detail="synthetic"),)
+        ),
+    )
+
+    def unavailable():
+        raise ImportError("DXF export needs ezdxf; install the export extra")
+
+    monkeypatch.setattr(dxf, "_require_ezdxf", unavailable)
+    code, output, error = _run(
+        "export", "--artifact", "dxf", str(_REPO / "examples" / "base_plate.spec.yaml")
+    )
+    assert code == EXIT_UNBUILT and output == ""
+    assert "install the export extra" in error
+
+
 def test_every_machine_readable_result_validates_against_the_published_contract(
     spec_file, spec_pair, envelope, tmp_path
 ):
@@ -548,7 +612,10 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
     qif_spec = tmp_path / "lug.yaml"
     qif_spec.write_text(_LUG_SPEC, encoding="utf-8")
     build_spec = tmp_path / "base-plate.yaml"
-    build_spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    build_spec.write_text(
+        _BASE_PLATE_SPEC + "constraints:\n  min_safety_factor: {value: 2.0, origin: user_stated}\n",
+        encoding="utf-8",
+    )
     built_step = tmp_path / "base-plate.step"
     before, after = spec_pair
     invocations = (
@@ -562,6 +629,15 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
             "--format",
             "json",
             str(qif_spec),
+        ),
+        (
+            "export",
+            "export",
+            "--artifact",
+            "dxf",
+            "--format",
+            "json",
+            str(build_spec),
         ),
         ("verify", *_verify_args(envelope), "--format", "json"),
         ("diff", "diff", "--format", "json", str(before), str(after)),

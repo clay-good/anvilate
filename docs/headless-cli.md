@@ -327,7 +327,7 @@ action. With the `geometry` extra installed, the kernel check builds a valid pro
 reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
 remain explicit failures; database integrity is proved by loading the bundled resolver and
 counting its material and component designations. `--format json` emits the same report
-under CLI output schema 1.5.0.
+under CLI output schema 1.6.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -393,8 +393,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.5.0.json",
- "schema_version": "1.5.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.6.0.json",
+ "schema_version": "1.6.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -514,13 +514,23 @@ roll-up, then every check with its detail and its citation, then the spec those 
 were computed from, then the disclaimer. The spec block is the YAML you can paste back into
 `anvilate check`: a reviewer holding only this output can re-run the analysis and get the
 same card, which is the scenario `artifact-export` asks for and a test now performs. See
-[the evidence bundle](evidence-bundle.md) for why the roll-up still exists. A DXF does need
-a built part, and it is refused by name:
+[the evidence bundle](evidence-bundle.md) for why the roll-up still exists.
 
-```text
-anvilate export --artifact dxf: a DXF is drawn from built geometry, and there is no built
-part to draw. See openspec/specs/geometry-generation.
+**DXF builds before it draws.** For the audited `base_plate` and `cover_plate` patterns,
+the command builds the B-Rep, reads the validated plan dimensions from the built result,
+and emits a deterministic millimeter DXF to stdout:
+
+```bash
+anvilate export --artifact dxf validated-plate.yaml > validated-plate.dxf
 ```
+
+Rectangles are centered closed polylines on `OUTLINE`. Circular and annular covers use an
+`OUTLINE` circle and, where present, a concentric circle on `HOLES`. The DXF header carries
+the export authorization metadata. A card that fails or cannot be evaluated produces no
+drawing and points to the evidence bundle; an unsupported geometry pattern exits 4 naming
+the missing audited pattern. Repeated exports of the same built geometry produce identical
+bytes and SHA-256 digests. `--format json` carries those exact bytes as UTF-8 text plus the
+digest.
 
 **QIF results come out of the same command, and used to be refused beside the DXF.**
 
@@ -567,12 +577,11 @@ differs — the CLI prints it, the tool returns it and writes nothing at all, be
 an MCP client names is a capability the server does not grant.
 
 **They no longer refuse the same set, and each says why *it* refuses.** The shell serves
-QIF; the tool does not yet, because its published result's payload is the evidence bundle
-document and a QIF results file is XML — a change to a published tool result, which is a
-decision about the protocol surface rather than a line to delete. Both refusal reasons still
-live in `anvilate.cli` and are read from there rather than restated, and a test asserts the
-MCP refusal for `qif` does not claim geometry: a surface inheriting the other's excuse is how
-this went wrong twice.
+QIF and DXF. The tool does not yet serve either because its published result carries the
+evidence-bundle document and has no approved delivery contract for QIF XML or CAD geometry.
+Those are protocol and disclosure decisions, not missing local implementations. Both
+refusal reasons live in `anvilate.cli` and are read from there rather than restated, and
+tests assert that each refusal names the local command that already works.
 
 **The bundle goes to stdout, and that is deliberate.** Every artifact-emitting entry point
 in the package takes a mandatory `ExportAuthorization` ([export gating](export-gating.md)),
@@ -783,7 +792,7 @@ typed cover model. Both verify
 that the kernel produced one valid positive-volume solid, and tags `top`, `bottom`, `north`,
 `south`, `east`, and `west` for boxes or `top`, `bottom`, `perimeter`, and optional `bore`
 for round covers. The text result reports the volume and digest. `--format json`
-adds the declared dimensions and all semantic tags under the CLI output 1.5.0 contract.
+adds the declared dimensions and all semantic tags under the CLI output 1.6.0 contract.
 
 The writer refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a

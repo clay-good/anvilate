@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.5.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.6.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.5.0.json"]
-SchemaVersion = Literal["1.5.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.6.0.json"]
+SchemaVersion = Literal["1.6.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -101,6 +101,23 @@ class QifOutput(_WireModel):
     artifact: Literal["qif"]
     status: CheckStatus
     documents: tuple[QifOutputEntry, ...]
+
+
+class DxfOutputEntry(_WireModel):
+    path: str
+    name: Named
+    format: Literal["dxf"]
+    dxf: str
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class DxfOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["export"]
+    artifact: Literal["dxf"]
+    status: CheckStatus
+    documents: tuple[DxfOutputEntry, ...]
 
 
 class ToolComponent(_WireModel):
@@ -226,6 +243,7 @@ CliOutput = (
     BuildOutput
     | CheckOutput
     | EvidenceBundleOutput
+    | DxfOutput
     | QifOutput
     | VerifyOutput
     | DiffOutput

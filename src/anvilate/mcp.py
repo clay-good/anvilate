@@ -535,7 +535,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Export an artifact",
             description=(
                 "Return a downstream document — an evidence bundle today, a QIF results "
-                "file or a DXF once there is built geometry — for the scorecard a handle "
+                "file or a DXF once its result contract is published — for the scorecard a handle "
                 "names. The document is returned, not written: this surface names no path "
                 "and touches no filesystem the caller chose, so a client saves it or does "
                 "not. Export is gated on validation and the result carries the screening "
@@ -1482,10 +1482,10 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     #
     # It is `_UNSERVED_OVER_MCP` and not `_UNBUILT_ARTIFACTS` because the two surfaces do
     # not refuse the same set, and they never did — what changed is that the difference is
-    # now stated. A DXF waits on built geometry at both. QIF waits on nothing at the shell,
-    # which serves it; here it waits on this tool's published result, whose payload is the
-    # evidence bundle *document*. Naming that as the reason keeps the parity test honest:
-    # the surfaces still read one table, and it now says a true thing about each.
+    # now stated. DXF and QIF are both served locally; here they wait on an approved result
+    # and disclosure contract because this tool's published payload is the evidence bundle
+    # *document*. Naming that as the reason keeps the parity test honest: the surfaces still
+    # read one table, and it now says a true thing about each.
     from .cli import _UNSERVED_OVER_MCP as _UNBUILT_ARTIFACTS
     from .scorecard import Scorecard
     from .spec import parse_spec

@@ -190,36 +190,31 @@ def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
     assert at_the_shell["status"] == CheckStatus.NOT_EVALUATED.value
 
 
-def test_a_format_neither_surface_can_produce_is_refused_in_the_same_words():
-    """`dxf` is unbuilt on both surfaces, and neither invents its own reason.
-
-    The MCP handler imports the CLI's table rather than restating it, so this is really a
-    check that it still does: a second copy of "what a DXF waits on" is a sentence that goes
-    stale in one place and not the other, and a client reading the MCP refusal and a user
-    reading the shell one would then be told different things about the same gap.
-    """
-    from anvilate.cli import _NEEDS_GEOMETRY, EXIT_UNBUILT
+def test_dxf_is_local_and_the_remote_surface_names_its_delivery_boundary():
+    """The CLI can build DXF, while MCP has no approved CAD-content delivery contract."""
+    from anvilate.cli import _NEEDS_GEOMETRY, _NOT_YET_OVER_MCP, EXIT_NOT_EVALUATED
 
     handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
-    assert set(_NEEDS_GEOMETRY) == {"dxf"}
-    for artifact, reason in sorted(_NEEDS_GEOMETRY.items()):
-        error = _mcp("export_artifact", {"subject": handle, "format": artifact})["error"]
-        # -32000 and not -32602: an unbuilt operation is not an argument the caller can fix,
-        # and a client that retries an INVALID_PARAMS with a better argument would loop.
-        assert error["code"] == -32000, artifact
-        assert reason in error["message"], artifact
-        code, _out, err = _cli("export", "--artifact", artifact, "unused.yaml")
-        assert code == EXIT_UNBUILT
-        assert reason in err
+    assert _NEEDS_GEOMETRY == {}
+    reason = _NOT_YET_OVER_MCP["dxf"]
+    error = _mcp("export_artifact", {"subject": handle, "format": "dxf"})["error"]
+    assert error["code"] == -32000
+    assert reason in error["message"]
+
+    code, output, err = _cli(
+        "export", "--artifact", "dxf", str(_REPO / "examples" / "base_plate.spec.yaml")
+    )
+    assert code == EXIT_NOT_EVALUATED and output == ""
+    assert "export is gated" in err and "built geometry" not in err
 
 
 def test_live_documents_name_the_task_route_that_now_exists():
     """A task promise is valid only while the method and a backed task tool both exist."""
     from anvilate.mcp import Dispatch, handle_request, tool_catalog
 
-    missing_id = handle_request(
-        {"jsonrpc": "2.0", "id": 1, "method": "tasks/get", "params": {}}
-    )["error"]
+    missing_id = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tasks/get", "params": {}})[
+        "error"
+    ]
     assert missing_id["code"] == -32602, "tasks/get fell back to an unknown method"
 
     tasks = {tool.name: tool for tool in tool_catalog() if tool.dispatch is Dispatch.TASK}

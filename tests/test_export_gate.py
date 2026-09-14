@@ -385,6 +385,7 @@ _ARTIFACT_WRITES = (
     "json.dump",  # dump and dumps both
     "ZipFile(",
     "open(",  # the last resort, and the one a helper reaches for first
+    "_document_bytes(",  # the deterministic in-memory DXF serializer
 )
 
 
@@ -439,7 +440,7 @@ def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization(
         for name, fn in entry_points.items()
         if name.rsplit(".", 1)[-1] not in _NOT_AN_ARTIFACT_WRITER and _writes_a_file_or_document(fn)
     }
-    assert len(emitters) == 4, f"expected the four artifact writers, found {sorted(emitters)}"
+    assert len(emitters) == 5, f"expected the five artifact writers, found {sorted(emitters)}"
     for name, function in sorted(emitters.items()):
         parameters = inspect.signature(function).parameters
         assert "authorization" in parameters, (
@@ -484,10 +485,9 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     Asked per format, which is what the surface actually publishes:
 
     * ``dxf`` and ``qif`` are CAD artifacts, and ``artifact-export`` gates those on the
-      acceptance checks passing. Neither is served — both wait on built geometry — and the
-      exporters that will serve them each take a mandatory ``authorization``, which is the
-      assertion this test has always made, now made about them by name rather than about
-      whichever one ``backing`` happened to point at.
+      acceptance checks passing. Both are served locally and withheld over MCP pending an
+      approved content-delivery contract. Their exporters take a mandatory
+      ``authorization``, including the built-geometry DXF renderer the CLI actually calls.
     * ``evidence_bundle`` is the evidence, including the evidence that a part did **not**
       pass, so it is served whatever the verdict. Its watermark is ``SCREENING_DISCLAIMER``
       and it is not a field a caller can omit — there is no argument to ``to_json_dict``
@@ -518,6 +518,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     # which is what this assertion is about wherever the exporter is called from.
     for symbol_path in (
         "anvilate.export.dxf:export_plate_dxf",
+        "anvilate.export.dxf:render_geometry_dxf",
         "anvilate.export.qif:export_qif_results",
     ):
         module_path, _, symbol = symbol_path.partition(":")

@@ -8,12 +8,12 @@ MCP server.
 
 **Five of the five are backed today**; a sixth command, ``verify``, comes from the
 attestation capability. ``doctor`` reports which optional runtimes are present.
-``build`` now produces STEP for the first audited geometry pattern, ``base_plate``. Other
+``build`` now produces STEP for audited ``base_plate`` and ``cover_plate`` patterns. Other
 element types are refused by name rather than sent through an unreviewed generic generator.
 ``check`` compiles a spec document and screens it, which is exactly the path
 :func:`anvilate.screening.screen_spec` already serves over MCP.
-``export`` serves the artifacts that need no geometry — the evidence bundle, and QIF results
-(ISO 23952), both assembled from a screened card — and refuses the one that does.
+``export`` serves the evidence bundle and QIF results (ISO 23952) from a screened card, and
+builds audited geometry before rendering a DXF cut profile. All three go to stdout.
 
 That split was got wrong twice, the same way each time. First ``export`` was refused whole,
 on the reasoning that it "writes a downstream artifact from a built part": true of a DXF,
@@ -120,9 +120,8 @@ _DIFF_NEEDS_GEOMETRY = (
     "mass, volume and centre-of-gravity deltas need two built parts. See " + _GEOMETRY_SPEC + "."
 )
 
-# What a spec file alone genuinely cannot produce, and what it waits on — in the same words
-# `_UNBUILT` uses, because a caller asking for a DXF is owed the same answer as one asking
-# for a build. A DXF is a drawing of a shape, and there is no shape.
+# The artifact-level local gap list. Empty now that DXF builds through the same audited
+# registry as `build`; kept as the declaration the surface-parity gate reads.
 #
 # **QIF used to be on this list, and the reason given for it was not true.** It said "QIF
 # results carry measured characteristics against a built part", and
@@ -133,12 +132,7 @@ _DIFF_NEEDS_GEOMETRY = (
 # A refusal wide enough to cover something that works is as misleading as a missing one —
 # which is the same mistake, one level down, that this module's own docstring records
 # `export` being refused whole for.
-_NEEDS_GEOMETRY = {
-    "dxf": (
-        "a DXF is drawn from built geometry, and there is no built part to draw. "
-        "See " + _GEOMETRY_SPEC + "."
-    ),
-}
+_NEEDS_GEOMETRY: dict[str, str] = {}
 
 # Served here and not yet over MCP, with the reason it waits on stated as the thing it
 # really is. `export_artifact` publishes a result whose payload is the evidence bundle
@@ -146,6 +140,11 @@ _NEEDS_GEOMETRY = {
 # there is a change to a published tool result, which is a decision to make in a diff about
 # the protocol surface rather than one to arrive at by removing a line here.
 _NOT_YET_OVER_MCP = {
+    "dxf": (
+        "the export tool has no approved CAD-content delivery contract: returning a DXF "
+        "would disclose built design geometry to the remote caller. "
+        "`anvilate export --artifact dxf` produces the document locally today."
+    ),
     "qif": (
         "the export tool's published result carries the evidence bundle document, and QIF "
         "results are an XML file, so serving them here is a change to the tool's result "
@@ -157,7 +156,7 @@ _NOT_YET_OVER_MCP = {
 # refuses that, plus what its own published result cannot yet carry.
 _UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
 _UNSERVED_OVER_MCP = {**_NEEDS_GEOMETRY, **_NOT_YET_OVER_MCP}
-_ARTIFACTS = ("evidence-bundle", *sorted(_UNSERVED_OVER_MCP))
+_ARTIFACTS = ("evidence-bundle", "dxf", "qif")
 
 _COMMAND_EXAMPLES = {
     "check": "anvilate check parts/bracket.yaml --show-work",
@@ -308,8 +307,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Render the chosen artifact for every spec given, or every spec under "
         "a directory. The exit code is the bundle roll-up, which is never better than its "
         "worst section: 0 when every section passed, 1 when one failed, 2 when one could "
-        "not be evaluated. QIF results are gated on the card passing, as `artifact-export` "
-        "asks; an artifact needing a built part is refused with 4.",
+        "not be evaluated. QIF and DXF results are gated on the card passing, as "
+        "`artifact-export` asks; unsupported geometry is refused with 4.",
         epilog=f"Example: {_COMMAND_EXAMPLES['export']}",
     )
     export.add_argument(
@@ -322,7 +321,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--artifact",
         choices=_ARTIFACTS,
         default="evidence-bundle",
-        help="which artifact; the evidence bundle and QIF results need no geometry",
+        help="which artifact; DXF builds an audited plate profile before rendering",
     )
     export.add_argument(
         "--format", choices=("text", "json"), default="text", help="how to render it"
@@ -1272,6 +1271,73 @@ def _qif(results, *, worst, fmt: str, out, err) -> int:
     return EXIT_CODES[worst]
 
 
+def _dxf(results, *, worst, fmt: str, out, err) -> int:
+    """Build and render validated plate profiles through the audited geometry registry."""
+    from .attestation import sha256_hex
+    from .export.dxf import render_geometry_dxf
+    from .export.gate import ExportRefused, authorize_export
+    from .geometry import GeometryError, GeometryUnavailable, UnsupportedGeometry, build_spec
+
+    documents: list[tuple[Path, Any, bytes]] = []
+    for path, spec, sections in results:
+        try:
+            authorization = authorize_export(sections.scorecard)
+        except ExportRefused as refused:
+            print(
+                f"anvilate export --artifact dxf: {path}: {refused}\n"
+                f"anvilate export has no override: exporting past a failing card is a "
+                f"deliberate act by somebody who has read it. "
+                f"`--artifact evidence-bundle` is served whatever the verdict and carries "
+                f"the failure.",
+                file=err,
+            )
+            return EXIT_CODES[worst]
+        try:
+            geometry = build_spec(spec)
+            document = render_geometry_dxf(geometry=geometry, authorization=authorization)
+        except ImportError as failure:
+            print(f"anvilate export --artifact dxf: {path}: {failure}", file=err)
+            return EXIT_UNBUILT
+        except (GeometryUnavailable, UnsupportedGeometry) as failure:
+            print(
+                f"anvilate export --artifact dxf: {path}: {failure}. See {_GEOMETRY_SPEC}.",
+                file=err,
+            )
+            return EXIT_UNBUILT
+        except GeometryError as failure:
+            print(f"anvilate export --artifact dxf: {path}: {failure}", file=err)
+            return EXIT_BAD_REQUEST
+        documents.append((path, spec, document))
+
+    if fmt == "json":
+        payload = machine_document(
+            "export",
+            {
+                "status": worst.value,
+                "documents": [
+                    {
+                        "path": str(path),
+                        "name": spec.name,
+                        "format": "dxf",
+                        "dxf": document.decode("utf-8"),
+                        "sha256": sha256_hex(document),
+                    }
+                    for path, spec, document in documents
+                ],
+            },
+            artifact="dxf",
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+    else:
+        for index, (path, _spec, document) in enumerate(documents):
+            if index:
+                print("", file=out)
+            if len(documents) > 1:
+                print(f"999\n{path}", file=out)
+            print(document.decode("utf-8"), end="", file=out)
+    return EXIT_CODES[worst]
+
+
 def _export(args: argparse.Namespace, *, out, err) -> int:
     """``export``, for the artifacts a spec file alone can produce."""
     from .bundle import BundleSections, combinations_for
@@ -1325,6 +1391,8 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
 
     if args.artifact == "qif":
         return _qif(results, worst=worst, fmt=args.format, out=out, err=err)
+    if args.artifact == "dxf":
+        return _dxf(results, worst=worst, fmt=args.format, out=out, err=err)
 
     if args.format == "json":
         payload = machine_document(

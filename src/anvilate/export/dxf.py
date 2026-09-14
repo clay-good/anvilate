@@ -1,9 +1,9 @@
-"""DXF export of 2D plate outlines with holes.
+"""DXF export of audited plate profiles and explicit 2D outlines with holes.
 
 Turns the plan geometry a code-checked structural plate implies — a lifting lug,
-a gusset, a base plate — into a DXF drawing a fabricator can cut from. The plate
-is a closed rectangular outline; each hole is a circle. Dimensions are
-:class:`~anvilate.units.Quantity` lengths, written to the DXF in millimetres.
+a gusset, a base plate, a round cover — into a DXF drawing a fabricator can cut from.
+Audited built solids render through :func:`render_geometry_dxf`; explicit rectangular
+drawings use :func:`export_plate_dxf`. Dimensions are written in millimeters.
 
 Every entry point here takes an :class:`~anvilate.export.gate.ExportAuthorization` as a
 required keyword and stamps its watermark into the DXF header. That is not decoration: a
@@ -16,8 +16,11 @@ a clear :class:`ImportError`.
 
 from __future__ import annotations
 
+from io import StringIO
 from math import cos, pi, radians, sin, tan
 from pathlib import Path
+from threading import Lock
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, field_validator
 
@@ -25,6 +28,9 @@ from .._models import RevalidatedModel, each_one
 from ..gdt import FeatureControlFrame
 from ..units import Quantity
 from .gate import ExportAuthorization
+
+if TYPE_CHECKING:
+    from ..geometry import BuiltGeometry
 
 __all__ = [
     "Hole",
@@ -35,6 +41,7 @@ __all__ = [
     "plate_cut_length",
     "plate_mass",
     "export_plate_dxf",
+    "render_geometry_dxf",
     "export_gear_blank_dxf",
     "export_feature_control_frame_dxf",
 ]
@@ -59,6 +66,7 @@ _GDT_LAYER = "GDT"
 # A DXF polyline bulge is tan(theta/4) of the arc it spans; every rounded plate
 # corner is a quarter circle.
 _CORNER_BULGE = tan(pi / 8)
+_DETERMINISTIC_WRITE = Lock()
 
 
 def _corner_radius_mm(corner_radius: Quantity | None, w: float, h: float) -> float:
@@ -98,6 +106,86 @@ def _stamp(doc, authorization: ExportAuthorization) -> None:
     """
     for tag, value in authorization.metadata():
         doc.header.custom_vars.append(tag, value)
+
+
+def _document_bytes(doc, *, authorization: ExportAuthorization) -> bytes:
+    """Serialize a DXF with stable metadata so identical geometry has identical bytes."""
+    ezdxf = _require_ezdxf()
+    _stamp(doc, authorization)
+    with _DETERMINISTIC_WRITE:
+        previous = ezdxf.options.write_fixed_meta_data_for_testing
+        ezdxf.options.write_fixed_meta_data_for_testing = True
+        try:
+            # ``new()`` creates this marker before the fixed-metadata option is enabled;
+            # normalize it here as well as the timestamps and GUIDs normalized by write().
+            doc.ezdxf_metadata()["CREATED_BY_EZDXF"] = "0.0 @ 2000-01-01T00:00:00.000000+00:00"
+            stream = StringIO()
+            doc.write(stream)
+        finally:
+            ezdxf.options.write_fixed_meta_data_for_testing = previous
+    return stream.getvalue().encode(doc.output_encoding)
+
+
+def render_geometry_dxf(*, geometry: BuiltGeometry, authorization: ExportAuthorization) -> bytes:
+    """Render the top profile of one audited plate solid as deterministic DXF bytes.
+
+    The dimensions come from :class:`~anvilate.geometry.BuiltGeometry`, after the kernel
+    has built and validated the solid. Rectangular base and cover plates become centered
+    closed polylines; circular covers become centered circles, with an annular cover's bore
+    on the ``HOLES`` layer. The layers are semantic cut intent, not merely colors.
+
+    ``authorization`` is mandatory and its watermark is embedded in the DXF header. The
+    result is returned rather than written so the CLI and MCP surfaces can expose the exact
+    same bytes without granting a remote caller filesystem access.
+    """
+    from ..geometry import BASE_PLATE_PATTERN, COVER_PLATE_PATTERN
+
+    if not geometry.is_valid:
+        raise ValueError("DXF export needs one valid positive-volume built solid")
+
+    ezdxf = _require_ezdxf()
+    doc = ezdxf.new()
+    doc.units = ezdxf.units.MM
+    doc.layers.add(_OUTLINE_LAYER, color=7)
+    msp = doc.modelspace()
+    dimensions = geometry.dimensions_mm
+
+    if geometry.pattern == BASE_PLATE_PATTERN:
+        width, height = dimensions["width"], dimensions["depth"]
+        half_width, half_height = width / 2, height / 2
+        msp.add_lwpolyline(
+            [
+                (-half_width, -half_height),
+                (half_width, -half_height),
+                (half_width, half_height),
+                (-half_width, half_height),
+            ],
+            close=True,
+            dxfattribs={"layer": _OUTLINE_LAYER},
+        )
+    elif geometry.pattern == COVER_PLATE_PATTERN and "diameter" not in dimensions:
+        width, height = dimensions["width"], dimensions["length"]
+        half_width, half_height = width / 2, height / 2
+        msp.add_lwpolyline(
+            [
+                (-half_width, -half_height),
+                (half_width, -half_height),
+                (half_width, half_height),
+                (-half_width, half_height),
+            ],
+            close=True,
+            dxfattribs={"layer": _OUTLINE_LAYER},
+        )
+    elif geometry.pattern == COVER_PLATE_PATTERN:
+        msp.add_circle((0, 0), dimensions["diameter"] / 2, dxfattribs={"layer": _OUTLINE_LAYER})
+        bore = dimensions.get("hole_diameter")
+        if bore is not None:
+            doc.layers.add(_HOLE_LAYER, color=1)
+            msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
+    else:
+        raise ValueError(f"DXF export does not support geometry pattern {geometry.pattern!r}")
+
+    return _document_bytes(doc, authorization=authorization)
 
 
 def _positive_length(value: Quantity, field: str) -> Quantity:

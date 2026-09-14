@@ -29,10 +29,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 
-# Only the foundational layers (units + spec IR) are implemented today, so
-# their runtime dependencies are the only hard requirements. Geometry,
-# validation, and export pull in OCCT/Gmsh/CalculiX and land as extras as
-# those capabilities are built out (see openspec/specs/).
+# Keep the analytical screening core lightweight. Audited B-Rep/STEP generation and DXF
+# export are working optional capabilities, installed only when a caller needs them.
 dependencies = [
     "pint>=0.24",
     "pydantic>=2.7",

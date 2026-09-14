@@ -100,9 +100,10 @@ Every build SHALL record a provenance graph — input spec hash, database versio
 The MCP tool surface SHALL be able to produce the evidence bundle for a screening result it
 is given, because that artifact needs no built geometry: the CLI produces it from a spec file
 today by screening the spec and rolling the card up, and the tool has that card through its
-subject handle. An artifact that does need built geometry — a DXF — SHALL continue to be
-refused with that reason, and every refusal SHALL name what that operation is actually
-waiting on rather than reporting the request as malformed.
+subject handle. The local CLI MAY build audited geometry and return a validation-gated DXF.
+The MCP tool SHALL refuse CAD-content delivery until that disclosure channel has an approved
+result contract, and every refusal SHALL name what that operation is actually waiting on
+rather than reporting the request as malformed.
 
 **A refusal SHALL state the reason that is true of the artifact it refuses.** QIF results
 were refused at both surfaces as needing built geometry, and they do not: the export layer
@@ -156,4 +157,3 @@ case. This surface grants no override, and no artifact leaves it unwatermarked.
 - **WHEN** any export call is served
 - **THEN** no file is created, and the tool's published input schema offers no property that
   could name one
-

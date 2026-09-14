@@ -6,7 +6,7 @@
 
 Anvilate is a **local-first, open-source** design tool for mechanical, structural, and industrial engineers. It runs the analytical screens you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, contact, thick-wall pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. No cloud, no LLM required, no account.
 
-> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate and cover-plate patterns build valid B-Reps, write STEP, render deterministic SVG viewport images, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic AP242 export described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate and cover-plate patterns build valid B-Reps, write STEP, render deterministic SVG viewport images, export validation-gated DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic AP242 export described under [Where this is going](#where-this-is-going) are still being built.
 
 ## Quickstart
 
@@ -144,6 +144,18 @@ These are intentionally narrow audited patterns, not a generic code executor. A 
 `element_type` exits 4 and names the missing audited pattern. See
 [geometry generation](openspec/specs/geometry-generation/spec.md).
 
+A plate spec whose acceptance checks pass can also produce a deterministic 2D cut profile
+from that built geometry. Rectangular profiles use a closed `OUTLINE` polyline; circular
+and annular covers use an `OUTLINE` circle and, where present, a `HOLES` bore. The validated
+screening notice is embedded in the DXF header.
+
+```bash
+anvilate export --artifact dxf validated-plate.yaml > validated-plate.dxf
+```
+
+The command has no override. A spec without its required safety factor, or with any failing
+or unevaluated check, produces no DXF and points to the evidence bundle instead.
+
 An MCP client can pass the `subject` returned by `build_part` to `render_viewport`. The
 result includes an `image/svg+xml` attachment plus the same base64 payload, dimensions,
 view, and SHA-256 digest under the published viewport-image schema. The renderer is local,
@@ -225,7 +237,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,523 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,530 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

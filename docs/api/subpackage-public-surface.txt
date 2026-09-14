@@ -25,6 +25,7 @@ export.dxf.grid_hole_pattern
 export.dxf.linear_hole_pattern
 export.dxf.plate_cut_length
 export.dxf.plate_mass
+export.dxf.render_geometry_dxf
 export.fcf.Arc
 export.fcf.Circle
 export.fcf.DEFAULT_TEXT_HEIGHT

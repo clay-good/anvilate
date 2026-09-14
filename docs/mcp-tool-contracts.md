@@ -270,8 +270,9 @@ Everything else ends in a refusal, and the kinds are worth separating:
   behind for a tool that has since been wired.
 - **`-32000`, that format is not served here.** New with the export ruling, and the reason
   it is separate: `export_artifact` is dispatched and two of the three formats it publishes
-  are not served — one of them because it waits on geometry, the other because it waits on
-  this tool's result shape. A per-tool refusal could not express either, and answering
+  are not served. Their local implementations exist, but returning XML or CAD geometry to
+  a remote caller needs an approved result and disclosure contract beyond the bundle-shaped
+  result published today. A per-tool refusal could not express that, and answering
   `-32602` would tell a client its argument was wrong, which invites a retry with a
   different one.
 

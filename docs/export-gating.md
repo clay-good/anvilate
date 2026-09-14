@@ -36,6 +36,17 @@ export_plate_dxf(
 | no card at all | raises `ExportRefused` | no file |
 | any refusal, with `override=True` | returns an overridden authorization | header says `UNVALIDATED` and names the blocking checks |
 
+The local CLI applies the same gate after screening and before building the drawing:
+
+```bash
+anvilate export --artifact dxf validated-plate.yaml > validated-plate.dxf
+```
+
+It accepts no override flag. For audited base and cover plates it builds the solid first,
+then renders the plan dimensions carried by that built result. This closes the gap between
+the older library entry point above, which accepts ad hoc drawing dimensions, and the
+document-driven product path, whose DXF is traceable to a validated geometry pattern.
+
 ## Four decisions worth reading
 
 **The authorization is a required argument.** Every entry point that emits an artifact takes

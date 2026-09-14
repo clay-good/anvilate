@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from anvilate.export.dxf import Hole, Slot, export_plate_dxf
+from anvilate.export.dxf import Hole, Slot, export_plate_dxf, render_geometry_dxf
 from anvilate.export.gate import authorize_export
 from anvilate.units import Quantity
 
@@ -17,6 +17,62 @@ def _q(text: str) -> Quantity:
 # owns that. An explicit override is the authorization a caller with no acceptance card
 # can obtain, so it is the one that keeps this file's subject unchanged.
 _AUTH = authorize_export(None, override=True)
+
+
+def test_audited_base_plate_dxf_is_centered_semantic_and_deterministic():
+    ezdxf = pytest.importorskip("ezdxf")
+    from io import StringIO
+
+    from anvilate.geometry import build_base_plate
+    from anvilate.packs.structural import BasePlate
+
+    plate = BasePlate(
+        name="bp1",
+        width=_q("300 mm"),
+        depth=_q("240 mm"),
+        axial_load=_q("200 kN"),
+        concrete_strength=_q("25 MPa"),
+        plate_thickness=_q("25 mm"),
+        cantilever=_q("50 mm"),
+        plate_material="ASTM-A36",
+    )
+    built = build_base_plate(plate)
+    first = render_geometry_dxf(geometry=built, authorization=_AUTH)
+    second = render_geometry_dxf(geometry=built, authorization=_AUTH)
+    assert first == second
+
+    doc = ezdxf.read(StringIO(first.decode("utf-8")))
+    outline = list(doc.modelspace().query("LWPOLYLINE"))
+    assert len(outline) == 1 and outline[0].dxf.layer == "OUTLINE"
+    assert list(outline[0].get_points("xy")) == pytest.approx(
+        [(-150, -120), (150, -120), (150, 120), (-150, 120)]
+    )
+
+
+def test_audited_annular_cover_dxf_separates_profile_and_bore():
+    ezdxf = pytest.importorskip("ezdxf")
+    from io import StringIO
+
+    from anvilate.geometry import build_cover_plate
+    from anvilate.packs.industrial import CoverPlate
+
+    built = build_cover_plate(
+        CoverPlate(
+            name="access-cover",
+            pressure=_q("15 kPa"),
+            thickness=_q("8 mm"),
+            material="ASTM-A36",
+            diameter=_q("300 mm"),
+            hole_diameter=_q("80 mm"),
+        )
+    )
+    data = render_geometry_dxf(geometry=built, authorization=_AUTH)
+    doc = ezdxf.read(StringIO(data.decode("utf-8")))
+    circles = list(doc.modelspace().query("CIRCLE"))
+    assert [(circle.dxf.layer, circle.dxf.radius) for circle in circles] == [
+        ("OUTLINE", 150),
+        ("HOLES", 40),
+    ]
 
 
 def test_export_lug_outline_round_trips(tmp_path):
