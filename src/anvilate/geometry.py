@@ -45,6 +45,7 @@ __all__ = [
     "GeometryMeasurement",
     "GeometryUnavailable",
     "ConfirmedStepInterface",
+    "ConfirmedPlanarContact",
     "CircularFeatureCandidate",
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
@@ -60,6 +61,7 @@ __all__ = [
     "build_transmission_shaft",
     "build_spec",
     "confirm_step_interface",
+    "confirm_planar_contact",
     "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
@@ -328,6 +330,21 @@ class ConfirmedStepInterface(StatableModel):
     solid_id: Named | None = None
     confirmed_by: Named
     contract: InterfaceContract
+
+
+class ConfirmedPlanarContact(StatableModel):
+    """One exact planar contact candidate accepted by a named person."""
+
+    source_name: Named
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    contact_candidate_id: Named
+    name: Named
+    first_solid_id: Named
+    first_face_candidate_id: Named
+    second_solid_id: Named
+    second_face_candidate_id: Named
+    overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
+    confirmed_by: Named
 
 
 _Point3D = tuple[float, float, float]
@@ -814,6 +831,41 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         result_data["solids"] = solid_candidates
         result_data["planar_contacts"] = tuple(contacts)
     return StepInterfaceCandidates.model_validate(result_data)
+
+
+def confirm_planar_contact(
+    candidates: StepInterfaceCandidates,
+    *,
+    contact_id: str,
+    name: str,
+    confirmed_by: str,
+) -> ConfirmedPlanarContact:
+    """Accept one exact measured planar contact without inventing interface geometry."""
+    confirmer = confirmed_by.strip()
+    if not confirmer:
+        raise GeometryError("accepting a contact candidate names the person confirming it")
+    contact_name = name.strip()
+    if not contact_name:
+        raise GeometryError("an accepted planar contact has a non-blank name")
+    matches = [contact for contact in candidates.planar_contacts if contact.id == contact_id]
+    if len(matches) != 1:
+        available = ", ".join(contact.id for contact in candidates.planar_contacts) or "none"
+        raise GeometryError(
+            f"contact candidate {contact_id!r} was not found exactly once; available: {available}"
+        )
+    contact = matches[0]
+    return ConfirmedPlanarContact(
+        source_name=candidates.source_name,
+        source_sha256=candidates.source_sha256,
+        contact_candidate_id=contact.id,
+        name=contact_name,
+        first_solid_id=contact.first_solid_id,
+        first_face_candidate_id=contact.first_face_candidate_id,
+        second_solid_id=contact.second_solid_id,
+        second_face_candidate_id=contact.second_face_candidate_id,
+        overlap_area_mm2=contact.overlap_area_mm2,
+        confirmed_by=confirmer,
+    )
 
 
 def confirm_step_interface(

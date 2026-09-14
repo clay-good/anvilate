@@ -1640,6 +1640,7 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     assert len(candidates["solids"]) == 2
     assert len(candidates["planar_contacts"]) == 1
     assert candidates["planar_contacts"][0]["overlap_area_mm2"] == pytest.approx(400)
+    contact_id = candidates["planar_contacts"][0]["id"]
     assert len({face["solid_id"] for face in candidates["planar_faces"]}) == 2
 
     code, selected_raw, err = _run(
@@ -1679,6 +1680,26 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     assert "  solid solid-" in text
     assert "  volume 76858.4 mm³" in text
     assert "contact-" in text and "overlap 400 mm²" in text
+
+    code, contact_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-contact",
+        contact_id,
+        "--name",
+        "housing_to_plate",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+    accepted_contact = json.loads(contact_raw)["accepted_contact"]
+    assert code == EXIT_OK and err == ""
+    assert accepted_contact["contact_candidate_id"] == contact_id
+    assert accepted_contact["name"] == "housing_to_plate"
+    assert accepted_contact["overlap_area_mm2"] == pytest.approx(400)
+    assert accepted_contact["confirmed_by"] == "R. Engineer"
+    assert "accepted" not in json.loads(contact_raw)
     assert "6 planar interface candidates" in text
 
 
@@ -1798,6 +1819,28 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
 
     assert code == EXIT_BAD_REQUEST and out == ""
     assert "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-contact",
+        "contact-any",
+        "--name",
+        "housing_to_plate",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "accepting a contact requires" in err and "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--accept",
+        "pattern-any",
+        "--accept-contact",
+        "contact-any",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "--accept and --accept-contact are mutually exclusive" in err
 
 
 def test_interfaces_requires_and_carries_an_exact_locating_feature(tmp_path):

@@ -25,6 +25,7 @@ from anvilate.geometry import (  # noqa: E402
     build_cover_plate,
     build_spec,
     build_transmission_shaft,
+    confirm_planar_contact,
     confirm_step_interface,
     detect_step_interfaces,
     measure_geometry,
@@ -818,6 +819,34 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
     assert not separated.planar_contacts
     assert not coplanar_disjoint.planar_contacts
     assert any("do not prove intended mating" in warning for warning in detected.warnings)
+
+    accepted = confirm_planar_contact(
+        detected,
+        contact_id=contact.id,
+        name="housing_to_plate",
+        confirmed_by="R. Engineer",
+    )
+    assert accepted.contact_candidate_id == contact.id
+    assert accepted.name == "housing_to_plate"
+    assert accepted.overlap_area_mm2 == pytest.approx(400)
+    assert accepted.confirmed_by == "R. Engineer"
+    assert accepted.first_solid_id == contact.first_solid_id
+    assert accepted.second_face_candidate_id == contact.second_face_candidate_id
+
+    with pytest.raises(GeometryError, match="not found exactly once"):
+        confirm_planar_contact(
+            detected,
+            contact_id="contact-absent",
+            name="housing_to_plate",
+            confirmed_by="R. Engineer",
+        )
+    with pytest.raises(GeometryError, match="names the person confirming it"):
+        confirm_planar_contact(
+            detected,
+            contact_id=contact.id,
+            name="housing_to_plate",
+            confirmed_by=" ",
+        )
 
 
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():

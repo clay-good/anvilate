@@ -43,6 +43,9 @@ faces on different solids is reported as a contact candidate with both solid/fac
 kernel-measured area; this is geometric evidence, not proof of design intent. A second pass
 with `--solid` narrows the summary, discovery, contacts, and acceptance to one exact ID; an
 unknown ID is refused with the available choices.
+`--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits
+a separate confirmed-contact artifact. It deliberately does not fabricate the hole pattern
+required by `InterfaceContract`.
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest, solid identity, and candidate IDs retained beside

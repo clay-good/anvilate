@@ -32,6 +32,7 @@ from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
 from .geometry import (
+    ConfirmedPlanarContact,
     ConfirmedStepInterface,
     GeometryMeasurement,
     GeometrySummary,
@@ -53,12 +54,14 @@ __all__ = [
     "BUNDLE_SCHEMA_VERSION",
     "GEOMETRY_SCHEMA_VERSION",
     "CONFIRMED_INTERFACE_SCHEMA_VERSION",
+    "CONFIRMED_CONTACT_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
     "confirmed_interface_json_schema",
+    "confirmed_contact_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
     "viewport_json_schema",
@@ -105,6 +108,9 @@ INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.5.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
 CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"
+
+# One measured planar contact accepted by a named person without an invented hole pattern.
+CONFIRMED_CONTACT_SCHEMA_VERSION = "1.0.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -205,6 +211,21 @@ def confirmed_interface_json_schema() -> dict[str, Any]:
             "candidate IDs, the named person who accepted them, and the InterfaceContract "
             "created for downstream design. Generated from "
             "anvilate.geometry.ConfirmedStepInterface."
+        ),
+    )
+
+
+def confirmed_contact_json_schema() -> dict[str, Any]:
+    """One exact planar contact accepted by a named person."""
+    return _artifact(
+        ConfirmedPlanarContact,
+        name="confirmed-planar-contact",
+        version=CONFIRMED_CONTACT_SCHEMA_VERSION,
+        description=(
+            "Anvilate confirmed planar contact: one exact kernel-measured contact candidate, "
+            "its source digest and solid/face endpoints, a semantic name, overlap area, and "
+            "the named person who accepted it. Generated from "
+            "anvilate.geometry.ConfirmedPlanarContact."
         ),
     )
 
@@ -373,6 +394,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "geometry-summary.schema.json": geometry_json_schema(),
         "step-interface-candidates.schema.json": interface_candidates_json_schema(),
         "confirmed-step-interface.schema.json": confirmed_interface_json_schema(),
+        "confirmed-planar-contact.schema.json": confirmed_contact_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),

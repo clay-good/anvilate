@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -602,6 +602,8 @@ topology, not STEP mate metadata and not an LLM:
 anvilate interfaces mating.step
 anvilate interfaces mating.step --format json
 anvilate interfaces assembly.step --solid solid-64934fb6edee
+anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
+  --name housing_to_plate --confirmed-by "R. Engineer" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -636,6 +638,12 @@ the filter. A pattern belonging to another solid cannot be accepted through a fi
 A contact candidate retains both solid IDs, both face candidate IDs, and measured overlap
 area. It proves those imported faces overlap geometrically; it does not prove they were
 intended to mate, carry load, or have acceptable clearance.
+
+`--accept-contact` requires one exact contact ID, `--name`, and `--confirmed-by`. It emits a
+separate `accepted_contact` artifact retaining the source digest, endpoints, and overlap
+area. It does not emit an `InterfaceContract`, because that contract requires a hole pattern
+and inventing one would turn a truthful contact measurement into false interface geometry.
+Pattern and contact acceptance are mutually exclusive in one invocation.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

@@ -1,0 +1,64 @@
+{
+  "$id": "https://anvilate.dev/schemas/confirmed-planar-contact/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate confirmed planar contact: one exact kernel-measured contact candidate, its source digest and solid/face endpoints, a semantic name, overlap area, and the named person who accepted it. Generated from anvilate.geometry.ConfirmedPlanarContact.",
+  "properties": {
+    "confirmed_by": {
+      "title": "Confirmed By",
+      "type": "string"
+    },
+    "contact_candidate_id": {
+      "title": "Contact Candidate Id",
+      "type": "string"
+    },
+    "first_face_candidate_id": {
+      "title": "First Face Candidate Id",
+      "type": "string"
+    },
+    "first_solid_id": {
+      "title": "First Solid Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "overlap_area_mm2": {
+      "exclusiveMinimum": 0,
+      "title": "Overlap Area Mm2",
+      "type": "number"
+    },
+    "second_face_candidate_id": {
+      "title": "Second Face Candidate Id",
+      "type": "string"
+    },
+    "second_solid_id": {
+      "title": "Second Solid Id",
+      "type": "string"
+    },
+    "source_name": {
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_name",
+    "source_sha256",
+    "contact_candidate_id",
+    "name",
+    "first_solid_id",
+    "first_face_candidate_id",
+    "second_solid_id",
+    "second_face_candidate_id",
+    "overlap_area_mm2",
+    "confirmed_by"
+  ],
+  "title": "ConfirmedPlanarContact",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

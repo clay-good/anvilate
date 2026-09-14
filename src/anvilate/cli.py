@@ -253,6 +253,11 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATTERN_ID",
         help="accept this exact detected hole-pattern candidate as an interface contract",
     )
+    interfaces.add_argument(
+        "--accept-contact",
+        metavar="CONTACT_ID",
+        help="accept this exact detected planar contact without inventing a hole pattern",
+    )
     interfaces.add_argument("--name", help="name for the accepted InterfaceContract")
     interfaces.add_argument(
         "--mating-plane", help="semantic mating-face tag to publish in the accepted contract"
@@ -988,19 +993,47 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     from .geometry import (
         GeometryError,
         GeometryUnavailable,
+        confirm_planar_contact,
         confirm_step_interface,
         detect_step_interfaces,
     )
 
-    acceptance = {
+    pattern_acceptance = {
         "--accept": args.accept,
         "--name": args.name,
         "--mating-plane": args.mating_plane,
         "--confirmed-by": args.confirmed_by,
     }
-    supplied = {option for option, value in acceptance.items() if value is not None}
-    if supplied and len(supplied) != len(acceptance):
-        missing = ", ".join(option for option in acceptance if option not in supplied)
+    pattern_supplied = {option for option, value in pattern_acceptance.items() if value is not None}
+    if args.accept is not None and args.accept_contact is not None:
+        print("anvilate interfaces: --accept and --accept-contact are mutually exclusive", file=err)
+        return EXIT_BAD_REQUEST
+    if args.accept_contact is not None:
+        contact_acceptance = {
+            "--accept-contact": args.accept_contact,
+            "--name": args.name,
+            "--confirmed-by": args.confirmed_by,
+        }
+        contact_supplied = {
+            option for option, value in contact_acceptance.items() if value is not None
+        }
+        if len(contact_supplied) != len(contact_acceptance):
+            missing = ", ".join(
+                option for option in contact_acceptance if option not in contact_supplied
+            )
+            print(
+                "anvilate interfaces: accepting a contact requires --accept-contact, --name, "
+                f"and --confirmed-by; missing {missing}",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+        if args.mating_plane is not None:
+            print("anvilate interfaces: --mating-plane requires --accept", file=err)
+            return EXIT_BAD_REQUEST
+    elif pattern_supplied and len(pattern_supplied) != len(pattern_acceptance):
+        missing = ", ".join(
+            option for option in pattern_acceptance if option not in pattern_supplied
+        )
         print(
             "anvilate interfaces: accepting a candidate requires --accept, --name, "
             f"--mating-plane, and --confirmed-by; missing {missing}",
@@ -1039,10 +1072,10 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                     ),
                 }
             )
-        accepted = (
-            None
-            if not supplied
-            else confirm_step_interface(
+        accepted = None
+        accepted_contact = None
+        if args.accept is not None:
+            accepted = confirm_step_interface(
                 detected,
                 pattern_id=args.accept,
                 name=args.name,
@@ -1050,7 +1083,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 confirmed_by=args.confirmed_by,
                 locating_feature_id=args.locator,
             )
-        )
+        elif args.accept_contact is not None:
+            accepted_contact = confirm_planar_contact(
+                detected,
+                contact_id=args.accept_contact,
+                name=args.name,
+                confirmed_by=args.confirmed_by,
+            )
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
@@ -1064,6 +1103,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         }
         if accepted is not None:
             document["accepted"] = accepted.model_dump(mode="json", exclude_unset=True)
+        if accepted_contact is not None:
+            document["accepted_contact"] = accepted_contact.model_dump(mode="json")
         payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
         return EXIT_OK
@@ -1118,6 +1159,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(
             f"  accepted: {contract.name} on {contract.mating_plane}, confirmed by "
             f"{accepted.confirmed_by}",
+            file=out,
+        )
+    if accepted_contact is not None:
+        contact_identity = (
+            f"{accepted_contact.name} ({accepted_contact.contact_candidate_id})"
+        )
+        print(
+            f"  accepted contact: {contact_identity}, "
+            f"confirmed by {accepted_contact.confirmed_by}",
             file=out,
         )
     return EXIT_OK

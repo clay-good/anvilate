@@ -174,6 +174,8 @@ To start a mating-part workflow from existing CAD, inspect a local STEP file:
 ```bash
 anvilate interfaces mating.step
 anvilate interfaces assembly.step --solid solid-64934fb6edee
+anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
+  --name housing_to_plate --confirmed-by "R. Engineer" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -188,7 +190,9 @@ can be mapped back to a component. When opposing faces are exactly coplanar, the
 reports their positive overlap as a contact candidate retaining both solid and face IDs; a
 nearby face is not called contact. Single-solid JSON remains unchanged. After discovery,
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
-refused with the available choices. Its output is a proposal only. Creating a contract
+refused with the available choices. `--accept-contact` records one exact pair, a semantic
+name, and the named confirmer without fabricating the hole pattern required by an
+`InterfaceContract`. Its output is a proposal only. Creating a contract
 requires the exact pattern ID, a semantic mating-plane tag, and a named confirmer; the result
 keeps the STEP digest, solid identity, and candidate IDs beside the generated
 `InterfaceContract`. That contract carries a right-handed source frame and every
@@ -274,7 +278,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,611 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,616 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
