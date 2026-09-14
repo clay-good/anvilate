@@ -109,9 +109,8 @@ def test_the_golden_path_completes_with_the_socket_layer_closed(
 
     The worked lug is the longest path the package has today: a scorecard, a DXF artifact,
     an evidence bundle, an in-toto attestation over both subjects, and a verification pass
-    over the result. Everything the requirement names that exists is in it. Geometry and
-    STEP export are not, because no writer ships yet — see `docs/export-targets.md`; when
-    one lands it belongs in this call rather than in a second test.
+    over the result. Audited plate STEP generation is covered separately because this lug
+    has no registered B-Rep pattern; see `docs/export-targets.md`.
     """
     from examples.attested_evidence_bundle import attest_the_lug
 

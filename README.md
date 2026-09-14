@@ -128,8 +128,8 @@ Cover plates may be rectangular, circular, or annular. Existing output is protec
 `--force` is explicit.
 
 ```bash
-anvilate build examples/base_plate.spec.yaml --output base_plate.step
-anvilate build examples/cover_plate.spec.yaml --output cover_plate.step
+anvilate build examples/base_plate.spec.yaml --output base_plate.step --unvalidated
+anvilate build examples/cover_plate.spec.yaml --output cover_plate.step --unvalidated
 ```
 
 ```text
@@ -143,6 +143,10 @@ bp1: BUILT
 These are intentionally narrow audited patterns, not a generic code executor. A different
 `element_type` exits 4 and names the missing audited pattern. See
 [geometry generation](openspec/specs/geometry-generation/spec.md).
+The checked-in examples intentionally declare no required safety factor, so the commands
+above make the override explicit and stamp `UNVALIDATED` into the STEP header. For a spec
+whose acceptance checks pass, omit `--unvalidated`; a nonpassing card otherwise writes no
+STEP at all.
 
 A plate spec whose acceptance checks pass can also produce a deterministic 2D cut profile
 from that built geometry. Rectangular profiles use a closed `OUTLINE` polyline; circular
@@ -237,7 +241,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,530 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,532 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

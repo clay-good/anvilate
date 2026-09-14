@@ -11,7 +11,7 @@ shipped exits 4 naming that gap.
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
-| `build` | a spec | `--output`, `--force`, `--format` | a valid STEP artifact was written |
+| `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated` | a valid, watermarked STEP artifact was written |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -782,8 +782,8 @@ Install the optional kernel and build either checked-in geometry spec:
 
 ```bash
 pip install -e ".[geometry]"
-anvilate build examples/base_plate.spec.yaml --output base_plate.step
-anvilate build examples/cover_plate.spec.yaml --output cover_plate.step
+anvilate build examples/base_plate.spec.yaml --output base_plate.step --unvalidated
+anvilate build examples/cover_plate.spec.yaml --output cover_plate.step --unvalidated
 ```
 
 The `base_plate/1` pattern creates a box centered on XY with its bottom at Z=0. The
@@ -797,6 +797,13 @@ adds the declared dimensions and all semantic tags under the CLI output 1.6.0 co
 The writer refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a
 part failure. Unsupported element types exit 4 and name the pattern that has not shipped.
+
+STEP is a CAD artifact, so building one is validation-gated. A passing scorecard produces a
+`VALIDATED` header. The checked-in geometry examples omit the required safety factor and
+therefore use the explicit `--unvalidated` override above; that file carries `UNVALIDATED`,
+the screening notice, and its blocking checks in `FILE_DESCRIPTION`. Without the flag, a
+failed or unevaluated card writes nothing. The generated timestamp is normalized, so the
+same geometry and authorization produce byte-identical STEP and the same digest.
 
 ## Running it in CI
 

@@ -453,6 +453,14 @@ def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization(
         )
 
 
+def test_geometry_step_writer_cannot_bypass_the_export_gate():
+    """STEP lives in the geometry module, so the export-package census cannot see it."""
+    from anvilate.geometry import write_step
+
+    parameter = inspect.signature(write_step).parameters["authorization"]
+    assert parameter.default is inspect.Parameter.empty
+
+
 def test_an_exempt_entry_point_is_one_that_really_emits_nothing():
     """The exemption list cannot be used to excuse a writer.
 

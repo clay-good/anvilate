@@ -341,15 +341,21 @@ def _build_parser() -> argparse.ArgumentParser:
     build = commands.add_parser(
         "build",
         help="build an audited Design Spec geometry pattern as STEP",
-        description="Build one Design Spec as a valid B-Rep and write STEP. The first "
-        "supported element type is base_plate; unsupported patterns exit 4 and name the "
-        "missing pattern. Exit 0 means the STEP was written; a bad spec or output exits 3, "
-        "and an unexpected kernel error exits 5. Existing files are not overwritten "
-        "unless --force is given.",
+        description="Build one Design Spec as a valid B-Rep and write a validation-stamped "
+        "STEP. Base and cover plates are supported; unsupported patterns exit 4 and name "
+        "the missing pattern. A nonpassing card writes nothing unless --unvalidated is "
+        "explicit. Exit 0 means the STEP was written; a bad spec or output exits 3, and an "
+        "unexpected kernel error exits 5. Existing files are not overwritten unless "
+        "--force is given.",
         epilog=f"Example: {_COMMAND_EXAMPLES['build']}",
     )
     build.add_argument("spec", type=Path, help="the Design Spec document to build")
     build.add_argument("--output", type=Path, required=True, help="STEP file to write")
+    build.add_argument(
+        "--unvalidated",
+        action="store_true",
+        help="write a conspicuously watermarked STEP when the scorecard does not pass",
+    )
     build.add_argument(
         "--force", action="store_true", help="replace an existing output file deliberately"
     )
@@ -1640,8 +1646,26 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate build: {failure}", file=err)
         return EXIT_BAD_REQUEST
 
+    from .export.gate import ExportRefused, authorize_export
+    from .screening import screen_spec
+
+    card = screen_spec(spec)
     try:
-        write_step(built, args.output)
+        authorization = authorize_export(card, override=args.unvalidated)
+    except ExportRefused as refused:
+        print(
+            f"anvilate build: {refused}\n"
+            "Pass --unvalidated only after reviewing the scorecard; the STEP will be "
+            "watermarked and is not released for fabrication.",
+            file=err,
+        )
+        return EXIT_CODES[card.status]
+    except ValueError as failure:
+        print(f"anvilate build: {failure}. Remove --unvalidated.", file=err)
+        return EXIT_BAD_REQUEST
+
+    try:
+        write_step(built, args.output, authorization=authorization)
         digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     except OSError as failure:
         print(f"anvilate build: {failure}", file=err)

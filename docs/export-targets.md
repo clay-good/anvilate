@@ -5,9 +5,10 @@ aimed at an unverified claim is worse than no target.** This page records where 
 export layer is pointed, and, for each claim, whether it was confirmed from a primary source
 on **2026-08-22** or is carried as unverified.
 
-A plain STEP B-Rep writer is now shipped through `anvilate build` for the audited
-`base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry; it does **not** claim AP242 semantic
-PMI conformance. AP242 PMI and 3MF remain roadmap targets. The other shipped formats are
+A plain validation-gated STEP B-Rep writer is now shipped through `anvilate build` for the
+audited `base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry with a
+deterministic validation watermark; it does **not** claim AP242 semantic PMI conformance.
+AP242 PMI and 3MF remain roadmap targets. The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 
 ## What was confirmed
@@ -57,7 +58,7 @@ matching the ranges already pinned.
 
 ## What the conformance gate will and will not guarantee
 
-When the STEP writer lands, CI will run every exported file through an independent analyzer
+When the AP242 semantic writer lands, CI will run every exported file through an independent analyzer
 and regression-test the reader and writer against the free test models. That buys a real
 guarantee and a narrow one:
 

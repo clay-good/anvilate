@@ -188,8 +188,16 @@ designed one. And a feature exactly **tangent to the plate edge** is left to the
 same spirit as the corner-radius note: the writer checks features against the full rectangle
 and does not judge edge distance, which is a fabrication rule with no single right number.
 
+## STEP builds use the same gate
+
+`anvilate build` writes a CAD artifact, even though its purpose is geometry generation. It
+therefore screens the spec before writing. A passing card stamps `VALIDATED`; a nonpassing
+card writes nothing unless the caller explicitly supplies `--unvalidated`, which stamps the
+status, notice, and blocking checks into STEP `FILE_DESCRIPTION`. The writer also replaces
+the generated timestamp with a fixed value, making identical builds byte-for-byte stable.
+
 ## What is not gated
 
 The report renderer carries its own disclaimer and is not an artifact the export gate sees.
-There is no STEP or 3MF writer yet; when one lands it comes through this gate, and the
-ratchet above is what makes that a build failure rather than a review comment.
+There is no 3MF writer yet; when one lands it comes through this gate, and the ratchet above
+is what makes that a build failure rather than a review comment.

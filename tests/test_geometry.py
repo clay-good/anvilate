@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("build123d")
 
+from anvilate.export.gate import authorize_export  # noqa: E402
 from anvilate.geometry import (  # noqa: E402
     BASE_PLATE_PATTERN,
     COVER_PLATE_PATTERN,
@@ -35,6 +36,8 @@ from anvilate.spec import (  # noqa: E402
     ValidationTier,
 )
 from anvilate.units import Quantity, UnitSystem  # noqa: E402
+
+_STEP_AUTH = authorize_export(None, override=True)
 
 
 def _plate(**changes) -> BasePlate:
@@ -200,10 +203,16 @@ def test_viewport_refuses_widths_outside_the_published_bounds(width):
 def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     from build123d import import_step
 
-    path = write_step(build_base_plate(_plate()), tmp_path / "base.step")
+    path = write_step(build_base_plate(_plate()), tmp_path / "base.step", authorization=_STEP_AUTH)
     restored = import_step(path)
 
-    assert path.read_text(encoding="utf-8").startswith("ISO-10303-21;")
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("ISO-10303-21;")
+    assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in text
+    rebuilt = write_step(
+        build_base_plate(_plate()), tmp_path / "rebuilt.step", authorization=_STEP_AUTH
+    )
+    assert rebuilt.read_bytes() == path.read_bytes()
     assert restored.is_valid
     assert len(restored.solids()) == 1
     assert restored.volume == pytest.approx(300 * 240 * 25, rel=1e-8)
@@ -344,7 +353,7 @@ def test_annular_cover_plate_step_round_trip_preserves_the_bore(tmp_path):
             hole_diameter=Quantity.parse("80 mm"),
         )
     )
-    restored = import_step(write_step(built, tmp_path / "cover.step"))
+    restored = import_step(write_step(built, tmp_path / "cover.step", authorization=_STEP_AUTH))
 
     assert restored.is_valid
     assert len(restored.solids()) == 1

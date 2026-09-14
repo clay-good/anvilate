@@ -669,6 +669,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
             "the published variant accepts an undocumented top-level field",
             arguments,
         )
+    assert "ANVILATE_EXPORT_STATUS=VALIDATED" in built_step.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -1502,11 +1503,24 @@ def test_build_writes_a_valid_step_and_reports_the_artifact(tmp_path):
     output = tmp_path / "base-plate.step"
     spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
 
-    code, text, err = _run("build", str(spec), "--output", str(output))
+    code, text, err = _run("build", str(spec), "--output", str(output), "--unvalidated")
 
     assert code == EXIT_OK and err == ""
     assert "bp1: BUILT" in text and "base_plate/1" in text
-    assert output.read_text(encoding="utf-8").startswith("ISO-10303-21;")
+    step = output.read_text(encoding="utf-8")
+    assert step.startswith("ISO-10303-21;")
+    assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in step
+
+
+def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_path):
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+
+    code, text, error = _run("build", str(spec), "--output", str(output))
+
+    assert code == EXIT_NOT_EVALUATED and text == "" and not output.exists()
+    assert "export is gated" in error and "--unvalidated" in error
 
 
 def test_build_json_carries_geometry_identity_and_digest(tmp_path):
@@ -1515,7 +1529,9 @@ def test_build_json_carries_geometry_identity_and_digest(tmp_path):
     output = tmp_path / "base-plate.step"
     spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
 
-    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
+    code, raw, err = _run(
+        "build", str(spec), "--output", str(output), "--format", "json", "--unvalidated"
+    )
     payload = json.loads(raw)
 
     assert code == EXIT_OK and err == ""
@@ -1537,7 +1553,9 @@ def test_build_writes_the_circular_cover_plate_example_with_its_bore(tmp_path):
     spec = Path(__file__).resolve().parents[1] / "examples/cover_plate.spec.yaml"
     output = tmp_path / "cover.step"
 
-    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
+    code, raw, err = _run(
+        "build", str(spec), "--output", str(output), "--format", "json", "--unvalidated"
+    )
     payload = json.loads(raw)
 
     assert code == EXIT_OK and err == ""

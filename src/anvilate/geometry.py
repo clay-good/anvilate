@@ -12,6 +12,7 @@ the dependency is required only when a solid is built or written.
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
@@ -24,6 +25,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from ._models import FrozenMap, Named, StatableModel
+from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.structural import BasePlate
 from .spec import DesignSpec
@@ -556,10 +558,40 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
     raise GeometryError(f"unsupported geometry query {query!r}; choose {supported}")
 
 
-def write_step(built: BuiltGeometry, path: Path) -> Path:
-    """Write one built solid as STEP and return the output path."""
+def _step_string(value: str) -> str:
+    """Escape one ISO 10303 string literal payload."""
+    return value.replace("'", "''")
+
+
+def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthorization) -> Path:
+    """Write one authorized solid as deterministic, watermarked STEP and return its path."""
     if not built.is_valid:
         raise GeometryError("refusing to write invalid geometry")
     _Align, _Box, _Cylinder, export_step = _kernel()
     export_step(built.shape, path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as failure:
+        path.unlink(missing_ok=True)
+        raise GeometryError(
+            "STEP writer produced a non-UTF-8 file; refusing to release it"
+        ) from failure
+    descriptions = [
+        "Open CASCADE Model",
+        *(f"{key}={value}" for key, value in authorization.metadata()),
+    ]
+    header = (
+        "FILE_DESCRIPTION(("
+        + ",".join(f"'{_step_string(value)}'" for value in descriptions)
+        + "),'2;1');"
+    )
+    text, descriptions_changed = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
+    filename = f"FILE_NAME('{_step_string(built.name)}','2000-01-01T00:00:00',"
+    text, filename_changed = re.subn(r"FILE_NAME\('[^']*','[^']*',", filename, text, count=1)
+    if descriptions_changed != 1 or filename_changed != 1:
+        path.unlink(missing_ok=True)
+        raise GeometryError(
+            "STEP writer produced an unrecognized header; refusing an unstamped file"
+        )
+    path.write_text(text, encoding="utf-8")
     return path
