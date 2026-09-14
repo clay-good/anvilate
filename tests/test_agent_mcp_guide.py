@@ -135,6 +135,8 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "element_params",
         "base_plate",
         "min_safety_factor",
+        "face_count",
+        "plate_thickness",
     }
     # The artifact formats `export_artifact` publishes, read off the schema rather than
     # listed: `evidence_bundle` is snake_case in backticks and is not a tool, and a fourth
@@ -194,9 +196,13 @@ def test_the_contracts_page_backing_table_is_the_catalogs_own():
         8: "Eight",
     }
     unbacked = len(catalog) - backed
-    assert f"{words[backed]} of the eight run today" in text, backed
-    verb = "says" if unbacked == 1 else "say"
-    assert f"other {words[unbacked].lower()} {verb} so with `None`" in text, unbacked
+    count_claim = (
+        "All eight run today" if backed == 8 else f"{words[backed]} of the eight run today"
+    )
+    assert count_claim in text, backed
+    if unbacked:
+        verb = "says" if unbacked == 1 else "say"
+        assert f"other {words[unbacked].lower()} {verb} so with `None`" in text, unbacked
 
 
 def test_the_contracts_page_subject_table_marks_the_dispatched_tools():

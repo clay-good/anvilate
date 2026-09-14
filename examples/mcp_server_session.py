@@ -3,7 +3,7 @@
 Everything else in this repository imports the library. This one starts the server the way
 a client does — ``python -m anvilate.mcp``, newline-delimited JSON over its stdin and
 stdout — and holds a short session with it: initialize, list the tools, compile a spec,
-build a base plate, render it, and run a validation.
+build a base plate, render and measure it, and run a validation.
 
 The build and refusal are different statements:
 
@@ -153,6 +153,15 @@ def session() -> list[dict]:
             "method": "tools/call",
             "params": {"name": "read_scorecard", "arguments": {"subject": card_handle}},
         },
+        {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {
+                "name": "measure_geometry",
+                "arguments": {"subject": build_handle, "query": "area:top"},
+            },
+        },
     ):
         send(request)
         responses.append(json.loads(server.stdout.readline()))
@@ -165,7 +174,7 @@ def session() -> list[dict]:
 
 def main() -> None:
     responses = session()
-    print(f"{len(_requests()) + 2} messages sent, {len(responses)} responses — the")
+    print(f"{len(_requests()) + 3} messages sent, {len(responses)} responses — the")
     print("notification takes none, which is what a client waiting one-for-one needs.\n")
 
     by_id = {response.get("id"): response for response in responses}
@@ -200,6 +209,9 @@ def main() -> None:
         f"render_viewport -> {viewport['view']} {viewport['width_px']}×{viewport['height_px']} "
         f"{viewport['mime_type']}, image attachment included"
     )
+    measured = by_id[9]["result"]["structuredContent"]["measurement"]
+    pretty_unit = measured["unit"].replace("^2", "²").replace("^3", "³")
+    print(f"measure_geometry -> {measured['query']} = {measured['value']:g} {pretty_unit}")
 
 
 if __name__ == "__main__":

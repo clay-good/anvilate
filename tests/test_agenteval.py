@@ -338,12 +338,11 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     assert len({task.task_id for task in tasks}) == len(tasks)
 
 
-def test_the_corpus_asks_for_the_behaviour_the_remaining_refusals_exist_to_get():
-    """An undispatched operation must still be reached by the agent-driving corpus."""
+def test_the_corpus_reaches_every_backed_operation():
+    """The corpus measures the whole live surface rather than a favored subset."""
     from anvilate import mcp
     from anvilate.agenteval import default_task_set
 
-    undispatched = set(mcp._UNBUILT)
-    assert undispatched, "nothing is refused any more; this test has outlived its subject"
+    assert set(mcp._UNBUILT) == set()
     reached = {operation for task in default_task_set() for operation in task.operations}
-    assert undispatched <= reached, f"no task reaches {sorted(undispatched - reached)}"
+    assert set(mcp._DISPATCH) <= reached

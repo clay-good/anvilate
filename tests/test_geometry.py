@@ -16,6 +16,7 @@ from anvilate.geometry import (  # noqa: E402
     UnsupportedGeometry,
     build_base_plate,
     build_spec,
+    measure_geometry,
     render_viewport,
     write_step,
 )
@@ -147,6 +148,31 @@ def test_viewport_document_refuses_an_image_that_does_not_match_its_digest():
         from anvilate.geometry import ViewportImage
 
         ViewportImage.model_validate(document)
+
+
+@pytest.mark.parametrize(
+    ("query", "value", "unit", "feature"),
+    (
+        ("volume", 1_800_000, "mm^3", "solid"),
+        ("width", 300, "mm", "east-west extent"),
+        ("depth", 240, "mm", "north-south extent"),
+        ("plate_thickness", 25, "mm", "bottom-top extent"),
+        ("face_count", 6, "count", "semantic faces"),
+        ("area:top", 72_000, "mm^2", "top"),
+        ("area:east", 6_000, "mm^2", "east"),
+    ),
+)
+def test_geometry_measurements_are_read_from_the_brep(query, value, unit, feature):
+    measured = measure_geometry(build_base_plate(_plate()), query)
+
+    assert measured.value == pytest.approx(value)
+    assert measured.unit == unit
+    assert measured.feature == feature
+
+
+def test_geometry_measurement_refuses_an_unknown_query_and_lists_the_grammar():
+    with pytest.raises(GeometryError, match=r"area:<semantic-face>"):
+        measure_geometry(build_base_plate(_plate()), "mass")
 
 
 @pytest.mark.parametrize("width", (63, 4097))

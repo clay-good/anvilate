@@ -6,8 +6,7 @@ calls whether an answer can arrive in the reply at all.**
 This page describes the tool *contracts*, which were pinned before the server existed — the
 cheapest moment to change a tool surface is before a client has integrated against it. **The
 server is built now**: `anvilate-mcp` runs it on stdio, answers the three core methods plus
-`tasks/get`, `tasks/update` and `tasks/cancel`, and seven of the eight operations are backed.
-The remaining operation is refused by name with what it waits on.
+`tasks/get`, `tasks/update` and `tasks/cancel`, and all eight operations are backed.
 
 ```python
 from anvilate.mcp import catalog_issues, tool_catalog, wire_definitions
@@ -25,14 +24,13 @@ is empty. The worked table is
 | `compile_spec` | synchronous | — | `anvilate.spec:parse_spec` |
 | `build_part` | synchronous | — | `anvilate.geometry:build_spec` |
 | `render_viewport` | synchronous | — | `anvilate.geometry:render_viewport` |
-| `measure_geometry` | synchronous | — | not built |
+| `measure_geometry` | synchronous | — | `anvilate.geometry:measure_geometry` |
 | `run_validation` | synchronous | — | `anvilate.screening:screen_spec` |
 | `run_fea_validation` | task | — | `anvilate.screening:screen_spec` |
 | `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
 | `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
 
-Seven of the eight run today. The other one says so with `None` rather than naming a symbol
-that does not exist, and the seven that *are* backed name a dotted path CI resolves against
+All eight run today. Each backed tool names a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
 Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
 as nothing was wired and went on resolving after it was dispatched to the screen, so each
@@ -45,7 +43,8 @@ A tool that consumes a spec does not describe a spec. It `$ref`s
 `https://anvilate.dev/schemas/design-spec/1.3.0.json`, the artifact
 [published as JSON Schema 2020-12](published-contracts.md); a tool that returns a scorecard
 `$ref`s the scorecard at its version. `build_part` returns the standalone geometry-summary
-contract, and `render_viewport` returns the viewport-image contract rather than bare objects.
+contract, `render_viewport` returns the viewport-image contract, and `measure_geometry`
+returns the geometry-measurement contract rather than bare objects.
 The tool contract an agent reads and the
 structured-output constraint a compiler is decoded under therefore resolve to one document,
 which is the "one schema, two enforcement points" requirement made mechanical.
@@ -131,9 +130,8 @@ client that sends the shell's spelling gets `-32602` naming the three valid valu
 
 ## Still open
 
-Feature measurement still waits on `measure_geometry`; registry publication and the external
-protocol conformance run remain release work. Viewport image attachments and the Tasks extension
-are live; tasks use
+Registry publication and the external protocol conformance run remain release work. Viewport
+image attachments, B-Rep measurement, and the Tasks extension are live; tasks use
 durable local records plus fixed subprocess workers, with no server-initiated sampling.
 
 ## Every tool names what it acts on
@@ -168,7 +166,7 @@ instead of needing an edit.
 | `run_validation` | `spec` | yes, and dispatched |
 | `run_fea_validation` | `spec` | yes (task-dispatched) |
 | `render_viewport` | `subject` | yes, and dispatched for built geometry |
-| `measure_geometry` | `subject` | yes — waiting on built geometry |
+| `measure_geometry` | `subject` | yes, and dispatched for built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
 | `export_artifact` | `subject` | yes, and dispatched for the evidence bundle |
 
@@ -267,13 +265,9 @@ Everything else ends in a refusal, and the kinds are worth separating:
   a call whose only valid response is a task handle.
 - **`-32000`, stateless.** Empty today — every tool names its subject — and kept as the net
   for the next tool that stops declaring one.
-- **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does
-  not. A result invented here would be indistinguishable from a real one, which is the
-  failure a published tool contract makes most likely. `render_viewport` and
-  `measure_geometry` reach it, each naming built geometry as what it waits on, and a census
-  test holds that list of reasons against the dispatch table in **both** directions — a tool
-  neither dispatched nor given a reason fails, and so does a reason left behind for a tool
-  that has since been wired.
+- **`-32000`, not dispatched yet.** Empty today. The census remains in both directions: a
+  future tool that is neither dispatched nor given a reason fails, and so does a reason left
+  behind for a tool that has since been wired.
 - **`-32000`, that format is not served here.** New with the export ruling, and the reason
   it is separate: `export_artifact` is dispatched and two of the three formats it publishes
   are not served — one of them because it waits on geometry, the other because it waits on

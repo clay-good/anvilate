@@ -32,17 +32,20 @@ __all__ = [
     "BuiltGeometry",
     "GeometryError",
     "GeometrySummary",
+    "GeometryMeasurement",
     "GeometryUnavailable",
     "RenderedViewport",
     "UnsupportedGeometry",
     "ViewportImage",
     "build_base_plate",
     "build_spec",
+    "measure_geometry",
     "render_viewport",
     "write_step",
 ]
 
 BASE_PLATE_PATTERN = "base_plate/1"
+_COUNT_UNIT = "count"
 
 
 class GeometryError(ValueError):
@@ -69,6 +72,15 @@ class GeometrySummary(StatableModel):
         json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
     )
     face_tags: tuple[Named, ...] = Field(alias="faceTags", min_length=1)
+
+
+class GeometryMeasurement(StatableModel):
+    """One value read from built geometry rather than repeated from its spec."""
+
+    query: Named
+    value: Annotated[float, Field(gt=0)]
+    unit: Literal["count", "mm", "mm^2", "mm^3"]
+    feature: Named
 
 
 class ViewportImage(StatableModel):
@@ -340,6 +352,42 @@ def render_viewport(
         + "\n</svg>\n"
     ).encode("utf-8")
     return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
+
+
+def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
+    """Measure one supported property directly from the regenerated B-Rep."""
+    bounds = built.shape.bounding_box()
+    dimensions = {
+        "width": (float(bounds.size.X), "east-west extent"),
+        "depth": (float(bounds.size.Y), "north-south extent"),
+        "plate_thickness": (float(bounds.size.Z), "bottom-top extent"),
+    }
+    if query == "volume":
+        return GeometryMeasurement(
+            query=query, value=built.volume_mm3, unit="mm^3", feature="solid"
+        )
+    if query == "face_count":
+        return GeometryMeasurement(
+            query=query,
+            value=float(sum(len(faces) for faces in built.faces.values())),
+            unit=_COUNT_UNIT,
+            feature="semantic faces",
+        )
+    if query in dimensions:
+        value, feature = dimensions[query]
+        return GeometryMeasurement(query=query, value=value, unit="mm", feature=feature)
+    if query.startswith("area:"):
+        tag = query.removeprefix("area:")
+        faces = built.faces.get(tag)
+        if faces:
+            return GeometryMeasurement(
+                query=query,
+                value=float(sum(face.area for face in faces)),
+                unit="mm^2",
+                feature=tag,
+            )
+    supported = "volume, width, depth, plate_thickness, face_count, or area:<semantic-face>"
+    raise GeometryError(f"unsupported geometry query {query!r}; choose {supported}")
 
 
 def write_step(built: BuiltGeometry, path: Path) -> Path:

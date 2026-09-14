@@ -18,6 +18,7 @@ The analytical loop and the first geometry pattern are callable today:
 | Compile the spec | `compile_spec` | **Dispatched.** |
 | Build the part | `build_part` | **Dispatched synchronously** for `base_plate`; returns the published geometry summary. |
 | Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic SVG as structured data and an image attachment. |
+| Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
 | Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject handle returned by validation. |
@@ -273,14 +274,14 @@ def refusal(name, arguments):
     return error["code"], error["message"].split(";")[0].split(",")[0]
 
 
-print(refusal("measure_geometry", {"subject": "sha256:" + "a" * 64, "query": "volume"}))
+print(refusal("measure_geometry", {"subject": "sha256:" + "a" * 64, "query": ""}))
 print(refusal("run_validation", {}))
 ```
 
 ```text
 cannot be served statelessly: 
 task-dispatched: run_fea_validation
-(-32000, 'measure_geometry is not dispatched yet: measuring a feature needs built geometry')
+(-32602, 'measure_geometry.query must be at least 1 character(s)')
 (-32602, "run_validation requires 'spec'")
 ```
 
@@ -289,10 +290,6 @@ task-dispatched: run_fea_validation
   the extension forbids that response unless this request declares
   `io.modelcontextprotocol/tasks`. Add it under the request's client-capability metadata;
   the error's `requiredCapabilities` gives the exact shape.
-- **`-32000`, not dispatched yet.** The contract and the handler are built and the operation
-  behind it is not, and the message names what it waits on — `measure_geometry` waits on
-  built geometry. Retrying is pointless; a result invented
-  there would be indistinguishable from a real one.
 - **`-32000`, that format is not served here.** The narrower version of the same fact, and
   the one place a tool is dispatched while part of what it publishes is not: `export_artifact`
   serves `evidence_bundle` and refuses `dxf` and `qif` — **for two different reasons, and the
@@ -316,6 +313,8 @@ task-dispatched: run_fea_validation
 Four tools take a **subject** — `render_viewport`, `measure_geometry`, `read_scorecard` and
 `export_artifact`. It is a handle: `sha256:` and the digest of the document it names, returned
 by an earlier call. `render_viewport` wants the handle returned by `build_part`.
+`measure_geometry` takes that same build handle and answers `volume`, `width`, `depth`,
+`plate_thickness`, `face_count`, or `area:<semantic-face>` from the regenerated B-Rep.
 `read_scorecard` and `export_artifact` both want the handle
 `run_validation` returns, not the spec handle `compile_spec` returns; the store records each
 document's kind, so handing over the wrong one is refused by name rather than failing three

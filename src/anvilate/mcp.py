@@ -166,6 +166,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 _BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.0.1.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
+_MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
@@ -419,19 +420,26 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "spec asked for."
             ),
             input_schema=_object_schema(
-                {"subject": _SUBJECT_SCHEMA, "query": {"type": "string", "minLength": 1}},
+                {
+                    "subject": _SUBJECT_SCHEMA,
+                    "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": (
+                            "volume, width, depth, plate_thickness, face_count, or "
+                            "area:<semantic-face>"
+                        ),
+                    },
+                },
                 required=["subject", "query"],
             ),
             output_schema=_object_schema(
-                {
-                    "value": {"type": "number"},
-                    "unit": {"type": "string"},
-                    "feature": {"type": "string"},
-                },
-                required=["value", "unit"],
+                {"measurement": {"$ref": _MEASUREMENT_REF}},
+                required=["measurement"],
             ),
             cost=Cost.BOUNDED,
             subject="subject",
+            backing="anvilate.geometry:measure_geometry",
         ),
         ToolDefinition(
             name="run_validation",
@@ -611,7 +619,14 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
         if required not in properties:
             issues.append(f"{where} requires {required!r}, which it does not define")
     for ref in sorted(_refs(schema)):
-        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF, _GEOMETRY_REF, _VIEWPORT_REF}:
+        if ref not in {
+            _SPEC_REF,
+            _SCORECARD_REF,
+            _BUNDLE_REF,
+            _GEOMETRY_REF,
+            _VIEWPORT_REF,
+            _MEASUREMENT_REF,
+        }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
                 "at its current version"
@@ -1341,6 +1356,22 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {"viewport": rendered.document().model_dump(mode="json")}
 
 
+def _measure_geometry(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Measure an actual regenerated B-Rep property by built-geometry subject."""
+    from .geometry import GeometryError, GeometryUnavailable, measure_geometry
+
+    try:
+        built = _built_geometry(arguments["subject"])
+        measurement = measure_geometry(built, arguments["query"])
+    except UnknownSubject as unknown:
+        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+    except GeometryUnavailable as failure:
+        raise _Unavailable(str(failure)) from failure
+    except GeometryError as failure:
+        raise _InvalidArguments([f"query: {failure}"]) from failure
+    return {"measurement": measurement.model_dump(mode="json")}
+
+
 def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``run_validation``, dispatched to :func:`anvilate.screening.screen_spec`.
 
@@ -1597,12 +1628,7 @@ def _execute_task(operation: str, arguments: Mapping[str, Any]) -> dict[str, Any
 # What each undispatched tool is waiting on. A census in tests/test_mcp.py holds this against
 # the dispatch map, so a tool that stops being served, or starts, cannot leave a stale reason
 # behind — and one that is neither dispatched nor named here fails the build.
-_UNBUILT: dict[str, str] = {
-    "measure_geometry": (
-        "measuring a feature needs built geometry, and no geometry is generated from a spec "
-        "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
-    ),
-}
+_UNBUILT: dict[str, str] = {}
 
 _UNBUILT_TASKS: dict[str, str] = {}
 
@@ -1616,6 +1642,7 @@ _DISPATCH: dict[str, Any] = {
     "build_part": _build_part,
     "compile_spec": _compile_spec,
     "export_artifact": _export_artifact,
+    "measure_geometry": _measure_geometry,
     "read_scorecard": _read_scorecard,
     "render_viewport": _render_viewport,
     "run_validation": _run_validation,

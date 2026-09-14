@@ -1,0 +1,39 @@
+{
+  "$id": "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate geometry measurement: one query answered from the regenerated B-Rep, with its value, unit, and semantic feature. Generated from anvilate.geometry.GeometryMeasurement.",
+  "properties": {
+    "feature": {
+      "title": "Feature",
+      "type": "string"
+    },
+    "query": {
+      "title": "Query",
+      "type": "string"
+    },
+    "unit": {
+      "enum": [
+        "count",
+        "mm",
+        "mm^2",
+        "mm^3"
+      ],
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "exclusiveMinimum": 0,
+      "title": "Value",
+      "type": "number"
+    }
+  },
+  "required": [
+    "query",
+    "value",
+    "unit",
+    "feature"
+  ],
+  "title": "GeometryMeasurement",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

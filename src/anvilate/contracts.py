@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
-from .geometry import GeometrySummary, ViewportImage
+from .geometry import GeometryMeasurement, GeometrySummary, ViewportImage
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -46,9 +46,11 @@ __all__ = [
     "SCORECARD_SCHEMA_VERSION",
     "BUNDLE_SCHEMA_VERSION",
     "GEOMETRY_SCHEMA_VERSION",
+    "MEASUREMENT_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
+    "measurement_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -90,6 +92,9 @@ GEOMETRY_SCHEMA_VERSION = "1.0.1"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
+
+# A scalar read directly from a built B-Rep by ``measure_geometry``.
+MEASUREMENT_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:
@@ -152,6 +157,20 @@ def viewport_json_schema() -> dict[str, Any]:
             "Anvilate viewport image: one deterministic SVG rendering with its view, pixel "
             "dimensions, exact media type, SHA-256 digest, and base64 payload. Generated "
             "from anvilate.geometry.ViewportImage."
+        ),
+    )
+
+
+def measurement_json_schema() -> dict[str, Any]:
+    """A typed scalar inspection of built geometry."""
+    return _artifact(
+        GeometryMeasurement,
+        name="geometry-measurement",
+        version=MEASUREMENT_SCHEMA_VERSION,
+        description=(
+            "Anvilate geometry measurement: one query answered from the regenerated B-Rep, "
+            "with its value, unit, and semantic feature. Generated from "
+            "anvilate.geometry.GeometryMeasurement."
         ),
     )
 
@@ -305,6 +324,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "evidence-bundle.schema.json": bundle_json_schema(),
         "geometry-summary.schema.json": geometry_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
+        "geometry-measurement.schema.json": measurement_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

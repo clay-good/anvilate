@@ -244,12 +244,11 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. Seven of the eight
-    operations are backed today; the other one says so with None rather than naming a
-    symbol that does not exist.
+    A dotted path in a table is a comment until something imports it. All eight operations
+    are backed today, and each claim names a symbol that exists.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 7, backed
+    assert len(backed) == 8, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -642,12 +641,12 @@ def test_a_declared_subject_must_be_a_required_input():
 
 
 def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
-    """One tool is servable and unwired, and that is now the honest state.
+    """Every servable tool is wired, with a two-way census retained for future gaps.
 
     Until they carried subjects they were refused for naming nothing to act on, which hid the
     real reason behind a contract problem. With handles the contract is sound and what
-    remains is geometry — so the refusal names that, the way the CLI names what its unbuilt
-    command waits on, and this holds the two lists against each other: a tool that is neither
+    remains is held honestly, the way the CLI names what an unbuilt command waits on. This
+    holds the two lists against each other: a tool that is neither
     dispatched nor named in `_UNBUILT` fails here, and a reason left behind for a tool that
     has since been wired fails too.
 
@@ -668,7 +667,7 @@ def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
     assert undispatched == set(mcp._UNBUILT), (
         f"undispatched {sorted(undispatched)}; reasons written for {sorted(mcp._UNBUILT)}"
     )
-    assert undispatched == {"measure_geometry"}
+    assert undispatched == set()
 
     for name in sorted(undispatched):
         error = _call(name, _minimum_arguments(name))["error"]
@@ -784,6 +783,36 @@ def test_render_viewport_refuses_a_screening_handle_instead_of_rendering_the_wro
 
     assert error["code"] == -32602
     assert "screening" in error["message"] and "built-geometry" in error["message"]
+
+
+@pytest.mark.parametrize(
+    ("query", "value", "unit", "feature"),
+    (
+        ("volume", 1_800_000, "mm^3", "solid"),
+        ("plate_thickness", 25, "mm", "bottom-top extent"),
+        ("area:top", 72_000, "mm^2", "top"),
+    ),
+)
+def test_measure_geometry_reads_the_built_subject(query, value, unit, feature):
+    pytest.importorskip("build123d")
+    built = _call("build_part", {"spec": _base_plate_document()})["result"]
+    handle = built["structuredContent"]["subject"]
+
+    result = _call("measure_geometry", {"subject": handle, "query": query})["result"]
+    measured = result["structuredContent"]["measurement"]
+
+    assert result["isError"] is False
+    assert measured == {"query": query, "value": value, "unit": unit, "feature": feature}
+
+
+def test_measure_geometry_refuses_an_unsupported_query_with_the_supported_grammar():
+    built = _call("build_part", {"spec": _base_plate_document()})["result"]
+    handle = built["structuredContent"]["subject"]
+
+    error = _call("measure_geometry", {"subject": handle, "query": "mass"})["error"]
+
+    assert error["code"] == -32602
+    assert "area:<semantic-face>" in error["message"]
 
 
 def test_build_part_refuses_a_spec_without_an_audited_pattern():
@@ -1147,6 +1176,7 @@ def _released_registry():
     from anvilate.contracts import (
         BUNDLE_SCHEMA_VERSION,
         GEOMETRY_SCHEMA_VERSION,
+        MEASUREMENT_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
         VIEWPORT_SCHEMA_VERSION,
@@ -1164,6 +1194,7 @@ def _released_registry():
                 _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
                 _released(f"geometry-summary-{GEOMETRY_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
+                _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
         ]
     )
@@ -1193,6 +1224,9 @@ def _dispatched_arguments(tool_name: str) -> dict:
     if tool_name == "render_viewport":
         built = _call("build_part", {"spec": _base_plate_document()})["result"]
         return {"subject": built["structuredContent"]["subject"], "view": "iso"}
+    if tool_name == "measure_geometry":
+        built = _call("build_part", {"spec": _base_plate_document()})["result"]
+        return {"subject": built["structuredContent"]["subject"], "query": "volume"}
     if tool_name == "run_validation":
         return {"spec": document}
     handle = _call("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]

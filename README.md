@@ -145,7 +145,9 @@ This is intentionally one narrow pattern, not a generic code executor. A differe
 An MCP client can pass the `subject` returned by `build_part` to `render_viewport`. The
 result includes an `image/svg+xml` attachment plus the same base64 payload, dimensions,
 view, and SHA-256 digest under the published viewport-image schema. The renderer is local,
-deterministic, and makes no network requests.
+deterministic, and makes no network requests. `measure_geometry` uses that same build handle
+to read the B-Rep's dimensions, volume, semantic-face count, or a tagged face's area instead
+of repeating the requested value from the spec.
 
 ## What you can do today
 
@@ -221,7 +223,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,490 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,508 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

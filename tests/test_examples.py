@@ -7696,7 +7696,7 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     # Seven messages in, six responses from that batch — the notification takes none —
     # and then two dependent calls use the handles returned by validation and build.
     assert len(namespace["_requests"]()) == 7
-    assert len(responses) == 8
+    assert len(responses) == 9
     assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
     assert len(by_id[2]["result"]["tools"]) == 8
 
@@ -7723,6 +7723,12 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
         "type": "image",
         "data": viewport["image"],
         "mimeType": "image/svg+xml",
+    }
+    assert by_id[9]["result"]["structuredContent"]["measurement"] == {
+        "query": "area:top",
+        "value": 72_000,
+        "unit": "mm^2",
+        "feature": "top",
     }
 
     # And the round trip subjects exist for: the card came back with a handle, and reading

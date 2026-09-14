@@ -435,11 +435,9 @@ def task_set_issues(tasks: Sequence[AgentTask]) -> list[str]:
 # the skill loaded. The scoring half of that is this module; the server half exists; this is
 # the third piece, and it is the one that says what "driving Anvilate" means.
 #
-# **The tasks are written against the surface as it is, refusals included.** One operation is
-# published and not dispatched: feature measurement still waits on built geometry. A task set
-# that avoided it would report a model can drive Anvilate on the strength of a surface it never
-# touched, which is the thing `task_set_issues` refuses. The render task now tests the positive
-# build-handle-to-image path instead of grading an obsolete refusal.
+# **The tasks are written against the surface as it is.** All eight operations are backed.
+# The geometry tasks test the positive build-handle-to-image and build-handle-to-measurement
+# paths, so a model cannot receive credit for calculating values from the spec itself.
 #
 # What is still missing after this is the measurement, and it is missing for a reason no code
 # here can fix: running the funnel needs an agent, and this package initiates no sampling and
@@ -519,9 +517,9 @@ _TASK_SET: tuple[AgentTask, ...] = (
         prelude=("compile_spec",),
         required_tools=("build_part", "measure_geometry"),
         notes=(
-            "The build succeeds and measurement is refused while that operation remains unbuilt. "
-            "A run must not answer a question about built geometry out of the spec that asked "
-            "for it."
+            "The build and measurement both succeed. A run must carry the build handle into "
+            "measurement rather than answer a question about actual geometry from the spec "
+            "that asked for it."
         ),
     ),
     AgentTask(
