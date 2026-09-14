@@ -201,7 +201,9 @@ on different solids report their signed diametral clearance and shared axial eng
 without judging whether that fit is acceptable. Every solid pair is also intersected: a
 strictly positive common volume becomes a stable interference candidate and a cited failing
 scorecard entry, while exact face contact remains non-interfering. The CLI exits 1 when any
-such interference exists. Single-solid JSON remains unchanged. After discovery,
+such interference exists. When a fit or cited gap-band check is requested, its entries join
+the interference result in one `assembly_scorecard` with a governing check; that single
+roll-up drives the exit code. Single-solid JSON remains unchanged. After discovery,
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. `--accept-contact` records one exact pair, a semantic
 name, and the named confirmer without fabricating the hole pattern required by an

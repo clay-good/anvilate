@@ -53,6 +53,8 @@ the caller's band. This remains a local CLI workflow rather than an MCP tool.
 Every multi-solid import also returns a scored interference check. Positive common B-Rep
 volume names the offending solid pair, measured volume, centroid, and bounds and exits 1;
 exact face contact is not interference. This result is available through the local CLI only.
+The local CLI rolls that check together with any requested ISO-fit and cited gap-band checks
+into a top-level `assembly_scorecard`; its status and governing entry drive the exit code.
 Coaxial bore/shaft surfaces on different solids are reported separately with signed
 diametral clearance and axial engagement. The result is measured geometry, not a fit verdict.
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits

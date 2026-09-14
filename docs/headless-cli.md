@@ -650,6 +650,12 @@ solid IDs plus overlap volume, centroid, and bounds. The accompanying
 contact and separated or disjoint solids pass. Any failing assembly interference makes the
 command exit 1 even when no optional fit or gap-band check was requested.
 
+For a multi-solid file, JSON also carries one top-level `assembly_scorecard`. It starts with
+the interference entries and adds one cited entry for each requested ISO 286 feature check
+and cited planar-gap band check. Its own tri-state roll-up and `governing()` result are the
+single verdict used for the command's exit code. A single-solid discovery omits the card;
+the roll-up is only produced when an assembly interference check has actually run.
+
 For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
 ID with `--solid` to return its summary and list and accept candidates from that solid only.
 An unknown ID is refused with the available IDs, and a single-solid input tells you to omit

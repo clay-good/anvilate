@@ -1484,6 +1484,56 @@ def check_cylindrical_mate_fit(
     )
 
 
+def _assembly_interface_scorecard(
+    candidates: StepInterfaceCandidates,
+    *,
+    fit_check: CylindricalMateFitCheck | None = None,
+    gap_check: PlanarGapClearanceCheck | None = None,
+) -> Scorecard:
+    """Roll assembly interference and requested interface checks into one verdict."""
+    entries = list(
+        ()
+        if candidates.interference_scorecard is None
+        else candidates.interference_scorecard.entries
+    )
+    if fit_check is not None:
+        for label, feature in (("hole", fit_check.hole), ("shaft", fit_check.shaft)):
+            entries.append(
+                ScorecardEntry(
+                    name=f"cylindrical mate {label} within {feature.designation}",
+                    status=CheckStatus.PASS if feature.within_zone else CheckStatus.FAIL,
+                    detail=(
+                        f"measured {feature.measured_diameter_mm:g} mm against "
+                        f"{feature.minimum_diameter_mm:g}–{feature.maximum_diameter_mm:g} mm"
+                    ),
+                    reference=(
+                        "ISO 286-1:2010, standard tolerance grades and fundamental deviations"
+                    ),
+                    underived=Underived(
+                        kind=DerivationAbsence.NUMERIC_RESULT,
+                        reason="the verdict compares a B-Rep diameter with resolved ISO 286 limits",
+                    ),
+                )
+            )
+    if gap_check is not None:
+        entries.append(
+            ScorecardEntry(
+                name=f"planar gap {gap_check.confirmed_gap.name}",
+                status=CheckStatus.PASS if gap_check.status == "pass" else CheckStatus.FAIL,
+                detail=(
+                    f"measured {gap_check.confirmed_gap.separation_mm:g} mm against "
+                    f"{gap_check.minimum_gap_mm:g}–{gap_check.maximum_gap_mm:g} mm"
+                ),
+                reference=gap_check.reference,
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason="the verdict compares a B-Rep separation with the cited limits",
+                ),
+            )
+        )
+    return Scorecard(entries=tuple(entries))
+
+
 def confirm_step_interface(
     candidates: StepInterfaceCandidates,
     *,

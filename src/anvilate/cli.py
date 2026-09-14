@@ -1028,6 +1028,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     from .geometry import (
         GeometryError,
         GeometryUnavailable,
+        _assembly_interface_scorecard,
         _interference_scorecard,
         check_cylindrical_mate_fit,
         check_planar_gap_clearance,
@@ -1273,18 +1274,22 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                     )
                 except ValueError as failure:
                     raise GeometryError(str(failure)) from failure
+        assembly_scorecard = (
+            None
+            if detected.interference_scorecard is None
+            else _assembly_interface_scorecard(
+                detected,
+                fit_check=fit_check,
+                gap_check=gap_check,
+            )
+        )
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
     except GeometryError as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_BAD_REQUEST
-    checks_passed = (fit_check is None or fit_check.status == "pass") and (
-        gap_check is None or gap_check.status == "pass"
-    ) and (
-        detected.interference_scorecard is None or detected.interference_scorecard.passed
-    )
-    result_code = EXIT_OK if checks_passed else EXIT_FAILED
+    result_code = EXIT_OK if assembly_scorecard is None else EXIT_CODES[assembly_scorecard.status]
     if args.format == "json":
         document = {
             "path": str(args.step),
@@ -1302,6 +1307,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["fit_check"] = fit_check.model_dump(mode="json")
         if gap_check is not None:
             document["gap_check"] = gap_check.model_dump(mode="json")
+        if assembly_scorecard is not None:
+            document["assembly_scorecard"] = assembly_scorecard.model_dump(mode="json")
         payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
         return result_code
@@ -1310,6 +1317,14 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     if detected.interference_scorecard is not None:
         print(
             f"  assembly interference: {detected.interference_scorecard.status.value.upper()}",
+            file=out,
+        )
+    if assembly_scorecard is not None:
+        governing = assembly_scorecard.governing()
+        governing_name = "none" if governing is None else governing.name
+        print(
+            f"  assembly scorecard: {assembly_scorecard.status.value.upper()}  "
+            f"governing {governing_name}",
             file=out,
         )
     for solid in detected.solids:

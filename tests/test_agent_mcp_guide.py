@@ -139,8 +139,9 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "min_safety_factor",
         "face_count",
         "plate_thickness",
-        # Local interface-candidate field, not an MCP tool.
+        # Local interface-candidate fields, not MCP tools.
         "solid_id",
+        "assembly_scorecard",
     }
     # The artifact formats `export_artifact` publishes, read off the schema rather than
     # listed: `evidence_bundle` is snake_case in backticks and is not a tool, and a fourth

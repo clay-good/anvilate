@@ -1657,6 +1657,7 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert "planar_gaps" not in payload["candidates"]
     assert "solid_interferences" not in payload["candidates"]
     assert "interference_scorecard" not in payload["candidates"]
+    assert "assembly_scorecard" not in payload
     assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
@@ -1829,6 +1830,10 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     assert fit_check["minimum_design_clearance_mm"] == pytest.approx(0.005)
     assert fit_check["maximum_design_clearance_mm"] == pytest.approx(0.029)
     assert "ISO 286-1" in fit_check["reference"]
+    assembly_card = accepted_payload["assembly_scorecard"]
+    assert assembly_card["status"] == "fail"
+    assert [entry["status"] for entry in assembly_card["entries"]] == ["pass", "pass", "fail"]
+    assert assembly_card["entries"][-1]["name"] == "cylindrical mate shaft within g6"
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -1852,6 +1857,7 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     assert code == EXIT_FAILED and err == ""
     assert f"accepted cylindrical mate: bearing_journal ({mate['id']})" in accepted_text
     assert "ISO 286 H7/g6: FAIL  hole PASS  shaft FAIL" in accepted_text
+    assert "assembly scorecard: FAIL  governing cylindrical mate shaft within g6" in accepted_text
 
     passing_step = _write_cylindrical_mate_step(
         tmp_path / "passing-shaft-in-bore.step", shaft_radius=4.995
@@ -1936,6 +1942,9 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     assert gap_check["margin_above_minimum_mm"] == pytest.approx(0.5)
     assert gap_check["margin_below_maximum_mm"] == pytest.approx(0.5)
     assert gap_check["reference"] == "Drawing A-101, note 7"
+    assembly_card = accepted_payload["assembly_scorecard"]
+    assert assembly_card["status"] == "pass"
+    assert [entry["status"] for entry in assembly_card["entries"]] == ["pass", "pass"]
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -1961,6 +1970,7 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     assert code == EXIT_OK and err == ""
     assert f"accepted planar gap: seal_gap ({gap['id']})" in accepted_text
     assert "gap requirement: PASS  measured 1 mm  allowed 0.5–1.5 mm" in accepted_text
+    assert "assembly scorecard: PASS  governing none" in accepted_text
 
     code, failed_raw, err = _run(
         "interfaces",
@@ -1981,7 +1991,10 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
         "json",
     )
     assert code == EXIT_FAILED and err == ""
-    assert json.loads(failed_raw)["gap_check"]["status"] == "fail"
+    failed_payload = json.loads(failed_raw)
+    assert failed_payload["gap_check"]["status"] == "fail"
+    assert failed_payload["assembly_scorecard"]["status"] == "fail"
+    assert failed_payload["assembly_scorecard"]["entries"][-1]["name"] == "planar gap seal_gap"
 
     code, out, err = _run(
         "interfaces",
@@ -2016,6 +2029,7 @@ def test_interfaces_scores_positive_solid_interference(tmp_path):
     assert interference["center_mm"] == pytest.approx([0, 0, 2.5])
     assert candidates["interference_scorecard"]["status"] == "fail"
     assert candidates["interference_scorecard"]["entries"][0]["status"] == "fail"
+    assert json.loads(raw)["assembly_scorecard"]["status"] == "fail"
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -2036,6 +2050,7 @@ def test_interfaces_scores_positive_solid_interference(tmp_path):
     code, text, err = _run("interfaces", str(step))
     assert code == EXIT_FAILED and err == ""
     assert "assembly interference: FAIL" in text
+    assert "assembly scorecard: FAIL  governing solid interference" in text
     assert "overlap 2000 mm³  center (0, 0, 2.5) mm" in text
 
     touching = _write_interference_step(tmp_path / "touching.step", center_z=15)
@@ -2044,6 +2059,7 @@ def test_interfaces_scores_positive_solid_interference(tmp_path):
     assert code == EXIT_OK and err == ""
     assert not touching_candidates["solid_interferences"]
     assert touching_candidates["interference_scorecard"]["status"] == "pass"
+    assert json.loads(touching_raw)["assembly_scorecard"]["status"] == "pass"
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
