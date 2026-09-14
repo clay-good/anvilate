@@ -618,15 +618,17 @@ mating.step: 6 planar interface candidates
 Face, pattern, and (for a multi-solid file) solid IDs are hashes of rounded measured
 geometry, so re-importing unchanged geometry returns the same identities without depending
 on kernel face or solid order. Every candidate from a multi-solid file names its `solid_id`,
-and a confirmed result preserves it. A single-solid result omits the field, preserving the
-existing JSON shape. The JSON also carries the source file's SHA-256 digest and every hole
-center. A successful scan exits 0 even when it finds no regular pattern; that is a completed
-measurement, not a passing engineering verdict.
+and a confirmed result preserves it. The `solids` collection gives each ID's measured volume,
+centroid, and axis-aligned minimum and maximum bounds, making opaque IDs recognizable without
+trusting STEP labels. A single-solid result omits both the collection and per-face field,
+preserving the existing JSON shape. The JSON also carries the source file's SHA-256 digest
+and every hole center. A successful scan exits 0 even when it finds no regular pattern; that
+is a completed measurement, not a passing engineering verdict.
 
 For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
-ID with `--solid` to list and accept candidates from that solid only. An unknown ID is
-refused with the available IDs, and a single-solid input tells you to omit the filter. A
-pattern belonging to another solid cannot be accepted through a filtered scan.
+ID with `--solid` to return its summary and list and accept candidates from that solid only.
+An unknown ID is refused with the available IDs, and a single-solid input tells you to omit
+the filter. A pattern belonging to another solid cannot be accepted through a filtered scan.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

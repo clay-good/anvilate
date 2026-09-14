@@ -167,6 +167,7 @@ geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.RenderedViewport
 geometry.StepInterfaceCandidates
+geometry.StepSolidCandidate
 geometry.StepValidationProperties
 geometry.UnsupportedGeometry
 geometry.ViewportImage

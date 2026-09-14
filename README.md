@@ -182,10 +182,11 @@ anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
 
 The command imports every valid positive-volume solid, lists stable planar-face candidates,
 and fits regular equal-diameter through holes to pitch circles from shared B-Rep topology.
-Multi-solid files carry a geometry-derived `solid_id` on every face and confirmed result;
-single-solid JSON remains unchanged. After discovery, `--solid` narrows inspection and
-acceptance to one exact ID; an unknown ID is refused with the available choices. Its output
-is a proposal only. Creating a contract
+Multi-solid files carry a geometry-derived `solid_id` on every face and confirmed result,
+plus a summary of each solid's measured volume, centroid, and axis-aligned bounds so the ID
+can be mapped back to a component. Single-solid JSON remains unchanged. After discovery,
+`--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
+refused with the available choices. Its output is a proposal only. Creating a contract
 requires the exact pattern ID, a semantic mating-plane tag, and a named confirmer; the result
 keeps the STEP digest, solid identity, and candidate IDs beside the generated
 `InterfaceContract`. That contract carries a right-handed source frame and every
@@ -270,7 +271,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,606 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,608 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

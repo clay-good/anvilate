@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import re
 from hashlib import sha256
+from math import pi
 from types import MappingProxyType
 from xml.etree import ElementTree
 
@@ -748,6 +749,15 @@ def test_step_interface_detection_enumerates_multi_solid_interfaces_with_stable_
 
     assert len(detected.planar_faces) == 12
     assert None not in solid_ids and len(solid_ids) == 2
+    assert len(detected.solids) == 2
+    assert sorted(solid.volume_mm3 for solid in detected.solids) == pytest.approx(
+        sorted((8_000, 80_000 - 4 * pi * 5**2 * 10))
+    )
+    assert detected.solids == reversed_detected.solids
+    plate_summary = max(detected.solids, key=lambda solid: solid.volume_mm3)
+    assert plate_summary.center_mm == pytest.approx((0, 0, 5))
+    assert plate_summary.bounds_min_mm == pytest.approx((-50, -40, 0))
+    assert plate_summary.bounds_max_mm == pytest.approx((50, 40, 10))
     assert solid_ids == {face.solid_id for face in reversed_detected.planar_faces}
     assert {face.id for face in detected.planar_faces} == {
         face.id for face in reversed_detected.planar_faces
@@ -769,6 +779,7 @@ def test_single_solid_interface_output_does_not_gain_a_solid_id(tmp_path):
 
     dumped = detected.model_dump(mode="json", exclude_unset=True)
 
+    assert "solids" not in dumped
     assert all("solid_id" not in face for face in dumped["planar_faces"])
 
 

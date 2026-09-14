@@ -1028,9 +1028,10 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 )
             detected = detected.model_copy(
                 update={
+                    "solids": tuple(solid for solid in detected.solids if solid.id == args.solid),
                     "planar_faces": tuple(
                         face for face in detected.planar_faces if face.solid_id == args.solid
-                    )
+                    ),
                 }
             )
         accepted = (
@@ -1063,6 +1064,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         return EXIT_OK
 
     print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
+    for solid in detected.solids:
+        center = ", ".join(f"{value:g}" for value in solid.center_mm)
+        minimum = ", ".join(f"{value:g}" for value in solid.bounds_min_mm)
+        maximum = ", ".join(f"{value:g}" for value in solid.bounds_max_mm)
+        print(
+            f"  {solid.id}  volume {solid.volume_mm3:g} mm³  center ({center}) mm  "
+            f"bounds ({minimum})–({maximum}) mm",
+            file=out,
+        )
     for face in detected.planar_faces:
         solid = "" if face.solid_id is None else f"  solid {face.solid_id}"
         center = ", ".join(f"{value:g}" for value in face.center_mm)

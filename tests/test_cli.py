@@ -1620,6 +1620,7 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert payload["command"] == "interfaces"
     assert payload["path"] == str(step)
     assert "accepted" not in payload
+    assert "solids" not in payload["candidates"]
     assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
@@ -1634,14 +1635,17 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     pattern_id = patterned_face["hole_patterns"][0]["id"]
 
     assert code == EXIT_OK and err == ""
+    assert len(candidates["solids"]) == 2
     assert len({face["solid_id"] for face in candidates["planar_faces"]}) == 2
 
     code, selected_raw, err = _run(
         "interfaces", str(step), "--solid", patterned_face["solid_id"], "--format", "json"
     )
     selected_faces = json.loads(selected_raw)["candidates"]["planar_faces"]
+    selected_solids = json.loads(selected_raw)["candidates"]["solids"]
     assert code == EXIT_OK and err == ""
     assert len(selected_faces) == 6
+    assert [solid["id"] for solid in selected_solids] == [patterned_face["solid_id"]]
     assert {face["solid_id"] for face in selected_faces} == {patterned_face["solid_id"]}
 
     code, accepted_raw, err = _run(
@@ -1668,6 +1672,7 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     code, text, err = _run("interfaces", str(step), "--solid", patterned_face["solid_id"])
     assert code == EXIT_OK and err == ""
     assert "  solid solid-" in text
+    assert "  volume 76858.4 mm³" in text
     assert "6 planar interface candidates" in text
 
 

@@ -50,6 +50,7 @@ __all__ = [
     "RenderedViewport",
     "StepValidationProperties",
     "StepInterfaceCandidates",
+    "StepSolidCandidate",
     "UnsupportedGeometry",
     "ViewportImage",
     "build_base_plate",
@@ -262,11 +263,37 @@ class PlanarInterfaceCandidate(StatableModel):
     locating_features: tuple[CircularFeatureCandidate, ...] = ()
 
 
+class StepSolidCandidate(StatableModel):
+    """One imported solid identified by deterministic measured geometry."""
+
+    id: Named
+    volume_mm3: Annotated[FiniteFloat, Field(gt=0)]
+    center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    bounds_min_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    bounds_max_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+    @model_validator(mode="after")
+    def _bounds_contain_the_center(self) -> StepSolidCandidate:
+        if any(
+            low > high for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
+        ):
+            raise ValueError("solid bounds minimum must not exceed its maximum")
+        if any(
+            center < low or center > high
+            for center, low, high in zip(
+                self.center_mm, self.bounds_min_mm, self.bounds_max_mm, strict=True
+            )
+        ):
+            raise ValueError("solid bounds must contain its center")
+        return self
+
+
 class StepInterfaceCandidates(StatableModel):
     """Deterministic interface candidates measured from one imported STEP part."""
 
     source_name: Named
     source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    solids: tuple[StepSolidCandidate, ...] = ()
     planar_faces: tuple[PlanarInterfaceCandidate, ...]
     warnings: tuple[str, ...] = ()
 
@@ -413,14 +440,14 @@ def _point_along(origin: _Point3D, direction: _Point3D, distance: float) -> _Poi
     )
 
 
-def _solid_signature(solid: Any) -> dict[str, object]:
+def _solid_measurements(solid: Any) -> tuple[float, _Point3D, _Point3D, _Point3D]:
     bounds = solid.bounding_box()
-    return {
-        "volume": round(float(solid.volume), 9),
-        "center": _rounded_point(_coordinates(solid.center())),
-        "minimum": _rounded_point(_coordinates(bounds.min)),
-        "maximum": _rounded_point(_coordinates(bounds.max)),
-    }
+    return (
+        round(float(solid.volume), 9),
+        _rounded_point(_coordinates(solid.center())),
+        _rounded_point(_coordinates(bounds.min)),
+        _rounded_point(_coordinates(bounds.max)),
+    )
 
 
 def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
@@ -469,16 +496,39 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         raise GeometryError(
             f"STEP interface detection needs valid positive-volume solids; found {len(solids)}"
         )
-    signatures = [_solid_signature(solid) for solid in solids]
-    if len({_candidate_id("solid", signature) for signature in signatures}) != len(solids):
+    records = []
+    for solid in solids:
+        volume, center, minimum, maximum = _solid_measurements(solid)
+        signature = {
+            "volume": volume,
+            "center": center,
+            "minimum": minimum,
+            "maximum": maximum,
+        }
+        records.append((_candidate_id("solid", signature), solid, volume, center, minimum, maximum))
+    if len({record[0] for record in records}) != len(solids):
         raise GeometryError(
             "STEP interface detection cannot distinguish coincident solids with identical "
             "measured geometry"
         )
     solid_ids = {
-        _candidate_id("solid", signature): solid
-        for signature, solid in zip(signatures, solids, strict=True)
+        solid_id: solid for solid_id, solid, _volume, _center, _minimum, _maximum in records
     }
+    solid_candidates = tuple(
+        sorted(
+            (
+                StepSolidCandidate(
+                    id=solid_id,
+                    volume_mm3=volume,
+                    center_mm=center,
+                    bounds_min_mm=minimum,
+                    bounds_max_mm=maximum,
+                )
+                for solid_id, _solid, volume, center, minimum, maximum in records
+            ),
+            key=lambda candidate: candidate.id,
+        )
+    )
 
     planar = [face for face in shape.faces() if face.geom_type.name == "PLANE"]
     planes = [
@@ -668,16 +718,19 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             candidate.id,
         )
     )
-    return StepInterfaceCandidates(
-        source_name=path.name,
-        source_sha256=sha256(source_bytes).hexdigest(),
-        planar_faces=tuple(candidates),
-        warnings=(
+    result_data = {
+        "source_name": path.name,
+        "source_sha256": sha256(source_bytes).hexdigest(),
+        "planar_faces": tuple(candidates),
+        "warnings": (
             "candidates are measured suggestions only; confirm one before creating an "
             "interface contract",
             "this detector does not yet classify nested blind steps or nonconcentric locators",
         ),
-    )
+    }
+    if len(solids) > 1:
+        result_data["solids"] = solid_candidates
+    return StepInterfaceCandidates.model_validate(result_data)
 
 
 def confirm_step_interface(
