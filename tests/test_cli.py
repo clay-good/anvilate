@@ -139,7 +139,8 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     # `status` is the run-level verdict the text summary prints; it joined `specs` when the
     # payload stopped dropping the two conclusions the text rendering carries. The keys are
     # asserted exactly rather than by membership, so a third cannot appear unremarked.
-    assert sorted(payload) == ["specs", "status"] and len(payload["specs"]) == 1
+    assert sorted(payload) == ["command", "schema", "schema_version", "specs", "status"]
+    assert len(payload["specs"]) == 1
     entry = payload["specs"][0]
     assert sorted(entry) == ["governing", "name", "path", "scorecard", "status"]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
@@ -395,7 +396,15 @@ def test_export_json_is_the_bundle_document(spec_file):
     # A list whatever the count, the same shape `check --format json` uses.
     # `status` is the run-level roll-up, which is also the exit code. Keys asserted
     # exactly rather than by membership, so a third cannot appear unremarked.
-    assert sorted(payload) == ["bundles", "status"] and len(payload["bundles"]) == 1
+    assert sorted(payload) == [
+        "artifact",
+        "bundles",
+        "command",
+        "schema",
+        "schema_version",
+        "status",
+    ]
+    assert len(payload["bundles"]) == 1
     entry = payload["bundles"][0]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
     assert entry["bundle"]["status"] == "not_evaluated"
@@ -500,6 +509,56 @@ def test_the_qif_json_format_carries_the_document_and_its_digest(tmp_path):
     assert entry["format"] == "qif" and entry["name"] == "padeye"
     assert entry["qif"].startswith("<?xml")
     assert entry["sha256"] == hashlib.sha256(entry["qif"].encode("utf-8")).hexdigest()
+
+
+def test_every_machine_readable_result_validates_against_the_published_contract(
+    spec_file, spec_pair, envelope, tmp_path
+):
+    """One released schema covers every JSON-producing path, using real command results.
+
+    Merely putting a version field in the payload would name a contract that could drift
+    away from what the commands actually write. Validation is the other half: each variant
+    is exercised here and unknown top-level or nested fields are rejected by the models that
+    generated the checked-in artifact.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    from anvilate._cli_output import CLI_OUTPUT_SCHEMA_ID, CLI_OUTPUT_SCHEMA_VERSION
+
+    qif_spec = tmp_path / "lug.yaml"
+    qif_spec.write_text(_LUG_SPEC, encoding="utf-8")
+    before, after = spec_pair
+    invocations = (
+        ("check", "check", "--format", "json", str(spec_file)),
+        ("export", "export", "--format", "json", str(spec_file)),
+        (
+            "export",
+            "export",
+            "--artifact",
+            "qif",
+            "--format",
+            "json",
+            str(qif_spec),
+        ),
+        ("verify", *_verify_args(envelope), "--format", "json"),
+        ("diff", "diff", "--format", "json", str(before), str(after)),
+    )
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    validator = jsonschema.Draft202012Validator(schema)
+
+    for command, *arguments in invocations:
+        _code, raw, error = _run(*arguments)
+        assert raw, (arguments, error)
+        payload = json.loads(raw)
+        assert payload["schema"] == CLI_OUTPUT_SCHEMA_ID
+        assert payload["schema_version"] == CLI_OUTPUT_SCHEMA_VERSION
+        assert payload["command"] == command
+        assert not list(validator.iter_errors(payload)), arguments
+        assert list(validator.iter_errors({**payload, "unexpected": True})), (
+            "the published variant accepts an undocumented top-level field",
+            arguments,
+        )
 
 
 def test_the_artifact_list_is_the_mcp_tools_own():
@@ -1134,7 +1193,18 @@ def test_the_json_diff_carries_every_section_on_every_run(spec_pair):
     out to be empty — the rule the text rendering already follows by printing `GEOMETRY` with
     nothing under it."""
     before, after = spec_pair
-    sections = {"before", "after", "spec", "verdict", "checks", "geometry", "regression"}
+    sections = {
+        "schema",
+        "schema_version",
+        "command",
+        "before",
+        "after",
+        "spec",
+        "verdict",
+        "checks",
+        "geometry",
+        "regression",
+    }
     for arguments in ((before, before), (before, after)):
         _code, out, _err = _run("diff", "--format", "json", *[str(p) for p in arguments])
         payload = json.loads(out)

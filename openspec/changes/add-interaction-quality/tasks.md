@@ -24,6 +24,8 @@
 
 - [ ] 3.1 TTY detection, `NO_COLOR`, dumb terminals, width awareness, ASCII fallback
 - [ ] 3.2 Machine-readable output on every command with a stable, versioned schema
+      — completed results from all five backed JSON paths now carry and validate against
+      frozen `cli-output` 1.0.0; bad-request and unbuilt refusals still need JSON forms
 - [ ] 3.3 Exit codes: success, refusal, failed verdict, internal error — distinct and
       documented
 - [ ] 3.4 Progress to stderr so stdout stays pipeable

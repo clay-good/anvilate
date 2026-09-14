@@ -13,6 +13,7 @@ heard of anvilate.
 | [`docs/api/schemas/design-spec.schema.json`](api/schemas/design-spec.schema.json) | the typed part description the pipeline consumes | the same number a spec file states in `anvilate_spec` |
 | [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `SCORECARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json) | every layer's contribution for one part, the roll-up, the scorecard and the spec | `BUNDLE_SCHEMA_VERSION` |
+| [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `check`, `export`, `verify`, and `diff` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and
 `test_the_contract_tables_versions_are_the_constants_own` holds them to the module. This row
@@ -169,6 +170,29 @@ than a runtime one, because it checks what Anvilate emits rather than anything A
 needs to run. CI installs it, so both the meta-schema check and a round trip — a scorecard
 the library actually produced, validated against the published contract — run on every push
 to `main` and on every pull request, rather than skipping the way an opt-in check would.
+
+## The CLI identifies its contract on the wire
+
+Every completed `--format json` result carries the same three fields before its
+command-specific content:
+
+```json
+{
+  "schema": "https://anvilate.dev/schemas/cli-output/1.0.0.json",
+  "schema_version": "1.0.0",
+  "command": "check"
+}
+```
+
+The schema is a closed union of five exact result variants: `check`, evidence-bundle
+export, QIF export, `verify`, and `diff`. The export variants also carry `artifact`, so a
+reader never has to infer whether `documents` or `bundles` should be present. The contract
+is generated from the wire models, checked against real output from all five paths, and
+frozen under `released/` by the same two-part drift gate as the other contracts.
+
+This release covers completed command results. Machine-readable bad-request and unbuilt
+refusals remain the unfinished half of interaction-quality task 3.2; their current contract
+is the documented exit code plus stderr remedy.
 
 ## What is not published as a schema artifact
 

@@ -30,6 +30,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -263,10 +264,30 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "design-spec.schema.json": spec_json_schema(),
         "scorecard.schema.json": scorecard_json_schema(),
         "evidence-bundle.schema.json": bundle_json_schema(),
+        "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema
             for tag, schema in element_json_schemas().items()
         },
+    }
+
+
+def cli_output_json_schema() -> dict[str, Any]:
+    """Every completed ``anvilate --format json`` result as one union contract."""
+    from ._cli_output import CLI_OUTPUT_SCHEMA_ID
+    from ._cli_output import cli_output_json_schema as generated
+
+    schema = generated()
+    return {
+        "$schema": JSON_SCHEMA_DIALECT,
+        "$id": CLI_OUTPUT_SCHEMA_ID,
+        "title": "Anvilate CLI output",
+        "description": (
+            "Every completed machine-readable Anvilate CLI result. Generated from "
+            "anvilate._cli_output.CliOutput."
+        ),
+        "x-anvilate-version": CLI_OUTPUT_SCHEMA_VERSION,
+        **{key: value for key, value in schema.items() if key not in {"title"}},
     }
 
 

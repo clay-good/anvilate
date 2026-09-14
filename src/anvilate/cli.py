@@ -65,6 +65,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, TextIO
 
+from ._cli_output import machine_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -400,7 +401,10 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
         after_path=args.after,
     )
     if args.format == "json":
-        print(json.dumps(document, indent=2, sort_keys=True), file=out)
+        print(
+            json.dumps(machine_document("diff", document), indent=2, sort_keys=True),
+            file=out,
+        )
     else:
         print(_render_diff(document), file=out)
 
@@ -813,12 +817,15 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
         # secret proves the envelope was not altered, not who made it. And the requirement
         # asks this command to report the toolchain the envelope attests, which was true of
         # one of its two renderings.
-        payload = {
-            **report.model_dump(mode="json"),
-            "status": report.status.value,
-            "attested": report.attested,
-            **_attested_toolchain(statement),
-        }
+        payload = machine_document(
+            "verify",
+            {
+                **report.model_dump(mode="json"),
+                "status": report.status.value,
+                "attested": report.attested,
+                **_attested_toolchain(statement),
+            },
+        )
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
         print(_render_verification(report, statement), file=out)
@@ -978,19 +985,23 @@ def _qif(results, *, worst, fmt: str, out, err) -> int:
         )
 
     if fmt == "json":
-        payload = {
-            "status": worst.value,
-            "documents": [
-                {
-                    "path": str(path),
-                    "name": spec.name,
-                    "format": "qif",
-                    "qif": document,
-                    "sha256": sha256_hex(document.encode("utf-8")),
-                }
-                for path, spec, document in documents
-            ],
-        }
+        payload = machine_document(
+            "export",
+            {
+                "status": worst.value,
+                "documents": [
+                    {
+                        "path": str(path),
+                        "name": spec.name,
+                        "format": "qif",
+                        "qif": document,
+                        "sha256": sha256_hex(document.encode("utf-8")),
+                    }
+                    for path, spec, document in documents
+                ],
+            },
+            artifact="qif",
+        )
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
         for index, (path, _spec, document) in enumerate(documents):
@@ -1059,13 +1070,17 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
         return _qif(results, worst=worst, fmt=args.format, out=out, err=err)
 
     if args.format == "json":
-        payload = {
-            "status": worst.value,
-            "bundles": [
-                {"path": str(path), "name": spec.name, "bundle": sections.to_document_dict()}
-                for path, spec, sections in results
-            ],
-        }
+        payload = machine_document(
+            "export",
+            {
+                "status": worst.value,
+                "bundles": [
+                    {"path": str(path), "name": spec.name, "bundle": sections.to_document_dict()}
+                    for path, spec, sections in results
+                ],
+            },
+            artifact="evidence-bundle",
+        )
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
         for index, (path, _spec, sections) in enumerate(results):
@@ -1295,23 +1310,26 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
         # `Scorecard.governing()` at every call site. Both are always present, `governing`
         # as null when there is none — a card with nothing to govern and a payload missing
         # the key must not look the same, which is the rule the text line already follows.
-        payload = {
-            "status": _worst_status(card for _path, _spec, card in results).value,
-            "specs": [
-                {
-                    "path": str(path),
-                    "name": spec.name,
-                    "status": card.status.value,
-                    "governing": (
-                        None
-                        if (governing := card.governing()) is None
-                        else {"name": governing.name, "status": governing.status.value}
-                    ),
-                    "scorecard": card.model_dump(mode="json"),
-                }
-                for path, spec, card in results
-            ],
-        }
+        payload = machine_document(
+            "check",
+            {
+                "status": _worst_status(card for _path, _spec, card in results).value,
+                "specs": [
+                    {
+                        "path": str(path),
+                        "name": spec.name,
+                        "status": card.status.value,
+                        "governing": (
+                            None
+                            if (governing := card.governing()) is None
+                            else {"name": governing.name, "status": governing.status.value}
+                        ),
+                        "scorecard": card.model_dump(mode="json"),
+                    }
+                    for path, spec, card in results
+                ],
+            },
+        )
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
         # The path is printed alongside the name whenever more than one spec ran. Two

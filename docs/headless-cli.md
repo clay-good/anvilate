@@ -307,10 +307,13 @@ A check that could not run is listed too and labelled as such. It blocks exactly
 and calling it a failure would be a different claim. A passing card writes nothing to
 stderr at all.
 
-`--format json` prints `{"specs": [...]}` — one object per spec with its path, its name and
-its whole scorecard. A list whatever the count, because a shape that changes with the number
-of arguments is a shape every caller has to branch on, and the branch is wrong the first time
-a directory happens to hold exactly one spec.
+`--format json` prints a versioned document with `{"command": "check", "specs": [...]}` —
+one object per spec with its path, its name and its whole scorecard. A list whatever the
+count, because a shape that changes with the number of arguments is a shape every caller has
+to branch on, and the branch is wrong the first time a directory happens to hold exactly one
+spec. Every JSON-producing command also carries `schema` and `schema_version`; all five
+result shapes are published at
+[`cli-output.schema.json`](api/schemas/cli-output.schema.json).
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -375,7 +378,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.0.0.json",
+ "schema_version": "1.0.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -403,6 +407,12 @@ and the exit code are all read off it.
 `governing` is `null` rather than absent on a card with nothing to govern — an ordinary card
 of passing checks that carry no safety factor — because a missing key and a card with
 nothing to govern must not look the same. That is the rule the text line already followed.
+
+The published schema is a closed union: unknown fields and fields from the wrong command
+variant do not validate. Evidence and QIF export documents additionally carry `artifact`,
+so a script can select the variant without inspecting its payload. The schema is generated,
+checked against real results from every backed JSON path, and frozen at each version. A
+changed shape under the same version therefore fails CI.
 
 ### An unbuilt operation is refused however it is invoked
 
@@ -811,4 +821,3 @@ what will say when to change it back: it asks the index whether the distribution
 fails **either way round** — if `anvilate` is published while the action still installs from
 git, and if the action names PyPI while the index has nothing. A gate that fired in only one
 direction would leave this exact state sitting unnoticed a second time.
-
