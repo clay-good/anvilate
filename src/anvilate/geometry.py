@@ -46,6 +46,7 @@ __all__ = [
     "GeometryUnavailable",
     "ConfirmedStepInterface",
     "ConfirmedPlanarContact",
+    "ConfirmedCylindricalMate",
     "CircularFeatureCandidate",
     "CylindricalMatingCandidate",
     "HolePatternCandidate",
@@ -63,6 +64,7 @@ __all__ = [
     "build_spec",
     "confirm_step_interface",
     "confirm_planar_contact",
+    "confirm_cylindrical_mate",
     "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
@@ -375,6 +377,38 @@ class ConfirmedPlanarContact(StatableModel):
     second_face_candidate_id: Named
     overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
     confirmed_by: Named
+
+
+class ConfirmedCylindricalMate(StatableModel):
+    """One cylindrical mating candidate accepted by a named person."""
+
+    source_name: Named
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    mate_candidate_id: Named
+    name: Named
+    bore_solid_id: Named
+    bore_surface_id: Named
+    shaft_solid_id: Named
+    shaft_surface_id: Named
+    bore_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    shaft_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    diametral_clearance_mm: FiniteFloat
+    axial_engagement_mm: Annotated[FiniteFloat, Field(gt=0)]
+    axis_origin_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    axis_direction: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    confirmed_by: Named
+
+    @model_validator(mode="after")
+    def _preserves_consistent_geometry(self) -> ConfirmedCylindricalMate:
+        if self.bore_solid_id == self.shaft_solid_id:
+            raise ValueError("a confirmed cylindrical mate must join two different solids")
+        expected = self.bore_diameter_mm - self.shaft_diameter_mm
+        if abs(self.diametral_clearance_mm - expected) > 1e-9:
+            raise ValueError("diametral clearance must equal bore diameter minus shaft diameter")
+        axis_length = sqrt(sum(component**2 for component in self.axis_direction))
+        if abs(axis_length - 1) > 1e-9:
+            raise ValueError("confirmed cylindrical mate axis_direction must be a unit vector")
+        return self
 
 
 _Point3D = tuple[float, float, float]
@@ -1004,6 +1038,46 @@ def confirm_planar_contact(
         second_solid_id=contact.second_solid_id,
         second_face_candidate_id=contact.second_face_candidate_id,
         overlap_area_mm2=contact.overlap_area_mm2,
+        confirmed_by=confirmer,
+    )
+
+
+def confirm_cylindrical_mate(
+    candidates: StepInterfaceCandidates,
+    *,
+    mate_id: str,
+    name: str,
+    confirmed_by: str,
+) -> ConfirmedCylindricalMate:
+    """Accept one exact cylindrical mate without judging its fit."""
+    confirmer = confirmed_by.strip()
+    if not confirmer:
+        raise GeometryError("accepting a cylindrical mate names the person confirming it")
+    mate_name = name.strip()
+    if not mate_name:
+        raise GeometryError("an accepted cylindrical mate has a non-blank name")
+    matches = [mate for mate in candidates.cylindrical_mates if mate.id == mate_id]
+    if len(matches) != 1:
+        available = ", ".join(mate.id for mate in candidates.cylindrical_mates) or "none"
+        raise GeometryError(
+            f"cylindrical mate {mate_id!r} was not found exactly once; available: {available}"
+        )
+    mate = matches[0]
+    return ConfirmedCylindricalMate(
+        source_name=candidates.source_name,
+        source_sha256=candidates.source_sha256,
+        mate_candidate_id=mate.id,
+        name=mate_name,
+        bore_solid_id=mate.bore_solid_id,
+        bore_surface_id=mate.bore_surface_id,
+        shaft_solid_id=mate.shaft_solid_id,
+        shaft_surface_id=mate.shaft_surface_id,
+        bore_diameter_mm=mate.bore_diameter_mm,
+        shaft_diameter_mm=mate.shaft_diameter_mm,
+        diametral_clearance_mm=mate.diametral_clearance_mm,
+        axial_engagement_mm=mate.axial_engagement_mm,
+        axis_origin_mm=mate.axis_origin_mm,
+        axis_direction=mate.axis_direction,
         confirmed_by=confirmer,
     )
 

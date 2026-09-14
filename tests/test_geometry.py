@@ -25,6 +25,7 @@ from anvilate.geometry import (  # noqa: E402
     build_cover_plate,
     build_spec,
     build_transmission_shaft,
+    confirm_cylindrical_mate,
     confirm_planar_contact,
     confirm_step_interface,
     detect_step_interfaces,
@@ -886,6 +887,27 @@ def test_step_interface_detection_measures_coaxial_bore_and_shaft_mates(tmp_path
     assert not offset.cylindrical_mates
     assert not disengaged.cylindrical_mates
     assert any("do not judge fit" in warning for warning in clearance.warnings)
+
+    confirmed = confirm_cylindrical_mate(
+        clearance,
+        mate_id=mate.id,
+        name="bearing_journal",
+        confirmed_by="R. Engineer",
+    )
+    assert confirmed.source_sha256 == clearance.source_sha256
+    assert confirmed.mate_candidate_id == mate.id
+    assert confirmed.name == "bearing_journal"
+    assert confirmed.diametral_clearance_mm == pytest.approx(0.2)
+    assert confirmed.axial_engagement_mm == pytest.approx(10)
+    assert confirmed.confirmed_by == "R. Engineer"
+
+    with pytest.raises(GeometryError, match="available: cylindrical-mate-"):
+        confirm_cylindrical_mate(
+            clearance,
+            mate_id="cylindrical-mate-absent",
+            name="bearing_journal",
+            confirmed_by="R. Engineer",
+        )
 
 
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():

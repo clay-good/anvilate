@@ -1774,6 +1774,42 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     assert "cylindrical-mate-" in text
     assert "clearance 0.2 mm  engagement 10 mm" in text
 
+    code, accepted_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-mate",
+        mate["id"],
+        "--name",
+        "bearing_journal",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+    accepted_payload = json.loads(accepted_raw)
+    accepted = accepted_payload["accepted_mate"]
+    assert code == EXIT_OK and err == ""
+    assert accepted["source_sha256"] == candidates["source_sha256"]
+    assert accepted["mate_candidate_id"] == mate["id"]
+    assert accepted["bore_surface_id"] == mate["bore_surface_id"]
+    assert accepted["shaft_surface_id"] == mate["shaft_surface_id"]
+    assert accepted["diametral_clearance_mm"] == pytest.approx(0.2)
+    assert accepted["confirmed_by"] == "R. Engineer"
+    assert "accepted" not in accepted_payload and "accepted_contact" not in accepted_payload
+
+    code, accepted_text, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-mate",
+        mate["id"],
+        "--name",
+        "bearing_journal",
+        "--confirmed-by",
+        "R. Engineer",
+    )
+    assert code == EXIT_OK and err == ""
+    assert f"accepted cylindrical mate: bearing_journal ({mate['id']})" in accepted_text
+
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
     step = _write_four_hole_step(tmp_path / "mating.step")
@@ -1873,13 +1909,24 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
     code, out, err = _run(
         "interfaces",
         str(step),
+        "--accept-mate",
+        "cylindrical-mate-any",
+        "--name",
+        "bearing_journal",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "accepting a cylindrical mate requires" in err and "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
         "--accept",
         "pattern-any",
         "--accept-contact",
         "contact-any",
     )
     assert code == EXIT_BAD_REQUEST and out == ""
-    assert "--accept and --accept-contact are mutually exclusive" in err
+    assert "--accept, --accept-contact, and --accept-mate are mutually exclusive" in err
 
 
 def test_interfaces_requires_and_carries_an_exact_locating_feature(tmp_path):

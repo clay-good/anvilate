@@ -32,6 +32,7 @@ from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
 from .geometry import (
+    ConfirmedCylindricalMate,
     ConfirmedPlanarContact,
     ConfirmedStepInterface,
     GeometryMeasurement,
@@ -55,6 +56,7 @@ __all__ = [
     "GEOMETRY_SCHEMA_VERSION",
     "CONFIRMED_INTERFACE_SCHEMA_VERSION",
     "CONFIRMED_CONTACT_SCHEMA_VERSION",
+    "CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
@@ -62,6 +64,7 @@ __all__ = [
     "geometry_json_schema",
     "confirmed_interface_json_schema",
     "confirmed_contact_json_schema",
+    "confirmed_cylindrical_mate_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
     "viewport_json_schema",
@@ -111,6 +114,9 @@ CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"
 
 # One measured planar contact accepted by a named person without an invented hole pattern.
 CONFIRMED_CONTACT_SCHEMA_VERSION = "1.0.0"
+
+# One measured cylindrical mate accepted by a named person without a fit verdict.
+CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION = "1.0.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -226,6 +232,21 @@ def confirmed_contact_json_schema() -> dict[str, Any]:
             "its source digest and solid/face endpoints, a semantic name, overlap area, and "
             "the named person who accepted it. Generated from "
             "anvilate.geometry.ConfirmedPlanarContact."
+        ),
+    )
+
+
+def confirmed_cylindrical_mate_json_schema() -> dict[str, Any]:
+    """One exact cylindrical mate accepted by a named person."""
+    return _artifact(
+        ConfirmedCylindricalMate,
+        name="confirmed-cylindrical-mate",
+        version=CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION,
+        description=(
+            "Anvilate confirmed cylindrical mate: one exact measured bore/shaft candidate, "
+            "its source digest, endpoints, signed clearance, axial engagement, semantic name, "
+            "and the named person who accepted it without a fit verdict. Generated from "
+            "anvilate.geometry.ConfirmedCylindricalMate."
         ),
     )
 
@@ -395,6 +416,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "step-interface-candidates.schema.json": interface_candidates_json_schema(),
         "confirmed-step-interface.schema.json": confirmed_interface_json_schema(),
         "confirmed-planar-contact.schema.json": confirmed_contact_json_schema(),
+        "confirmed-cylindrical-mate.schema.json": confirmed_cylindrical_mate_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),

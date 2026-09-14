@@ -15,15 +15,20 @@ from pydantic import ConfigDict, Field, TypeAdapter
 from ._models import FrozenMap, Named, RevalidatedModel
 from .attestation import SignatureState
 from .bundle import BundleDocument
-from .geometry import ConfirmedPlanarContact, ConfirmedStepInterface, StepInterfaceCandidates
+from .geometry import (
+    ConfirmedCylindricalMate,
+    ConfirmedPlanarContact,
+    ConfirmedStepInterface,
+    StepInterfaceCandidates,
+)
 from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.19.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.20.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.19.0.json"]
-SchemaVersion = Literal["1.19.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.20.0.json"]
+SchemaVersion = Literal["1.20.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -266,6 +271,7 @@ class InterfacesOutput(_WireModel):
     candidates: StepInterfaceCandidates
     accepted: ConfirmedStepInterface | None = None
     accepted_contact: ConfirmedPlanarContact | None = None
+    accepted_mate: ConfirmedCylindricalMate | None = None
 
 
 CliOutput = (

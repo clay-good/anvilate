@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-mate`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested artifact was explicitly confirmed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -604,6 +604,8 @@ anvilate interfaces mating.step --format json
 anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
+anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
+  --name bearing_journal --confirmed-by "R. Engineer" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -651,7 +653,13 @@ for a later engineering decision.
 separate `accepted_contact` artifact retaining the source digest, endpoints, and overlap
 area. It does not emit an `InterfaceContract`, because that contract requires a hole pattern
 and inventing one would turn a truthful contact measurement into false interface geometry.
-Pattern and contact acceptance are mutually exclusive in one invocation.
+
+`--accept-mate` likewise requires one exact cylindrical mate ID, `--name`, and
+`--confirmed-by`. Its separate `accepted_mate` artifact preserves the source digest, both
+solid and surface IDs, diameters, signed clearance, axial engagement, and canonical axis.
+Confirmation records design intent; it still does not choose an ISO 286 designation or
+declare the measured fit acceptable. Pattern, contact, and cylindrical-mate acceptance are
+mutually exclusive in one invocation.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a
