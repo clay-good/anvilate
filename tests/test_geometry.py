@@ -251,6 +251,15 @@ def test_step_writer_restores_the_process_global_schema(tmp_path):
         Interface_Static.SetCVal_s("write.step.schema", original)
 
 
+def test_step_writer_refuses_an_unknown_schema_without_writing(tmp_path):
+    path = tmp_path / "base.step"
+
+    with pytest.raises(GeometryError, match="choose ap242 or ap214"):
+        write_step(build_base_plate(_plate()), path, authorization=_STEP_AUTH, schema="ap203")
+
+    assert not path.exists()
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     (

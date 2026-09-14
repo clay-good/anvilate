@@ -57,6 +57,7 @@ BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
+_AP214_SCHEMA = "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }"
 _GVP_RECOMMENDED_PRACTICE = (
     "CAx-IF Rec.Pracs.---Geometric and Assembly Validation Properties---4.6---2023-04-21"
 )
@@ -581,8 +582,13 @@ def _step_string(value: str) -> str:
     return value.replace("'", "''")
 
 
-def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
-    """Write AP242 with CAx-IF part-level properties and contain global settings."""
+def _write_step_shape(
+    built: BuiltGeometry,
+    path: Path,
+    *,
+    schema: Literal["ap242", "ap214"],
+) -> None:
+    """Write STEP with CAx-IF part-level properties and contain global settings."""
     try:
         from build123d import CenterOf
         from OCP.gp import gp_Pnt  # type: ignore[import-untyped]
@@ -632,8 +638,9 @@ def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
         STEPControl_Controller.Init_s()
         previous_schema = Interface_Static.CVal_s("write.step.schema")
         try:
-            if not Interface_Static.SetCVal_s("write.step.schema", "AP242DIS"):
-                raise GeometryError("the installed geometry kernel cannot select AP242")
+            setting = "AP242DIS" if schema == "ap242" else "AP214IS"
+            if not Interface_Static.SetCVal_s("write.step.schema", setting):
+                raise GeometryError(f"the installed geometry kernel cannot select {schema.upper()}")
             messenger = Message.DefaultMessenger_s()
             for printer in messenger.Printers():
                 printer.SetTraceLevel(Message_Gravity.Message_Fail)
@@ -760,11 +767,19 @@ def verify_step_integrity(path: Path) -> StepValidationProperties:
     return expected
 
 
-def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthorization) -> Path:
+def write_step(
+    built: BuiltGeometry,
+    path: Path,
+    *,
+    authorization: ExportAuthorization,
+    schema: Literal["ap242", "ap214"] = "ap242",
+) -> Path:
     """Write one authorized solid as deterministic, watermarked STEP and return its path."""
     if not built.is_valid:
         raise GeometryError("refusing to write invalid geometry")
-    _write_ap242_shape(built, path)
+    if schema not in {"ap242", "ap214"}:
+        raise GeometryError(f"unsupported STEP schema {schema!r}; choose ap242 or ap214")
+    _write_step_shape(built, path, schema=schema)
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as failure:
@@ -772,9 +787,10 @@ def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthori
         raise GeometryError(
             "STEP writer produced a non-UTF-8 file; refusing to release it"
         ) from failure
-    if _AP242_SCHEMA not in text:
+    expected_schema = _AP242_SCHEMA if schema == "ap242" else _AP214_SCHEMA
+    if expected_schema not in text:
         path.unlink(missing_ok=True)
-        raise GeometryError("STEP writer did not declare AP242; refusing to release it")
+        raise GeometryError(f"STEP writer did not declare {schema.upper()}; refusing to release it")
     descriptions = [
         "Open CASCADE Model",
         _GVP_RECOMMENDED_PRACTICE,

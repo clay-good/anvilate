@@ -65,7 +65,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Literal, TextIO
 
 from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
@@ -355,6 +355,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--unvalidated",
         action="store_true",
         help="write a conspicuously watermarked STEP when the scorecard does not pass",
+    )
+    build.add_argument(
+        "--ap214",
+        action="store_true",
+        help="use the explicit AP214 fallback for a legacy receiver (AP242 is the default)",
     )
     build.add_argument(
         "--force", action="store_true", help="replace an existing output file deliberately"
@@ -1665,7 +1670,8 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         return EXIT_BAD_REQUEST
 
     try:
-        write_step(built, args.output, authorization=authorization)
+        step_schema: Literal["ap242", "ap214"] = "ap214" if args.ap214 else "ap242"
+        write_step(built, args.output, authorization=authorization, schema=step_schema)
         digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     except OSError as failure:
         print(f"anvilate build: {failure}", file=err)
@@ -1690,6 +1696,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     else:
         print(f"{spec.name}: BUILT", file=out)
         print(f"  STEP          {args.output}", file=out)
+        print(f"  schema        {step_schema.upper()}", file=out)
         print(f"  pattern       {built.pattern}", file=out)
         print(f"  volume        {built.volume_mm3:g} mm³", file=out)
         print(f"  semantic faces {', '.join(sorted(built.faces))}", file=out)

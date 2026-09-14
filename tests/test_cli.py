@@ -1514,7 +1514,28 @@ def test_build_writes_a_valid_step_and_reports_the_artifact(tmp_path):
     assert "authorization  UNVALIDATED" in text
     step = output.read_text(encoding="utf-8")
     assert step.startswith("ISO-10303-21;")
+    assert "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF" in step
     assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in step
+
+
+def test_build_ap214_fallback_is_explicit_and_keeps_validation_properties(tmp_path):
+    pytest.importorskip("build123d")
+    from anvilate.geometry import verify_step_integrity
+
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+
+    code, text, err = _run(
+        "build", str(spec), "--output", str(output), "--unvalidated", "--ap214"
+    )
+
+    step = output.read_text(encoding="utf-8")
+    assert code == EXIT_OK and err == "" and "schema        AP214" in text
+    assert "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }" in step
+    assert "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF" not in step
+    assert step.count("'geometric validation property'") == 3
+    assert verify_step_integrity(output).volume_mm3 == pytest.approx(1_800_000)
 
 
 def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_path):

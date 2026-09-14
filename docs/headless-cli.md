@@ -11,7 +11,7 @@ shipped exits 4 naming that gap.
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
-| `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated` | a valid, watermarked STEP artifact was written |
+| `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -801,6 +801,9 @@ solid, and checks them at the CAx-IF v4.6 industry example thresholds before rel
 file. It refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a
 part failure. Unsupported element types exit 4 and name the pattern that has not shipped.
+AP242 is the default. `--ap214` is an explicit compatibility fallback for a legacy receiver;
+it retains the same validation properties, watermark, deterministic header, and integrity
+check.
 
 STEP is a CAD artifact, so building one is validation-gated. A passing scorecard produces a
 `VALIDATED` header. The checked-in geometry examples omit the required safety factor and

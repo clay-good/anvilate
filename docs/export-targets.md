@@ -13,6 +13,8 @@ properties, then verifies them against a fresh import before releasing the file.
 **not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain roadmap targets.
 The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
+AP242 is the default; local `anvilate build --ap214` is the explicit legacy fallback and
+retains the same properties and validation gate.
 
 ## What was confirmed
 
