@@ -122,6 +122,11 @@ def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20)
         shape = shape - Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
             Location((0, 0, 5))
         )
+    elif locator == "counterbore":
+        shape = shape - Cylinder(15, 3, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((0, 0, 7))
+        )
+        shape = shape - Cylinder(8, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
     elif locator == "boss":
         shape = shape + Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
             Location((0, 0, 10))
@@ -578,11 +583,16 @@ def test_an_interface_candidate_cannot_be_accepted_without_a_named_person(tmp_pa
 
 
 @pytest.mark.parametrize(
-    ("fixture", "kind", "extent"),
-    (("bore", "bore", 10), ("blind_bore", "bore", 5), ("boss", "boss", 5)),
+    ("fixture", "kind", "extent", "through_diameter"),
+    (
+        ("bore", "bore", 10, None),
+        ("blind_bore", "bore", 5, None),
+        ("boss", "boss", 5, None),
+        ("counterbore", "counterbore", 3, 16),
+    ),
 )
 def test_step_interface_detection_finds_and_confirms_a_concentric_locator(
-    tmp_path, fixture, kind, extent
+    tmp_path, fixture, kind, extent, through_diameter
 ):
     detected = detect_step_interfaces(
         _four_hole_step(tmp_path / f"with-{fixture}.step", locator=fixture)
@@ -597,6 +607,7 @@ def test_step_interface_detection_finds_and_confirms_a_concentric_locator(
     assert feature.kind == kind
     assert feature.diameter_mm == pytest.approx(30)
     assert feature.axial_extent_mm == pytest.approx(extent)
+    assert feature.through_diameter_mm == through_diameter
     accepted = confirm_step_interface(
         detected,
         pattern_id=face.hole_patterns[0].id,
@@ -609,6 +620,13 @@ def test_step_interface_detection_finds_and_confirms_a_concentric_locator(
     assert accepted.contract.locator.kind == kind
     assert accepted.contract.locator.diameter.to("mm").magnitude == pytest.approx(30)
     assert accepted.contract.locator.axial_extent.to("mm").magnitude == pytest.approx(extent)
+    if through_diameter is None:
+        assert accepted.contract.locator.through_diameter is None
+    else:
+        assert accepted.contract.locator.through_diameter is not None
+        assert accepted.contract.locator.through_diameter.to("mm").magnitude == pytest.approx(
+            through_diameter
+        )
 
 
 def test_step_interface_detection_does_not_call_an_off_center_boss_a_locator(tmp_path):
@@ -631,7 +649,7 @@ def test_step_interface_detection_does_not_call_an_off_center_boss_a_locator(tmp
     assert all(not face.locating_features for face in detected.planar_faces)
 
 
-def test_step_interface_detection_does_not_flatten_a_counterbore_into_a_simple_top_locator(
+def test_step_interface_detection_does_not_call_nested_blind_steps_a_counterbore(
     tmp_path,
 ):
     from build123d import Align, Box, Cylinder, Location, export_step
@@ -645,8 +663,10 @@ def test_step_interface_detection_does_not_flatten_a_counterbore_into_a_simple_t
     shape -= Cylinder(15, 3, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
         Location((0, 0, 7))
     )
-    shape -= Cylinder(8, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    path = tmp_path / "counterbore.step"
+    shape -= Cylinder(8, 4, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+        Location((0, 0, 3))
+    )
+    path = tmp_path / "nested-blind.step"
     export_step(shape, path)
 
     detected = detect_step_interfaces(path)

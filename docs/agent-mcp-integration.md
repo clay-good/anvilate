@@ -38,7 +38,8 @@ geometry and the remote tool surface has no approved delivery contract for that 
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest and candidate IDs retained beside it.
-An optional `--locator` selects an exact concentric through- or blind-bore or boss candidate; omission
+An optional `--locator` selects an exact concentric through-bore, blind-bore, boss, or
+counterbore candidate; omission
 leaves the contract's locator empty rather than guessing that a circular feature locates.
 
 Every task response also carries `_meta["dev.anvilate/progress"]` with `activity`,
@@ -91,7 +92,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 protocol: 2026-07-28
 server: anvilate
 tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact
-compile_spec output $ref: {"$ref": "https://anvilate.dev/schemas/design-spec/1.5.0.json"}
+compile_spec output $ref: {"$ref": "https://anvilate.dev/schemas/design-spec/1.6.0.json"}
 ```
 
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a

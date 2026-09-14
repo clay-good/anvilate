@@ -107,6 +107,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.6.0: counterbores retain both diameters
+
+The circular locator adds `counterbore`, which requires a through diameter smaller than its
+recess diameter; `axial_extent` is the recess depth. Detection only offers the stepped
+feature when exactly one smaller coaxial inward cylinder continues from the shoulder to the
+opposing exterior plane. Nested blind steps remain unclassified rather than guessed.
+
 ### Design Spec 1.5.0: a confirmed interface can carry its circular locator
 
 `InterfaceContract.locator` is an optional typed through/blind pilot bore or boss, with its diameter and

@@ -201,11 +201,12 @@ class InterfaceFrame(_Base):
 
 
 class CircularLocator(_Base):
-    """A concentric bore or boss that locates a mating interface."""
+    """A concentric bore, boss, or counterbore that locates a mating interface."""
 
-    kind: Literal["bore", "boss"]
+    kind: Literal["bore", "boss", "counterbore"]
     diameter: Length
     axial_extent: Length
+    through_diameter: Length | None = None
 
     @model_validator(mode="after")
     def _positive_dimensions(self) -> CircularLocator:
@@ -213,6 +214,14 @@ class CircularLocator(_Base):
             value: Quantity = getattr(self, field)
             if value.to("mm").magnitude <= 0:
                 raise ValueError(f"circular-locator {field} must be positive; got {value}")
+        if (self.kind == "counterbore") != (self.through_diameter is not None):
+            raise ValueError("only a counterbore locator carries through_diameter")
+        if self.through_diameter is not None:
+            through = self.through_diameter.to("mm").magnitude
+            if through <= 0 or through >= self.diameter.to("mm").magnitude:
+                raise ValueError(
+                    "a counterbore through diameter must be positive and smaller than its recess"
+                )
         return self
 
 
@@ -634,12 +643,13 @@ class AcceptanceCriteria(_Base):
 # element_params. 1.3.0 added constraints.max_safety_factor, the top of the target band an
 # OVER_MARGIN verdict is measured against. 1.4.0 added optional interface frames and
 # in-plane hole centers, preserving a measured pattern's clocking. 1.5.0 added an optional
-# concentric circular locator (pilot bore or boss). All additive, which is
+# concentric circular locator (pilot bore or boss). 1.6.0 extended that locator with a
+# counterbore kind and its required through diameter. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.5.0"
+SCHEMA_VERSION = "1.6.0"
 
 
 class DesignSpec(_Base):

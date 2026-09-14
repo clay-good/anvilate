@@ -620,6 +620,19 @@ def test_circular_locator_requires_positive_length_dimensions():
             diameter=Quantity.parse("0 mm"),
             axial_extent=Quantity.parse("10 mm"),
         )
+    with pytest.raises(ValidationError, match="only a counterbore locator"):
+        CircularLocator(
+            kind="counterbore",
+            diameter=Quantity.parse("30 mm"),
+            axial_extent=Quantity.parse("3 mm"),
+        )
+    with pytest.raises(ValidationError, match="smaller than its recess"):
+        CircularLocator(
+            kind="counterbore",
+            diameter=Quantity.parse("30 mm"),
+            axial_extent=Quantity.parse("3 mm"),
+            through_diameter=Quantity.parse("30 mm"),
+        )
 
 
 def test_hole_pattern_rejects_non_positive_dimensions():

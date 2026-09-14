@@ -185,10 +185,10 @@ proposal only. Creating a contract requires the exact pattern ID, a semantic mat
 tag, and a named confirmer; the result keeps the STEP digest and candidate IDs beside the
 generated `InterfaceContract`. That contract carries a right-handed source frame and every
 hole's in-plane center, preserving rectangular layouts and rotational clocking instead of
-reducing them to diameter, count, and size. Concentric through or blind pilot bores and
-locating bosses are offered as separate candidates and enter the contract only when their
-exact ID is confirmed. Counterbores and nonconcentric locators remain explicit detector
-limits; stepped geometry is not flattened into a false simple bore.
+reducing them to diameter, count, and size. Concentric through or blind pilot bores,
+locating bosses, and counterbores are offered as separate candidates and enter the contract
+only when their exact ID is confirmed. A counterbore preserves its recess diameter, depth,
+and through diameter; ambiguous nested blind steps and nonconcentric locators remain limits.
 
 ## What you can do today
 
@@ -264,7 +264,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,600 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,602 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

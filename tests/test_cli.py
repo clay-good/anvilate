@@ -1719,6 +1719,7 @@ def test_interfaces_requires_and_carries_an_exact_locating_feature(tmp_path):
         "kind": "bore",
         "diameter": {"magnitude": pytest.approx(30), "unit": "mm"},
         "axial_extent": {"magnitude": pytest.approx(10), "unit": "mm"},
+        "through_diameter": None,
     }
 
 

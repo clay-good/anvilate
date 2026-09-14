@@ -258,7 +258,7 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces.add_argument(
         "--locator",
         metavar="FEATURE_ID",
-        help="also accept this exact concentric pilot-bore or boss candidate",
+        help="also accept this exact concentric bore, boss, or counterbore candidate",
     )
 
     check = commands.add_parser(
@@ -1052,9 +1052,14 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 file=out,
             )
         for feature in face.locating_features:
+            through = (
+                ""
+                if feature.through_diameter_mm is None
+                else f", through ⌀{feature.through_diameter_mm:g} mm"
+            )
             print(
                 f"    {feature.id}  {feature.kind} ⌀{feature.diameter_mm:g} mm × "
-                f"{feature.axial_extent_mm:g} mm axial extent",
+                f"{feature.axial_extent_mm:g} mm axial extent{through}",
                 file=out,
             )
     for warning in detected.warnings:

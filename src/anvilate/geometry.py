@@ -232,13 +232,22 @@ class HolePatternCandidate(StatableModel):
 
 
 class CircularFeatureCandidate(StatableModel):
-    """One concentric bore or boss that can locate a mating interface."""
+    """One concentric bore, boss, or counterbore that can locate a mating interface."""
 
     id: Named
-    kind: Literal["bore", "boss"]
+    kind: Literal["bore", "boss", "counterbore"]
     diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
     axial_extent_mm: Annotated[FiniteFloat, Field(gt=0)]
+    through_diameter_mm: Annotated[FiniteFloat, Field(gt=0)] | None = None
     center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+    @model_validator(mode="after")
+    def _counterbore_has_its_through_diameter(self) -> CircularFeatureCandidate:
+        if (self.kind == "counterbore") != (self.through_diameter_mm is not None):
+            raise ValueError("only a counterbore candidate carries through_diameter_mm")
+        if self.through_diameter_mm is not None and self.through_diameter_mm >= self.diameter_mm:
+            raise ValueError("a counterbore through diameter must be smaller than its recess")
+        return self
 
 
 class PlanarInterfaceCandidate(StatableModel):
@@ -282,7 +291,9 @@ class _DetectedPlane:
     center: _Point3D
     normal: _Point3D
     holes: list[tuple[float, _Point3D]]
-    circular_features: list[tuple[Literal["bore", "boss"], float, float, _Point3D]]
+    circular_features: list[
+        tuple[Literal["bore", "boss", "counterbore"], float, float, _Point3D, float | None]
+    ]
 
 
 def _coordinates(vector: Any) -> _Point3D:
@@ -320,6 +331,60 @@ def _interface_basis(normal: _Point3D) -> tuple[_Point3D, _Point3D, _Point3D]:
     x_axis = _normalized(projected)
     y_axis = _normalized(_cross(unit_normal, x_axis))
     return (_rounded_point(x_axis), _rounded_point(y_axis), _rounded_point(unit_normal))
+
+
+def _counterbore_through_radius(
+    shape: Any,
+    recess: Any,
+    shoulder: Any,
+    axis_point: _Point3D,
+    direction: _Point3D,
+    recess_radius: float,
+) -> float | None:
+    """The one smaller coaxial inward cylinder continuing through the opposite face."""
+    matches = []
+    for cylinder in (face for face in shape.faces() if face.geom_type.name == "CYLINDER"):
+        if cylinder.is_same(recess) or cylinder.radius is None or cylinder.radius >= recess_radius:
+            continue
+        other_axis = cylinder.axis_of_rotation
+        if other_axis is None:
+            continue
+        other_direction = _coordinates(other_axis.direction)
+        if abs(_dot(direction, other_direction)) < 0.999999:
+            continue
+        offset = _subtract(_coordinates(other_axis.position), axis_point)
+        if sqrt(_dot(_cross(offset, direction), _cross(offset, direction))) > 0.01:
+            continue
+        surface_point = _coordinates(cylinder.center())
+        along = _dot(_subtract(surface_point, _coordinates(other_axis.position)), other_direction)
+        axial_point = _point_along(_coordinates(other_axis.position), other_direction, along)
+        radial = _subtract(surface_point, axial_point)
+        if _dot(radial, _coordinates(cylinder.normal_at())) >= 0:
+            continue
+        circular_edges = [edge for edge in cylinder.edges() if edge.geom_type.name == "CIRCLE"]
+        if not any(
+            shoulder_edge.is_same(cylinder_edge)
+            for shoulder_edge in shoulder.edges()
+            for cylinder_edge in circular_edges
+        ):
+            continue
+        attached = [
+            plane
+            for plane in shape.faces()
+            if plane.geom_type.name == "PLANE"
+            and any(
+                plane_edge.is_same(cylinder_edge)
+                for plane_edge in plane.edges()
+                for cylinder_edge in circular_edges
+            )
+        ]
+        if len(attached) != 2 or not any(plane.is_same(shoulder) for plane in attached):
+            continue
+        opposite = next(plane for plane in attached if not plane.is_same(shoulder))
+        if _dot(_coordinates(shoulder.normal_at()), _coordinates(opposite.normal_at())) > -0.999999:
+            continue
+        matches.append(float(cylinder.radius))
+    return matches[0] if len(matches) == 1 else None
 
 
 def _candidate_id(prefix: str, values: object) -> str:
@@ -437,23 +502,30 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 distance = _dot(_subtract(plane.center, axis_point), plane.normal) / denominator
                 center = _rounded_point(_point_along(axis_point, direction, distance))
                 plane.holes.append((float(radius), center))
-                plane.circular_features.append(("bore", float(radius), extent, center))
+                plane.circular_features.append(("bore", float(radius), extent, center, None))
         elif inward and _dot(first.normal, second.normal) > 0.999999:
             mouth = max((first, second), key=lambda plane: _dot(plane.center, plane.normal))
             floor = first if mouth is second else second
             floor_circles = [edge for edge in floor.face.edges() if edge.geom_type.name == "CIRCLE"]
-            if len(floor_circles) != 1:
-                continue  # a stepped counterbore or another ambiguous coaxial feature
             denominator = _dot(direction, mouth.normal)
             distance = _dot(_subtract(mouth.center, axis_point), mouth.normal) / denominator
             center = _rounded_point(_point_along(axis_point, direction, distance))
-            mouth.circular_features.append(("bore", float(radius), extent, center))
+            if len(floor_circles) == 1:
+                mouth.circular_features.append(("bore", float(radius), extent, center, None))
+            else:
+                through_radius = _counterbore_through_radius(
+                    shape, cylinder, floor.face, axis_point, direction, float(radius)
+                )
+                if through_radius is not None:
+                    mouth.circular_features.append(
+                        ("counterbore", float(radius), extent, center, through_radius)
+                    )
         elif not inward and _dot(first.normal, second.normal) > 0.999999:
             base = min((first, second), key=lambda plane: _dot(plane.center, plane.normal))
             denominator = _dot(direction, base.normal)
             distance = _dot(_subtract(base.center, axis_point), base.normal) / denominator
             center = _rounded_point(_point_along(axis_point, direction, distance))
-            base.circular_features.append(("boss", float(radius), extent, center))
+            base.circular_features.append(("boss", float(radius), extent, center, None))
 
     candidates = []
     for plane in planes:
@@ -507,7 +579,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 )
             )
         locating_features = []
-        for kind, radius, extent, feature_center in plane.circular_features:
+        for kind, radius, extent, feature_center, through_radius in plane.circular_features:
             if not any(
                 sqrt(
                     sum(
@@ -523,6 +595,9 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 "kind": kind,
                 "diameter": round(2 * radius, 9),
                 "axial_extent": round(extent, 9),
+                "through_diameter": (
+                    None if through_radius is None else round(2 * through_radius, 9)
+                ),
                 "center": feature_center,
             }
             locating_features.append(
@@ -531,6 +606,9 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     kind=kind,
                     diameter_mm=round(2 * radius, 9),
                     axial_extent_mm=round(extent, 9),
+                    through_diameter_mm=(
+                        None if through_radius is None else round(2 * through_radius, 9)
+                    ),
                     center_mm=feature_center,
                 )
             )
@@ -559,7 +637,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings=(
             "candidates are measured suggestions only; confirm one before creating an "
             "interface contract",
-            "this detector does not yet classify counterbores or nonconcentric locators",
+            "this detector does not yet classify nested blind steps or nonconcentric locators",
         ),
     )
 
@@ -659,6 +737,11 @@ def confirm_step_interface(
                         kind=locator.kind,
                         diameter=Quantity(magnitude=locator.diameter_mm, unit="mm"),
                         axial_extent=Quantity(magnitude=locator.axial_extent_mm, unit="mm"),
+                        through_diameter=(
+                            None
+                            if locator.through_diameter_mm is None
+                            else Quantity(magnitude=locator.through_diameter_mm, unit="mm")
+                        ),
                     )
                 ),
             ),
