@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.7.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.8.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.7.0.json"]
-SchemaVersion = Literal["1.7.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.8.0.json"]
+SchemaVersion = Literal["1.8.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -144,6 +144,23 @@ class VerifyOutput(_WireModel):
     toolchain: tuple[ToolComponent, ...]
 
 
+class StepValidationPropertiesOutput(_WireModel):
+    volume_mm3: Annotated[float, Field(gt=0)]
+    surface_area_mm2: Annotated[float, Field(gt=0)]
+    centroid_mm: tuple[float, float, float]
+
+
+class StepVerifyOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["verify"]
+    artifact: Literal["step"]
+    path: str
+    status: Literal["pass", "fail"]
+    properties: StepValidationPropertiesOutput | None
+    problems: tuple[str, ...]
+
+
 class DiffEndpoint(_WireModel):
     path: str
     name: Named
@@ -247,6 +264,7 @@ CliOutput = (
     | DxfOutput
     | QifOutput
     | VerifyOutput
+    | StepVerifyOutput
     | DiffOutput
     | RefusalOutput
     | ErrorOutput

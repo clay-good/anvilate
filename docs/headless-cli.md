@@ -327,7 +327,7 @@ action. With the `geometry` extra installed, the kernel check builds a valid pro
 reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
 remain explicit failures; database integrity is proved by loading the bundled resolver and
 counting its material and component designations. `--format json` emits the same report
-under CLI output schema 1.7.0.
+under CLI output schema 1.8.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -393,8 +393,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.7.0.json",
- "schema_version": "1.7.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.8.0.json",
+ "schema_version": "1.8.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -637,7 +637,26 @@ with different versions installed must still be told what *produced* the artifac
 envelope attesting no toolchain reads `none attested`, for the same reason the report's
 headings never vanish.
 
-Three things this command will not do, and they are the reasons it exists:
+The same command verifies a received STEP file by suffix:
+
+```bash
+anvilate verify received.step
+```
+
+```text
+PASS  STEP integrity received.step
+  volume       1.8e+06 mm³
+  surface area 171000 mm²
+  centroid     (0, 0, 12.5) mm
+```
+
+It reads the CAx-IF v4.6 part-level properties, independently imports the solid, and compares
+the imported volume, total surface area, and centroid at the published industry example
+thresholds. A missing or altered property exits 1 and names the mismatch. `--format json`
+returns the same verdict and values under CLI output schema 1.8.0. The envelope-only
+`--artifact` and `--hmac-key-file` options are refused for STEP rather than ignored.
+
+For attestation envelopes, three things this command will not do are the reasons it exists:
 
 - **A signature nobody could check is not a pass.** Without `--hmac-key-file` the state is
   `not_checked` and the exit code is 2. Reporting that as success is the single worst thing
@@ -793,7 +812,7 @@ that the kernel produced one valid positive-volume solid, and tags `top`, `botto
 `south`, `east`, and `west` for boxes or `top`, `bottom`, `perimeter`, and optional `bore`
 for round covers. The text result reports the volume and digest. `--format json`
 adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
-`unvalidated` under the CLI output 1.7.0 contract.
+`unvalidated` under the CLI output 1.8.0 contract.
 
 The writer emits the AP242 managed model-based 3D engineering schema and part-level volume,
 surface-area, and centroid validation properties. It reads those properties back, imports the

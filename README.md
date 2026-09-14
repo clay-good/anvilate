@@ -6,7 +6,7 @@
 
 Anvilate is a **local-first, open-source** design tool for mechanical, structural, and industrial engineers. It runs the analytical screens you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, contact, thick-wall pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. No cloud, no LLM required, no account.
 
-> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate and cover-plate patterns build valid B-Reps, write validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate and cover-plate patterns build valid B-Reps, write and verify validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
 
 ## Quickstart
 
@@ -242,7 +242,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,536 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,537 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

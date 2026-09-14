@@ -257,14 +257,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     verify = commands.add_parser(
         "verify",
-        help="verify an attestation envelope and report what was checked",
-        description="Check an envelope's signature, its subject digests and its predicate "
-        "schema, offline. Exit 0 only when all three checked clean; 2 when something could "
-        "not be checked at all — a signature with no key, a subject with no file — which is "
-        "not a pass.",
+        help="verify an attestation envelope or STEP import integrity",
+        description="Check a DSSE envelope's signature, subject digests and predicate schema, "
+        "or compare a .step/.stp file's imported geometry with its CAx-IF validation properties, "
+        "offline. Exit 0 only when every applicable check passes; 1 on a mismatch; 2 when an "
+        "attestation check could not run.",
         epilog=f"Example: {_COMMAND_EXAMPLES['verify']}",
     )
-    verify.add_argument("envelope", type=Path, help="a DSSE envelope, as JSON")
+    verify.add_argument("envelope", type=Path, help="a DSSE envelope as JSON, or a STEP file")
     verify.add_argument(
         "--artifact",
         action="append",
@@ -1010,6 +1010,9 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     verification are unimplemented, and saying "verified" for a signature nothing could
     check is exactly the claim this command exists to avoid making.
     """
+    if args.envelope.suffix.lower() in {".step", ".stp"}:
+        return _verify_step(args, out=out, err=err)
+
     from .attestation import Attestation, LocalHmacSigner, verify_attestation
 
     try:
@@ -1099,6 +1102,68 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     for problem in report.problems:
         print(f"anvilate verify: {problem}", file=err)
     return EXIT_CODES[report.status]
+
+
+def _verify_step(args: argparse.Namespace, *, out, err) -> int:
+    """Verify a received STEP solid against its embedded CAx-IF properties."""
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        read_step_validation_properties,
+        verify_step_integrity,
+    )
+
+    if args.artifact or args.hmac_key_file is not None:
+        print(
+            "anvilate verify: --artifact and --hmac-key-file apply to DSSE envelopes, not STEP",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    properties = None
+    problems = []
+    try:
+        properties = read_step_validation_properties(args.envelope)
+        verify_step_integrity(args.envelope)
+    except GeometryUnavailable as failure:
+        print(f"anvilate verify: {failure}", file=err)
+        return EXIT_UNBUILT
+    except (GeometryError, OSError) as failure:
+        problems.append(str(failure))
+
+    status = "pass" if not problems else "fail"
+    property_document = (
+        {
+            "volume_mm3": properties.volume_mm3,
+            "surface_area_mm2": properties.surface_area_mm2,
+            "centroid_mm": properties.centroid_mm,
+        }
+        if properties is not None
+        else None
+    )
+    if args.format == "json":
+        payload = machine_document(
+            "verify",
+            {
+                "artifact": "step",
+                "path": str(args.envelope),
+                "status": status,
+                "properties": property_document,
+                "problems": problems,
+            },
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+    else:
+        print(f"{status.upper()}  STEP integrity {args.envelope}", file=out)
+        if properties is not None:
+            centroid = ", ".join(f"{value:g}" for value in properties.centroid_mm)
+            print(f"  volume       {properties.volume_mm3:g} mm³", file=out)
+            print(f"  surface area {properties.surface_area_mm2:g} mm²", file=out)
+            print(f"  centroid     ({centroid}) mm", file=out)
+        for problem in problems:
+            print(f"  problem      {problem}", file=out)
+    for problem in problems:
+        print(f"anvilate verify: {problem}", file=err)
+    return EXIT_OK if status == "pass" else EXIT_FAILED
 
 
 def _attested_toolchain(statement: dict) -> dict:

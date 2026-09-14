@@ -617,6 +617,10 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         encoding="utf-8",
     )
     built_step = tmp_path / "base-plate.step"
+    verified_step = tmp_path / "received.step"
+    assert _run(
+        "build", str(build_spec), "--output", str(verified_step), "--format", "json"
+    )[0] == EXIT_OK
     before, after = spec_pair
     invocations = (
         ("check", "check", "--format", "json", str(spec_file)),
@@ -640,6 +644,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
             str(build_spec),
         ),
         ("verify", *_verify_args(envelope), "--format", "json"),
+        ("verify", "verify", str(verified_step), "--format", "json"),
         ("diff", "diff", "--format", "json", str(before), str(after)),
         (
             "build",
@@ -1536,6 +1541,31 @@ def test_build_ap214_fallback_is_explicit_and_keeps_validation_properties(tmp_pa
     assert "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF" not in step
     assert step.count("'geometric validation property'") == 3
     assert verify_step_integrity(output).volume_mm3 == pytest.approx(1_800_000)
+
+
+def test_verify_step_reports_properties_and_detects_tampering(tmp_path):
+    pytest.importorskip("build123d")
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.step"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    assert _run("build", str(spec), "--output", str(output), "--unvalidated")[0] == EXIT_OK
+
+    code, raw, err = _run("verify", str(output), "--format", "json")
+    payload = json.loads(raw)
+    assert code == EXIT_OK and err == "" and payload["status"] == "pass"
+    assert payload["artifact"] == "step" and payload["properties"] == {
+        "centroid_mm": [0, 0, 12.5],
+        "surface_area_mm2": 171_000,
+        "volume_mm3": 1_800_000,
+    }
+
+    step = output.read_text(encoding="utf-8")
+    output.write_text(step.replace("1.8E+06", "1.7E+06", 1), encoding="utf-8")
+    code, raw, err = _run("verify", str(output), "--format", "json")
+    payload = json.loads(raw)
+    assert code == EXIT_FAILED and payload["status"] == "fail"
+    assert "volume differs by 5.882%" in payload["problems"][0]
+    assert payload["problems"][0] in err
 
 
 def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_path):
