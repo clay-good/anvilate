@@ -368,6 +368,7 @@ than collapsing to pass/fail:
 | 2 | the card could not be fully evaluated — **not a pass**, and not a failure |
 | 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
+| 5 | Anvilate itself failed unexpectedly; retry once, then report the diagnostic as a bug |
 
 ### The JSON says what the text says
 
@@ -378,8 +379,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.1.0.json",
- "schema_version": "1.1.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.2.0.json",
+ "schema_version": "1.2.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -420,7 +421,8 @@ or 4, and a remedy. A gated export retains verdict code 1 or 2 in the same form.
 covers parser errors and `build`, even though those paths stop before a normal result exists;
 `build --help` documents the JSON option despite the operation itself remaining unbuilt.
 Scripts therefore never have to switch back to scraping prose precisely when an invocation
-goes wrong.
+goes wrong. An unexpected defect uses the sibling `outcome: "error"` variant and exit code
+5, so a broken tool cannot be mistaken for a rejected input or a failing part.
 
 ### An unbuilt operation is refused however it is invoked
 

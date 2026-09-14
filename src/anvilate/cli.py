@@ -48,6 +48,7 @@ rather than collapsing to pass/fail:
 2    the card could not be fully evaluated — **not a pass**, and not a failure
 3    the request was wrong: a usage error, a missing file, a document that is not a spec
 4    the operation is specified but unbuilt
+5    the command itself failed unexpectedly
 ===  ===========================================================================
 
 Code 2 is the one worth arguing about, and No-silent-green settles it. A screen that could
@@ -67,7 +68,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, TextIO
 
-from ._cli_output import machine_document, refusal_document
+from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -80,6 +81,7 @@ EXIT_FAILED = 1
 EXIT_NOT_EVALUATED = 2
 EXIT_BAD_REQUEST = 3
 EXIT_UNBUILT = 4
+EXIT_INTERNAL_ERROR = 5
 
 #: The exit code for each rolled-up scorecard status, and nothing else. Written as a total
 #: map over the enumeration rather than an if-chain with an else, so a fifth status is a
@@ -210,7 +212,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="anvilate",
         description="Screen Design Specs without a UI. Exit code 0 is the only success; "
         "1 means something failed, 2 that something could not be evaluated — which is "
-        "never a pass — 3 a bad request, 4 an operation that is specified and unbuilt. "
+        "never a pass — 3 a bad request, 4 an operation that is specified and unbuilt, "
+        "5 an unexpected internal error. "
         "What counts as failure differs per command; each says so in its own help.",
         epilog="Run `anvilate <command> --help` for the exit codes that command uses.",
     )
@@ -384,17 +387,24 @@ def run(
         command_err = err
         command_out = out
 
-    if args.command in _UNBUILT:
-        print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=command_err)
-        code = EXIT_UNBUILT
-    elif args.command == "export":
-        code = _export(args, out=command_out, err=command_err)
-    elif args.command == "verify":
-        code = _verify(args, out=command_out, err=command_err)
-    elif args.command == "diff":
-        code = _diff(args, out=command_out, err=command_err)
-    else:
-        code = _check(args, out=command_out, err=command_err)
+    try:
+        if args.command in _UNBUILT:
+            print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=command_err)
+            code = EXIT_UNBUILT
+        elif args.command == "export":
+            code = _export(args, out=command_out, err=command_err)
+        elif args.command == "verify":
+            code = _verify(args, out=command_out, err=command_err)
+        elif args.command == "diff":
+            code = _diff(args, out=command_out, err=command_err)
+        else:
+            code = _check(args, out=command_out, err=command_err)
+    except Exception as failure:
+        print(
+            f"anvilate {args.command}: internal error: {type(failure).__name__}: {failure}",
+            file=command_err,
+        )
+        code = EXIT_INTERNAL_ERROR
 
     if json_requested:
         diagnostic = captured.getvalue()
@@ -402,6 +412,8 @@ def run(
         print(diagnostic, end="", file=err)
         if payload:
             print(payload, end="", file=out)
+        elif code == EXIT_INTERNAL_ERROR:
+            _print_error(command=args.command, diagnostic=diagnostic, out=out)
         elif diagnostic:
             _print_refusal(command=args.command, code=code, diagnostic=diagnostic, out=out)
     return code
@@ -440,6 +452,25 @@ def _print_refusal(*, command: str, code: int, diagnostic: str, out) -> None:
                 exit_code=code,
                 diagnostics=lines,
                 remedy=remedy,
+            ),
+            indent=2,
+            sort_keys=True,
+        ),
+        file=out,
+    )
+
+
+def _print_error(*, command: str, diagnostic: str, out) -> None:
+    """Write an unexpected defect without making a script parse a traceback."""
+    print(
+        json.dumps(
+            error_document(
+                command,
+                diagnostic=diagnostic.strip(),
+                remedy=(
+                    "Retry once; if the error repeats, report this diagnostic as an "
+                    "Anvilate bug."
+                ),
             ),
             indent=2,
             sort_keys=True,

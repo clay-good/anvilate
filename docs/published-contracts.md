@@ -178,8 +178,8 @@ command-specific content:
 
 ```json
 {
-  "schema": "https://anvilate.dev/schemas/cli-output/1.1.0.json",
-  "schema_version": "1.1.0",
+  "schema": "https://anvilate.dev/schemas/cli-output/1.2.0.json",
+  "schema_version": "1.2.0",
   "command": "check"
 }
 ```
@@ -196,6 +196,11 @@ keeps its established exit code and stderr text, and also writes a document carr
 `outcome: refused`, the code, every diagnostic line, and a concrete remedy. That includes
 parser-level refusals such as a missing positional argument, before a command namespace
 exists.
+
+Version 1.2.0 adds the internal-error variant. Unexpected exceptions from command execution
+exit 5 and carry `outcome: error`, the diagnostic, and the retry/report remedy. Ordinary
+Python exceptions are contained; `KeyboardInterrupt` and `SystemExit` remain control flow
+and are not mislabeled as product defects.
 
 ## What is not published as a schema artifact
 

@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.1.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.2.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.1.0.json"]
-SchemaVersion = Literal["1.1.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.2.0.json"]
+SchemaVersion = Literal["1.2.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -176,8 +176,24 @@ class RefusalOutput(_WireModel):
     remedy: Named
 
 
+class ErrorOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Named
+    outcome: Literal["error"]
+    exit_code: Literal[5]
+    diagnostic: Named
+    remedy: Named
+
+
 CliOutput = (
-    CheckOutput | EvidenceBundleOutput | QifOutput | VerifyOutput | DiffOutput | RefusalOutput
+    CheckOutput
+    | EvidenceBundleOutput
+    | QifOutput
+    | VerifyOutput
+    | DiffOutput
+    | RefusalOutput
+    | ErrorOutput
 )
 
 
@@ -210,4 +226,12 @@ def refusal_document(
             "diagnostics": diagnostics,
             "remedy": remedy,
         },
+    )
+
+
+def error_document(command: str, *, diagnostic: str, remedy: str) -> dict:
+    """One unexpected tool defect as a stable machine-readable result."""
+    return machine_document(
+        command,
+        {"outcome": "error", "exit_code": 5, "diagnostic": diagnostic, "remedy": remedy},
     )

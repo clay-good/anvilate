@@ -32,6 +32,7 @@ from anvilate.cli import (
     EXIT_BAD_REQUEST,
     EXIT_CODES,
     EXIT_FAILED,
+    EXIT_INTERNAL_ERROR,
     EXIT_NOT_EVALUATED,
     EXIT_OK,
     EXIT_UNBUILT,
@@ -607,6 +608,42 @@ def test_a_gated_qif_export_is_a_machine_readable_refusal(spec_file):
     assert payload["outcome"] == "refused"
     assert "export is gated" in "\n".join(payload["diagnostics"])
     assert payload["diagnostics"] == [line for line in error.splitlines() if line]
+
+
+@pytest.mark.parametrize("fmt", ("text", "json"))
+def test_an_unexpected_command_defect_has_its_own_exit_code(spec_file, monkeypatch, fmt):
+    from anvilate import screening
+
+    def broken_screen(_spec):
+        raise RuntimeError("solver bridge broke")
+
+    monkeypatch.setattr(screening, "screen_spec", broken_screen)
+    code, raw, error = _run("check", str(spec_file), "--format", fmt)
+    assert code == EXIT_INTERNAL_ERROR
+    assert "internal error: RuntimeError: solver bridge broke" in error
+    if fmt == "text":
+        assert raw == ""
+    else:
+        jsonschema = pytest.importorskip("jsonschema")
+        payload = json.loads(raw)
+        assert payload["outcome"] == "error"
+        assert payload["exit_code"] == EXIT_INTERNAL_ERROR
+        assert payload["diagnostic"].strip() == error.strip()
+        schema = json.loads(
+            (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+        )
+        assert not list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+
+
+def test_an_interrupt_is_control_flow_not_an_internal_error(spec_file, monkeypatch):
+    from anvilate import screening
+
+    def interrupted(_spec):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(screening, "screen_spec", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        _run("check", str(spec_file), "--format", "json")
 
 
 def test_the_artifact_list_is_the_mcp_tools_own():
