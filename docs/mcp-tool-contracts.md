@@ -223,9 +223,9 @@ encode back, so a stdio loop, an HTTP handler and a test drive the same code. It
 `initialize`, `tools/list`, `tools/call`, `tasks/get`, `tasks/update` and `tasks/cancel`, and returns `None` for a notification, which
 the protocol says takes no response — including no error response.
 
-**Four operations are synchronous and `run_fea_validation` is task-dispatched.** The three
-remaining operations are refused because built geometry does not exist yet, rather than
-answered with plausible-looking placeholders.
+**Seven operations are synchronous and `run_fea_validation` is task-dispatched.** Every
+catalog operation is backed; partial export-format refusals remain explicit rather than
+being answered with plausible-looking placeholders.
 
 `compile_spec` answers with a spec or with the paths that stopped it. A document that does
 not validate comes back as a **result**, not a transport error: the output schema requires

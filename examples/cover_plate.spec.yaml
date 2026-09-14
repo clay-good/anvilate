@@ -1,0 +1,15 @@
+anvilate_spec: "1.3.0"
+name: access-cover
+description: A circular access cover with a centered inspection bore.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: cover_plate
+element_params:
+  name: access-cover
+  pressure: {magnitude: 15.0, unit: kPa}
+  thickness: {magnitude: 8.0, unit: mm}
+  material: ASTM-A36
+  diameter: {magnitude: 300.0, unit: mm}
+  hole_diameter: {magnitude: 80.0, unit: mm}
+acceptance: {tiers: [T1_analytical]}

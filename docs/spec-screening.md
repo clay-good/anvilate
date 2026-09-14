@@ -191,8 +191,8 @@ is the assumption least worth inventing.
 
 ## What it still cannot do
 
-T0 reports the same way: it checks a built solid, and no geometry is generated from a spec
-today. T3 is bounded by a convergence criterion rather than by the size of its input, so it
+T0 reports the same way: the synchronous screen does not invoke the separate audited
+geometry build automatically. T3 is bounded by a convergence criterion rather than by the size of its input, so it
 is not part of a synchronous screen at all.
 
 ## The rule that makes the card safe to read

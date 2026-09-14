@@ -12,14 +12,17 @@ pytest.importorskip("build123d")
 
 from anvilate.geometry import (  # noqa: E402
     BASE_PLATE_PATTERN,
+    COVER_PLATE_PATTERN,
     GeometryError,
     UnsupportedGeometry,
     build_base_plate,
+    build_cover_plate,
     build_spec,
     measure_geometry,
     render_viewport,
     write_step,
 )
+from anvilate.packs.industrial import CoverPlate  # noqa: E402
 from anvilate.packs.structural import BasePlate  # noqa: E402
 from anvilate.spec import (  # noqa: E402
     AcceptanceCriteria,
@@ -47,6 +50,19 @@ def _plate(**changes) -> BasePlate:
     }
     values.update(changes)
     return BasePlate(**values)
+
+
+def _cover(**changes) -> CoverPlate:
+    values = {
+        "name": "access-cover",
+        "pressure": Quantity.parse("15 kPa"),
+        "thickness": Quantity.parse("8 mm"),
+        "material": "ASTM-A36",
+        "length": Quantity.parse("400 mm"),
+        "width": Quantity.parse("300 mm"),
+    }
+    values.update(changes)
+    return CoverPlate(**values)
 
 
 def _spec(*, element_type: str = "base_plate", params=None) -> DesignSpec:
@@ -214,3 +230,122 @@ def test_pattern_refuses_a_base_plate_without_thickness():
 def test_registry_refuses_an_element_without_an_audited_pattern():
     with pytest.raises(UnsupportedGeometry, match="lifting_lug"):
         build_spec(_spec(element_type="lifting_lug"))
+
+
+def test_rectangular_cover_plate_is_one_tagged_solid_with_exact_volume():
+    built = build_cover_plate(_cover())
+
+    assert built.pattern == COVER_PLATE_PATTERN
+    assert built.is_valid
+    assert built.volume_mm3 == pytest.approx(400 * 300 * 8)
+    assert dict(built.dimensions_mm) == {"width": 300, "length": 400, "thickness": 8}
+    assert set(built.faces) == {"bottom", "east", "north", "south", "top", "west"}
+
+
+def test_circular_cover_plate_is_a_tagged_disk_with_exact_volume():
+    built = build_cover_plate(_cover(length=None, width=None, diameter=Quantity.parse("300 mm")))
+
+    assert built.is_valid
+    assert built.volume_mm3 == pytest.approx(3.141592653589793 * 150**2 * 8)
+    assert set(built.faces) == {"bottom", "perimeter", "top"}
+
+
+def test_annular_cover_plate_preserves_the_semantic_bore():
+    built = build_cover_plate(
+        _cover(
+            length=None,
+            width=None,
+            diameter=Quantity.parse("300 mm"),
+            hole_diameter=Quantity.parse("80 mm"),
+        )
+    )
+
+    assert built.volume_mm3 == pytest.approx(3.141592653589793 * (150**2 - 40**2) * 8)
+    assert set(built.faces) == {"bore", "bottom", "perimeter", "top"}
+    assert measure_geometry(built, "hole_diameter").value == pytest.approx(80)
+    assert measure_geometry(built, "area:bore").value == pytest.approx(3.141592653589793 * 80 * 8)
+
+
+def test_cover_plate_refuses_a_nonpositive_thickness():
+    with pytest.raises(GeometryError, match="thickness must be greater than zero"):
+        build_cover_plate(_cover(thickness=Quantity.parse("0 mm")))
+
+
+def test_cover_plate_refuses_a_bore_that_consumes_the_blank():
+    with pytest.raises(GeometryError, match="hole_diameter must be below diameter"):
+        build_cover_plate(
+            _cover(
+                length=None,
+                width=None,
+                diameter=Quantity.parse("80 mm"),
+                hole_diameter=Quantity.parse("80 mm"),
+            )
+        )
+
+
+def test_cover_plate_regeneration_is_deterministic():
+    plate = _cover(length=None, width=None, diameter=Quantity.parse("300 mm"))
+
+    first = build_cover_plate(plate)
+    second = build_cover_plate(plate)
+
+    assert first.signature == second.signature
+    assert first.summary() == second.summary()
+
+
+def test_cover_plate_builds_through_the_design_spec_registry():
+    built = build_spec(_spec(element_type="cover_plate", params=_cover().model_dump()))
+
+    assert built.pattern == COVER_PLATE_PATTERN
+    assert built.is_valid
+
+
+@pytest.mark.parametrize("view", ("iso", "front", "top", "right"))
+def test_annular_cover_plate_renders_every_named_view_with_all_semantic_tags(view):
+    built = build_cover_plate(
+        _cover(
+            length=None,
+            width=None,
+            diameter=Quantity.parse("300 mm"),
+            hole_diameter=Quantity.parse("80 mm"),
+        )
+    )
+
+    rendered = render_viewport(built, view=view, width_px=640)
+    text = rendered.data.decode()
+
+    assert rendered == render_viewport(built, view=view, width_px=640)
+    assert all(f'data-face="{tag}"' in text for tag in built.faces)
+
+
+def test_annular_cover_plate_named_views_are_visually_distinct():
+    built = build_cover_plate(
+        _cover(
+            length=None,
+            width=None,
+            diameter=Quantity.parse("300 mm"),
+            hole_diameter=Quantity.parse("80 mm"),
+        )
+    )
+
+    images = {view: render_viewport(built, view=view).data for view in ("iso", "front", "top")}
+
+    assert len(set(images.values())) == len(images)
+
+
+def test_annular_cover_plate_step_round_trip_preserves_the_bore(tmp_path):
+    from build123d import import_step
+
+    built = build_cover_plate(
+        _cover(
+            length=None,
+            width=None,
+            diameter=Quantity.parse("300 mm"),
+            hole_diameter=Quantity.parse("80 mm"),
+        )
+    )
+    restored = import_step(write_step(built, tmp_path / "cover.step"))
+
+    assert restored.is_valid
+    assert len(restored.solids()) == 1
+    assert restored.volume == pytest.approx(built.volume_mm3, rel=1e-8)

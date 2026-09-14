@@ -133,7 +133,8 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         # names rather than tool names, like `anvilate_spec` above.
         "element_type",
         "element_params",
-        "base_plate",
+            "base_plate",
+            "cover_plate",
         "min_safety_factor",
         "face_count",
         "plate_thickness",

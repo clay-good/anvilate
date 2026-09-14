@@ -8,15 +8,15 @@ The rules an agent must follow while doing any of this are the shipped
 [agent skill](agent-skill.md) — retrieval not recall, read the scorecard, `not_evaluated`
 is not a pass, screening is not certification. This page assumes them and covers the wire.
 
-## The loop, with the first geometry pattern
+## The loop, with audited geometry patterns
 
 The loop a coding agent wants is *build, render, validate, read the scorecard, repair, repeat*.
-The analytical loop and the first geometry pattern are callable today:
+The analytical loop and the base-plate and cover-plate geometry patterns are callable today:
 
 | Step | Tool | Today |
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
-| Build the part | `build_part` | **Dispatched synchronously** for `base_plate`; returns the published geometry summary. |
+| Build the part | `build_part` | **Dispatched synchronously** for `base_plate` and rectangular, circular, or annular `cover_plate`; returns the published geometry summary. |
 | Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic SVG as structured data and an image attachment. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |

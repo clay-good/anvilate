@@ -2,7 +2,7 @@
 
 All four commands `headless-automation` names are backed; `verify` from
 `evidence-attestation` and the environment self-check `doctor` are backed too. Geometry is
-pattern-limited: `base_plate` builds today, and an element whose audited pattern has not
+pattern-limited: `base_plate` and `cover_plate` build today, and an element whose audited pattern has not
 shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
@@ -327,7 +327,7 @@ action. With the `geometry` extra installed, the kernel check builds a valid pro
 reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
 remain explicit failures; database integrity is proved by loading the bundled resolver and
 counting its material and component designations. `--format json` emits the same report
-under CLI output schema 1.4.3.
+under CLI output schema 1.5.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -393,8 +393,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.4.3.json",
- "schema_version": "1.4.3", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.5.0.json",
+ "schema_version": "1.5.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -769,17 +769,21 @@ roll-up and cannot be deleted by deleting the checks.
 
 ## Build a STEP solid
 
-Install the optional kernel and build the checked-in base-plate spec:
+Install the optional kernel and build either checked-in geometry spec:
 
 ```bash
 pip install -e ".[geometry]"
 anvilate build examples/base_plate.spec.yaml --output base_plate.step
+anvilate build examples/cover_plate.spec.yaml --output cover_plate.step
 ```
 
-The `base_plate/1` pattern creates a box centered on XY with its bottom at Z=0, verifies
+The `base_plate/1` pattern creates a box centered on XY with its bottom at Z=0. The
+`cover_plate/1` pattern creates a rectangular, circular, or annular plate from the existing
+typed cover model. Both verify
 that the kernel produced one valid positive-volume solid, and tags `top`, `bottom`, `north`,
-`south`, `east`, and `west`. The text result reports the volume and digest. `--format json`
-adds the declared dimensions and all semantic tags under the CLI output 1.4.3 contract.
+`south`, `east`, and `west` for boxes or `top`, `bottom`, `perimeter`, and optional `bore`
+for round covers. The text result reports the volume and digest. `--format json`
+adds the declared dimensions and all semantic tags under the CLI output 1.5.0 contract.
 
 The writer refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a

@@ -1456,6 +1456,25 @@ def test_build_json_carries_geometry_identity_and_digest(tmp_path):
     ]
 
 
+def test_build_writes_the_circular_cover_plate_example_with_its_bore(tmp_path):
+    pytest.importorskip("build123d")
+    spec = Path(__file__).resolve().parents[1] / "examples/cover_plate.spec.yaml"
+    output = tmp_path / "cover.step"
+
+    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
+    payload = json.loads(raw)
+
+    assert code == EXIT_OK and err == ""
+    assert payload["artifact"]["pattern"] == "cover_plate/1"
+    assert payload["artifact"]["dimensions_mm"] == {
+        "diameter": 300,
+        "hole_diameter": 80,
+        "thickness": 8,
+    }
+    assert payload["artifact"]["face_tags"] == ["bore", "bottom", "perimeter", "top"]
+    assert output.read_text(encoding="utf-8").startswith("ISO-10303-21;")
+
+
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
     spec = tmp_path / "lug.yaml"
     spec.write_text(_LUG_SPEC, encoding="utf-8")

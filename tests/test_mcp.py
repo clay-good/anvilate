@@ -742,6 +742,25 @@ def _base_plate_document() -> dict:
     return document
 
 
+def _cover_plate_document() -> dict:
+    document = _spec_document()
+    document.update(
+        {
+            "name": "access-cover",
+            "element_type": "cover_plate",
+            "element_params": {
+                "name": "access-cover",
+                "pressure": {"magnitude": 15.0, "unit": "kPa"},
+                "thickness": {"magnitude": 8.0, "unit": "mm"},
+                "material": "ASTM-A36",
+                "diameter": {"magnitude": 300.0, "unit": "mm"},
+                "hole_diameter": {"magnitude": 80.0, "unit": "mm"},
+            },
+        }
+    )
+    return document
+
+
 def test_build_part_returns_a_valid_semantically_tagged_geometry_summary():
     pytest.importorskip("build123d")
 
@@ -754,6 +773,23 @@ def test_build_part_returns_a_valid_semantically_tagged_geometry_summary():
     assert geometry["volumeMm3"] == pytest.approx(1_800_000)
     assert geometry["faceTags"] == ["bottom", "east", "north", "south", "top", "west"]
     assert result["structuredContent"]["subject"].startswith("sha256:")
+
+
+def test_cover_plate_build_render_and_measure_flow_uses_one_built_subject():
+    pytest.importorskip("build123d")
+    built = _call("build_part", {"spec": _cover_plate_document()})["result"]
+    document = built["structuredContent"]
+    handle = document["subject"]
+
+    rendered = _call("render_viewport", {"subject": handle, "view": "top", "width_px": 640})[
+        "result"
+    ]
+    measured = _call("measure_geometry", {"subject": handle, "query": "hole_diameter"})["result"]
+
+    assert document["geometry"]["pattern"] == "cover_plate/1"
+    assert document["geometry"]["faceTags"] == ["bore", "bottom", "perimeter", "top"]
+    assert rendered["content"][1]["mimeType"] == "image/svg+xml"
+    assert measured["structuredContent"]["measurement"]["value"] == pytest.approx(80)
 
 
 def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_attachment():
