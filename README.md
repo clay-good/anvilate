@@ -188,7 +188,9 @@ Multi-solid files carry a geometry-derived `solid_id` on every face and confirme
 plus a summary of each solid's measured volume, centroid, and axis-aligned bounds so the ID
 can be mapped back to a component. When opposing faces are exactly coplanar, the kernel also
 reports their positive overlap as a contact candidate retaining both solid and face IDs; a
-nearby face is not called contact. Single-solid JSON remains unchanged. After discovery,
+nearby face is not called contact. Coaxial bore/shaft surfaces on different solids report
+their signed diametral clearance and shared axial engagement without judging whether that
+fit is acceptable. Single-solid JSON remains unchanged. After discovery,
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. `--accept-contact` records one exact pair, a semantic
 name, and the named confirmer without fabricating the hole pattern required by an
@@ -202,6 +204,7 @@ locating bosses, and counterbores are offered as separate candidates and enter t
 only when their exact ID is confirmed. A counterbore preserves its recess diameter, depth,
 and through diameter; coincident indistinguishable solids are refused rather than assigned
 an arbitrary identity. A contact candidate proves geometric overlap, not design intent.
+Likewise, a cylindrical mating candidate reports geometry rather than an ISO 286 fit verdict.
 Ambiguous nested blind steps and nonconcentric locators remain limits.
 
 ## What you can do today
@@ -278,7 +281,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,616 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,590 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

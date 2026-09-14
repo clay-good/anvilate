@@ -624,7 +624,10 @@ and a confirmed result preserves it. The `solids` collection gives each ID's mea
 centroid, and axis-aligned minimum and maximum bounds, making opaque IDs recognizable without
 trusting STEP labels. For different solids whose planar faces oppose in the exact same plane,
 the kernel measures the common face and reports a contact candidate only when that overlap
-has positive area. A gap, however small, is not contact. A single-solid result omits the
+has positive area. A gap, however small, is not contact. One inward bore cylinder and one
+outward shaft cylinder on different solids become a cylindrical mating candidate only when
+their axes coincide and their axial spans overlap. It carries both measured diameters, signed
+diametral clearance (`bore - shaft`), and axial engagement. A single-solid result omits the
 multi-solid collections and per-face field, preserving the existing JSON shape. The JSON
 also carries the source file's SHA-256 digest and every hole center. A successful scan exits
 0 even when it finds no regular pattern; that is a completed measurement, not a passing
@@ -638,6 +641,11 @@ the filter. A pattern belonging to another solid cannot be accepted through a fi
 A contact candidate retains both solid IDs, both face candidate IDs, and measured overlap
 area. It proves those imported faces overlap geometrically; it does not prove they were
 intended to mate, carry load, or have acceptable clearance.
+
+A cylindrical mating candidate similarly identifies both solids and both cylindrical
+surfaces, but does not choose an ISO 286 fit or declare clearance/interference acceptable.
+Positive clearance, zero line-to-line size, and negative interference remain measured inputs
+for a later engineering decision.
 
 `--accept-contact` requires one exact contact ID, `--name`, and `--confirmed-by`. It emits a
 separate `accepted_contact` artifact retaining the source digest, endpoints, and overlap

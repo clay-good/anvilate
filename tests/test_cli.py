@@ -141,6 +141,18 @@ def _write_four_hole_assembly_step(path: Path, *, touching: bool = False) -> Pat
     return path
 
 
+def _write_cylindrical_mate_step(path: Path) -> Path:
+    from build123d import Align, Box, Compound, Cylinder, Location, export_step
+
+    plate = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    plate -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    pin = Cylinder(4.9, 20, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+        Location((0, 0, -5))
+    )
+    export_step(Compound(children=[plate, pin]), path)
+    return path
+
+
 @pytest.fixture
 def spec_file(tmp_path):
     path = tmp_path / "deck.yaml"
@@ -1623,6 +1635,7 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert payload["path"] == str(step)
     assert "accepted" not in payload
     assert "solids" not in payload["candidates"]
+    assert "cylindrical_mates" not in payload["candidates"]
     assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
@@ -1734,6 +1747,32 @@ def test_interfaces_refuses_unknown_and_cross_solid_selection(tmp_path):
     )
     assert code == EXIT_BAD_REQUEST and out == ""
     assert f"pattern candidate {pattern_id!r} was not found" in err
+
+
+def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
+    step = _write_cylindrical_mate_step(tmp_path / "shaft-in-bore.step")
+
+    code, raw, err = _run("interfaces", str(step), "--format", "json")
+    candidates = json.loads(raw)["candidates"]
+    mate = candidates["cylindrical_mates"][0]
+
+    assert code == EXIT_OK and err == ""
+    assert len(candidates["cylindrical_mates"]) == 1
+    assert mate["bore_diameter_mm"] == pytest.approx(10)
+    assert mate["shaft_diameter_mm"] == pytest.approx(9.8)
+    assert mate["diametral_clearance_mm"] == pytest.approx(0.2)
+    assert mate["axial_engagement_mm"] == pytest.approx(10)
+
+    code, selected_raw, err = _run(
+        "interfaces", str(step), "--solid", mate["shaft_solid_id"], "--format", "json"
+    )
+    assert code == EXIT_OK and err == ""
+    assert json.loads(selected_raw)["candidates"]["cylindrical_mates"] == [mate]
+
+    code, text, err = _run("interfaces", str(step))
+    assert code == EXIT_OK and err == ""
+    assert "cylindrical-mate-" in text
+    assert "clearance 0.2 mm  engagement 10 mm" in text
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):

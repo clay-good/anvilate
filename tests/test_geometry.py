@@ -849,6 +849,45 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
         )
 
 
+def test_step_interface_detection_measures_coaxial_bore_and_shaft_mates(tmp_path):
+    from build123d import Align, Box, Compound, Cylinder, Location, export_step
+
+    plate = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    plate -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+    def write_pair(name: str, *, radius: float, x: float = 0, z: float = -5, reverse=False):
+        pin = Cylinder(radius, 20, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((x, 0, z))
+        )
+        children = [pin, plate] if reverse else [plate, pin]
+        path = tmp_path / name
+        export_step(Compound(children=children), path)
+        return path
+
+    clearance = detect_step_interfaces(write_pair("clearance.step", radius=4.9))
+    reversed_clearance = detect_step_interfaces(
+        write_pair("clearance-reversed.step", radius=4.9, reverse=True)
+    )
+    interference = detect_step_interfaces(write_pair("interference.step", radius=5.1))
+    offset = detect_step_interfaces(write_pair("offset.step", radius=4.9, x=1))
+    disengaged = detect_step_interfaces(write_pair("disengaged.step", radius=4.9, z=15))
+
+    assert len(clearance.cylindrical_mates) == 1
+    mate = clearance.cylindrical_mates[0]
+    assert mate.bore_diameter_mm == pytest.approx(10)
+    assert mate.shaft_diameter_mm == pytest.approx(9.8)
+    assert mate.diametral_clearance_mm == pytest.approx(0.2)
+    assert mate.axial_engagement_mm == pytest.approx(10)
+    assert mate.axis_origin_mm == pytest.approx((0, 0, 0))
+    assert mate.axis_direction == pytest.approx((0, 0, 1))
+    assert {mate.bore_solid_id, mate.shaft_solid_id} == {solid.id for solid in clearance.solids}
+    assert clearance.cylindrical_mates == reversed_clearance.cylindrical_mates
+    assert interference.cylindrical_mates[0].diametral_clearance_mm == pytest.approx(-0.2)
+    assert not offset.cylindrical_mates
+    assert not disengaged.cylindrical_mates
+    assert any("do not judge fit" in warning for warning in clearance.warnings)
+
+
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():
     with pytest.raises(ValueError, match="hole_count is 3, but 2 centers are listed"):
         HolePatternCandidate(

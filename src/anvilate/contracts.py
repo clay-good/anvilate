@@ -104,7 +104,7 @@ BUNDLE_SCHEMA_VERSION = "1.4.0"
 GEOMETRY_SCHEMA_VERSION = "1.2.0"
 
 # Planar faces and through-hole patterns measured from imported mating STEP solids.
-INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.5.0"
+INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.6.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
 CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"
@@ -192,8 +192,8 @@ def interface_candidates_json_schema() -> dict[str, Any]:
         description=(
             "Anvilate STEP interface candidates: planar mating faces and regular "
             "equal-diameter through-hole patterns and concentric locating features measured "
-            "from imported solids, with measured solid summaries and exact coplanar contact "
-            "candidates on multi-solid inputs. "
+            "from imported solids, with measured solid summaries, exact coplanar contacts, "
+            "and coaxial cylindrical mating candidates on multi-solid inputs. "
             "Candidates require user confirmation before becoming interface contracts. "
             "Generated from anvilate.geometry.StepInterfaceCandidates."
         ),

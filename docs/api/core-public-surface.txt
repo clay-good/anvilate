@@ -166,6 +166,7 @@ geometry.GeometryUnavailable
 geometry.ConfirmedStepInterface
 geometry.ConfirmedPlanarContact
 geometry.CircularFeatureCandidate
+geometry.CylindricalMatingCandidate
 geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.PlanarContactCandidate

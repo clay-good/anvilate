@@ -47,6 +47,7 @@ __all__ = [
     "ConfirmedStepInterface",
     "ConfirmedPlanarContact",
     "CircularFeatureCandidate",
+    "CylindricalMatingCandidate",
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
     "PlanarContactCandidate",
@@ -284,6 +285,34 @@ class PlanarContactCandidate(StatableModel):
         return self
 
 
+class CylindricalMatingCandidate(StatableModel):
+    """One coaxial bore/shaft pair measured between different imported solids."""
+
+    id: Named
+    bore_solid_id: Named
+    bore_surface_id: Named
+    shaft_solid_id: Named
+    shaft_surface_id: Named
+    bore_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    shaft_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    diametral_clearance_mm: FiniteFloat
+    axial_engagement_mm: Annotated[FiniteFloat, Field(gt=0)]
+    axis_origin_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    axis_direction: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+    @model_validator(mode="after")
+    def _is_one_consistent_pair(self) -> CylindricalMatingCandidate:
+        if self.bore_solid_id == self.shaft_solid_id:
+            raise ValueError("a cylindrical mating candidate must join two different solids")
+        expected = self.bore_diameter_mm - self.shaft_diameter_mm
+        if abs(self.diametral_clearance_mm - expected) > 1e-9:
+            raise ValueError("diametral clearance must equal bore diameter minus shaft diameter")
+        axis_length = sqrt(sum(component**2 for component in self.axis_direction))
+        if abs(axis_length - 1) > 1e-9:
+            raise ValueError("cylindrical mating axis_direction must be a unit vector")
+        return self
+
+
 class StepSolidCandidate(StatableModel):
     """One imported solid identified by deterministic measured geometry."""
 
@@ -317,6 +346,7 @@ class StepInterfaceCandidates(StatableModel):
     solids: tuple[StepSolidCandidate, ...] = ()
     planar_faces: tuple[PlanarInterfaceCandidate, ...]
     planar_contacts: tuple[PlanarContactCandidate, ...] = ()
+    cylindrical_mates: tuple[CylindricalMatingCandidate, ...] = ()
     warnings: tuple[str, ...] = ()
 
 
@@ -360,6 +390,18 @@ class _DetectedPlane:
     circular_features: list[
         tuple[Literal["bore", "boss", "counterbore"], float, float, _Point3D, float | None]
     ]
+
+
+@dataclass(frozen=True)
+class _CylindricalSurface:
+    id: str
+    solid_id: str
+    inward: bool
+    radius: float
+    axis_origin: _Point3D
+    axis_direction: _Point3D
+    start: float
+    end: float
 
 
 def _coordinates(vector: Any) -> _Point3D:
@@ -477,6 +519,16 @@ def _point_along(origin: _Point3D, direction: _Point3D, distance: float) -> _Poi
     )
 
 
+def _canonical_axis(position: _Point3D, direction: _Point3D) -> tuple[_Point3D, _Point3D]:
+    """A direction-independent identity for one infinite axis line."""
+    unit = _normalized(direction)
+    first = next(component for component in unit if abs(component) > 1e-12)
+    if first < 0:
+        unit = (-unit[0], -unit[1], -unit[2])
+    origin = _point_along(position, unit, -_dot(position, unit))
+    return _rounded_point(origin), _rounded_point(unit)
+
+
 def _solid_measurements(solid: Any) -> tuple[float, _Point3D, _Point3D, _Point3D]:
     bounds = solid.bounding_box()
     return (
@@ -580,6 +632,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         for face in planar
     ]
 
+    cylindrical_surfaces: list[_CylindricalSurface] = []
     for cylinder in (face for face in shape.faces() if face.geom_type.name == "CYLINDER"):
         axis = cylinder.axis_of_rotation
         radius = cylinder.radius
@@ -593,6 +646,43 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         radial = _subtract(surface_point, axial_point)
         inward = _dot(radial, _coordinates(cylinder.normal_at())) < 0
         circular_edges = [edge for edge in cylinder.edges() if edge.geom_type.name == "CIRCLE"]
+        if len(solids) > 1 and len(circular_edges) >= 2:
+            containing = [
+                solid_id
+                for solid_id, solid in solid_ids.items()
+                if any(face.is_same(cylinder) for face in solid.faces())
+            ]
+            if len(containing) != 1:
+                raise GeometryError(
+                    "a cylindrical face could not be assigned to one imported solid"
+                )
+            axis_origin, axis_direction = _canonical_axis(axis_point, direction)
+            positions = sorted(
+                _dot(_coordinates(edge.center()), axis_direction) for edge in circular_edges
+            )
+            start, end = round(positions[0], 9), round(positions[-1], 9)
+            if end - start > 1e-9:
+                surface_signature = {
+                    "solid": containing[0],
+                    "kind": "bore" if inward else "shaft",
+                    "radius": round(float(radius), 9),
+                    "axis_origin": axis_origin,
+                    "axis_direction": axis_direction,
+                    "start": start,
+                    "end": end,
+                }
+                cylindrical_surfaces.append(
+                    _CylindricalSurface(
+                        id=_candidate_id("cylinder", surface_signature),
+                        solid_id=containing[0],
+                        inward=inward,
+                        radius=round(float(radius), 9),
+                        axis_origin=axis_origin,
+                        axis_direction=axis_direction,
+                        start=start,
+                        end=end,
+                    )
+                )
         attached = []
         for index, plane in enumerate(planes):
             if any(
@@ -811,6 +901,51 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     overlap_area_mm2=overlap_area,
                 )
             )
+    cylindrical_mates: list[CylindricalMatingCandidate] = []
+    bores = [surface for surface in cylindrical_surfaces if surface.inward]
+    shafts = [surface for surface in cylindrical_surfaces if not surface.inward]
+    for bore in bores:
+        for shaft in shafts:
+            if bore.solid_id == shaft.solid_id:
+                continue
+            if _dot(bore.axis_direction, shaft.axis_direction) < 0.999999:
+                continue
+            axis_offset = _subtract(bore.axis_origin, shaft.axis_origin)
+            if sqrt(_dot(axis_offset, axis_offset)) > 1e-6:
+                continue
+            engagement = round(min(bore.end, shaft.end) - max(bore.start, shaft.start), 9)
+            if engagement <= 1e-9:
+                continue
+            bore_diameter = round(2 * bore.radius, 9)
+            shaft_diameter = round(2 * shaft.radius, 9)
+            clearance = round(bore_diameter - shaft_diameter, 9)
+            signature = {
+                "bore_solid": bore.solid_id,
+                "bore_surface": bore.id,
+                "shaft_solid": shaft.solid_id,
+                "shaft_surface": shaft.id,
+                "bore_diameter": bore_diameter,
+                "shaft_diameter": shaft_diameter,
+                "clearance": clearance,
+                "engagement": engagement,
+                "axis_origin": bore.axis_origin,
+                "axis_direction": bore.axis_direction,
+            }
+            cylindrical_mates.append(
+                CylindricalMatingCandidate(
+                    id=_candidate_id("cylindrical-mate", signature),
+                    bore_solid_id=bore.solid_id,
+                    bore_surface_id=bore.id,
+                    shaft_solid_id=shaft.solid_id,
+                    shaft_surface_id=shaft.id,
+                    bore_diameter_mm=bore_diameter,
+                    shaft_diameter_mm=shaft_diameter,
+                    diametral_clearance_mm=clearance,
+                    axial_engagement_mm=engagement,
+                    axis_origin_mm=bore.axis_origin,
+                    axis_direction=bore.axis_direction,
+                )
+            )
     warnings = [
         "candidates are measured suggestions only; confirm one before creating an "
         "interface contract",
@@ -820,6 +955,9 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings.append(
             "planar contacts report exact coplanar overlap only; they do not prove intended mating"
         )
+        warnings.append(
+            "cylindrical mates report measured signed clearance only; they do not judge fit"
+        )
     result_data = {
         "source_name": path.name,
         "source_sha256": sha256(source_bytes).hexdigest(),
@@ -828,8 +966,10 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     }
     if len(solids) > 1:
         contacts.sort(key=lambda contact: contact.id)
+        cylindrical_mates.sort(key=lambda mate: mate.id)
         result_data["solids"] = solid_candidates
         result_data["planar_contacts"] = tuple(contacts)
+        result_data["cylindrical_mates"] = tuple(cylindrical_mates)
     return StepInterfaceCandidates.model_validate(result_data)
 
 

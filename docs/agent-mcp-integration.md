@@ -43,6 +43,8 @@ faces on different solids is reported as a contact candidate with both solid/fac
 kernel-measured area; this is geometric evidence, not proof of design intent. A second pass
 with `--solid` narrows the summary, discovery, contacts, and acceptance to one exact ID; an
 unknown ID is refused with the available choices.
+Coaxial bore/shaft surfaces on different solids are reported separately with signed
+diametral clearance and axial engagement. The result is measured geometry, not a fit verdict.
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits
 a separate confirmed-contact artifact. It deliberately does not fabricate the hole pattern
 required by `InterfaceContract`.

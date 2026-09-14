@@ -1067,6 +1067,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         for contact in detected.planar_contacts
                         if args.solid in {contact.first_solid_id, contact.second_solid_id}
                     ),
+                    "cylindrical_mates": tuple(
+                        mate
+                        for mate in detected.cylindrical_mates
+                        if args.solid in {mate.bore_solid_id, mate.shaft_solid_id}
+                    ),
                     "planar_faces": tuple(
                         face for face in detected.planar_faces if face.solid_id == args.solid
                     ),
@@ -1124,6 +1129,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             f"  {contact.id}  {contact.first_solid_id}/{contact.first_face_candidate_id} ↔ "
             f"{contact.second_solid_id}/{contact.second_face_candidate_id}  "
             f"overlap {contact.overlap_area_mm2:g} mm²",
+            file=out,
+        )
+    for mate in detected.cylindrical_mates:
+        print(
+            f"  {mate.id}  bore {mate.bore_solid_id}/{mate.bore_surface_id} "
+            f"⌀{mate.bore_diameter_mm:g} mm ↔ shaft "
+            f"{mate.shaft_solid_id}/{mate.shaft_surface_id} ⌀{mate.shaft_diameter_mm:g} mm  "
+            f"clearance {mate.diametral_clearance_mm:g} mm  "
+            f"engagement {mate.axial_engagement_mm:g} mm",
             file=out,
         )
     for face in detected.planar_faces:
