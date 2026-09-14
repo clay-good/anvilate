@@ -95,10 +95,12 @@ contracts.element_schema_version
 contracts.SCORECARD_SCHEMA_VERSION
 contracts.BUNDLE_SCHEMA_VERSION
 contracts.GEOMETRY_SCHEMA_VERSION
+contracts.CONFIRMED_INTERFACE_SCHEMA_VERSION
 contracts.INTERFACE_CANDIDATES_SCHEMA_VERSION
 contracts.MEASUREMENT_SCHEMA_VERSION
 contracts.VIEWPORT_SCHEMA_VERSION
 contracts.geometry_json_schema
+contracts.confirmed_interface_json_schema
 contracts.interface_candidates_json_schema
 contracts.measurement_json_schema
 contracts.viewport_json_schema
@@ -159,6 +161,7 @@ geometry.GeometryError
 geometry.GeometryMeasurement
 geometry.GeometrySummary
 geometry.GeometryUnavailable
+geometry.ConfirmedStepInterface
 geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.RenderedViewport
@@ -170,6 +173,7 @@ geometry.build_base_plate
 geometry.build_cover_plate
 geometry.build_transmission_shaft
 geometry.build_spec
+geometry.confirm_step_interface
 geometry.detect_step_interfaces
 geometry.measure_geometry
 geometry.render_viewport

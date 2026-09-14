@@ -31,7 +31,8 @@ from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
-from .spec import DesignSpec
+from .spec import DesignSpec, HolePattern, InterfaceContract
+from .units import Quantity
 
 __all__ = [
     "BASE_PLATE_PATTERN",
@@ -42,6 +43,7 @@ __all__ = [
     "GeometrySummary",
     "GeometryMeasurement",
     "GeometryUnavailable",
+    "ConfirmedStepInterface",
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
     "RenderedViewport",
@@ -53,6 +55,7 @@ __all__ = [
     "build_cover_plate",
     "build_transmission_shaft",
     "build_spec",
+    "confirm_step_interface",
     "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
@@ -244,6 +247,17 @@ class StepInterfaceCandidates(StatableModel):
     source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     planar_faces: tuple[PlanarInterfaceCandidate, ...]
     warnings: tuple[str, ...] = ()
+
+
+class ConfirmedStepInterface(StatableModel):
+    """A measured STEP candidate accepted by a named person as an interface contract."""
+
+    source_name: Named
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    face_candidate_id: Named
+    pattern_candidate_id: Named
+    confirmed_by: Named
+    contract: InterfaceContract
 
 
 _Point3D = tuple[float, float, float]
@@ -459,6 +473,66 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             "this detector does not yet classify blind holes, counterbores, bosses, or pilot bores",
         ),
     )
+
+
+def confirm_step_interface(
+    candidates: StepInterfaceCandidates,
+    *,
+    pattern_id: str,
+    name: str,
+    mating_plane: str,
+    confirmed_by: str,
+) -> ConfirmedStepInterface:
+    """Accept one measured hole pattern as a downstream interface contract.
+
+    This function does not infer a choice or a semantic tag. The caller supplies the exact
+    deterministic candidate ID, the contract identity, and the person who reviewed the
+    measured proposal.
+    """
+    confirmer = confirmed_by.strip()
+    if not confirmer:
+        raise GeometryError("accepting an interface candidate names the person confirming it")
+    if not name.strip():
+        raise GeometryError("an accepted interface contract has a non-blank name")
+    if not mating_plane.strip():
+        raise GeometryError("an accepted interface names its semantic mating-plane tag")
+
+    matches = [
+        (face, pattern)
+        for face in candidates.planar_faces
+        for pattern in face.hole_patterns
+        if pattern.id == pattern_id
+    ]
+    if len(matches) != 1:
+        available = sorted(
+            pattern.id for face in candidates.planar_faces for pattern in face.hole_patterns
+        )
+        choices = ", ".join(available) if available else "none"
+        raise GeometryError(
+            f"pattern candidate {pattern_id!r} was not found exactly once; available: {choices}"
+        )
+    face, pattern = matches[0]
+    try:
+        return ConfirmedStepInterface(
+            source_name=candidates.source_name,
+            source_sha256=candidates.source_sha256,
+            face_candidate_id=face.id,
+            pattern_candidate_id=pattern.id,
+            confirmed_by=confirmer,
+            contract=InterfaceContract(
+                name=name.strip(),
+                mating_plane=mating_plane.strip(),
+                pattern=HolePattern(
+                    diameter=Quantity(magnitude=pattern.pitch_diameter_mm, unit="mm"),
+                    hole_count=pattern.hole_count,
+                    hole_size=Quantity(magnitude=pattern.hole_diameter_mm, unit="mm"),
+                ),
+            ),
+        )
+    except ValueError as failure:
+        raise GeometryError(
+            f"could not create the confirmed interface contract: {failure}"
+        ) from failure
 
 
 def _kernel():

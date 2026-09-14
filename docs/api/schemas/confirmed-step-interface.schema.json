@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "HolePattern": {
+      "additionalProperties": false,
+      "description": "A bolt/hole pattern published as part of an interface contract.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "hole_count": {
+          "minimum": 1,
+          "title": "Hole Count",
+          "type": "integer"
+        },
+        "hole_size": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "diameter",
+        "hole_count",
+        "hole_size"
+      ],
+      "title": "HolePattern",
+      "type": "object"
+    },
+    "InterfaceContract": {
+      "additionalProperties": false,
+      "description": "A published, importable interface: the geometry a mating part designs against.",
+      "properties": {
+        "mating_plane": {
+          "title": "Mating Plane",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "$ref": "#/$defs/HolePattern"
+        }
+      },
+      "required": [
+        "name",
+        "mating_plane",
+        "pattern"
+      ],
+      "title": "InterfaceContract",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/confirmed-step-interface/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate confirmed STEP interface: the source digest and exact measured candidate IDs, the named person who accepted them, and the InterfaceContract created for downstream design. Generated from anvilate.geometry.ConfirmedStepInterface.",
+  "properties": {
+    "confirmed_by": {
+      "title": "Confirmed By",
+      "type": "string"
+    },
+    "contract": {
+      "$ref": "#/$defs/InterfaceContract"
+    },
+    "face_candidate_id": {
+      "title": "Face Candidate Id",
+      "type": "string"
+    },
+    "pattern_candidate_id": {
+      "title": "Pattern Candidate Id",
+      "type": "string"
+    },
+    "source_name": {
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_name",
+    "source_sha256",
+    "face_candidate_id",
+    "pattern_candidate_id",
+    "confirmed_by",
+    "contract"
+  ],
+  "title": "ConfirmedStepInterface",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

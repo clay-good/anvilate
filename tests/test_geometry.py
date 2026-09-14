@@ -24,6 +24,7 @@ from anvilate.geometry import (  # noqa: E402
     build_cover_plate,
     build_spec,
     build_transmission_shaft,
+    confirm_step_interface,
     detect_step_interfaces,
     measure_geometry,
     read_step_validation_properties,
@@ -517,6 +518,58 @@ def test_step_interface_candidate_ids_and_order_are_deterministic(tmp_path):
     assert first == second
     assert len({face.id for face in first.planar_faces}) == 6
     assert first.source_sha256 == sha256(path.read_bytes()).hexdigest()
+
+
+def test_a_named_person_can_confirm_one_exact_candidate_as_an_interface_contract(tmp_path):
+    detected = detect_step_interfaces(_four_hole_step(tmp_path / "mating.step"))
+    face = next(face for face in detected.planar_faces if face.normal == (0, 0, 1))
+    pattern = face.hole_patterns[0]
+
+    accepted = confirm_step_interface(
+        detected,
+        pattern_id=pattern.id,
+        name="motor_mount",
+        mating_plane="motor_mount_face",
+        confirmed_by="R. Engineer",
+    )
+
+    assert accepted.source_sha256 == detected.source_sha256
+    assert accepted.face_candidate_id == face.id
+    assert accepted.pattern_candidate_id == pattern.id
+    assert accepted.confirmed_by == "R. Engineer"
+    assert accepted.contract.name == "motor_mount"
+    assert accepted.contract.mating_plane == "motor_mount_face"
+    assert accepted.contract.pattern.hole_count == 4
+    assert accepted.contract.pattern.diameter.to("mm").magnitude == pytest.approx(72.111025509)
+    assert accepted.contract.pattern.hole_size.to("mm").magnitude == pytest.approx(10)
+
+
+def test_an_interface_candidate_cannot_be_accepted_without_a_named_person(tmp_path):
+    detected = detect_step_interfaces(_four_hole_step(tmp_path / "mating.step"))
+    pattern = next(pattern for face in detected.planar_faces for pattern in face.hole_patterns)
+
+    with pytest.raises(GeometryError, match="names the person confirming it"):
+        confirm_step_interface(
+            detected,
+            pattern_id=pattern.id,
+            name="motor_mount",
+            mating_plane="motor_mount_face",
+            confirmed_by="   ",
+        )
+
+
+def test_interface_confirmation_refuses_an_unknown_candidate_and_names_the_choices(tmp_path):
+    detected = detect_step_interfaces(_four_hole_step(tmp_path / "mating.step"))
+    available = next(pattern.id for face in detected.planar_faces for pattern in face.hole_patterns)
+
+    with pytest.raises(GeometryError, match=available):
+        confirm_step_interface(
+            detected,
+            pattern_id="pattern-not-present",
+            name="motor_mount",
+            mating_plane="motor_mount_face",
+            confirmed_by="R. Engineer",
+        )
 
 
 def test_step_interface_detection_does_not_call_an_outside_cylinder_a_hole(tmp_path):

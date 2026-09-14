@@ -31,7 +31,13 @@ from pathlib import Path
 from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
-from .geometry import GeometryMeasurement, GeometrySummary, StepInterfaceCandidates, ViewportImage
+from .geometry import (
+    ConfirmedStepInterface,
+    GeometryMeasurement,
+    GeometrySummary,
+    StepInterfaceCandidates,
+    ViewportImage,
+)
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -46,11 +52,13 @@ __all__ = [
     "SCORECARD_SCHEMA_VERSION",
     "BUNDLE_SCHEMA_VERSION",
     "GEOMETRY_SCHEMA_VERSION",
+    "CONFIRMED_INTERFACE_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
+    "confirmed_interface_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
     "viewport_json_schema",
@@ -94,6 +102,9 @@ GEOMETRY_SCHEMA_VERSION = "1.2.0"
 
 # Planar faces and through-hole patterns measured from one imported mating STEP.
 INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.0.0"
+
+# One measured candidate accepted by a named person as an InterfaceContract.
+CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.0.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -177,6 +188,21 @@ def interface_candidates_json_schema() -> dict[str, Any]:
             "equal-diameter through-hole patterns measured from one imported solid. "
             "Candidates require user confirmation before becoming interface contracts. "
             "Generated from anvilate.geometry.StepInterfaceCandidates."
+        ),
+    )
+
+
+def confirmed_interface_json_schema() -> dict[str, Any]:
+    """One confirmed STEP candidate and the InterfaceContract created from it."""
+    return _artifact(
+        ConfirmedStepInterface,
+        name="confirmed-step-interface",
+        version=CONFIRMED_INTERFACE_SCHEMA_VERSION,
+        description=(
+            "Anvilate confirmed STEP interface: the source digest and exact measured "
+            "candidate IDs, the named person who accepted them, and the InterfaceContract "
+            "created for downstream design. Generated from "
+            "anvilate.geometry.ConfirmedStepInterface."
         ),
     )
 
@@ -344,6 +370,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "evidence-bundle.schema.json": bundle_json_schema(),
         "geometry-summary.schema.json": geometry_json_schema(),
         "step-interface-candidates.schema.json": interface_candidates_json_schema(),
+        "confirmed-step-interface.schema.json": confirmed_interface_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),

@@ -243,6 +243,18 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces.add_argument(
         "--format", choices=("text", "json"), default="text", help="how to render the candidates"
     )
+    interfaces.add_argument(
+        "--accept",
+        metavar="PATTERN_ID",
+        help="accept this exact detected hole-pattern candidate as an interface contract",
+    )
+    interfaces.add_argument("--name", help="name for the accepted InterfaceContract")
+    interfaces.add_argument(
+        "--mating-plane", help="semantic mating-face tag to publish in the accepted contract"
+    )
+    interfaces.add_argument(
+        "--confirmed-by", help="name of the person who reviewed and accepts the measured candidate"
+    )
 
     check = commands.add_parser(
         "check",
@@ -475,7 +487,7 @@ def _wants_json(arguments: list[str]) -> bool:
 
 def _requested_command(arguments: list[str]) -> str:
     """Best command identity available before a malformed invocation can be parsed."""
-    commands = {"build", "check", "verify", "diff", "export", "doctor", *_UNBUILT}
+    commands = {"build", "check", "verify", "diff", "export", "doctor", "interfaces", *_UNBUILT}
     return next((argument for argument in arguments if argument in commands), "anvilate")
 
 
@@ -963,10 +975,42 @@ def _margin_figure(value: float | None) -> str:
 
 def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     """Inspect one local STEP file for measured, unconfirmed mating interfaces."""
-    from .geometry import GeometryError, GeometryUnavailable, detect_step_interfaces
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        confirm_step_interface,
+        detect_step_interfaces,
+    )
+
+    acceptance = {
+        "--accept": args.accept,
+        "--name": args.name,
+        "--mating-plane": args.mating_plane,
+        "--confirmed-by": args.confirmed_by,
+    }
+    supplied = {option for option, value in acceptance.items() if value is not None}
+    if supplied and len(supplied) != len(acceptance):
+        missing = ", ".join(option for option in acceptance if option not in supplied)
+        print(
+            "anvilate interfaces: accepting a candidate requires --accept, --name, "
+            f"--mating-plane, and --confirmed-by; missing {missing}",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
 
     try:
         detected = detect_step_interfaces(args.step)
+        accepted = (
+            None
+            if not supplied
+            else confirm_step_interface(
+                detected,
+                pattern_id=args.accept,
+                name=args.name,
+                mating_plane=args.mating_plane,
+                confirmed_by=args.confirmed_by,
+            )
+        )
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
@@ -974,13 +1018,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_BAD_REQUEST
     if args.format == "json":
-        payload = machine_document(
-            "interfaces",
-            {
-                "path": str(args.step),
-                "candidates": detected.model_dump(mode="json"),
-            },
-        )
+        document = {
+            "path": str(args.step),
+            "candidates": detected.model_dump(mode="json"),
+        }
+        if accepted is not None:
+            document["accepted"] = accepted.model_dump(mode="json")
+        payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
         return EXIT_OK
 
@@ -1000,6 +1044,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             )
     for warning in detected.warnings:
         print(f"  note: {warning}", file=out)
+    if accepted is not None:
+        contract = accepted.contract
+        print(
+            f"  accepted: {contract.name} on {contract.mating_plane}, confirmed by "
+            f"{accepted.confirmed_by}",
+            file=out,
+        )
     return EXIT_OK
 
 

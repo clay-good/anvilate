@@ -1603,9 +1603,76 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert code == EXIT_OK and err == ""
     assert payload["command"] == "interfaces"
     assert payload["path"] == str(step)
+    assert "accepted" not in payload
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
     assert patterned[0]["hole_patterns"][0]["pitch_diameter_mm"] == pytest.approx(72.111025509)
+
+
+def test_interfaces_emits_a_confirmed_contract_only_with_an_exact_candidate_and_person(tmp_path):
+    step = _write_four_hole_step(tmp_path / "mating.step")
+    _code, discovered, _err = _run("interfaces", str(step), "--format", "json")
+    candidates = json.loads(discovered)["candidates"]
+    pattern = next(
+        pattern
+        for face in candidates["planar_faces"]
+        if face["normal"] == [0, 0, 1]
+        for pattern in face["hole_patterns"]
+    )
+
+    code, raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept",
+        pattern["id"],
+        "--name",
+        "motor_mount",
+        "--mating-plane",
+        "motor_mount_face",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+    payload = json.loads(raw)
+    accepted = payload["accepted"]
+
+    assert code == EXIT_OK and err == ""
+    assert accepted["source_sha256"] == candidates["source_sha256"]
+    assert accepted["pattern_candidate_id"] == pattern["id"]
+    assert accepted["confirmed_by"] == "R. Engineer"
+    assert accepted["contract"] == {
+        "name": "motor_mount",
+        "mating_plane": "motor_mount_face",
+        "pattern": {
+            "diameter": {"magnitude": pytest.approx(72.111025509), "unit": "mm"},
+            "hole_count": 4,
+            "hole_size": {"magnitude": pytest.approx(10), "unit": "mm"},
+        },
+    }
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+
+
+def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmation(tmp_path):
+    step = _write_four_hole_step(tmp_path / "mating.step")
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--accept",
+        "pattern-any",
+        "--name",
+        "motor_mount",
+        "--mating-plane",
+        "motor_mount_face",
+    )
+
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "missing --confirmed-by" in err
 
 
 def test_interfaces_refuses_a_non_step_file_as_a_bad_request(tmp_path):

@@ -173,12 +173,17 @@ To start a mating-part workflow from existing CAD, inspect a local STEP file:
 
 ```bash
 anvilate interfaces mating.step
+anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
+  --name motor_mount --mating-plane motor_mount_face \
+  --confirmed-by "R. Engineer" --format json
 ```
 
 The command imports one solid, lists stable planar-face candidates, and fits regular
 equal-diameter through holes to pitch circles from shared B-Rep topology. Its output is a
-proposal only: no candidate becomes a Design Spec interface contract until a user confirms
-it. Blind holes, counterbores, bosses, and pilot bores remain explicit detector limits.
+proposal only. Creating a contract requires the exact pattern ID, a semantic mating-plane
+tag, and a named confirmer; the result keeps the STEP digest and candidate IDs beside the
+generated `InterfaceContract`. Blind holes, counterbores, bosses, and pilot bores remain
+explicit detector limits.
 
 ## What you can do today
 
@@ -254,7 +259,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,577 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,587 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

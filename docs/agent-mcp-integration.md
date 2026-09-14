@@ -35,6 +35,9 @@ Mating-STEP interface discovery is currently a local operation:
 `anvilate interfaces mating.step`. It returns measured planar faces and regular through-hole
 patterns but is not exposed as an MCP tool, because those coordinates disclose imported CAD
 geometry and the remote tool surface has no approved delivery contract for that content.
+The same local command can accept an exact pattern with `--accept`, `--name`,
+`--mating-plane`, and `--confirmed-by`; all four are required before it emits an
+`InterfaceContract` with the source digest and candidate IDs retained beside it.
 
 Every task response also carries `_meta["dev.anvilate/progress"]` with `activity`,
 `completedUnits`, `totalUnits`, and `indeterminate`. Queued and running work has no invented

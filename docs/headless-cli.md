@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format` | the local solid was imported and its interface candidates were measured |
+| `interfaces` | a mating STEP | `--format`, `--accept`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -601,6 +601,9 @@ topology, not STEP mate metadata and not an LLM:
 ```bash
 anvilate interfaces mating.step
 anvilate interfaces mating.step --format json
+anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
+  --name motor_mount --mating-plane motor_mount_face \
+  --confirmed-by "R. Engineer" --format json
 ```
 
 ```text
@@ -616,11 +619,14 @@ carries the source file's SHA-256 digest and every hole center. A successful sca
 even when it finds no regular pattern; that is a completed measurement, not a passing
 engineering verdict.
 
-Nothing in this command edits a spec. A candidate becomes an `InterfaceContract` only after
-a user chooses it, preserving the confirmation boundary for imported evidence. This first
-detector handles one valid solid, planar faces, and through holes whose equal-diameter
-centers fit one pitch circle. Blind holes, counterbores, bosses, pilot bores, assemblies,
-and free-form hole groups remain explicit limits in the output.
+Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
+Acceptance requires all four values: the exact pattern ID, the downstream contract name, a
+semantic mating-plane tag, and the name of the person confirming the measurement. The JSON
+then adds `accepted`, containing the source digest and face/pattern IDs, `confirmed_by`, and
+the generated `InterfaceContract`; omitting any confirmation input exits 3 and emits no
+contract. This first detector handles one valid solid, planar faces, and through holes whose
+equal-diameter centers fit one pitch circle. Blind holes, counterbores, bosses, pilot bores,
+assemblies, and free-form hole groups remain explicit limits in the output.
 
 ## `anvilate verify`
 
