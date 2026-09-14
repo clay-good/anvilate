@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.2.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.3.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.2.0.json"]
-SchemaVersion = Literal["1.2.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.3.0.json"]
+SchemaVersion = Literal["1.3.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -186,6 +186,21 @@ class ErrorOutput(_WireModel):
     remedy: Named
 
 
+class DoctorCheck(_WireModel):
+    name: Named
+    status: Literal["pass", "fail"]
+    detail: Named
+    remedy: Named | None
+
+
+class DoctorOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["doctor"]
+    status: Literal["pass", "fail"]
+    checks: tuple[DoctorCheck, ...]
+
+
 CliOutput = (
     CheckOutput
     | EvidenceBundleOutput
@@ -194,6 +209,7 @@ CliOutput = (
     | DiffOutput
     | RefusalOutput
     | ErrorOutput
+    | DoctorOutput
 )
 
 

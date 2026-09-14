@@ -178,8 +178,8 @@ command-specific content:
 
 ```json
 {
-  "schema": "https://anvilate.dev/schemas/cli-output/1.2.0.json",
-  "schema_version": "1.2.0",
+  "schema": "https://anvilate.dev/schemas/cli-output/1.3.0.json",
+  "schema_version": "1.3.0",
   "command": "check"
 }
 ```
@@ -201,6 +201,9 @@ Version 1.2.0 adds the internal-error variant. Unexpected exceptions from comman
 exit 5 and carry `outcome: error`, the diagnostic, and the retry/report remedy. Ordinary
 Python exceptions are contained; `KeyboardInterrupt` and `SystemExit` remain control flow
 and are not mislabeled as product defects.
+
+Version 1.3.0 adds the `doctor` result: one independently reported pass/fail record for each
+required runtime area, including a remedy on every failure.
 
 ## What is not published as a schema artifact
 

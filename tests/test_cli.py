@@ -543,6 +543,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         ),
         ("verify", *_verify_args(envelope), "--format", "json"),
         ("diff", "diff", "--format", "json", str(before), str(after)),
+        ("doctor", "doctor", "--format", "json"),
     )
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -1552,6 +1553,23 @@ def test_every_command_help_has_a_parser_accepted_example():
         assert parser.parse_args(shlex.split(example)[1:]).command == command
 
 
+def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure():
+    code, raw, error = _run("doctor", "--format", "json")
+    payload = json.loads(raw)
+    by_name = {check["name"]: check for check in payload["checks"]}
+    assert set(by_name) == {
+        "FEA solver",
+        "geometry kernel",
+        "local model runtime",
+        "viewport prerequisites",
+        "database integrity",
+    }
+    assert payload["status"] == "fail" and code == EXIT_FAILED and error == ""
+    assert all(check["remedy"] for check in by_name.values() if check["status"] == "fail")
+    assert by_name["database integrity"]["status"] == "pass"
+    assert "material" in by_name["database integrity"]["detail"]
+
+
 @pytest.mark.parametrize("command", ["check", "diff", "verify", "export"])
 def test_every_backed_command_explains_its_own_exit_code(command):
     """The program help defers to these, so they have to say something."""
@@ -1967,7 +1985,7 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
         if isinstance(action, argparse._SubParsersAction)
     )
     backed = sorted(set(commands) - set(cli._UNBUILT))
-    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
     assert claimed is not None, "the module no longer says how many commands are backed"

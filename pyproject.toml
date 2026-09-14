@@ -52,7 +52,7 @@ dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21", "mypy>=1.11
 # The MCP server on stdio. No arguments and no configuration: the surface is the
 # published tool catalog and there is no state to lose across a restart.
 anvilate-mcp = "anvilate.mcp:main"
-# The headless CLI. Four of its five commands are backed; `build` is refused by name with
+# The headless CLI. Five of its six commands are backed; `build` is refused by name with
 # what it waits on, rather than reported as an unknown command.
 anvilate = "anvilate.cli:main"
 

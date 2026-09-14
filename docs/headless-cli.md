@@ -1,8 +1,8 @@
 # `anvilate` on the command line
 
-Three of the four commands `headless-automation` names are backed, and a fifth that
-`evidence-attestation` names is backed too. The one that is not is refused by name, with
-what it is waiting on.
+Three of the four commands `headless-automation` names are backed; `verify` from
+`evidence-attestation` and the environment self-check `doctor` are backed too. The one that
+is not is refused by name, with what it is waiting on.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
@@ -11,6 +11,7 @@ what it is waiting on.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--format` | nothing: it is specified and unbuilt, and exits 4 |
+| `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -312,9 +313,18 @@ stderr at all.
 one object per spec with its path, its name and its whole scorecard. A list whatever the
 count, because a shape that changes with the number of arguments is a shape every caller has
 to branch on, and the branch is wrong the first time a directory happens to hold exactly one
-spec. Every JSON-producing command also carries `schema` and `schema_version`; all five
+spec. Every JSON-producing command also carries `schema` and `schema_version`; all six
 result shapes are published at
 [`cli-output.schema.json`](api/schemas/cli-output.schema.json).
+
+### Check the environment before debugging a design
+
+`anvilate doctor` checks the five runtime areas the onboarding contract names: FEA solver,
+geometry kernel, local model runtime, viewport prerequisites, and bundled database
+integrity. Each gets its own pass/fail line, and every failure carries a concrete next
+action. The current release honestly reports the first four as unbuilt and proves the fifth
+by loading the bundled resolver and counting its material and component designations.
+`--format json` emits the same report under CLI output schema 1.3.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what

@@ -1,4 +1,4 @@
-"""The headless command line: four commands that are backed, and the one that is not.
+"""The headless command line: five commands that are backed, and the one that is not.
 
 `headless-automation` requires the CLI to expose every pipeline capability — "at minimum
 ``anvilate build``, ``anvilate check``, ``anvilate export``, ``anvilate diff`` — operating on
@@ -6,10 +6,11 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Three of the four are backed today**, and a fifth command the attestation capability names
-is backed as well: only ``build`` is refused, and it is refused by name with what it waits
-on. ``check`` compiles a spec document and screens it,
-which is exactly the path :func:`anvilate.screening.screen_spec` already serves over MCP.
+**Four of the five are backed today**, and a sixth command, ``doctor``, reports runtime
+readiness: the fifth is ``verify`` from the attestation capability. Only ``build`` is
+refused, and it is refused by name with what it waits on. ``check`` compiles a spec document
+and screens it, which is exactly the path :func:`anvilate.screening.screen_spec` already
+serves over MCP.
 ``export`` serves the artifacts that need no geometry — the evidence bundle, and QIF results
 (ISO 23952), both assembled from a screened card — and refuses the one that does.
 
@@ -172,6 +173,7 @@ _COMMAND_EXAMPLES = {
     "verify": "anvilate verify bundle.dsse.json --artifact scorecard.json=scorecard.json",
     "diff": "anvilate diff before.yaml after.yaml --format json",
     "build": "anvilate build part.yaml --format json",
+    "doctor": "anvilate doctor --format json",
 }
 
 
@@ -334,6 +336,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render it"
     )
 
+    doctor = commands.add_parser(
+        "doctor",
+        help="check which Anvilate runtime capabilities are ready",
+        description="Check solvers, geometry, the local model runtime, viewport support, "
+        "and bundled database integrity independently. Exit 0 only when every item passes.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['doctor']}",
+    )
+    doctor.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the report"
+    )
+
     for name, reason in _UNBUILT.items():
         unbuilt = commands.add_parser(
             name,
@@ -412,6 +425,8 @@ def run(
             code = _verify(args, out=command_out, err=command_err)
         elif args.command == "diff":
             code = _diff(args, out=command_out, err=command_err)
+        elif args.command == "doctor":
+            code = _doctor(args, out=command_out)
         else:
             code = _check(args, out=command_out, err=command_err)
     except Exception as failure:
@@ -491,6 +506,79 @@ def _print_error(*, command: str, diagnostic: str, out) -> None:
         ),
         file=out,
     )
+
+
+def _doctor(args: argparse.Namespace, *, out) -> int:
+    """Report each required runtime capability independently and actionably."""
+    from .standards import default_standards_resolver
+
+    specs = "https://github.com/clay-good/anvilate/tree/main/openspec/specs"
+    checks = [
+        {
+            "name": "FEA solver",
+            "status": "fail",
+            "detail": "No FEA solver backend is shipped or configured in this release.",
+            "remedy": (
+                f"Implement and configure the T3 backend specified in {specs}/validation-gauntlet."
+            ),
+        },
+        {
+            "name": "geometry kernel",
+            "status": "fail",
+            "detail": "No geometry kernel is shipped or configured in this release.",
+            "remedy": (
+                f"Install the kernel selected by {specs}/geometry-generation once implemented."
+            ),
+        },
+        {
+            "name": "local model runtime",
+            "status": "fail",
+            "detail": "No local intent-compilation model runtime is shipped or configured.",
+            "remedy": (
+                f"Configure the local runtime selected by {specs}/intent-compilation once "
+                "implemented."
+            ),
+        },
+        {
+            "name": "viewport prerequisites",
+            "status": "fail",
+            "detail": "Viewport rendering waits on built geometry and has no renderer backend.",
+            "remedy": (
+                f"Complete geometry and viewport rendering under {specs}/geometry-generation."
+            ),
+        },
+    ]
+    resolver = default_standards_resolver()
+    material_count = len(resolver.known_materials())
+    component_count = len(resolver.known_components())
+    checks.append(
+        {
+            "name": "database integrity",
+            "status": "pass",
+            "detail": (
+                f"Loaded {material_count} material and {component_count} component designations "
+                "from the bundled standards databases."
+            ),
+            "remedy": None,
+        }
+    )
+    status = "fail" if any(check["status"] == "fail" for check in checks) else "pass"
+    if args.format == "json":
+        print(
+            json.dumps(
+                machine_document("doctor", {"status": status, "checks": checks}),
+                indent=2,
+                sort_keys=True,
+            ),
+            file=out,
+        )
+    else:
+        print(f"doctor: {status.upper()}", file=out)
+        for check in checks:
+            print(f"  {check['status']:<4}  {check['name']}: {check['detail']}", file=out)
+            if check["remedy"]:
+                print(f"        fix: {check['remedy']}", file=out)
+    return EXIT_OK if status == "pass" else EXIT_FAILED
 
 
 def _diff(args: argparse.Namespace, *, out, err) -> int:

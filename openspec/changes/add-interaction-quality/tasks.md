@@ -24,7 +24,7 @@
 
 - [ ] 3.1 TTY detection, `NO_COLOR`, dumb terminals, width awareness, ASCII fallback
 - [x] 3.2 Machine-readable output on every command with a stable, versioned schema
-      — `cli-output` 1.2.0 covers all five completed-result paths plus parser, bad-input,
+      — `cli-output` 1.3.0 covers every completed-result path plus parser, bad-input,
       and unbuilt refusals while preserving their exit codes and stderr diagnostics
 - [x] 3.3 Exit codes: success, refusal, failed verdict, internal error — distinct and
       documented; unexpected command defects exit 5 and JSON schema 1.2.0 identifies them
