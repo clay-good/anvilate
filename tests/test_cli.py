@@ -110,6 +110,19 @@ def _run(*argv):
     return code, out.getvalue(), err.getvalue()
 
 
+def _write_four_hole_step(path: Path) -> Path:
+    from build123d import Align, Box, Cylinder, Location, export_step
+
+    shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    for x in (-30, 30):
+        for y in (-20, 20):
+            shape = shape - Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+                Location((x, y, 0))
+            )
+    export_step(shape, path)
+    return path
+
+
 @pytest.fixture
 def spec_file(tmp_path):
     path = tmp_path / "deck.yaml"
@@ -622,6 +635,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         _run("build", str(build_spec), "--output", str(verified_step), "--format", "json")[0]
         == EXIT_OK
     )
+    mating_step = _write_four_hole_step(tmp_path / "mating.step")
     before, after = spec_pair
     invocations = (
         ("check", "check", "--format", "json", str(spec_file)),
@@ -657,6 +671,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
             "json",
         ),
         ("doctor", "doctor", "--format", "json"),
+        ("interfaces", "interfaces", str(mating_step), "--format", "json"),
     )
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -1567,6 +1582,42 @@ def test_verify_step_reports_properties_and_detects_tampering(tmp_path):
     assert payload["problems"][0] in err
 
 
+def test_interfaces_lists_measured_planes_and_through_hole_patterns(tmp_path):
+    step = _write_four_hole_step(tmp_path / "mating.step")
+
+    code, text, err = _run("interfaces", str(step))
+
+    assert code == EXIT_OK and err == ""
+    assert "6 planar interface candidates" in text
+    assert text.count("4 × ⌀10 mm on ⌀72.111 mm pitch circle") == 2
+    assert "confirm one before creating an interface contract" in text
+
+
+def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
+    step = _write_four_hole_step(tmp_path / "mating.step")
+
+    code, raw, err = _run("interfaces", str(step), "--format", "json")
+    payload = json.loads(raw)
+    patterned = [face for face in payload["candidates"]["planar_faces"] if face["hole_patterns"]]
+
+    assert code == EXIT_OK and err == ""
+    assert payload["command"] == "interfaces"
+    assert payload["path"] == str(step)
+    assert len(patterned) == 2
+    assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
+    assert patterned[0]["hole_patterns"][0]["pitch_diameter_mm"] == pytest.approx(72.111025509)
+
+
+def test_interfaces_refuses_a_non_step_file_as_a_bad_request(tmp_path):
+    path = tmp_path / "not-step.step"
+    path.write_text("not a STEP exchange file", encoding="utf-8")
+
+    code, out, err = _run("interfaces", str(path))
+
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "could not import STEP file" in err
+
+
 def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_path):
     spec = tmp_path / "base-plate.yaml"
     output = tmp_path / "base-plate.step"
@@ -1842,7 +1893,7 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert "material" in by_name["database integrity"]["detail"]
 
 
-@pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export"])
+@pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export", "interfaces"])
 def test_every_backed_command_explains_its_own_exit_code(command):
     """The program help defers to these, so they have to say something."""
     text = _help(command)
@@ -2257,12 +2308,12 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
         if isinstance(action, argparse._SubParsersAction)
     )
     backed = sorted(set(commands) - set(cli._UNBUILT))
-    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
     assert claimed is not None, "the module no longer says how many commands are backed"
-    # The sentence counts the four `headless-automation` names; `verify` comes from the
-    # attestation capability and is the "fifth" the next clause names.
+    # The sentence counts the non-attestation commands; `verify` comes from the
+    # attestation capability and is the seventh the next clause names.
     assert words[claimed.group(2).lower()] == len(commands) - 1
     assert words[claimed.group(1).lower()] == len([name for name in backed if name != "verify"])
 

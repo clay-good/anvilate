@@ -1,9 +1,10 @@
 # `anvilate` on the command line
 
 All four commands `headless-automation` names are backed; `verify` from
-`evidence-attestation` and the environment self-check `doctor` are backed too. Geometry is
-pattern-limited: `base_plate`, `cover_plate`, and `transmission_shaft` build today, and an
-element whose audited pattern has not shipped exits 4 naming that gap.
+`evidence-attestation`, mating-STEP inspection from `input-ingestion`, and the environment
+self-check `doctor` are backed too. Geometry is pattern-limited: `base_plate`,
+`cover_plate`, and `transmission_shaft` build today, and an element whose audited pattern
+has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
@@ -12,6 +13,7 @@ element whose audited pattern has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
+| `interfaces` | a mating STEP | `--format` | the local solid was imported and its interface candidates were measured |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -589,6 +591,36 @@ and there is no bundle *writer* behind that gate. Printing is not emitting — a
 redirecting the output is doing their own act — and a file-writing path here would be the
 first one outside `anvilate.export`, which is exactly the bypass the gate exists to prevent.
 A test asserts the command creates no file anywhere.
+
+## `anvilate interfaces`
+
+`interfaces` imports one local mating-part STEP and deterministically lists planar faces
+and regular equal-diameter through-hole patterns. It reads B-Rep geometry and shared edge
+topology, not STEP mate metadata and not an LLM:
+
+```bash
+anvilate interfaces mating.step
+anvilate interfaces mating.step --format json
+```
+
+```text
+mating.step: 6 planar interface candidates
+  plane-30576f1f0651  area 7685.84 mm²  center (0, 0, 0) mm  normal (0, 0, -1)
+    pattern-d32fc45f9b2e  4 × ⌀10 mm on ⌀72.111 mm pitch circle
+  note: candidates are measured suggestions only; confirm one before creating an interface contract
+```
+
+Face and pattern IDs are hashes of rounded measured geometry, so re-importing unchanged
+geometry returns the same identities without depending on kernel face order. The JSON also
+carries the source file's SHA-256 digest and every hole center. A successful scan exits 0
+even when it finds no regular pattern; that is a completed measurement, not a passing
+engineering verdict.
+
+Nothing in this command edits a spec. A candidate becomes an `InterfaceContract` only after
+a user chooses it, preserving the confirmation boundary for imported evidence. This first
+detector handles one valid solid, planar faces, and through holes whose equal-diameter
+centers fit one pitch circle. Blind holes, counterbores, bosses, pilot bores, assemblies,
+and free-form hole groups remain explicit limits in the output.
 
 ## `anvilate verify`
 

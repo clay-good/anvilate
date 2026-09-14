@@ -6,7 +6,7 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Five of the five are backed today**; a sixth command, ``verify``, comes from the
+**Six of the six are backed today**; a seventh command, ``verify``, comes from the
 attestation capability. ``doctor`` reports which optional runtimes are present.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
 ``transmission_shaft`` patterns. Other element types are refused by name rather than sent
@@ -166,6 +166,7 @@ _COMMAND_EXAMPLES = {
     "diff": "anvilate diff before.yaml after.yaml --format json",
     "build": "anvilate build part.yaml --output part.step",
     "doctor": "anvilate doctor --format json",
+    "interfaces": "anvilate interfaces mating.step --format json",
 }
 
 
@@ -228,6 +229,20 @@ def _build_parser() -> argparse.ArgumentParser:
     # gate says so.
     parser.add_argument("--version", action="version", version=f"anvilate {_installed_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    interfaces = commands.add_parser(
+        "interfaces",
+        help="detect planar faces and through-hole patterns in a mating STEP",
+        description="Import one local STEP solid and list measured interface candidates. "
+        "No candidate becomes a Design Spec contract until a user confirms it. Exit 0 "
+        "means the import and detection completed; a bad file exits 3 and a missing "
+        "geometry runtime exits 4.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['interfaces']}",
+    )
+    interfaces.add_argument("step", type=Path, help="the local mating-part STEP file to inspect")
+    interfaces.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the candidates"
+    )
 
     check = commands.add_parser(
         "check",
@@ -343,7 +358,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "build",
         help="build an audited Design Spec geometry pattern as STEP",
         description="Build one Design Spec as a valid B-Rep and write a validation-stamped "
-        "STEP. Base and cover plates are supported; unsupported patterns exit 4 and name "
+        "STEP. Base plates, cover plates, and transmission shafts are supported; unsupported "
+        "patterns exit 4 and name "
         "the missing pattern. A nonpassing card writes nothing unless --unvalidated is "
         "explicit. Exit 0 means the STEP was written; a bad spec or output exits 3, and an "
         "unexpected kernel error exits 5. Existing files are not overwritten unless "
@@ -417,6 +433,8 @@ def run(
     try:
         if args.command == "build":
             code = _build(args, out=command_out, err=command_err)
+        elif args.command == "interfaces":
+            code = _interfaces(args, out=command_out, err=command_err)
         elif args.command == "export":
             code = _export(args, out=command_out, err=command_err)
         elif args.command == "verify":
@@ -941,6 +959,48 @@ def _diff_document(
 def _margin_figure(value: float | None) -> str:
     """A safety factor for the diff line, or the word for a check that carries none."""
     return "none" if value is None else f"{value:.{_MARGIN_DECIMALS}f}"
+
+
+def _interfaces(args: argparse.Namespace, *, out, err) -> int:
+    """Inspect one local STEP file for measured, unconfirmed mating interfaces."""
+    from .geometry import GeometryError, GeometryUnavailable, detect_step_interfaces
+
+    try:
+        detected = detect_step_interfaces(args.step)
+    except GeometryUnavailable as failure:
+        print(f"anvilate interfaces: {failure}", file=err)
+        return EXIT_UNBUILT
+    except GeometryError as failure:
+        print(f"anvilate interfaces: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+    if args.format == "json":
+        payload = machine_document(
+            "interfaces",
+            {
+                "path": str(args.step),
+                "candidates": detected.model_dump(mode="json"),
+            },
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+        return EXIT_OK
+
+    print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
+    for face in detected.planar_faces:
+        center = ", ".join(f"{value:g}" for value in face.center_mm)
+        normal = ", ".join(f"{value:g}" for value in face.normal)
+        print(
+            f"  {face.id}  area {face.area_mm2:g} mm²  center ({center}) mm  normal ({normal})",
+            file=out,
+        )
+        for pattern in face.hole_patterns:
+            print(
+                f"    {pattern.id}  {pattern.hole_count} × ⌀{pattern.hole_diameter_mm:g} mm "
+                f"on ⌀{pattern.pitch_diameter_mm:g} mm pitch circle",
+                file=out,
+            )
+    for warning in detected.warnings:
+        print(f"  note: {warning}", file=out)
+    return EXIT_OK
 
 
 def _render_diff(document: dict[str, Any]) -> str:

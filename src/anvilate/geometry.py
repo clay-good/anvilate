@@ -12,6 +12,7 @@ the dependency is required only when a solid is built or written.
 from __future__ import annotations
 
 import base64
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from threading import Lock
 from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, FiniteFloat, model_validator
 
 from ._models import FrozenMap, Named, StatableModel
 from .export.gate import ExportAuthorization
@@ -41,14 +42,18 @@ __all__ = [
     "GeometrySummary",
     "GeometryMeasurement",
     "GeometryUnavailable",
+    "HolePatternCandidate",
+    "PlanarInterfaceCandidate",
     "RenderedViewport",
     "StepValidationProperties",
+    "StepInterfaceCandidates",
     "UnsupportedGeometry",
     "ViewportImage",
     "build_base_plate",
     "build_cover_plate",
     "build_transmission_shaft",
     "build_spec",
+    "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
     "read_step_validation_properties",
@@ -200,6 +205,260 @@ class StepValidationProperties:
     volume_mm3: float
     surface_area_mm2: float
     centroid_mm: tuple[float, float, float]
+
+
+class HolePatternCandidate(StatableModel):
+    """One equal-diameter through-hole pattern measured on a planar STEP face."""
+
+    id: Named
+    hole_count: Annotated[int, Field(ge=2)]
+    hole_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    pitch_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    hole_centers_mm: tuple[tuple[FiniteFloat, FiniteFloat, FiniteFloat], ...] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def _count_matches_centers(self) -> HolePatternCandidate:
+        if self.hole_count != len(self.hole_centers_mm):
+            raise ValueError(
+                f"hole_count is {self.hole_count}, but "
+                f"{len(self.hole_centers_mm)} centers are listed"
+            )
+        return self
+
+
+class PlanarInterfaceCandidate(StatableModel):
+    """One planar mating-face candidate and any through-hole patterns it carries."""
+
+    id: Named
+    area_mm2: Annotated[FiniteFloat, Field(gt=0)]
+    center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    normal: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    hole_patterns: tuple[HolePatternCandidate, ...] = ()
+
+
+class StepInterfaceCandidates(StatableModel):
+    """Deterministic interface candidates measured from one imported STEP part."""
+
+    source_name: Named
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    planar_faces: tuple[PlanarInterfaceCandidate, ...]
+    warnings: tuple[str, ...] = ()
+
+
+_Point3D = tuple[float, float, float]
+
+
+@dataclass
+class _DetectedPlane:
+    face: Any
+    area: float
+    center: _Point3D
+    normal: _Point3D
+    holes: list[tuple[float, _Point3D]]
+
+
+def _coordinates(vector: Any) -> _Point3D:
+    """One kernel vector as stable plain coordinates."""
+    return (float(vector.X), float(vector.Y), float(vector.Z))
+
+
+def _dot(left: _Point3D, right: _Point3D) -> float:
+    return sum(a * b for a, b in zip(left, right, strict=True))
+
+
+def _candidate_id(prefix: str, values: object) -> str:
+    payload = json.dumps(values, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"{prefix}-{sha256(payload).hexdigest()[:12]}"
+
+
+def _rounded_point(point: _Point3D) -> _Point3D:
+    def clean(value: float) -> float:
+        return 0.0 if abs(value) < 0.0000000005 else round(value, 9)
+
+    return (clean(point[0]), clean(point[1]), clean(point[2]))
+
+
+def _subtract(left: _Point3D, right: _Point3D) -> _Point3D:
+    return (left[0] - right[0], left[1] - right[1], left[2] - right[2])
+
+
+def _point_along(origin: _Point3D, direction: _Point3D, distance: float) -> _Point3D:
+    return (
+        origin[0] + distance * direction[0],
+        origin[1] + distance * direction[1],
+        origin[2] + distance * direction[2],
+    )
+
+
+def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
+    """Detect planar faces and regular equal-diameter through-hole patterns in STEP.
+
+    The result is a set of candidates, not an accepted interface contract. The caller must
+    choose a face and pattern before putting either into a Design Spec. Detection relies on
+    imported B-Rep topology and measured geometry only; STEP mate semantics and entity order
+    are ignored.
+    """
+    try:
+        from build123d import import_step
+        from OCP.Message import Message  # type: ignore[import-untyped]
+    except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
+        raise GeometryUnavailable(
+            "STEP interface detection needs the optional dependency; install anvilate[geometry]"
+        ) from failure
+    try:
+        source_bytes = path.read_bytes()
+    except OSError as failure:
+        raise GeometryError(f"could not read STEP file {path}: {failure}") from failure
+    if not source_bytes.lstrip().startswith(b"ISO-10303-21;"):
+        raise GeometryError(f"could not import STEP file {path}: missing ISO-10303-21 header")
+    try:
+        # OCCT writes parser diagnostics through process-global printers, bypassing the
+        # caller's stdout stream. Remove them only while this locked import runs so JSON
+        # output remains JSON even for a malformed exchange file, then restore them.
+        with _STEP_IO_LOCK:
+            messenger = Message.DefaultMessenger_s()
+            printers = list(messenger.Printers())
+            for printer in printers:
+                messenger.RemovePrinter(printer)
+            try:
+                shape = import_step(path)
+            finally:
+                for printer in printers:
+                    messenger.AddPrinter(printer)
+    except Exception as failure:
+        raise GeometryError(f"could not import STEP file {path}: {failure}") from failure
+    if not shape.is_valid or len(shape.solids()) != 1:
+        raise GeometryError(
+            f"STEP interface detection needs one valid solid; found {len(shape.solids())}"
+        )
+
+    planar = [face for face in shape.faces() if face.geom_type.name == "PLANE"]
+    planes = [
+        _DetectedPlane(
+            face=face,
+            area=float(face.area),
+            center=_coordinates(face.center()),
+            normal=_coordinates(face.normal_at()),
+            holes=[],
+        )
+        for face in planar
+    ]
+
+    for cylinder in (face for face in shape.faces() if face.geom_type.name == "CYLINDER"):
+        axis = cylinder.axis_of_rotation
+        radius = cylinder.radius
+        if axis is None or radius is None:  # pragma: no cover - a cylindrical face has both
+            continue
+        direction = _coordinates(axis.direction)
+        axis_point = _coordinates(axis.position)
+        surface_point = _coordinates(cylinder.center())
+        along = _dot(_subtract(surface_point, axis_point), direction)
+        axial_point = _point_along(axis_point, direction, along)
+        radial = _subtract(surface_point, axial_point)
+        if _dot(radial, _coordinates(cylinder.normal_at())) >= 0:
+            continue  # an outside cylinder or boss, not a hole
+        circular_edges = [edge for edge in cylinder.edges() if edge.geom_type.name == "CIRCLE"]
+        attached = []
+        for index, plane in enumerate(planes):
+            if any(
+                plane_edge.is_same(cylinder_edge)
+                for plane_edge in plane.face.edges()
+                for cylinder_edge in circular_edges
+            ):
+                attached.append(index)
+        if len(attached) != 2:
+            continue
+        first, second = (planes[index] for index in attached)
+        if _dot(first.normal, second.normal) > -0.999999:
+            continue
+        if abs(_dot(direction, first.normal)) < 0.999999:
+            continue
+        for index in attached:
+            plane = planes[index]
+            denominator = _dot(direction, plane.normal)
+            distance = _dot(_subtract(plane.center, axis_point), plane.normal) / denominator
+            center = _point_along(axis_point, direction, distance)
+            plane.holes.append((float(radius), _rounded_point(center)))
+
+    candidates = []
+    for plane in planes:
+        center = _rounded_point(plane.center)
+        normal = _rounded_point(plane.normal)
+        face_signature = {"area": round(plane.area, 9), "center": center, "normal": normal}
+        face_id = _candidate_id("plane", face_signature)
+        groups: dict[float, list[tuple[float, float, float]]] = {}
+        for radius, hole_center in plane.holes:
+            groups.setdefault(round(radius, 6), []).append(hole_center)
+        patterns = []
+        for radius, hole_centers in sorted(groups.items()):
+            if len(hole_centers) < 2:
+                continue
+            ordered_centers = tuple(sorted(hole_centers))
+            pattern_center = (
+                sum(point[0] for point in ordered_centers) / len(ordered_centers),
+                sum(point[1] for point in ordered_centers) / len(ordered_centers),
+                sum(point[2] for point in ordered_centers) / len(ordered_centers),
+            )
+            pitch_radii = [
+                sqrt(
+                    (point[0] - pattern_center[0]) ** 2
+                    + (point[1] - pattern_center[1]) ** 2
+                    + (point[2] - pattern_center[2]) ** 2
+                )
+                for point in ordered_centers
+            ]
+            pitch_radius = sum(pitch_radii) / len(pitch_radii)
+            fit_tolerance = max(0.01, pitch_radius * 1e-4)
+            if (
+                pitch_radius <= 0
+                or max(abs(value - pitch_radius) for value in pitch_radii) > fit_tolerance
+            ):
+                continue
+            pattern_signature = {
+                "face": face_id,
+                "hole_diameter": round(2 * radius, 9),
+                "pitch_diameter": round(2 * pitch_radius, 9),
+                "center": _rounded_point(pattern_center),
+                "holes": ordered_centers,
+            }
+            patterns.append(
+                HolePatternCandidate(
+                    id=_candidate_id("pattern", pattern_signature),
+                    hole_count=len(ordered_centers),
+                    hole_diameter_mm=2 * radius,
+                    pitch_diameter_mm=round(2 * pitch_radius, 9),
+                    center_mm=_rounded_point(pattern_center),
+                    hole_centers_mm=ordered_centers,
+                )
+            )
+        candidates.append(
+            PlanarInterfaceCandidate(
+                id=face_id,
+                area_mm2=round(plane.area, 9),
+                center_mm=center,
+                normal=normal,
+                hole_patterns=tuple(sorted(patterns, key=lambda pattern: pattern.id)),
+            )
+        )
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.normal,
+            candidate.center_mm,
+            candidate.area_mm2,
+            candidate.id,
+        )
+    )
+    return StepInterfaceCandidates(
+        source_name=path.name,
+        source_sha256=sha256(source_bytes).hexdigest(),
+        planar_faces=tuple(candidates),
+        warnings=(
+            "candidates are measured suggestions only; confirm one before creating an "
+            "interface contract",
+            "this detector does not yet classify blind holes, counterbores, bosses, or pilot bores",
+        ),
+    )
 
 
 def _kernel():

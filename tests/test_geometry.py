@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import re
+from hashlib import sha256
 from types import MappingProxyType
 from xml.etree import ElementTree
 
@@ -17,11 +18,13 @@ from anvilate.geometry import (  # noqa: E402
     COVER_PLATE_PATTERN,
     TRANSMISSION_SHAFT_PATTERN,
     GeometryError,
+    HolePatternCandidate,
     UnsupportedGeometry,
     build_base_plate,
     build_cover_plate,
     build_spec,
     build_transmission_shaft,
+    detect_step_interfaces,
     measure_geometry,
     read_step_validation_properties,
     render_viewport,
@@ -101,6 +104,19 @@ def _spec(*, element_type: str = "base_plate", params=None) -> DesignSpec:
         element_params=params or _plate().model_dump(),
         acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
     )
+
+
+def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20))):
+    from build123d import Align, Box, Cylinder, Location, export_step
+
+    shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    for x, y in centers:
+        cutter = Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((x, y, 0))
+        )
+        shape = shape - cutter
+    export_step(shape, path)
+    return path
 
 
 def test_base_plate_golden_dimensions_and_kernel_volume():
@@ -471,6 +487,100 @@ def test_transmission_shaft_geometry_requires_a_declared_length():
 def test_transmission_shaft_geometry_refuses_a_non_length_dimension():
     with pytest.raises(GeometryError, match="diameter must be a length"):
         build_transmission_shaft(_shaft(diameter=Quantity.parse("55 N")))
+
+
+def test_step_interface_detection_finds_planar_faces_and_the_four_hole_circle(tmp_path):
+    path = _four_hole_step(tmp_path / "mating.step")
+
+    detected = detect_step_interfaces(path)
+    patterned = [face for face in detected.planar_faces if face.hole_patterns]
+
+    assert detected.source_name == "mating.step"
+    assert len(detected.planar_faces) == 6
+    assert {face.normal for face in patterned} == {(0, 0, -1), (0, 0, 1)}
+    assert len(patterned) == 2
+    for face in patterned:
+        pattern = face.hole_patterns[0]
+        assert pattern.hole_count == 4
+        assert pattern.hole_diameter_mm == pytest.approx(10)
+        assert pattern.pitch_diameter_mm == pytest.approx(2 * (30**2 + 20**2) ** 0.5)
+        assert pattern.center_mm[:2] == pytest.approx((0, 0))
+        assert len(pattern.hole_centers_mm) == 4
+
+
+def test_step_interface_candidate_ids_and_order_are_deterministic(tmp_path):
+    path = _four_hole_step(tmp_path / "mating.step")
+
+    first = detect_step_interfaces(path)
+    second = detect_step_interfaces(path)
+
+    assert first == second
+    assert len({face.id for face in first.planar_faces}) == 6
+    assert first.source_sha256 == sha256(path.read_bytes()).hexdigest()
+
+
+def test_step_interface_detection_does_not_call_an_outside_cylinder_a_hole(tmp_path):
+    path = write_step(
+        build_transmission_shaft(_shaft()),
+        tmp_path / "shaft.step",
+        authorization=_STEP_AUTH,
+    )
+
+    detected = detect_step_interfaces(path)
+
+    assert len(detected.planar_faces) == 2
+    assert all(not face.hole_patterns for face in detected.planar_faces)
+
+
+def test_step_interface_detection_does_not_invent_a_pattern_from_one_hole(tmp_path):
+    path = _four_hole_step(tmp_path / "one-hole.step", centers=((0, 0),))
+
+    detected = detect_step_interfaces(path)
+
+    assert len(detected.planar_faces) == 6
+    assert all(not face.hole_patterns for face in detected.planar_faces)
+
+
+def test_step_interface_detection_rejects_equal_holes_that_do_not_fit_one_circle(tmp_path):
+    path = _four_hole_step(
+        tmp_path / "irregular.step", centers=((-30, -20), (-10, 20), (20, -10), (30, 30))
+    )
+
+    detected = detect_step_interfaces(path)
+
+    assert all(not face.hole_patterns for face in detected.planar_faces)
+
+
+def test_step_interface_detection_refuses_a_multi_solid_file(tmp_path):
+    from build123d import Box, Location, export_step
+
+    path = tmp_path / "assembly.step"
+    export_step(Box(10, 10, 10) + Box(10, 10, 10).moved(Location((30, 0, 0))), path)
+
+    with pytest.raises(GeometryError, match="needs one valid solid; found 2"):
+        detect_step_interfaces(path)
+
+
+def test_hole_pattern_candidate_count_must_match_its_measured_centers():
+    with pytest.raises(ValueError, match="hole_count is 3, but 2 centers are listed"):
+        HolePatternCandidate(
+            id="pattern-test",
+            hole_count=3,
+            hole_diameter_mm=10,
+            pitch_diameter_mm=60,
+            center_mm=(0, 0, 0),
+            hole_centers_mm=((-30, 0, 0), (30, 0, 0)),
+        )
+
+
+def test_step_interface_import_does_not_leak_kernel_diagnostics_to_stdout(tmp_path, capsys):
+    path = tmp_path / "broken.step"
+    path.write_text("ISO-10303-21;\nBROKEN;\nEND-ISO-10303-21;\n", encoding="utf-8")
+
+    with pytest.raises(GeometryError, match="needs one valid solid"):
+        detect_step_interfaces(path)
+
+    assert capsys.readouterr().out == ""
 
 
 @pytest.mark.parametrize("view", ("iso", "front", "top", "right"))

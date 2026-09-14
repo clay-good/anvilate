@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "HolePatternCandidate": {
+      "description": "One equal-diameter through-hole pattern measured on a planar STEP face.",
+      "properties": {
+        "center_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center Mm",
+          "type": "array"
+        },
+        "hole_centers_mm": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Hole Centers Mm",
+          "type": "array"
+        },
+        "hole_count": {
+          "minimum": 2,
+          "title": "Hole Count",
+          "type": "integer"
+        },
+        "hole_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Hole Diameter Mm",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "pitch_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Pitch Diameter Mm",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "hole_count",
+        "hole_diameter_mm",
+        "pitch_diameter_mm",
+        "center_mm",
+        "hole_centers_mm"
+      ],
+      "title": "HolePatternCandidate",
+      "type": "object"
+    },
+    "PlanarInterfaceCandidate": {
+      "description": "One planar mating-face candidate and any through-hole patterns it carries.",
+      "properties": {
+        "area_mm2": {
+          "exclusiveMinimum": 0,
+          "title": "Area Mm2",
+          "type": "number"
+        },
+        "center_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center Mm",
+          "type": "array"
+        },
+        "hole_patterns": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HolePatternCandidate"
+          },
+          "title": "Hole Patterns",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "normal": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Normal",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "area_mm2",
+        "center_mm",
+        "normal"
+      ],
+      "title": "PlanarInterfaceCandidate",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/step-interface-candidates/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate STEP interface candidates: planar mating faces and regular equal-diameter through-hole patterns measured from one imported solid. Candidates require user confirmation before becoming interface contracts. Generated from anvilate.geometry.StepInterfaceCandidates.",
+  "properties": {
+    "planar_faces": {
+      "items": {
+        "$ref": "#/$defs/PlanarInterfaceCandidate"
+      },
+      "title": "Planar Faces",
+      "type": "array"
+    },
+    "source_name": {
+      "title": "Source Name",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "source_name",
+    "source_sha256",
+    "planar_faces"
+  ],
+  "title": "StepInterfaceCandidates",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

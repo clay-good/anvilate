@@ -31,6 +31,11 @@ result, and `tasks/cancel` terminates the worker process group. Cancellation com
 a `not_evaluated` scorecard, not a passing card and not a nonstandard result on MCP's bare
 `cancelled` variant.
 
+Mating-STEP interface discovery is currently a local operation:
+`anvilate interfaces mating.step`. It returns measured planar faces and regular through-hole
+patterns but is not exposed as an MCP tool, because those coordinates disclose imported CAD
+geometry and the remote tool surface has no approved delivery contract for that content.
+
 Every task response also carries `_meta["dev.anvilate/progress"]` with `activity`,
 `completedUnits`, `totalUnits`, and `indeterminate`. Queued and running work has no invented
 total and is explicitly indeterminate; completion reports `1/1`, while failure or

@@ -6,7 +6,7 @@
 
 Anvilate is a **local-first, open-source** design tool for mechanical, structural, and industrial engineers. It runs the analytical screens you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, contact, thick-wall pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. No cloud, no LLM required, no account.
 
-> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate, cover-plate, and solid transmission-shaft patterns build valid B-Reps, write and verify validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated plate DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate, cover-plate, and solid transmission-shaft patterns build valid B-Reps, write and verify validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated plate DXF cut profiles locally, and expose kernel measurements over MCP. Local mating-STEP inspection detects planar faces and regular through-hole patterns without an LLM. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
 
 ## Quickstart
 
@@ -169,6 +169,17 @@ deterministic, and makes no network requests. `measure_geometry` uses that same 
 to read the B-Rep's dimensions, volume, semantic-face count, or a tagged face's area instead
 of repeating the requested value from the spec.
 
+To start a mating-part workflow from existing CAD, inspect a local STEP file:
+
+```bash
+anvilate interfaces mating.step
+```
+
+The command imports one solid, lists stable planar-face candidates, and fits regular
+equal-diameter through holes to pitch circles from shared B-Rep topology. Its output is a
+proposal only: no candidate becomes a Design Spec interface contract until a user confirms
+it. Blind holes, counterbores, bosses, and pilot bores remain explicit detector limits.
+
 ## What you can do today
 
 496 runnable examples, each executed in CI so they stay honest. A few:
@@ -243,7 +254,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,557 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,577 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -304,7 +315,7 @@ Three cross-cutting layers keep a green from being a silent one.
 
 | | |
 | --- | --- |
-| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export`, `verify`, `diff`, and `doctor`. `build` writes STEP for audited geometry patterns; `doctor` proves whether its kernel and the other optional runtimes are ready. Every command's `--help` includes a copyable example. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. The three size bounds hold for a **scorecard** read back too — out of a signed attestation or a subject store — and for every model one holds. |
+| [`anvilate` on the command line](docs/headless-cli.md) | `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor`. `build` writes STEP for audited geometry patterns; `interfaces` measures mating planes and regular through-hole patterns in an imported STEP; `doctor` proves whether its kernel and the other optional runtimes are ready. Every command's `--help` includes a copyable example. `check` compiles a spec document, screens it and prints the card; the exit code follows the scorecard's own tri-state rather than collapsing to pass/fail. A document is bounded on every axis it has before any of it is screened, rendered, exported or signed — no infinity or NaN, no more than 32 levels of nesting, no string past 4,096 characters and no collection past 1,024 items — each refused at the front door naming the field. The three size bounds hold for a **scorecard** read back too — out of a signed attestation or a subject store — and for every model one holds. |
 | [MCP server](docs/agent-mcp-integration.md) | All of the pipeline's eight operations over stdio, as `anvilate-mcp` or `python -m anvilate.mcp`; closed-form checks reply synchronously, while T3 uses durable task handles with structured progress, serialized state transitions, typed refusals, and subprocess cancellation. |
 | [Published contracts](docs/published-contracts.md) | The Spec IR going in, scorecards, evidence bundles, and every completed CLI JSON result, as JSON Schema 2020-12 — generated from the models, and held by a gate that rejects both drift and a changed artifact under an unchanged version. |
 | [MCP tool contracts](docs/mcp-tool-contracts.md) | The same artifacts as tool definitions, whose schemas `$ref` the spec and scorecard at their versions rather than paraphrasing them, so the tool surface an agent reads cannot drift from the contract. |

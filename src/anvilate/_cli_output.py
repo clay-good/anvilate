@@ -15,14 +15,15 @@ from pydantic import ConfigDict, Field, TypeAdapter
 from ._models import FrozenMap, Named, RevalidatedModel
 from .attestation import SignatureState
 from .bundle import BundleDocument
+from .geometry import StepInterfaceCandidates
 from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.9.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.10.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.9.0.json"]
-SchemaVersion = Literal["1.9.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.10.0.json"]
+SchemaVersion = Literal["1.10.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -257,6 +258,14 @@ class DoctorOutput(_WireModel):
     checks: tuple[DoctorCheck, ...]
 
 
+class InterfacesOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["interfaces"]
+    path: str
+    candidates: StepInterfaceCandidates
+
+
 CliOutput = (
     BuildOutput
     | CheckOutput
@@ -269,6 +278,7 @@ CliOutput = (
     | RefusalOutput
     | ErrorOutput
     | DoctorOutput
+    | InterfacesOutput
 )
 
 

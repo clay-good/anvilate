@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
-from .geometry import GeometryMeasurement, GeometrySummary, ViewportImage
+from .geometry import GeometryMeasurement, GeometrySummary, StepInterfaceCandidates, ViewportImage
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -46,10 +46,12 @@ __all__ = [
     "SCORECARD_SCHEMA_VERSION",
     "BUNDLE_SCHEMA_VERSION",
     "GEOMETRY_SCHEMA_VERSION",
+    "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
+    "interface_candidates_json_schema",
     "measurement_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
@@ -89,6 +91,9 @@ BUNDLE_SCHEMA_VERSION = "1.1.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.2.0"
+
+# Planar faces and through-hole patterns measured from one imported mating STEP.
+INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.0.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -157,6 +162,21 @@ def viewport_json_schema() -> dict[str, Any]:
             "Anvilate viewport image: one deterministic SVG rendering with its view, pixel "
             "dimensions, exact media type, SHA-256 digest, and base64 payload. Generated "
             "from anvilate.geometry.ViewportImage."
+        ),
+    )
+
+
+def interface_candidates_json_schema() -> dict[str, Any]:
+    """The measured, unconfirmed interface candidates from one mating STEP."""
+    return _artifact(
+        StepInterfaceCandidates,
+        name="step-interface-candidates",
+        version=INTERFACE_CANDIDATES_SCHEMA_VERSION,
+        description=(
+            "Anvilate STEP interface candidates: planar mating faces and regular "
+            "equal-diameter through-hole patterns measured from one imported solid. "
+            "Candidates require user confirmation before becoming interface contracts. "
+            "Generated from anvilate.geometry.StepInterfaceCandidates."
         ),
     )
 
@@ -323,6 +343,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "scorecard.schema.json": scorecard_json_schema(),
         "evidence-bundle.schema.json": bundle_json_schema(),
         "geometry-summary.schema.json": geometry_json_schema(),
+        "step-interface-candidates.schema.json": interface_candidates_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
