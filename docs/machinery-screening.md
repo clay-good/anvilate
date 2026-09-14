@@ -67,6 +67,27 @@ the shaft's surface and geometry rather than of the loads the model carries.
 
 See [`examples/transmission_shaft_scorecard.py`](../examples/transmission_shaft_scorecard.py).
 
+## Build the screened shaft
+
+The same typed element now drives the audited `transmission_shaft/1` geometry pattern. It
+builds a prismatic solid round shaft along +Z, with `drive_end`, `driven_end`, and
+`outside_surface` semantic faces. Diameter and length must both be positive; because length
+is optional for a strength-only analytical screen, the geometry path refuses a shaft that
+does not declare it instead of inventing an extent. The checked-in workflow declares
+`cnc_turning` as its manufacturing profile, and the pattern's analytical binding is the
+three-check `screen_shaft` card above.
+
+```bash
+anvilate check examples/transmission_shaft.spec.yaml
+anvilate build examples/transmission_shaft.spec.yaml --output drive_shaft.step
+anvilate verify drive_shaft.step
+```
+
+The checked-in shaft is 55 mm diameter by 600 mm long and declares its required safety
+factor as user-stated input. Its checks pass before the validation-gated AP242 STEP is
+written; the file carries volume, surface area, and centroid properties that `verify`
+recomputes after importing the solid.
+
 ## Spur gear meshes
 
 The same shape one level up: four checks, and this time they are moved by **three different

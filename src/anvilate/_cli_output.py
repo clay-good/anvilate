@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.8.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.9.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.8.0.json"]
-SchemaVersion = Literal["1.8.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.9.0.json"]
+SchemaVersion = Literal["1.9.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -54,7 +54,7 @@ class BuildArtifact(_WireModel):
     path: str
     format: Literal["step"]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    pattern: Literal["base_plate/1", "cover_plate/1"]
+    pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]
     volume_mm3: Annotated[float, Field(gt=0)]
     dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
         json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}}

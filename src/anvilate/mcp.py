@@ -164,7 +164,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 # reads has changed and neither release closes `additionalProperties`, so an old client keeps
 # working; it simply cannot see where the numbers came from.
 _BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
-_GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.1.0.json"
+_GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"
 
@@ -364,7 +364,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build or regenerate the part",
             description=(
                 "Build the audited pattern selected by the Design Spec and return its B-Rep "
-                "geometry summary. The current registry supports base_plate and cover_plate. "
+                "geometry summary. The current registry supports base_plate, cover_plate, and "
+                "transmission_shaft. "
                 "No caller code "
                 "is executed, so the bounded primitive build replies synchronously."
             ),

@@ -69,8 +69,8 @@ One rule, stated once and enforced, rather than assigned tool by tool:
 - **Unbounded cost** — the work is a function of a convergence criterion or of code the
   caller supplied. Task: handle, progress, cancellation.
 
-The audited `base_plate` primitive is bounded by three declared dimensions and executes no
-caller code, so `build_part` replies synchronously. That is also why the validation tier
+The audited plate and solid-shaft primitives are bounded by their declared dimensions and
+execute no caller code, so `build_part` replies synchronously. That is also why the validation tier
 splits into two tools rather than one with a flag.
 `run_validation` covers T0 geometry, T1 analytical and T2 manufacturability — all
 closed-form or a table lookup — and returns the scorecard in the reply. `run_fea_validation`

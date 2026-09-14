@@ -1,0 +1,19 @@
+anvilate_spec: "1.3.0"
+name: drive-shaft
+description: A solid round shaft sized by strength, fatigue, and twist.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: transmission_shaft
+element_params:
+  diameter: {magnitude: 55.0, unit: mm}
+  length: {magnitude: 600.0, unit: mm}
+  bending_moment: {magnitude: 250.0, unit: N*m}
+  torque: {magnitude: 400.0, unit: N*m}
+  yield_strength: {magnitude: 370.0, unit: MPa}
+  shear_modulus: {magnitude: 79.3, unit: GPa}
+  allowable_twist: {magnitude: 0.5, unit: degree}
+  endurance_limit: {magnitude: 200.0, unit: MPa}
+  ultimate_strength: {magnitude: 690.0, unit: MPa}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+acceptance: {tiers: [T1_analytical]}

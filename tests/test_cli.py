@@ -618,9 +618,10 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
     )
     built_step = tmp_path / "base-plate.step"
     verified_step = tmp_path / "received.step"
-    assert _run(
-        "build", str(build_spec), "--output", str(verified_step), "--format", "json"
-    )[0] == EXIT_OK
+    assert (
+        _run("build", str(build_spec), "--output", str(verified_step), "--format", "json")[0]
+        == EXIT_OK
+    )
     before, after = spec_pair
     invocations = (
         ("check", "check", "--format", "json", str(spec_file)),
@@ -1531,9 +1532,7 @@ def test_build_ap214_fallback_is_explicit_and_keeps_validation_properties(tmp_pa
     output = tmp_path / "base-plate.step"
     spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
 
-    code, text, err = _run(
-        "build", str(spec), "--output", str(output), "--unvalidated", "--ap214"
-    )
+    code, text, err = _run("build", str(spec), "--output", str(output), "--unvalidated", "--ap214")
 
     step = output.read_text(encoding="utf-8")
     assert code == EXIT_OK and err == "" and "schema        AP214" in text
@@ -1624,6 +1623,29 @@ def test_build_writes_the_circular_cover_plate_example_with_its_bore(tmp_path):
     }
     assert payload["artifact"]["face_tags"] == ["bore", "bottom", "perimeter", "top"]
     assert output.read_text(encoding="utf-8").startswith("ISO-10303-21;")
+
+
+def test_build_writes_a_validated_transmission_shaft_with_import_properties(tmp_path):
+    pytest.importorskip("build123d")
+    from anvilate.geometry import verify_step_integrity
+
+    spec = Path(__file__).resolve().parents[1] / "examples/transmission_shaft.spec.yaml"
+    output = tmp_path / "shaft.step"
+
+    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
+    payload = json.loads(raw)
+
+    assert code == EXIT_OK and err == ""
+    assert payload["artifact"]["pattern"] == "transmission_shaft/1"
+    assert payload["artifact"]["authorization"] == "validated"
+    assert payload["artifact"]["dimensions_mm"] == {"diameter": 55, "length": 600}
+    assert payload["artifact"]["face_tags"] == [
+        "drive_end",
+        "driven_end",
+        "outside_surface",
+    ]
+    properties = verify_step_integrity(output)
+    assert properties.volume_mm3 == pytest.approx(3.141592653589793 * 27.5**2 * 600)
 
 
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):

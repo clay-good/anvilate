@@ -6,7 +6,7 @@
 
 Anvilate is a **local-first, open-source** design tool for mechanical, structural, and industrial engineers. It runs the analytical screens you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, contact, thick-wall pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. No cloud, no LLM required, no account.
 
-> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate and cover-plate patterns build valid B-Reps, write and verify validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The deterministic engineering core is real, tested, and runnable today. Audited base-plate, cover-plate, and solid transmission-shaft patterns build valid B-Reps, write and verify validation-gated AP242 STEP with import-integrity properties, render deterministic SVG viewport images, export validation-gated plate DXF cut profiles locally, and expose kernel measurements over MCP. The wider geometry catalog, natural-language front end, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
 
 ## Quickstart
 
@@ -122,15 +122,16 @@ never a pass. See [screening a document](docs/spec-screening.md).
 
 ## Build audited 3D patterns
 
-The audited `base_plate` and `cover_plate` patterns read only dimensions declared in the
-spec. They produce one valid B-Rep solid, tag functional faces semantically, and write AP242
-STEP.
-Cover plates may be rectangular, circular, or annular. Existing output is protected unless
-`--force` is explicit.
+The audited `base_plate`, `cover_plate`, and `transmission_shaft` patterns read only
+dimensions declared in the spec. They produce one valid B-Rep solid, tag functional faces
+semantically, and write AP242 STEP. Cover plates may be rectangular, circular, or annular;
+the first shaft pattern is a prismatic solid round turned blank whose length is mandatory.
+Existing output is protected unless `--force` is explicit.
 
 ```bash
 anvilate build examples/base_plate.spec.yaml --output base_plate.step --unvalidated
 anvilate build examples/cover_plate.spec.yaml --output cover_plate.step --unvalidated
+anvilate build examples/transmission_shaft.spec.yaml --output drive_shaft.step
 ```
 
 ```text
@@ -144,10 +145,10 @@ bp1: BUILT
 These are intentionally narrow audited patterns, not a generic code executor. A different
 `element_type` exits 4 and names the missing audited pattern. See
 [geometry generation](openspec/specs/geometry-generation/spec.md).
-The checked-in examples intentionally declare no required safety factor, so the commands
-above make the override explicit and stamp `UNVALIDATED` into the STEP header. For a spec
-whose acceptance checks pass, omit `--unvalidated`; a nonpassing card otherwise writes no
-STEP at all.
+The checked-in plate examples intentionally declare no required safety factor, so their
+commands make the override explicit and stamp `UNVALIDATED` into the STEP header. The shaft
+example declares a user-stated factor of 2.0 and passes strength, fatigue, and twist, so its
+STEP is stamped `VALIDATED`. A nonpassing card writes no STEP at all.
 
 A plate spec whose acceptance checks pass can also produce a deterministic 2D cut profile
 from that built geometry. Rectangular profiles use a closed `OUTLINE` polyline; circular
@@ -242,7 +243,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,537 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,557 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

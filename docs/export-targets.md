@@ -6,10 +6,11 @@ export layer is pointed, and, for each claim, whether it was confirmed from a pr
 or is carried as unverified. Dates are named where they affect the conclusion.
 
 A plain validation-gated AP242 STEP B-Rep writer is now shipped through `anvilate build` for
-the audited `base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry with
-a deterministic validation watermark and declares OCCT's managed model-based 3D engineering
-schema. It also writes CAx-IF v4.6 part-level volume, total surface area, and centroid
-properties, then verifies them against a fresh import before releasing the file. It does
+the audited `base_plate/1`, `cover_plate/1`, and `transmission_shaft/1` patterns. It writes
+valid solid geometry with a deterministic validation watermark and declares OCCT's managed
+model-based 3D engineering schema. It also writes CAx-IF v4.6 part-level volume, total
+surface area, and centroid properties, then verifies them against a fresh import before
+releasing the file. It does
 **not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain roadmap targets.
 The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).

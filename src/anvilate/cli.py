@@ -8,8 +8,9 @@ MCP server.
 
 **Five of the five are backed today**; a sixth command, ``verify``, comes from the
 attestation capability. ``doctor`` reports which optional runtimes are present.
-``build`` now produces STEP for audited ``base_plate`` and ``cover_plate`` patterns. Other
-element types are refused by name rather than sent through an unreviewed generic generator.
+``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
+``transmission_shaft`` patterns. Other element types are refused by name rather than sent
+through an unreviewed generic generator.
 ``check`` compiles a spec document and screens it, which is exactly the path
 :func:`anvilate.screening.screen_spec` already serves over MCP.
 ``export`` serves the evidence bundle and QIF results (ISO 23952) from a screened card, and

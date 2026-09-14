@@ -151,6 +151,7 @@ gdt.FeatureControlFrame
 gdt.position_stack_contribution
 geometry.BASE_PLATE_PATTERN
 geometry.COVER_PLATE_PATTERN
+geometry.TRANSMISSION_SHAFT_PATTERN
 geometry.BuiltGeometry
 geometry.GeometryError
 geometry.GeometryMeasurement
@@ -162,6 +163,7 @@ geometry.UnsupportedGeometry
 geometry.ViewportImage
 geometry.build_base_plate
 geometry.build_cover_plate
+geometry.build_transmission_shaft
 geometry.build_spec
 geometry.measure_geometry
 geometry.render_viewport

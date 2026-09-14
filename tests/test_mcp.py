@@ -761,6 +761,29 @@ def _cover_plate_document() -> dict:
     return document
 
 
+def _transmission_shaft_document() -> dict:
+    document = _spec_document()
+    document.update(
+        {
+            "name": "drive-shaft",
+            "manufacturing": {"process": "cnc_turning"},
+            "element_type": "transmission_shaft",
+            "element_params": {
+                "diameter": {"magnitude": 55.0, "unit": "mm"},
+                "length": {"magnitude": 600.0, "unit": "mm"},
+                "bending_moment": {"magnitude": 250.0, "unit": "N*m"},
+                "torque": {"magnitude": 400.0, "unit": "N*m"},
+                "yield_strength": {"magnitude": 370.0, "unit": "MPa"},
+                "shear_modulus": {"magnitude": 79.3, "unit": "GPa"},
+                "allowable_twist": {"magnitude": 0.5, "unit": "degree"},
+                "endurance_limit": {"magnitude": 200.0, "unit": "MPa"},
+                "ultimate_strength": {"magnitude": 690.0, "unit": "MPa"},
+            },
+        }
+    )
+    return document
+
+
 def test_build_part_returns_a_valid_semantically_tagged_geometry_summary():
     pytest.importorskip("build123d")
 
@@ -790,6 +813,32 @@ def test_cover_plate_build_render_and_measure_flow_uses_one_built_subject():
     assert document["geometry"]["faceTags"] == ["bore", "bottom", "perimeter", "top"]
     assert rendered["content"][1]["mimeType"] == "image/svg+xml"
     assert measured["structuredContent"]["measurement"]["value"] == pytest.approx(80)
+
+
+def test_transmission_shaft_build_render_and_measure_flow_uses_one_built_subject():
+    pytest.importorskip("build123d")
+    built = _call("build_part", {"spec": _transmission_shaft_document()})["result"]
+    document = built["structuredContent"]
+    handle = document["subject"]
+
+    rendered = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})[
+        "result"
+    ]
+    measured = _call("measure_geometry", {"subject": handle, "query": "length"})["result"]
+
+    assert document["geometry"]["pattern"] == "transmission_shaft/1"
+    assert document["geometry"]["faceTags"] == [
+        "drive_end",
+        "driven_end",
+        "outside_surface",
+    ]
+    assert rendered["content"][1]["mimeType"] == "image/svg+xml"
+    assert measured["structuredContent"]["measurement"] == {
+        "query": "length",
+        "value": 600,
+        "unit": "mm",
+        "feature": "drive-to-driven extent",
+    }
 
 
 def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_attachment():

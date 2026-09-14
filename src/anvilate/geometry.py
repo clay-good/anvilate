@@ -1,9 +1,9 @@
 """Deterministic B-Rep geometry built from audited Design Spec patterns.
 
 The geometry layer does not execute arbitrary generated Python.  A Design Spec selects a
-named pattern, and that pattern reads only the dimensions it declares.  The first shipped
-pattern is ``base_plate``: a rectangular solid centered on the XY origin with its bottom
-face at Z=0.
+named pattern, and that pattern reads only the dimensions it declares.  The shipped
+patterns are plates and a solid round transmission shaft, each centered on the XY origin
+with its bottom face or drive end at Z=0.
 
 ``build123d`` is an optional dependency.  Importing :mod:`anvilate.geometry` remains cheap;
 the dependency is required only when a solid is built or written.
@@ -28,12 +28,14 @@ from pydantic import Field, model_validator
 from ._models import FrozenMap, Named, StatableModel
 from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
+from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
 from .spec import DesignSpec
 
 __all__ = [
     "BASE_PLATE_PATTERN",
     "COVER_PLATE_PATTERN",
+    "TRANSMISSION_SHAFT_PATTERN",
     "BuiltGeometry",
     "GeometryError",
     "GeometrySummary",
@@ -45,6 +47,7 @@ __all__ = [
     "ViewportImage",
     "build_base_plate",
     "build_cover_plate",
+    "build_transmission_shaft",
     "build_spec",
     "measure_geometry",
     "render_viewport",
@@ -55,6 +58,7 @@ __all__ = [
 
 BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
+TRANSMISSION_SHAFT_PATTERN = "transmission_shaft/1"
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
 _AP214_SCHEMA = "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }"
@@ -80,7 +84,7 @@ class GeometrySummary(StatableModel):
     """The serializable identity and kernel checks for one built solid."""
 
     name: Named
-    pattern: Literal["base_plate/1", "cover_plate/1"]
+    pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]
     valid: Literal[True]
     volume_mm3: Annotated[float, Field(alias="volumeMm3", gt=0)]
     dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
@@ -209,7 +213,10 @@ def _kernel():
 
 
 def _positive_mm(value: Any, field: str, *, element: str = "base_plate") -> float:
-    magnitude = float(value.to("mm").magnitude)
+    try:
+        magnitude = float(value.to("mm").magnitude)
+    except (TypeError, ValueError) as failure:
+        raise GeometryError(f"{element} {field} must be a length; got {value}") from failure
     if magnitude <= 0:
         raise GeometryError(f"{element} {field} must be greater than zero; got {magnitude:g} mm")
     return magnitude
@@ -343,6 +350,53 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
     return built
 
 
+def _tag_shaft_faces(shape: Any) -> Mapping[str, tuple[Any, ...]]:
+    """Tag the two shaft ends and its outside surface without topology indices."""
+    tagged: dict[str, tuple[Any, ...]] = {}
+    for face in shape.faces():
+        if face.geom_type.name == "PLANE":
+            tag = "driven_end" if face.normal_at().Z > 0 else "drive_end"
+        elif face.geom_type.name == "CYLINDER":
+            tag = "outside_surface"
+        else:  # pragma: no cover - a cylinder primitive cannot produce another surface
+            raise GeometryError(
+                f"transmission_shaft produced an unexpected {face.geom_type.name} face"
+            )
+        tagged[tag] = (face,)
+    expected = {"drive_end", "driven_end", "outside_surface"}
+    if set(tagged) != expected:  # pragma: no cover - primitive topology corruption guard
+        raise GeometryError(f"transmission_shaft face tagging incomplete: got {sorted(tagged)}")
+    return MappingProxyType(tagged)
+
+
+def build_transmission_shaft(
+    shaft: TransmissionShaft, *, name: str = "transmission-shaft"
+) -> BuiltGeometry:
+    """Build an audited prismatic solid-round shaft from its declared diameter and length."""
+    if shaft.length is None:
+        raise GeometryError("transmission_shaft geometry needs element_params.length")
+    diameter = _positive_mm(shaft.diameter, "diameter", element="transmission_shaft")
+    length = _positive_mm(shaft.length, "length", element="transmission_shaft")
+    Align, _Box, Cylinder, _export_step = _kernel()
+    shape = Cylinder(
+        diameter / 2,
+        length,
+        align=(Align.CENTER, Align.CENTER, Align.MIN),
+    )
+    built = BuiltGeometry(
+        name=name,
+        pattern=TRANSMISSION_SHAFT_PATTERN,
+        shape=shape,
+        faces=_tag_shaft_faces(shape),
+        dimensions_mm=MappingProxyType({"diameter": diameter, "length": length}),
+    )
+    if not built.is_valid:  # pragma: no cover - guarded Cylinder dimensions are valid
+        raise GeometryError(
+            "transmission_shaft pattern did not produce one valid positive-volume solid"
+        )
+    return built
+
+
 def build_spec(spec: DesignSpec) -> BuiltGeometry:
     """Build the audited geometry pattern selected by a Design Spec."""
     try:
@@ -350,36 +404,53 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
             return build_base_plate(BasePlate(**dict(spec.element_params)))
         if spec.element_type == "cover_plate":
             return build_cover_plate(CoverPlate(**dict(spec.element_params)))
+        if spec.element_type == "transmission_shaft":
+            return build_transmission_shaft(
+                TransmissionShaft(**dict(spec.element_params)), name=str(spec.name)
+            )
     except ValueError as failure:
         raise GeometryError(f"invalid {spec.element_type} element_params: {failure}") from failure
     tag = spec.element_type or "<undeclared>"
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {tag!r}; "
-        "supported: base_plate, cover_plate"
+        "supported: base_plate, cover_plate, transmission_shaft"
     )
 
 
-def _render_round_cover(
+def _render_round_geometry(
     built: BuiltGeometry,
     *,
     view: Literal["iso", "front", "top", "right"],
     width_px: int,
 ) -> RenderedViewport:
-    """Render the circular cover primitive with exact SVG curves."""
+    """Render a Z-axis disk, annulus, or shaft with exact SVG curves."""
     height_px = max(64, round(width_px * 0.75))
     cx, cy = width_px / 2, height_px / 2
     diameter = built.dimensions_mm["diameter"]
-    thickness = built.dimensions_mm["thickness"]
+    is_shaft = built.pattern == TRANSMISSION_SHAFT_PATTERN
+    axial_size = built.dimensions_mm["length" if is_shaft else "thickness"]
+    bottom_tag = "drive_end" if is_shaft else "bottom"
+    top_tag = "driven_end" if is_shaft else "top"
+    perimeter_tag = "outside_surface" if is_shaft else "perimeter"
     radius = min(width_px, height_px) * 0.42
-    wall = max(3.0, radius * thickness / diameter)
+    wall = max(3.0, radius * axial_size / diameter)
+    if is_shaft and view != "top":
+        # A plate is normally much wider than it is thick, while a shaft is normally the
+        # opposite. Scaling both from the radius made a 600 x 55 mm shaft thousands of
+        # pixels tall and clipped both ends outside a 600 px viewport. Fit the full axial
+        # extent for the shaft views, including the projected end ellipse in isometric.
+        projected_length = axial_size + (diameter * 0.42 if view == "iso" else 0)
+        scale = min(width_px * 0.84 / diameter, height_px * 0.84 / projected_length)
+        radius = diameter * scale / 2
+        wall = axial_size * scale
     bore_radius = radius * built.dimensions_mm.get("hole_diameter", 0) / diameter
     if view == "top":
         body = [
-            f'<circle data-face="bottom" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
+            f'<circle data-face="{bottom_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
             'fill="#dbeafe" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<circle data-face="top" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
+            f'<circle data-face="{top_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
             'fill="#eff6ff" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<circle data-face="perimeter" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
+            f'<circle data-face="{perimeter_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
             'fill="none" stroke="#0f172a" stroke-width="2"/>',
         ]
         if bore_radius:
@@ -392,13 +463,13 @@ def _render_round_cover(
         top_y = cy - wall / 2
         bottom_y = cy + wall / 2
         body = [
-            f'<ellipse data-face="bottom" cx="{cx:.3f}" cy="{bottom_y:.3f}" '
+            f'<ellipse data-face="{bottom_tag}" cx="{cx:.3f}" cy="{bottom_y:.3f}" '
             f'rx="{radius:.3f}" ry="{ry:.3f}" fill="#bfdbfe" stroke="#0f172a"/>',
-            f'<path data-face="perimeter" d="M {cx - radius:.3f} {top_y:.3f} '
+            f'<path data-face="{perimeter_tag}" d="M {cx - radius:.3f} {top_y:.3f} '
             f"L {cx - radius:.3f} {bottom_y:.3f} A {radius:.3f} {ry:.3f} 0 0 0 "
             f'{cx + radius:.3f} {bottom_y:.3f} L {cx + radius:.3f} {top_y:.3f} Z" '
             'fill="#93c5fd" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<ellipse data-face="top" cx="{cx:.3f}" cy="{top_y:.3f}" '
+            f'<ellipse data-face="{top_tag}" cx="{cx:.3f}" cy="{top_y:.3f}" '
             f'rx="{radius:.3f}" ry="{ry:.3f}" fill="#eff6ff" stroke="#0f172a"/>',
         ]
         if bore_radius:
@@ -410,12 +481,12 @@ def _render_round_cover(
     else:
         left, top = cx - radius, cy - wall / 2
         body = [
-            f'<line data-face="bottom" x1="{left:.3f}" y1="{top + wall:.3f}" '
+            f'<line data-face="{bottom_tag}" x1="{left:.3f}" y1="{top + wall:.3f}" '
             f'x2="{left + 2 * radius:.3f}" y2="{top + wall:.3f}" stroke="#0f172a"/>',
-            f'<rect data-face="perimeter" x="{left:.3f}" y="{top:.3f}" '
+            f'<rect data-face="{perimeter_tag}" x="{left:.3f}" y="{top:.3f}" '
             f'width="{2 * radius:.3f}" height="{wall:.3f}" fill="#bfdbfe" '
             'stroke="#0f172a" stroke-width="1.5"/>',
-            f'<line data-face="top" x1="{left:.3f}" y1="{top:.3f}" '
+            f'<line data-face="{top_tag}" x1="{left:.3f}" y1="{top:.3f}" '
             f'x2="{left + 2 * radius:.3f}" y2="{top:.3f}" stroke="#0f172a"/>',
         ]
         if bore_radius:
@@ -448,14 +519,18 @@ def render_viewport(
     current rectangular base-plate pattern and deliberately refuses to masquerade as a
     general hidden-line renderer for patterns that have not shipped.
     """
-    if built.pattern not in {BASE_PLATE_PATTERN, COVER_PLATE_PATTERN}:
+    if built.pattern not in {
+        BASE_PLATE_PATTERN,
+        COVER_PLATE_PATTERN,
+        TRANSMISSION_SHAFT_PATTERN,
+    }:
         raise UnsupportedGeometry(f"viewport rendering has no projector for {built.pattern!r}")
     if not 64 <= width_px <= 4096:
         raise GeometryError(f"viewport width_px must be from 64 through 4096; got {width_px}")
     if view not in {"iso", "front", "top", "right"}:
         raise GeometryError(f"unknown viewport {view!r}; choose iso, front, top, or right")
-    if built.pattern == COVER_PLATE_PATTERN and "diameter" in built.dimensions_mm:
-        return _render_round_cover(built, view=view, width_px=width_px)
+    if "diameter" in built.dimensions_mm:
+        return _render_round_geometry(built, view=view, width_px=width_px)
     height_px = max(64, round(width_px * 0.75))
     bounds = built.shape.bounding_box()
     x0, y0, z0 = bounds.min.X, bounds.min.Y, bounds.min.Z
@@ -535,7 +610,12 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
     dimensions = {
         "width": (float(bounds.size.X), "east-west extent"),
         "depth": (float(bounds.size.Y), "north-south extent"),
-        "length": (float(bounds.size.Y), "north-south extent"),
+        "length": (
+            float(bounds.size.Z if built.pattern == TRANSMISSION_SHAFT_PATTERN else bounds.size.Y),
+            "drive-to-driven extent"
+            if built.pattern == TRANSMISSION_SHAFT_PATTERN
+            else "north-south extent",
+        ),
         "plate_thickness": (float(bounds.size.Z), "bottom-top extent"),
         "thickness": (float(bounds.size.Z), "bottom-top extent"),
         "diameter": (float(max(bounds.size.X, bounds.size.Y)), "outside diameter"),

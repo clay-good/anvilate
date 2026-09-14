@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from types import MappingProxyType
 from xml.etree import ElementTree
 
@@ -14,11 +15,13 @@ from anvilate.export.gate import authorize_export  # noqa: E402
 from anvilate.geometry import (  # noqa: E402
     BASE_PLATE_PATTERN,
     COVER_PLATE_PATTERN,
+    TRANSMISSION_SHAFT_PATTERN,
     GeometryError,
     UnsupportedGeometry,
     build_base_plate,
     build_cover_plate,
     build_spec,
+    build_transmission_shaft,
     measure_geometry,
     read_step_validation_properties,
     render_viewport,
@@ -26,6 +29,7 @@ from anvilate.geometry import (  # noqa: E402
     write_step,
 )
 from anvilate.packs.industrial import CoverPlate  # noqa: E402
+from anvilate.packs.machinery import TransmissionShaft  # noqa: E402
 from anvilate.packs.structural import BasePlate  # noqa: E402
 from anvilate.spec import (  # noqa: E402
     AcceptanceCriteria,
@@ -68,6 +72,22 @@ def _cover(**changes) -> CoverPlate:
     }
     values.update(changes)
     return CoverPlate(**values)
+
+
+def _shaft(**changes) -> TransmissionShaft:
+    values = {
+        "diameter": Quantity.parse("55 mm"),
+        "length": Quantity.parse("600 mm"),
+        "bending_moment": Quantity.parse("250 N*m"),
+        "torque": Quantity.parse("400 N*m"),
+        "yield_strength": Quantity.parse("370 MPa"),
+        "shear_modulus": Quantity.parse("79.3 GPa"),
+        "allowable_twist": Quantity.parse("0.5 degree"),
+        "endurance_limit": Quantity.parse("200 MPa"),
+        "ultimate_strength": Quantity.parse("690 MPa"),
+    }
+    values.update(changes)
+    return TransmissionShaft(**values)
 
 
 def _spec(*, element_type: str = "base_plate", params=None) -> DesignSpec:
@@ -349,6 +369,108 @@ def test_cover_plate_builds_through_the_design_spec_registry():
 
     assert built.pattern == COVER_PLATE_PATTERN
     assert built.is_valid
+
+
+def test_transmission_shaft_golden_dimensions_and_kernel_volume():
+    built = build_transmission_shaft(_shaft())
+    size = built.shape.bounding_box().size
+
+    assert (size.X, size.Y, size.Z) == pytest.approx((55, 55, 600))
+    assert built.volume_mm3 == pytest.approx(3.141592653589793 * 27.5**2 * 600)
+    assert dict(built.dimensions_mm) == {"diameter": 55, "length": 600}
+
+
+def test_transmission_shaft_is_one_valid_solid_at_the_declared_origin():
+    built = build_transmission_shaft(_shaft())
+    bounds = built.shape.bounding_box()
+
+    assert built.is_valid
+    assert len(built.shape.solids()) == 1
+    assert (bounds.min.X, bounds.min.Y, bounds.min.Z) == pytest.approx((-27.5, -27.5, 0))
+    assert (bounds.max.X, bounds.max.Y, bounds.max.Z) == pytest.approx((27.5, 27.5, 600))
+
+
+def test_transmission_shaft_tags_both_ends_and_the_outside_surface():
+    built = build_transmission_shaft(_shaft())
+
+    assert set(built.faces) == {"drive_end", "driven_end", "outside_surface"}
+    assert all(len(faces) == 1 for faces in built.faces.values())
+    assert built.faces["drive_end"][0].normal_at().Z == pytest.approx(-1)
+    assert built.faces["driven_end"][0].normal_at().Z == pytest.approx(1)
+
+
+def test_transmission_shaft_regeneration_is_deterministic():
+    first = build_transmission_shaft(_shaft())
+    second = build_transmission_shaft(_shaft())
+
+    assert first.signature == second.signature
+    assert first.summary() == second.summary()
+    assert first.pattern == TRANSMISSION_SHAFT_PATTERN
+
+
+@pytest.mark.parametrize("view", ("iso", "front", "top", "right"))
+def test_transmission_shaft_renders_every_named_view_with_all_semantic_tags(view):
+    built = build_transmission_shaft(_shaft())
+    root = ElementTree.fromstring(render_viewport(built, view=view).data)
+
+    assert {node.attrib["data-face"] for node in root if "data-face" in node.attrib} == set(
+        built.faces
+    )
+
+
+@pytest.mark.parametrize("view", ("iso", "front", "right"))
+def test_long_transmission_shaft_viewports_fit_both_ends_inside_the_canvas(view):
+    rendered = render_viewport(build_transmission_shaft(_shaft()), view=view, width_px=800)
+    svg = rendered.data.decode("utf-8")
+    if view == "iso":
+        end_centers = [
+            float(value)
+            for value in re.findall(r'data-face="(?:drive|driven)_end"[^>]+ cy="([\d.]+)"', svg)
+        ]
+        assert min(end_centers) > 0
+        assert max(end_centers) < rendered.height_px
+    else:
+        match = re.search(
+            r'data-face="outside_surface"[^>]+ y="([\d.]+)"[^>]+ height="([\d.]+)"', svg
+        )
+        assert match is not None
+        top, height = (float(value) for value in match.groups())
+        assert top > 0
+        assert top + height < rendered.height_px
+
+
+@pytest.mark.parametrize(
+    ("query", "value", "feature"),
+    (
+        ("diameter", 55, "outside diameter"),
+        ("length", 600, "drive-to-driven extent"),
+        ("area:drive_end", 3.141592653589793 * 27.5**2, "drive_end"),
+        ("area:outside_surface", 3.141592653589793 * 55 * 600, "outside_surface"),
+    ),
+)
+def test_transmission_shaft_measurements_come_from_the_brep(query, value, feature):
+    measured = measure_geometry(build_transmission_shaft(_shaft()), query)
+
+    assert measured.value == pytest.approx(value)
+    assert measured.feature == feature
+
+
+def test_transmission_shaft_builds_through_the_design_spec_registry():
+    built = build_spec(_spec(element_type="transmission_shaft", params=_shaft().model_dump()))
+
+    assert built.name == "bp1"
+    assert built.pattern == TRANSMISSION_SHAFT_PATTERN
+    assert built.is_valid
+
+
+def test_transmission_shaft_geometry_requires_a_declared_length():
+    with pytest.raises(GeometryError, match="element_params.length"):
+        build_transmission_shaft(_shaft(length=None))
+
+
+def test_transmission_shaft_geometry_refuses_a_non_length_dimension():
+    with pytest.raises(GeometryError, match="diameter must be a length"):
+        build_transmission_shaft(_shaft(diameter=Quantity.parse("55 N")))
 
 
 @pytest.mark.parametrize("view", ("iso", "front", "top", "right"))
