@@ -1029,6 +1029,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             detected = detected.model_copy(
                 update={
                     "solids": tuple(solid for solid in detected.solids if solid.id == args.solid),
+                    "planar_contacts": tuple(
+                        contact
+                        for contact in detected.planar_contacts
+                        if args.solid in {contact.first_solid_id, contact.second_solid_id}
+                    ),
                     "planar_faces": tuple(
                         face for face in detected.planar_faces if face.solid_id == args.solid
                     ),
@@ -1071,6 +1076,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(
             f"  {solid.id}  volume {solid.volume_mm3:g} mm³  center ({center}) mm  "
             f"bounds ({minimum})–({maximum}) mm",
+            file=out,
+        )
+    for contact in detected.planar_contacts:
+        print(
+            f"  {contact.id}  {contact.first_solid_id}/{contact.first_face_candidate_id} ↔ "
+            f"{contact.second_solid_id}/{contact.second_face_candidate_id}  "
+            f"overlap {contact.overlap_area_mm2:g} mm²",
             file=out,
         )
     for face in detected.planar_faces:

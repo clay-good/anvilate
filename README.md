@@ -184,7 +184,9 @@ The command imports every valid positive-volume solid, lists stable planar-face 
 and fits regular equal-diameter through holes to pitch circles from shared B-Rep topology.
 Multi-solid files carry a geometry-derived `solid_id` on every face and confirmed result,
 plus a summary of each solid's measured volume, centroid, and axis-aligned bounds so the ID
-can be mapped back to a component. Single-solid JSON remains unchanged. After discovery,
+can be mapped back to a component. When opposing faces are exactly coplanar, the kernel also
+reports their positive overlap as a contact candidate retaining both solid and face IDs; a
+nearby face is not called contact. Single-solid JSON remains unchanged. After discovery,
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. Its output is a proposal only. Creating a contract
 requires the exact pattern ID, a semantic mating-plane tag, and a named confirmer; the result
@@ -195,7 +197,8 @@ reducing them to diameter, count, and size. Concentric through or blind pilot bo
 locating bosses, and counterbores are offered as separate candidates and enter the contract
 only when their exact ID is confirmed. A counterbore preserves its recess diameter, depth,
 and through diameter; coincident indistinguishable solids are refused rather than assigned
-an arbitrary identity. Ambiguous nested blind steps and nonconcentric locators remain limits.
+an arbitrary identity. A contact candidate proves geometric overlap, not design intent.
+Ambiguous nested blind steps and nonconcentric locators remain limits.
 
 ## What you can do today
 
@@ -271,7 +274,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,608 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,611 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

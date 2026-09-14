@@ -620,15 +620,22 @@ geometry, so re-importing unchanged geometry returns the same identities without
 on kernel face or solid order. Every candidate from a multi-solid file names its `solid_id`,
 and a confirmed result preserves it. The `solids` collection gives each ID's measured volume,
 centroid, and axis-aligned minimum and maximum bounds, making opaque IDs recognizable without
-trusting STEP labels. A single-solid result omits both the collection and per-face field,
-preserving the existing JSON shape. The JSON also carries the source file's SHA-256 digest
-and every hole center. A successful scan exits 0 even when it finds no regular pattern; that
-is a completed measurement, not a passing engineering verdict.
+trusting STEP labels. For different solids whose planar faces oppose in the exact same plane,
+the kernel measures the common face and reports a contact candidate only when that overlap
+has positive area. A gap, however small, is not contact. A single-solid result omits the
+multi-solid collections and per-face field, preserving the existing JSON shape. The JSON
+also carries the source file's SHA-256 digest and every hole center. A successful scan exits
+0 even when it finds no regular pattern; that is a completed measurement, not a passing
+engineering verdict.
 
 For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
 ID with `--solid` to return its summary and list and accept candidates from that solid only.
 An unknown ID is refused with the available IDs, and a single-solid input tells you to omit
 the filter. A pattern belonging to another solid cannot be accepted through a filtered scan.
+
+A contact candidate retains both solid IDs, both face candidate IDs, and measured overlap
+area. It proves those imported faces overlap geometrically; it does not prove they were
+intended to mate, carry load, or have acceptable clearance.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

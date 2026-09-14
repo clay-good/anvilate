@@ -165,6 +165,7 @@ geometry.ConfirmedStepInterface
 geometry.CircularFeatureCandidate
 geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
+geometry.PlanarContactCandidate
 geometry.RenderedViewport
 geometry.StepInterfaceCandidates
 geometry.StepSolidCandidate

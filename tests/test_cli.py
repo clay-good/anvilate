@@ -129,13 +129,15 @@ def _write_four_hole_step(path: Path, *, locator=None) -> Path:
     return path
 
 
-def _write_four_hole_assembly_step(path: Path) -> Path:
-    from build123d import Box, Location, export_step, import_step
+def _write_four_hole_assembly_step(path: Path, *, touching: bool = False) -> Path:
+    from build123d import Box, Compound, Location, export_step, import_step
 
     plate_path = path.with_name("assembly-plate.step")
     plate = import_step(_write_four_hole_step(plate_path))
-    other = Box(20, 20, 20).moved(Location((150, 0, 0)))
-    export_step(plate + other, path)
+    location = (0, 0, 20) if touching else (150, 0, 0)
+    other = Box(20, 20, 20).moved(Location(location))
+    shape = Compound(children=[plate, other]) if touching else plate + other
+    export_step(shape, path)
     return path
 
 
@@ -1628,7 +1630,7 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
 
 
 def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_path):
-    step = _write_four_hole_assembly_step(tmp_path / "assembly.step")
+    step = _write_four_hole_assembly_step(tmp_path / "assembly.step", touching=True)
     code, discovered, err = _run("interfaces", str(step), "--format", "json")
     candidates = json.loads(discovered)["candidates"]
     patterned_face = next(face for face in candidates["planar_faces"] if face["hole_patterns"])
@@ -1636,6 +1638,8 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
 
     assert code == EXIT_OK and err == ""
     assert len(candidates["solids"]) == 2
+    assert len(candidates["planar_contacts"]) == 1
+    assert candidates["planar_contacts"][0]["overlap_area_mm2"] == pytest.approx(400)
     assert len({face["solid_id"] for face in candidates["planar_faces"]}) == 2
 
     code, selected_raw, err = _run(
@@ -1645,6 +1649,7 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     selected_solids = json.loads(selected_raw)["candidates"]["solids"]
     assert code == EXIT_OK and err == ""
     assert len(selected_faces) == 6
+    assert len(json.loads(selected_raw)["candidates"]["planar_contacts"]) == 1
     assert [solid["id"] for solid in selected_solids] == [patterned_face["solid_id"]]
     assert {face["solid_id"] for face in selected_faces} == {patterned_face["solid_id"]}
 
@@ -1673,6 +1678,7 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     assert code == EXIT_OK and err == ""
     assert "  solid solid-" in text
     assert "  volume 76858.4 mm³" in text
+    assert "contact-" in text and "overlap 400 mm²" in text
     assert "6 planar interface candidates" in text
 
 

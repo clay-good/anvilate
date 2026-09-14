@@ -783,6 +783,43 @@ def test_single_solid_interface_output_does_not_gain_a_solid_id(tmp_path):
     assert all("solid_id" not in face for face in dumped["planar_faces"])
 
 
+def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tmp_path):
+    from build123d import Box, Compound, Location, export_step
+
+    base = Box(100, 80, 10)
+    touching = Box(20, 20, 20).moved(Location((40, 30, 15)))
+    touching_path = tmp_path / "touching.step"
+    reversed_path = tmp_path / "touching-reversed.step"
+    separated_path = tmp_path / "separated.step"
+    coplanar_disjoint_path = tmp_path / "coplanar-disjoint.step"
+    export_step(Compound(children=[base, touching]), touching_path)
+    export_step(Compound(children=[touching, base]), reversed_path)
+    export_step(Compound(children=[base, touching.moved(Location((0, 0, 1)))]), separated_path)
+    export_step(
+        Compound(children=[base, touching.moved(Location((100, 0, 0)))]),
+        coplanar_disjoint_path,
+    )
+
+    detected = detect_step_interfaces(touching_path)
+    reversed_detected = detect_step_interfaces(reversed_path)
+    separated = detect_step_interfaces(separated_path)
+    coplanar_disjoint = detect_step_interfaces(coplanar_disjoint_path)
+
+    assert len(detected.planar_contacts) == 1
+    contact = detected.planar_contacts[0]
+    assert contact.overlap_area_mm2 == pytest.approx(400)
+    assert {contact.first_solid_id, contact.second_solid_id} == {
+        solid.id for solid in detected.solids
+    }
+    assert {contact.first_face_candidate_id, contact.second_face_candidate_id} <= {
+        face.id for face in detected.planar_faces
+    }
+    assert detected.planar_contacts == reversed_detected.planar_contacts
+    assert not separated.planar_contacts
+    assert not coplanar_disjoint.planar_contacts
+    assert any("do not prove intended mating" in warning for warning in detected.warnings)
+
+
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():
     with pytest.raises(ValueError, match="hole_count is 3, but 2 centers are listed"):
         HolePatternCandidate(

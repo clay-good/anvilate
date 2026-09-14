@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from html import escape
+from itertools import combinations
 from math import isfinite, sqrt
 from pathlib import Path
 from threading import Lock
@@ -47,6 +48,7 @@ __all__ = [
     "CircularFeatureCandidate",
     "HolePatternCandidate",
     "PlanarInterfaceCandidate",
+    "PlanarContactCandidate",
     "RenderedViewport",
     "StepValidationProperties",
     "StepInterfaceCandidates",
@@ -263,6 +265,23 @@ class PlanarInterfaceCandidate(StatableModel):
     locating_features: tuple[CircularFeatureCandidate, ...] = ()
 
 
+class PlanarContactCandidate(StatableModel):
+    """One exact coplanar overlap between opposing faces on different imported solids."""
+
+    id: Named
+    first_solid_id: Named
+    first_face_candidate_id: Named
+    second_solid_id: Named
+    second_face_candidate_id: Named
+    overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
+
+    @model_validator(mode="after")
+    def _joins_two_different_solids(self) -> PlanarContactCandidate:
+        if self.first_solid_id == self.second_solid_id:
+            raise ValueError("a planar contact candidate must join two different solids")
+        return self
+
+
 class StepSolidCandidate(StatableModel):
     """One imported solid identified by deterministic measured geometry."""
 
@@ -295,6 +314,7 @@ class StepInterfaceCandidates(StatableModel):
     source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     solids: tuple[StepSolidCandidate, ...] = ()
     planar_faces: tuple[PlanarInterfaceCandidate, ...]
+    planar_contacts: tuple[PlanarContactCandidate, ...] = ()
     warnings: tuple[str, ...] = ()
 
 
@@ -604,7 +624,8 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             center = _rounded_point(_point_along(axis_point, direction, distance))
             base.circular_features.append(("boss", float(radius), extent, center, None))
 
-    candidates = []
+    candidates: list[PlanarInterfaceCandidate] = []
+    plane_candidates: list[tuple[_DetectedPlane, PlanarInterfaceCandidate]] = []
     for plane in planes:
         containing = [
             solid_id
@@ -709,7 +730,9 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         }
         if solid_id is not None:
             candidate_data["solid_id"] = solid_id
-        candidates.append(PlanarInterfaceCandidate.model_validate(candidate_data))
+        candidate = PlanarInterfaceCandidate.model_validate(candidate_data)
+        candidates.append(candidate)
+        plane_candidates.append((plane, candidate))
     candidates.sort(
         key=lambda candidate: (
             candidate.normal,
@@ -718,18 +741,78 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             candidate.id,
         )
     )
+    contacts: list[PlanarContactCandidate] = []
+    if len(solids) > 1:
+        for (first_plane, first_candidate), (
+            second_plane,
+            second_candidate,
+        ) in combinations(plane_candidates, 2):
+            if (
+                first_candidate.solid_id is None
+                or second_candidate.solid_id is None
+                or first_candidate.solid_id == second_candidate.solid_id
+                or _dot(first_candidate.normal, second_candidate.normal) > -0.999999
+            ):
+                continue
+            separation = abs(
+                _dot(_subtract(second_plane.center, first_plane.center), first_plane.normal)
+            )
+            if separation > 1e-6:
+                continue
+            endpoints = sorted(
+                (
+                    (first_candidate.solid_id, first_candidate.id),
+                    (second_candidate.solid_id, second_candidate.id),
+                )
+            )
+            try:
+                overlap = first_plane.face & second_plane.face
+            except Exception as failure:
+                raise GeometryError(
+                    f"could not measure planar overlap between {endpoints[0][1]} and "
+                    f"{endpoints[1][1]}: {failure}"
+                ) from failure
+            if overlap is None:
+                continue
+            overlap_area = round(float(overlap.area), 9)
+            if overlap_area <= 1e-9:
+                continue
+            signature = {
+                "first_solid": endpoints[0][0],
+                "first_face": endpoints[0][1],
+                "second_solid": endpoints[1][0],
+                "second_face": endpoints[1][1],
+                "overlap_area": overlap_area,
+            }
+            contacts.append(
+                PlanarContactCandidate(
+                    id=_candidate_id("contact", signature),
+                    first_solid_id=endpoints[0][0],
+                    first_face_candidate_id=endpoints[0][1],
+                    second_solid_id=endpoints[1][0],
+                    second_face_candidate_id=endpoints[1][1],
+                    overlap_area_mm2=overlap_area,
+                )
+            )
+    warnings = [
+        "candidates are measured suggestions only; confirm one before creating an "
+        "interface contract",
+        "this detector does not yet classify nested blind steps or nonconcentric locators",
+    ]
+    if len(solids) > 1:
+        warnings.append(
+            "planar contacts report exact coplanar overlap only; they do not prove intended mating"
+        )
     result_data = {
         "source_name": path.name,
         "source_sha256": sha256(source_bytes).hexdigest(),
         "planar_faces": tuple(candidates),
-        "warnings": (
-            "candidates are measured suggestions only; confirm one before creating an "
-            "interface contract",
-            "this detector does not yet classify nested blind steps or nonconcentric locators",
-        ),
+        "warnings": tuple(warnings),
     }
     if len(solids) > 1:
+        contacts.sort(key=lambda contact: contact.id)
         result_data["solids"] = solid_candidates
+        result_data["planar_contacts"] = tuple(contacts)
     return StepInterfaceCandidates.model_validate(result_data)
 
 
