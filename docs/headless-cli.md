@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested clearance check passed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -695,6 +695,10 @@ for a later engineering decision.
 separate `accepted_contact` artifact retaining the source digest, endpoints, and overlap
 area. It does not emit an `InterfaceContract`, because that contract requires a hole pattern
 and inventing one would turn a truthful contact measurement into false interface geometry.
+When `--min-contact-area` and `--requirement` are both supplied, JSON also carries a typed
+`contact_check` with the normalized square-millimeter minimum, remaining area margin,
+pass/fail status, and source clause. The check joins `assembly_scorecard` and drives the exit
+code. A partial, uncited, negative, or non-area requirement is refused.
 
 `--accept-mate` likewise requires one exact cylindrical mate ID, `--name`, and
 `--confirmed-by`. Its separate `accepted_mate` artifact preserves the source digest, both

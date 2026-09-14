@@ -99,6 +99,7 @@ contracts.CONFIRMED_INTERFACE_SCHEMA_VERSION
 contracts.CONFIRMED_CONTACT_SCHEMA_VERSION
 contracts.CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION
 contracts.CONFIRMED_PLANAR_GAP_SCHEMA_VERSION
+contracts.PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION
 contracts.PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION
 contracts.CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION
 contracts.INTERFACE_CANDIDATES_SCHEMA_VERSION
@@ -109,6 +110,7 @@ contracts.confirmed_interface_json_schema
 contracts.confirmed_contact_json_schema
 contracts.confirmed_cylindrical_mate_json_schema
 contracts.confirmed_planar_gap_json_schema
+contracts.planar_contact_area_check_json_schema
 contracts.planar_gap_clearance_check_json_schema
 contracts.cylindrical_mate_fit_check_json_schema
 contracts.interface_candidates_json_schema
@@ -173,6 +175,7 @@ geometry.GeometrySummary
 geometry.GeometryUnavailable
 geometry.ConfirmedStepInterface
 geometry.ConfirmedPlanarContact
+geometry.PlanarContactAreaCheck
 geometry.ConfirmedCylindricalMate
 geometry.ConfirmedPlanarGap
 geometry.PlanarGapClearanceCheck
@@ -197,6 +200,7 @@ geometry.build_transmission_shaft
 geometry.build_spec
 geometry.confirm_step_interface
 geometry.confirm_planar_contact
+geometry.check_planar_contact_area
 geometry.confirm_cylindrical_mate
 geometry.confirm_planar_gap
 geometry.check_planar_gap_clearance

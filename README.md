@@ -175,7 +175,8 @@ To start a mating-part workflow from existing CAD, inspect a local STEP file:
 anvilate interfaces mating.step
 anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
-  --name housing_to_plate --confirmed-by "R. Engineer" --format json
+  --name housing_to_plate --confirmed-by "R. Engineer" \
+  --min-contact-area "300 mm^2" --requirement "Drawing A-101, note 8" --format json
 anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
   --name seal_gap --confirmed-by "R. Engineer" \
   --min-gap "0.5 mm" --max-gap "1.5 mm" \
@@ -209,7 +210,9 @@ engagement; any excess overlap remains a failure. Single-solid JSON remains unch
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. `--accept-contact` records one exact pair, a semantic
 name, and the named confirmer without fabricating the hole pattern required by an
-`InterfaceContract`. `--accept-gap` likewise preserves the selected gap's endpoints,
+`InterfaceContract`. Supplying `--min-contact-area` and `--requirement` checks its measured
+overlap against that cited minimum and adds the verdict to the assembly scorecard.
+`--accept-gap` likewise preserves the selected gap's endpoints,
 separation, overlap, direction, semantic name, and named confirmer without inventing an
 allowable clearance. Supplying `--min-gap`, `--max-gap`, and `--requirement` checks the
 measured separation against a caller-sourced band and exits 1 outside it; partial or uncited
@@ -304,7 +307,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,653 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,660 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

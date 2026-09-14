@@ -280,6 +280,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="basic size with unit for --fit, for example '10 mm'",
     )
     interfaces.add_argument(
+        "--min-contact-area",
+        metavar="QUANTITY",
+        help="minimum required overlap area with unit for --accept-contact",
+    )
+    interfaces.add_argument(
         "--min-gap",
         metavar="QUANTITY",
         help="minimum allowed gap with unit for --accept-gap",
@@ -291,7 +296,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     interfaces.add_argument(
         "--requirement",
-        help="source clause for the caller-supplied gap limits",
+        help="source clause for caller-supplied contact-area or gap limits",
     )
     interfaces.add_argument("--name", help="semantic name for the accepted artifact")
     interfaces.add_argument(
@@ -1031,6 +1036,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         _assembly_interface_scorecard,
         _interference_scorecard,
         check_cylindrical_mate_fit,
+        check_planar_contact_area,
         check_planar_gap_clearance,
         confirm_cylindrical_mate,
         confirm_planar_contact,
@@ -1145,6 +1151,34 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 file=err,
             )
             return EXIT_BAD_REQUEST
+    contact_check_acceptance = {
+        "--min-contact-area": args.min_contact_area,
+        "--requirement": args.requirement,
+    }
+    contact_check_supplied = {
+        option for option, value in contact_check_acceptance.items() if value is not None
+    }
+    if args.accept_contact is not None or args.min_contact_area is not None:
+        if contact_check_supplied:
+            if args.accept_contact is None:
+                print(
+                    "anvilate interfaces: --min-contact-area and --requirement require "
+                    "--accept-contact",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
+            if len(contact_check_supplied) != len(contact_check_acceptance):
+                missing = ", ".join(
+                    option
+                    for option in contact_check_acceptance
+                    if option not in contact_check_supplied
+                )
+                print(
+                    "anvilate interfaces: a contact-area check requires --min-contact-area "
+                    f"and --requirement; missing {missing}",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
     gap_check_acceptance = {
         "--min-gap": args.min_gap,
         "--max-gap": args.max_gap,
@@ -1153,23 +1187,34 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     gap_check_supplied = {
         option for option, value in gap_check_acceptance.items() if value is not None
     }
-    if gap_check_supplied:
-        if args.accept_gap is None:
-            print(
-                "anvilate interfaces: gap limits and --requirement require --accept-gap",
-                file=err,
-            )
-            return EXIT_BAD_REQUEST
-        if len(gap_check_supplied) != len(gap_check_acceptance):
-            missing = ", ".join(
-                option for option in gap_check_acceptance if option not in gap_check_supplied
-            )
-            print(
-                "anvilate interfaces: a gap check requires --min-gap, --max-gap, and "
-                f"--requirement; missing {missing}",
-                file=err,
-            )
-            return EXIT_BAD_REQUEST
+    if args.accept_gap is not None or args.min_gap is not None or args.max_gap is not None:
+        if gap_check_supplied:
+            if args.accept_gap is None:
+                print(
+                    "anvilate interfaces: gap limits and --requirement require --accept-gap",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
+            if len(gap_check_supplied) != len(gap_check_acceptance):
+                missing = ", ".join(
+                    option for option in gap_check_acceptance if option not in gap_check_supplied
+                )
+                print(
+                    "anvilate interfaces: a gap check requires --min-gap, --max-gap, and "
+                    f"--requirement; missing {missing}",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
+    if (
+        args.requirement is not None
+        and args.accept_contact is None
+        and args.accept_gap is None
+    ):
+        print(
+            "anvilate interfaces: --requirement requires --accept-contact or --accept-gap",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
 
     try:
         detected = detect_step_interfaces(args.step)
@@ -1222,6 +1267,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         accepted_contact = None
         accepted_mate = None
         accepted_gap = None
+        contact_check = None
         fit_check = None
         gap_check = None
         if args.accept is not None:
@@ -1240,6 +1286,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 name=args.name,
                 confirmed_by=args.confirmed_by,
             )
+            if args.min_contact_area is not None:
+                try:
+                    contact_check = check_planar_contact_area(
+                        accepted_contact,
+                        minimum_overlap_area=Quantity.parse(args.min_contact_area),
+                        reference=args.requirement,
+                    )
+                except ValueError as failure:
+                    raise GeometryError(str(failure)) from failure
         elif args.accept_mate is not None:
             accepted_mate = confirm_cylindrical_mate(
                 detected,
@@ -1279,6 +1334,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             if detected.interference_scorecard is None
             else _assembly_interface_scorecard(
                 detected,
+                contact_check=contact_check,
                 fit_check=fit_check,
                 gap_check=gap_check,
             )
@@ -1299,6 +1355,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["accepted"] = accepted.model_dump(mode="json", exclude_unset=True)
         if accepted_contact is not None:
             document["accepted_contact"] = accepted_contact.model_dump(mode="json")
+        if contact_check is not None:
+            document["contact_check"] = contact_check.model_dump(mode="json")
         if accepted_mate is not None:
             document["accepted_mate"] = accepted_mate.model_dump(mode="json")
         if accepted_gap is not None:
@@ -1416,6 +1474,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(
             f"  accepted contact: {contact_identity}, "
             f"confirmed by {accepted_contact.confirmed_by}",
+            file=out,
+        )
+    if contact_check is not None:
+        print(
+            f"  contact-area requirement: {contact_check.status.upper()}  measured "
+            f"{contact_check.confirmed_contact.overlap_area_mm2:g} mm²  minimum "
+            f"{contact_check.minimum_overlap_area_mm2:g} mm²",
             file=out,
         )
     if accepted_mate is not None:

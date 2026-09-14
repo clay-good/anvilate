@@ -1777,6 +1777,87 @@ def test_interfaces_refuses_unknown_and_cross_solid_selection(tmp_path):
     assert f"pattern candidate {pattern_id!r} was not found" in err
 
 
+def test_interfaces_checks_a_confirmed_planar_contact_against_a_cited_minimum_area(tmp_path):
+    step = _write_four_hole_assembly_step(tmp_path / "contact-area.step", touching=True)
+    _code, discovered, _err = _run("interfaces", str(step), "--format", "json")
+    contact_id = json.loads(discovered)["candidates"]["planar_contacts"][0]["id"]
+
+    base_args = (
+        "interfaces",
+        str(step),
+        "--accept-contact",
+        contact_id,
+        "--name",
+        "housing_to_plate",
+        "--confirmed-by",
+        "R. Engineer",
+    )
+    code, raw, err = _run(
+        *base_args,
+        "--min-contact-area",
+        "300 mm^2",
+        "--requirement",
+        "Drawing A-101, note 8",
+        "--format",
+        "json",
+    )
+    payload = json.loads(raw)
+    check = payload["contact_check"]
+    assert code == EXIT_OK and err == ""
+    assert check["status"] == "pass"
+    assert check["minimum_overlap_area_mm2"] == pytest.approx(300)
+    assert check["margin_above_minimum_mm2"] == pytest.approx(100)
+    assert check["reference"] == "Drawing A-101, note 8"
+    assert payload["assembly_scorecard"]["status"] == "pass"
+    assert payload["assembly_scorecard"]["entries"][-1]["name"] == (
+        "planar contact area housing_to_plate"
+    )
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+
+    code, text, err = _run(
+        *base_args,
+        "--min-contact-area",
+        "300 mm^2",
+        "--requirement",
+        "Drawing A-101, note 8",
+    )
+    assert code == EXIT_OK and err == ""
+    assert "contact-area requirement: PASS  measured 400 mm²  minimum 300 mm²" in text
+
+    code, failed_raw, err = _run(
+        *base_args,
+        "--min-contact-area",
+        "500 mm^2",
+        "--requirement",
+        "Drawing A-101, note 8",
+        "--format",
+        "json",
+    )
+    failed = json.loads(failed_raw)
+    assert code == EXIT_FAILED and err == ""
+    assert failed["contact_check"]["status"] == "fail"
+    assert failed["assembly_scorecard"]["status"] == "fail"
+    assert failed["assembly_scorecard"]["entries"][-1]["status"] == "fail"
+
+    code, out, err = _run(*base_args, "--min-contact-area", "300 mm^2")
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "a contact-area check requires" in err and "missing --requirement" in err
+
+    code, out, err = _run(
+        *base_args,
+        "--min-contact-area",
+        "3 mm",
+        "--requirement",
+        "Drawing A-101, note 8",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "minimum contact area must be an area" in err
+
+
 def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     step = _write_cylindrical_mate_step(tmp_path / "shaft-in-bore.step")
 

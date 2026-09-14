@@ -39,6 +39,7 @@ from .geometry import (
     CylindricalMateFitCheck,
     GeometryMeasurement,
     GeometrySummary,
+    PlanarContactAreaCheck,
     PlanarGapClearanceCheck,
     StepInterfaceCandidates,
     ViewportImage,
@@ -61,6 +62,7 @@ __all__ = [
     "CONFIRMED_CONTACT_SCHEMA_VERSION",
     "CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION",
     "CONFIRMED_PLANAR_GAP_SCHEMA_VERSION",
+    "PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION",
     "PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION",
     "CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
@@ -72,6 +74,7 @@ __all__ = [
     "confirmed_contact_json_schema",
     "confirmed_cylindrical_mate_json_schema",
     "confirmed_planar_gap_json_schema",
+    "planar_contact_area_check_json_schema",
     "planar_gap_clearance_check_json_schema",
     "cylindrical_mate_fit_check_json_schema",
     "interface_candidates_json_schema",
@@ -132,6 +135,9 @@ CONFIRMED_PLANAR_GAP_SCHEMA_VERSION = "1.0.0"
 
 # One confirmed planar gap checked against a caller-supplied cited band.
 PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION = "1.0.0"
+
+# One confirmed planar contact checked against a caller-supplied cited minimum area.
+PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION = "1.0.0"
 
 # One confirmed cylindrical mate checked against an explicit ISO 286 fit.
 CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.0.0"
@@ -296,6 +302,21 @@ def planar_gap_clearance_check_json_schema() -> dict[str, Any]:
             "caller-supplied minimum and maximum separations, with margins, pass/fail "
             "status, and the requirement citation. Generated from "
             "anvilate.geometry.PlanarGapClearanceCheck."
+        ),
+    )
+
+
+def planar_contact_area_check_json_schema() -> dict[str, Any]:
+    """One confirmed planar contact checked against a cited minimum overlap area."""
+    return _artifact(
+        PlanarContactAreaCheck,
+        name="planar-contact-area-check",
+        version=PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION,
+        description=(
+            "Anvilate planar contact area check: one confirmed contact checked against a "
+            "caller-supplied minimum overlap area, with margin, pass/fail status, and the "
+            "requirement citation. Generated from "
+            "anvilate.geometry.PlanarContactAreaCheck."
         ),
     )
 
@@ -482,6 +503,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "confirmed-planar-contact.schema.json": confirmed_contact_json_schema(),
         "confirmed-cylindrical-mate.schema.json": confirmed_cylindrical_mate_json_schema(),
         "confirmed-planar-gap.schema.json": confirmed_planar_gap_json_schema(),
+        "planar-contact-area-check.schema.json": planar_contact_area_check_json_schema(),
         "planar-gap-clearance-check.schema.json": planar_gap_clearance_check_json_schema(),
         "cylindrical-mate-fit-check.schema.json": cylindrical_mate_fit_check_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),

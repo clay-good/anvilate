@@ -62,6 +62,8 @@ diametral clearance and axial engagement. The result is measured geometry, not a
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits
 a separate confirmed-contact artifact. It deliberately does not fabricate the hole pattern
 required by `InterfaceContract`.
+The local CLI can additionally check that contact against explicit `--min-contact-area` and
+`--requirement` inputs; the typed result joins `assembly_scorecard`.
 `--accept-mate` does the same for an exact cylindrical mate, preserving its bore/shaft
 endpoints, signed clearance, and engagement without making a fit verdict. Both acceptance
 paths are local CLI workflows, not MCP tools.

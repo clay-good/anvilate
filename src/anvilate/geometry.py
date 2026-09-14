@@ -48,6 +48,7 @@ __all__ = [
     "GeometryUnavailable",
     "ConfirmedStepInterface",
     "ConfirmedPlanarContact",
+    "PlanarContactAreaCheck",
     "ConfirmedCylindricalMate",
     "ConfirmedPlanarGap",
     "PlanarGapClearanceCheck",
@@ -72,6 +73,7 @@ __all__ = [
     "build_spec",
     "confirm_step_interface",
     "confirm_planar_contact",
+    "check_planar_contact_area",
     "confirm_cylindrical_mate",
     "confirm_planar_gap",
     "check_planar_gap_clearance",
@@ -443,6 +445,26 @@ class ConfirmedPlanarContact(StatableModel):
     second_face_candidate_id: Named
     overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
     confirmed_by: Named
+
+
+class PlanarContactAreaCheck(StatableModel):
+    """A confirmed planar contact checked against one cited minimum overlap area."""
+
+    confirmed_contact: ConfirmedPlanarContact
+    minimum_overlap_area_mm2: Annotated[FiniteFloat, Field(ge=0)]
+    margin_above_minimum_mm2: FiniteFloat
+    status: Literal["pass", "fail"]
+    reference: Provenance
+
+    @model_validator(mode="after")
+    def _matches_its_minimum(self) -> PlanarContactAreaCheck:
+        expected_margin = self.confirmed_contact.overlap_area_mm2 - self.minimum_overlap_area_mm2
+        if abs(self.margin_above_minimum_mm2 - expected_margin) > 1e-9:
+            raise ValueError("contact-area margin must match the measured overlap")
+        expected_status = "pass" if expected_margin >= 0 else "fail"
+        if self.status != expected_status:
+            raise ValueError("contact-area status must match the measured overlap and minimum")
+        return self
 
 
 class ConfirmedPlanarGap(StatableModel):
@@ -1330,6 +1352,31 @@ def confirm_planar_contact(
     )
 
 
+def check_planar_contact_area(
+    confirmed: ConfirmedPlanarContact,
+    *,
+    minimum_overlap_area: Quantity,
+    reference: str,
+) -> PlanarContactAreaCheck:
+    """Check a confirmed contact against one caller-supplied, cited minimum area."""
+    if not minimum_overlap_area.has_dimension("[length]**2"):
+        raise GeometryError(
+            "minimum contact area must be an area; got "
+            f"{minimum_overlap_area.dimensionality} ({minimum_overlap_area})"
+        )
+    minimum_mm2 = minimum_overlap_area.to("mm^2").magnitude
+    if minimum_mm2 < 0:
+        raise GeometryError("minimum contact area must not be negative")
+    margin = round(confirmed.overlap_area_mm2 - minimum_mm2, 9)
+    return PlanarContactAreaCheck(
+        confirmed_contact=confirmed,
+        minimum_overlap_area_mm2=round(minimum_mm2, 9),
+        margin_above_minimum_mm2=margin,
+        status="pass" if margin >= 0 else "fail",
+        reference=reference,
+    )
+
+
 def confirm_cylindrical_mate(
     candidates: StepInterfaceCandidates,
     *,
@@ -1487,6 +1534,7 @@ def check_cylindrical_mate_fit(
 def _assembly_interface_scorecard(
     candidates: StepInterfaceCandidates,
     *,
+    contact_check: PlanarContactAreaCheck | None = None,
     fit_check: CylindricalMateFitCheck | None = None,
     gap_check: PlanarGapClearanceCheck | None = None,
 ) -> Scorecard:
@@ -1547,6 +1595,22 @@ def _assembly_interface_scorecard(
             else candidates.interference_scorecard.entries
         )
     ]
+    if contact_check is not None:
+        entries.append(
+            ScorecardEntry(
+                name=f"planar contact area {contact_check.confirmed_contact.name}",
+                status=CheckStatus.PASS if contact_check.status == "pass" else CheckStatus.FAIL,
+                detail=(
+                    f"measured {contact_check.confirmed_contact.overlap_area_mm2:g} mm² "
+                    f"against minimum {contact_check.minimum_overlap_area_mm2:g} mm²"
+                ),
+                reference=contact_check.reference,
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason="the verdict compares a B-Rep overlap area with the cited minimum",
+                ),
+            )
+        )
     if fit_check is not None:
         for label, feature in (("hole", fit_check.hole), ("shaft", fit_check.shaft)):
             entries.append(
