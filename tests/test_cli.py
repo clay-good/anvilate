@@ -2053,6 +2053,93 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     )
 
 
+def test_interfaces_checks_cylindrical_engagement_alongside_the_iso_fit(tmp_path):
+    step = _write_cylindrical_mate_step(tmp_path / "engagement.step", shaft_radius=4.995)
+    _code, discovered, _err = _run("interfaces", str(step), "--format", "json")
+    mate_id = json.loads(discovered)["candidates"]["cylindrical_mates"][0]["id"]
+    base_args = (
+        "interfaces",
+        str(step),
+        "--accept-mate",
+        mate_id,
+        "--name",
+        "bearing_journal",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/g6",
+        "--basic-size",
+        "10 mm",
+    )
+
+    code, raw, err = _run(
+        *base_args,
+        "--min-engagement",
+        "8 mm",
+        "--requirement",
+        "Drawing S-201, detail B",
+        "--format",
+        "json",
+    )
+    payload = json.loads(raw)
+    check = payload["engagement_check"]
+    assert code == EXIT_OK and err == ""
+    assert payload["fit_check"]["status"] == "pass"
+    assert check["status"] == "pass"
+    assert check["minimum_axial_engagement_mm"] == pytest.approx(8)
+    assert check["margin_above_minimum_mm"] == pytest.approx(2)
+    assert check["reference"] == "Drawing S-201, detail B"
+    assert payload["assembly_scorecard"]["status"] == "pass"
+    assert payload["assembly_scorecard"]["entries"][1]["name"] == (
+        "cylindrical mate engagement bearing_journal"
+    )
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+
+    code, text, err = _run(
+        *base_args,
+        "--min-engagement",
+        "8 mm",
+        "--requirement",
+        "Drawing S-201, detail B",
+    )
+    assert code == EXIT_OK and err == ""
+    assert "engagement requirement: PASS  measured 10 mm  minimum 8 mm" in text
+
+    code, failed_raw, err = _run(
+        *base_args,
+        "--min-engagement",
+        "12 mm",
+        "--requirement",
+        "Drawing S-201, detail B",
+        "--format",
+        "json",
+    )
+    failed = json.loads(failed_raw)
+    assert code == EXIT_FAILED and err == ""
+    assert failed["fit_check"]["status"] == "pass"
+    assert failed["engagement_check"]["status"] == "fail"
+    assert failed["assembly_scorecard"]["status"] == "fail"
+    assert failed["assembly_scorecard"]["entries"][1]["status"] == "fail"
+
+    code, out, err = _run(*base_args, "--min-engagement", "8 mm")
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "an engagement check requires" in err and "missing --requirement" in err
+
+    code, out, err = _run(
+        *base_args,
+        "--min-engagement",
+        "8 mm^2",
+        "--requirement",
+        "Drawing S-201, detail B",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "minimum axial engagement must be a length" in err
+
+
 def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     step = _write_planar_gap_step(tmp_path / "planar-gap.step")
 

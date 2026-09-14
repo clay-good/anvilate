@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "ConfirmedCylindricalMate": {
+      "description": "One cylindrical mating candidate accepted by a named person.",
+      "properties": {
+        "axial_engagement_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Axial Engagement Mm",
+          "type": "number"
+        },
+        "axis_direction": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis Direction",
+          "type": "array"
+        },
+        "axis_origin_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis Origin Mm",
+          "type": "array"
+        },
+        "bore_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Bore Diameter Mm",
+          "type": "number"
+        },
+        "bore_solid_id": {
+          "title": "Bore Solid Id",
+          "type": "string"
+        },
+        "bore_surface_id": {
+          "title": "Bore Surface Id",
+          "type": "string"
+        },
+        "confirmed_by": {
+          "title": "Confirmed By",
+          "type": "string"
+        },
+        "diametral_clearance_mm": {
+          "title": "Diametral Clearance Mm",
+          "type": "number"
+        },
+        "mate_candidate_id": {
+          "title": "Mate Candidate Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "shaft_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Shaft Diameter Mm",
+          "type": "number"
+        },
+        "shaft_solid_id": {
+          "title": "Shaft Solid Id",
+          "type": "string"
+        },
+        "shaft_surface_id": {
+          "title": "Shaft Surface Id",
+          "type": "string"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_name",
+        "source_sha256",
+        "mate_candidate_id",
+        "name",
+        "bore_solid_id",
+        "bore_surface_id",
+        "shaft_solid_id",
+        "shaft_surface_id",
+        "bore_diameter_mm",
+        "shaft_diameter_mm",
+        "diametral_clearance_mm",
+        "axial_engagement_mm",
+        "axis_origin_mm",
+        "axis_direction",
+        "confirmed_by"
+      ],
+      "title": "ConfirmedCylindricalMate",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/cylindrical-mate-engagement-check/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate cylindrical mate engagement check: a confirmed measured bore/shaft pair checked against a caller-supplied minimum axial engagement, with margin, pass/fail status, and the requirement citation. Generated from anvilate.geometry.CylindricalMateEngagementCheck.",
+  "properties": {
+    "confirmed_mate": {
+      "$ref": "#/$defs/ConfirmedCylindricalMate"
+    },
+    "margin_above_minimum_mm": {
+      "title": "Margin Above Minimum Mm",
+      "type": "number"
+    },
+    "minimum_axial_engagement_mm": {
+      "minimum": 0,
+      "title": "Minimum Axial Engagement Mm",
+      "type": "number"
+    },
+    "reference": {
+      "title": "Reference",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "confirmed_mate",
+    "minimum_axial_engagement_mm",
+    "margin_above_minimum_mm",
+    "status",
+    "reference"
+  ],
+  "title": "CylindricalMateEngagementCheck",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

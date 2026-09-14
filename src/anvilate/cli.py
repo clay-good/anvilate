@@ -285,6 +285,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="minimum required overlap area with unit for --accept-contact",
     )
     interfaces.add_argument(
+        "--min-engagement",
+        metavar="QUANTITY",
+        help="minimum required axial engagement with unit for --accept-mate",
+    )
+    interfaces.add_argument(
         "--min-gap",
         metavar="QUANTITY",
         help="minimum allowed gap with unit for --accept-gap",
@@ -1035,6 +1040,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         GeometryUnavailable,
         _assembly_interface_scorecard,
         _interference_scorecard,
+        check_cylindrical_mate_engagement,
         check_cylindrical_mate_fit,
         check_planar_contact_area,
         check_planar_gap_clearance,
@@ -1179,6 +1185,34 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                     file=err,
                 )
                 return EXIT_BAD_REQUEST
+    engagement_check_acceptance = {
+        "--min-engagement": args.min_engagement,
+        "--requirement": args.requirement,
+    }
+    engagement_check_supplied = {
+        option for option, value in engagement_check_acceptance.items() if value is not None
+    }
+    if args.accept_mate is not None or args.min_engagement is not None:
+        if engagement_check_supplied:
+            if args.accept_mate is None:
+                print(
+                    "anvilate interfaces: --min-engagement and --requirement require "
+                    "--accept-mate",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
+            if len(engagement_check_supplied) != len(engagement_check_acceptance):
+                missing = ", ".join(
+                    option
+                    for option in engagement_check_acceptance
+                    if option not in engagement_check_supplied
+                )
+                print(
+                    "anvilate interfaces: an engagement check requires --min-engagement "
+                    f"and --requirement; missing {missing}",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
     gap_check_acceptance = {
         "--min-gap": args.min_gap,
         "--max-gap": args.max_gap,
@@ -1208,10 +1242,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     if (
         args.requirement is not None
         and args.accept_contact is None
+        and args.accept_mate is None
         and args.accept_gap is None
     ):
         print(
-            "anvilate interfaces: --requirement requires --accept-contact or --accept-gap",
+            "anvilate interfaces: --requirement requires --accept-contact, --accept-mate, "
+            "or --accept-gap",
             file=err,
         )
         return EXIT_BAD_REQUEST
@@ -1268,6 +1304,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         accepted_mate = None
         accepted_gap = None
         contact_check = None
+        engagement_check = None
         fit_check = None
         gap_check = None
         if args.accept is not None:
@@ -1302,6 +1339,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 name=args.name,
                 confirmed_by=args.confirmed_by,
             )
+            if args.min_engagement is not None:
+                try:
+                    engagement_check = check_cylindrical_mate_engagement(
+                        accepted_mate,
+                        minimum_engagement=Quantity.parse(args.min_engagement),
+                        reference=args.requirement,
+                    )
+                except ValueError as failure:
+                    raise GeometryError(str(failure)) from failure
             if args.fit is not None:
                 try:
                     basic_size = Quantity.parse(args.basic_size)
@@ -1335,6 +1381,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             else _assembly_interface_scorecard(
                 detected,
                 contact_check=contact_check,
+                engagement_check=engagement_check,
                 fit_check=fit_check,
                 gap_check=gap_check,
             )
@@ -1357,6 +1404,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["accepted_contact"] = accepted_contact.model_dump(mode="json")
         if contact_check is not None:
             document["contact_check"] = contact_check.model_dump(mode="json")
+        if engagement_check is not None:
+            document["engagement_check"] = engagement_check.model_dump(mode="json")
         if accepted_mate is not None:
             document["accepted_mate"] = accepted_mate.model_dump(mode="json")
         if accepted_gap is not None:
@@ -1488,6 +1537,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(
             f"  accepted cylindrical mate: {mate_identity}, "
             f"confirmed by {accepted_mate.confirmed_by}",
+            file=out,
+        )
+    if engagement_check is not None:
+        print(
+            f"  engagement requirement: {engagement_check.status.upper()}  measured "
+            f"{engagement_check.confirmed_mate.axial_engagement_mm:g} mm  minimum "
+            f"{engagement_check.minimum_axial_engagement_mm:g} mm",
             file=out,
         )
     if accepted_gap is not None:

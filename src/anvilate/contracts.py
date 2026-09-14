@@ -36,6 +36,7 @@ from .geometry import (
     ConfirmedPlanarContact,
     ConfirmedPlanarGap,
     ConfirmedStepInterface,
+    CylindricalMateEngagementCheck,
     CylindricalMateFitCheck,
     GeometryMeasurement,
     GeometrySummary,
@@ -64,6 +65,7 @@ __all__ = [
     "CONFIRMED_PLANAR_GAP_SCHEMA_VERSION",
     "PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION",
     "PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION",
+    "CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION",
     "CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
@@ -76,6 +78,7 @@ __all__ = [
     "confirmed_planar_gap_json_schema",
     "planar_contact_area_check_json_schema",
     "planar_gap_clearance_check_json_schema",
+    "cylindrical_mate_engagement_check_json_schema",
     "cylindrical_mate_fit_check_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
@@ -141,6 +144,9 @@ PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION = "1.0.0"
 
 # One confirmed cylindrical mate checked against an explicit ISO 286 fit.
 CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.0.0"
+
+# One confirmed cylindrical mate checked against a caller-supplied cited minimum engagement.
+CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION = "1.0.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -336,6 +342,21 @@ def cylindrical_mate_fit_check_json_schema() -> dict[str, Any]:
     )
 
 
+def cylindrical_mate_engagement_check_json_schema() -> dict[str, Any]:
+    """One confirmed cylindrical mate checked against a cited minimum engagement."""
+    return _artifact(
+        CylindricalMateEngagementCheck,
+        name="cylindrical-mate-engagement-check",
+        version=CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION,
+        description=(
+            "Anvilate cylindrical mate engagement check: a confirmed measured bore/shaft "
+            "pair checked against a caller-supplied minimum axial engagement, with margin, "
+            "pass/fail status, and the requirement citation. Generated from "
+            "anvilate.geometry.CylindricalMateEngagementCheck."
+        ),
+    )
+
+
 def measurement_json_schema() -> dict[str, Any]:
     """A typed scalar inspection of built geometry."""
     return _artifact(
@@ -505,6 +526,9 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "confirmed-planar-gap.schema.json": confirmed_planar_gap_json_schema(),
         "planar-contact-area-check.schema.json": planar_contact_area_check_json_schema(),
         "planar-gap-clearance-check.schema.json": planar_gap_clearance_check_json_schema(),
+        "cylindrical-mate-engagement-check.schema.json": (
+            cylindrical_mate_engagement_check_json_schema()
+        ),
         "cylindrical-mate-fit-check.schema.json": cylindrical_mate_fit_check_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),

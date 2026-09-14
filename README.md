@@ -183,7 +183,8 @@ anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
   --requirement "Drawing A-101, note 7" --format json
 anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
   --name bearing_journal --confirmed-by "R. Engineer" \
-  --fit H7/g6 --basic-size "10 mm" --format json
+  --fit H7/g6 --basic-size "10 mm" --min-engagement "8 mm" \
+  --requirement "Drawing S-201, detail B" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -220,7 +221,9 @@ limits are refused. `--accept-mate` records the exact bore/shaft endpoints, meas
 semantic name, and named confirmer without declaring the fit acceptable. Its output is a
 proposal only. Supplying both `--fit` and `--basic-size` then checks each measured diameter
 against the caller-selected ISO 286 zones, cites the encoded standard table, and exits 1 if
-either feature is outside its zone. The command never infers those fit inputs. Creating a contract
+either feature is outside its zone. Supplying `--min-engagement` with `--requirement` also
+checks the measured axial engagement and joins that verdict to the same scorecard. The
+command never infers those inputs. Creating a contract
 requires the exact pattern ID, a semantic mating-plane tag, and a named confirmer; the result
 keeps the STEP digest, solid identity, and candidate IDs beside the generated
 `InterfaceContract`. That contract carries a right-handed source frame and every
@@ -307,7 +310,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,660 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,667 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

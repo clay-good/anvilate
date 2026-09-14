@@ -50,6 +50,7 @@ __all__ = [
     "ConfirmedPlanarContact",
     "PlanarContactAreaCheck",
     "ConfirmedCylindricalMate",
+    "CylindricalMateEngagementCheck",
     "ConfirmedPlanarGap",
     "PlanarGapClearanceCheck",
     "CylindricalMateFitCheck",
@@ -75,6 +76,7 @@ __all__ = [
     "confirm_planar_contact",
     "check_planar_contact_area",
     "confirm_cylindrical_mate",
+    "check_cylindrical_mate_engagement",
     "confirm_planar_gap",
     "check_planar_gap_clearance",
     "check_cylindrical_mate_fit",
@@ -550,6 +552,28 @@ class ConfirmedCylindricalMate(StatableModel):
         axis_length = sqrt(sum(component**2 for component in self.axis_direction))
         if abs(axis_length - 1) > 1e-9:
             raise ValueError("confirmed cylindrical mate axis_direction must be a unit vector")
+        return self
+
+
+class CylindricalMateEngagementCheck(StatableModel):
+    """A confirmed cylindrical mate checked against one cited minimum engagement."""
+
+    confirmed_mate: ConfirmedCylindricalMate
+    minimum_axial_engagement_mm: Annotated[FiniteFloat, Field(ge=0)]
+    margin_above_minimum_mm: FiniteFloat
+    status: Literal["pass", "fail"]
+    reference: Provenance
+
+    @model_validator(mode="after")
+    def _matches_its_minimum(self) -> CylindricalMateEngagementCheck:
+        expected_margin = (
+            self.confirmed_mate.axial_engagement_mm - self.minimum_axial_engagement_mm
+        )
+        if abs(self.margin_above_minimum_mm - expected_margin) > 1e-9:
+            raise ValueError("engagement margin must match the measured axial engagement")
+        expected_status = "pass" if expected_margin >= 0 else "fail"
+        if self.status != expected_status:
+            raise ValueError("engagement status must match the measured engagement and minimum")
         return self
 
 
@@ -1484,6 +1508,31 @@ def check_planar_gap_clearance(
     )
 
 
+def check_cylindrical_mate_engagement(
+    confirmed: ConfirmedCylindricalMate,
+    *,
+    minimum_engagement: Quantity,
+    reference: str,
+) -> CylindricalMateEngagementCheck:
+    """Check a confirmed cylindrical mate against one cited minimum engagement."""
+    if not minimum_engagement.has_dimension("[length]"):
+        raise GeometryError(
+            "minimum axial engagement must be a length; got "
+            f"{minimum_engagement.dimensionality} ({minimum_engagement})"
+        )
+    minimum_mm = minimum_engagement.to("mm").magnitude
+    if minimum_mm < 0:
+        raise GeometryError("minimum axial engagement must not be negative")
+    margin = round(confirmed.axial_engagement_mm - minimum_mm, 9)
+    return CylindricalMateEngagementCheck(
+        confirmed_mate=confirmed,
+        minimum_axial_engagement_mm=round(minimum_mm, 9),
+        margin_above_minimum_mm=margin,
+        status="pass" if margin >= 0 else "fail",
+        reference=reference,
+    )
+
+
 def check_cylindrical_mate_fit(
     confirmed: ConfirmedCylindricalMate,
     *,
@@ -1535,6 +1584,7 @@ def _assembly_interface_scorecard(
     candidates: StepInterfaceCandidates,
     *,
     contact_check: PlanarContactAreaCheck | None = None,
+    engagement_check: CylindricalMateEngagementCheck | None = None,
     fit_check: CylindricalMateFitCheck | None = None,
     gap_check: PlanarGapClearanceCheck | None = None,
 ) -> Scorecard:
@@ -1608,6 +1658,24 @@ def _assembly_interface_scorecard(
                 underived=Underived(
                     kind=DerivationAbsence.NUMERIC_RESULT,
                     reason="the verdict compares a B-Rep overlap area with the cited minimum",
+                ),
+            )
+        )
+    if engagement_check is not None:
+        entries.append(
+            ScorecardEntry(
+                name=f"cylindrical mate engagement {engagement_check.confirmed_mate.name}",
+                status=(
+                    CheckStatus.PASS if engagement_check.status == "pass" else CheckStatus.FAIL
+                ),
+                detail=(
+                    f"measured {engagement_check.confirmed_mate.axial_engagement_mm:g} mm "
+                    f"against minimum {engagement_check.minimum_axial_engagement_mm:g} mm"
+                ),
+                reference=engagement_check.reference,
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason="the verdict compares B-Rep axial engagement with the cited minimum",
                 ),
             )
         )

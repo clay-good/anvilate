@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -713,6 +713,10 @@ basic size from measured geometry. The result reports the permitted hole and sha
 limits, whether each measurement lies inside its own zone, the design clearance range, the
 measured clearance comparison, and the ISO 286 table citation. It passes only when both
 features are in zone; an out-of-zone result remains valid JSON but exits 1 for CI.
+An independent engagement check requires `--min-engagement` and `--requirement` beside the
+same accepted mate. It reports the measured and required axial engagement, remaining margin,
+status, and citation. It can run with or without the ISO fit check, joins
+`assembly_scorecard`, and blocks the command when the confirmed engagement is too short.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

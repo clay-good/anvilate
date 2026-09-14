@@ -70,6 +70,8 @@ paths are local CLI workflows, not MCP tools.
 When the caller also supplies `--fit` and `--basic-size`, the CLI resolves the existing ISO
 286 tables and reports per-feature limits and pass/fail results. It refuses missing fit
 inputs and never chooses a basic size or fit designation from measured geometry.
+Optional `--min-engagement` and `--requirement` inputs independently check the same mate's
+measured axial engagement and join the typed result to `assembly_scorecard`.
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest, solid identity, and candidate IDs retained beside

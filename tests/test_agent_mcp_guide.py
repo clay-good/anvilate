@@ -143,6 +143,7 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "solid_id",
         "assembly_scorecard",
         "contact_check",
+        "engagement_check",
     }
     # The artifact formats `export_artifact` publishes, read off the schema rather than
     # listed: `evidence_bundle` is snake_case in backticks and is not a tool, and a fourth
