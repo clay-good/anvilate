@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--accept`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested contract was explicitly confirmed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -601,6 +601,7 @@ topology, not STEP mate metadata and not an LLM:
 ```bash
 anvilate interfaces mating.step
 anvilate interfaces mating.step --format json
+anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -621,6 +622,11 @@ and a confirmed result preserves it. A single-solid result omits the field, pres
 existing JSON shape. The JSON also carries the source file's SHA-256 digest and every hole
 center. A successful scan exits 0 even when it finds no regular pattern; that is a completed
 measurement, not a passing engineering verdict.
+
+For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
+ID with `--solid` to list and accept candidates from that solid only. An unknown ID is
+refused with the available IDs, and a single-solid input tells you to omit the filter. A
+pattern belonging to another solid cannot be accepted through a filtered scan.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

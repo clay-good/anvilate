@@ -36,7 +36,9 @@ Mating-STEP interface discovery is currently a local operation:
 patterns but is not exposed as an MCP tool, because those coordinates disclose imported CAD
 geometry and the remote tool surface has no approved delivery contract for that content.
 Multi-solid files receive deterministic geometry-derived solid IDs on each candidate, so an
-agent can retain exact component identity without depending on STEP or kernel ordering.
+agent can retain exact component identity without depending on STEP or kernel ordering. A
+second pass with `--solid` narrows both discovery and acceptance to one exact ID; an unknown
+ID is refused with the available choices.
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest, solid identity, and candidate IDs retained beside

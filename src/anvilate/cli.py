@@ -233,7 +233,7 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces = commands.add_parser(
         "interfaces",
         help="detect planar faces and through-hole patterns in a mating STEP",
-        description="Import one local STEP solid and list measured interface candidates. "
+        description="Import one local STEP and list measured interface candidates. "
         "No candidate becomes a Design Spec contract until a user confirms it. Exit 0 "
         "means the import and detection completed; a bad file exits 3 and a missing "
         "geometry runtime exits 4.",
@@ -242,6 +242,11 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces.add_argument("step", type=Path, help="the local mating-part STEP file to inspect")
     interfaces.add_argument(
         "--format", choices=("text", "json"), default="text", help="how to render the candidates"
+    )
+    interfaces.add_argument(
+        "--solid",
+        metavar="SOLID_ID",
+        help="only list and accept candidates belonging to this exact detected solid",
     )
     interfaces.add_argument(
         "--accept",
@@ -1008,6 +1013,26 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
 
     try:
         detected = detect_step_interfaces(args.step)
+        if args.solid is not None:
+            solid_ids = sorted(
+                {face.solid_id for face in detected.planar_faces if face.solid_id is not None}
+            )
+            if args.solid not in solid_ids:
+                if solid_ids:
+                    available = ", ".join(solid_ids)
+                    raise GeometryError(
+                        f"solid candidate {args.solid!r} was not found; available: {available}"
+                    )
+                raise GeometryError(
+                    "this STEP contains one solid and exposes no solid ID; omit --solid"
+                )
+            detected = detected.model_copy(
+                update={
+                    "planar_faces": tuple(
+                        face for face in detected.planar_faces if face.solid_id == args.solid
+                    )
+                }
+            )
         accepted = (
             None
             if not supplied

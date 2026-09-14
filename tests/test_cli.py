@@ -1636,9 +1636,19 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     assert code == EXIT_OK and err == ""
     assert len({face["solid_id"] for face in candidates["planar_faces"]}) == 2
 
+    code, selected_raw, err = _run(
+        "interfaces", str(step), "--solid", patterned_face["solid_id"], "--format", "json"
+    )
+    selected_faces = json.loads(selected_raw)["candidates"]["planar_faces"]
+    assert code == EXIT_OK and err == ""
+    assert len(selected_faces) == 6
+    assert {face["solid_id"] for face in selected_faces} == {patterned_face["solid_id"]}
+
     code, accepted_raw, err = _run(
         "interfaces",
         str(step),
+        "--solid",
+        patterned_face["solid_id"],
         "--accept",
         pattern_id,
         "--name",
@@ -1655,9 +1665,52 @@ def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_p
     assert code == EXIT_OK and err == ""
     assert accepted["solid_id"] == patterned_face["solid_id"]
 
-    code, text, err = _run("interfaces", str(step))
+    code, text, err = _run("interfaces", str(step), "--solid", patterned_face["solid_id"])
     assert code == EXIT_OK and err == ""
     assert "  solid solid-" in text
+    assert "6 planar interface candidates" in text
+
+
+def test_interfaces_refuses_unknown_and_cross_solid_selection(tmp_path):
+    step = _write_four_hole_assembly_step(tmp_path / "assembly.step")
+    _code, discovered, _err = _run("interfaces", str(step), "--format", "json")
+    faces = json.loads(discovered)["candidates"]["planar_faces"]
+    patterned_face = next(face for face in faces if face["hole_patterns"])
+    other_solid = next(
+        face["solid_id"] for face in faces if face["solid_id"] != patterned_face["solid_id"]
+    )
+    pattern_id = patterned_face["hole_patterns"][0]["id"]
+
+    code, out, err = _run("interfaces", str(step), "--solid", "solid-absent")
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "solid candidate 'solid-absent' was not found; available:" in err
+    assert patterned_face["solid_id"] in err and other_solid in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--solid",
+        other_solid,
+        "--accept",
+        pattern_id,
+        "--name",
+        "assembly_mount",
+        "--mating-plane",
+        "assembly_mount_face",
+        "--confirmed-by",
+        "R. Engineer",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert f"pattern candidate {pattern_id!r} was not found" in err
+
+
+def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
+    step = _write_four_hole_step(tmp_path / "mating.step")
+
+    code, out, err = _run("interfaces", str(step), "--solid", "solid-any")
+
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "contains one solid and exposes no solid ID; omit --solid" in err
 
 
 def test_interfaces_emits_a_confirmed_contract_only_with_an_exact_candidate_and_person(tmp_path):
