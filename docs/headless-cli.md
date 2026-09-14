@@ -624,7 +624,11 @@ Acceptance requires all four values: the exact pattern ID, the downstream contra
 semantic mating-plane tag, and the name of the person confirming the measurement. The JSON
 then adds `accepted`, containing the source digest and face/pattern IDs, `confirmed_by`, and
 the generated `InterfaceContract`; omitting any confirmation input exits 3 and emits no
-contract. This first detector handles one valid solid, planar faces, and through holes whose
+contract. The contract includes a deterministic right-handed frame at the pattern center
+and every hole's in-plane `(x, y)` center, so a rectangular or clocked pattern is not reduced
+to diameter, count, and hole size. The frame's X axis is global +X projected onto the mating
+plane (global +Y is the fallback when needed); Y completes the right-handed frame. This
+first detector handles one valid solid, planar faces, and through holes whose
 equal-diameter centers fit one pitch circle. Blind holes, counterbores, bosses, pilot bores,
 assemblies, and free-form hole groups remain explicit limits in the output.
 

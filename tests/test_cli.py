@@ -1641,15 +1641,24 @@ def test_interfaces_emits_a_confirmed_contract_only_with_an_exact_candidate_and_
     assert accepted["source_sha256"] == candidates["source_sha256"]
     assert accepted["pattern_candidate_id"] == pattern["id"]
     assert accepted["confirmed_by"] == "R. Engineer"
-    assert accepted["contract"] == {
-        "name": "motor_mount",
-        "mating_plane": "motor_mount_face",
-        "pattern": {
-            "diameter": {"magnitude": pytest.approx(72.111025509), "unit": "mm"},
-            "hole_count": 4,
-            "hole_size": {"magnitude": pytest.approx(10), "unit": "mm"},
-        },
+    contract = accepted["contract"]
+    assert contract["name"] == "motor_mount"
+    assert contract["mating_plane"] == "motor_mount_face"
+    assert contract["pattern"]["diameter"] == {
+        "magnitude": pytest.approx(72.111025509),
+        "unit": "mm",
     }
+    assert contract["pattern"]["hole_count"] == 4
+    assert contract["pattern"]["hole_size"] == {"magnitude": pytest.approx(10), "unit": "mm"}
+    assert contract["pattern"]["hole_centers"] == [
+        [{"magnitude": -30, "unit": "mm"}, {"magnitude": -20, "unit": "mm"}],
+        [{"magnitude": -30, "unit": "mm"}, {"magnitude": 20, "unit": "mm"}],
+        [{"magnitude": 30, "unit": "mm"}, {"magnitude": -20, "unit": "mm"}],
+        [{"magnitude": 30, "unit": "mm"}, {"magnitude": 20, "unit": "mm"}],
+    ]
+    assert contract["frame"]["x_axis"] == [1, 0, 0]
+    assert contract["frame"]["y_axis"] == [0, 1, 0]
+    assert contract["frame"]["normal"] == [0, 0, 1]
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")

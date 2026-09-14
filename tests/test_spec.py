@@ -20,6 +20,7 @@ from anvilate.spec import (
     GeometricTolerance,
     HolePattern,
     InterfaceContract,
+    InterfaceFrame,
     LoadCase,
     LoadKind,
     Manufacturing,
@@ -567,6 +568,48 @@ def test_interface_contract_publishable():
     )
     reloaded = load_spec_yaml(dump_spec_yaml(spec))
     assert reloaded.exports[0].name == "mount_pattern"
+
+
+def test_interface_contract_can_publish_a_frame_and_in_plane_hole_centers():
+    contract = InterfaceContract(
+        name="mount_pattern",
+        mating_plane="extrusion_mount_face",
+        pattern=HolePattern(
+            diameter=Quantity.parse("40 mm"),
+            hole_count=2,
+            hole_size=Quantity.parse("5 mm"),
+            hole_centers=(
+                (Quantity.parse("-20 mm"), Quantity.parse("0 mm")),
+                (Quantity.parse("20 mm"), Quantity.parse("0 mm")),
+            ),
+        ),
+        frame=InterfaceFrame(
+            origin=(Quantity.parse("0 mm"), Quantity.parse("0 mm"), Quantity.parse("10 mm")),
+            x_axis=(1, 0, 0),
+            y_axis=(0, 1, 0),
+            normal=(0, 0, 1),
+        ),
+    )
+
+    assert contract.pattern.hole_centers is not None
+    assert contract.pattern.hole_centers[1][0].to("mm").magnitude == 20
+
+
+def test_hole_pattern_center_count_and_interface_frame_are_validated():
+    with pytest.raises(ValidationError, match="2 holes but 1 in-plane centers"):
+        HolePattern(
+            diameter=Quantity.parse("40 mm"),
+            hole_count=2,
+            hole_size=Quantity.parse("5 mm"),
+            hole_centers=((Quantity.parse("0 mm"), Quantity.parse("0 mm")),),
+        )
+    with pytest.raises(ValidationError, match="cross y_axis must equal normal"):
+        InterfaceFrame(
+            origin=(Quantity.parse("0 mm"),) * 3,
+            x_axis=(1, 0, 0),
+            y_axis=(0, -1, 0),
+            normal=(0, 0, 1),
+        )
 
 
 def test_hole_pattern_rejects_non_positive_dimensions():

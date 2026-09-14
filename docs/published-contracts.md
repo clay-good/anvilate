@@ -107,6 +107,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.4.0: interface geometry keeps its coordinate frame
+
+`InterfaceContract.frame` locates a deterministic right-handed coordinate frame in the
+source geometry, and `HolePattern.hole_centers` lists each hole in that frame. Both are
+optional, so every older 1.x contract remains valid. Confirmed STEP candidates populate both:
+diameter, count, and hole size alone cannot distinguish a rectangular pattern's clocking.
+The evidence-bundle, confirmed-interface, and CLI schemas move with the nested contract.
+
 ### Design Spec 1.3.0: a document can ask to be told it is over-engineered
 
 `constraints.max_safety_factor` is the top of the target band. `OVER_MARGIN` was first-class

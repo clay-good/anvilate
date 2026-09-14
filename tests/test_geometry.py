@@ -542,6 +542,14 @@ def test_a_named_person_can_confirm_one_exact_candidate_as_an_interface_contract
     assert accepted.contract.pattern.hole_count == 4
     assert accepted.contract.pattern.diameter.to("mm").magnitude == pytest.approx(72.111025509)
     assert accepted.contract.pattern.hole_size.to("mm").magnitude == pytest.approx(10)
+    assert [
+        tuple(value.to("mm").magnitude for value in center)
+        for center in accepted.contract.pattern.hole_centers or ()
+    ] == [(-30, -20), (-30, 20), (30, -20), (30, 20)]
+    assert accepted.contract.frame is not None
+    assert accepted.contract.frame.x_axis == (1, 0, 0)
+    assert accepted.contract.frame.y_axis == (0, 1, 0)
+    assert accepted.contract.frame.normal == (0, 0, 1)
 
 
 def test_an_interface_candidate_cannot_be_accepted_without_a_named_person(tmp_path):

@@ -95,7 +95,7 @@ SCORECARD_SCHEMA_VERSION = "1.6.0"
 # `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
 # schema said nothing about. Same rule as the two above — bump on a change to the generated
 # document, and the gate refuses a changed schema under an unchanged version.
-BUNDLE_SCHEMA_VERSION = "1.1.0"
+BUNDLE_SCHEMA_VERSION = "1.2.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.2.0"
@@ -104,7 +104,7 @@ GEOMETRY_SCHEMA_VERSION = "1.2.0"
 INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.0.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
-CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.0.0"
+CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.1.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"

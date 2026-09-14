@@ -131,7 +131,10 @@ REQUIRED_OPERATIONS = frozenset(
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.3.0.json"
+_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.4.0.json"
+# 1.4.0 adds optional interface frames and in-plane hole centers. Older contracts remain
+# valid; a confirmed STEP pattern can now retain the coordinate data needed to reproduce
+# its clocking instead of collapsing to diameter, count, and size.
 # Moved to 1.6.0 when a check that compares two quantities gained `comparison`, so a
 # report can state the comparison in its own units instead of the ones it was screened
 # in. Additive; `detail` is still written from it and still says what it always said.
@@ -163,7 +166,9 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 # always carried and the document a reviewer receives did not. Nothing a 1.0.0 client already
 # reads has changed and neither release closes `additionalProperties`, so an old client keeps
 # working; it simply cannot see where the numbers came from.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
+# 1.2.0 follows Design Spec 1.4.0 because the bundle embeds that document and therefore
+# carries the same optional interface-frame fields.
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.2.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"

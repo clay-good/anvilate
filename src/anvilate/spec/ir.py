@@ -10,6 +10,7 @@ origin recorded via :class:`Provenanced`.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import sqrt
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -58,6 +59,7 @@ __all__ = [
     "ImportedInterface",
     "Interface",
     "InterfaceContract",
+    "InterfaceFrame",
     "HolePattern",
     "ToleranceDimension",
     "ChainLink",
@@ -146,6 +148,7 @@ class HolePattern(_Base):
     diameter: Length
     hole_count: int = Field(ge=1)
     hole_size: Length
+    hole_centers: tuple[tuple[Length, Length], ...] | None = None
 
     @model_validator(mode="after")
     def _positive_dimensions(self) -> HolePattern:
@@ -153,6 +156,46 @@ class HolePattern(_Base):
             value: Quantity = getattr(self, field)
             if value.to("mm").magnitude <= 0:
                 raise ValueError(f"hole-pattern {field} must be positive; got {value}")
+        if self.hole_centers is not None and len(self.hole_centers) != self.hole_count:
+            raise ValueError(
+                f"hole-pattern has {self.hole_count} holes but "
+                f"{len(self.hole_centers)} in-plane centers"
+            )
+        return self
+
+
+class InterfaceFrame(_Base):
+    """A right-handed coordinate frame locating an interface in its source geometry."""
+
+    origin: tuple[Length, Length, Length]
+    x_axis: tuple[float, float, float]
+    y_axis: tuple[float, float, float]
+    normal: tuple[float, float, float]
+
+    @model_validator(mode="after")
+    def _orthonormal_and_right_handed(self) -> InterfaceFrame:
+        vectors = (self.x_axis, self.y_axis, self.normal)
+        if any(abs(sqrt(sum(value * value for value in vector)) - 1) > 1e-9 for vector in vectors):
+            raise ValueError("interface-frame axes must be unit vectors")
+        if any(
+            abs(sum(a * b for a, b in zip(left, right, strict=True))) > 1e-9
+            for left, right in (
+                (self.x_axis, self.y_axis),
+                (self.x_axis, self.normal),
+                (self.y_axis, self.normal),
+            )
+        ):
+            raise ValueError("interface-frame axes must be mutually perpendicular")
+        cross = (
+            self.x_axis[1] * self.y_axis[2] - self.x_axis[2] * self.y_axis[1],
+            self.x_axis[2] * self.y_axis[0] - self.x_axis[0] * self.y_axis[2],
+            self.x_axis[0] * self.y_axis[1] - self.x_axis[1] * self.y_axis[0],
+        )
+        if any(
+            abs(actual - expected) > 1e-9
+            for actual, expected in zip(cross, self.normal, strict=True)
+        ):
+            raise ValueError("interface-frame x_axis cross y_axis must equal normal")
         return self
 
 
@@ -162,6 +205,7 @@ class InterfaceContract(_Base):
     name: Named
     mating_plane: str  # semantic tag of the mating face
     pattern: HolePattern
+    frame: InterfaceFrame | None = None
 
 
 class StandardComponentInterface(_Base):
@@ -570,11 +614,13 @@ class AcceptanceCriteria(_Base):
 # 1.1.0 added the optional LoadCase.nature classification, the DesignSpec
 # combination_basis, and the seismic parameters. 1.2.0 added element_type and
 # element_params. 1.3.0 added constraints.max_safety_factor, the top of the target band an
-# OVER_MARGIN verdict is measured against. All additive, which is what lets an older 1.x
-# spec load unchanged — and it comes back saying which version it is, not this one. The
+# OVER_MARGIN verdict is measured against. 1.4.0 added optional interface frames and
+# in-plane hole centers, preserving a measured pattern's clocking. All additive, which is
+# what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
+# not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.3.0"
+SCHEMA_VERSION = "1.4.0"
 
 
 class DesignSpec(_Base):

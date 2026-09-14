@@ -182,8 +182,10 @@ The command imports one solid, lists stable planar-face candidates, and fits reg
 equal-diameter through holes to pitch circles from shared B-Rep topology. Its output is a
 proposal only. Creating a contract requires the exact pattern ID, a semantic mating-plane
 tag, and a named confirmer; the result keeps the STEP digest and candidate IDs beside the
-generated `InterfaceContract`. Blind holes, counterbores, bosses, and pilot bores remain
-explicit detector limits.
+generated `InterfaceContract`. That contract carries a right-handed source frame and every
+hole's in-plane center, preserving rectangular layouts and rotational clocking instead of
+reducing them to diameter, count, and size. Blind holes, counterbores, bosses, and pilot
+bores remain explicit detector limits.
 
 ## What you can do today
 
@@ -259,7 +261,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,587 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,590 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

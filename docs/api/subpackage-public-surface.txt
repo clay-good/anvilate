@@ -143,6 +143,7 @@ spec.HolePattern
 spec.ImportedInterface
 spec.Interface
 spec.InterfaceContract
+spec.InterfaceFrame
 spec.LoadCase
 spec.LoadKind
 spec.Manufacturing
@@ -174,6 +175,7 @@ spec.ir.HolePattern
 spec.ir.ImportedInterface
 spec.ir.Interface
 spec.ir.InterfaceContract
+spec.ir.InterfaceFrame
 spec.ir.LoadCase
 spec.ir.LoadKind
 spec.ir.Manufacturing

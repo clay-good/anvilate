@@ -31,7 +31,7 @@ from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
-from .spec import DesignSpec, HolePattern, InterfaceContract
+from .spec import DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
 
 __all__ = [
@@ -281,6 +281,34 @@ def _dot(left: _Point3D, right: _Point3D) -> float:
     return sum(a * b for a, b in zip(left, right, strict=True))
 
 
+def _cross(left: _Point3D, right: _Point3D) -> _Point3D:
+    return (
+        left[1] * right[2] - left[2] * right[1],
+        left[2] * right[0] - left[0] * right[2],
+        left[0] * right[1] - left[1] * right[0],
+    )
+
+
+def _normalized(vector: _Point3D) -> _Point3D:
+    magnitude = sqrt(_dot(vector, vector))
+    return (vector[0] / magnitude, vector[1] / magnitude, vector[2] / magnitude)
+
+
+def _interface_basis(normal: _Point3D) -> tuple[_Point3D, _Point3D, _Point3D]:
+    """A deterministic right-handed in-plane basis from one face normal."""
+    unit_normal = _normalized(normal)
+    reference = (1.0, 0.0, 0.0) if abs(unit_normal[0]) < 0.9 else (0.0, 1.0, 0.0)
+    projection = _dot(reference, unit_normal)
+    projected = (
+        reference[0] - projection * unit_normal[0],
+        reference[1] - projection * unit_normal[1],
+        reference[2] - projection * unit_normal[2],
+    )
+    x_axis = _normalized(projected)
+    y_axis = _normalized(_cross(unit_normal, x_axis))
+    return (_rounded_point(x_axis), _rounded_point(y_axis), _rounded_point(unit_normal))
+
+
 def _candidate_id(prefix: str, values: object) -> str:
     payload = json.dumps(values, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return f"{prefix}-{sha256(payload).hexdigest()[:12]}"
@@ -512,6 +540,18 @@ def confirm_step_interface(
             f"pattern candidate {pattern_id!r} was not found exactly once; available: {choices}"
         )
     face, pattern = matches[0]
+    x_axis, y_axis, normal = _interface_basis(face.normal)
+    hole_centers = tuple(
+        (
+            Quantity(
+                magnitude=round(_dot(_subtract(center, pattern.center_mm), x_axis), 9), unit="mm"
+            ),
+            Quantity(
+                magnitude=round(_dot(_subtract(center, pattern.center_mm), y_axis), 9), unit="mm"
+            ),
+        )
+        for center in pattern.hole_centers_mm
+    )
     try:
         return ConfirmedStepInterface(
             source_name=candidates.source_name,
@@ -526,6 +566,17 @@ def confirm_step_interface(
                     diameter=Quantity(magnitude=pattern.pitch_diameter_mm, unit="mm"),
                     hole_count=pattern.hole_count,
                     hole_size=Quantity(magnitude=pattern.hole_diameter_mm, unit="mm"),
+                    hole_centers=hole_centers,
+                ),
+                frame=InterfaceFrame(
+                    origin=(
+                        Quantity(magnitude=pattern.center_mm[0], unit="mm"),
+                        Quantity(magnitude=pattern.center_mm[1], unit="mm"),
+                        Quantity(magnitude=pattern.center_mm[2], unit="mm"),
+                    ),
+                    x_axis=x_axis,
+                    y_axis=y_axis,
+                    normal=normal,
                 ),
             ),
         )
