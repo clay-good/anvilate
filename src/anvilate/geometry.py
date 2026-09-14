@@ -19,6 +19,7 @@ from hashlib import sha256
 from html import escape
 from math import sqrt
 from pathlib import Path
+from threading import Lock
 from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
@@ -52,6 +53,8 @@ __all__ = [
 BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 _COUNT_UNIT = "count"
+_AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
+_STEP_WRITER_LOCK = Lock()
 
 
 class GeometryError(ValueError):
@@ -563,12 +566,52 @@ def _step_string(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
+    """Write with OCCT's AP242 protocol while containing its process-global setting."""
+    try:
+        from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
+        from OCP.Interface import Interface_Static  # type: ignore[import-untyped]
+        from OCP.Message import Message, Message_Gravity  # type: ignore[import-untyped]
+        from OCP.STEPControl import (  # type: ignore[import-untyped]
+            STEPControl_Controller,
+            STEPControl_StepModelType,
+            STEPControl_Writer,
+        )
+    except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
+        raise GeometryUnavailable(
+            "3D geometry needs the optional dependency; install anvilate[geometry]"
+        ) from failure
+
+    with _STEP_WRITER_LOCK:
+        STEPControl_Controller.Init_s()
+        previous_schema = Interface_Static.CVal_s("write.step.schema")
+        try:
+            if not Interface_Static.SetCVal_s("write.step.schema", "AP242DIS"):
+                raise GeometryError("the installed geometry kernel cannot select AP242")
+            messenger = Message.DefaultMessenger_s()
+            for printer in messenger.Printers():
+                printer.SetTraceLevel(Message_Gravity.Message_Fail)
+            writer = STEPControl_Writer()
+            transferred = writer.Transfer(
+                built.shape.wrapped,
+                STEPControl_StepModelType.STEPControl_AsIs,
+            )
+            if transferred != IFSelect_ReturnStatus.IFSelect_RetDone:
+                raise GeometryError("STEP writer could not transfer the built solid")
+            if writer.Write(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
+                raise GeometryError("STEP writer could not write the built solid")
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
+        finally:
+            Interface_Static.SetCVal_s("write.step.schema", previous_schema)
+
+
 def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthorization) -> Path:
     """Write one authorized solid as deterministic, watermarked STEP and return its path."""
     if not built.is_valid:
         raise GeometryError("refusing to write invalid geometry")
-    _Align, _Box, _Cylinder, export_step = _kernel()
-    export_step(built.shape, path)
+    _write_ap242_shape(built, path)
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as failure:
@@ -576,10 +619,20 @@ def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthori
         raise GeometryError(
             "STEP writer produced a non-UTF-8 file; refusing to release it"
         ) from failure
+    if _AP242_SCHEMA not in text:
+        path.unlink(missing_ok=True)
+        raise GeometryError("STEP writer did not declare AP242; refusing to release it")
     descriptions = [
         "Open CASCADE Model",
         *(f"{key}={value}" for key, value in authorization.metadata()),
     ]
+    product_name = _step_string(built.name)
+    text, products_changed = re.subn(
+        r"PRODUCT\('(?:[^']|'')*'\s*,\s*'(?:[^']|'')*'\s*,",
+        lambda _match: f"PRODUCT('{product_name}','{product_name}',",
+        text,
+        count=1,
+    )
     header = (
         "FILE_DESCRIPTION(("
         + ",".join(f"'{_step_string(value)}'" for value in descriptions)
@@ -587,8 +640,10 @@ def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthori
     )
     text, descriptions_changed = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
     filename = f"FILE_NAME('{_step_string(built.name)}','2000-01-01T00:00:00',"
-    text, filename_changed = re.subn(r"FILE_NAME\('[^']*','[^']*',", filename, text, count=1)
-    if descriptions_changed != 1 or filename_changed != 1:
+    text, filename_changed = re.subn(
+        r"FILE_NAME\('[^']*','[^']*',", lambda _match: filename, text, count=1
+    )
+    if products_changed != 1 or descriptions_changed != 1 or filename_changed != 1:
         path.unlink(missing_ok=True)
         raise GeometryError(
             "STEP writer produced an unrecognized header; refusing an unstamped file"

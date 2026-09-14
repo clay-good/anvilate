@@ -40,7 +40,10 @@ dependencies = [
 [project.optional-dependencies]
 # Deterministic B-Rep generation and STEP output. Keep this minor line pinned because the
 # generated topology and file writer are product behavior, not an interchangeable helper.
-geometry = ["build123d<0.12,>=0.11.1"]
+geometry = [
+    "build123d<0.12,>=0.11.1",
+    "cadquery-ocp-novtk<8,>=7.9",
+]
 # DXF drawing export (ezdxf is MIT, pure-Python). The core stays dependency-light;
 # import anvilate.export.dxf only pulls ezdxf when this extra is installed.
 export = ["ezdxf>=1.1"]
@@ -54,6 +57,7 @@ dev = [
     "jsonschema>=4.21",
     "mypy>=1.11",
     "build123d<0.12,>=0.11.1",
+    "cadquery-ocp-novtk<8,>=7.9",
 ]
 
 [project.scripts]

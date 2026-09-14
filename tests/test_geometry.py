@@ -208,6 +208,8 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
 
     text = path.read_text(encoding="utf-8")
     assert text.startswith("ISO-10303-21;")
+    assert "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF" in text
+    assert "10303 214" not in text
     assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in text
     rebuilt = write_step(
         build_base_plate(_plate()), tmp_path / "rebuilt.step", authorization=_STEP_AUTH
@@ -216,6 +218,20 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     assert restored.is_valid
     assert len(restored.solids()) == 1
     assert restored.volume == pytest.approx(300 * 240 * 25, rel=1e-8)
+
+
+def test_step_writer_restores_the_process_global_schema(tmp_path):
+    from OCP.Interface import Interface_Static
+    from OCP.STEPControl import STEPControl_Controller
+
+    STEPControl_Controller.Init_s()
+    original = Interface_Static.CVal_s("write.step.schema")
+    try:
+        assert Interface_Static.SetCVal_s("write.step.schema", "AP203")
+        write_step(build_base_plate(_plate()), tmp_path / "base.step", authorization=_STEP_AUTH)
+        assert Interface_Static.CVal_s("write.step.schema") == "AP203"
+    finally:
+        Interface_Static.SetCVal_s("write.step.schema", original)
 
 
 @pytest.mark.parametrize(

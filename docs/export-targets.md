@@ -5,10 +5,11 @@ aimed at an unverified claim is worse than no target.** This page records where 
 export layer is pointed, and, for each claim, whether it was confirmed from a primary source
 on **2026-08-22** or is carried as unverified.
 
-A plain validation-gated STEP B-Rep writer is now shipped through `anvilate build` for the
-audited `base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry with a
-deterministic validation watermark; it does **not** claim AP242 semantic PMI conformance.
-AP242 PMI and 3MF remain roadmap targets. The other shipped formats are
+A plain validation-gated AP242 STEP B-Rep writer is now shipped through `anvilate build` for
+the audited `base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry with
+a deterministic validation watermark and declares OCCT's managed model-based 3D engineering
+schema. It does **not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain
+roadmap targets. The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 
 ## What was confirmed
@@ -58,9 +59,9 @@ matching the ranges already pinned.
 
 ## What the conformance gate will and will not guarantee
 
-When the AP242 semantic writer lands, CI will run every exported file through an independent analyzer
-and regression-test the reader and writer against the free test models. That buys a real
-guarantee and a narrow one:
+When the AP242 semantic PMI writer lands, CI will run every exported file through an
+independent analyzer and regression-test the reader and writer against the free test models.
+That buys a real guarantee and a narrow one:
 
 - **It will guarantee** that the file declares the AP242 schema, that its validation
   properties are present and self-consistent, and that its semantic PMI matches the test

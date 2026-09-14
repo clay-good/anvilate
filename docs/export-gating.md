@@ -195,6 +195,8 @@ therefore screens the spec before writing. A passing card stamps `VALIDATED`; a 
 card writes nothing unless the caller explicitly supplies `--unvalidated`, which stamps the
 status, notice, and blocking checks into STEP `FILE_DESCRIPTION`. The writer also replaces
 the generated timestamp with a fixed value, making identical builds byte-for-byte stable.
+The solid is written using OCCT's AP242 managed model-based 3D engineering schema; this is
+plain B-Rep exchange and does not claim semantic PMI.
 
 ## What is not gated
 

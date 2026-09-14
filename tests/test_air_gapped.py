@@ -47,7 +47,10 @@ from conftest import parsed_source
 
 _REPO = pathlib.Path(__file__).resolve().parents[1]
 # A distribution's name on PyPI is not the name it is imported by.
-_IMPORT_NAME = {"pyyaml": "yaml"}
+_IMPORT_NAME = {
+    "cadquery-ocp-novtk": "OCP",
+    "pyyaml": "yaml",
+}
 
 
 class NetworkAttempted(AssertionError):

@@ -871,13 +871,13 @@ def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
 # Each capability the README's status line calls unbuilt, and the words a one-line
 # description would claim it with. A synonym table rather than a substring of the README,
 # because "plain English" is how a description claims a "natural-language front end" and
-# "AP242 PMI" is how it claims "semantic AP242 export" — neither contains the other, and a gate that
+# "AP242 PMI" is how it claims "semantic PMI" — neither contains the other, and a gate that
 # looked for the README's own phrasing would have passed the very sentence that prompted it.
 _CLAIMED_BY = {
     "natural-language front end": ("plain english", "natural language", "natural-language"),
     "wider geometry catalog": ("all geometry", "geometry catalog", "arbitrary solid"),
     "FEA": ("fea", "finite element"),
-    "semantic AP242 export": ("ap242", "semantic step", "step pmi"),
+    "semantic PMI": ("ap242 pmi", "semantic pmi", "semantic step", "step pmi"),
 }
 
 

@@ -795,7 +795,8 @@ for round covers. The text result reports the volume and digest. `--format json`
 adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
 `unvalidated` under the CLI output 1.7.0 contract.
 
-The writer refuses to replace an existing file unless `--force` is present. A `.step` or
+The writer emits the AP242 managed model-based 3D engineering schema and refuses to replace
+an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a
 part failure. Unsupported element types exit 4 and name the pattern that has not shipped.
 
@@ -803,8 +804,9 @@ STEP is a CAD artifact, so building one is validation-gated. A passing scorecard
 `VALIDATED` header. The checked-in geometry examples omit the required safety factor and
 therefore use the explicit `--unvalidated` override above; that file carries `UNVALIDATED`,
 the screening notice, and its blocking checks in `FILE_DESCRIPTION`. Without the flag, a
-failed or unevaluated card writes nothing. The generated timestamp is normalized, so the
-same geometry and authorization produce byte-identical STEP and the same digest.
+failed or unevaluated card writes nothing. AP242 here means exchangeable solid geometry,
+not semantic PMI. The generated timestamp is normalized, so the same geometry and
+authorization produce byte-identical STEP and the same digest.
 
 ## Running it in CI
 
