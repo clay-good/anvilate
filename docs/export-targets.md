@@ -3,19 +3,22 @@
 **Aiming a target is cheap before the code exists and expensive afterwards — but a target
 aimed at an unverified claim is worse than no target.** This page records where Anvilate's
 export layer is pointed, and, for each claim, whether it was confirmed from a primary source
-on **2026-08-22** or is carried as unverified.
+or is carried as unverified. Dates are named where they affect the conclusion.
 
 A plain validation-gated AP242 STEP B-Rep writer is now shipped through `anvilate build` for
 the audited `base_plate/1` and `cover_plate/1` patterns. It writes valid solid geometry with
 a deterministic validation watermark and declares OCCT's managed model-based 3D engineering
-schema. It does **not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain
-roadmap targets. The other shipped formats are
+schema. It also writes CAx-IF v4.6 part-level volume, total surface area, and centroid
+properties, then verifies them against a fresh import before releasing the file. It does
+**not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain roadmap targets.
+The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 
 ## What was confirmed
 
 | Claim | Status | How |
 | --- | --- | --- |
+| Solid validation properties are volume, total surface area, and centroid; the current document identifier is v4.6 dated 2023-04-21 | **confirmed** | [CAx-IF Geometric and Assembly Validation Properties v4.6](https://www.mbx-if.org/home/wp-content/uploads/2024/05/rec_prac_gvp_v46.pdf), sections 3, 4.4, 4.7, and 4.13 |
 | The NIST STEP File Analyzer and Viewer is the de-facto free AP242 PMI checker | **confirmed** | [usnistgov/SFA](https://github.com/usnistgov/SFA) is live and its README describes AP242, AP203, AP214, AP209 and AP238 handling |
 | The CAx-IF/MBx-IF MBE PMI test models are freely downloadable AP242 regression fixtures | **confirmed** | [mbx-if.org resources](https://www.mbx-if.org/home/cax/resources/) hosts the FTC, STC and CTC models with AP242 STEP files, and tells implementers to export AP242 and run the result through the NIST analyzer — which is exactly the conformance loop the spec asks CI to automate |
 | 3MF is ISO/IEC 25422:2025 | **confirmed** | stated on [3mf.io](https://3mf.io/) |

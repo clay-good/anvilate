@@ -20,7 +20,9 @@ from anvilate.geometry import (  # noqa: E402
     build_cover_plate,
     build_spec,
     measure_geometry,
+    read_step_validation_properties,
     render_viewport,
+    verify_step_integrity,
     write_step,
 )
 from anvilate.packs.industrial import CoverPlate  # noqa: E402
@@ -210,7 +212,9 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     assert text.startswith("ISO-10303-21;")
     assert "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF" in text
     assert "10303 214" not in text
+    assert "Geometric and Assembly Validation Properties---4.6---2023-04-21" in text
     assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in text
+    properties = read_step_validation_properties(path)
     rebuilt = write_step(
         build_base_plate(_plate()), tmp_path / "rebuilt.step", authorization=_STEP_AUTH
     )
@@ -218,6 +222,19 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     assert restored.is_valid
     assert len(restored.solids()) == 1
     assert restored.volume == pytest.approx(300 * 240 * 25, rel=1e-8)
+    assert properties.volume_mm3 == pytest.approx(restored.volume)
+    assert properties.surface_area_mm2 == pytest.approx(restored.area)
+    assert properties.centroid_mm == pytest.approx((0, 0, 12.5))
+    assert verify_step_integrity(path) == properties
+
+
+def test_step_integrity_verifier_detects_a_tampered_property(tmp_path):
+    path = write_step(build_base_plate(_plate()), tmp_path / "base.step", authorization=_STEP_AUTH)
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace("1.8E+06", "1.7E+06", 1), encoding="utf-8")
+
+    with pytest.raises(GeometryError, match=r"volume differs by 5\.882%"):
+        verify_step_integrity(path)
 
 
 def test_step_writer_restores_the_process_global_schema(tmp_path):

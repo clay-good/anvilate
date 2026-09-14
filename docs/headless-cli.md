@@ -795,8 +795,10 @@ for round covers. The text result reports the volume and digest. `--format json`
 adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
 `unvalidated` under the CLI output 1.7.0 contract.
 
-The writer emits the AP242 managed model-based 3D engineering schema and refuses to replace
-an existing file unless `--force` is present. A `.step` or
+The writer emits the AP242 managed model-based 3D engineering schema and part-level volume,
+surface-area, and centroid validation properties. It reads those properties back, imports the
+solid, and checks them at the CAx-IF v4.6 industry example thresholds before releasing the
+file. It refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a
 part failure. Unsupported element types exit 4 and name the pattern that has not shipped.
 

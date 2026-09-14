@@ -157,6 +157,7 @@ geometry.GeometryMeasurement
 geometry.GeometrySummary
 geometry.GeometryUnavailable
 geometry.RenderedViewport
+geometry.StepValidationProperties
 geometry.UnsupportedGeometry
 geometry.ViewportImage
 geometry.build_base_plate
@@ -164,6 +165,8 @@ geometry.build_cover_plate
 geometry.build_spec
 geometry.measure_geometry
 geometry.render_viewport
+geometry.read_step_validation_properties
+geometry.verify_step_integrity
 geometry.write_step
 ingest.Bound
 ingest.ConfirmationState

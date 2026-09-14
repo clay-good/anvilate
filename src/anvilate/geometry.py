@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from html import escape
-from math import sqrt
+from math import isfinite, sqrt
 from pathlib import Path
 from threading import Lock
 from types import MappingProxyType
@@ -40,6 +40,7 @@ __all__ = [
     "GeometryMeasurement",
     "GeometryUnavailable",
     "RenderedViewport",
+    "StepValidationProperties",
     "UnsupportedGeometry",
     "ViewportImage",
     "build_base_plate",
@@ -47,6 +48,8 @@ __all__ = [
     "build_spec",
     "measure_geometry",
     "render_viewport",
+    "read_step_validation_properties",
+    "verify_step_integrity",
     "write_step",
 ]
 
@@ -54,7 +57,10 @@ BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
-_STEP_WRITER_LOCK = Lock()
+_GVP_RECOMMENDED_PRACTICE = (
+    "CAx-IF Rec.Pracs.---Geometric and Assembly Validation Properties---4.6---2023-04-21"
+)
+_STEP_IO_LOCK = Lock()
 
 
 class GeometryError(ValueError):
@@ -180,6 +186,15 @@ class RenderedViewport:
             sha256=self.sha256,
             image=base64.b64encode(self.data).decode("ascii"),
         )
+
+
+@dataclass(frozen=True)
+class StepValidationProperties:
+    """Part-level geometric validation properties read from a STEP exchange file."""
+
+    volume_mm3: float
+    surface_area_mm2: float
+    centroid_mm: tuple[float, float, float]
 
 
 def _kernel():
@@ -567,22 +582,53 @@ def _step_string(value: str) -> str:
 
 
 def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
-    """Write with OCCT's AP242 protocol while containing its process-global setting."""
+    """Write AP242 with CAx-IF part-level properties and contain global settings."""
     try:
+        from build123d import CenterOf
+        from OCP.gp import gp_Pnt  # type: ignore[import-untyped]
         from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
         from OCP.Interface import Interface_Static  # type: ignore[import-untyped]
         from OCP.Message import Message, Message_Gravity  # type: ignore[import-untyped]
+        from OCP.STEPCAFControl import (  # type: ignore[import-untyped]
+            STEPCAFControl_Controller,
+            STEPCAFControl_Writer,
+        )
         from OCP.STEPControl import (  # type: ignore[import-untyped]
             STEPControl_Controller,
             STEPControl_StepModelType,
-            STEPControl_Writer,
         )
+        from OCP.TCollection import TCollection_ExtendedString  # type: ignore[import-untyped]
+        from OCP.TDataStd import TDataStd_Name  # type: ignore[import-untyped]
+        from OCP.TDocStd import TDocStd_Document  # type: ignore[import-untyped]
+        from OCP.XCAFApp import XCAFApp_Application  # type: ignore[import-untyped]
+        from OCP.XCAFDoc import (  # type: ignore[import-untyped]
+            XCAFDoc_Area,
+            XCAFDoc_Centroid,
+            XCAFDoc_DocumentTool,
+            XCAFDoc_Volume,
+        )
+        from OCP.XSControl import XSControl_WorkSession  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
             "3D geometry needs the optional dependency; install anvilate[geometry]"
         ) from failure
 
-    with _STEP_WRITER_LOCK:
+    with _STEP_IO_LOCK:
+        document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+        application = XCAFApp_Application.GetApplication_s()
+        application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"), document)
+        application.InitDocument(document)
+        XCAFDoc_DocumentTool.SetLengthUnit_s(document, 0.001)
+        shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(document.Main())
+        label = shape_tool.AddShape(built.shape.wrapped, False)
+        TDataStd_Name.Set_s(label, TCollection_ExtendedString(built.name))
+        centroid = built.shape.center(CenterOf.MASS)
+        coordinates = tuple(0.0 if abs(value) < 1e-12 else float(value) for value in centroid)
+        XCAFDoc_Volume.Set_s(label, built.volume_mm3)
+        XCAFDoc_Area.Set_s(label, float(built.shape.area))
+        XCAFDoc_Centroid.Set_s(label, gp_Pnt(*coordinates))
+
+        STEPCAFControl_Controller.Init_s()
         STEPControl_Controller.Init_s()
         previous_schema = Interface_Static.CVal_s("write.step.schema")
         try:
@@ -591,12 +637,10 @@ def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
             messenger = Message.DefaultMessenger_s()
             for printer in messenger.Printers():
                 printer.SetTraceLevel(Message_Gravity.Message_Fail)
-            writer = STEPControl_Writer()
-            transferred = writer.Transfer(
-                built.shape.wrapped,
-                STEPControl_StepModelType.STEPControl_AsIs,
-            )
-            if transferred != IFSelect_ReturnStatus.IFSelect_RetDone:
+            writer = STEPCAFControl_Writer(XSControl_WorkSession(), False)
+            writer.SetNameMode(True)
+            writer.SetPropsMode(True)
+            if not writer.Transfer(document, STEPControl_StepModelType.STEPControl_AsIs):
                 raise GeometryError("STEP writer could not transfer the built solid")
             if writer.Write(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
                 raise GeometryError("STEP writer could not write the built solid")
@@ -605,6 +649,115 @@ def _write_ap242_shape(built: BuiltGeometry, path: Path) -> None:
             raise
         finally:
             Interface_Static.SetCVal_s("write.step.schema", previous_schema)
+
+
+def read_step_validation_properties(path: Path) -> StepValidationProperties:
+    """Read the 3 CAx-IF part-level validation properties from one STEP part."""
+    try:
+        from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
+        from OCP.STEPCAFControl import STEPCAFControl_Reader  # type: ignore[import-untyped]
+        from OCP.TCollection import TCollection_ExtendedString  # type: ignore[import-untyped]
+        from OCP.TDF import TDF_LabelSequence  # type: ignore[import-untyped]
+        from OCP.TDocStd import TDocStd_Document  # type: ignore[import-untyped]
+        from OCP.XCAFApp import XCAFApp_Application  # type: ignore[import-untyped]
+        from OCP.XCAFDoc import (  # type: ignore[import-untyped]
+            XCAFDoc_Area,
+            XCAFDoc_Centroid,
+            XCAFDoc_DocumentTool,
+            XCAFDoc_Volume,
+        )
+    except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
+        raise GeometryUnavailable(
+            "STEP validation needs the optional dependency; install anvilate[geometry]"
+        ) from failure
+
+    with _STEP_IO_LOCK:
+        reader = STEPCAFControl_Reader()
+        reader.SetPropsMode(True)
+        if reader.ReadFile(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
+            raise GeometryError(f"could not read STEP file {path}")
+        document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+        application = XCAFApp_Application.GetApplication_s()
+        application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"), document)
+        application.InitDocument(document)
+        if not reader.Transfer(document):
+            raise GeometryError(f"could not transfer STEP file {path}")
+        labels = TDF_LabelSequence()
+        XCAFDoc_DocumentTool.ShapeTool_s(document.Main()).GetFreeShapes(labels)
+        if labels.Length() != 1:
+            raise GeometryError(
+                f"STEP integrity verification needs one part; found {labels.Length()}"
+            )
+        label = labels.Value(1)
+        area = XCAFDoc_Area()
+        volume = XCAFDoc_Volume()
+        centroid = XCAFDoc_Centroid()
+        missing = [
+            name
+            for name, attribute_type, attribute in (
+                ("surface area", XCAFDoc_Area, area),
+                ("volume", XCAFDoc_Volume, volume),
+                ("centroid", XCAFDoc_Centroid, centroid),
+            )
+            if not label.FindAttribute(attribute_type.GetID_s(), attribute)
+        ]
+        if missing:
+            raise GeometryError("STEP is missing validation properties: " + ", ".join(missing))
+        point = centroid.Get()
+        properties = StepValidationProperties(
+            volume_mm3=float(volume.Get()),
+            surface_area_mm2=float(area.Get()),
+            centroid_mm=(float(point.X()), float(point.Y()), float(point.Z())),
+        )
+        values = (
+            properties.volume_mm3,
+            properties.surface_area_mm2,
+            *properties.centroid_mm,
+        )
+        if not all(isfinite(value) for value in values):
+            raise GeometryError("STEP validation properties must all be finite")
+        if properties.volume_mm3 <= 0 or properties.surface_area_mm2 <= 0:
+            raise GeometryError("STEP volume and surface-area properties must be positive")
+        return properties
+
+
+def verify_step_integrity(path: Path) -> StepValidationProperties:
+    """Verify imported geometry against CAx-IF v4.6 industry example thresholds."""
+    try:
+        from build123d import CenterOf, import_step
+    except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
+        raise GeometryUnavailable(
+            "STEP validation needs the optional dependency; install anvilate[geometry]"
+        ) from failure
+    expected = read_step_validation_properties(path)
+    received = import_step(path)
+    if not received.is_valid or len(received.solids()) != 1:
+        raise GeometryError("received STEP geometry is not one valid solid")
+    volume_deviation = abs(float(received.volume) - expected.volume_mm3) / expected.volume_mm3
+    area_deviation = (
+        abs(float(received.area) - expected.surface_area_mm2) / expected.surface_area_mm2
+    )
+    center = received.center(CenterOf.MASS)
+    centroid_deviation = sqrt(
+        sum(
+            (actual - stated) ** 2
+            for actual, stated in zip(center, expected.centroid_mm, strict=True)
+        )
+    )
+    size = received.bounding_box().size
+    centroid_limit = 0.02 + (0.001 * sqrt(size.X**2 + size.Y**2 + size.Z**2))
+    failures = []
+    if volume_deviation >= 0.005:
+        failures.append(f"volume differs by {volume_deviation:.3%}")
+    if area_deviation >= 0.005:
+        failures.append(f"surface area differs by {area_deviation:.3%}")
+    if centroid_deviation >= centroid_limit:
+        failures.append(
+            f"centroid differs by {centroid_deviation:g} mm (limit {centroid_limit:g} mm)"
+        )
+    if failures:
+        raise GeometryError("STEP geometric validation failed: " + "; ".join(failures))
+    return expected
 
 
 def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthorization) -> Path:
@@ -624,6 +777,7 @@ def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthori
         raise GeometryError("STEP writer did not declare AP242; refusing to release it")
     descriptions = [
         "Open CASCADE Model",
+        _GVP_RECOMMENDED_PRACTICE,
         *(f"{key}={value}" for key, value in authorization.metadata()),
     ]
     product_name = _step_string(built.name)
@@ -649,4 +803,9 @@ def write_step(built: BuiltGeometry, path: Path, *, authorization: ExportAuthori
             "STEP writer produced an unrecognized header; refusing an unstamped file"
         )
     path.write_text(text, encoding="utf-8")
+    try:
+        verify_step_integrity(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
     return path
