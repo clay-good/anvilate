@@ -59,13 +59,15 @@ that genuinely wants "nothing failed" say so, deliberately, in one place.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, TextIO
 
-from ._cli_output import machine_document
+from ._cli_output import machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -321,6 +323,12 @@ def _build_parser() -> argparse.ArgumentParser:
         unbuilt = commands.add_parser(
             name, help=f"specified, unbuilt — {reason.split('.')[0]}", description=reason
         )
+        unbuilt.add_argument(
+            "--format",
+            choices=("text", "json"),
+            default="text",
+            help="text for a person, json for a script that needs the refusal as data",
+        )
         # Everything after the name is swallowed, because there is no invocation of an
         # unbuilt operation that would be correct. `anvilate build part.yaml` — the thing a
         # reader of the help above actually types — answered "unrecognized arguments" and
@@ -347,19 +355,97 @@ def run(
     """
     out = sys.stdout if stdout is None else stdout
     err = sys.stderr if stderr is None else stderr
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    json_requested = _wants_json(arguments)
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    if json_requested:
+        parse_diagnostics = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(parse_diagnostics):
+                args = parser.parse_args(arguments)
+        except SystemExit as failure:
+            if failure.code == EXIT_OK:
+                raise
+            diagnostic = parse_diagnostics.getvalue()
+            print(diagnostic, end="", file=err)
+            _print_refusal(
+                command=_requested_command(arguments),
+                code=EXIT_BAD_REQUEST,
+                diagnostic=diagnostic,
+                out=out,
+            )
+            return EXIT_BAD_REQUEST
+        captured = io.StringIO()
+        captured_out = io.StringIO()
+        command_err = captured
+        command_out = captured_out
+    else:
+        args = parser.parse_args(arguments)
+        command_err = err
+        command_out = out
 
     if args.command in _UNBUILT:
-        print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=err)
-        return EXIT_UNBUILT
-    if args.command == "export":
-        return _export(args, out=out, err=err)
-    if args.command == "verify":
-        return _verify(args, out=out, err=err)
-    if args.command == "diff":
-        return _diff(args, out=out, err=err)
-    return _check(args, out=out, err=err)
+        print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=command_err)
+        code = EXIT_UNBUILT
+    elif args.command == "export":
+        code = _export(args, out=command_out, err=command_err)
+    elif args.command == "verify":
+        code = _verify(args, out=command_out, err=command_err)
+    elif args.command == "diff":
+        code = _diff(args, out=command_out, err=command_err)
+    else:
+        code = _check(args, out=command_out, err=command_err)
+
+    if json_requested:
+        diagnostic = captured.getvalue()
+        payload = captured_out.getvalue()
+        print(diagnostic, end="", file=err)
+        if payload:
+            print(payload, end="", file=out)
+        elif diagnostic:
+            _print_refusal(command=args.command, code=code, diagnostic=diagnostic, out=out)
+    return code
+
+
+def _wants_json(arguments: list[str]) -> bool:
+    """Whether an invocation requested JSON, even when the parser will reject it."""
+    return "--format=json" in arguments or any(
+        option == "--format" and value == "json"
+        for option, value in zip(arguments, arguments[1:], strict=False)
+    )
+
+
+def _requested_command(arguments: list[str]) -> str:
+    """Best command identity available before a malformed invocation can be parsed."""
+    commands = {"check", "verify", "diff", "export", *_UNBUILT}
+    return next((argument for argument in arguments if argument in commands), "anvilate")
+
+
+def _print_refusal(*, command: str, code: int, diagnostic: str, out) -> None:
+    """Write the JSON refusal corresponding to diagnostics already sent to stderr."""
+    lines = tuple(line for line in diagnostic.splitlines() if line)
+    remedy = (
+        f"Correct the {command} arguments or input document named in diagnostics, then retry."
+        if code == EXIT_BAD_REQUEST
+        else (
+            f"Use a backed command, or implement the capability named by anvilate {command}."
+            if code == EXIT_UNBUILT
+            else f"Resolve the {command} condition named in diagnostics, then retry."
+        )
+    )
+    print(
+        json.dumps(
+            refusal_document(
+                command,
+                exit_code=code,
+                diagnostics=lines,
+                remedy=remedy,
+            ),
+            indent=2,
+            sort_keys=True,
+        ),
+        file=out,
+    )
 
 
 def _diff(args: argparse.Namespace, *, out, err) -> int:

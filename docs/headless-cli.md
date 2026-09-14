@@ -10,7 +10,7 @@ what it is waiting on.
 | `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
-| `build` | a spec | — | nothing: it is specified and unbuilt, and exits 4 |
+| `build` | a spec | `--format` | nothing: it is specified and unbuilt, and exits 4 |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -378,8 +378,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.0.0.json",
- "schema_version": "1.0.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.1.0.json",
+ "schema_version": "1.1.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -413,6 +413,14 @@ variant do not validate. Evidence and QIF export documents additionally carry `a
 so a script can select the variant without inspecting its payload. The schema is generated,
 checked against real results from every backed JSON path, and frozen at each version. A
 changed shape under the same version therefore fails CI.
+
+A refusal requested with `--format json` is data too. The established diagnostic remains on
+stderr, while stdout carries `outcome: "refused"`, the same diagnostic lines, exit code 3
+or 4, and a remedy. A gated export retains verdict code 1 or 2 in the same form. This also
+covers parser errors and `build`, even though those paths stop before a normal result exists;
+`build --help` documents the JSON option despite the operation itself remaining unbuilt.
+Scripts therefore never have to switch back to scraping prose precisely when an invocation
+goes wrong.
 
 ### An unbuilt operation is refused however it is invoked
 

@@ -561,6 +561,54 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         )
 
 
+@pytest.mark.parametrize(
+    ("arguments", "expected_code", "expected_command"),
+    (
+        (("check", "--format", "json"), EXIT_BAD_REQUEST, "check"),
+        (("check", "absent.yaml", "--format=json"), EXIT_BAD_REQUEST, "check"),
+        (("build", "part.yaml", "--format", "json"), EXIT_UNBUILT, "build"),
+    ),
+)
+def test_a_json_refusal_is_data_and_preserves_the_human_diagnostic(
+    arguments, expected_code, expected_command
+):
+    """Parser, input, and unbuilt refusals use one contract without hiding stderr.
+
+    The diagnostic remains on stderr for a human and appears line-for-line in the JSON for
+    a script. The exit code remains the established interface: asking for JSON must not turn
+    a refusal into a completed verdict.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    code, raw, error = _run(*arguments)
+    payload = json.loads(raw)
+
+    assert code == payload["exit_code"] == expected_code
+    assert payload["command"] == expected_command
+    assert payload["outcome"] == "refused"
+    assert payload["diagnostics"] == [line for line in error.splitlines() if line]
+    assert expected_command in payload["remedy"]
+
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(payload))
+
+
+def test_a_gated_qif_export_is_a_machine_readable_refusal(spec_file):
+    """QIF can refuse with a verdict code, not only the generic refusal codes.
+
+    A not-evaluated card exits 2 and a failing card exits 1. Both mean the QIF artifact was
+    withheld, so an empty stdout would violate the machine-readable contract even though
+    neither code means the request itself was malformed.
+    """
+    code, raw, error = _run("export", "--artifact", "qif", "--format", "json", str(spec_file))
+    payload = json.loads(raw)
+    assert code == payload["exit_code"] == EXIT_NOT_EVALUATED
+    assert payload["outcome"] == "refused"
+    assert "export is gated" in "\n".join(payload["diagnostics"])
+    assert payload["diagnostics"] == [line for line in error.splitlines() if line]
+
+
 def test_the_artifact_list_is_the_mcp_tools_own():
     """`export_artifact`'s published input schema names the three formats. The CLI offering
     a fourth, or silently dropping one, is a surface saying something different from the

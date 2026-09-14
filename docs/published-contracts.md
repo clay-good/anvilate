@@ -178,21 +178,24 @@ command-specific content:
 
 ```json
 {
-  "schema": "https://anvilate.dev/schemas/cli-output/1.0.0.json",
-  "schema_version": "1.0.0",
+  "schema": "https://anvilate.dev/schemas/cli-output/1.1.0.json",
+  "schema_version": "1.1.0",
   "command": "check"
 }
 ```
 
-The schema is a closed union of five exact result variants: `check`, evidence-bundle
-export, QIF export, `verify`, and `diff`. The export variants also carry `artifact`, so a
+The schema is a closed union of the five completed-result variants plus a refusal variant:
+`check`, evidence-bundle export, QIF export, `verify`, `diff`, and `refused`. The export
+variants also carry `artifact`, so a
 reader never has to infer whether `documents` or `bundles` should be present. The contract
 is generated from the wire models, checked against real output from all five paths, and
 frozen under `released/` by the same two-part drift gate as the other contracts.
 
-This release covers completed command results. Machine-readable bad-request and unbuilt
-refusals remain the unfinished half of interaction-quality task 3.2; their current contract
-is the documented exit code plus stderr remedy.
+Version 1.1.0 adds the refusal variant. A bad request or unbuilt operation requested as JSON
+keeps its established exit code and stderr text, and also writes a document carrying
+`outcome: refused`, the code, every diagnostic line, and a concrete remedy. That includes
+parser-level refusals such as a missing positional argument, before a command namespace
+exists.
 
 ## What is not published as a schema artifact
 

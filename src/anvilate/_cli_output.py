@@ -19,8 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.0.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.1.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.1.0.json"]
+SchemaVersion = Literal["1.1.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -41,8 +43,8 @@ class CheckedSpec(_WireModel):
 
 
 class CheckOutput(_WireModel):
-    schema_: Literal["https://anvilate.dev/schemas/cli-output/1.0.0.json"] = Field(alias="schema")
-    schema_version: Literal["1.0.0"]
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
     command: Literal["check"]
     status: CheckStatus
     specs: tuple[CheckedSpec, ...]
@@ -55,8 +57,8 @@ class EvidenceBundleOutputEntry(_WireModel):
 
 
 class EvidenceBundleOutput(_WireModel):
-    schema_: Literal["https://anvilate.dev/schemas/cli-output/1.0.0.json"] = Field(alias="schema")
-    schema_version: Literal["1.0.0"]
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
     command: Literal["export"]
     artifact: Literal["evidence-bundle"]
     status: CheckStatus
@@ -72,8 +74,8 @@ class QifOutputEntry(_WireModel):
 
 
 class QifOutput(_WireModel):
-    schema_: Literal["https://anvilate.dev/schemas/cli-output/1.0.0.json"] = Field(alias="schema")
-    schema_version: Literal["1.0.0"]
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
     command: Literal["export"]
     artifact: Literal["qif"]
     status: CheckStatus
@@ -86,8 +88,8 @@ class ToolComponent(_WireModel):
 
 
 class VerifyOutput(_WireModel):
-    schema_: Literal["https://anvilate.dev/schemas/cli-output/1.0.0.json"] = Field(alias="schema")
-    schema_version: Literal["1.0.0"]
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
     command: Literal["verify"]
     bundle_digest: str
     signature_state: SignatureState
@@ -152,8 +154,8 @@ class Regression(_WireModel):
 
 
 class DiffOutput(_WireModel):
-    schema_: Literal["https://anvilate.dev/schemas/cli-output/1.0.0.json"] = Field(alias="schema")
-    schema_version: Literal["1.0.0"]
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
     command: Literal["diff"]
     before: DiffEndpoint
     after: DiffEndpoint
@@ -164,7 +166,19 @@ class DiffOutput(_WireModel):
     regression: Regression
 
 
-CliOutput = CheckOutput | EvidenceBundleOutput | QifOutput | VerifyOutput | DiffOutput
+class RefusalOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Named
+    outcome: Literal["refused"]
+    exit_code: Literal[1, 2, 3, 4]
+    diagnostics: Annotated[tuple[Named, ...], Field(min_length=1)]
+    remedy: Named
+
+
+CliOutput = (
+    CheckOutput | EvidenceBundleOutput | QifOutput | VerifyOutput | DiffOutput | RefusalOutput
+)
 
 
 def cli_output_json_schema() -> dict:
@@ -182,3 +196,18 @@ def machine_document(command: str, payload: dict, *, artifact: str | None = None
     if artifact is not None:
         metadata["artifact"] = artifact
     return {**metadata, **payload}
+
+
+def refusal_document(
+    command: str, *, exit_code: int, diagnostics: tuple[str, ...], remedy: str
+) -> dict:
+    """One rejected invocation, preserving the exact human diagnostics as data."""
+    return machine_document(
+        command,
+        {
+            "outcome": "refused",
+            "exit_code": exit_code,
+            "diagnostics": diagnostics,
+            "remedy": remedy,
+        },
+    )
