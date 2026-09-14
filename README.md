@@ -198,7 +198,10 @@ reports their positive overlap as a contact candidate retaining both solid and f
 nearby parallel face is instead reported as a planar gap with its separation and projected
 overlap, without judging whether the clearance is acceptable. Coaxial bore/shaft surfaces
 on different solids report their signed diametral clearance and shared axial engagement
-without judging whether that fit is acceptable. Single-solid JSON remains unchanged. After discovery,
+without judging whether that fit is acceptable. Every solid pair is also intersected: a
+strictly positive common volume becomes a stable interference candidate and a cited failing
+scorecard entry, while exact face contact remains non-interfering. The CLI exits 1 when any
+such interference exists. Single-solid JSON remains unchanged. After discovery,
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. `--accept-contact` records one exact pair, a semantic
 name, and the named confirmer without fabricating the hole pattern required by an
@@ -297,7 +300,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,649 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,653 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

@@ -184,6 +184,7 @@ geometry.HolePatternCandidate
 geometry.PlanarInterfaceCandidate
 geometry.PlanarContactCandidate
 geometry.PlanarGapCandidate
+geometry.SolidInterferenceCandidate
 geometry.RenderedViewport
 geometry.StepInterfaceCandidates
 geometry.StepSolidCandidate

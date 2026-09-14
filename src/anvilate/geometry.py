@@ -28,10 +28,12 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, FiniteFloat, model_validator
 
 from ._models import FrozenMap, Named, Provenance, StatableModel
+from .derivation import DerivationAbsence, Underived
 from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import CircularLocator, DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
 
@@ -57,6 +59,7 @@ __all__ = [
     "PlanarInterfaceCandidate",
     "PlanarContactCandidate",
     "PlanarGapCandidate",
+    "SolidInterferenceCandidate",
     "RenderedViewport",
     "StepValidationProperties",
     "StepInterfaceCandidates",
@@ -317,6 +320,36 @@ class PlanarGapCandidate(StatableModel):
         return self
 
 
+class SolidInterferenceCandidate(StatableModel):
+    """One positive-volume B-Rep intersection between different imported solids."""
+
+    id: Named
+    first_solid_id: Named
+    second_solid_id: Named
+    overlap_volume_mm3: Annotated[FiniteFloat, Field(gt=0)]
+    center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    bounds_min_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    bounds_max_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+    @model_validator(mode="after")
+    def _is_one_bounded_pair(self) -> SolidInterferenceCandidate:
+        if self.first_solid_id == self.second_solid_id:
+            raise ValueError("a solid interference must join two different solids")
+        if any(
+            low > high
+            for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
+        ):
+            raise ValueError("interference bounds minimum must not exceed its maximum")
+        if any(
+            center < low or center > high
+            for center, low, high in zip(
+                self.center_mm, self.bounds_min_mm, self.bounds_max_mm, strict=True
+            )
+        ):
+            raise ValueError("interference bounds must contain its center")
+        return self
+
+
 class CylindricalMatingCandidate(StatableModel):
     """One coaxial bore/shaft pair measured between different imported solids."""
 
@@ -380,6 +413,8 @@ class StepInterfaceCandidates(StatableModel):
     planar_contacts: tuple[PlanarContactCandidate, ...] = ()
     planar_gaps: tuple[PlanarGapCandidate, ...] = ()
     cylindrical_mates: tuple[CylindricalMatingCandidate, ...] = ()
+    solid_interferences: tuple[SolidInterferenceCandidate, ...] = ()
+    interference_scorecard: Scorecard | None = None
     warnings: tuple[str, ...] = ()
 
 
@@ -710,6 +745,42 @@ def _solid_measurements(solid: Any) -> tuple[float, _Point3D, _Point3D, _Point3D
     )
 
 
+def _interference_scorecard(
+    candidates: tuple[SolidInterferenceCandidate, ...], *, pair_count: int
+) -> Scorecard:
+    if candidates:
+        entries = tuple(
+            ScorecardEntry(
+                name=f"solid interference {candidate.first_solid_id}/{candidate.second_solid_id}",
+                status=CheckStatus.FAIL,
+                detail=(
+                    f"positive common volume {candidate.overlap_volume_mm3:g} mm³ between "
+                    f"{candidate.first_solid_id} and {candidate.second_solid_id}"
+                ),
+                reference="assembly-robotics: Assembly-level validation",
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason="the verdict comes from an exact B-Rep common-volume operation",
+                ),
+            )
+            for candidate in candidates
+        )
+    else:
+        entries = (
+            ScorecardEntry(
+                name="solid interference",
+                status=CheckStatus.PASS,
+                detail=f"0 positive-volume intersections across {pair_count} solid pairs",
+                reference="assembly-robotics: Assembly-level validation",
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason="the verdict comes from exact B-Rep common-volume operations",
+                ),
+            ),
+        )
+    return Scorecard(entries=entries)
+
+
 def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     """Detect planar faces and regular equal-diameter through-hole patterns in STEP.
 
@@ -788,6 +859,43 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             ),
             key=lambda candidate: candidate.id,
         )
+    )
+    solid_interferences: list[SolidInterferenceCandidate] = []
+    for (first_solid_id, first_solid), (second_solid_id, second_solid) in combinations(
+        sorted(solid_ids.items()), 2
+    ):
+        try:
+            overlap = first_solid & second_solid
+        except Exception as failure:
+            raise GeometryError(
+                f"could not measure solid interference between {first_solid_id} and "
+                f"{second_solid_id}: {failure}"
+            ) from failure
+        if overlap is None or float(overlap.volume) <= 1e-9:
+            continue
+        volume, center, minimum, maximum = _solid_measurements(overlap)
+        signature = {
+            "first_solid": first_solid_id,
+            "second_solid": second_solid_id,
+            "volume": volume,
+            "center": center,
+            "minimum": minimum,
+            "maximum": maximum,
+        }
+        solid_interferences.append(
+            SolidInterferenceCandidate(
+                id=_candidate_id("interference", signature),
+                first_solid_id=first_solid_id,
+                second_solid_id=second_solid_id,
+                overlap_volume_mm3=volume,
+                center_mm=center,
+                bounds_min_mm=minimum,
+                bounds_max_mm=maximum,
+            )
+        )
+    pair_count = len(solids) * (len(solids) - 1) // 2
+    interference_scorecard = _interference_scorecard(
+        tuple(solid_interferences), pair_count=pair_count
     )
 
     planar = [face for face in shape.faces() if face.geom_type.name == "PLANE"]
@@ -1164,7 +1272,10 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings.append(
             "cylindrical mates report measured signed clearance only; they do not judge fit"
         )
-    result_data = {
+        warnings.append(
+            "positive common solid volume is a failed assembly interference check"
+        )
+    result_data: dict[str, Any] = {
         "source_name": path.name,
         "source_sha256": sha256(source_bytes).hexdigest(),
         "planar_faces": tuple(candidates),
@@ -1174,10 +1285,13 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         contacts.sort(key=lambda contact: contact.id)
         gaps.sort(key=lambda gap: gap.id)
         cylindrical_mates.sort(key=lambda mate: mate.id)
+        solid_interferences.sort(key=lambda candidate: candidate.id)
         result_data["solids"] = solid_candidates
         result_data["planar_contacts"] = tuple(contacts)
         result_data["planar_gaps"] = tuple(gaps)
         result_data["cylindrical_mates"] = tuple(cylindrical_mates)
+        result_data["solid_interferences"] = tuple(solid_interferences)
+        result_data["interference_scorecard"] = interference_scorecard
     return StepInterfaceCandidates.model_validate(result_data)
 
 

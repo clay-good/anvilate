@@ -162,6 +162,15 @@ def _write_planar_gap_step(path: Path) -> Path:
     return path
 
 
+def _write_interference_step(path: Path, *, center_z: float = 10) -> Path:
+    from build123d import Box, Compound, Location, export_step
+
+    base = Box(100, 80, 10)
+    intruder = Box(20, 20, 20).moved(Location((0, 0, center_z)))
+    export_step(Compound(children=[base, intruder]), path)
+    return path
+
+
 @pytest.fixture
 def spec_file(tmp_path):
     path = tmp_path / "deck.yaml"
@@ -1646,6 +1655,8 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert "solids" not in payload["candidates"]
     assert "cylindrical_mates" not in payload["candidates"]
     assert "planar_gaps" not in payload["candidates"]
+    assert "solid_interferences" not in payload["candidates"]
+    assert "interference_scorecard" not in payload["candidates"]
     assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
@@ -1990,6 +2001,49 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     )
     assert code == EXIT_BAD_REQUEST and out == ""
     assert "minimum gap must not exceed maximum gap" in err
+
+
+def test_interfaces_scores_positive_solid_interference(tmp_path):
+    step = _write_interference_step(tmp_path / "interference.step")
+
+    code, raw, err = _run("interfaces", str(step), "--format", "json")
+    candidates = json.loads(raw)["candidates"]
+    interference = candidates["solid_interferences"][0]
+
+    assert code == EXIT_FAILED and err == ""
+    assert len(candidates["solid_interferences"]) == 1
+    assert interference["overlap_volume_mm3"] == pytest.approx(2_000)
+    assert interference["center_mm"] == pytest.approx([0, 0, 2.5])
+    assert candidates["interference_scorecard"]["status"] == "fail"
+    assert candidates["interference_scorecard"]["entries"][0]["status"] == "fail"
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(json.loads(raw)))
+
+    code, selected_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--solid",
+        interference["first_solid_id"],
+        "--format",
+        "json",
+    )
+    assert code == EXIT_FAILED and err == ""
+    assert json.loads(selected_raw)["candidates"]["solid_interferences"] == [interference]
+
+    code, text, err = _run("interfaces", str(step))
+    assert code == EXIT_FAILED and err == ""
+    assert "assembly interference: FAIL" in text
+    assert "overlap 2000 mm³  center (0, 0, 2.5) mm" in text
+
+    touching = _write_interference_step(tmp_path / "touching.step", center_z=15)
+    code, touching_raw, err = _run("interfaces", str(touching), "--format", "json")
+    touching_candidates = json.loads(touching_raw)["candidates"]
+    assert code == EXIT_OK and err == ""
+    assert not touching_candidates["solid_interferences"]
+    assert touching_candidates["interference_scorecard"]["status"] == "pass"
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):

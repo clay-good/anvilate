@@ -643,6 +643,13 @@ also carries the source file's SHA-256 digest and every hole center. A successfu
 0 even when it finds no regular pattern; that is a completed measurement, not a passing
 engineering verdict.
 
+Every distinguishable solid pair also undergoes an exact B-Rep common-volume operation.
+Strictly positive overlap produces a stable `solid_interferences` candidate carrying both
+solid IDs plus overlap volume, centroid, and bounds. The accompanying
+`interference_scorecard` fails with the offending pair and measured volume; zero-volume face
+contact and separated or disjoint solids pass. Any failing assembly interference makes the
+command exit 1 even when no optional fit or gap-band check was requested.
+
 For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
 ID with `--solid` to return its summary and list and accept candidates from that solid only.
 An unknown ID is refused with the available IDs, and a single-solid input tells you to omit

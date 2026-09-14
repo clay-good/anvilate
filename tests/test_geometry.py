@@ -41,6 +41,7 @@ from anvilate.geometry import (  # noqa: E402
 from anvilate.packs.industrial import CoverPlate  # noqa: E402
 from anvilate.packs.machinery import TransmissionShaft  # noqa: E402
 from anvilate.packs.structural import BasePlate  # noqa: E402
+from anvilate.scorecard import CheckStatus  # noqa: E402
 from anvilate.spec import (  # noqa: E402
     AcceptanceCriteria,
     DesignSpec,
@@ -786,6 +787,8 @@ def test_single_solid_interface_output_does_not_gain_a_solid_id(tmp_path):
 
     assert "solids" not in dumped
     assert "planar_gaps" not in dumped
+    assert "solid_interferences" not in dumped
+    assert "interference_scorecard" not in dumped
     assert all("solid_id" not in face for face in dumped["planar_faces"])
 
 
@@ -1019,6 +1022,42 @@ def test_step_interface_detection_measures_coaxial_bore_and_shaft_mates(tmp_path
             name="bearing_journal",
             confirmed_by="R. Engineer",
         )
+
+
+def test_step_interface_detection_scores_positive_solid_interference(tmp_path):
+    from build123d import Box, Compound, Location, export_step
+
+    base = Box(100, 80, 10)
+
+    def write_pair(name: str, *, center=(0, 0, 10), reverse=False):
+        intruder = Box(20, 20, 20).moved(Location(center))
+        children = [intruder, base] if reverse else [base, intruder]
+        path = tmp_path / name
+        export_step(Compound(children=children), path)
+        return path
+
+    detected = detect_step_interfaces(write_pair("interference.step"))
+    reversed_detected = detect_step_interfaces(
+        write_pair("interference-reversed.step", reverse=True)
+    )
+    touching = detect_step_interfaces(write_pair("touching.step", center=(0, 0, 15)))
+    disjoint = detect_step_interfaces(write_pair("disjoint.step", center=(100, 0, 10)))
+
+    assert len(detected.solid_interferences) == 1
+    interference = detected.solid_interferences[0]
+    assert interference.overlap_volume_mm3 == pytest.approx(2_000)
+    assert interference.center_mm == pytest.approx((0, 0, 2.5))
+    assert interference.bounds_min_mm == pytest.approx((-10, -10, 0))
+    assert interference.bounds_max_mm == pytest.approx((10, 10, 5))
+    assert detected.solid_interferences == reversed_detected.solid_interferences
+    assert detected.interference_scorecard.status is CheckStatus.FAIL
+    assert detected.interference_scorecard.governing().name.startswith("solid interference")
+    assert "2,000" not in detected.interference_scorecard.governing().detail
+    assert "2000 mm³" in detected.interference_scorecard.governing().detail
+    assert not touching.solid_interferences
+    assert touching.interference_scorecard.status is CheckStatus.PASS
+    assert not disjoint.solid_interferences
+    assert disjoint.interference_scorecard.status is CheckStatus.PASS
 
 
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():

@@ -1028,6 +1028,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     from .geometry import (
         GeometryError,
         GeometryUnavailable,
+        _interference_scorecard,
         check_cylindrical_mate_fit,
         check_planar_gap_clearance,
         confirm_cylindrical_mate,
@@ -1184,6 +1185,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 raise GeometryError(
                     "this STEP contains one solid and exposes no solid ID; omit --solid"
                 )
+            related_interferences = tuple(
+                candidate
+                for candidate in detected.solid_interferences
+                if args.solid in {candidate.first_solid_id, candidate.second_solid_id}
+            )
             detected = detected.model_copy(
                 update={
                     "solids": tuple(solid for solid in detected.solids if solid.id == args.solid),
@@ -1201,6 +1207,10 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         mate
                         for mate in detected.cylindrical_mates
                         if args.solid in {mate.bore_solid_id, mate.shaft_solid_id}
+                    ),
+                    "solid_interferences": related_interferences,
+                    "interference_scorecard": _interference_scorecard(
+                        related_interferences, pair_count=len(detected.solids) - 1
                     ),
                     "planar_faces": tuple(
                         face for face in detected.planar_faces if face.solid_id == args.solid
@@ -1271,6 +1281,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         return EXIT_BAD_REQUEST
     checks_passed = (fit_check is None or fit_check.status == "pass") and (
         gap_check is None or gap_check.status == "pass"
+    ) and (
+        detected.interference_scorecard is None or detected.interference_scorecard.passed
     )
     result_code = EXIT_OK if checks_passed else EXIT_FAILED
     if args.format == "json":
@@ -1295,6 +1307,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         return result_code
 
     print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
+    if detected.interference_scorecard is not None:
+        print(
+            f"  assembly interference: {detected.interference_scorecard.status.value.upper()}",
+            file=out,
+        )
     for solid in detected.solids:
         center = ", ".join(f"{value:g}" for value in solid.center_mm)
         minimum = ", ".join(f"{value:g}" for value in solid.bounds_min_mm)
@@ -1316,6 +1333,14 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             f"  {gap.id}  {gap.first_solid_id}/{gap.first_face_candidate_id} ↔ "
             f"{gap.second_solid_id}/{gap.second_face_candidate_id}  "
             f"gap {gap.separation_mm:g} mm  projected overlap {gap.overlap_area_mm2:g} mm²",
+            file=out,
+        )
+    for interference in detected.solid_interferences:
+        center = ", ".join(f"{value:g}" for value in interference.center_mm)
+        print(
+            f"  {interference.id}  {interference.first_solid_id} ↔ "
+            f"{interference.second_solid_id}  overlap {interference.overlap_volume_mm3:g} mm³  "
+            f"center ({center}) mm",
             file=out,
         )
     for mate in detected.cylindrical_mates:

@@ -50,6 +50,9 @@ artifact without fabricating an `InterfaceContract` or allowable clearance.
 Optional `--min-gap`, `--max-gap`, and `--requirement` inputs produce a cited clearance-band
 check; all three are required, and the CLI exits 1 when the confirmed separation is outside
 the caller's band. This remains a local CLI workflow rather than an MCP tool.
+Every multi-solid import also returns a scored interference check. Positive common B-Rep
+volume names the offending solid pair, measured volume, centroid, and bounds and exits 1;
+exact face contact is not interference. This result is available through the local CLI only.
 Coaxial bore/shaft surfaces on different solids are reported separately with signed
 diametral clearance and axial engagement. The result is measured geometry, not a fit verdict.
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits
