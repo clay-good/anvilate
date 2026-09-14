@@ -657,6 +657,7 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
     )
     validator = jsonschema.Draft202012Validator(schema)
 
+    build_payload = None
     for command, *arguments in invocations:
         _code, raw, error = _run(*arguments)
         assert raw, (arguments, error)
@@ -664,11 +665,14 @@ def test_every_machine_readable_result_validates_against_the_published_contract(
         assert payload["schema"] == CLI_OUTPUT_SCHEMA_ID
         assert payload["schema_version"] == CLI_OUTPUT_SCHEMA_VERSION
         assert payload["command"] == command
+        if command == "build":
+            build_payload = payload
         assert not list(validator.iter_errors(payload)), arguments
         assert list(validator.iter_errors({**payload, "unexpected": True})), (
             "the published variant accepts an undocumented top-level field",
             arguments,
         )
+    assert build_payload["artifact"]["authorization"] == "validated"
     assert "ANVILATE_EXPORT_STATUS=VALIDATED" in built_step.read_text(encoding="utf-8")
 
 
@@ -1507,6 +1511,7 @@ def test_build_writes_a_valid_step_and_reports_the_artifact(tmp_path):
 
     assert code == EXIT_OK and err == ""
     assert "bp1: BUILT" in text and "base_plate/1" in text
+    assert "authorization  UNVALIDATED" in text
     step = output.read_text(encoding="utf-8")
     assert step.startswith("ISO-10303-21;")
     assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in step
@@ -1538,6 +1543,7 @@ def test_build_json_carries_geometry_identity_and_digest(tmp_path):
     assert payload["artifact"]["pattern"] == "base_plate/1"
     assert payload["artifact"]["volume_mm3"] == pytest.approx(1_800_000)
     assert payload["artifact"]["sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    assert payload["artifact"]["authorization"] == "unvalidated"
     assert payload["artifact"]["face_tags"] == [
         "bottom",
         "east",

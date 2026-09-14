@@ -1682,6 +1682,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
             "volume_mm3": built.volume_mm3,
             "dimensions_mm": dict(built.dimensions_mm),
             "face_tags": sorted(built.faces),
+            "authorization": authorization.status.lower(),
         },
     }
     if args.format == "json":
@@ -1692,6 +1693,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         print(f"  pattern       {built.pattern}", file=out)
         print(f"  volume        {built.volume_mm3:g} mm³", file=out)
         print(f"  semantic faces {', '.join(sorted(built.faces))}", file=out)
+        print(f"  authorization  {authorization.status}", file=out)
         print(f"  sha256        {digest}", file=out)
     return EXIT_OK
 

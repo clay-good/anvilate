@@ -19,10 +19,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.6.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.7.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.6.0.json"]
-SchemaVersion = Literal["1.6.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.7.0.json"]
+SchemaVersion = Literal["1.7.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -60,6 +60,7 @@ class BuildArtifact(_WireModel):
         json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}}
     )
     face_tags: tuple[Named, ...]
+    authorization: Literal["validated", "unvalidated"]
 
 
 class BuildOutput(_WireModel):

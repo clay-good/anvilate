@@ -327,7 +327,7 @@ action. With the `geometry` extra installed, the kernel check builds a valid pro
 reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
 remain explicit failures; database integrity is proved by loading the bundled resolver and
 counting its material and component designations. `--format json` emits the same report
-under CLI output schema 1.6.0.
+under CLI output schema 1.7.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what
@@ -393,8 +393,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.6.0.json",
- "schema_version": "1.6.0", "command": "check", "status": "fail",
+{"schema": "https://anvilate.dev/schemas/cli-output/1.7.0.json",
+ "schema_version": "1.7.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -792,7 +792,8 @@ typed cover model. Both verify
 that the kernel produced one valid positive-volume solid, and tags `top`, `bottom`, `north`,
 `south`, `east`, and `west` for boxes or `top`, `bottom`, `perimeter`, and optional `bore`
 for round covers. The text result reports the volume and digest. `--format json`
-adds the declared dimensions and all semantic tags under the CLI output 1.6.0 contract.
+adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
+`unvalidated` under the CLI output 1.7.0 contract.
 
 The writer refuses to replace an existing file unless `--force` is present. A `.step` or
 `.stp` suffix is required, and a missing output directory is a bad request rather than a
