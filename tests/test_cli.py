@@ -27,6 +27,7 @@ import pytest
 
 from anvilate.cli import (
     _ARTIFACTS,
+    _COMMAND_EXAMPLES,
     _UNBUILT,
     _UNBUILT_ARTIFACTS,
     EXIT_BAD_REQUEST,
@@ -1525,10 +1526,30 @@ def test_the_program_help_states_no_rule_a_command_breaks():
     text = _help()
     assert "only when every check passed" not in text
     # It states the codes, which *are* shared, and defers what counts as failure.
-    for code in ("0", "1", "2", "3", "4"):
+    for code in ("0", "1", "2", "3", "4", "5"):
         assert code in text
     assert "differs per command" in text
     assert "never a pass" in text, "code 2 must not be described as a kind of success"
+
+
+def test_every_command_help_has_a_parser_accepted_example():
+    """A new command cannot land without showing its user a valid invocation."""
+    import argparse
+    import shlex
+
+    from anvilate.cli import _build_parser
+
+    parser = _build_parser()
+    commands = next(
+        dict(action.choices)
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    assert set(_COMMAND_EXAMPLES) == set(commands)
+    for command, example in _COMMAND_EXAMPLES.items():
+        assert example.startswith(f"anvilate {command} ")
+        assert example in _help(command)
+        assert parser.parse_args(shlex.split(example)[1:]).command == command
 
 
 @pytest.mark.parametrize("command", ["check", "diff", "verify", "export"])

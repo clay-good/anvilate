@@ -24,7 +24,7 @@
 
 - [ ] 3.1 TTY detection, `NO_COLOR`, dumb terminals, width awareness, ASCII fallback
 - [x] 3.2 Machine-readable output on every command with a stable, versioned schema
-      — `cli-output` 1.1.0 covers all five completed-result paths plus parser, bad-input,
+      — `cli-output` 1.2.0 covers all five completed-result paths plus parser, bad-input,
       and unbuilt refusals while preserving their exit codes and stderr diagnostics
 - [x] 3.3 Exit codes: success, refusal, failed verdict, internal error — distinct and
       documented; unexpected command defects exit 5 and JSON schema 1.2.0 identifies them
@@ -40,7 +40,7 @@
 ## 5. Discoverability
 
 - [ ] 5.1 "What applies to this spec" listing of available screens with what each needs
-- [ ] 5.2 Runnable examples in every command's help
+- [x] 5.2 Runnable examples in every command's help, held against the parser's command set
 - [ ] 5.3 Shell completion for the supported shells
 
 ## 6. Budgets

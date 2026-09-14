@@ -166,6 +166,14 @@ _UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
 _UNSERVED_OVER_MCP = {**_NEEDS_GEOMETRY, **_NOT_YET_OVER_MCP}
 _ARTIFACTS = ("evidence-bundle", *sorted(_UNSERVED_OVER_MCP))
 
+_COMMAND_EXAMPLES = {
+    "check": "anvilate check parts/bracket.yaml --show-work",
+    "export": "anvilate export parts/ --format json",
+    "verify": "anvilate verify bundle.dsse.json --artifact scorecard.json=scorecard.json",
+    "diff": "anvilate diff before.yaml after.yaml --format json",
+    "build": "anvilate build part.yaml --format json",
+}
+
 
 class _Parser(argparse.ArgumentParser):
     """An ``ArgumentParser`` whose usage errors are bad requests, not verdicts.
@@ -233,6 +241,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Screen every spec given, or every spec under a directory. Exit 0 "
         "only when every check passed, 1 if one failed, 2 if a card could not be fully "
         "evaluated. Blocking checks are listed on stderr with the spec they came from.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['check']}",
     )
     check.add_argument(
         "spec",
@@ -260,6 +269,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "schema, offline. Exit 0 only when all three checked clean; 2 when something could "
         "not be checked at all — a signature with no key, a subject with no file — which is "
         "not a pass.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['verify']}",
     )
     verify.add_argument("envelope", type=Path, help="a DSSE envelope, as JSON")
     verify.add_argument(
@@ -287,6 +297,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "code is about what got WORSE, not about the new card: 0 when nothing regressed, "
         "even on a run where every check fails, because a part that was already failing "
         "has not got worse.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['diff']}",
     )
     diff.add_argument("before", type=Path, help="the spec as it was")
     diff.add_argument("after", type=Path, help="the spec as it is")
@@ -305,6 +316,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "worst section: 0 when every section passed, 1 when one failed, 2 when one could "
         "not be evaluated. QIF results are gated on the card passing, as `artifact-export` "
         "asks; an artifact needing a built part is refused with 4.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['export']}",
     )
     export.add_argument(
         "spec",
@@ -324,7 +336,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     for name, reason in _UNBUILT.items():
         unbuilt = commands.add_parser(
-            name, help=f"specified, unbuilt — {reason.split('.')[0]}", description=reason
+            name,
+            help=f"specified, unbuilt — {reason.split('.')[0]}",
+            description=reason,
+            epilog=f"Example: {_COMMAND_EXAMPLES[name]}",
         )
         unbuilt.add_argument(
             "--format",
@@ -468,8 +483,7 @@ def _print_error(*, command: str, diagnostic: str, out) -> None:
                 command,
                 diagnostic=diagnostic.strip(),
                 remedy=(
-                    "Retry once; if the error repeats, report this diagnostic as an "
-                    "Anvilate bug."
+                    "Retry once; if the error repeats, report this diagnostic as an Anvilate bug."
                 ),
             ),
             indent=2,

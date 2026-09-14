@@ -14,7 +14,8 @@ what it is waiting on.
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
-got worse.
+got worse. It also ends with one copyable example for that command; a parser-derived gate
+requires every command to have one and parses each example exactly as printed.
 
 ```bash
 anvilate check part.yaml
