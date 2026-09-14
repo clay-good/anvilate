@@ -35,9 +35,12 @@ Mating-STEP interface discovery is currently a local operation:
 `anvilate interfaces mating.step`. It returns measured planar faces and regular through-hole
 patterns but is not exposed as an MCP tool, because those coordinates disclose imported CAD
 geometry and the remote tool surface has no approved delivery contract for that content.
+Multi-solid files receive deterministic geometry-derived solid IDs on each candidate, so an
+agent can retain exact component identity without depending on STEP or kernel ordering.
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
-`InterfaceContract` with the source digest and candidate IDs retained beside it.
+`InterfaceContract` with the source digest, solid identity, and candidate IDs retained beside
+it. Single-solid JSON omits `solid_id` for compatibility.
 An optional `--locator` selects an exact concentric through-bore, blind-bore, boss, or
 counterbore candidate; omission
 leaves the contract's locator empty rather than guessing that a circular feature locates.

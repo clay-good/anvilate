@@ -254,6 +254,7 @@ class PlanarInterfaceCandidate(StatableModel):
     """One planar mating-face candidate and any through-hole patterns it carries."""
 
     id: Named
+    solid_id: Named | None = None
     area_mm2: Annotated[FiniteFloat, Field(gt=0)]
     center_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
     normal: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
@@ -277,6 +278,7 @@ class ConfirmedStepInterface(StatableModel):
     source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     face_candidate_id: Named
     pattern_candidate_id: Named
+    solid_id: Named | None = None
     confirmed_by: Named
     contract: InterfaceContract
 
@@ -411,6 +413,16 @@ def _point_along(origin: _Point3D, direction: _Point3D, distance: float) -> _Poi
     )
 
 
+def _solid_signature(solid: Any) -> dict[str, object]:
+    bounds = solid.bounding_box()
+    return {
+        "volume": round(float(solid.volume), 9),
+        "center": _rounded_point(_coordinates(solid.center())),
+        "minimum": _rounded_point(_coordinates(bounds.min)),
+        "maximum": _rounded_point(_coordinates(bounds.max)),
+    }
+
+
 def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     """Detect planar faces and regular equal-diameter through-hole patterns in STEP.
 
@@ -448,10 +460,25 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     messenger.AddPrinter(printer)
     except Exception as failure:
         raise GeometryError(f"could not import STEP file {path}: {failure}") from failure
-    if not shape.is_valid or len(shape.solids()) != 1:
+    solids = list(shape.solids())
+    if (
+        not shape.is_valid
+        or not solids
+        or any(not solid.is_valid or solid.volume <= 0 for solid in solids)
+    ):
         raise GeometryError(
-            f"STEP interface detection needs one valid solid; found {len(shape.solids())}"
+            f"STEP interface detection needs valid positive-volume solids; found {len(solids)}"
         )
+    signatures = [_solid_signature(solid) for solid in solids]
+    if len({_candidate_id("solid", signature) for signature in signatures}) != len(solids):
+        raise GeometryError(
+            "STEP interface detection cannot distinguish coincident solids with identical "
+            "measured geometry"
+        )
+    solid_ids = {
+        _candidate_id("solid", signature): solid
+        for signature, solid in zip(signatures, solids, strict=True)
+    }
 
     planar = [face for face in shape.faces() if face.geom_type.name == "PLANE"]
     planes = [
@@ -529,9 +556,19 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
 
     candidates = []
     for plane in planes:
+        containing = [
+            solid_id
+            for solid_id, solid in solid_ids.items()
+            if any(face.is_same(plane.face) for face in solid.faces())
+        ]
+        if len(containing) != 1:
+            raise GeometryError("a planar face could not be assigned to exactly one imported solid")
+        solid_id = containing[0] if len(solids) > 1 else None
         center = _rounded_point(plane.center)
         normal = _rounded_point(plane.normal)
         face_signature = {"area": round(plane.area, 9), "center": center, "normal": normal}
+        if solid_id is not None:
+            face_signature["solid"] = solid_id
         face_id = _candidate_id("plane", face_signature)
         groups: dict[float, list[tuple[float, float, float]]] = {}
         for radius, hole_center in plane.holes:
@@ -612,16 +649,17 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     center_mm=feature_center,
                 )
             )
-        candidates.append(
-            PlanarInterfaceCandidate(
-                id=face_id,
-                area_mm2=round(plane.area, 9),
-                center_mm=center,
-                normal=normal,
-                hole_patterns=tuple(sorted(patterns, key=lambda pattern: pattern.id)),
-                locating_features=tuple(sorted(locating_features, key=lambda feature: feature.id)),
-            )
-        )
+        candidate_data = {
+            "id": face_id,
+            "area_mm2": round(plane.area, 9),
+            "center_mm": center,
+            "normal": normal,
+            "hole_patterns": tuple(sorted(patterns, key=lambda pattern: pattern.id)),
+            "locating_features": tuple(sorted(locating_features, key=lambda feature: feature.id)),
+        }
+        if solid_id is not None:
+            candidate_data["solid_id"] = solid_id
+        candidates.append(PlanarInterfaceCandidate.model_validate(candidate_data))
     candidates.sort(
         key=lambda candidate: (
             candidate.normal,
@@ -705,13 +743,13 @@ def confirm_step_interface(
         for center in pattern.hole_centers_mm
     )
     try:
-        return ConfirmedStepInterface(
-            source_name=candidates.source_name,
-            source_sha256=candidates.source_sha256,
-            face_candidate_id=face.id,
-            pattern_candidate_id=pattern.id,
-            confirmed_by=confirmer,
-            contract=InterfaceContract(
+        confirmed_data = {
+            "source_name": candidates.source_name,
+            "source_sha256": candidates.source_sha256,
+            "face_candidate_id": face.id,
+            "pattern_candidate_id": pattern.id,
+            "confirmed_by": confirmer,
+            "contract": InterfaceContract(
                 name=name.strip(),
                 mating_plane=mating_plane.strip(),
                 pattern=HolePattern(
@@ -745,7 +783,10 @@ def confirm_step_interface(
                     )
                 ),
             ),
-        )
+        }
+        if face.solid_id is not None:
+            confirmed_data["solid_id"] = face.solid_id
+        return ConfirmedStepInterface.model_validate(confirmed_data)
     except ValueError as failure:
         raise GeometryError(
             f"could not create the confirmed interface contract: {failure}"

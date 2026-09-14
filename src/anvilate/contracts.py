@@ -100,11 +100,11 @@ BUNDLE_SCHEMA_VERSION = "1.4.0"
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.2.0"
 
-# Planar faces and through-hole patterns measured from one imported mating STEP.
-INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.2.0"
+# Planar faces and through-hole patterns measured from imported mating STEP solids.
+INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.3.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
-CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.3.0"
+CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
 VIEWPORT_SCHEMA_VERSION = "1.0.0"
@@ -186,7 +186,7 @@ def interface_candidates_json_schema() -> dict[str, Any]:
         description=(
             "Anvilate STEP interface candidates: planar mating faces and regular "
             "equal-diameter through-hole patterns and concentric locating features measured "
-            "from one imported solid. "
+            "from imported solids, with solid identity on multi-solid inputs. "
             "Candidates require user confirmation before becoming interface contracts. "
             "Generated from anvilate.geometry.StepInterfaceCandidates."
         ),

@@ -726,14 +726,50 @@ def test_step_interface_detection_rejects_equal_holes_that_do_not_fit_one_circle
     assert all(not face.hole_patterns for face in detected.planar_faces)
 
 
-def test_step_interface_detection_refuses_a_multi_solid_file(tmp_path):
-    from build123d import Box, Location, export_step
+def test_step_interface_detection_enumerates_multi_solid_interfaces_with_stable_ids(tmp_path):
+    from build123d import Align, Box, Cylinder, Location, export_step
 
     path = tmp_path / "assembly.step"
-    export_step(Box(10, 10, 10) + Box(10, 10, 10).moved(Location((30, 0, 0))), path)
+    plate = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    for x in (-30, 30):
+        for y in (-20, 20):
+            plate -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+                Location((x, y, 0))
+            )
+    other = Box(20, 20, 20).moved(Location((150, 0, 0)))
+    export_step(plate + other, path)
+    reversed_path = tmp_path / "assembly-reversed.step"
+    export_step(other + plate, reversed_path)
 
-    with pytest.raises(GeometryError, match="needs one valid solid; found 2"):
-        detect_step_interfaces(path)
+    detected = detect_step_interfaces(path)
+    reversed_detected = detect_step_interfaces(reversed_path)
+    solid_ids = {face.solid_id for face in detected.planar_faces}
+    patterned = [face for face in detected.planar_faces if face.hole_patterns]
+
+    assert len(detected.planar_faces) == 12
+    assert None not in solid_ids and len(solid_ids) == 2
+    assert solid_ids == {face.solid_id for face in reversed_detected.planar_faces}
+    assert {face.id for face in detected.planar_faces} == {
+        face.id for face in reversed_detected.planar_faces
+    }
+    assert len(patterned) == 2
+    assert {face.solid_id for face in patterned} == {patterned[0].solid_id}
+    accepted = confirm_step_interface(
+        detected,
+        pattern_id=patterned[0].hole_patterns[0].id,
+        name="assembly_mount",
+        mating_plane="assembly_mount_face",
+        confirmed_by="R. Engineer",
+    )
+    assert accepted.solid_id == patterned[0].solid_id
+
+
+def test_single_solid_interface_output_does_not_gain_a_solid_id(tmp_path):
+    detected = detect_step_interfaces(_four_hole_step(tmp_path / "mating.step"))
+
+    dumped = detected.model_dump(mode="json", exclude_unset=True)
+
+    assert all("solid_id" not in face for face in dumped["planar_faces"])
 
 
 def test_hole_pattern_candidate_count_must_match_its_measured_centers():
@@ -752,7 +788,7 @@ def test_step_interface_import_does_not_leak_kernel_diagnostics_to_stdout(tmp_pa
     path = tmp_path / "broken.step"
     path.write_text("ISO-10303-21;\nBROKEN;\nEND-ISO-10303-21;\n", encoding="utf-8")
 
-    with pytest.raises(GeometryError, match="needs one valid solid"):
+    with pytest.raises(GeometryError, match="needs valid positive-volume solids"):
         detect_step_interfaces(path)
 
     assert capsys.readouterr().out == ""

@@ -1029,20 +1029,22 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     if args.format == "json":
         document = {
             "path": str(args.step),
-            "candidates": detected.model_dump(mode="json"),
+            "candidates": detected.model_dump(mode="json", exclude_unset=True),
         }
         if accepted is not None:
-            document["accepted"] = accepted.model_dump(mode="json")
+            document["accepted"] = accepted.model_dump(mode="json", exclude_unset=True)
         payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
         return EXIT_OK
 
     print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
     for face in detected.planar_faces:
+        solid = "" if face.solid_id is None else f"  solid {face.solid_id}"
         center = ", ".join(f"{value:g}" for value in face.center_mm)
         normal = ", ".join(f"{value:g}" for value in face.normal)
+        measurements = f"area {face.area_mm2:g} mm²  center ({center}) mm  normal ({normal})"
         print(
-            f"  {face.id}  area {face.area_mm2:g} mm²  center ({center}) mm  normal ({normal})",
+            f"  {face.id}{solid}  {measurements}",
             file=out,
         )
         for pattern in face.hole_patterns:

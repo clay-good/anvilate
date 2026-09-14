@@ -614,11 +614,13 @@ mating.step: 6 planar interface candidates
   note: candidates are measured suggestions only; confirm one before creating an interface contract
 ```
 
-Face and pattern IDs are hashes of rounded measured geometry, so re-importing unchanged
-geometry returns the same identities without depending on kernel face order. The JSON also
-carries the source file's SHA-256 digest and every hole center. A successful scan exits 0
-even when it finds no regular pattern; that is a completed measurement, not a passing
-engineering verdict.
+Face, pattern, and (for a multi-solid file) solid IDs are hashes of rounded measured
+geometry, so re-importing unchanged geometry returns the same identities without depending
+on kernel face or solid order. Every candidate from a multi-solid file names its `solid_id`,
+and a confirmed result preserves it. A single-solid result omits the field, preserving the
+existing JSON shape. The JSON also carries the source file's SHA-256 digest and every hole
+center. A successful scan exits 0 even when it finds no regular pattern; that is a completed
+measurement, not a passing engineering verdict.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a
@@ -631,11 +633,13 @@ contract. The contract includes a deterministic right-handed frame at the patter
 and every hole's in-plane `(x, y)` center, so a rectangular or clocked pattern is not reduced
 to diameter, count, and hole size. The frame's X axis is global +X projected onto the mating
 plane (global +Y is the fallback when needed); Y completes the right-handed frame. This
-first detector handles one valid solid, planar faces, through holes whose equal-diameter
-centers fit one pitch circle, concentric through or blind pilot bores, cylindrical bosses,
-and counterbores that continue through the opposing exterior plane. A counterbore carries
-its recess diameter, depth, and through diameter. Nested blind steps, nonconcentric locators,
-assemblies, and free-form hole groups remain explicit limits in the output.
+detector handles valid positive-volume solids, planar faces, through holes whose
+equal-diameter centers fit one pitch circle, concentric through or blind pilot bores,
+cylindrical bosses, and counterbores that continue through the opposing exterior plane. A
+counterbore carries its recess diameter, depth, and through diameter. Coincident solids with
+identical measured geometry are refused because they cannot receive truthful distinct IDs.
+Nested blind steps, nonconcentric locators, and free-form hole groups remain explicit limits
+in the output.
 
 ## `anvilate verify`
 

@@ -129,6 +129,16 @@ def _write_four_hole_step(path: Path, *, locator=None) -> Path:
     return path
 
 
+def _write_four_hole_assembly_step(path: Path) -> Path:
+    from build123d import Box, Location, export_step, import_step
+
+    plate_path = path.with_name("assembly-plate.step")
+    plate = import_step(_write_four_hole_step(plate_path))
+    other = Box(20, 20, 20).moved(Location((150, 0, 0)))
+    export_step(plate + other, path)
+    return path
+
+
 @pytest.fixture
 def spec_file(tmp_path):
     path = tmp_path / "deck.yaml"
@@ -1610,9 +1620,44 @@ def test_interfaces_json_is_stable_machine_readable_candidate_data(tmp_path):
     assert payload["command"] == "interfaces"
     assert payload["path"] == str(step)
     assert "accepted" not in payload
+    assert all("solid_id" not in face for face in payload["candidates"]["planar_faces"])
     assert len(patterned) == 2
     assert patterned[0]["hole_patterns"][0]["hole_count"] == 4
     assert patterned[0]["hole_patterns"][0]["pitch_diameter_mm"] == pytest.approx(72.111025509)
+
+
+def test_interfaces_identifies_and_confirms_the_exact_solid_in_an_assembly(tmp_path):
+    step = _write_four_hole_assembly_step(tmp_path / "assembly.step")
+    code, discovered, err = _run("interfaces", str(step), "--format", "json")
+    candidates = json.loads(discovered)["candidates"]
+    patterned_face = next(face for face in candidates["planar_faces"] if face["hole_patterns"])
+    pattern_id = patterned_face["hole_patterns"][0]["id"]
+
+    assert code == EXIT_OK and err == ""
+    assert len({face["solid_id"] for face in candidates["planar_faces"]}) == 2
+
+    code, accepted_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept",
+        pattern_id,
+        "--name",
+        "assembly_mount",
+        "--mating-plane",
+        "assembly_mount_face",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+    accepted = json.loads(accepted_raw)["accepted"]
+
+    assert code == EXIT_OK and err == ""
+    assert accepted["solid_id"] == patterned_face["solid_id"]
+
+    code, text, err = _run("interfaces", str(step))
+    assert code == EXIT_OK and err == ""
+    assert "  solid solid-" in text
 
 
 def test_interfaces_emits_a_confirmed_contract_only_with_an_exact_candidate_and_person(tmp_path):
@@ -1647,6 +1692,7 @@ def test_interfaces_emits_a_confirmed_contract_only_with_an_exact_candidate_and_
     assert accepted["source_sha256"] == candidates["source_sha256"]
     assert accepted["pattern_candidate_id"] == pattern["id"]
     assert accepted["confirmed_by"] == "R. Engineer"
+    assert "solid_id" not in accepted
     contract = accepted["contract"]
     assert contract["name"] == "motor_mount"
     assert contract["mating_plane"] == "motor_mount_face"
