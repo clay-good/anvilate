@@ -27,7 +27,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, FiniteFloat, model_validator
 
-from ._models import FrozenMap, Named, StatableModel
+from ._models import FrozenMap, Named, Provenance, StatableModel
 from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
@@ -47,6 +47,8 @@ __all__ = [
     "ConfirmedStepInterface",
     "ConfirmedPlanarContact",
     "ConfirmedCylindricalMate",
+    "CylindricalMateFitCheck",
+    "FitFeatureCheck",
     "CircularFeatureCandidate",
     "CylindricalMatingCandidate",
     "HolePatternCandidate",
@@ -65,6 +67,7 @@ __all__ = [
     "confirm_step_interface",
     "confirm_planar_contact",
     "confirm_cylindrical_mate",
+    "check_cylindrical_mate_fit",
     "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
@@ -408,6 +411,58 @@ class ConfirmedCylindricalMate(StatableModel):
         axis_length = sqrt(sum(component**2 for component in self.axis_direction))
         if abs(axis_length - 1) > 1e-9:
             raise ValueError("confirmed cylindrical mate axis_direction must be a unit vector")
+        return self
+
+
+class FitFeatureCheck(StatableModel):
+    """One measured diameter checked against an explicit ISO 286 zone."""
+
+    designation: Named
+    measured_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    minimum_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    maximum_diameter_mm: Annotated[FiniteFloat, Field(gt=0)]
+    within_zone: bool
+
+    @model_validator(mode="after")
+    def _matches_its_limits(self) -> FitFeatureCheck:
+        if self.minimum_diameter_mm > self.maximum_diameter_mm:
+            raise ValueError("fit feature minimum diameter must not exceed its maximum")
+        expected = self.minimum_diameter_mm <= self.measured_diameter_mm <= self.maximum_diameter_mm
+        if self.within_zone is not expected:
+            raise ValueError("within_zone must match the measured diameter and limits")
+        return self
+
+
+class CylindricalMateFitCheck(StatableModel):
+    """A confirmed cylindrical mate checked against a caller-supplied ISO 286 fit."""
+
+    confirmed_mate: ConfirmedCylindricalMate
+    basic_size_mm: Annotated[FiniteFloat, Field(gt=0)]
+    fit_designation: Named
+    fit_kind: Literal["clearance", "transition", "interference"]
+    minimum_design_clearance_mm: FiniteFloat
+    maximum_design_clearance_mm: FiniteFloat
+    hole: FitFeatureCheck
+    shaft: FitFeatureCheck
+    measured_clearance_within_design_range: bool
+    status: Literal["pass", "fail"]
+    reference: Provenance
+
+    @model_validator(mode="after")
+    def _matches_its_checks(self) -> CylindricalMateFitCheck:
+        if self.minimum_design_clearance_mm > self.maximum_design_clearance_mm:
+            raise ValueError("minimum design clearance must not exceed maximum design clearance")
+        measured = self.confirmed_mate.diametral_clearance_mm
+        clearance_ok = (
+            self.minimum_design_clearance_mm
+            <= measured
+            <= self.maximum_design_clearance_mm
+        )
+        if self.measured_clearance_within_design_range is not clearance_ok:
+            raise ValueError("measured clearance result must match the design clearance range")
+        expected_status = "pass" if self.hole.within_zone and self.shaft.within_zone else "fail"
+        if self.status != expected_status:
+            raise ValueError("fit-check status must match the hole and shaft checks")
         return self
 
 
@@ -1079,6 +1134,53 @@ def confirm_cylindrical_mate(
         axis_origin_mm=mate.axis_origin_mm,
         axis_direction=mate.axis_direction,
         confirmed_by=confirmer,
+    )
+
+
+def check_cylindrical_mate_fit(
+    confirmed: ConfirmedCylindricalMate,
+    *,
+    basic_size: Quantity,
+    designation: str,
+) -> CylindricalMateFitCheck:
+    """Check confirmed measured diameters against one explicit ISO 286 fit."""
+    from .tolerance.iso286 import fit
+
+    resolved = fit(designation, basic_size)
+    basic_size_mm = basic_size.to("mm").magnitude
+    hole_min = resolved.hole.min_size.to("mm").magnitude
+    hole_max = resolved.hole.max_size.to("mm").magnitude
+    shaft_min = resolved.shaft.min_size.to("mm").magnitude
+    shaft_max = resolved.shaft.max_size.to("mm").magnitude
+    measured_clearance = confirmed.diametral_clearance_mm
+    design_min = resolved.min_clearance.to("mm").magnitude
+    design_max = resolved.max_clearance.to("mm").magnitude
+    hole_ok = hole_min <= confirmed.bore_diameter_mm <= hole_max
+    shaft_ok = shaft_min <= confirmed.shaft_diameter_mm <= shaft_max
+    return CylindricalMateFitCheck(
+        confirmed_mate=confirmed,
+        basic_size_mm=basic_size_mm,
+        fit_designation=resolved.designation,
+        fit_kind=resolved.kind,
+        minimum_design_clearance_mm=design_min,
+        maximum_design_clearance_mm=design_max,
+        hole=FitFeatureCheck(
+            designation=resolved.hole.designation,
+            measured_diameter_mm=confirmed.bore_diameter_mm,
+            minimum_diameter_mm=hole_min,
+            maximum_diameter_mm=hole_max,
+            within_zone=hole_ok,
+        ),
+        shaft=FitFeatureCheck(
+            designation=resolved.shaft.designation,
+            measured_diameter_mm=confirmed.shaft_diameter_mm,
+            minimum_diameter_mm=shaft_min,
+            maximum_diameter_mm=shaft_max,
+            within_zone=shaft_ok,
+        ),
+        measured_clearance_within_design_range=design_min <= measured_clearance <= design_max,
+        status="pass" if hole_ok and shaft_ok else "fail",
+        reference=resolved.source,
     )
 
 

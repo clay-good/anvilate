@@ -1,0 +1,227 @@
+{
+  "$defs": {
+    "ConfirmedCylindricalMate": {
+      "description": "One cylindrical mating candidate accepted by a named person.",
+      "properties": {
+        "axial_engagement_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Axial Engagement Mm",
+          "type": "number"
+        },
+        "axis_direction": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis Direction",
+          "type": "array"
+        },
+        "axis_origin_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Axis Origin Mm",
+          "type": "array"
+        },
+        "bore_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Bore Diameter Mm",
+          "type": "number"
+        },
+        "bore_solid_id": {
+          "title": "Bore Solid Id",
+          "type": "string"
+        },
+        "bore_surface_id": {
+          "title": "Bore Surface Id",
+          "type": "string"
+        },
+        "confirmed_by": {
+          "title": "Confirmed By",
+          "type": "string"
+        },
+        "diametral_clearance_mm": {
+          "title": "Diametral Clearance Mm",
+          "type": "number"
+        },
+        "mate_candidate_id": {
+          "title": "Mate Candidate Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "shaft_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Shaft Diameter Mm",
+          "type": "number"
+        },
+        "shaft_solid_id": {
+          "title": "Shaft Solid Id",
+          "type": "string"
+        },
+        "shaft_surface_id": {
+          "title": "Shaft Surface Id",
+          "type": "string"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_name",
+        "source_sha256",
+        "mate_candidate_id",
+        "name",
+        "bore_solid_id",
+        "bore_surface_id",
+        "shaft_solid_id",
+        "shaft_surface_id",
+        "bore_diameter_mm",
+        "shaft_diameter_mm",
+        "diametral_clearance_mm",
+        "axial_engagement_mm",
+        "axis_origin_mm",
+        "axis_direction",
+        "confirmed_by"
+      ],
+      "title": "ConfirmedCylindricalMate",
+      "type": "object"
+    },
+    "FitFeatureCheck": {
+      "description": "One measured diameter checked against an explicit ISO 286 zone.",
+      "properties": {
+        "designation": {
+          "title": "Designation",
+          "type": "string"
+        },
+        "maximum_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Maximum Diameter Mm",
+          "type": "number"
+        },
+        "measured_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Measured Diameter Mm",
+          "type": "number"
+        },
+        "minimum_diameter_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Minimum Diameter Mm",
+          "type": "number"
+        },
+        "within_zone": {
+          "title": "Within Zone",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "designation",
+        "measured_diameter_mm",
+        "minimum_diameter_mm",
+        "maximum_diameter_mm",
+        "within_zone"
+      ],
+      "title": "FitFeatureCheck",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/cylindrical-mate-fit-check/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate cylindrical mate fit check: a confirmed measured bore/shaft pair checked against caller-supplied ISO 286 basic size and designations, with feature limits, per-feature verdicts, clearance range, and citation. Generated from anvilate.geometry.CylindricalMateFitCheck.",
+  "properties": {
+    "basic_size_mm": {
+      "exclusiveMinimum": 0,
+      "title": "Basic Size Mm",
+      "type": "number"
+    },
+    "confirmed_mate": {
+      "$ref": "#/$defs/ConfirmedCylindricalMate"
+    },
+    "fit_designation": {
+      "title": "Fit Designation",
+      "type": "string"
+    },
+    "fit_kind": {
+      "enum": [
+        "clearance",
+        "transition",
+        "interference"
+      ],
+      "title": "Fit Kind",
+      "type": "string"
+    },
+    "hole": {
+      "$ref": "#/$defs/FitFeatureCheck"
+    },
+    "maximum_design_clearance_mm": {
+      "title": "Maximum Design Clearance Mm",
+      "type": "number"
+    },
+    "measured_clearance_within_design_range": {
+      "title": "Measured Clearance Within Design Range",
+      "type": "boolean"
+    },
+    "minimum_design_clearance_mm": {
+      "title": "Minimum Design Clearance Mm",
+      "type": "number"
+    },
+    "reference": {
+      "title": "Reference",
+      "type": "string"
+    },
+    "shaft": {
+      "$ref": "#/$defs/FitFeatureCheck"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "confirmed_mate",
+    "basic_size_mm",
+    "fit_designation",
+    "fit_kind",
+    "minimum_design_clearance_mm",
+    "maximum_design_clearance_mm",
+    "hole",
+    "shaft",
+    "measured_clearance_within_design_range",
+    "status",
+    "reference"
+  ],
+  "title": "CylindricalMateFitCheck",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

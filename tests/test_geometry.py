@@ -25,6 +25,7 @@ from anvilate.geometry import (  # noqa: E402
     build_cover_plate,
     build_spec,
     build_transmission_shaft,
+    check_cylindrical_mate_fit,
     confirm_cylindrical_mate,
     confirm_planar_contact,
     confirm_step_interface,
@@ -900,6 +901,36 @@ def test_step_interface_detection_measures_coaxial_bore_and_shaft_mates(tmp_path
     assert confirmed.diametral_clearance_mm == pytest.approx(0.2)
     assert confirmed.axial_engagement_mm == pytest.approx(10)
     assert confirmed.confirmed_by == "R. Engineer"
+
+    failed_fit = check_cylindrical_mate_fit(
+        confirmed,
+        basic_size=Quantity.parse("10 mm"),
+        designation="H7/g6",
+    )
+    assert failed_fit.status == "fail"
+    assert failed_fit.hole.within_zone is True
+    assert failed_fit.shaft.within_zone is False
+    assert failed_fit.minimum_design_clearance_mm == pytest.approx(0.005)
+    assert failed_fit.maximum_design_clearance_mm == pytest.approx(0.029)
+    assert failed_fit.measured_clearance_within_design_range is False
+    assert "ISO 286-1" in failed_fit.reference
+
+    passing = detect_step_interfaces(write_pair("passing-fit.step", radius=4.995))
+    passing_mate = confirm_cylindrical_mate(
+        passing,
+        mate_id=passing.cylindrical_mates[0].id,
+        name="bearing_journal",
+        confirmed_by="R. Engineer",
+    )
+    passed_fit = check_cylindrical_mate_fit(
+        passing_mate,
+        basic_size=Quantity.parse("10 mm"),
+        designation="H7/g6",
+    )
+    assert passed_fit.status == "pass"
+    assert passed_fit.hole.within_zone is True
+    assert passed_fit.shaft.within_zone is True
+    assert passed_fit.measured_clearance_within_design_range is True
 
     with pytest.raises(GeometryError, match="available: cylindrical-mate-"):
         confirm_cylindrical_mate(

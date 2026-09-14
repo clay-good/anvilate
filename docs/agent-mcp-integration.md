@@ -51,6 +51,9 @@ required by `InterfaceContract`.
 `--accept-mate` does the same for an exact cylindrical mate, preserving its bore/shaft
 endpoints, signed clearance, and engagement without making a fit verdict. Both acceptance
 paths are local CLI workflows, not MCP tools.
+When the caller also supplies `--fit` and `--basic-size`, the CLI resolves the existing ISO
+286 tables and reports per-feature limits and pass/fail results. It refuses missing fit
+inputs and never chooses a basic size or fit designation from measured geometry.
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest, solid identity, and candidate IDs retained beside

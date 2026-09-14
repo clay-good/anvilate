@@ -141,12 +141,12 @@ def _write_four_hole_assembly_step(path: Path, *, touching: bool = False) -> Pat
     return path
 
 
-def _write_cylindrical_mate_step(path: Path) -> Path:
+def _write_cylindrical_mate_step(path: Path, *, shaft_radius: float = 4.9) -> Path:
     from build123d import Align, Box, Compound, Cylinder, Location, export_step
 
     plate = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
     plate -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    pin = Cylinder(4.9, 20, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+    pin = Cylinder(shaft_radius, 20, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
         Location((0, 0, -5))
     )
     export_step(Compound(children=[plate, pin]), path)
@@ -1783,12 +1783,16 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
         "bearing_journal",
         "--confirmed-by",
         "R. Engineer",
+        "--fit",
+        "H7/g6",
+        "--basic-size",
+        "10 mm",
         "--format",
         "json",
     )
     accepted_payload = json.loads(accepted_raw)
     accepted = accepted_payload["accepted_mate"]
-    assert code == EXIT_OK and err == ""
+    assert code == EXIT_FAILED and err == ""
     assert accepted["source_sha256"] == candidates["source_sha256"]
     assert accepted["mate_candidate_id"] == mate["id"]
     assert accepted["bore_surface_id"] == mate["bore_surface_id"]
@@ -1796,6 +1800,19 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     assert accepted["diametral_clearance_mm"] == pytest.approx(0.2)
     assert accepted["confirmed_by"] == "R. Engineer"
     assert "accepted" not in accepted_payload and "accepted_contact" not in accepted_payload
+    fit_check = accepted_payload["fit_check"]
+    assert fit_check["status"] == "fail"
+    assert fit_check["fit_designation"] == "H7/g6"
+    assert fit_check["hole"]["within_zone"] is True
+    assert fit_check["shaft"]["within_zone"] is False
+    assert fit_check["minimum_design_clearance_mm"] == pytest.approx(0.005)
+    assert fit_check["maximum_design_clearance_mm"] == pytest.approx(0.029)
+    assert "ISO 286-1" in fit_check["reference"]
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(accepted_payload))
 
     code, accepted_text, err = _run(
         "interfaces",
@@ -1806,9 +1823,38 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
         "bearing_journal",
         "--confirmed-by",
         "R. Engineer",
+        "--fit",
+        "H7/g6",
+        "--basic-size",
+        "10 mm",
+    )
+    assert code == EXIT_FAILED and err == ""
+    assert f"accepted cylindrical mate: bearing_journal ({mate['id']})" in accepted_text
+    assert "ISO 286 H7/g6: FAIL  hole PASS  shaft FAIL" in accepted_text
+
+    passing_step = _write_cylindrical_mate_step(
+        tmp_path / "passing-shaft-in-bore.step", shaft_radius=4.995
+    )
+    _code, passing_raw, _err = _run("interfaces", str(passing_step), "--format", "json")
+    passing_mate_id = json.loads(passing_raw)["candidates"]["cylindrical_mates"][0]["id"]
+    code, passing_check_raw, err = _run(
+        "interfaces",
+        str(passing_step),
+        "--accept-mate",
+        passing_mate_id,
+        "--name",
+        "bearing_journal",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/g6",
+        "--basic-size",
+        "10 mm",
+        "--format",
+        "json",
     )
     assert code == EXIT_OK and err == ""
-    assert f"accepted cylindrical mate: bearing_journal ({mate['id']})" in accepted_text
+    assert json.loads(passing_check_raw)["fit_check"]["status"] == "pass"
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
@@ -1916,6 +1962,32 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
     )
     assert code == EXIT_BAD_REQUEST and out == ""
     assert "accepting a cylindrical mate requires" in err and "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--fit",
+        "H7/g6",
+        "--basic-size",
+        "10 mm",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "--fit and --basic-size require --accept-mate" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-mate",
+        "cylindrical-mate-any",
+        "--name",
+        "bearing_journal",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/g6",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "a fit check requires --fit and --basic-size; missing --basic-size" in err
 
     code, out, err = _run(
         "interfaces",

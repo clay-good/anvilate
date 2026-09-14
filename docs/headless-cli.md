@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-mate`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, and any requested artifact was explicitly confirmed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-mate`, `--fit`, `--basic-size`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested fit check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -605,7 +605,8 @@ anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
 anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
-  --name bearing_journal --confirmed-by "R. Engineer" --format json
+  --name bearing_journal --confirmed-by "R. Engineer" \
+  --fit H7/g6 --basic-size "10 mm" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
@@ -660,6 +661,13 @@ solid and surface IDs, diameters, signed clearance, axial engagement, and canoni
 Confirmation records design intent; it still does not choose an ISO 286 designation or
 declare the measured fit acceptable. Pattern, contact, and cylindrical-mate acceptance are
 mutually exclusive in one invocation.
+
+An optional fit check requires both `--fit HOLE/SHAFT` and `--basic-size QUANTITY` beside
+`--accept-mate`. Those values are caller decisions: Anvilate does not derive `H7/g6` or the
+basic size from measured geometry. The result reports the permitted hole and shaft diameter
+limits, whether each measurement lies inside its own zone, the design clearance range, the
+measured clearance comparison, and the ISO 286 table citation. It passes only when both
+features are in zone; an out-of-zone result remains valid JSON but exits 1 for CI.
 
 Nothing in this command edits a spec. With no acceptance flags, it only discovers candidates.
 Acceptance requires all four values: the exact pattern ID, the downstream contract name, a

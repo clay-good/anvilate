@@ -72,7 +72,7 @@ from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
-from .units import UnitSystem
+from .units import Quantity, UnitSystem
 
 __all__ = ["EXIT_CODES", "main", "run"]
 
@@ -235,8 +235,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="detect planar faces and through-hole patterns in a mating STEP",
         description="Import one local STEP and list measured interface candidates. "
         "No candidate becomes a Design Spec contract until a user confirms it. Exit 0 "
-        "means the import and detection completed; a bad file exits 3 and a missing "
-        "geometry runtime exits 4.",
+        "means the import and detection completed, and any requested fit check passed; "
+        "an out-of-zone fit check exits 1, a bad file exits 3, and a missing geometry "
+        "runtime exits 4.",
         epilog=f"Example: {_COMMAND_EXAMPLES['interfaces']}",
     )
     interfaces.add_argument("step", type=Path, help="the local mating-part STEP file to inspect")
@@ -262,6 +263,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--accept-mate",
         metavar="MATE_ID",
         help="accept this exact detected cylindrical mate without judging its fit",
+    )
+    interfaces.add_argument(
+        "--fit",
+        metavar="HOLE/SHAFT",
+        help="check the accepted cylindrical mate against this explicit ISO 286 fit",
+    )
+    interfaces.add_argument(
+        "--basic-size",
+        metavar="QUANTITY",
+        help="basic size with unit for --fit, for example '10 mm'",
     )
     interfaces.add_argument("--name", help="semantic name for the accepted artifact")
     interfaces.add_argument(
@@ -998,6 +1009,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     from .geometry import (
         GeometryError,
         GeometryUnavailable,
+        check_cylindrical_mate_fit,
         confirm_cylindrical_mate,
         confirm_planar_contact,
         confirm_step_interface,
@@ -1023,6 +1035,9 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             "are mutually exclusive",
             file=err,
         )
+        return EXIT_BAD_REQUEST
+    if (args.fit is not None or args.basic_size is not None) and args.accept_mate is None:
+        print("anvilate interfaces: --fit and --basic-size require --accept-mate", file=err)
         return EXIT_BAD_REQUEST
     if args.accept_contact is not None:
         contact_acceptance = {
@@ -1077,6 +1092,17 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     if args.locator is not None and args.accept is None:
         print("anvilate interfaces: --locator requires --accept", file=err)
         return EXIT_BAD_REQUEST
+    fit_acceptance = {"--fit": args.fit, "--basic-size": args.basic_size}
+    fit_supplied = {option for option, value in fit_acceptance.items() if value is not None}
+    if fit_supplied:
+        if len(fit_supplied) != len(fit_acceptance):
+            missing = ", ".join(option for option in fit_acceptance if option not in fit_supplied)
+            print(
+                "anvilate interfaces: a fit check requires --fit and --basic-size; "
+                f"missing {missing}",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
 
     try:
         detected = detect_step_interfaces(args.step)
@@ -1114,6 +1140,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         accepted = None
         accepted_contact = None
         accepted_mate = None
+        fit_check = None
         if args.accept is not None:
             accepted = confirm_step_interface(
                 detected,
@@ -1137,12 +1164,23 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 name=args.name,
                 confirmed_by=args.confirmed_by,
             )
+            if args.fit is not None:
+                try:
+                    basic_size = Quantity.parse(args.basic_size)
+                    fit_check = check_cylindrical_mate_fit(
+                        accepted_mate,
+                        basic_size=basic_size,
+                        designation=args.fit,
+                    )
+                except ValueError as failure:
+                    raise GeometryError(str(failure)) from failure
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
     except GeometryError as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_BAD_REQUEST
+    result_code = EXIT_OK if fit_check is None or fit_check.status == "pass" else EXIT_FAILED
     if args.format == "json":
         document = {
             "path": str(args.step),
@@ -1154,9 +1192,11 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["accepted_contact"] = accepted_contact.model_dump(mode="json")
         if accepted_mate is not None:
             document["accepted_mate"] = accepted_mate.model_dump(mode="json")
+        if fit_check is not None:
+            document["fit_check"] = fit_check.model_dump(mode="json")
         payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
-        return EXIT_OK
+        return result_code
 
     print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
     for solid in detected.solids:
@@ -1235,7 +1275,14 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             f"confirmed by {accepted_mate.confirmed_by}",
             file=out,
         )
-    return EXIT_OK
+    if fit_check is not None:
+        print(
+            f"  ISO 286 {fit_check.fit_designation}: {fit_check.status.upper()}  "
+            f"hole {'PASS' if fit_check.hole.within_zone else 'FAIL'}  "
+            f"shaft {'PASS' if fit_check.shaft.within_zone else 'FAIL'}",
+            file=out,
+        )
+    return result_code
 
 
 def _render_diff(document: dict[str, Any]) -> str:
