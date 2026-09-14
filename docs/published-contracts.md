@@ -109,7 +109,7 @@ exists to avoid.
 
 ### Design Spec 1.5.0: a confirmed interface can carry its circular locator
 
-`InterfaceContract.locator` is an optional typed pilot bore or boss, with its diameter and
+`InterfaceContract.locator` is an optional typed through/blind pilot bore or boss, with its diameter and
 axial extent. STEP discovery offers only circular features concentric with a fitted pattern,
 and confirmation names the exact locator ID separately; it is never selected by proximity
 alone. The candidate, confirmed-interface, evidence-bundle, and CLI schemas move with it.

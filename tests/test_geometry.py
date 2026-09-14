@@ -118,6 +118,10 @@ def _four_hole_step(path, *, centers=((-30, -20), (-30, 20), (30, -20), (30, 20)
         shape = shape - cutter
     if locator == "bore":
         shape = shape - Cylinder(15, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    elif locator == "blind_bore":
+        shape = shape - Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+            Location((0, 0, 5))
+        )
     elif locator == "boss":
         shape = shape + Cylinder(15, 5, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
             Location((0, 0, 10))
@@ -573,9 +577,16 @@ def test_an_interface_candidate_cannot_be_accepted_without_a_named_person(tmp_pa
         )
 
 
-@pytest.mark.parametrize(("kind", "extent"), (("bore", 10), ("boss", 5)))
-def test_step_interface_detection_finds_and_confirms_a_concentric_locator(tmp_path, kind, extent):
-    detected = detect_step_interfaces(_four_hole_step(tmp_path / f"with-{kind}.step", locator=kind))
+@pytest.mark.parametrize(
+    ("fixture", "kind", "extent"),
+    (("bore", "bore", 10), ("blind_bore", "bore", 5), ("boss", "boss", 5)),
+)
+def test_step_interface_detection_finds_and_confirms_a_concentric_locator(
+    tmp_path, fixture, kind, extent
+):
+    detected = detect_step_interfaces(
+        _four_hole_step(tmp_path / f"with-{fixture}.step", locator=fixture)
+    )
     face = next(
         face
         for face in detected.planar_faces
@@ -618,6 +629,35 @@ def test_step_interface_detection_does_not_call_an_off_center_boss_a_locator(tmp
     detected = detect_step_interfaces(path)
 
     assert all(not face.locating_features for face in detected.planar_faces)
+
+
+def test_step_interface_detection_does_not_flatten_a_counterbore_into_a_simple_top_locator(
+    tmp_path,
+):
+    from build123d import Align, Box, Cylinder, Location, export_step
+
+    shape = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    for x in (-30, 30):
+        for y in (-20, 20):
+            shape -= Cylinder(5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+                Location((x, y, 0))
+            )
+    shape -= Cylinder(15, 3, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
+        Location((0, 0, 7))
+    )
+    shape -= Cylinder(8, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    path = tmp_path / "counterbore.step"
+    export_step(shape, path)
+
+    detected = detect_step_interfaces(path)
+    top = next(
+        face
+        for face in detected.planar_faces
+        if face.normal == (0, 0, 1) and face.center_mm[2] == 10
+    )
+
+    assert top.hole_patterns
+    assert not top.locating_features
 
 
 def test_interface_confirmation_refuses_an_unknown_candidate_and_names_the_choices(tmp_path):

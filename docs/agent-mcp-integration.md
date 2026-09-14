@@ -38,7 +38,7 @@ geometry and the remote tool surface has no approved delivery contract for that 
 The same local command can accept an exact pattern with `--accept`, `--name`,
 `--mating-plane`, and `--confirmed-by`; all four are required before it emits an
 `InterfaceContract` with the source digest and candidate IDs retained beside it.
-An optional `--locator` selects an exact concentric through-bore or boss candidate; omission
+An optional `--locator` selects an exact concentric through- or blind-bore or boss candidate; omission
 leaves the contract's locator empty rather than guessing that a circular feature locates.
 
 Every task response also carries `_meta["dev.anvilate/progress"]` with `activity`,

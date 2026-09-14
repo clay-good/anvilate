@@ -438,6 +438,16 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 center = _rounded_point(_point_along(axis_point, direction, distance))
                 plane.holes.append((float(radius), center))
                 plane.circular_features.append(("bore", float(radius), extent, center))
+        elif inward and _dot(first.normal, second.normal) > 0.999999:
+            mouth = max((first, second), key=lambda plane: _dot(plane.center, plane.normal))
+            floor = first if mouth is second else second
+            floor_circles = [edge for edge in floor.face.edges() if edge.geom_type.name == "CIRCLE"]
+            if len(floor_circles) != 1:
+                continue  # a stepped counterbore or another ambiguous coaxial feature
+            denominator = _dot(direction, mouth.normal)
+            distance = _dot(_subtract(mouth.center, axis_point), mouth.normal) / denominator
+            center = _rounded_point(_point_along(axis_point, direction, distance))
+            mouth.circular_features.append(("bore", float(radius), extent, center))
         elif not inward and _dot(first.normal, second.normal) > 0.999999:
             base = min((first, second), key=lambda plane: _dot(plane.center, plane.normal))
             denominator = _dot(direction, base.normal)
@@ -549,8 +559,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings=(
             "candidates are measured suggestions only; confirm one before creating an "
             "interface contract",
-            "this detector does not yet classify blind holes, counterbores, or "
-            "nonconcentric locators",
+            "this detector does not yet classify counterbores or nonconcentric locators",
         ),
     )
 
