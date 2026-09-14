@@ -520,21 +520,27 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 "implemented."
             ),
         },
-        {
-            "name": "viewport prerequisites",
-            "status": "fail",
-            "detail": "Viewport rendering waits on built geometry and has no renderer backend.",
-            "remedy": (
-                f"Complete geometry and viewport rendering under {specs}/geometry-generation."
-            ),
-        },
     ]
     try:
         from build123d import Box
 
+        from .geometry import BASE_PLATE_PATTERN, BuiltGeometry, render_viewport
+
         probe = Box(1, 1, 1)
         if not probe.is_valid or len(probe.solids()) != 1:
             raise RuntimeError("the kernel probe did not produce one valid solid")
+        viewport = render_viewport(
+            BuiltGeometry(
+                name="doctor",
+                pattern=BASE_PLATE_PATTERN,
+                shape=probe,
+                faces={},
+                dimensions_mm={"width": 1, "depth": 1, "plate_thickness": 1},
+            ),
+            width_px=64,
+        )
+        if not viewport.data.startswith(b'<?xml version="1.0"'):
+            raise RuntimeError("the viewport probe did not produce an SVG image")
         build123d_version = version("build123d")
         ocp_version = version("cadquery-ocp-novtk")
     except (ImportError, PackageNotFoundError, RuntimeError) as failure:
@@ -544,6 +550,17 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 "name": "geometry kernel",
                 "status": "fail",
                 "detail": f"The build123d/OCCT geometry runtime is not ready: {failure}",
+                "remedy": "Install the geometry runtime with `pip install anvilate[geometry]`.",
+            },
+        )
+        checks.insert(
+            2,
+            {
+                "name": "viewport prerequisites",
+                "status": "fail",
+                "detail": (
+                    f"Viewport rendering is not ready because geometry is unavailable: {failure}"
+                ),
                 "remedy": "Install the geometry runtime with `pip install anvilate[geometry]`.",
             },
         )
@@ -557,6 +574,15 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                     f"build123d {build123d_version} with cadquery-ocp-novtk {ocp_version} "
                     "produced one valid B-Rep probe solid."
                 ),
+                "remedy": None,
+            },
+        )
+        checks.insert(
+            2,
+            {
+                "name": "viewport prerequisites",
+                "status": "pass",
+                "detail": "The deterministic SVG renderer produced a 64 px viewport image.",
                 "remedy": None,
             },
         )

@@ -1439,9 +1439,7 @@ def test_build_json_carries_geometry_identity_and_digest(tmp_path):
     output = tmp_path / "base-plate.step"
     spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
 
-    code, raw, err = _run(
-        "build", str(spec), "--output", str(output), "--format", "json"
-    )
+    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
     payload = json.loads(raw)
 
     assert code == EXIT_OK and err == ""
@@ -1646,6 +1644,8 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert all(check["remedy"] for check in by_name.values() if check["status"] == "fail")
     assert by_name["geometry kernel"]["status"] == "pass"
     assert "build123d" in by_name["geometry kernel"]["detail"]
+    assert by_name["viewport prerequisites"]["status"] == "pass"
+    assert "SVG" in by_name["viewport prerequisites"]["detail"]
     assert by_name["database integrity"]["status"] == "pass"
     assert "material" in by_name["database integrity"]["detail"]
 

@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
-from .geometry import GeometrySummary
+from .geometry import GeometrySummary, ViewportImage
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -46,8 +46,10 @@ __all__ = [
     "SCORECARD_SCHEMA_VERSION",
     "BUNDLE_SCHEMA_VERSION",
     "GEOMETRY_SCHEMA_VERSION",
+    "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
+    "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
     "schema_artifacts",
@@ -85,6 +87,9 @@ BUNDLE_SCHEMA_VERSION = "1.1.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.0.1"
+
+# The self-contained SVG image document returned by ``render_viewport``.
+VIEWPORT_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:
@@ -133,6 +138,20 @@ def geometry_json_schema() -> dict[str, Any]:
             "Anvilate geometry summary: the audited pattern, declared dimensions, semantic "
             "face tags, and kernel-checked volume for one valid solid. Generated from "
             "anvilate.geometry.GeometrySummary."
+        ),
+    )
+
+
+def viewport_json_schema() -> dict[str, Any]:
+    """The deterministic viewport image and its integrity metadata."""
+    return _artifact(
+        ViewportImage,
+        name="viewport-image",
+        version=VIEWPORT_SCHEMA_VERSION,
+        description=(
+            "Anvilate viewport image: one deterministic SVG rendering with its view, pixel "
+            "dimensions, exact media type, SHA-256 digest, and base64 payload. Generated "
+            "from anvilate.geometry.ViewportImage."
         ),
     )
 
@@ -285,6 +304,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "scorecard.schema.json": scorecard_json_schema(),
         "evidence-bundle.schema.json": bundle_json_schema(),
         "geometry-summary.schema.json": geometry_json_schema(),
+        "viewport-image.schema.json": viewport_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

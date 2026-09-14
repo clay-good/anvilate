@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 from types import MappingProxyType
+from xml.etree import ElementTree
 
 import pytest
 
@@ -14,6 +16,7 @@ from anvilate.geometry import (  # noqa: E402
     UnsupportedGeometry,
     build_base_plate,
     build_spec,
+    render_viewport,
     write_step,
 )
 from anvilate.packs.structural import BasePlate  # noqa: E402
@@ -106,6 +109,50 @@ def test_regeneration_has_the_same_pattern_signature_and_geometry():
     assert first.pattern == second.pattern == BASE_PLATE_PATTERN
     assert first.volume_mm3 == second.volume_mm3
     assert first.shape.bounding_box().size == second.shape.bounding_box().size
+
+
+def test_viewport_is_a_deterministic_self_contained_svg_with_integrity_metadata():
+    built = build_base_plate(_plate())
+    first = render_viewport(built, view="iso", width_px=640)
+    second = render_viewport(built, view="iso", width_px=640)
+    document = first.document()
+
+    assert first.data == second.data
+    assert first.sha256 == second.sha256 == document.sha256
+    assert document.mime_type == "image/svg+xml"
+    assert base64.b64decode(document.image) == first.data
+    root = ElementTree.fromstring(first.data)
+    assert root.attrib["width"] == "640"
+    assert root.attrib["height"] == "480"
+    assert "href=" not in first.data.decode()
+    assert {node.attrib["data-face"] for node in root if "data-face" in node.attrib} == set(
+        built.faces
+    )
+
+
+def test_named_viewports_produce_distinct_projections():
+    built = build_base_plate(_plate())
+    images = {
+        view: render_viewport(built, view=view).data for view in ("iso", "front", "top", "right")
+    }
+
+    assert len(set(images.values())) == 4
+
+
+def test_viewport_document_refuses_an_image_that_does_not_match_its_digest():
+    document = render_viewport(build_base_plate(_plate())).document().model_dump()
+    document["image"] = base64.b64encode(b"different bytes").decode("ascii")
+
+    with pytest.raises(ValueError, match="sha256 does not match image bytes"):
+        from anvilate.geometry import ViewportImage
+
+        ViewportImage.model_validate(document)
+
+
+@pytest.mark.parametrize("width", (63, 4097))
+def test_viewport_refuses_widths_outside_the_published_bounds(width):
+    with pytest.raises(GeometryError, match="width_px must be from 64 through 4096"):
+        render_viewport(build_base_plate(_plate()), width_px=width)
 
 
 def test_step_round_trip_preserves_the_valid_solid(tmp_path):

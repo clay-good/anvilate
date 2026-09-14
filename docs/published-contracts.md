@@ -14,6 +14,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `SCORECARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/evidence-bundle.schema.json`](api/schemas/evidence-bundle.schema.json) | every layer's contribution for one part, the roll-up, the scorecard and the spec | `BUNDLE_SCHEMA_VERSION` |
 | [`docs/api/schemas/geometry-summary.schema.json`](api/schemas/geometry-summary.schema.json) | one valid solid's audited pattern, dimensions, volume, and semantic face tags | `GEOMETRY_SCHEMA_VERSION` |
+| [`docs/api/schemas/viewport-image.schema.json`](api/schemas/viewport-image.schema.json) | a deterministic SVG viewport, integrity digest, and base64 payload | `VIEWPORT_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and

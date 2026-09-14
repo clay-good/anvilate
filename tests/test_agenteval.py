@@ -338,14 +338,8 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     assert len({task.task_id for task in tasks}) == len(tasks)
 
 
-def test_the_corpus_asks_for_the_behaviour_the_refusals_exist_to_get():
-    """Three operations are published and not dispatched, and a corpus that avoided them
-    would measure only the half of the surface that answers.
-
-    Reaching an operation is not being answered by it: a run that calls `render_viewport`,
-    reads the refusal naming geometry and reports it has driven the tool correctly, and that
-    is the behaviour this library most needs a model to have.
-    """
+def test_the_corpus_asks_for_the_behaviour_the_remaining_refusals_exist_to_get():
+    """An undispatched operation must still be reached by the agent-driving corpus."""
     from anvilate import mcp
     from anvilate.agenteval import default_task_set
 

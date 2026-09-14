@@ -53,6 +53,7 @@ from ._models import Named, RevalidatedModel, _refusal_line
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
+from .geometry import GeometrySummary
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
 
@@ -164,6 +165,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 # working; it simply cannot see where the numbers came from.
 _BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.1.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.0.1.json"
+_VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
@@ -372,8 +374,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {
                     "geometry": {"$ref": _GEOMETRY_REF},
                     "warnings": {"type": "array", "items": {"type": "string"}},
+                    "subject": _SUBJECT_SCHEMA,
                 },
-                required=["geometry", "warnings"],
+                required=["geometry", "warnings", "subject"],
             ),
             cost=Cost.BOUNDED,
             tiers=(ValidationTier.T0_GEOMETRY,),
@@ -400,15 +403,12 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["subject", "view"],
             ),
             output_schema=_object_schema(
-                {
-                    "view": {"type": "string"},
-                    "width_px": {"type": "integer"},
-                    "height_px": {"type": "integer"},
-                },
-                required=["view", "width_px", "height_px"],
+                {"viewport": {"$ref": _VIEWPORT_REF}},
+                required=["viewport"],
             ),
             cost=Cost.BOUNDED,
             subject="subject",
+            backing="anvilate.geometry:render_viewport",
         ),
         ToolDefinition(
             name="measure_geometry",
@@ -611,7 +611,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
         if required not in properties:
             issues.append(f"{where} requires {required!r}, which it does not define")
     for ref in sorted(_refs(schema)):
-        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF, _GEOMETRY_REF}:
+        if ref not in {_SPEC_REF, _SCORECARD_REF, _BUNDLE_REF, _GEOMETRY_REF, _VIEWPORT_REF}:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
                 "at its current version"
@@ -1144,8 +1144,18 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
 def _task_call_result(structured: Mapping[str, Any]) -> dict[str, Any]:
     """The CallToolResult shared by synchronous calls and completed task calls."""
     document = dict(structured)
+    text_document = deepcopy(document)
+    content: list[dict[str, Any]] = []
+    viewport = document.get("viewport")
+    if isinstance(viewport, Mapping):
+        data = viewport.get("image")
+        mime_type = viewport.get("mime_type")
+        if isinstance(data, str) and isinstance(mime_type, str):
+            text_document["viewport"].pop("image", None)
+            content.append({"type": "image", "data": data, "mimeType": mime_type})
+    content.insert(0, {"type": "text", "text": json.dumps(text_document, sort_keys=True)})
     return {
-        "content": [{"type": "text", "text": json.dumps(document, sort_keys=True)}],
+        "content": content,
         "structuredContent": document,
         "isError": bool(document.get("errors")),
     }
@@ -1162,6 +1172,7 @@ def _task_call_result(structured: Mapping[str, Any]) -> dict[str, Any]:
 # a document with a different shape. A handle published by a build before this change is
 # refused by the store naming both kinds, which is the honest answer — see `_screening`.
 _SCREENING = "screening"
+_BUILT_GEOMETRY = "built-geometry"
 
 
 def _screening(handle: str) -> Mapping[str, Any]:
@@ -1272,10 +1283,62 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _Unavailable(str(failure)) from failure
     except GeometryError as failure:
         raise _InvalidArguments([f"spec.element_params: {failure}"]) from failure
+    geometry = built.summary().model_dump(mode="json", by_alias=True)
+    handle = subject_store().publish(
+        _BUILT_GEOMETRY,
+        {"spec": spec.model_dump(mode="json"), "geometry": geometry},
+    )
     return {
-        "geometry": built.summary().model_dump(mode="json", by_alias=True),
+        "geometry": geometry,
         "warnings": [],
+        "subject": handle,
     }
+
+
+def _built_geometry(handle: str):
+    """Resolve and regenerate the exact built geometry named by ``handle``."""
+    from .geometry import build_spec
+    from .spec import parse_spec
+
+    try:
+        record = subject_store().resolve(handle, kind=_BUILT_GEOMETRY)
+        spec = parse_spec(record["spec"])
+        expected = GeometrySummary.model_validate(record["geometry"])
+        built = build_spec(spec)
+    except UnknownSubject:
+        raise
+    except (ValueError, TypeError, KeyError) as unreadable:
+        raise UnknownSubject(
+            f"{handle} resolves to a built-geometry record this build cannot read "
+            f"({unreadable}). Call build_part again to publish a current handle"
+        ) from unreadable
+    actual = built.summary()
+    if actual != expected:
+        raise UnknownSubject(
+            f"{handle} resolves to geometry that no longer regenerates to its stored "
+            "summary. Call build_part again before rendering"
+        )
+    return built
+
+
+def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Render a built-geometry subject as a schema-backed MCP image attachment."""
+    from .geometry import GeometryError, GeometryUnavailable, UnsupportedGeometry, render_viewport
+
+    try:
+        built = _built_geometry(arguments["subject"])
+        rendered = render_viewport(
+            built,
+            view=arguments["view"],
+            width_px=arguments.get("width_px", 800),
+        )
+    except UnknownSubject as unknown:
+        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+    except (GeometryUnavailable, UnsupportedGeometry) as failure:
+        raise _Unavailable(str(failure)) from failure
+    except GeometryError as failure:
+        raise _InvalidArguments([str(failure)]) from failure
+    return {"viewport": rendered.document().model_dump(mode="json")}
 
 
 def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -1535,10 +1598,6 @@ def _execute_task(operation: str, arguments: Mapping[str, Any]) -> dict[str, Any
 # the dispatch map, so a tool that stops being served, or starts, cannot leave a stale reason
 # behind — and one that is neither dispatched nor named here fails the build.
 _UNBUILT: dict[str, str] = {
-    "render_viewport": (
-        "rendering an image needs built geometry, and no geometry is generated from a spec "
-        "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
-    ),
     "measure_geometry": (
         "measuring a feature needs built geometry, and no geometry is generated from a spec "
         "today (see https://github.com/clay-good/anvilate/tree/main/openspec/specs/geometry-generation)"
@@ -1558,6 +1617,7 @@ _DISPATCH: dict[str, Any] = {
     "compile_spec": _compile_spec,
     "export_artifact": _export_artifact,
     "read_scorecard": _read_scorecard,
+    "render_viewport": _render_viewport,
     "run_validation": _run_validation,
 }
 

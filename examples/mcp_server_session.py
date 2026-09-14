@@ -3,16 +3,14 @@
 Everything else in this repository imports the library. This one starts the server the way
 a client does — ``python -m anvilate.mcp``, newline-delimited JSON over its stdin and
 stdout — and holds a short session with it: initialize, list the tools, compile a spec,
-build a base plate, run a validation, and try a viewport operation it refuses.
+build a base plate, render it, and run a validation.
 
 The build and refusal are different statements:
 
 1. **``build_part`` synchronously builds the audited ``base_plate`` primitive.** It executes
    no caller code and returns a published geometry summary with volume and semantic faces.
-2. **``render_viewport`` is not dispatched yet, and says what it waits on.** It names what
-   it acts on — every tool does now, by taking a subject handle — so the contract is sound
-   and what is missing is built geometry. "Not implemented" is not an answer a client can
-   act on; the message names the thing.
+2. **``render_viewport`` takes the build handle and returns a deterministic SVG.** The same
+   bytes cross as schema-backed structured data and as an MCP image attachment.
 
 The session also does the thing subjects exist for: ``run_validation`` returns a handle to
 the card it screened, and ``read_scorecard`` reads that card back by handle. No memory
@@ -52,7 +50,7 @@ _STORE_ENV = (
 
 
 def _requests() -> list[dict]:
-    """The session: handshake, catalog, four real calls, and one refusal."""
+    """The first round: handshake, catalog, compile, screen, and build."""
     from anvilate.spec import (
         AcceptanceCriteria,
         DesignSpec,
@@ -104,17 +102,15 @@ def _requests() -> list[dict]:
         call(4, "compile_spec", {"document": {"name": "nameless"}}),
         call(5, "run_validation", {"spec": document}),
         call(6, "build_part", {"spec": build_document}),
-        call(7, "render_viewport", {"subject": "sha256:" + "a" * 64, "view": "iso"}),
     ]
 
 
 def session() -> list[dict]:
     """Run the whole session against a real ``python -m anvilate.mcp`` subprocess.
 
-    Two rounds, because the second one depends on the first: `run_validation` answers with a
-    **subject** — a handle to the card it screened — and `read_scorecard` takes that handle.
-    A client that writes its whole script up front cannot do that, which is the difference
-    between a transcript and a session.
+    Two rounds, because the second depends on the first: validation and build each return a
+    subject handle consumed by a later call. A client that writes its whole script up front
+    cannot do that, which is the difference between a transcript and a session.
     """
     server = subprocess.Popen(  # noqa: S603 - our own module, no shell, fixed argv
         [sys.executable, "-m", "anvilate.mcp"],
@@ -135,18 +131,31 @@ def session() -> list[dict]:
         if "id" in request:  # a notification takes no response line
             responses.append(json.loads(server.stdout.readline()))
 
-    handle = next(r for r in responses if r.get("id") == 5)["result"]["structuredContent"][
+    card_handle = next(r for r in responses if r.get("id") == 5)["result"]["structuredContent"][
         "subject"
     ]
-    send(
+    build_handle = next(r for r in responses if r.get("id") == 6)["result"]["structuredContent"][
+        "subject"
+    ]
+    for request in (
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "render_viewport",
+                "arguments": {"subject": build_handle, "view": "iso", "width_px": 640},
+            },
+        },
         {
             "jsonrpc": "2.0",
             "id": 8,
             "method": "tools/call",
-            "params": {"name": "read_scorecard", "arguments": {"subject": handle}},
-        }
-    )
-    responses.append(json.loads(server.stdout.readline()))
+            "params": {"name": "read_scorecard", "arguments": {"subject": card_handle}},
+        },
+    ):
+        send(request)
+        responses.append(json.loads(server.stdout.readline()))
 
     server.stdin.close()
     server.stdout.close()
@@ -156,7 +165,7 @@ def session() -> list[dict]:
 
 def main() -> None:
     responses = session()
-    print(f"{len(_requests())} messages sent, {len(responses)} responses — the")
+    print(f"{len(_requests()) + 2} messages sent, {len(responses)} responses — the")
     print("notification takes none, which is what a client waiting one-for-one needs.\n")
 
     by_id = {response.get("id"): response for response in responses}
@@ -186,8 +195,11 @@ def main() -> None:
         f"\nbuild_part -> {geometry['pattern']}, {geometry['volumeMm3']:g} mm³, "
         f"faces: {', '.join(geometry['faceTags'])}"
     )
-    error = by_id[7]["error"]
-    print(f"\nviewport refusal -> {error['code']}  {error['message'][:96]}")
+    viewport = by_id[7]["result"]["structuredContent"]["viewport"]
+    print(
+        f"render_viewport -> {viewport['view']} {viewport['width_px']}×{viewport['height_px']} "
+        f"{viewport['mime_type']}, image attachment included"
+    )
 
 
 if __name__ == "__main__":

@@ -62,13 +62,11 @@ agent should have done with the tools and writing it before they could be driven
 been writing it against nothing — the same order
 [the compilation metrics](valid-is-not-correct.md) shipped in.
 
-**It asks for the refusals on purpose.** Three operations are published and not dispatched —
-two wait on built geometry, one on a decision about writing files — and a corpus that skipped
-them would report that a model can drive Anvilate on the strength of the half that answers.
-Reaching an operation is not the same as being answered by it: a run that calls
-`render_viewport`, reads the refusal naming geometry and says so, rather than describing a
-picture it never received, has driven the tool correctly. That is the behaviour this library
-most needs a model to have, and it is only measurable if the corpus asks for it.
+**It asks for the remaining refusal on purpose.** Feature measurement is published and not
+dispatched, so a corpus that skipped it would report that a model can drive Anvilate without
+touching the incomplete edge. The viewport task now checks the positive path: build a base
+plate, carry its subject handle into `render_viewport`, and use the returned image attachment
+rather than describing a picture the model invented.
 
 **What is still missing is the measurement.** Running the funnel needs an agent, and nothing
 here runs a model: this package initiates no sampling and ships none. It scores a transcript,

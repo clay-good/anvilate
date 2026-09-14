@@ -95,7 +95,9 @@ contracts.element_schema_version
 contracts.SCORECARD_SCHEMA_VERSION
 contracts.BUNDLE_SCHEMA_VERSION
 contracts.GEOMETRY_SCHEMA_VERSION
+contracts.VIEWPORT_SCHEMA_VERSION
 contracts.geometry_json_schema
+contracts.viewport_json_schema
 contracts.SPEC_SCHEMA_VERSION
 contracts.schema_artifacts
 contracts.schema_issues
@@ -150,9 +152,12 @@ geometry.BuiltGeometry
 geometry.GeometryError
 geometry.GeometrySummary
 geometry.GeometryUnavailable
+geometry.RenderedViewport
 geometry.UnsupportedGeometry
+geometry.ViewportImage
 geometry.build_base_plate
 geometry.build_spec
+geometry.render_viewport
 geometry.write_step
 ingest.Bound
 ingest.ConfirmationState

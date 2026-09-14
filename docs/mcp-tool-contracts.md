@@ -6,8 +6,8 @@ calls whether an answer can arrive in the reply at all.**
 This page describes the tool *contracts*, which were pinned before the server existed — the
 cheapest moment to change a tool surface is before a client has integrated against it. **The
 server is built now**: `anvilate-mcp` runs it on stdio, answers the three core methods plus
-`tasks/get`, `tasks/update` and `tasks/cancel`, and six of the eight operations are backed.
-The other two are refused by name with what each waits on.
+`tasks/get`, `tasks/update` and `tasks/cancel`, and seven of the eight operations are backed.
+The remaining operation is refused by name with what it waits on.
 
 ```python
 from anvilate.mcp import catalog_issues, tool_catalog, wire_definitions
@@ -24,15 +24,15 @@ is empty. The worked table is
 | --- | --- | --- | --- |
 | `compile_spec` | synchronous | — | `anvilate.spec:parse_spec` |
 | `build_part` | synchronous | — | `anvilate.geometry:build_spec` |
-| `render_viewport` | synchronous | — | not built |
+| `render_viewport` | synchronous | — | `anvilate.geometry:render_viewport` |
 | `measure_geometry` | synchronous | — | not built |
 | `run_validation` | synchronous | — | `anvilate.screening:screen_spec` |
 | `run_fea_validation` | task | — | `anvilate.screening:screen_spec` |
 | `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
 | `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
 
-Six of the eight run today. The other two say so with `None` rather than naming a symbol
-that does not exist, and the six that *are* backed name a dotted path CI resolves against
+Seven of the eight run today. The other one says so with `None` rather than naming a symbol
+that does not exist, and the seven that *are* backed name a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
 Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
 as nothing was wired and went on resolving after it was dispatched to the screen, so each
@@ -45,7 +45,8 @@ A tool that consumes a spec does not describe a spec. It `$ref`s
 `https://anvilate.dev/schemas/design-spec/1.3.0.json`, the artifact
 [published as JSON Schema 2020-12](published-contracts.md); a tool that returns a scorecard
 `$ref`s the scorecard at its version. `build_part` returns the standalone geometry-summary
-contract rather than a bare object. The tool contract an agent reads and the
+contract, and `render_viewport` returns the viewport-image contract rather than bare objects.
+The tool contract an agent reads and the
 structured-output constraint a compiler is decoded under therefore resolve to one document,
 which is the "one schema, two enforcement points" requirement made mechanical.
 
@@ -130,8 +131,9 @@ client that sends the shell's spelling gets `-32602` naming the three valid valu
 
 ## Still open
 
-Preview-image attachments still wait on `render_viewport`; registry publication and the external
-protocol conformance run remain release work. The Tasks extension itself is live and uses
+Feature measurement still waits on `measure_geometry`; registry publication and the external
+protocol conformance run remain release work. Viewport image attachments and the Tasks extension
+are live; tasks use
 durable local records plus fixed subprocess workers, with no server-initiated sampling.
 
 ## Every tool names what it acts on
@@ -165,7 +167,7 @@ instead of needing an edit.
 | `build_part` | `spec` | yes, and dispatched synchronously |
 | `run_validation` | `spec` | yes, and dispatched |
 | `run_fea_validation` | `spec` | yes (task-dispatched) |
-| `render_viewport` | `subject` | yes — waiting on built geometry |
+| `render_viewport` | `subject` | yes, and dispatched for built geometry |
 | `measure_geometry` | `subject` | yes — waiting on built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
 | `export_artifact` | `subject` | yes, and dispatched for the evidence bundle |

@@ -244,12 +244,12 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. Six of the eight
-    operations are backed today; the other two say so with None rather than naming a
+    A dotted path in a table is a comment until something imports it. Seven of the eight
+    operations are backed today; the other one says so with None rather than naming a
     symbol that does not exist.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 6, backed
+    assert len(backed) == 7, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -642,7 +642,7 @@ def test_a_declared_subject_must_be_a_required_input():
 
 
 def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
-    """Two tools are servable and unwired, and that is now the honest state.
+    """One tool is servable and unwired, and that is now the honest state.
 
     Until they carried subjects they were refused for naming nothing to act on, which hid the
     real reason behind a contract problem. With handles the contract is sound and what
@@ -668,7 +668,7 @@ def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
     assert undispatched == set(mcp._UNBUILT), (
         f"undispatched {sorted(undispatched)}; reasons written for {sorted(mcp._UNBUILT)}"
     )
-    assert undispatched == {"render_viewport", "measure_geometry"}
+    assert undispatched == {"measure_geometry"}
 
     for name in sorted(undispatched):
         error = _call(name, _minimum_arguments(name))["error"]
@@ -754,6 +754,36 @@ def test_build_part_returns_a_valid_semantically_tagged_geometry_summary():
     assert geometry["pattern"] == "base_plate/1"
     assert geometry["volumeMm3"] == pytest.approx(1_800_000)
     assert geometry["faceTags"] == ["bottom", "east", "north", "south", "top", "west"]
+    assert result["structuredContent"]["subject"].startswith("sha256:")
+
+
+def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_attachment():
+    import base64
+
+    pytest.importorskip("build123d")
+    built = _call("build_part", {"spec": _base_plate_document()})["result"]
+    handle = built["structuredContent"]["subject"]
+
+    result = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})["result"]
+    viewport = result["structuredContent"]["viewport"]
+    attachment = result["content"][1]
+
+    assert result["isError"] is False
+    assert (viewport["width_px"], viewport["height_px"]) == (640, 480)
+    assert viewport["mime_type"] == attachment["mimeType"] == "image/svg+xml"
+    assert viewport["image"] == attachment["data"]
+    assert base64.b64decode(attachment["data"]).startswith(b'<?xml version="1.0"')
+    assert "image" not in json.loads(result["content"][0]["text"])["viewport"]
+
+
+def test_render_viewport_refuses_a_screening_handle_instead_of_rendering_the_wrong_subject():
+    screening = _call("run_validation", {"spec": _spec_document()})["result"]
+    handle = screening["structuredContent"]["subject"]
+
+    error = _call("render_viewport", {"subject": handle, "view": "iso"})["error"]
+
+    assert error["code"] == -32602
+    assert "screening" in error["message"] and "built-geometry" in error["message"]
 
 
 def test_build_part_refuses_a_spec_without_an_audited_pattern():
@@ -990,9 +1020,10 @@ def test_a_value_outside_its_declared_enum_or_bounds_is_refused():
     shape = _call("render_viewport", {"subject": "the last one", "view": "iso"})["error"]
     assert shape["code"] == -32602 and "must match" in shape["message"]
 
-    # In range, the argument check passes and the honest refusal comes back instead.
+    # In range, argument validation reaches subject resolution.
     valid = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 800})
-    assert valid["error"]["code"] == -32000
+    assert valid["error"]["code"] == -32602
+    assert "subject" in valid["error"]["message"]
 
 
 def test_an_exclusive_bound_is_exclusive():
@@ -1118,6 +1149,7 @@ def _released_registry():
         GEOMETRY_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
+        VIEWPORT_SCHEMA_VERSION,
     )
 
     # The filenames are derived from the version constants rather than typed. They were
@@ -1131,6 +1163,7 @@ def _released_registry():
                 _released(f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"),
                 _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
                 _released(f"geometry-summary-{GEOMETRY_SCHEMA_VERSION}.json"),
+                _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
             )
         ]
     )
@@ -1157,6 +1190,9 @@ def _dispatched_arguments(tool_name: str) -> dict:
         return {"document": document}
     if tool_name == "build_part":
         return {"spec": _base_plate_document()}
+    if tool_name == "render_viewport":
+        built = _call("build_part", {"spec": _base_plate_document()})["result"]
+        return {"subject": built["structuredContent"]["subject"], "view": "iso"}
     if tool_name == "run_validation":
         return {"spec": document}
     handle = _call("run_validation", {"spec": document})["result"]["structuredContent"]["subject"]

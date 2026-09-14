@@ -1,0 +1,55 @@
+{
+  "$id": "https://anvilate.dev/schemas/viewport-image/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate viewport image: one deterministic SVG rendering with its view, pixel dimensions, exact media type, SHA-256 digest, and base64 payload. Generated from anvilate.geometry.ViewportImage.",
+  "properties": {
+    "height_px": {
+      "maximum": 3072,
+      "minimum": 64,
+      "title": "Height Px",
+      "type": "integer"
+    },
+    "image": {
+      "minLength": 1,
+      "title": "Image",
+      "type": "string"
+    },
+    "mime_type": {
+      "const": "image/svg+xml",
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "view": {
+      "enum": [
+        "iso",
+        "front",
+        "top",
+        "right"
+      ],
+      "title": "View",
+      "type": "string"
+    },
+    "width_px": {
+      "maximum": 4096,
+      "minimum": 64,
+      "title": "Width Px",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "view",
+    "width_px",
+    "height_px",
+    "mime_type",
+    "sha256",
+    "image"
+  ],
+  "title": "ViewportImage",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

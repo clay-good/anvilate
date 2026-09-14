@@ -11,15 +11,19 @@ the dependency is required only when a solid is built or written.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Mapping
 from dataclasses import dataclass
+from hashlib import sha256
+from html import escape
+from math import sqrt
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from ._models import FrozenMap, Named, RevalidatedModel
+from ._models import FrozenMap, Named, StatableModel
 from .packs.structural import BasePlate
 from .spec import DesignSpec
 
@@ -29,9 +33,12 @@ __all__ = [
     "GeometryError",
     "GeometrySummary",
     "GeometryUnavailable",
+    "RenderedViewport",
     "UnsupportedGeometry",
+    "ViewportImage",
     "build_base_plate",
     "build_spec",
+    "render_viewport",
     "write_step",
 ]
 
@@ -50,7 +57,7 @@ class UnsupportedGeometry(GeometryError):
     """No audited geometry pattern exists for the requested element type."""
 
 
-class GeometrySummary(RevalidatedModel):
+class GeometrySummary(StatableModel):
     """The serializable identity and kernel checks for one built solid."""
 
     name: Named
@@ -59,11 +66,31 @@ class GeometrySummary(RevalidatedModel):
     volume_mm3: Annotated[float, Field(alias="volumeMm3", gt=0)]
     dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
         alias="dimensionsMm",
-        json_schema_extra={
-            "additionalProperties": {"type": "number", "exclusiveMinimum": 0}
-        },
+        json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
     )
     face_tags: tuple[Named, ...] = Field(alias="faceTags", min_length=1)
+
+
+class ViewportImage(StatableModel):
+    """The portable image document returned beside an MCP image attachment."""
+
+    view: Literal["iso", "front", "top", "right"]
+    width_px: Annotated[int, Field(ge=64, le=4096)]
+    height_px: Annotated[int, Field(ge=64, le=3072)]
+    mime_type: Literal["image/svg+xml"]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    image: Annotated[str, Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def _payload_matches_its_digest(self) -> ViewportImage:
+        try:
+            data = base64.b64decode(self.image, validate=True)
+        except ValueError as failure:
+            raise ValueError("image must be valid base64") from failure
+        actual = sha256(data).hexdigest()
+        if actual != self.sha256:
+            raise ValueError(f"sha256 does not match image bytes: computed {actual}")
+        return self
 
 
 @dataclass(frozen=True)
@@ -100,6 +127,37 @@ class BuiltGeometry:
             volumeMm3=self.volume_mm3,
             dimensionsMm=dict(self.dimensions_mm),
             faceTags=tuple(sorted(self.faces)),
+        )
+
+
+@dataclass(frozen=True)
+class RenderedViewport:
+    """A deterministic SVG rendering and the metadata needed to attach it over MCP."""
+
+    view: Literal["iso", "front", "top", "right"]
+    width_px: int
+    height_px: int
+    data: bytes
+
+    @property
+    def mime_type(self) -> str:
+        """The media type of :attr:`data`."""
+        return "image/svg+xml"
+
+    @property
+    def sha256(self) -> str:
+        """The lowercase SHA-256 digest of the exact SVG bytes."""
+        return sha256(self.data).hexdigest()
+
+    def document(self) -> ViewportImage:
+        """Return the schema-backed, base64-encoded wire document."""
+        return ViewportImage(
+            view=self.view,
+            width_px=self.width_px,
+            height_px=self.height_px,
+            mime_type=self.mime_type,
+            sha256=self.sha256,
+            image=base64.b64encode(self.data).decode("ascii"),
         )
 
 
@@ -191,6 +249,97 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
     except ValueError as failure:
         raise GeometryError(f"invalid base_plate element_params: {failure}") from failure
     return build_base_plate(plate)
+
+
+def render_viewport(
+    built: BuiltGeometry,
+    *,
+    view: Literal["iso", "front", "top", "right"] = "iso",
+    width_px: int = 800,
+) -> RenderedViewport:
+    """Render a deterministic vector viewport of one valid solid.
+
+    The projection uses only the built solid's bounding vertices. That is exact for the
+    current rectangular base-plate pattern and deliberately refuses to masquerade as a
+    general hidden-line renderer for patterns that have not shipped.
+    """
+    if built.pattern != BASE_PLATE_PATTERN:
+        raise UnsupportedGeometry(f"viewport rendering has no projector for {built.pattern!r}")
+    if not 64 <= width_px <= 4096:
+        raise GeometryError(f"viewport width_px must be from 64 through 4096; got {width_px}")
+    if view not in {"iso", "front", "top", "right"}:
+        raise GeometryError(f"unknown viewport {view!r}; choose iso, front, top, or right")
+    height_px = max(64, round(width_px * 0.75))
+    bounds = built.shape.bounding_box()
+    x0, y0, z0 = bounds.min.X, bounds.min.Y, bounds.min.Z
+    x1, y1, z1 = bounds.max.X, bounds.max.Y, bounds.max.Z
+    vertices = (
+        (x0, y0, z0),
+        (x1, y0, z0),
+        (x1, y1, z0),
+        (x0, y1, z0),
+        (x0, y0, z1),
+        (x1, y0, z1),
+        (x1, y1, z1),
+        (x0, y1, z1),
+    )
+    root2 = sqrt(2)
+    projectors = {
+        "top": lambda x, y, z: (x, y, z),
+        "front": lambda x, y, z: (x, z, -y),
+        "right": lambda x, y, z: (y, z, x),
+        "iso": lambda x, y, z: ((x + y) / root2, z + (y - x) / root2, x - y + z),
+    }
+    projected = tuple(projectors[view](*vertex) for vertex in vertices)
+    low_x = min(point[0] for point in projected)
+    high_x = max(point[0] for point in projected)
+    low_y = min(point[1] for point in projected)
+    high_y = max(point[1] for point in projected)
+    margin = width_px * 0.08
+    span_x = max(high_x - low_x, 1e-9)
+    span_y = max(high_y - low_y, 1e-9)
+    scale = min((width_px - 2 * margin) / span_x, (height_px - 2 * margin) / span_y)
+    offset_x = (width_px - span_x * scale) / 2
+    offset_y = (height_px - span_y * scale) / 2
+
+    def screen(point: tuple[float, float, float]) -> tuple[float, float]:
+        return (
+            offset_x + (point[0] - low_x) * scale,
+            height_px - offset_y - (point[1] - low_y) * scale,
+        )
+
+    faces = (
+        ("bottom", (0, 1, 2, 3), "#cbd5e1"),
+        ("south", (0, 1, 5, 4), "#bfdbfe"),
+        ("east", (1, 2, 6, 5), "#93c5fd"),
+        ("north", (2, 3, 7, 6), "#dbeafe"),
+        ("west", (3, 0, 4, 7), "#e2e8f0"),
+        ("top", (4, 5, 6, 7), "#eff6ff"),
+    )
+    ordered = sorted(
+        faces,
+        key=lambda face: sum(projected[index][2] for index in face[1]) / len(face[1]),
+    )
+    polygons = []
+    for tag, indices, fill in ordered:
+        points = " ".join(
+            f"{screen(projected[index])[0]:.3f},{screen(projected[index])[1]:.3f}"
+            for index in indices
+        )
+        polygons.append(
+            f'<polygon data-face="{escape(tag)}" points="{points}" fill="{fill}" '
+            'stroke="#0f172a" stroke-width="1.5" stroke-linejoin="round"/>'
+        )
+    svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_px}" height="{height_px}" '
+        f'viewBox="0 0 {width_px} {height_px}" role="img" '
+        f'aria-label="{escape(built.name)} {view} viewport">\n'
+        f'<rect width="{width_px}" height="{height_px}" fill="#ffffff"/>\n'
+        + "\n".join(polygons)
+        + "\n</svg>\n"
+    ).encode("utf-8")
+    return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
 
 
 def write_step(built: BuiltGeometry, path: Path) -> Path:

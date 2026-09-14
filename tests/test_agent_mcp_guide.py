@@ -131,10 +131,10 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "read_scorecard",
         # The two fields a document uses to say what kind of element it is. Spec-IR field
         # names rather than tool names, like `anvilate_spec` above.
-            "element_type",
-            "element_params",
-            "base_plate",
-            "min_safety_factor",
+        "element_type",
+        "element_params",
+        "base_plate",
+        "min_safety_factor",
     }
     # The artifact formats `export_artifact` publishes, read off the schema rather than
     # listed: `evidence_bundle` is snake_case in backticks and is not a tool, and a fourth
@@ -183,10 +183,20 @@ def test_the_contracts_page_backing_table_is_the_catalogs_own():
         assert claimed == expected, f"{name}: page says {claimed}, catalog says {expected}"
 
     backed = sum(1 for tool in catalog.values() if tool.backing)
-    words = {2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+    words = {
+        1: "One",
+        2: "Two",
+        3: "Three",
+        4: "Four",
+        5: "Five",
+        6: "Six",
+        7: "Seven",
+        8: "Eight",
+    }
     unbacked = len(catalog) - backed
     assert f"{words[backed]} of the eight run today" in text, backed
-    assert f"other {words[unbacked].lower()} say so with `None`" in text, unbacked
+    verb = "says" if unbacked == 1 else "say"
+    assert f"other {words[unbacked].lower()} {verb} so with `None`" in text, unbacked
 
 
 def test_the_contracts_page_subject_table_marks_the_dispatched_tools():

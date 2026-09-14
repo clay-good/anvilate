@@ -7693,10 +7693,9 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     responses = namespace["session"]()
     by_id = {r.get("id"): r for r in responses}
 
-    # Eight messages in, seven responses from that batch — the notification takes none —
-    # and then an eighth response, sent only after validation answered: `read_scorecard`
-    # takes the handle `run_validation` returned, which makes this a session, not a transcript.
-    assert len(namespace["_requests"]()) == 8
+    # Seven messages in, six responses from that batch — the notification takes none —
+    # and then two dependent calls use the handles returned by validation and build.
+    assert len(namespace["_requests"]()) == 7
     assert len(responses) == 8
     assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
     assert len(by_id[2]["result"]["tools"]) == 8
@@ -7713,10 +7712,18 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert [entry["status"] for entry in card["entries"]] == ["not_evaluated", "pass"]
     assert "declares no structural element type" in card["entries"][0]["detail"]
 
-    # The geometry build is real; the viewport still names the missing operation.
-    geometry = by_id[6]["result"]["structuredContent"]["geometry"]
+    # The geometry build is real, and its handle produces an SVG image attachment.
+    built = by_id[6]["result"]["structuredContent"]
+    geometry = built["geometry"]
     assert geometry["pattern"] == "base_plate/1" and geometry["valid"] is True
-    assert "needs built geometry" in by_id[7]["error"]["message"]
+    viewport_result = by_id[7]["result"]
+    viewport = viewport_result["structuredContent"]["viewport"]
+    assert (viewport["width_px"], viewport["height_px"]) == (640, 480)
+    assert viewport_result["content"][1] == {
+        "type": "image",
+        "data": viewport["image"],
+        "mimeType": "image/svg+xml",
+    }
 
     # And the round trip subjects exist for: the card came back with a handle, and reading
     # that handle returns the same card, with no memory in the server between the two calls.

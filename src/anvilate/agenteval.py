@@ -435,14 +435,11 @@ def task_set_issues(tasks: Sequence[AgentTask]) -> list[str]:
 # the skill loaded. The scoring half of that is this module; the server half exists; this is
 # the third piece, and it is the one that says what "driving Anvilate" means.
 #
-# **The tasks are written against the surface as it is, refusals included.** Three operations
-# are published and not dispatched — two wait on built geometry, one on a decision about
-# writing files — and a task set that avoided them would report a model can drive Anvilate on
-# the strength of a surface it never touched, which is the thing `task_set_issues` refuses.
-# Reaching an operation is not the same as being answered by it: a run that calls
-# `render_viewport`, receives the refusal naming geometry, and reports that rather than
-# inventing a picture has driven the tool correctly. That is the behaviour this library most
-# needs a model to have, and it is only measurable if the corpus asks for it.
+# **The tasks are written against the surface as it is, refusals included.** One operation is
+# published and not dispatched: feature measurement still waits on built geometry. A task set
+# that avoided it would report a model can drive Anvilate on the strength of a surface it never
+# touched, which is the thing `task_set_issues` refuses. The render task now tests the positive
+# build-handle-to-image path instead of grading an obsolete refusal.
 #
 # What is still missing after this is the measurement, and it is missing for a reason no code
 # here can fix: running the funnel needs an agent, and this package initiates no sampling and
@@ -504,14 +501,13 @@ _TASK_SET: tuple[AgentTask, ...] = (
         ),
     ),
     AgentTask(
-        task_id="report-an-unbuilt-operation",
-        prompt="Show me a rendered view of the part you just screened.",
+        task_id="render-built-geometry",
+        prompt="Build the base plate and show me its isometric rendered view.",
         prelude=("compile_spec",),
-        required_tools=("run_validation", "render_viewport"),
+        required_tools=("build_part", "render_viewport"),
         notes=(
-            "The tool is published, takes a subject, and is refused with what it waits on. A "
-            "correct run reaches it, reads the refusal and says geometry is not generated — "
-            "rather than describing a picture it never received."
+            "The renderer takes the built-geometry subject, not the compiled-spec or screening "
+            "handle. A correct run reports the returned attachment rather than inventing a view."
         ),
     ),
     AgentTask(
@@ -523,9 +519,9 @@ _TASK_SET: tuple[AgentTask, ...] = (
         prelude=("compile_spec",),
         required_tools=("build_part", "measure_geometry"),
         notes=(
-            "Both are refused today — one task-dispatched, one waiting on geometry — and the "
-            "distinction is the point: a run must not answer a question about built geometry "
-            "out of the spec that asked for it."
+            "The build succeeds and measurement is refused while that operation remains unbuilt. "
+            "A run must not answer a question about built geometry out of the spec that asked "
+            "for it."
         ),
     ),
     AgentTask(
