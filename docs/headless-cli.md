@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested fit check passed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested clearance check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -605,7 +605,9 @@ anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
 anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
-  --name seal_gap --confirmed-by "R. Engineer" --format json
+  --name seal_gap --confirmed-by "R. Engineer" \
+  --min-gap "0.5 mm" --max-gap "1.5 mm" \
+  --requirement "Drawing A-101, note 7" --format json
 anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
   --name bearing_journal --confirmed-by "R. Engineer" \
   --fit H7/g6 --basic-size "10 mm" --format json
@@ -658,6 +660,10 @@ clearance verdict.
 `--accept-gap` requires one exact gap ID, `--name`, and `--confirmed-by`. It emits a separate
 `accepted_gap` artifact retaining the source digest, endpoints, separation, overlap, and
 direction. It does not create an `InterfaceContract` or an allowable-clearance verdict.
+When `--min-gap`, `--max-gap`, and `--requirement` are all supplied, the JSON also carries a
+`gap_check` with normalized millimeter limits, margins to both bounds, pass/fail, and the
+source clause. Limits are never inferred, partial or uncited bands are refused, and a valid
+out-of-band result exits 1.
 
 A cylindrical mating candidate similarly identifies both solids and both cylindrical
 surfaces, but does not choose an ISO 286 fit or declare clearance/interference acceptable.

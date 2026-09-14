@@ -39,6 +39,7 @@ from .geometry import (
     CylindricalMateFitCheck,
     GeometryMeasurement,
     GeometrySummary,
+    PlanarGapClearanceCheck,
     StepInterfaceCandidates,
     ViewportImage,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "CONFIRMED_CONTACT_SCHEMA_VERSION",
     "CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION",
     "CONFIRMED_PLANAR_GAP_SCHEMA_VERSION",
+    "PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION",
     "CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
@@ -70,6 +72,7 @@ __all__ = [
     "confirmed_contact_json_schema",
     "confirmed_cylindrical_mate_json_schema",
     "confirmed_planar_gap_json_schema",
+    "planar_gap_clearance_check_json_schema",
     "cylindrical_mate_fit_check_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
@@ -126,6 +129,9 @@ CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION = "1.0.0"
 
 # One measured planar gap accepted by a named person without an allowable clearance.
 CONFIRMED_PLANAR_GAP_SCHEMA_VERSION = "1.0.0"
+
+# One confirmed planar gap checked against a caller-supplied cited band.
+PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION = "1.0.0"
 
 # One confirmed cylindrical mate checked against an explicit ISO 286 fit.
 CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.0.0"
@@ -275,6 +281,21 @@ def confirmed_planar_gap_json_schema() -> dict[str, Any]:
             "source digest, solid/face endpoints, separation, overlap, direction, semantic "
             "name, and named confirmer without an allowable-clearance verdict. Generated "
             "from anvilate.geometry.ConfirmedPlanarGap."
+        ),
+    )
+
+
+def planar_gap_clearance_check_json_schema() -> dict[str, Any]:
+    """One confirmed planar gap checked against a cited clearance band."""
+    return _artifact(
+        PlanarGapClearanceCheck,
+        name="planar-gap-clearance-check",
+        version=PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION,
+        description=(
+            "Anvilate planar gap clearance check: one confirmed gap checked against "
+            "caller-supplied minimum and maximum separations, with margins, pass/fail "
+            "status, and the requirement citation. Generated from "
+            "anvilate.geometry.PlanarGapClearanceCheck."
         ),
     )
 
@@ -461,6 +482,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "confirmed-planar-contact.schema.json": confirmed_contact_json_schema(),
         "confirmed-cylindrical-mate.schema.json": confirmed_cylindrical_mate_json_schema(),
         "confirmed-planar-gap.schema.json": confirmed_planar_gap_json_schema(),
+        "planar-gap-clearance-check.schema.json": planar_gap_clearance_check_json_schema(),
         "cylindrical-mate-fit-check.schema.json": cylindrical_mate_fit_check_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),

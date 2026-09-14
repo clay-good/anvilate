@@ -21,16 +21,17 @@ from .geometry import (
     ConfirmedPlanarGap,
     ConfirmedStepInterface,
     CylindricalMateFitCheck,
+    PlanarGapClearanceCheck,
     StepInterfaceCandidates,
 )
 from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.23.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.24.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.23.0.json"]
-SchemaVersion = Literal["1.23.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.24.0.json"]
+SchemaVersion = Literal["1.24.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -276,6 +277,7 @@ class InterfacesOutput(_WireModel):
     accepted_mate: ConfirmedCylindricalMate | None = None
     accepted_gap: ConfirmedPlanarGap | None = None
     fit_check: CylindricalMateFitCheck | None = None
+    gap_check: PlanarGapClearanceCheck | None = None
 
 
 CliOutput = (

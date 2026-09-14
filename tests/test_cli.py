@@ -1900,6 +1900,12 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
         "seal_gap",
         "--confirmed-by",
         "R. Engineer",
+        "--min-gap",
+        "0.5 mm",
+        "--max-gap",
+        "1.5 mm",
+        "--requirement",
+        "Drawing A-101, note 7",
         "--format",
         "json",
     )
@@ -1912,6 +1918,18 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     assert accepted["separation_mm"] == pytest.approx(1)
     assert accepted["direction"] == gap["direction"]
     assert accepted["confirmed_by"] == "R. Engineer"
+    gap_check = accepted_payload["gap_check"]
+    assert gap_check["status"] == "pass"
+    assert gap_check["minimum_gap_mm"] == pytest.approx(0.5)
+    assert gap_check["maximum_gap_mm"] == pytest.approx(1.5)
+    assert gap_check["margin_above_minimum_mm"] == pytest.approx(0.5)
+    assert gap_check["margin_below_maximum_mm"] == pytest.approx(0.5)
+    assert gap_check["reference"] == "Drawing A-101, note 7"
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    assert not list(jsonschema.Draft202012Validator(schema).iter_errors(accepted_payload))
 
     code, accepted_text, err = _run(
         "interfaces",
@@ -1922,9 +1940,56 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
         "seal_gap",
         "--confirmed-by",
         "R. Engineer",
+        "--min-gap",
+        "0.5 mm",
+        "--max-gap",
+        "1.5 mm",
+        "--requirement",
+        "Drawing A-101, note 7",
     )
     assert code == EXIT_OK and err == ""
     assert f"accepted planar gap: seal_gap ({gap['id']})" in accepted_text
+    assert "gap requirement: PASS  measured 1 mm  allowed 0.5–1.5 mm" in accepted_text
+
+    code, failed_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-gap",
+        gap["id"],
+        "--name",
+        "seal_gap",
+        "--confirmed-by",
+        "R. Engineer",
+        "--min-gap",
+        "0.25 mm",
+        "--max-gap",
+        "0.75 mm",
+        "--requirement",
+        "Drawing A-101, note 7",
+        "--format",
+        "json",
+    )
+    assert code == EXIT_FAILED and err == ""
+    assert json.loads(failed_raw)["gap_check"]["status"] == "fail"
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-gap",
+        gap["id"],
+        "--name",
+        "seal_gap",
+        "--confirmed-by",
+        "R. Engineer",
+        "--min-gap",
+        "2 mm",
+        "--max-gap",
+        "1 mm",
+        "--requirement",
+        "Drawing A-101, note 7",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "minimum gap must not exceed maximum gap" in err
 
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
@@ -2043,6 +2108,19 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
     )
     assert code == EXIT_BAD_REQUEST and out == ""
     assert "accepting a planar gap requires" in err and "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
+        "--min-gap",
+        "0.5 mm",
+        "--max-gap",
+        "1.5 mm",
+        "--requirement",
+        "Drawing A-101, note 7",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "gap limits and --requirement require --accept-gap" in err
 
     code, out, err = _run(
         "interfaces",

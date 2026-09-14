@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "ConfirmedPlanarGap": {
+      "description": "One planar gap candidate accepted by a named person.",
+      "properties": {
+        "confirmed_by": {
+          "title": "Confirmed By",
+          "type": "string"
+        },
+        "direction": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Direction",
+          "type": "array"
+        },
+        "first_face_candidate_id": {
+          "title": "First Face Candidate Id",
+          "type": "string"
+        },
+        "first_solid_id": {
+          "title": "First Solid Id",
+          "type": "string"
+        },
+        "gap_candidate_id": {
+          "title": "Gap Candidate Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "overlap_area_mm2": {
+          "exclusiveMinimum": 0,
+          "title": "Overlap Area Mm2",
+          "type": "number"
+        },
+        "second_face_candidate_id": {
+          "title": "Second Face Candidate Id",
+          "type": "string"
+        },
+        "second_solid_id": {
+          "title": "Second Solid Id",
+          "type": "string"
+        },
+        "separation_mm": {
+          "exclusiveMinimum": 0,
+          "title": "Separation Mm",
+          "type": "number"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_name",
+        "source_sha256",
+        "gap_candidate_id",
+        "name",
+        "first_solid_id",
+        "first_face_candidate_id",
+        "second_solid_id",
+        "second_face_candidate_id",
+        "separation_mm",
+        "overlap_area_mm2",
+        "direction",
+        "confirmed_by"
+      ],
+      "title": "ConfirmedPlanarGap",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/planar-gap-clearance-check/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Anvilate planar gap clearance check: one confirmed gap checked against caller-supplied minimum and maximum separations, with margins, pass/fail status, and the requirement citation. Generated from anvilate.geometry.PlanarGapClearanceCheck.",
+  "properties": {
+    "confirmed_gap": {
+      "$ref": "#/$defs/ConfirmedPlanarGap"
+    },
+    "margin_above_minimum_mm": {
+      "title": "Margin Above Minimum Mm",
+      "type": "number"
+    },
+    "margin_below_maximum_mm": {
+      "title": "Margin Below Maximum Mm",
+      "type": "number"
+    },
+    "maximum_gap_mm": {
+      "minimum": 0,
+      "title": "Maximum Gap Mm",
+      "type": "number"
+    },
+    "minimum_gap_mm": {
+      "minimum": 0,
+      "title": "Minimum Gap Mm",
+      "type": "number"
+    },
+    "reference": {
+      "title": "Reference",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "confirmed_gap",
+    "minimum_gap_mm",
+    "maximum_gap_mm",
+    "margin_above_minimum_mm",
+    "margin_below_maximum_mm",
+    "status",
+    "reference"
+  ],
+  "title": "PlanarGapClearanceCheck",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

@@ -48,6 +48,7 @@ __all__ = [
     "ConfirmedPlanarContact",
     "ConfirmedCylindricalMate",
     "ConfirmedPlanarGap",
+    "PlanarGapClearanceCheck",
     "CylindricalMateFitCheck",
     "FitFeatureCheck",
     "CircularFeatureCandidate",
@@ -70,6 +71,7 @@ __all__ = [
     "confirm_planar_contact",
     "confirm_cylindrical_mate",
     "confirm_planar_gap",
+    "check_planar_gap_clearance",
     "check_cylindrical_mate_fit",
     "detect_step_interfaces",
     "measure_geometry",
@@ -431,6 +433,34 @@ class ConfirmedPlanarGap(StatableModel):
         direction_length = sqrt(sum(component**2 for component in self.direction))
         if abs(direction_length - 1) > 1e-9:
             raise ValueError("confirmed planar gap direction must be a unit vector")
+        return self
+
+
+class PlanarGapClearanceCheck(StatableModel):
+    """A confirmed planar gap checked against one cited clearance band."""
+
+    confirmed_gap: ConfirmedPlanarGap
+    minimum_gap_mm: Annotated[FiniteFloat, Field(ge=0)]
+    maximum_gap_mm: Annotated[FiniteFloat, Field(ge=0)]
+    margin_above_minimum_mm: FiniteFloat
+    margin_below_maximum_mm: FiniteFloat
+    status: Literal["pass", "fail"]
+    reference: Provenance
+
+    @model_validator(mode="after")
+    def _matches_its_band(self) -> PlanarGapClearanceCheck:
+        if self.minimum_gap_mm > self.maximum_gap_mm:
+            raise ValueError("minimum gap must not exceed maximum gap")
+        separation = self.confirmed_gap.separation_mm
+        expected_lower = separation - self.minimum_gap_mm
+        expected_upper = self.maximum_gap_mm - separation
+        if abs(self.margin_above_minimum_mm - expected_lower) > 1e-9:
+            raise ValueError("minimum-gap margin must match the measured separation")
+        if abs(self.margin_below_maximum_mm - expected_upper) > 1e-9:
+            raise ValueError("maximum-gap margin must match the measured separation")
+        expected_status = "pass" if expected_lower >= 0 and expected_upper >= 0 else "fail"
+        if self.status != expected_status:
+            raise ValueError("gap-check status must match the measured separation and band")
         return self
 
 
@@ -1260,6 +1290,36 @@ def confirm_planar_gap(
         overlap_area_mm2=gap.overlap_area_mm2,
         direction=gap.direction,
         confirmed_by=confirmer,
+    )
+
+
+def check_planar_gap_clearance(
+    confirmed: ConfirmedPlanarGap,
+    *,
+    minimum_gap: Quantity,
+    maximum_gap: Quantity,
+    reference: str,
+) -> PlanarGapClearanceCheck:
+    """Check a confirmed gap against caller-supplied, cited clearance limits."""
+    for label, bound in (("minimum gap", minimum_gap), ("maximum gap", maximum_gap)):
+        if not bound.has_dimension("[length]"):
+            raise GeometryError(f"{label} must be a length; got {bound.dimensionality} ({bound})")
+    minimum_mm = minimum_gap.to("mm").magnitude
+    maximum_mm = maximum_gap.to("mm").magnitude
+    if minimum_mm < 0 or maximum_mm < 0:
+        raise GeometryError("planar gap limits must not be negative")
+    if minimum_mm > maximum_mm:
+        raise GeometryError("minimum gap must not exceed maximum gap")
+    lower_margin = round(confirmed.separation_mm - minimum_mm, 9)
+    upper_margin = round(maximum_mm - confirmed.separation_mm, 9)
+    return PlanarGapClearanceCheck(
+        confirmed_gap=confirmed,
+        minimum_gap_mm=round(minimum_mm, 9),
+        maximum_gap_mm=round(maximum_mm, 9),
+        margin_above_minimum_mm=lower_margin,
+        margin_below_maximum_mm=upper_margin,
+        status="pass" if lower_margin >= 0 and upper_margin >= 0 else "fail",
+        reference=reference,
     )
 
 

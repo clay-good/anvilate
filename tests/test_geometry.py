@@ -26,6 +26,7 @@ from anvilate.geometry import (  # noqa: E402
     build_spec,
     build_transmission_shaft,
     check_cylindrical_mate_fit,
+    check_planar_gap_clearance,
     confirm_cylindrical_mate,
     confirm_planar_contact,
     confirm_planar_gap,
@@ -855,6 +856,43 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
     assert accepted_gap.separation_mm == pytest.approx(1)
     assert accepted_gap.direction == gap.direction
     assert accepted_gap.confirmed_by == "R. Engineer"
+
+    passing_gap_check = check_planar_gap_clearance(
+        accepted_gap,
+        minimum_gap=Quantity.parse("500 um"),
+        maximum_gap=Quantity.parse("0.06 in"),
+        reference="Drawing A-101, note 7",
+    )
+    assert passing_gap_check.status == "pass"
+    assert passing_gap_check.minimum_gap_mm == pytest.approx(0.5)
+    assert passing_gap_check.maximum_gap_mm == pytest.approx(1.524)
+    assert passing_gap_check.margin_above_minimum_mm == pytest.approx(0.5)
+    assert passing_gap_check.margin_below_maximum_mm == pytest.approx(0.524)
+    assert passing_gap_check.reference == "Drawing A-101, note 7"
+
+    failing_gap_check = check_planar_gap_clearance(
+        accepted_gap,
+        minimum_gap=Quantity.parse("0.25 mm"),
+        maximum_gap=Quantity.parse("0.75 mm"),
+        reference="Drawing A-101, note 7",
+    )
+    assert failing_gap_check.status == "fail"
+    assert failing_gap_check.margin_below_maximum_mm == pytest.approx(-0.25)
+
+    with pytest.raises(GeometryError, match="minimum gap must not exceed maximum gap"):
+        check_planar_gap_clearance(
+            accepted_gap,
+            minimum_gap=Quantity.parse("2 mm"),
+            maximum_gap=Quantity.parse("1 mm"),
+            reference="Drawing A-101, note 7",
+        )
+    with pytest.raises(GeometryError, match="must be a length"):
+        check_planar_gap_clearance(
+            accepted_gap,
+            minimum_gap=Quantity.parse("1 kg"),
+            maximum_gap=Quantity.parse("2 mm"),
+            reference="Drawing A-101, note 7",
+        )
 
     with pytest.raises(GeometryError, match="available: planar-gap-"):
         confirm_planar_gap(

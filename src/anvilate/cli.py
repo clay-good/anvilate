@@ -279,6 +279,20 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="QUANTITY",
         help="basic size with unit for --fit, for example '10 mm'",
     )
+    interfaces.add_argument(
+        "--min-gap",
+        metavar="QUANTITY",
+        help="minimum allowed gap with unit for --accept-gap",
+    )
+    interfaces.add_argument(
+        "--max-gap",
+        metavar="QUANTITY",
+        help="maximum allowed gap with unit for --accept-gap",
+    )
+    interfaces.add_argument(
+        "--requirement",
+        help="source clause for the caller-supplied gap limits",
+    )
     interfaces.add_argument("--name", help="semantic name for the accepted artifact")
     interfaces.add_argument(
         "--mating-plane", help="semantic mating-face tag to publish in the accepted contract"
@@ -1015,6 +1029,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         GeometryError,
         GeometryUnavailable,
         check_cylindrical_mate_fit,
+        check_planar_gap_clearance,
         confirm_cylindrical_mate,
         confirm_planar_contact,
         confirm_planar_gap,
@@ -1128,6 +1143,31 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 file=err,
             )
             return EXIT_BAD_REQUEST
+    gap_check_acceptance = {
+        "--min-gap": args.min_gap,
+        "--max-gap": args.max_gap,
+        "--requirement": args.requirement,
+    }
+    gap_check_supplied = {
+        option for option, value in gap_check_acceptance.items() if value is not None
+    }
+    if gap_check_supplied:
+        if args.accept_gap is None:
+            print(
+                "anvilate interfaces: gap limits and --requirement require --accept-gap",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+        if len(gap_check_supplied) != len(gap_check_acceptance):
+            missing = ", ".join(
+                option for option in gap_check_acceptance if option not in gap_check_supplied
+            )
+            print(
+                "anvilate interfaces: a gap check requires --min-gap, --max-gap, and "
+                f"--requirement; missing {missing}",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
 
     try:
         detected = detect_step_interfaces(args.step)
@@ -1172,6 +1212,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         accepted_mate = None
         accepted_gap = None
         fit_check = None
+        gap_check = None
         if args.accept is not None:
             accepted = confirm_step_interface(
                 detected,
@@ -1212,13 +1253,26 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 name=args.name,
                 confirmed_by=args.confirmed_by,
             )
+            if args.min_gap is not None:
+                try:
+                    gap_check = check_planar_gap_clearance(
+                        accepted_gap,
+                        minimum_gap=Quantity.parse(args.min_gap),
+                        maximum_gap=Quantity.parse(args.max_gap),
+                        reference=args.requirement,
+                    )
+                except ValueError as failure:
+                    raise GeometryError(str(failure)) from failure
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
     except GeometryError as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_BAD_REQUEST
-    result_code = EXIT_OK if fit_check is None or fit_check.status == "pass" else EXIT_FAILED
+    checks_passed = (fit_check is None or fit_check.status == "pass") and (
+        gap_check is None or gap_check.status == "pass"
+    )
+    result_code = EXIT_OK if checks_passed else EXIT_FAILED
     if args.format == "json":
         document = {
             "path": str(args.step),
@@ -1234,6 +1288,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["accepted_gap"] = accepted_gap.model_dump(mode="json")
         if fit_check is not None:
             document["fit_check"] = fit_check.model_dump(mode="json")
+        if gap_check is not None:
+            document["gap_check"] = gap_check.model_dump(mode="json")
         payload = machine_document("interfaces", document)
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
         return result_code
@@ -1333,6 +1389,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             f"  ISO 286 {fit_check.fit_designation}: {fit_check.status.upper()}  "
             f"hole {'PASS' if fit_check.hole.within_zone else 'FAIL'}  "
             f"shaft {'PASS' if fit_check.shaft.within_zone else 'FAIL'}",
+            file=out,
+        )
+    if gap_check is not None:
+        print(
+            f"  gap requirement: {gap_check.status.upper()}  measured "
+            f"{gap_check.confirmed_gap.separation_mm:g} mm  allowed "
+            f"{gap_check.minimum_gap_mm:g}–{gap_check.maximum_gap_mm:g} mm",
             file=out,
         )
     return result_code
