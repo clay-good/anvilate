@@ -55,6 +55,8 @@ volume names the offending solid pair, measured volume, centroid, and bounds and
 exact face contact is not interference. This result is available through the local CLI only.
 The local CLI rolls that check together with any requested ISO-fit and cited gap-band checks
 into a top-level `assembly_scorecard`; its status and governing entry drive the exit code.
+A passing confirmed ISO interference fit may account for the exact annular common volume of
+its measured engagement. Any volume beyond that geometry remains a collision failure.
 Coaxial bore/shaft surfaces on different solids are reported separately with signed
 diametral clearance and axial engagement. The result is measured geometry, not a fit verdict.
 `--accept-contact` requires an exact contact ID, semantic name, and named confirmer and emits

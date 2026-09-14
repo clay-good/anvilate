@@ -1315,8 +1315,15 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
 
     print(f"{args.step}: {len(detected.planar_faces)} planar interface candidates", file=out)
     if detected.interference_scorecard is not None:
+        interference_result = detected.interference_scorecard.status.value.upper()
+        if (
+            detected.interference_scorecard.status is CheckStatus.FAIL
+            and assembly_scorecard is not None
+            and assembly_scorecard.passed
+        ):
+            interference_result = "PASS after declared fit allowance"
         print(
-            f"  assembly interference: {detected.interference_scorecard.status.value.upper()}",
+            f"  assembly interference: {interference_result}",
             file=out,
         )
     if assembly_scorecard is not None:

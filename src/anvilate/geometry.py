@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from html import escape
 from itertools import combinations
-from math import isfinite, sqrt
+from math import isfinite, pi, sqrt
 from pathlib import Path
 from threading import Lock
 from types import MappingProxyType
@@ -1491,11 +1491,62 @@ def _assembly_interface_scorecard(
     gap_check: PlanarGapClearanceCheck | None = None,
 ) -> Scorecard:
     """Roll assembly interference and requested interface checks into one verdict."""
-    entries = list(
-        ()
-        if candidates.interference_scorecard is None
-        else candidates.interference_scorecard.entries
-    )
+    replacements: dict[str, ScorecardEntry] = {}
+    if (
+        fit_check is not None
+        and fit_check.status == "pass"
+        and fit_check.fit_kind == "interference"
+        and fit_check.measured_clearance_within_design_range
+        and fit_check.confirmed_mate.diametral_clearance_mm < 0
+    ):
+        mate = fit_check.confirmed_mate
+        pair = {mate.bore_solid_id, mate.shaft_solid_id}
+        matching = [
+            candidate
+            for candidate in candidates.solid_interferences
+            if {candidate.first_solid_id, candidate.second_solid_id} == pair
+        ]
+        expected_overlap = (
+            pi
+            / 4
+            * (mate.shaft_diameter_mm**2 - mate.bore_diameter_mm**2)
+            * mate.axial_engagement_mm
+        )
+        if len(matching) == 1 and matching[0].overlap_volume_mm3 <= expected_overlap + max(
+            1e-6, expected_overlap * 1e-6
+        ):
+            interference = matching[0]
+            original_name = (
+                f"solid interference {interference.first_solid_id}/{interference.second_solid_id}"
+            )
+            replacements[original_name] = ScorecardEntry(
+                name=f"declared cylindrical interference {mate.name}",
+                status=CheckStatus.PASS,
+                detail=(
+                    f"common volume {interference.overlap_volume_mm3:g} mm³ is fully explained "
+                    f"by {expected_overlap:g} mm³ of measured {fit_check.fit_designation} "
+                    "cylindrical engagement"
+                ),
+                reference=(
+                    "assembly-robotics: Assembly-level validation; ISO 286-1:2010, "
+                    "standard tolerance grades and fundamental deviations"
+                ),
+                underived=Underived(
+                    kind=DerivationAbsence.NUMERIC_RESULT,
+                    reason=(
+                        "the verdict compares exact common volume with the annular volume "
+                        "of the confirmed cylindrical engagement"
+                    ),
+                ),
+            )
+    entries = [
+        replacements.get(entry.name, entry)
+        for entry in (
+            ()
+            if candidates.interference_scorecard is None
+            else candidates.interference_scorecard.entries
+        )
+    ]
     if fit_check is not None:
         for label, feature in (("hole", fit_check.hole), ("shaft", fit_check.shaft)):
             entries.append(

@@ -141,7 +141,9 @@ def _write_four_hole_assembly_step(path: Path, *, touching: bool = False) -> Pat
     return path
 
 
-def _write_cylindrical_mate_step(path: Path, *, shaft_radius: float = 4.9) -> Path:
+def _write_cylindrical_mate_step(
+    path: Path, *, shaft_radius: float = 4.9, extra_collision: bool = False
+) -> Path:
     from build123d import Align, Box, Compound, Cylinder, Location, export_step
 
     plate = Box(100, 80, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -149,6 +151,10 @@ def _write_cylindrical_mate_step(path: Path, *, shaft_radius: float = 4.9) -> Pa
     pin = Cylinder(shaft_radius, 20, align=(Align.CENTER, Align.CENTER, Align.MIN)).moved(
         Location((0, 0, -5))
     )
+    if extra_collision:
+        pin += Box(8, 4, 5, align=(Align.MIN, Align.CENTER, Align.MIN)).moved(
+            Location((3, 0, 0))
+        )
     export_step(Compound(children=[plate, pin]), path)
     return path
 
@@ -1882,6 +1888,88 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     )
     assert code == EXIT_OK and err == ""
     assert json.loads(passing_check_raw)["fit_check"]["status"] == "pass"
+
+    interference_step = _write_cylindrical_mate_step(
+        tmp_path / "passing-interference-fit.step", shaft_radius=5.01
+    )
+    code, interference_raw, err = _run(
+        "interfaces", str(interference_step), "--format", "json"
+    )
+    interference_payload = json.loads(interference_raw)
+    interference_mate = interference_payload["candidates"]["cylindrical_mates"][0]
+    assert code == EXIT_FAILED and err == ""
+    assert interference_payload["candidates"]["interference_scorecard"]["status"] == "fail"
+
+    code, allowed_raw, err = _run(
+        "interfaces",
+        str(interference_step),
+        "--accept-mate",
+        interference_mate["id"],
+        "--name",
+        "press_fit",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/p6",
+        "--basic-size",
+        "10 mm",
+        "--format",
+        "json",
+    )
+    allowed_payload = json.loads(allowed_raw)
+    assert code == EXIT_OK and err == ""
+    assert allowed_payload["fit_check"]["status"] == "pass"
+    assert allowed_payload["assembly_scorecard"]["status"] == "pass"
+    allowed_entry = allowed_payload["assembly_scorecard"]["entries"][0]
+    assert allowed_entry["name"] == "declared cylindrical interference press_fit"
+    assert "fully explained" in allowed_entry["detail"]
+    code, allowed_text, err = _run(
+        "interfaces",
+        str(interference_step),
+        "--accept-mate",
+        interference_mate["id"],
+        "--name",
+        "press_fit",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/p6",
+        "--basic-size",
+        "10 mm",
+    )
+    assert code == EXIT_OK and err == ""
+    assert "assembly interference: PASS after declared fit allowance" in allowed_text
+
+    excess_step = _write_cylindrical_mate_step(
+        tmp_path / "interference-fit-with-extra-collision.step",
+        shaft_radius=5.01,
+        extra_collision=True,
+    )
+    _code, excess_raw, _err = _run("interfaces", str(excess_step), "--format", "json")
+    excess_mate = json.loads(excess_raw)["candidates"]["cylindrical_mates"][0]
+    code, excess_check_raw, err = _run(
+        "interfaces",
+        str(excess_step),
+        "--accept-mate",
+        excess_mate["id"],
+        "--name",
+        "press_fit",
+        "--confirmed-by",
+        "R. Engineer",
+        "--fit",
+        "H7/p6",
+        "--basic-size",
+        "10 mm",
+        "--format",
+        "json",
+    )
+    excess_payload = json.loads(excess_check_raw)
+    assert code == EXIT_FAILED and err == ""
+    assert excess_payload["fit_check"]["status"] == "pass"
+    assert excess_payload["assembly_scorecard"]["status"] == "fail"
+    assert excess_payload["assembly_scorecard"]["entries"][0]["name"].startswith(
+        "solid interference"
+    )
 
 
 def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):

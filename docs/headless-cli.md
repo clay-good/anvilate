@@ -656,6 +656,14 @@ and cited planar-gap band check. Its own tri-state roll-up and `governing()` res
 single verdict used for the command's exit code. A single-solid discovery omits the card;
 the roll-up is only produced when an assembly interference check has actually run.
 
+A passing, explicitly confirmed ISO 286 interference fit changes one matching solid-pair
+overlap from a raw collision failure to a passing declared-fit entry only when the measured
+common volume is no greater than the annular overlap calculated from that mate's measured
+diameters and axial engagement. The raw `interference_scorecard` remains in the candidate
+artifact as measurement evidence. An unconfirmed fit, a failing fit, or any excess volume
+still fails the assembly scorecard, so a press fit cannot conceal another collision between
+the same solids.
+
 For a large assembly, run the unfiltered command once to discover IDs, then pass one exact
 ID with `--solid` to return its summary and list and accept candidates from that solid only.
 An unknown ID is refused with the available IDs, and a single-solid input tells you to omit
