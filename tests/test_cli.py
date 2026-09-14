@@ -1891,6 +1891,41 @@ def test_interfaces_reports_and_filters_projected_planar_gaps(tmp_path):
     assert "planar-gap-" in text
     assert "gap 1 mm  projected overlap 400 mm²" in text
 
+    code, accepted_raw, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-gap",
+        gap["id"],
+        "--name",
+        "seal_gap",
+        "--confirmed-by",
+        "R. Engineer",
+        "--format",
+        "json",
+    )
+    accepted_payload = json.loads(accepted_raw)
+    accepted = accepted_payload["accepted_gap"]
+    assert code == EXIT_OK and err == ""
+    assert accepted["source_sha256"] == candidates["source_sha256"]
+    assert accepted["gap_candidate_id"] == gap["id"]
+    assert accepted["first_face_candidate_id"] == gap["first_face_candidate_id"]
+    assert accepted["separation_mm"] == pytest.approx(1)
+    assert accepted["direction"] == gap["direction"]
+    assert accepted["confirmed_by"] == "R. Engineer"
+
+    code, accepted_text, err = _run(
+        "interfaces",
+        str(step),
+        "--accept-gap",
+        gap["id"],
+        "--name",
+        "seal_gap",
+        "--confirmed-by",
+        "R. Engineer",
+    )
+    assert code == EXIT_OK and err == ""
+    assert f"accepted planar gap: seal_gap ({gap['id']})" in accepted_text
+
 
 def test_interfaces_refuses_a_solid_filter_for_single_solid_input(tmp_path):
     step = _write_four_hole_step(tmp_path / "mating.step")
@@ -2001,6 +2036,17 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
     code, out, err = _run(
         "interfaces",
         str(step),
+        "--accept-gap",
+        "planar-gap-any",
+        "--name",
+        "seal_gap",
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "accepting a planar gap requires" in err and "missing --confirmed-by" in err
+
+    code, out, err = _run(
+        "interfaces",
+        str(step),
         "--fit",
         "H7/g6",
         "--basic-size",
@@ -2033,7 +2079,10 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
         "contact-any",
     )
     assert code == EXIT_BAD_REQUEST and out == ""
-    assert "--accept, --accept-contact, and --accept-mate are mutually exclusive" in err
+    assert (
+        "--accept, --accept-contact, --accept-mate, and --accept-gap are mutually exclusive"
+        in err
+    )
 
 
 def test_interfaces_requires_and_carries_an_exact_locating_feature(tmp_path):

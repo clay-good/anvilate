@@ -34,6 +34,7 @@ from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
 from .geometry import (
     ConfirmedCylindricalMate,
     ConfirmedPlanarContact,
+    ConfirmedPlanarGap,
     ConfirmedStepInterface,
     CylindricalMateFitCheck,
     GeometryMeasurement,
@@ -58,6 +59,7 @@ __all__ = [
     "CONFIRMED_INTERFACE_SCHEMA_VERSION",
     "CONFIRMED_CONTACT_SCHEMA_VERSION",
     "CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION",
+    "CONFIRMED_PLANAR_GAP_SCHEMA_VERSION",
     "CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
@@ -67,6 +69,7 @@ __all__ = [
     "confirmed_interface_json_schema",
     "confirmed_contact_json_schema",
     "confirmed_cylindrical_mate_json_schema",
+    "confirmed_planar_gap_json_schema",
     "cylindrical_mate_fit_check_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
@@ -120,6 +123,9 @@ CONFIRMED_CONTACT_SCHEMA_VERSION = "1.0.0"
 
 # One measured cylindrical mate accepted by a named person without a fit verdict.
 CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION = "1.0.0"
+
+# One measured planar gap accepted by a named person without an allowable clearance.
+CONFIRMED_PLANAR_GAP_SCHEMA_VERSION = "1.0.0"
 
 # One confirmed cylindrical mate checked against an explicit ISO 286 fit.
 CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.0.0"
@@ -254,6 +260,21 @@ def confirmed_cylindrical_mate_json_schema() -> dict[str, Any]:
             "its source digest, endpoints, signed clearance, axial engagement, semantic name, "
             "and the named person who accepted it without a fit verdict. Generated from "
             "anvilate.geometry.ConfirmedCylindricalMate."
+        ),
+    )
+
+
+def confirmed_planar_gap_json_schema() -> dict[str, Any]:
+    """One exact planar gap accepted by a named person."""
+    return _artifact(
+        ConfirmedPlanarGap,
+        name="confirmed-planar-gap",
+        version=CONFIRMED_PLANAR_GAP_SCHEMA_VERSION,
+        description=(
+            "Anvilate confirmed planar gap: one exact projected-overlap candidate, its "
+            "source digest, solid/face endpoints, separation, overlap, direction, semantic "
+            "name, and named confirmer without an allowable-clearance verdict. Generated "
+            "from anvilate.geometry.ConfirmedPlanarGap."
         ),
     )
 
@@ -439,6 +460,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "confirmed-step-interface.schema.json": confirmed_interface_json_schema(),
         "confirmed-planar-contact.schema.json": confirmed_contact_json_schema(),
         "confirmed-cylindrical-mate.schema.json": confirmed_cylindrical_mate_json_schema(),
+        "confirmed-planar-gap.schema.json": confirmed_planar_gap_json_schema(),
         "cylindrical-mate-fit-check.schema.json": cylindrical_mate_fit_check_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),

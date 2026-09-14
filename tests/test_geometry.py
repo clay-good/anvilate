@@ -28,6 +28,7 @@ from anvilate.geometry import (  # noqa: E402
     check_cylindrical_mate_fit,
     confirm_cylindrical_mate,
     confirm_planar_contact,
+    confirm_planar_gap,
     confirm_step_interface,
     detect_step_interfaces,
     measure_geometry,
@@ -840,6 +841,28 @@ def test_step_interface_detection_only_calls_exact_coplanar_overlap_a_contact(tm
     assert not coplanar_disjoint.planar_gaps
     assert not tilted_detected.planar_gaps
     assert any("do not judge clearance" in warning for warning in separated.warnings)
+
+    accepted_gap = confirm_planar_gap(
+        separated,
+        gap_id=gap.id,
+        name="seal_gap",
+        confirmed_by="R. Engineer",
+    )
+    assert accepted_gap.source_sha256 == separated.source_sha256
+    assert accepted_gap.gap_candidate_id == gap.id
+    assert accepted_gap.first_face_candidate_id == gap.first_face_candidate_id
+    assert accepted_gap.second_solid_id == gap.second_solid_id
+    assert accepted_gap.separation_mm == pytest.approx(1)
+    assert accepted_gap.direction == gap.direction
+    assert accepted_gap.confirmed_by == "R. Engineer"
+
+    with pytest.raises(GeometryError, match="available: planar-gap-"):
+        confirm_planar_gap(
+            separated,
+            gap_id="planar-gap-absent",
+            name="seal_gap",
+            confirmed_by="R. Engineer",
+        )
 
     accepted = confirm_planar_contact(
         detected,

@@ -265,6 +265,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="accept this exact detected cylindrical mate without judging its fit",
     )
     interfaces.add_argument(
+        "--accept-gap",
+        metavar="GAP_ID",
+        help="accept this exact detected planar gap without inventing an allowable clearance",
+    )
+    interfaces.add_argument(
         "--fit",
         metavar="HOLE/SHAFT",
         help="check the accepted cylindrical mate against this explicit ISO 286 fit",
@@ -1012,6 +1017,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         check_cylindrical_mate_fit,
         confirm_cylindrical_mate,
         confirm_planar_contact,
+        confirm_planar_gap,
         confirm_step_interface,
         detect_step_interfaces,
     )
@@ -1027,12 +1033,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         "--accept": args.accept,
         "--accept-contact": args.accept_contact,
         "--accept-mate": args.accept_mate,
+        "--accept-gap": args.accept_gap,
     }
     supplied_modes = [option for option, value in acceptance_modes.items() if value is not None]
     if len(supplied_modes) > 1:
         print(
-            "anvilate interfaces: --accept, --accept-contact, and --accept-mate "
-            "are mutually exclusive",
+            "anvilate interfaces: --accept, --accept-contact, --accept-mate, and "
+            "--accept-gap are mutually exclusive",
             file=err,
         )
         return EXIT_BAD_REQUEST
@@ -1073,6 +1080,24 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             print(
                 "anvilate interfaces: accepting a cylindrical mate requires --accept-mate, "
                 f"--name, and --confirmed-by; missing {missing}",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+        if args.mating_plane is not None:
+            print("anvilate interfaces: --mating-plane requires --accept", file=err)
+            return EXIT_BAD_REQUEST
+    elif args.accept_gap is not None:
+        gap_acceptance = {
+            "--accept-gap": args.accept_gap,
+            "--name": args.name,
+            "--confirmed-by": args.confirmed_by,
+        }
+        gap_supplied = {option for option, value in gap_acceptance.items() if value is not None}
+        if len(gap_supplied) != len(gap_acceptance):
+            missing = ", ".join(option for option in gap_acceptance if option not in gap_supplied)
+            print(
+                "anvilate interfaces: accepting a planar gap requires --accept-gap, --name, "
+                f"and --confirmed-by; missing {missing}",
                 file=err,
             )
             return EXIT_BAD_REQUEST
@@ -1145,6 +1170,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         accepted = None
         accepted_contact = None
         accepted_mate = None
+        accepted_gap = None
         fit_check = None
         if args.accept is not None:
             accepted = confirm_step_interface(
@@ -1179,6 +1205,13 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                     )
                 except ValueError as failure:
                     raise GeometryError(str(failure)) from failure
+        elif args.accept_gap is not None:
+            accepted_gap = confirm_planar_gap(
+                detected,
+                gap_id=args.accept_gap,
+                name=args.name,
+                confirmed_by=args.confirmed_by,
+            )
     except GeometryUnavailable as failure:
         print(f"anvilate interfaces: {failure}", file=err)
         return EXIT_UNBUILT
@@ -1197,6 +1230,8 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             document["accepted_contact"] = accepted_contact.model_dump(mode="json")
         if accepted_mate is not None:
             document["accepted_mate"] = accepted_mate.model_dump(mode="json")
+        if accepted_gap is not None:
+            document["accepted_gap"] = accepted_gap.model_dump(mode="json")
         if fit_check is not None:
             document["fit_check"] = fit_check.model_dump(mode="json")
         payload = machine_document("interfaces", document)
@@ -1285,6 +1320,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         print(
             f"  accepted cylindrical mate: {mate_identity}, "
             f"confirmed by {accepted_mate.confirmed_by}",
+            file=out,
+        )
+    if accepted_gap is not None:
+        gap_identity = f"{accepted_gap.name} ({accepted_gap.gap_candidate_id})"
+        print(
+            f"  accepted planar gap: {gap_identity}, confirmed by {accepted_gap.confirmed_by}",
             file=out,
         )
     if fit_check is not None:

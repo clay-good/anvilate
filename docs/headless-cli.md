@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-mate`, `--fit`, `--basic-size`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested fit check passed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested fit check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -604,6 +604,8 @@ anvilate interfaces mating.step --format json
 anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
+anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
+  --name seal_gap --confirmed-by "R. Engineer" --format json
 anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
   --name bearing_journal --confirmed-by "R. Engineer" \
   --fit H7/g6 --basic-size "10 mm" --format json
@@ -653,6 +655,10 @@ separation and projected overlap after translating one face onto the other's pla
 back-to-back, and projection-disjoint faces are excluded. It is geometric separation, not a
 clearance verdict.
 
+`--accept-gap` requires one exact gap ID, `--name`, and `--confirmed-by`. It emits a separate
+`accepted_gap` artifact retaining the source digest, endpoints, separation, overlap, and
+direction. It does not create an `InterfaceContract` or an allowable-clearance verdict.
+
 A cylindrical mating candidate similarly identifies both solids and both cylindrical
 surfaces, but does not choose an ISO 286 fit or declare clearance/interference acceptable.
 Positive clearance, zero line-to-line size, and negative interference remain measured inputs
@@ -667,8 +673,8 @@ and inventing one would turn a truthful contact measurement into false interface
 `--confirmed-by`. Its separate `accepted_mate` artifact preserves the source digest, both
 solid and surface IDs, diameters, signed clearance, axial engagement, and canonical axis.
 Confirmation records design intent; it still does not choose an ISO 286 designation or
-declare the measured fit acceptable. Pattern, contact, and cylindrical-mate acceptance are
-mutually exclusive in one invocation.
+declare the measured fit acceptable. Pattern, contact, planar-gap, and cylindrical-mate
+acceptance are mutually exclusive in one invocation.
 
 An optional fit check requires both `--fit HOLE/SHAFT` and `--basic-size QUANTITY` beside
 `--accept-mate`. Those values are caller decisions: Anvilate does not derive `H7/g6` or the

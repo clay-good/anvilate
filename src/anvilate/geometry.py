@@ -47,6 +47,7 @@ __all__ = [
     "ConfirmedStepInterface",
     "ConfirmedPlanarContact",
     "ConfirmedCylindricalMate",
+    "ConfirmedPlanarGap",
     "CylindricalMateFitCheck",
     "FitFeatureCheck",
     "CircularFeatureCandidate",
@@ -68,6 +69,7 @@ __all__ = [
     "confirm_step_interface",
     "confirm_planar_contact",
     "confirm_cylindrical_mate",
+    "confirm_planar_gap",
     "check_cylindrical_mate_fit",
     "detect_step_interfaces",
     "measure_geometry",
@@ -404,6 +406,32 @@ class ConfirmedPlanarContact(StatableModel):
     second_face_candidate_id: Named
     overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
     confirmed_by: Named
+
+
+class ConfirmedPlanarGap(StatableModel):
+    """One planar gap candidate accepted by a named person."""
+
+    source_name: Named
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    gap_candidate_id: Named
+    name: Named
+    first_solid_id: Named
+    first_face_candidate_id: Named
+    second_solid_id: Named
+    second_face_candidate_id: Named
+    separation_mm: Annotated[FiniteFloat, Field(gt=0)]
+    overlap_area_mm2: Annotated[FiniteFloat, Field(gt=0)]
+    direction: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+    confirmed_by: Named
+
+    @model_validator(mode="after")
+    def _preserves_one_directed_pair(self) -> ConfirmedPlanarGap:
+        if self.first_solid_id == self.second_solid_id:
+            raise ValueError("a confirmed planar gap must join two different solids")
+        direction_length = sqrt(sum(component**2 for component in self.direction))
+        if abs(direction_length - 1) > 1e-9:
+            raise ValueError("confirmed planar gap direction must be a unit vector")
+        return self
 
 
 class ConfirmedCylindricalMate(StatableModel):
@@ -1194,6 +1222,43 @@ def confirm_cylindrical_mate(
         axial_engagement_mm=mate.axial_engagement_mm,
         axis_origin_mm=mate.axis_origin_mm,
         axis_direction=mate.axis_direction,
+        confirmed_by=confirmer,
+    )
+
+
+def confirm_planar_gap(
+    candidates: StepInterfaceCandidates,
+    *,
+    gap_id: str,
+    name: str,
+    confirmed_by: str,
+) -> ConfirmedPlanarGap:
+    """Accept one exact planar gap without inventing an allowable clearance."""
+    confirmer = confirmed_by.strip()
+    if not confirmer:
+        raise GeometryError("accepting a planar gap names the person confirming it")
+    gap_name = name.strip()
+    if not gap_name:
+        raise GeometryError("an accepted planar gap has a non-blank name")
+    matches = [gap for gap in candidates.planar_gaps if gap.id == gap_id]
+    if len(matches) != 1:
+        available = ", ".join(gap.id for gap in candidates.planar_gaps) or "none"
+        raise GeometryError(
+            f"planar gap {gap_id!r} was not found exactly once; available: {available}"
+        )
+    gap = matches[0]
+    return ConfirmedPlanarGap(
+        source_name=candidates.source_name,
+        source_sha256=candidates.source_sha256,
+        gap_candidate_id=gap.id,
+        name=gap_name,
+        first_solid_id=gap.first_solid_id,
+        first_face_candidate_id=gap.first_face_candidate_id,
+        second_solid_id=gap.second_solid_id,
+        second_face_candidate_id=gap.second_face_candidate_id,
+        separation_mm=gap.separation_mm,
+        overlap_area_mm2=gap.overlap_area_mm2,
+        direction=gap.direction,
         confirmed_by=confirmer,
     )
 

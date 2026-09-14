@@ -18,6 +18,7 @@ from .bundle import BundleDocument
 from .geometry import (
     ConfirmedCylindricalMate,
     ConfirmedPlanarContact,
+    ConfirmedPlanarGap,
     ConfirmedStepInterface,
     CylindricalMateFitCheck,
     StepInterfaceCandidates,
@@ -26,10 +27,10 @@ from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.22.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.23.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.22.0.json"]
-SchemaVersion = Literal["1.22.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.23.0.json"]
+SchemaVersion = Literal["1.23.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -273,6 +274,7 @@ class InterfacesOutput(_WireModel):
     accepted: ConfirmedStepInterface | None = None
     accepted_contact: ConfirmedPlanarContact | None = None
     accepted_mate: ConfirmedCylindricalMate | None = None
+    accepted_gap: ConfirmedPlanarGap | None = None
     fit_check: CylindricalMateFitCheck | None = None
 
 

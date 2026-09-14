@@ -176,6 +176,8 @@ anvilate interfaces mating.step
 anvilate interfaces assembly.step --solid solid-64934fb6edee
 anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
+anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
+  --name seal_gap --confirmed-by "R. Engineer" --format json
 anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
   --name bearing_journal --confirmed-by "R. Engineer" \
   --fit H7/g6 --basic-size "10 mm" --format json
@@ -198,7 +200,9 @@ without judging whether that fit is acceptable. Single-solid JSON remains unchan
 `--solid` narrows the summaries, inspection, and acceptance to one exact ID; an unknown ID is
 refused with the available choices. `--accept-contact` records one exact pair, a semantic
 name, and the named confirmer without fabricating the hole pattern required by an
-`InterfaceContract`. `--accept-mate` records the exact bore/shaft endpoints, measurements,
+`InterfaceContract`. `--accept-gap` likewise preserves the selected gap's endpoints,
+separation, overlap, direction, semantic name, and named confirmer without inventing an
+allowable clearance. `--accept-mate` records the exact bore/shaft endpoints, measurements,
 semantic name, and named confirmer without declaring the fit acceptable. Its output is a
 proposal only. Supplying both `--fit` and `--basic-size` then checks each measured diameter
 against the caller-selected ISO 286 zones, cites the encoded standard table, and exits 1 if
@@ -289,7 +293,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,637 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,643 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
