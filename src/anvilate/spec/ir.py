@@ -32,6 +32,7 @@ from ..loads import (
     asce7_lrfd_seismic,
     combination_evidence,
 )
+from ..margin import MarginEntry
 from ..tolerance import (
     AchievabilityCheck,
     ResolvedTolerance,
@@ -583,6 +584,12 @@ class Constraints(_Base):
     # asks for it.
     max_safety_factor: Provenanced[float] | None = None
     max_cost: Provenanced[float] | None = None  # currency handled by cost-estimation
+    # The conservatism the author knows they applied beyond the physics: an elected factor on
+    # top of a code minimum, a load contingency, a statistical allowable basis, a stock-size
+    # rounding. Each carries its kind and the authority for it, because whether a factor is
+    # an obligation or a choice is the one thing no screen can work out from the number.
+    # Read back as a `MarginLedger`, which multiplies them out and names double counts.
+    margins: tuple[MarginEntry, ...] = ()
 
     @model_validator(mode="after")
     def _positive_bounds(self) -> Constraints:
@@ -644,12 +651,13 @@ class AcceptanceCriteria(_Base):
 # OVER_MARGIN verdict is measured against. 1.4.0 added optional interface frames and
 # in-plane hole centers, preserving a measured pattern's clocking. 1.5.0 added an optional
 # concentric circular locator (pilot bore or boss). 1.6.0 extended that locator with a
-# counterbore kind and its required through diameter. All additive, which is
+# counterbore kind and its required through diameter. 1.7.0 added constraints.margins, the
+# declared conservatism a margin ledger multiplies out. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.6.0"
+SCHEMA_VERSION = "1.7.0"
 
 
 class DesignSpec(_Base):

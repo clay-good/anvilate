@@ -1531,7 +1531,11 @@ def test_every_constraint_is_either_screened_or_named_as_unscreened():
     # top of the band, which reaches the screens that take one and is *reported* on the
     # elements that do not.
     consumed = {"min_safety_factor", "max_safety_factor"}
-    unaccounted = declared - set(_UNSCREENED_CONSTRAINTS) - consumed
+    # Not a bound at all: `margins` records conservatism already applied, and is read by
+    # `anvilate.margin.MarginLedger`. It asks nothing of the part, so there is no verdict
+    # for the card to withhold, and a NOT_EVALUATED entry for it would block a sound card.
+    recorded = {"margins"}
+    unaccounted = declared - set(_UNSCREENED_CONSTRAINTS) - consumed - recorded
     assert not unaccounted, (
         f"these bounds are declared by a spec and neither screened nor reported: "
         f"{sorted(unaccounted)}"

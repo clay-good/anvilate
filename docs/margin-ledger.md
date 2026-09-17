@@ -59,9 +59,20 @@ factor, and the physics-limited utilization is reported beside the delivered ver
 never instead of it. Every factor scales utilization linearly, so the physics-limited
 figure is the delivered utilization divided by the elected product.
 
+## Declaring margins in a spec
+
+A Design Spec (1.7.0 and later) states its conservatism under `constraints.margins`, one
+entry per factor with the same fields as `MarginEntry`. Reading it back is one line:
+
+```python
+from anvilate.margin import MarginLedger
+
+ledger = MarginLedger(entries=spec.constraints.margins)
+```
+
 ## Status
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1
-and 3). The scorecard does not yet carry a ledger, the screens do not yet record the factors
-they apply, and the report does not render the table; those are the remaining groups of
-that change.
+and 3) and the spec field that declares entries. The scorecard does not yet carry a ledger,
+the screens do not yet record the factors they apply, and the report does not render the
+table; those are the remaining groups of that change.

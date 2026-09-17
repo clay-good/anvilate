@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import types
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -16,6 +17,7 @@ from anvilate.margin import (
     MarginLedger,
     MarginStack,
 )
+from anvilate.spec import load_spec_yaml, parse_spec
 
 _BENDING = "bracket bending stress"
 
@@ -264,8 +266,6 @@ def test_an_entry_refuses_unknown_fields() -> None:
 def test_the_docs_page_prints_what_the_ledger_computes() -> None:
     # docs/margin-ledger.md argues from figures in its comments; run its block and hold
     # every one of them to the ledger it builds.
-    from pathlib import Path
-
     page = (Path(__file__).parents[1] / "docs" / "margin-ledger.md").read_text()
     block = page.split("```python\n", 1)[1].split("```", 1)[0]
     scope: dict[str, object] = {}
@@ -281,3 +281,50 @@ def test_the_docs_page_prints_what_the_ledger_computes() -> None:
     (double,) = ledger.double_counts()
     assert f"x{double.combined:.4g} combined" in block
     assert f'"{ledger.stack("anchor bolt tension")}"' in block
+
+
+_PADEYE = Path(__file__).parents[1] / "examples" / "padeye.spec.yaml"
+_DECLARED = """constraints:
+  min_safety_factor: {value: 2.0, origin: user_stated}
+  margins:
+    - {label: ASME BTH-1 design category B, kind: code_required, value: 2.0,
+       quantity: padeye tension, action: lowers_capacity,
+       origin: "spec: constraints.min_safety_factor", authority: "ASME BTH-1-2020 §1-5"}
+    - {label: sling angle allowance, kind: contingency_or_growth, value: 1.15,
+       quantity: padeye tension, action: raises_demand,
+       origin: "spec: loads", authority: "company practice LP-7"}
+"""
+
+
+def _padeye_declaring(constraints: str) -> str:
+    text = _PADEYE.read_text()
+    (line,) = [ln for ln in text.splitlines() if ln.startswith("constraints:")]
+    return text.replace(line + "\n", constraints)
+
+
+def test_a_spec_declares_its_margins_and_they_read_back_as_a_ledger() -> None:
+    spec = load_spec_yaml(_padeye_declaring(_DECLARED))
+    ledger = MarginLedger(entries=spec.constraints.margins)
+    stack = ledger.stack("padeye tension")
+    assert stack.cumulative == pytest.approx(2.0 * 1.15, rel=1e-12)
+    assert stack.physics_limited == pytest.approx(2.0, rel=1e-12)
+    assert parse_spec(spec.model_dump(mode="json")) == spec
+
+
+def test_a_spec_without_margins_still_loads_and_declares_none() -> None:
+    assert load_spec_yaml(_PADEYE.read_text()).constraints.margins == ()
+
+
+@pytest.mark.parametrize(
+    ("broken", "refusal"),
+    [
+        ('authority: "company practice LP-7"', 'authority: "  "'),
+        ("value: 1.15", "value: 0.9"),
+        ("kind: contingency_or_growth", "kind: hunch"),
+        ('origin: "spec: loads"', 'origin: "spec: loads", orign: typo'),
+    ],
+)
+def test_a_spec_margin_that_is_not_one_is_refused(broken: str, refusal: str) -> None:
+    assert _DECLARED.count(broken) == 1
+    with pytest.raises(ValueError):
+        load_spec_yaml(_padeye_declaring(_DECLARED.replace(broken, refusal)))

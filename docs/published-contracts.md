@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.7.0: a spec can declare its margins
+
+`constraints.margins` is an optional list of margin-ledger entries: the conservatism an author
+applied beyond the physics, each with its kind (code-required, user-elected, statistical basis,
+contingency or growth, rounding, derating), the quantity it bears on, its origin and its
+authority. A blank origin or authority, or a factor below 1, is refused. The kind is declared
+rather than inferred, because no screen can tell an obligation from a choice by the number.
+See [the margin ledger](margin-ledger.md).
+
 ### Design Spec 1.6.0: counterbores retain both diameters
 
 The circular locator adds `counterbore`, which requires a through diameter smaller than its
