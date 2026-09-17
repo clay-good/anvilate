@@ -2,11 +2,11 @@
 
 ## 1. Contracts
 
-- [ ] 1.1 Ledger entry type: value, kind, origin, authority, the quantity it bears on,
+- [x] 1.1 Ledger entry type: value, kind, origin, authority, the quantity it bears on,
       and the direction it moves the result
-- [ ] 1.2 Kind enumeration as a total map — every consumer handles every kind explicitly,
+- [x] 1.2 Kind enumeration as a total map — every consumer handles every kind explicitly,
       with no `else` arm that files an unknown kind under a default
-- [ ] 1.3 Refusal of an entry with a blank origin or an authority that names no source
+- [x] 1.3 Refusal of an entry with a blank origin or an authority that names no source
 
 ## 2. Capture
 
@@ -19,10 +19,10 @@
 
 ## 3. Analysis
 
-- [ ] 3.1 Cumulative factor per checked quantity, with the multiplication shown
+- [x] 3.1 Cumulative factor per checked quantity, with the multiplication shown
 - [ ] 3.2 Physics-limited result: re-evaluate with code-required entries only
-- [ ] 3.3 Duplicate detection across origins for the same kind and quantity
-- [ ] 3.4 Dominant-entry identification with ties reported rather than broken arbitrarily
+- [x] 3.3 Duplicate detection across origins for the same kind and quantity
+- [x] 3.4 Dominant-entry identification with ties reported rather than broken arbitrarily
 
 ## 4. Gates
 
@@ -39,10 +39,10 @@
 
 ## 6. Tests
 
-- [ ] 6.1 A part with five separately defensible factors reports its cumulative factor,
+- [x] 6.1 A part with five separately defensible factors reports its cumulative factor,
       and the number is the product — the defect class this capability exists to expose
-- [ ] 6.2 An unattributed factor is refused
-- [ ] 6.3 A code-required factor and an elected one never render identically
+- [x] 6.2 An unattributed factor is refused
+- [x] 6.3 A code-required factor and an elected one never render identically
 - [ ] 6.4 Removing a factor from the code changes the ledger, not only the verdict
 
 ## 7. Docs & examples

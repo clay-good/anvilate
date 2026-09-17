@@ -247,6 +247,12 @@ loads.combination_scorecard
 loads.CombinationEvidence
 loads.combination_evidence
 loads.combination_derivation
+margin.MarginKind
+margin.MarginAction
+margin.MarginEntry
+margin.DoubleCount
+margin.MarginStack
+margin.MarginLedger
 mcp.Cost
 mcp.Dispatch
 mcp.Gate
