@@ -47,6 +47,13 @@ attestation.Attestation
 attestation.SignatureState
 attestation.VerificationReport
 attestation.verify_attestation
+budget.CombinationRule
+budget.ContributorBasis
+budget.LimitBasis
+budget.Contributor
+budget.Budget
+budget.ContributorResult
+budget.BudgetResult
 bundle.SectionStatus
 bundle.BundleDocument
 bundle.BundleSections

@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Forty-eight pages, arranged by what you are trying to do. The [README](../README.md) is the
+Forty-nine pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
@@ -36,6 +36,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | | |
 | --- | --- |
 | [Uncertainty-aware margins](uncertainty-margins.md) | Input scatter to a shortfall probability, and what the number does not mean. |
+| [Performance budgets](performance-budgets.md) | An allocated limit, itemized contributors and a declared rule — a card of passing checks that still fails. |
 | [Margin ledger](margin-ledger.md) | Every applied conservatism attributed and multiplied out, and the double counts named. |
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |

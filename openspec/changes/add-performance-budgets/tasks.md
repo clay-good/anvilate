@@ -2,23 +2,23 @@
 
 ## 1. Contracts
 
-- [ ] 1.1 Budget type: allocated limit, contributors, combination rule, total, margin
-- [ ] 1.2 Contributor type: name, value, unit, source (check id / measurement /
+- [x] 1.1 Budget type: allocated limit, contributors, combination rule, total, margin
+- [x] 1.2 Contributor type: name, value, unit, source (check id / measurement /
       user-declared with provenance), correlation group, optional band
-- [ ] 1.3 Combination-rule enumeration with no default value
+- [x] 1.3 Combination-rule enumeration with no default value
 
 ## 2. Evaluation
 
-- [ ] 2.1 Worst-case linear sum; RSS; hybrid with correlated groups summed then RSS'd
-- [ ] 2.2 Unit and dimension checking across contributors and the allocated limit
-- [ ] 2.3 Governing-contributor identification
-- [ ] 2.4 Headroom inverse: per-contributor allowable growth at the current total
+- [x] 2.1 Worst-case linear sum; RSS; hybrid with correlated groups summed then RSS'd
+- [x] 2.2 Unit and dimension checking across contributors and the allocated limit
+- [x] 2.3 Governing-contributor identification
+- [x] 2.4 Headroom inverse: per-contributor allowable growth at the current total
 
 ## 3. Wiring
 
 - [ ] 3.1 Spec IR budget declaration, schema-validated and diffable
 - [ ] 3.2 Contributor binding to scorecard check ids; recompute on screen change
-- [ ] 3.3 Scorecard entry emission; not-evaluated propagation from any unevaluated
+- [x] 3.3 Scorecard entry emission; not-evaluated propagation from any unevaluated
       contributor
 
 ## 4. Rendering
@@ -29,11 +29,11 @@
 
 ## 5. Tests
 
-- [ ] 5.1 RSS of correlated terms is refused, not silently computed
-- [ ] 5.2 One unevaluated contributor makes the budget not-evaluated, never a pass
-- [ ] 5.3 A budget whose contributors are all passing checks can still fail, with the
+- [x] 5.1 RSS of correlated terms is refused, not silently computed
+- [x] 5.2 One unevaluated contributor makes the budget not-evaluated, never a pass
+- [x] 5.3 A budget whose contributors are all passing checks can still fail, with the
       governing contributor named — the defect class this capability exists to catch
-- [ ] 5.4 Headroom inverse round-trips against the forward evaluation
+- [x] 5.4 Headroom inverse round-trips against the forward evaluation
 
 ## 6. Docs & examples
 
