@@ -34,6 +34,7 @@ from __future__ import annotations
 import ast
 import pathlib
 import re
+import runpy
 import socket
 import sys
 import tomllib
@@ -115,7 +116,13 @@ def test_the_golden_path_completes_with_the_socket_layer_closed(
     over the result. Audited plate STEP generation is covered separately because this lug
     has no registered B-Rep pattern; see `docs/export-targets.md`.
     """
-    from examples.attested_evidence_bundle import attest_the_lug
+    # By path, as every other test reaches an example: `examples` is not a package on
+    # sys.path under a bare `pytest`, so the import passed locally and failed in CI.
+    attest_the_lug = runpy.run_path(
+        str(
+            pathlib.Path(__file__).resolve().parents[1] / "examples" / "attested_evidence_bundle.py"
+        )
+    )["attest_the_lug"]
 
     from anvilate.scorecard import CheckStatus
 

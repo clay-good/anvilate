@@ -557,7 +557,12 @@ _DELIBERATELY_INHERITED = {
     "__new__": "object construction, not the numeric protocol",
     "__getformat__": "a CPython float internal, not part of any protocol a caller uses",
     "__getnewargs__": "pickling support, and a Quantity pickles correctly through pydantic",
+    "__getattribute__": "attribute lookup, not arithmetic; `float` defines it only on 3.11",
 }
+
+# Names `float` defines on some supported Pythons and not others, so their absence from the
+# protocol on the running interpreter does not make a table entry stale.
+_VERSION_DEPENDENT = {"__getattribute__"}
 
 
 def test_every_operation_a_number_answers_is_answered_or_declared_here():
@@ -585,7 +590,7 @@ def test_every_operation_a_number_answers_is_answered_or_declared_here():
 
     # And the table cannot carry a name the protocol does not have, or it rots into a
     # list of things nobody checks.
-    stale = sorted(set(_DELIBERATELY_INHERITED) - numeric_protocol)
+    stale = sorted(set(_DELIBERATELY_INHERITED) - numeric_protocol - _VERSION_DEPENDENT)
     assert not stale, f"_DELIBERATELY_INHERITED names what `float` does not define: {stale}"
 
 
