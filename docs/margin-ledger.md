@@ -32,7 +32,7 @@ stack = ledger.stack(q)
 stack.multiplication()                  # "1.67 x 1.2 x 1.1 x 1.15 x 1.047 = 2.653"
 stack.physics_limited                   # 1.67  — code-required factors only
 stack.elected                           # 1.589 — everything no cited code obliges
-stack.physics_limited_utilization(0.62) # 0.39  — the same check at code minimum
+stack.physics_limited_utilization(0.62) # 0.41  — the same plate at code minimum
 stack.dominant()                        # (the ASD factor,) — ties come back together
 ledger.double_counts()                  # two contingencies from two origins, x1.265 combined
 ledger.stack("anchor bolt tension")     # "anchor bolt tension: no conservatism recorded"
@@ -56,8 +56,9 @@ strongly that ratio moves a stress (as t² or t³) is the check's business, not 
 
 The ledger informs and never decides. It does not remove, reduce or recommend relaxing any
 factor, and the physics-limited utilization is reported beside the delivered verdict,
-never instead of it. Every factor scales utilization linearly, so the physics-limited
-figure is the delivered utilization divided by the elected product.
+never instead of it. It is the delivered part judged at code minimum: each elected
+multiplier scales utilization linearly and is divided out, while rounding stays, because a
+utilization computed at the stock size already contains it in the geometry.
 
 ## Declaring margins in a spec
 
@@ -70,12 +71,15 @@ from anvilate.margin import MarginLedger
 ledger = MarginLedger(entries=spec.constraints.margins)
 ```
 
+[`examples/bracket_margin_stack.py`](../examples/bracket_margin_stack.py) runs one bracket
+plate at code minimum and as delivered, side by side.
+
 `anvilate check` prints that ledger under the card and carries it in `--format json` as
 `margins`; the verdict and exit code never read it.
 
 ## Status
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1
-and 3), the spec field that declares entries, and its rendering on `anvilate check`. The
+and 3), a worked example, the spec field that declares entries, and its rendering on `anvilate check`. The
 screens do not yet record the factors they apply themselves, and the calculation report does
 not render the table; those are the remaining groups of that change.

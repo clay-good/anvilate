@@ -47,5 +47,5 @@
 
 ## 7. Docs & examples
 
-- [ ] 7.1 Worked example: the same bracket at code-minimum and as delivered, side by side
+- [x] 7.1 Worked example: the same bracket at code-minimum and as delivered, side by side
 - [ ] 7.2 Explanation page: why the tool reports conservatism and never removes it

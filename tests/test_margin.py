@@ -96,7 +96,7 @@ def test_physics_limited_utilization_removes_only_elected_factors() -> None:
     stack = _five_factor_bracket().stack(_BENDING)
     delivered = 0.9
     limited = stack.physics_limited_utilization(delivered)
-    assert limited == pytest.approx(delivered / stack.elected, rel=1e-12)
+    assert limited == pytest.approx(delivered / (1.2 * 1.15 * 1.1), rel=1e-12)
     assert limited < delivered
     assert {e.kind for e in stack.elected_entries()} == set(MarginKind) - {
         MarginKind.CODE_REQUIRED,
@@ -328,3 +328,13 @@ def test_a_spec_margin_that_is_not_one_is_refused(broken: str, refusal: str) -> 
     assert _DECLARED.count(broken) == 1
     with pytest.raises(ValueError):
         load_spec_yaml(_padeye_declaring(_DECLARED.replace(broken, refusal)))
+
+
+def test_rounding_is_not_divided_out_of_a_utilization_computed_at_the_delivered_size() -> None:
+    # A utilization computed on the stock plate already contains the rounding: it is in the
+    # geometry, not a multiplier on the demand. Dividing it out would report the delivered
+    # plate as less utilized than it is at its own code factors.
+    stack = _five_factor_bracket().stack(_BENDING)
+    multipliers = 1.2 * 1.15 * 1.1
+    assert stack.physics_limited_utilization(0.9) == pytest.approx(0.9 / multipliers, rel=1e-12)
+    assert stack.elected == pytest.approx(multipliers * (9.525 / 9.1), rel=1e-12)

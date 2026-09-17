@@ -52,16 +52,21 @@ class MarginKind(StrEnum):
 
 
 # The one place each kind is described, as a TOTAL map: (rendered label, whether a cited code
-# obliges it). Every consumer below reads a kind through this table and nothing files a kind
-# under an `else`, so a kind added to the enumeration and not here fails at import — loudly,
-# before any consumer can quietly treat it as one of the existing six.
-_KINDS: dict[MarginKind, tuple[str, bool]] = {
-    MarginKind.CODE_REQUIRED: ("code-required", True),
-    MarginKind.USER_ELECTED: ("user-elected", False),
-    MarginKind.STATISTICAL_BASIS: ("statistical basis", False),
-    MarginKind.CONTINGENCY: ("contingency/growth", False),
-    MarginKind.ROUNDING: ("rounding", False),
-    MarginKind.DERATING: ("derating", False),
+# obliges it, whether it is a multiplier inside a utilization). Every consumer below reads a
+# kind through this table and nothing files a kind under an `else`, so a kind added to the
+# enumeration and not here fails at import — loudly, before any consumer can quietly treat it
+# as one of the existing six.
+#
+# Rounding is the one kind that is not a multiplier: a utilization computed on the stock size
+# already contains it, in the geometry, and how strongly it moved the result (as t², t³) is
+# the check's business. Dividing it out of that utilization would understate it.
+_KINDS: dict[MarginKind, tuple[str, bool, bool]] = {
+    MarginKind.CODE_REQUIRED: ("code-required", True, True),
+    MarginKind.USER_ELECTED: ("user-elected", False, True),
+    MarginKind.STATISTICAL_BASIS: ("statistical basis", False, True),
+    MarginKind.CONTINGENCY: ("contingency/growth", False, True),
+    MarginKind.ROUNDING: ("rounding", False, False),
+    MarginKind.DERATING: ("derating", False, True),
 }
 if set(_KINDS) != set(MarginKind):
     raise RuntimeError(
@@ -214,17 +219,21 @@ class MarginStack(StatableModel):
         return tuple(e for e in self.entries if not e.code_required)
 
     def physics_limited_utilization(self, delivered: float) -> float:
-        """The utilization the same check reports with code-required factors only.
+        """The utilization the same size reports with code-required factors only.
 
-        Every factor scales utilization linearly, so removing the elected ones divides the
-        delivered utilization by their product. Information only: the delivered verdict is
-        the one that stands.
+        ``delivered`` is the utilization computed at the delivered size with every factor
+        applied. Each elected multiplier scales it linearly, so removing them divides by
+        their product. Rounding is not divided out: it is already in the delivered size, so
+        this is the delivered part judged at code minimum, not a smaller part. Information
+        only: the delivered verdict is the one that stands.
         """
         if not isfinite(delivered) or delivered < 0:
             raise ValueError(
                 f"delivered utilization must be a finite non-negative number; got {delivered}"
             )
-        return delivered / self.elected
+        return delivered / prod(
+            e.value for e in self.entries if not e.code_required and _KINDS[e.kind][2]
+        )
 
     def multiplication(self) -> str:
         """The product itemized, e.g. ``1.5 x 1.333 x 1.1 = 2.2``."""

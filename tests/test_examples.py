@@ -9244,3 +9244,23 @@ def test_an_example_that_prints_a_card_prints_the_checks_on_it():
         "these print a card's verdict and hide the checks behind it, so a reader is told "
         "something failed and not which:\n  " + "\n  ".join(hidden)
     )
+
+
+def test_bracket_margin_stack_example_multiplies_out_the_delivered_plate():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_margin_stack.py"))
+    result = namespace["margin_stack"]()
+    # Code minimum and as delivered: two stock sizes apart for the same load.
+    assert result["code_stock_mm"] == 16.0
+    assert result["delivered_stock_mm"] == 20.0
+    # The cumulative factor is the product of all five entries, the rounding included.
+    stack = result["ledger"].stack(namespace["QUANTITY"])
+    rounding = result["delivered_stock_mm"] / result["delivered_nominal_mm"]
+    assert stack.cumulative == pytest.approx(1.67 * 1.25 * 1.15 * 1.1 * rounding, rel=1e-12)
+    # The two contingencies from two origins are named, and both stay in the product.
+    assert result["double_count"] == pytest.approx(1.15 * 1.1, rel=1e-12)
+    # Judged at code minimum the delivered plate is exactly its code-only utilization:
+    # the elected multipliers are divided out and the stock size is kept.
+    code_only = namespace["_utilization"](result["delivered_stock_mm"], 1.0)
+    assert result["code_minimum_utilization"] == pytest.approx(code_only, rel=1e-12)
+    assert result["delivered_utilization"] <= 1.0
+    _assert_narrates_computed("bracket_margin_stack.py", namespace)
