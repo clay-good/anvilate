@@ -592,3 +592,30 @@ def test_a_malformed_sub_budget_term_is_refused(fields: dict, match: str) -> Non
         fields["sub_budget"] = _subsystem()
     with pytest.raises(ValidationError, match=match):
         _term("subsystem", value, **fields)
+
+
+def test_the_page_three_rule_figures_are_what_the_rules_produce() -> None:
+    # The explanation argues from one set of terms under three rules: fail, pass, fail
+    # against the same allocation. Each figure is computed here rather than proofread.
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "performance-budgets.md").read_text()
+    terms = (
+        _term("mount", 30.0, correlation_group="thermal"),
+        _term("bench", 20.0, correlation_group="thermal"),
+        _term("jitter", 40.0),
+        _term("alignment", 25.0),
+    )
+    plain = tuple(term.model_copy(update={"correlation_group": None}) for term in terms)
+    worst = _budget(CombinationRule.WORST_CASE, *plain, limit=65.0).evaluate()
+    rss = _budget(CombinationRule.RSS, *plain, limit=65.0).evaluate()
+    hybrid = _budget(CombinationRule.HYBRID, *terms, limit=65.0).evaluate()
+    assert f"they come to\n{worst.total:.0f} µrad" in page
+    assert f"root-sum-square, {rss.total:.1f}" in page
+    assert f"summed first, {hybrid.total:.1f}" in page
+    assert (worst.status, rss.status, hybrid.status) == (
+        CheckStatus.FAIL,
+        CheckStatus.PASS,
+        CheckStatus.FAIL,
+    )
+    assert "fail, pass, fail" in page

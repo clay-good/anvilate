@@ -94,6 +94,34 @@ An allowance is applied to the value the rule combines, and recorded rather than
 pass `result.ledger().entries` into `CalculationReport(margins=...)` and the allowance appears
 in the report's margin ledger with its authority, beside the budget it came from.
 
+## Why the rule is declared and never defaulted
+
+The four terms in the example are 30, 20, 40 and 25 µrad. Under worst case they come to
+115 µrad; under root-sum-square, 59.4; under the hybrid rule with the two thermal terms
+summed first, 68.7. Against a 65 µrad allocation that is fail, pass, fail — the same four
+numbers, three verdicts. There is no rule that is right for all of them, so a default would
+be this library choosing a verdict on the author's behalf, silently, in the one place no
+reviewer would look for that decision.
+
+Each rule is a statement about the terms, not a preference:
+
+- **Worst case** assumes every term reaches its bound at once. Masses do exactly that —
+  they add — and so does a chain of tolerances at their limits.
+- **Root-sum-square** assumes the terms are independent and random. It is right for
+  uncorrelated errors and it is *optimistic by construction*: quadrature is smaller than the
+  sum, so choosing it is claiming independence.
+- **Hybrid** is the honest middle for real hardware: terms that move together (one thermal
+  soak tilting a mount and its bench) are summed within their group, and the groups are
+  combined in quadrature.
+
+That is why two contributors sharing a correlation group under `rss` are refused rather than
+computed. The declaration says the terms move together; quadrature says they do not. Taking
+the smaller answer from two contradictory statements is how an allocation gets spent twice,
+and the refusal names the group and points at the rule that fits.
+
+The same reasoning is why a budget with no rule is `not_evaluated` rather than summed. A
+budget the author has not finished declaring is not a budget that passed.
+
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,

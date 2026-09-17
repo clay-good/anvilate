@@ -38,4 +38,4 @@
 ## 6. Docs & examples
 
 - [x] 6.1 Worked example: a mass budget and an angular-error budget on the same part
-- [ ] 6.2 Explanation page: why the combination rule is declared and never defaulted
+- [x] 6.2 Explanation page: why the combination rule is declared and never defaulted
