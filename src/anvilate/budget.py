@@ -354,11 +354,9 @@ def _headroom(
 ) -> tuple[float | None, str | None]:
     """The value this term could reach, the others held, with the limit exactly spent."""
     if abs(total) > limit:
-        return (
-            None,
-            f"the budget is already spent: the total overruns the limit by "
-            f"{abs(total) - limit:.4g}",
-        )
+        # The overrun itself is the result's (negative) margin, which every renderer states
+        # in the limit's own unit; a bare number in this sentence had no unit on it.
+        return None, "the budget is already spent: the total is over the limit"
     if term.compensating:
         return None, "a compensating term spends no budget; its loss is the total without it"
     value = values[term.name]

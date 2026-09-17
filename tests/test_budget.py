@@ -158,7 +158,10 @@ def test_a_spent_budget_reports_no_headroom_with_the_overrun() -> None:
     result = _budget(CombinationRule.WORST_CASE, _term("a", 80.0), _term("b", 40.0)).evaluate()
     for term in result.contributors:
         assert term.headroom is None
-        assert "overruns the limit by 20" in (term.headroom_unavailable or "")
+        assert (
+            term.headroom_unavailable == "the budget is already spent: the total is over the limit"
+        )
+    assert result.margin == pytest.approx(-20.0, rel=1e-12)
 
 
 def test_a_dimension_mismatch_is_refused_naming_the_contributor_and_both_dimensions() -> None:

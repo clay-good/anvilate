@@ -27,11 +27,12 @@ from math import isfinite
 from pydantic import ConfigDict, computed_field
 
 from .._models import StatableModel
+from ..budget import BudgetResult, LimitBasis
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..margin import MarginEntry, MarginLedger
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
-from ..units import UnitSystem
+from ..units import Quantity, UnitSystem, render, spoken
 from .mathml import formula_to_mathml
 
 __all__ = [
@@ -46,8 +47,8 @@ __all__ = [
 # for a change that older readers cannot ignore. 1.1 added the optional scorecard
 # annotations (repair hint, upper safety-factor band, uncertainty distribution);
 # a 1.0 reader ignores them and still loads the record. 1.2 added the report's margin
-# ledger entries.
-CALC_RECORD_SCHEMA_VERSION = "1.2"
+# ledger entries, and 1.3 its evaluated performance budgets.
+CALC_RECORD_SCHEMA_VERSION = "1.3"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -308,6 +309,9 @@ class CalculationReport(StatableModel):
     # the margin summary: the summary says how far each check is from its limit, the ledger
     # says how much of that distance was chosen rather than required.
     margins: tuple[MarginEntry, ...] = ()
+    # Evaluated budgets, itemized in their own section. A budget's verdict is already a
+    # check in `sections`; this is the arithmetic behind it, which no single line can carry.
+    budgets: tuple[BudgetResult, ...] = ()
 
     def scorecard(self) -> Scorecard:
         """The report's checks as a scorecard, for the usual roll-up rules."""
@@ -394,6 +398,13 @@ class CalculationReport(StatableModel):
             out.append(f"  governing check: {governing.name}")
         out.append(f"  overall: {_STATUS_LABEL[self.status]}")
         out.append("")
+        out.append("Performance budgets")
+        out.append("-------------------")
+        if not self.budgets:
+            out.append(f"  {_NONE_DECLARED}")
+        for result in self.budgets:
+            out.extend(self._budget_lines(result))
+        out.append("")
         out.append("Margin ledger")
         out.append("-------------")
         if not self.margins:
@@ -430,6 +441,7 @@ class CalculationReport(StatableModel):
         for section in self.sections:
             out.extend(self._html_section(section))
         out.extend(self._html_summary())
+        out.extend(self._html_budgets())
         out.extend(self._html_ledger())
         out.append(f'<p class="disclaimer">{escape(SCREENING_DISCLAIMER)}</p>')
         out.append("</body>")
@@ -626,6 +638,64 @@ class CalculationReport(StatableModel):
         if governing is not None:
             out.append(f"<p>Governing check: <strong>{escape(governing.name)}</strong></p>")
         out.append(f"<p>Overall: <strong>{_STATUS_LABEL[self.status]}</strong></p>")
+        return out
+
+    def _budget_rows(self, result: BudgetResult) -> list[tuple[str, str, str, str]]:
+        """Per contributor: its value in the reader's units, its source, and its share."""
+        sources = {term.name: term for term in result.budget.contributors}
+        rows = []
+        for term in result.contributors:
+            quantity = Quantity(magnitude=term.value, unit=result.budget.limit.unit)
+            rows.append(
+                (
+                    term.name,
+                    render(quantity, system=self.unit_system),
+                    sources[term.name].source,
+                    _NO_FIGURE if term.share is None else f"{term.share:.1%}",
+                )
+            )
+        return rows
+
+    def _budget_headline(self, result: BudgetResult) -> str:
+        budget = result.budget
+        limit = render(budget.limit, system=self.unit_system)
+        if result.status is CheckStatus.NOT_EVALUATED:
+            return f"{budget.name} ({budget.quantity}, allocated {limit}): {result.reason}"
+        assert result.total is not None and budget.rule is not None
+        total = render(
+            Quantity(magnitude=result.total, unit=budget.limit.unit), system=self.unit_system
+        )
+        margin = render(
+            Quantity(magnitude=result.margin or 0.0, unit=budget.limit.unit),
+            system=self.unit_system,
+        )
+        basis = " (working assumption)" if budget.limit_basis is LimitBasis.ASSUMPTION else ""
+        governing = " and ".join(result.governing) if result.governing else _NO_FIGURE
+        return (
+            f"{budget.name} ({budget.quantity}) by {spoken(budget.rule, joined_by=' ')}: "
+            f"{total} against {limit}{basis}, margin {margin}; "
+            f"governing: {governing} [{_STATUS_LABEL[result.status]}]"
+        )
+
+    def _budget_lines(self, result: BudgetResult) -> list[str]:
+        lines = [f"  {self._budget_headline(result)}"]
+        for name, value, source, share in self._budget_rows(result):
+            lines.append(f"    {name}: {value}, {share} of total ({source})")
+        return lines
+
+    def _html_budgets(self) -> list[str]:
+        out = ["<h2>Performance budgets</h2>"]
+        if not self.budgets:
+            return [*out, f'<p class="none">{_NONE_DECLARED}</p>']
+        for result in self.budgets:
+            out.append(f"<p>{escape(self._budget_headline(result))}</p>")
+            if not result.contributors:
+                continue
+            out.append('<table class="budget">')
+            out.append("<tr><th>Contributor</th><th>Value</th><th>Source</th><th>Share</th></tr>")
+            for row in self._budget_rows(result):
+                out.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>")
+            out.append("</table>")
         return out
 
     def _ledger_lines(self) -> list[str]:

@@ -1904,5 +1904,88 @@ def test_a_report_with_no_margins_says_so_rather_than_omitting_the_section():
 def test_the_calc_record_carries_the_margin_ledger_back():
     report = _ledgered_report()
     record = json.loads(json.dumps(report.to_record()))
-    assert record["schema_version"] == "1.2"
+    assert record["schema_version"] == "1.3"
     assert report_from_record(record) == report
+
+
+def _budgeted_report() -> CalculationReport:
+    from anvilate.budget import Budget, CombinationRule, Contributor, LimitBasis
+    from anvilate.units import Quantity
+
+    def term(name, value, basis, source):
+        return Contributor(
+            name=name,
+            value=Quantity(magnitude=value, unit="mm"),
+            source=source,
+            basis=basis,
+        )
+
+    budget = Budget(
+        name="hook travel",
+        quantity="vertical deflection",
+        limit=Quantity(magnitude=3.0, unit="mm"),
+        limit_basis=LimitBasis.REQUIREMENT,
+        limit_source="lift plan LP-9",
+        rule=CombinationRule.WORST_CASE,
+        contributors=(
+            term("sling stretch", 1.4, "estimated", "vendor data"),
+            term("padeye bending", 0.9, "calculated", "T1 screen"),
+        ),
+    )
+    return _report().model_copy(update={"budgets": (budget.evaluate(),)})
+
+
+def test_the_report_itemizes_each_budget_in_text_and_html():
+    report = _budgeted_report()
+    text = report.to_text()
+    section = text[text.index("Performance budgets") : text.index("Margin ledger")]
+    assert "hook travel (vertical deflection) by worst case: 2.30 mm against 3.00 mm" in section
+    assert "margin 0.700 mm; governing: sling stretch [PASS]" in section
+    assert "    sling stretch: 1.40 mm, 60.9% of total (vendor data)" in section
+
+    html = report.to_html()
+    assert "<h2>Performance budgets</h2>" in html
+    assert "<th>Contributor</th><th>Value</th><th>Source</th><th>Share</th>" in html
+    assert "<td>sling stretch</td><td>1.40 mm</td><td>vendor data</td><td>60.9%</td>" in html
+
+
+def test_a_budget_renders_in_the_readers_unit_system():
+    from anvilate.units import UnitSystem
+
+    report = _budgeted_report().model_copy(update={"unit_system": UnitSystem.US})
+    text = report.to_text()
+    assert "0.0906 in against 0.118 in" in text
+    assert "mm" not in text[text.index("Performance budgets") : text.index("Margin ledger")]
+
+
+def test_a_report_with_no_budgets_says_so_rather_than_omitting_the_section():
+    assert "Performance budgets\n-------------------\n  none declared\n" in _report().to_text()
+    assert '<h2>Performance budgets</h2><p class="none">none declared</p>' in "".join(
+        _report().to_html().splitlines()
+    )
+
+
+def test_an_unevaluated_budget_states_its_reason_in_the_report():
+    from anvilate.budget import Budget, Contributor, LimitBasis
+    from anvilate.units import Quantity
+
+    budget = Budget(
+        name="hook travel",
+        quantity="vertical deflection",
+        limit=Quantity(magnitude=3.0, unit="mm"),
+        limit_basis=LimitBasis.ASSUMPTION,
+        limit_source="working figure pending LP-9",
+        rule=None,
+        contributors=(
+            Contributor(
+                name="sling stretch",
+                value=Quantity(magnitude=1.4, unit="mm"),
+                source="vendor data",
+                basis="estimated",
+            ),
+        ),
+    )
+    report = _report().model_copy(update={"budgets": (budget.evaluate(),)})
+    text = report.to_text()
+    assert "no combination rule is declared" in text
+    assert "sling stretch:" not in text  # nothing itemized from a budget that did not run

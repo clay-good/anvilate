@@ -9264,3 +9264,19 @@ def test_bracket_margin_stack_example_multiplies_out_the_delivered_plate():
     assert result["code_minimum_utilization"] == pytest.approx(code_only, rel=1e-12)
     assert result["delivered_utilization"] <= 1.0
     _assert_narrates_computed("bracket_margin_stack.py", namespace)
+
+
+def test_optical_bench_budgets_example_fails_the_budget_its_screens_all_pass():
+    namespace = runpy.run_path(str(_EXAMPLES / "optical_bench_budgets.py"))
+    mass = namespace["mass_budget"]().evaluate()
+    pointing = namespace["pointing_budget"]().evaluate()
+    # Two budgets on one part, and only the combination rule tells them apart.
+    assert mass.status is CheckStatus.PASS
+    assert pointing.status is CheckStatus.FAIL
+    assert pointing.governing == ("mount",)  # not jitter, the largest single term
+    # Ignoring the correlation would have passed the same four numbers.
+    assert namespace["uncorrelated_pointing_total"]() < pointing.total
+    assert (
+        namespace["uncorrelated_pointing_total"]() < namespace["pointing_budget"]().limit.magnitude
+    )
+    _assert_narrates_computed("optical_bench_budgets.py", namespace)

@@ -23,9 +23,9 @@
 
 ## 4. Rendering
 
-- [ ] 4.1 Itemized budget table in the calculation report: each contributor, its source,
+- [x] 4.1 Itemized budget table in the calculation report: each contributor, its source,
       its share of the total, the rule, the margin
-- [ ] 4.2 Render in the reader's declared unit system, angular units included
+- [x] 4.2 Render in the reader's declared unit system, angular units included
 
 ## 5. Tests
 
@@ -37,5 +37,5 @@
 
 ## 6. Docs & examples
 
-- [ ] 6.1 Worked example: a mass budget and an angular-error budget on the same part
+- [x] 6.1 Worked example: a mass budget and an angular-error budget on the same part
 - [ ] 6.2 Explanation page: why the combination rule is declared and never defaulted

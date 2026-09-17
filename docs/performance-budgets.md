@@ -74,8 +74,22 @@ gates export like any other failure. A declared budget the screen could not eval
 Angles are dimensionless to the unit layer, so a microradian budget cannot tell an angle from
 a strain; the contributor's name and source are what distinguish them.
 
+## In the calculation report
+
+`CalculationReport(budgets=...)` takes evaluated budgets and renders each one as a headline
+— total against the allocation, margin, rule and governing contributor — over a table of
+its contributors with each one's value, source and share of the total. Every figure is
+rendered in the report's declared unit system, and a budget that was not evaluated states
+its reason and itemizes nothing. With no budgets the heading stays and says `none declared`.
+The calc record carries them from schema 1.3.
+
+[`examples/optical_bench_budgets.py`](../examples/optical_bench_budgets.py) puts a mass
+budget and a pointing budget on one part: the mass budget passes with headroom, and the
+pointing budget fails on the hybrid rule while every screen behind it passes — the same four
+numbers combine to 59.4 µrad uncorrelated and 68.7 µrad with the thermal pair summed first.
+
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,
-groups 1-3). Nested budgets and growth allowances are not built, and the calculation report
-does not itemize a budget.
+groups 1-3, 4 and 6.1). Nested budgets and growth allowances — a sub-budget as a
+contributor, and a per-basis allowance recorded as a margin-ledger entry — are not built.
