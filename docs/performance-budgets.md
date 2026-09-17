@@ -39,6 +39,15 @@ re-evaluating the rule without each term: removing `mount` also shrinks the corr
 group it is summed into. Headroom is the inverse: `mount` could grow to 68.18 µrad, the
 others held, before the limit is spent.
 
+## Bound to the screens that produced them
+
+A contributor that names a `check` takes its value from the scorecard, not from the
+document: `budget.bind(card)` reads each bound entry's measured quantity, so a rerun screen
+moves the total with it. A check that is missing from the card, appears on it twice, did not
+run, or measured nothing leaves the contributor unresolved with that reason, and the budget
+is not evaluated. A value declared beside a binding is not kept, because a stale number is
+worse than none. A bound check of the wrong dimension is refused like any other contributor.
+
 ## The rules
 
 | Rule | What it means |
@@ -59,6 +68,6 @@ a strain; the contributor's name and source are what distinguish them.
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,
-groups 1 and 2, and entry emission). A Design Spec cannot declare a budget yet, contributors
-are not yet bound to live scorecard checks, nested budgets and growth allowances are not
-built, and the calculation report does not itemize a budget.
+groups 1 and 2, entry emission and check binding). A Design Spec cannot declare a budget
+yet, nested budgets and growth allowances are not built, and the calculation report does
+not itemize a budget.

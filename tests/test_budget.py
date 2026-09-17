@@ -257,3 +257,92 @@ def test_the_rendered_result_itemizes_every_term_and_says_why_headroom_is_missin
     assert str(unresolved.evaluate()) == (
         "budget line of sight: not evaluated — contributor 'a' has no value: not measured"
     )
+
+
+def _checked(name: str, measured: float | None, *, unit: str = "µrad") -> ScorecardEntry:
+    from anvilate.scorecard import Comparison, LimitSense
+
+    if measured is None:
+        return ScorecardEntry(name=name, status=CheckStatus.NOT_EVALUATED, detail="no modulus")
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS,
+        detail="inside its own limit",
+        comparison=Comparison(
+            measured=Quantity(magnitude=measured, unit=unit),
+            limit=Quantity(magnitude=60.0, unit=unit),
+            sense=LimitSense.AT_MOST,
+            measured_label="error",
+            limit_label="limit",
+        ),
+    )
+
+
+def _bound_budget() -> Budget:
+    return _budget(
+        CombinationRule.WORST_CASE,
+        _term("mount", None, check="mount tilt", unresolved="bound at screening"),
+        _term("bench", None, check="bench tilt", unresolved="bound at screening"),
+        _term("alignment", 10.0),
+    )
+
+
+def test_a_budget_follows_the_screens_it_is_bound_to() -> None:
+    budget = _bound_budget()
+    before = budget.bind(
+        Scorecard(entries=(_checked("mount tilt", 40.0), _checked("bench tilt", 30.0)))
+    )
+    after = budget.bind(
+        Scorecard(entries=(_checked("mount tilt", 55.0), _checked("bench tilt", 30.0)))
+    )
+    assert before.evaluate().total == pytest.approx(80.0, rel=1e-12)
+    assert before.evaluate().status is CheckStatus.PASS
+    # Every screen still passes its own limit of 60; the combination no longer does.
+    assert after.evaluate().total == pytest.approx(95.0, rel=1e-12)
+    assert after.evaluate().status is CheckStatus.PASS
+    worse = budget.bind(
+        Scorecard(entries=(_checked("mount tilt", 59.0), _checked("bench tilt", 45.0)))
+    )
+    assert worse.evaluate().status is CheckStatus.FAIL
+
+
+@pytest.mark.parametrize(
+    ("entries", "reason"),
+    [
+        ((_checked("bench tilt", 30.0),), "check 'mount tilt' is not on the scorecard"),
+        (
+            (_checked("mount tilt", None), _checked("bench tilt", 30.0)),
+            "check 'mount tilt' was not evaluated: no modulus",
+        ),
+        (
+            (_checked("mount tilt", 1.0), _checked("mount tilt", 2.0), _checked("bench tilt", 3.0)),
+            "the scorecard carries 2 checks named 'mount tilt'",
+        ),
+        (
+            (
+                ScorecardEntry(name="mount tilt", status=CheckStatus.PASS, detail="ok"),
+                _checked("bench tilt", 30.0),
+            ),
+            "check 'mount tilt' carries no measured quantity to bind",
+        ),
+    ],
+)
+def test_a_broken_binding_makes_the_budget_not_evaluated_naming_it(entries, reason) -> None:
+    # A value declared beside the binding is not kept: a stale number is worse than none.
+    stale = _bound_budget().model_copy(
+        update={
+            "contributors": (
+                _term("mount", 12.0, check="mount tilt"),
+                *_bound_budget().contributors[1:],
+            )
+        }
+    )
+    result = stale.bind(Scorecard(entries=entries)).evaluate()
+    assert result.status is CheckStatus.NOT_EVALUATED
+    assert reason in (result.reason or "")
+
+
+def test_a_bound_check_of_the_wrong_dimension_is_refused() -> None:
+    card = Scorecard(entries=(_checked("mount tilt", 4.0, unit="mm"), _checked("bench tilt", 3.0)))
+    with pytest.raises(ValidationError, match="'mount'.*length"):
+        _bound_budget().bind(card)

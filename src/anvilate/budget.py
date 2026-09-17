@@ -39,7 +39,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
+from .scorecard import CheckStatus, Comparison, LimitSense, Scorecard, ScorecardEntry
 from .units import Quantity, spoken
 
 __all__ = [
@@ -190,6 +190,31 @@ class Budget(StatableModel):
                     )
         return self
 
+    def bind(self, card: Scorecard) -> Budget:
+        """This budget with every check-bound contributor's value read from ``card``.
+
+        A contributor naming a ``check`` takes that entry's measured quantity, so the total
+        follows the screens that produced it and cannot carry a superseded value. A check that
+        is not on the card, is on it twice, did not run, or measured nothing leaves the
+        contributor unresolved with that reason — and the budget not evaluated — rather than
+        keeping whatever value it was declared with. Contributors with no ``check`` are kept.
+        """
+        bound = []
+        for term in self.contributors:
+            if term.check is None:
+                bound.append(term)
+                continue
+            value, unresolved = _read_check(card, term.check)
+            if value is not None:
+                magnitude = abs(value.magnitude)
+                value = Quantity(
+                    magnitude=-magnitude if term.compensating else magnitude, unit=value.unit
+                )
+            bound.append(
+                Contributor.model_validate({**dict(term), "value": value, "unresolved": unresolved})
+            )
+        return Budget.model_validate({**dict(self), "contributors": tuple(bound)})
+
     def evaluate(self) -> BudgetResult:
         """The total, the margin, and what each contributor is responsible for."""
         unit = self.limit.unit
@@ -256,6 +281,20 @@ class Budget(StatableModel):
             contributors=tuple(terms),
             governing=governing,
         )
+
+
+def _read_check(card: Scorecard, check: str) -> tuple[Quantity | None, str | None]:
+    matches = [entry for entry in card.entries if entry.name == check]
+    if not matches:
+        return None, f"check '{check}' is not on the scorecard"
+    if len(matches) > 1:
+        return None, f"the scorecard carries {len(matches)} checks named '{check}'"
+    (entry,) = matches
+    if entry.status is CheckStatus.NOT_EVALUATED:
+        return None, f"check '{check}' was not evaluated: {entry.detail}"
+    if entry.comparison is None:
+        return None, f"check '{check}' carries no measured quantity to bind"
+    return entry.comparison.measured, None
 
 
 def _groups(contributors: tuple[Contributor, ...]) -> dict[str, list[Contributor]]:
