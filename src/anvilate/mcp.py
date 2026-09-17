@@ -158,7 +158,7 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.10.0.json"
 # document. Nothing a 1.2.0 client already reads has changed — the addition is one optional
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
-_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
+_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.7.0.json"
 # The evidence bundle, published so `export_artifact` can describe what it returns. It could
 # not before: the tool declared its entire output as `{"type": "object"}`, because
 # `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
@@ -173,7 +173,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.6.0.json"
 # carries the same optional interface-frame fields.
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.8.0.json"
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.9.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"

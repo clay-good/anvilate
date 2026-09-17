@@ -258,7 +258,11 @@ def test_a_changed_spec_changes_the_digest():
 # which a check states that it has no formula to show and why. Same reasoning: whether a
 # reviewer is owed a derivation is part of what the document says, so a bundle carrying
 # that statement is a different bundle from one that does not.
-_GOLDEN_DIGEST = "986709d5139ef8e1c3e8e16f3a8a247d5e8827000b04430a212afddf5b5e10e8"
+# And again, from 986709d5..., when `ScorecardEntry.needs` shipped — the declarations a check
+# that could not run says it was waiting on, which the consolidated needs report is built
+# from. Same reasoning once more: what a check needed and did not get is part of what the
+# document says, so a bundle that carries those statements is a different document.
+_GOLDEN_DIGEST = "dcfdb2575b9b81a5d9517f23578faba41529d645070d5e764d53feba78d7f28c"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

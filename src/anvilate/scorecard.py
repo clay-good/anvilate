@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isnan
 
-from pydantic import ConfigDict, computed_field, model_validator
+from pydantic import ConfigDict, Field, computed_field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
 from .derivation import Derivation, DerivationAbsence, Underived
@@ -31,6 +31,8 @@ __all__ = [
     "Direction",
     "RepairHint",
     "GoverningChange",
+    "ValueSource",
+    "Need",
     "ScorecardEntry",
     "Scorecard",
 ]
@@ -297,6 +299,53 @@ class Comparison(StatableModel):
         )
 
 
+class ValueSource(StrEnum):
+    """Where an acceptable value for a declaration may come from."""
+
+    STANDARD = "standard"
+    DATABASE = "database"
+    MEASUREMENT = "measurement"
+    USER = "user_statement"
+
+
+class Need(StatableModel):
+    """One declaration a build required and did not receive.
+
+    ``declaration`` is the field a document would state, written the way a document writes it
+    (``constraints.min_safety_factor``). ``dimension`` is the physical dimension it takes, or
+    ``None`` for a declaration that is not a quantity — an element tag, a combination rule.
+    ``units`` are spellings the unit layer accepts, so the report can say what to write.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    declaration: Named
+    takes: Provenance  # what the value is, in one phrase a reader can act on
+    dimension: str | None = None
+    units: tuple[str, ...] = ()
+    sources: tuple[ValueSource, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _a_need(self) -> Need:
+        if len(set(self.sources)) != len(self.sources):
+            raise ValueError(
+                f"the need for '{self.declaration}' names a source twice: "
+                f"{[s.value for s in self.sources]}"
+            )
+        if self.dimension is None and self.units:
+            raise ValueError(
+                f"the need for '{self.declaration}' names units {list(self.units)} and no "
+                "dimension; a value with units is a quantity, and its dimension is what a "
+                "screen checks"
+            )
+        return self
+
+    def __str__(self) -> str:
+        where = ", ".join(source.value.replace("_", " ") for source in self.sources)
+        units = f" in {' or '.join(self.units)}" if self.units else ""
+        return f"{self.declaration}: {self.takes}{units} (from {where})"
+
+
 class ScorecardEntry(StatableModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
@@ -338,10 +387,21 @@ class ScorecardEntry(StatableModel):
     # one re-renders. ``None`` on a check that compares nothing, and on a safety-factor
     # check, which already carries its two numbers as factors.
     comparison: Comparison | None = None
+    # What this check needed and did not get, when it could not run. The consolidated
+    # report in `anvilate.needs` is built from these: a screen states its own gap, so the
+    # report is never a parse of the detail line's prose.
+    needs: tuple[Need, ...] = ()
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:
         _refuse_contradictions(self)
+        if self.needs and self.status is not CheckStatus.NOT_EVALUATED:
+            raise ValueError(
+                f"check '{self.name}' is {self.status.value} and names "
+                f"{[need.declaration for need in self.needs]} as declarations it needs; a "
+                "check that ran had what it needed, and a needs report built from this "
+                "would send a reader to supply a value that changed nothing"
+            )
         return self
 
     def is_fragile(self, threshold: float = 0.05) -> bool:

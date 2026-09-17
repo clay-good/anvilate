@@ -70,7 +70,7 @@ from ._models import (
 )
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
-from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .spec import DesignSpec, ReferenceResolver, ValidationTier
 from .standards import default_standards_resolver
 from .standards.materials import (
@@ -93,6 +93,39 @@ __all__ = [
 # Why T1 cannot run when a spec declares no element. Written once because it is quoted in
 # the scorecard entry, in the docs page, and in the test that pins it — three places that
 # must not drift.
+# What a check says it needed, for the consolidated report in `anvilate.needs`. Declared here
+# beside the refusals that carry them, so the report is built from what a screen states and
+# never from a parse of its detail line.
+_NEEDS_AN_ELEMENT = (
+    Need(
+        declaration="element_type",
+        takes="the discipline-pack element this part is, as a tag the element registry carries",
+        sources=(ValueSource.USER,),
+    ),
+    Need(
+        declaration="element_params",
+        takes="the element's own fields — the dimensions, material and loads its screen reads",
+        sources=(ValueSource.USER, ValueSource.DATABASE, ValueSource.MEASUREMENT),
+    ),
+)
+_NEEDS_A_SAFETY_FACTOR = Need(
+    declaration="constraints.min_safety_factor",
+    takes="the minimum safety factor every judged screen is measured against",
+    dimension="dimensionless",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_A_TOLERANCED_DIMENSION = Need(
+    declaration="dimensions",
+    takes="at least one explicitly toleranced dimension, with its nominal and band",
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+_NEEDS_A_LOAD_NATURE = Need(
+    declaration="load_cases[].nature",
+    takes="what kind of load each force-carrying case is — dead, live, wind, seismic",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+
+
 _NO_ELEMENT_REASON = (
     "the Design Spec declares no structural element type, so no discipline-pack screen can "
     "be selected from it; declare element_type and element_params, or build the pack's "
@@ -281,6 +314,7 @@ def _screen_element(
                         "factor and the spec states none; declare "
                         "constraints.min_safety_factor"
                     ),
+                    needs=(_NEEDS_A_SAFETY_FACTOR,),
                 )
             ]
     # The band's top, where the screen takes one. `OVER_MARGIN` has been first-class in the
@@ -383,6 +417,7 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 name="T1 analytical",
                 status=CheckStatus.NOT_EVALUATED,
                 detail=_NO_ELEMENT_REASON,
+                needs=_NEEDS_AN_ELEMENT,
             )
         ]
     stated = spec.constraints.min_safety_factor
@@ -414,6 +449,7 @@ def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                     f"T2 was demanded and the spec declares no explicitly toleranced "
                     f"dimension, so there is nothing to screen against the {named_process} floor"
                 ),
+                needs=(_NEEDS_A_TOLERANCED_DIMENSION,),
             )
         ]
     entries: list[ScorecardEntry] = []
@@ -1200,6 +1236,7 @@ def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
                 f"and no declared nature ({', '.join(unclassified)}); a combination treats "
                 f"an unsupplied nature as zero, so the demand would never see them"
             ),
+            needs=(_NEEDS_A_LOAD_NATURE,),
         )
     return ScorecardEntry(
         name="load classification",

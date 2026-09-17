@@ -2,10 +2,10 @@
 
 ## 1. Needs report
 
-- [ ] 1.1 Collect every missing declaration across the card into one typed report
-- [ ] 1.2 Per item: what it is, what units it takes, which screens it unblocks, and where
+- [x] 1.1 Collect every missing declaration across the card into one typed report
+- [x] 1.2 Per item: what it is, what units it takes, which screens it unblocks, and where
       an acceptable value can come from
-- [ ] 1.3 Order by screens unblocked; report ties as ties
+- [x] 1.3 Order by screens unblocked; report ties as ties
 
 ## 2. Profiles
 

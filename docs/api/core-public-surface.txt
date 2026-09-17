@@ -275,6 +275,10 @@ mcp.stateless_gaps
 mcp.PROTOCOL_REVISION
 mcp.tool_catalog
 mcp.wire_definitions
+needs.NeedItem
+needs.NeedsReport
+needs.LEVERAGE_IS_NOT_IMPORTANCE
+needs.needs_report
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem
@@ -290,6 +294,8 @@ scorecard.Comparison
 scorecard.Direction
 scorecard.RepairHint
 scorecard.GoverningChange
+scorecard.ValueSource
+scorecard.Need
 scorecard.ScorecardEntry
 scorecard.Scorecard
 screening.Structure

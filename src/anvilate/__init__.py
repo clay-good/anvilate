@@ -82,6 +82,8 @@ that already ran and does one more thing with them:
   missed forty-two models, including one where a copy handed back a plain
   ``dict`` in place of a ``MappingProxyType`` and it could then be mutated in
   place.
+- :mod:`anvilate.needs` — every declaration a build needed and did not get, in one
+  report ordered by how many screens each would unblock — leverage, never severity.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.
