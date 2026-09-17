@@ -31,7 +31,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .._models import ItemCollection, Named, RevalidatedModel, StatableModel
-from ..units import Quantity
+from ..units import Quantity, spoken
 from .explicit import ResolvedTolerance
 
 __all__ = [
@@ -166,7 +166,8 @@ class StackResult(StatableModel):
         nominal = self.nominal.to("mm").magnitude
         lo = self.lower.to("mm").magnitude
         hi = self.upper.to("mm").magnitude
-        return f"{self.method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm)"
+        method = spoken(self.method, joined_by=" ")
+        return f"{method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm)"
 
 
 class MonteCarloResult(BaseModel):
@@ -222,7 +223,8 @@ class MonteCarloResult(BaseModel):
         hi = self.upper.to("mm").magnitude
         pct = self.coverage * 100.0
         nominal = self.nominal.to("mm").magnitude
-        return f"{self.method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm @ {pct:.2f}%)"
+        method = spoken(self.method, joined_by=" ")
+        return f"{method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm @ {pct:.2f}%)"
 
 
 class StackUp(ItemCollection, BaseModel):

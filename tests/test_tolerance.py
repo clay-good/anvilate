@@ -981,7 +981,8 @@ def test_stackup_satisfies_rejects_non_length_requirement() -> None:
 
 def test_stackup_result_str_renders_band() -> None:
     stack = StackUp(contributors=(_contributor("pin", 10.0, 0.02),))
-    assert "worst_case" in str(stack.worst_case())
+    # In English: the method is a word in a sentence a reviewer reads, not an identifier.
+    assert str(stack.worst_case()).startswith("worst case gap ")
 
 
 def _interface_stack() -> StackUp:
@@ -1085,7 +1086,7 @@ def test_monte_carlo_contributions_rank_by_variance() -> None:
 def test_monte_carlo_str_renders_band_and_coverage() -> None:
     mc = _interface_stack().monte_carlo(1000, seed=5)
     text = str(mc)
-    assert "monte_carlo" in text
+    assert text.startswith("monte carlo gap ")
     assert "99.73%" in text
 
 
