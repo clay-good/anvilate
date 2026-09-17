@@ -285,7 +285,15 @@ def test_the_json_says_everything_the_text_says(tmp_path):
         assert governing is not None, "the text names a governing check and the JSON has none"
         assert printed.split(":", 1)[1].strip() == (f"{governing['name']} ({governing['status']})")
         # And every check in the text is one the JSON carries, with the same verdict.
-        rendered = [line for line in lines[1:-1] if not line.startswith("       ")]
+        # By what the line IS, not by where it sits: the card's trailing lines (governing,
+        # the unevaluated count, the needs report) grow, and a slice off the end silently
+        # started counting one of them as a check.
+        statuses = {status.value for status in CheckStatus}
+        rendered = [
+            line
+            for line in lines[1:]
+            if not line.startswith("       ") and line.split()[0] in statuses
+        ]
         assert len(rendered) == len(entry["scorecard"]["entries"])
         for line, check in zip(rendered, entry["scorecard"]["entries"], strict=True):
             assert line.split() == [check["status"], *check["name"].split()]

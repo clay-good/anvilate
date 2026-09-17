@@ -436,8 +436,9 @@ Each checked spec also carries `needs`: the count of checks that could not run, 
 consolidated [needs report](declaration-needs.md) — one item per missing declaration with
 what it takes, where a value may come from, how many checks it unblocks and which ones — and
 the sentence stating that the order is leverage and not importance. The text rendering prints
-the unevaluated count under the card in both directions, zero included, and the report below
-it when there is one. Neither reads the verdict or the exit code.
+the unevaluated count under the card in both directions, zero included, and the report
+indented under it when there is one, so a directory run's one-blank-line-per-spec layout is
+unchanged. Neither reads the verdict or the exit code.
 
 The published schema is a closed union: unknown fields and fields from the wrong command
 variant do not validate. Evidence and QIF export documents additionally carry `artifact`,

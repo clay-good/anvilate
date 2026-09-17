@@ -2712,8 +2712,10 @@ def _render(
     lines.append(f"  not evaluated: {len(blocked)}")
     report = needs_report(card)
     if len(report):
-        lines.append("")
-        lines.extend(str(report).splitlines())
+        # Indented under the card and with no blank line before it: a run over a directory
+        # separates one spec's block from the next with a blank line, and a blank line
+        # inside a block would make the needs list read as a spec of its own.
+        lines.extend(f"  {line}" for line in str(report).splitlines())
     elif blocked:
         # The counts disagree with the report, and saying so is the honest end of it: these
         # checks could not run and none of them stated a declaration that would let them.

@@ -44,7 +44,7 @@ record, a measurement, or the user's own statement.
 ## On the command line
 
 `anvilate check` prints the unevaluated count under the card — zero included, so a complete
-card says so positively — and the report below it when anything is missing. `--format json`
+card says so positively — and the report indented below it when anything is missing. `--format json`
 carries the same thing per spec under `needs`, present with an empty `items` list when
 nothing is missing. Neither changes the verdict or the exit code.
 
