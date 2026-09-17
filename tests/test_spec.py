@@ -530,7 +530,11 @@ def test_a_minor_version_later_than_this_release_is_refused():
     from anvilate.spec import UnsupportedSchemaVersion
 
     data = dump_and_load_dict(golden_bracket())
-    data["anvilate_spec"] = "1.9.0"
+    # Derived from this release, not written down: the literal that used to sit here became
+    # the CURRENT version the day the schema moved, and the test then asserted that the
+    # version this build ships is refused.
+    major, minor, patch = (int(part) for part in SCHEMA_VERSION.split("."))
+    data["anvilate_spec"] = f"{major}.{minor + 1}.{patch}"
     with pytest.raises(UnsupportedSchemaVersion, match="later than this release knows"):
         parse_spec(data)
 

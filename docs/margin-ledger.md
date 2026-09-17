@@ -79,6 +79,9 @@ plate at code minimum and as delivered, side by side.
 A [calculation report](calculation-reports.md) renders the same ledger as a table from
 `CalculationReport(margins=...)`.
 
+A [performance budget](performance-budgets.md) records its per-basis growth allowances here
+too: `budget.evaluate().ledger()` returns them as contingency-or-growth entries.
+
 ## Status
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1

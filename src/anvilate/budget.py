@@ -32,13 +32,14 @@ tell an angle from a strain; the contributor's name and source are what distingu
 from __future__ import annotations
 
 from enum import StrEnum
-from math import isclose, sqrt
+from math import isclose, isfinite, sqrt
 from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
+from .margin import MarginAction, MarginEntry, MarginKind, MarginLedger
 from .scorecard import CheckStatus, Comparison, LimitSense, Scorecard, ScorecardEntry
 from .units import Quantity, spoken
 
@@ -46,6 +47,7 @@ __all__ = [
     "CombinationRule",
     "ContributorBasis",
     "LimitBasis",
+    "GrowthAllowance",
     "Contributor",
     "Budget",
     "ContributorResult",
@@ -75,6 +77,32 @@ class LimitBasis(StrEnum):
     REQUIREMENT = "requirement"
     DERIVED = "derived_allocation"
     ASSUMPTION = "working_assumption"
+
+
+class GrowthAllowance(StatableModel):
+    """A factor applied to every contributor of one basis, and the authority for it.
+
+    Established practice: an estimated quantity is expected to grow more than a measured one.
+    The allowance is applied to the contributor's value AND recorded as a margin-ledger entry
+    of kind contingency-or-growth, so it is visible as conservatism rather than absorbed into
+    a number that then looks like a measurement.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    basis: ContributorBasis
+    factor: float
+    authority: Provenance
+
+    @model_validator(mode="after")
+    def _an_allowance(self) -> Self:
+        if not isfinite(self.factor) or self.factor < 1.0:
+            raise ValueError(
+                f"the {self.basis.value} growth allowance is {self.factor}; an allowance is a "
+                "finite factor of at least 1, and one below 1 shrinks the term it is meant to "
+                "protect"
+            )
+        return self
 
 
 class Contributor(StatableModel):
@@ -139,6 +167,9 @@ class Budget(StatableModel):
     limit_source: Provenance
     rule: CombinationRule | None
     contributors: tuple[Contributor, ...] = Field(min_length=1)
+    # Per-basis growth allowances. At most one per basis, because two allowances on one basis
+    # is a question about which applies rather than an instruction to multiply both.
+    growth: tuple[GrowthAllowance, ...] = ()
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -171,6 +202,12 @@ class Budget(StatableModel):
         names = [term.name for term in self.contributors]
         if len(set(names)) != len(names):
             raise ValueError(f"budget '{self.name}' names a contributor twice: {names}")
+        bases = [allowance.basis for allowance in self.growth]
+        if len(set(bases)) != len(bases):
+            raise ValueError(
+                f"budget '{self.name}' declares two growth allowances for one basis: "
+                f"{[b.value for b in bases]}"
+            )
         if self.rule in (CombinationRule.RSS, CombinationRule.HYBRID):
             compensating = [t.name for t in self.contributors if t.compensating]
             if compensating:
@@ -237,7 +274,28 @@ class Budget(StatableModel):
                     f"contributor '{term.name}' has no value: {term.unresolved}" for term in waiting
                 ),
             )
-        values = {t.name: t.value.to(unit).magnitude for t in self.contributors if t.value}
+        allowed = {allowance.basis: allowance for allowance in self.growth}
+        values = {}
+        margins = []
+        for term in self.contributors:
+            assert term.value is not None  # every contributor resolved, checked above
+            magnitude = term.value.to(unit).magnitude
+            allowance = allowed.get(term.basis)
+            if allowance is None or allowance.factor == 1.0:
+                values[term.name] = magnitude
+                continue
+            values[term.name] = magnitude * allowance.factor
+            margins.append(
+                MarginEntry(
+                    label=f"{term.basis.value} growth allowance on {term.name}",
+                    kind=MarginKind.CONTINGENCY,
+                    value=allowance.factor,
+                    quantity=self.quantity,
+                    action=MarginAction.RAISES_DEMAND,
+                    origin=f"budget {self.name}: {term.name}",
+                    authority=allowance.authority,
+                )
+            )
         rule = self.rule
         total = _combine(rule, self.contributors, values)
         uncompensated = _combine(
@@ -280,6 +338,7 @@ class Budget(StatableModel):
             group_sums=group_sums if rule is CombinationRule.HYBRID else (),
             contributors=tuple(terms),
             governing=governing,
+            margins=tuple(margins),
         )
 
 
@@ -394,6 +453,9 @@ class BudgetResult(StatableModel):
     group_sums: tuple[tuple[str, float], ...] = ()
     contributors: tuple[ContributorResult, ...] = ()
     governing: tuple[str, ...] = ()
+    # The growth allowances this evaluation applied, as margin-ledger entries: an allowance
+    # is conservatism, and conservatism is recorded rather than folded into a value.
+    margins: tuple[MarginEntry, ...] = ()
 
     @property
     def estimated_share(self) -> float | None:
@@ -407,6 +469,10 @@ class BudgetResult(StatableModel):
         if any(share is None for share in shares):
             return None
         return sum(share for share in shares if share is not None)
+
+    def ledger(self) -> MarginLedger:
+        """The allowances this evaluation applied, as a margin ledger."""
+        return MarginLedger(entries=self.margins)
 
     def to_entry(self) -> ScorecardEntry:
         """The budget as a scorecard entry: total against limit, governing term named."""

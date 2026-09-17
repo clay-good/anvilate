@@ -398,7 +398,7 @@ def test_a_declared_budget_round_trips_through_the_document() -> None:
 
     spec = _padeye_with(_DECLARED_BUDGET)
     assert parse_spec(spec.model_dump(mode="json")) == spec
-    assert spec.anvilate_spec == "1.8.0"
+    assert spec.anvilate_spec == "1.9.0"
     assert _padeye_with("").budgets == ()
 
 
@@ -428,3 +428,70 @@ def test_a_budget_refused_by_its_own_binding_is_an_entry_not_a_traceback() -> No
     (entry,) = _budget_entries(spec, [_checked("tilt", 30.0)])
     assert entry.status is CheckStatus.NOT_EVALUATED
     assert "could not be evaluated" in entry.detail and "padeye bending" in entry.detail
+
+
+def _with_growth(*allowances) -> Budget:
+    return _hybrid().model_copy(update={"growth": allowances})
+
+
+def test_a_growth_allowance_is_applied_and_recorded_as_a_ledger_entry() -> None:
+    from anvilate.budget import GrowthAllowance
+    from anvilate.margin import MarginKind
+
+    budget = _with_growth(
+        GrowthAllowance(
+            basis=ContributorBasis.ESTIMATED, factor=1.25, authority="company practice DP-104"
+        )
+    )
+    result = budget.evaluate()
+    plain = _hybrid().evaluate()
+    # The estimated jitter grows by 25%; nothing else moves.
+    jitter = next(t for t in result.contributors if t.name == "jitter")
+    assert jitter.value == pytest.approx(40.0 * 1.25, rel=1e-12)
+    assert result.total > plain.total
+    # And the allowance is visible as conservatism rather than absorbed into the value.
+    (entry,) = result.ledger().entries
+    assert entry.kind is MarginKind.CONTINGENCY
+    assert entry.value == pytest.approx(1.25, rel=1e-12)
+    assert entry.label == "estimated growth allowance on jitter"
+    assert entry.origin == "budget line of sight: jitter"
+    assert entry.authority == "company practice DP-104"
+    assert result.ledger().stack("pointing error").cumulative == pytest.approx(1.25, rel=1e-12)
+    # Growing the estimate is what makes it govern: it was mount before.
+    assert result.governing == ("jitter",)
+
+
+def test_a_budget_with_no_allowance_records_no_entry() -> None:
+    assert _hybrid().evaluate().ledger().entries == ()
+    from anvilate.budget import GrowthAllowance
+
+    unit = _with_growth(
+        GrowthAllowance(basis=ContributorBasis.MEASURED, factor=1.0, authority="none needed")
+    )
+    assert unit.evaluate().margins == ()
+    assert unit.evaluate().total == pytest.approx(_hybrid().evaluate().total, rel=1e-12)
+
+
+def test_two_allowances_on_one_basis_are_refused() -> None:
+    from anvilate.budget import GrowthAllowance
+
+    with pytest.raises(ValidationError, match="two growth allowances for one basis"):
+        _with_growth(
+            GrowthAllowance(basis=ContributorBasis.ESTIMATED, factor=1.1, authority="DP-104"),
+            GrowthAllowance(basis=ContributorBasis.ESTIMATED, factor=1.2, authority="DP-104"),
+        )
+
+
+@pytest.mark.parametrize("factor", [0.9, 0.0, -1.0, float("nan"), float("inf")])
+def test_an_allowance_that_is_not_one_is_refused(factor: float) -> None:
+    from anvilate.budget import GrowthAllowance
+
+    with pytest.raises(ValidationError, match="at least 1"):
+        GrowthAllowance(basis=ContributorBasis.ESTIMATED, factor=factor, authority="DP-104")
+
+
+def test_an_allowance_needs_an_authority() -> None:
+    from anvilate.budget import GrowthAllowance
+
+    with pytest.raises(ValidationError, match="must state"):
+        GrowthAllowance(basis=ContributorBasis.ESTIMATED, factor=1.1, authority="  ")

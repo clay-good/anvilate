@@ -50,6 +50,7 @@ attestation.verify_attestation
 budget.CombinationRule
 budget.ContributorBasis
 budget.LimitBasis
+budget.GrowthAllowance
 budget.Contributor
 budget.Budget
 budget.ContributorResult

@@ -68,6 +68,7 @@ gates export like any other failure. A declared budget the screen could not eval
 | One check, one term | Two contributors bound to the same `check` id are refused, naming both. |
 | Compensation is declared | A negative value must be `compensating=True`, the result reports the total with and without it, and compensation is refused under quadrature, where its sign is squared away. |
 | Shares sum to one | Linearly under worst case; as a share of the squared total under quadrature. |
+| A growth allowance is ledgered, not folded in | `growth=(GrowthAllowance(basis=..., factor=..., authority=...),)` applies a factor to every contributor of one basis — practice expects an estimate to grow more than a measurement — and `result.ledger()` returns the applied allowances as [margin-ledger](margin-ledger.md) entries of kind contingency-or-growth. At most one allowance per basis, and a factor below 1 is refused. |
 | A spent budget has no headroom | Every headroom is unavailable with the overrun stated, never a negative allowance. |
 | An assumed limit says so | A `working_assumption` limit is labeled on the scorecard entry. |
 
@@ -88,8 +89,12 @@ budget and a pointing budget on one part: the mass budget passes with headroom, 
 pointing budget fails on the hybrid rule while every screen behind it passes — the same four
 numbers combine to 59.4 µrad uncorrelated and 68.7 µrad with the thermal pair summed first.
 
+An allowance is applied to the value the rule combines, and recorded rather than absorbed:
+pass `result.ledger().entries` into `CalculationReport(margins=...)` and the allowance appears
+in the report's margin ledger with its authority, beside the budget it came from.
+
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,
-groups 1-3, 4 and 6.1). Nested budgets and growth allowances — a sub-budget as a
-contributor, and a per-basis allowance recorded as a margin-ledger entry — are not built.
+groups 1-3, 4, 6.1 and per-basis growth allowances). Nested budgets — a sub-budget as a
+contributor, with bounded depth and cycle refusal — are not built.

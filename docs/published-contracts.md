@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.9.0: a budget can declare growth allowances
+
+`budgets[].growth` is an optional list of per-basis growth allowances: a factor applied to
+every contributor of one basis (measured, calculated, estimated) with the authority for it.
+The allowance is applied to the value the combination rule sees and recorded as a
+[margin-ledger](margin-ledger.md) entry of kind contingency-or-growth, so it is never
+absorbed into a number that then reads as a measurement. At most one allowance per basis.
+
 ### Design Spec 1.8.0: a spec can declare performance budgets
 
 `budgets` is an optional list of [performance budgets](performance-budgets.md): an allocated

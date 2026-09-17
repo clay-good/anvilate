@@ -15,7 +15,7 @@
 - [ ] 2.2 Capture statistical-basis conservatism where a material allowable declares one
 - [ ] 2.3 Capture rounding conservatism where a value is snapped to a stock size or a
       standard increment
-- [ ] 2.4 Capture contingency and growth allowances from budgets
+- [x] 2.4 Capture contingency and growth allowances from budgets
 
 ## 3. Analysis
 
