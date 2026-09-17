@@ -380,6 +380,8 @@ def test_every_docs_page_is_in_the_docs_index():
         "Forty-eight": 48,
         "Forty-nine": 49,
         "Fifty": 50,
+        "Fifty-one": 51,
+        "Fifty-two": 52,
     }
     claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)
     assert claimed is not None, "the index no longer opens by saying how many pages it maps"

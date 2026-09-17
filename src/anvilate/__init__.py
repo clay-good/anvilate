@@ -49,6 +49,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.dcc` — Digital Calibration Certificates read as measured inputs,
   with the instrument's identity, its stated uncertainty, and an honest signature
   status attached to every value.
+- :mod:`anvilate.dependency` — what each check consumes from which other check,
+  ordered so nothing runs before its input, with cycles refused by naming every member.
 - :mod:`anvilate.derivation` — a check's worked calculation: formula, substituted
   values, result, and the clause it came from.
 - :mod:`anvilate.evidence` — the provenance roll-up: where every standards number

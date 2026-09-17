@@ -140,6 +140,11 @@ dcc.CalibratedValue
 dcc.CalibrationCertificate
 dcc.d_si_quantity
 dcc.parse_dcc
+dependency.Output
+dependency.Consumes
+dependency.CheckNode
+dependency.DependencyGraph
+dependency.find_cycles
 derivation.SymbolValue
 derivation.Derivation
 derivation.DerivationAbsence
