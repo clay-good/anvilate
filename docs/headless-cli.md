@@ -432,6 +432,13 @@ two origins named as a possible double count. It is present with empty lists whe
 declares none. The text rendering prints the same ledger under the card, only when there is
 one, and the verdict and exit code never read it. See [the margin ledger](margin-ledger.md).
 
+Each checked spec also carries `needs`: the count of checks that could not run, the
+consolidated [needs report](declaration-needs.md) — one item per missing declaration with
+what it takes, where a value may come from, how many checks it unblocks and which ones — and
+the sentence stating that the order is leverage and not importance. The text rendering prints
+the unevaluated count under the card in both directions, zero included, and the report below
+it when there is one. Neither reads the verdict or the exit code.
+
 The published schema is a closed union: unknown fields and fields from the wrong command
 variant do not validate. Evidence and QIF export documents additionally carry `artifact`,
 so a script can select the variant without inspecting its payload. The schema is generated,

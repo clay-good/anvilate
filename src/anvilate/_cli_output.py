@@ -27,14 +27,15 @@ from .geometry import (
     StepInterfaceCandidates,
 )
 from .margin import MarginEntry, MarginKind
-from .scorecard import CheckStatus, Scorecard
+from .needs import LEVERAGE_IS_NOT_IMPORTANCE
+from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.34.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.35.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.34.0.json"]
-SchemaVersion = Literal["1.34.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.35.0.json"]
+SchemaVersion = Literal["1.35.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -70,6 +71,24 @@ class MarginSummary(_WireModel):
     double_counts: tuple[MarginDoubleCountSummary, ...]
 
 
+class NeedSummary(_WireModel):
+    declaration: Named
+    takes: Named
+    dimension: str | None
+    units: tuple[str, ...]
+    sources: tuple[ValueSource, ...]
+    leverage: Annotated[int, Field(ge=1)]
+    unblocks: tuple[Named, ...]
+
+
+class NeedsSummary(_WireModel):
+    """What the build needs next; `items` is empty when nothing is missing."""
+
+    not_evaluated: Annotated[int, Field(ge=0)]
+    ordering: Literal[LEVERAGE_IS_NOT_IMPORTANCE]  # type: ignore[valid-type]
+    items: tuple[NeedSummary, ...]
+
+
 class CheckedSpec(_WireModel):
     path: str
     name: Named
@@ -77,6 +96,7 @@ class CheckedSpec(_WireModel):
     governing: GoverningCheck | None
     scorecard: Scorecard
     margins: MarginSummary
+    needs: NeedsSummary
 
 
 class CheckOutput(_WireModel):

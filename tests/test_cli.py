@@ -229,7 +229,15 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     assert sorted(payload) == ["command", "schema", "schema_version", "specs", "status"]
     assert len(payload["specs"]) == 1
     entry = payload["specs"][0]
-    assert sorted(entry) == ["governing", "margins", "name", "path", "scorecard", "status"]
+    assert sorted(entry) == [
+        "governing",
+        "margins",
+        "name",
+        "needs",
+        "path",
+        "scorecard",
+        "status",
+    ]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
     assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated", "pass"]
     assert code == EXIT_NOT_EVALUATED
@@ -4342,3 +4350,63 @@ def test_check_json_carries_the_margin_summary_and_an_empty_one(tmp_path):
     (double,) = summary["double_counts"]
     assert double["origins"] == ["rigging plan RP-3", "spec: loads"]
     assert by_path[str(plain)] == {"entries": [], "stacks": [], "double_counts": []}
+
+
+_BARE_SPEC = """
+anvilate_spec: "1.3.0"
+name: bare
+description: A part with almost nothing declared.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+acceptance: {tiers: [T1_analytical, T2_dfm]}
+"""
+
+
+def test_check_prints_the_needs_report_and_the_unevaluated_count(tmp_path):
+    spec_file = tmp_path / "bare.yaml"
+    spec_file.write_text(_BARE_SPEC)
+    code, out, _err = _run("check", str(spec_file))
+    assert code != 0  # a card nobody could screen is not a pass
+    assert "  not evaluated: 2" in out
+    assert "needs 3:" in out
+    assert "leverage and not importance" in out
+    assert "element_type:" in out and "unblocks 1: T1 analytical" in out
+    # The card comes first and the next step after it, in one output.
+    assert out.index("bare: NOT_EVALUATED") < out.index("needs 3:")
+
+
+def test_check_states_a_zero_unevaluated_count_rather_than_staying_silent(tmp_path):
+    spec_file = tmp_path / "padeye.yaml"
+    spec_file.write_text(_LUG_SPEC)
+    _code, out, _err = _run("check", str(spec_file))
+    # A complete card says so positively: silence and completeness must not look the same.
+    assert "  not evaluated: 0" in out
+    assert "needs" not in out
+
+
+def test_check_json_carries_the_needs_summary(tmp_path):
+    from anvilate._cli_output import CheckOutput
+    from anvilate.needs import LEVERAGE_IS_NOT_IMPORTANCE
+
+    bare = tmp_path / "bare.yaml"
+    bare.write_text(_BARE_SPEC)
+    complete = tmp_path / "padeye.yaml"
+    complete.write_text(_LUG_SPEC)
+    _code, raw, _err = _run("check", "--format", "json", str(bare), str(complete))
+    document = json.loads(raw)
+    CheckOutput.model_validate(document)
+    by_path = {spec["path"]: spec["needs"] for spec in document["specs"]}
+    needs = by_path[str(bare)]
+    assert needs["not_evaluated"] == 2
+    assert needs["ordering"] == LEVERAGE_IS_NOT_IMPORTANCE
+    assert [item["declaration"] for item in needs["items"]] == [
+        "element_type",
+        "element_params",
+        "dimensions",
+    ]
+    assert needs["items"][0]["sources"] == ["user_statement"]
+    assert needs["items"][0]["unblocks"] == ["T1 analytical"]
+    # Present and empty on a complete card, not absent: the key is the answer either way.
+    assert by_path[str(complete)]["items"] == []
+    assert by_path[str(complete)]["not_evaluated"] == 0

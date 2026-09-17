@@ -41,9 +41,17 @@ record, a measurement, or the user's own statement.
 | A passing card still reports its gaps | A pass computed over a subset of the checks is not a complete answer. |
 | Nothing is inferred | The report never supplies a value, weakens a refusal, or changes a verdict. |
 
+## On the command line
+
+`anvilate check` prints the unevaluated count under the card — zero included, so a complete
+card says so positively — and the report below it when anything is missing. `--format json`
+carries the same thing per spec under `needs`, present with an empty `items` list when
+nothing is missing. Neither changes the verdict or the exit code.
+
 ## Status
 
-This is the consolidated report (`openspec/changes/add-declaration-completeness`, group 1),
+This is the consolidated report and its CLI rendering
+(`openspec/changes/add-declaration-completeness`, group 1),
 with the four screening refusals that state a need today: the element and its parameters, the
 required safety factor, a toleranced dimension, and a load case's nature. Profiles — a cited,
 versioned bundle of declarations — and a declared screening depth are the remaining groups of

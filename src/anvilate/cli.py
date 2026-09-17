@@ -72,6 +72,7 @@ from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .margin import MarginLedger
+from .needs import LEVERAGE_IS_NOT_IMPORTANCE, needs_report
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, UnitSystem
 
@@ -2394,6 +2395,27 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     return EXIT_OK
 
 
+def _needs_summary(card: Scorecard) -> dict[str, Any]:
+    """The consolidated needs report as `_cli_output.NeedsSummary` describes it."""
+    report = needs_report(card)
+    return {
+        "not_evaluated": len(card.not_evaluated()),
+        "ordering": LEVERAGE_IS_NOT_IMPORTANCE,
+        "items": [
+            {
+                "declaration": item.need.declaration,
+                "takes": item.need.takes,
+                "dimension": item.need.dimension,
+                "units": list(item.need.units),
+                "sources": [source.value for source in item.need.sources],
+                "leverage": item.leverage,
+                "unblocks": list(item.unblocks),
+            }
+            for item in report.items
+        ],
+    }
+
+
 def _margin_summary(spec) -> dict[str, Any]:
     """The declared margins as `_cli_output.MarginSummary` describes them."""
     ledger = MarginLedger(entries=spec.constraints.margins)
@@ -2470,6 +2492,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                         ),
                         "scorecard": card.model_dump(mode="json"),
                         "margins": _margin_summary(spec),
+                        "needs": _needs_summary(card),
                     }
                     for path, spec, card in results
                 ],
@@ -2682,6 +2705,19 @@ def _render(
         lines.append("  governing:     none — nothing blocks and no check carries a margin")
     else:
         lines.append(f"  governing:     {governing.name} ({governing.status.value})")
+    # Completeness beside the verdict, stated in both directions. A reader's question is not
+    # only what passed but what nobody looked at, and a card that says nothing about its
+    # unevaluated checks reads as complete whether it is or not — so the zero is printed too.
+    blocked = card.not_evaluated()
+    lines.append(f"  not evaluated: {len(blocked)}")
+    report = needs_report(card)
+    if len(report):
+        lines.append("")
+        lines.extend(str(report).splitlines())
+    elif blocked:
+        # The counts disagree with the report, and saying so is the honest end of it: these
+        # checks could not run and none of them stated a declaration that would let them.
+        lines.append(f"                 {len(blocked)} could not run and none states what it needs")
     return "\n".join(lines)
 
 
