@@ -9280,3 +9280,19 @@ def test_optical_bench_budgets_example_fails_the_budget_its_screens_all_pass():
         namespace["uncorrelated_pointing_total"]() < namespace["pointing_budget"]().limit.magnitude
     )
     _assert_narrates_computed("optical_bench_budgets.py", namespace)
+
+
+def test_concept_and_detailed_depth_example_screens_one_document_two_ways():
+    namespace = runpy.run_path(str(_EXAMPLES / "concept_and_detailed_depth.py"))
+    result = namespace["depth_comparison"]()
+    # The concept card is shorter, and what it left out is counted rather than implied.
+    assert result["concept_deferred"] == 2
+    assert result["detailed_deferred"] == 0
+    assert result["detailed_checks"] > result["concept_checks"] - result["concept_deferred"]
+    # A deferral is not a pass: the same document rolls up differently at the two depths.
+    assert result["concept_status"] is CheckStatus.OUT_OF_DEPTH
+    assert result["detailed_status"] is CheckStatus.PASS
+    # And the raise states its return and its price.
+    assert result["newly_run"] == 3
+    assert result["newly_required"] == 0
+    _assert_narrates_computed("concept_and_detailed_depth.py", namespace)

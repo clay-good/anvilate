@@ -275,10 +275,12 @@ mcp.stateless_gaps
 mcp.PROTOCOL_REVISION
 mcp.tool_catalog
 mcp.wire_definitions
+needs.DepthChange
 needs.NeedItem
 needs.NeedsReport
 needs.LEVERAGE_IS_NOT_IMPORTANCE
 needs.needs_report
+needs.deepening
 profile.Applicability
 profile.SuppliedValue
 profile.Profile
@@ -303,6 +305,7 @@ scorecard.ValueSource
 scorecard.Need
 scorecard.ScorecardEntry
 scorecard.Scorecard
+screening.DEPTH_ORDER
 screening.Structure
 screening.StructureMember
 screening.element_registry

@@ -110,6 +110,23 @@ tolerances, and the interfaces this part publishes.
 | The deferral says how to undo it | Each out-of-depth entry names the declaration that would have driven the check and the depth that would run it. |
 | The default changes nothing | A document that declares no depth is screened exactly as before. |
 
+### Going deeper names its price and its return
+
+```python
+from anvilate.needs import deepening
+from anvilate.spec import ScreeningDepth
+
+change = deepening(spec, ScreeningDepth.DETAILED)
+change.newly_run        # the checks that now produce a verdict, named
+change.newly_required   # the needs those checks add that the shallower screen never had
+print(change)           # "concept -> detailed: runs 3 more check(s), needs 1 more declaration(s)"
+```
+
+Both halves, because a raise has a return and a price: reporting only the needs makes a
+deeper screen read as a new wall, and reporting only the checks makes it read as free. A
+raise to the depth already declared, or to a shallower one, is refused rather than reported
+as a change of nothing.
+
 ## The refusals that state nothing
 
 Nine of the screening module's thirty-two refusals state a need today. The rest are listed
@@ -131,6 +148,5 @@ needs.
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
 with the nine screening refusals that state a need today. A profile's record, binding,
-applicability check and overrides ship too (group 2.1, 2.2 and 2.4). The declared screening depth ships too (group 3.1 and 3.2).
-Marking profile-sourced values through the spec, the card and the bundle (2.3), and the
-report that names what raising the depth newly requires (3.3), are what remain.
+applicability check and overrides ship too (group 2.1, 2.2 and 2.4). The declared screening depth and the depth-raise report ship too (group 3). Marking
+profile-sourced values through the spec, the card and the bundle (2.3) is what remains.

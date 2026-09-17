@@ -334,3 +334,45 @@ def test_the_page_counts_are_the_sweeps_own() -> None:
     tens = {30: "thirty", 32: "thirty-two", 33: "thirty-three", 35: "thirty-five", 40: "forty"}
     assert f"{words[wired]} of the screening module's {tens[len(sites)]} refusals" in page
     assert f"the {words[wired].lower()} screening refusals that state a need today" in page
+
+
+def test_supplying_the_top_item_unblocks_the_checks_it_promised() -> None:
+    """The report's claim is asserted, not decorative: it says which checks an item would
+    unblock, and supplying that item has to make exactly those checks run."""
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    lug = """
+anvilate_spec: "1.3.0"
+name: lug
+description: A lifting lug with no declared safety factor.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+element_type: lifting_lug
+element_params:
+  name: padeye
+  material: ASTM-A36
+  width: {magnitude: 120.0, unit: mm}
+  hole_diameter: {magnitude: 40.0, unit: mm}
+  thickness: {magnitude: 20.0, unit: mm}
+  load: {magnitude: 60.0, unit: kN}
+"""
+    before = screen_spec(load_spec_yaml(lug))
+    report = needs_report(before)
+    (top,) = report.items  # one item, and it promises one check
+    assert top.need.declaration == "constraints.min_safety_factor"
+    promised = set(top.unblocks)
+    assert promised == {entry.name for entry in before.not_evaluated()}
+
+    supplied = load_spec_yaml(
+        lug + "constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}\n"
+    )
+    after = screen_spec(supplied)
+    # Every check the item promised now produces a verdict, and nothing it promised is
+    # still waiting: the number in the report was the number of screens it unblocks.
+    still_blocked = {entry.name for entry in after.not_evaluated()}
+    assert not (promised & still_blocked)
+    assert len(after.entries) > len(before.entries) - len(promised)
+    assert needs_report(after).items == ()

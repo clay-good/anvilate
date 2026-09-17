@@ -83,6 +83,7 @@ from .tolerance.process import tolerance_is_achievable
 from .units import Quantity, spoken
 
 __all__ = [
+    "DEPTH_ORDER",
     "Structure",
     "StructureMember",
     "element_registry",
@@ -1456,6 +1457,12 @@ _DEEPER_THAN_CONCEPT: dict[str, tuple[str, str]] = {
         "a published contract states a mating geometry for another part to build against",
     ),
 }
+
+
+#: The depths from shallowest to deepest. An order rather than a comparison on the enum: a
+#: `StrEnum` compares alphabetically, which puts `concept` above `detailed` and would have
+#: read a raise as a lowering.
+DEPTH_ORDER: tuple[ScreeningDepth, ...] = (ScreeningDepth.CONCEPT, ScreeningDepth.DETAILED)
 
 
 def _deferred_by_depth(spec: DesignSpec) -> list[ScorecardEntry]:

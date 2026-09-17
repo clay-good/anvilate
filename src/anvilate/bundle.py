@@ -91,10 +91,19 @@ __all__ = [
 # blocking failure to hide.
 _PRECEDENCE: tuple[CheckStatus, ...] = (
     CheckStatus.PASS,
+    CheckStatus.OUT_OF_DEPTH,
     CheckStatus.OVER_MARGIN,
     CheckStatus.NOT_EVALUATED,
     CheckStatus.FAIL,
 )
+if set(_PRECEDENCE) != set(CheckStatus):
+    # A status outside this tuple made `_worst` raise `tuple.index(x): x not in tuple` from
+    # the middle of assembling a bundle, which names neither the status nor the decision that
+    # was never made about it. Checked at import, where the omission is.
+    raise RuntimeError(
+        f"the bundle roll-up has no precedence for "
+        f"{sorted(status.value for status in set(CheckStatus) - set(_PRECEDENCE))}"
+    )
 
 
 def _worst(statuses: Iterable[CheckStatus]) -> CheckStatus:

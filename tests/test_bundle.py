@@ -1647,3 +1647,17 @@ def test_the_exported_document_states_a_check_s_absence_of_work_and_not_only_its
             f"{entry.name!r} declares why it shows no formula and the exported document "
             f"does not carry it"
         )
+
+
+def test_the_roll_up_precedence_covers_every_status_and_matches_the_scorecards() -> None:
+    """Two orderings of one vocabulary, held to each other.
+
+    A status missing here used to raise `tuple.index(x): x not in tuple` out of the middle of
+    `assemble_evidence_bundle`, and the two orderings drifting apart is a second place for a
+    blocking verdict to hide — which is the comment `_PRECEDENCE` carries about itself.
+    """
+    from anvilate.bundle import _PRECEDENCE
+    from anvilate.scorecard import _STATUS_RANK, CheckStatus
+
+    assert set(_PRECEDENCE) == set(CheckStatus)
+    assert list(_PRECEDENCE) == sorted(CheckStatus, key=lambda status: _STATUS_RANK[status])

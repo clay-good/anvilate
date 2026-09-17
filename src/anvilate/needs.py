@@ -23,6 +23,8 @@ Nothing in this module infers a value, weakens a refusal, or changes a verdict.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import ConfigDict, Field
 
 from ._models import ItemCollection, Named, StatableModel
@@ -30,9 +32,11 @@ from .scorecard import CheckStatus, Need, Scorecard
 
 __all__ = [
     "NeedItem",
+    "DepthChange",
     "NeedsReport",
     "LEVERAGE_IS_NOT_IMPORTANCE",
     "needs_report",
+    "deepening",
 ]
 
 #: Printed wherever the report is rendered. The ordering is a measure of how much work a
@@ -111,3 +115,76 @@ def needs_report(card: Scorecard) -> NeedsReport:
     items = [NeedItem(need=need, unblocks=tuple(names)) for need, names in merged.values()]
     items.sort(key=lambda item: -item.leverage)
     return NeedsReport(items=tuple(items))
+
+
+class DepthChange(StatableModel):
+    """What raising a document's screening depth would run, and what it would then need.
+
+    Both halves, because a depth raise has a return and a price: the checks it newly runs,
+    and the declarations those checks ask for that the shallower screen never mentioned.
+    Reporting only the second is how a deeper screen reads as a new wall; reporting only the
+    first is how it reads as free.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    from_depth: Named
+    to_depth: Named
+    newly_run: tuple[Named, ...] = ()
+    newly_required: tuple[NeedItem, ...] = ()
+
+    def __str__(self) -> str:
+        if not self.newly_run and not self.newly_required:
+            return (
+                f"{self.from_depth} -> {self.to_depth}: no check this document supports runs "
+                "deeper than it is already screened"
+            )
+        lines = [
+            f"{self.from_depth} -> {self.to_depth}: runs {len(self.newly_run)} more "
+            f"check(s), needs {len(self.newly_required)} more declaration(s)"
+        ]
+        lines += [f"  runs: {name}" for name in self.newly_run]
+        lines += [f"  needs: {item}" for item in self.newly_required]
+        return "\n".join(lines)
+
+
+def deepening(spec: Any, to_depth: Any) -> DepthChange:
+    """Screen ``spec`` again at ``to_depth`` and report what the raise costs and returns.
+
+    A pure comparison of two screens of the same document: nothing is mutated, and the
+    deeper card is thrown away once its names and needs are read. ``to_depth`` must be
+    deeper than the document's own declaration — a raise to the depth already declared, or
+    to a shallower one, is refused rather than reported as a change of nothing.
+
+    Imported locally: this module describes a card, and the screen that builds one is a
+    layer above it. Reaching up at call time keeps that direction one-way.
+    """
+    from .screening import DEPTH_ORDER, screen_spec
+
+    declared = spec.acceptance.depth
+    if DEPTH_ORDER.index(to_depth) <= DEPTH_ORDER.index(declared):
+        raise ValueError(
+            f"this document is screened at {declared.value} and {to_depth.value} is not "
+            f"deeper than it; the depths from shallowest are "
+            f"{', '.join(depth.value for depth in DEPTH_ORDER)}"
+        )
+    shallow = screen_spec(spec)
+    deeper = screen_spec(
+        spec.model_copy(
+            update={"acceptance": spec.acceptance.model_copy(update={"depth": to_depth})}
+        )
+    )
+    ran_before = {entry.name for entry in shallow.entries if entry.evaluated}
+    newly_run = tuple(
+        entry.name for entry in deeper.entries if entry.evaluated and entry.name not in ran_before
+    )
+    asked_before = {item.need.declaration for item in needs_report(shallow).items}
+    newly_required = tuple(
+        item for item in needs_report(deeper).items if item.need.declaration not in asked_before
+    )
+    return DepthChange(
+        from_depth=declared.value,
+        to_depth=to_depth.value,
+        newly_run=newly_run,
+        newly_required=newly_required,
+    )

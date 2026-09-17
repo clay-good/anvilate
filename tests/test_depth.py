@@ -166,3 +166,68 @@ def test_every_status_has_an_exit_code_a_rank_and_a_label(status: CheckStatus) -
         _INSPECTION_STATUS,
     ):
         assert status in table, f"{status.value} has no entry in {table}"
+
+
+# --- raising the depth: what it runs, and what it then needs ---------------------------
+
+
+def test_raising_the_depth_reports_the_checks_it_runs() -> None:
+    from anvilate.needs import deepening
+    from anvilate.spec import ScreeningDepth
+
+    change = deepening(_spec("concept"), ScreeningDepth.DETAILED)
+    assert change.from_depth == "concept" and change.to_depth == "detailed"
+    # The return: the checks that now produce a verdict, named.
+    assert set(change.newly_run) == {
+        "tolerance achievability: bore",
+        "tolerance achievability: seat",
+        "stack-up: seat_to_bore",
+    }
+    rendered = str(change)
+    assert "concept -> detailed: runs 3 more check(s)" in rendered
+    for name in change.newly_run:
+        assert f"runs: {name}" in rendered
+
+
+def test_raising_the_depth_reports_what_it_newly_needs() -> None:
+    from anvilate.needs import deepening
+    from anvilate.spec import ScreeningDepth
+
+    # A chain that links a dimension the document never declared: invisible at concept
+    # depth, where chains are deferred, and a need as soon as the depth is raised.
+    text = _DRAWN.replace("{dimension: seat, direction: -1}", "{dimension: shim, direction: -1}")
+    concept = load_spec_yaml(
+        text.replace(
+            "acceptance: {tiers: [T1_analytical, T2_dfm]}",
+            "acceptance: {tiers: [T1_analytical, T2_dfm], depth: concept}",
+        )
+    )
+    change = deepening(concept, ScreeningDepth.DETAILED)
+    assert [item.need.declaration for item in change.newly_required] == ["dimensions"]
+    assert "needs: dimensions" in str(change)
+    # The price is stated beside the return, not instead of it.
+    assert change.newly_run and "runs 2 more check(s), needs 1 more declaration(s)" in str(change)
+
+
+@pytest.mark.parametrize("to_depth", ["concept", "detailed"])
+def test_a_raise_that_is_not_one_is_refused(to_depth: str) -> None:
+    from anvilate.needs import deepening
+    from anvilate.spec import ScreeningDepth
+
+    with pytest.raises(ValueError, match="is not deeper than it"):
+        deepening(_spec(), ScreeningDepth(to_depth))  # the document is already detailed
+
+
+def test_the_depths_are_ordered_shallowest_first_and_not_alphabetically() -> None:
+    from anvilate.screening import DEPTH_ORDER
+    from anvilate.spec import ScreeningDepth
+
+    assert DEPTH_ORDER == (ScreeningDepth.CONCEPT, ScreeningDepth.DETAILED)
+    assert set(DEPTH_ORDER) == set(ScreeningDepth), "a depth outside the order cannot be compared"
+    # Alphabetically 'concept' < 'detailed' agrees here, so the order is pinned by what each
+    # depth screens instead: the deeper one is a superset of the shallower one's families.
+    from anvilate.screening import _DEEPER_THAN_CONCEPT
+
+    deferred = {entry.name for entry in screen_spec(_spec("concept")).out_of_depth()}
+    assert deferred <= set(_DEEPER_THAN_CONCEPT)
+    assert not screen_spec(_spec()).out_of_depth()
