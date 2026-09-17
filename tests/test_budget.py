@@ -241,3 +241,19 @@ def test_the_docs_page_prints_what_the_budget_computes() -> None:
     assert f"# {result.estimated_share:.3f} " in block  # type: ignore[attr-defined]
     mount = result.contributors[0]  # type: ignore[attr-defined]
     assert f"could grow to {mount.headroom:.2f} µrad" in page
+
+
+def test_the_rendered_result_itemizes_every_term_and_says_why_headroom_is_missing() -> None:
+    lines = str(_hybrid().evaluate()).splitlines()
+    assert lines[0].startswith("pointing error by hybrid: total 68.74 µrad")
+    assert "  thermal: sum 50 µrad" in lines
+    assert "  mount: 30 µrad, 31.7% of total, headroom 68.18 µrad" in lines
+    assert len(lines) == 1 + 1 + 4
+
+    spent = str(_budget(CombinationRule.WORST_CASE, _term("a", 80.0), _term("b", 40.0)).evaluate())
+    assert "  a: 80 µrad, 66.7% of total, no headroom: the budget is already spent" in spent
+
+    unresolved = _budget(CombinationRule.RSS, _term("a", None, unresolved="not measured"))
+    assert str(unresolved.evaluate()) == (
+        "budget line of sight: not evaluated — contributor 'a' has no value: not measured"
+    )
