@@ -1,0 +1,29 @@
+# Refusals that state no declaration, and why — the exclusion list for the gate in
+# tests/test_needs.py.
+#
+# A check that could not run should say what it needed, so `anvilate.needs` can tell an
+# engineer their next action. Not every refusal has one: some report a capability this
+# library has not built, some answer a declaration that IS present, and some are corrections
+# rather than gaps — the document said something and it did not resolve, which a needs item
+# would misdescribe as a value nobody supplied.
+#
+# One line per site, `function | entry name | cause`. The gate refuses a NOT_EVALUATED
+# ScorecardEntry in src/anvilate/screening.py that neither carries `needs=` nor appears here,
+# and refuses a line here that no longer matches a site. Adding a line is a deliberate act
+# with a diff, which is the point: the honest default is that a refusal states its need.
+_budget_entries | budget {budget.name} | a correction, not a gap: the budget's contributors bind to checks that are on the card and measured something else, and the fix is the binding the document already wrote
+_chain_entries | stack-up chains | a correction: a linked dimension's tolerance designation does not resolve, so the document states a band the tables do not carry
+_combination_entry | load combination | a correction: the declared combination basis itself could not be resolved, and the fix is the basis the document already names
+_constraint_entries | constraint {field} | a capability gap: max_mass, max_cost and the envelope are bounds on a whole part, and nothing this library builds today weighs, costs or bounds one
+_declared_bound_entries | FEA convergence tolerance | a capability gap: the tolerance bounds a T3 run, and T3 is not a synchronous screen
+_declared_bound_entries | published interface contracts | a capability gap: a published contract states a mating geometry, and checking it takes built geometry
+_dfm_entries | tolerance achievability: {dimension.tag} | a correction: the declared tolerance or fit designation does not resolve, so the document states a band the tables do not carry
+_displacement_entry | displacement limit | a capability gap when no check computed a deflection, and an answer when every computed deflection clears the limit; neither is a missing declaration
+_envelope_entry | constraint envelope | a capability gap: fitting a part in an envelope takes the whole solid, and a document declares the element its checks need
+_geometric_tolerance_entry | geometric tolerance | a capability gap: the remaining Y14.5 rules turn on the tagged feature's type and the zone is checked against built geometry
+_min_wall_entry | minimum wall | a correction at one site (a wall that is not a length) and an answer at the other (every declared wall clears the minimum); the third site states its need
+_reference_entries | interface resolution: {interface.tag} | a capability gap: the contract is imported from another document, and a screen of one document cannot fetch another
+_screen_element | T1 analytical | three correction sites: an element_type the registry does not carry, element_params its model refuses, and a pack screen's own refusal about the element it was given; the fourth site states its need
+screen_spec | T0 geometry | a capability gap: T0 checks a built solid and no geometry is generated from a spec today
+screen_spec | T3 FEA | a capability gap: T3 is bounded by a convergence criterion rather than by the size of its input
+screen_structure_element | T1 analytical | a correction: a structure cannot be a member of a structure, and the fix is to list its members alongside the others

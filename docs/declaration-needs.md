@@ -48,11 +48,26 @@ card says so positively — and the report indented below it when anything is mi
 carries the same thing per spec under `needs`, present with an empty `items` list when
 nothing is missing. Neither changes the verdict or the exit code.
 
+## The refusals that state nothing
+
+Nine of the screening module's thirty-two refusals state a need today. The rest are listed
+in [`docs/api/refusals-without-needs.txt`](api/refusals-without-needs.txt) with a cause per
+site, because not every refusal has a declaration behind it: some report a capability this
+library has not built (T0 geometry, T3 FEA, a published contract that needs built geometry),
+some answer a declaration that is present (every declared wall clears the minimum), and some
+are corrections rather than gaps — the document said something and it did not resolve, which
+a needs item would misdescribe as a value nobody supplied.
+
+A gate in `tests/test_needs.py` reads the refusals off the module's syntax tree and fails a
+NOT_EVALUATED entry that neither states a need nor appears in that file, refuses a line for a
+site that no longer exists, and carries a population floor so a refactor cannot turn it green
+by emptying it. A second assertion is a one-way ratchet on how many refusals state their
+needs.
+
 ## Status
 
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
-with the four screening refusals that state a need today: the element and its parameters, the
-required safety factor, a toleranced dimension, and a load case's nature. Profiles — a cited,
+with the nine screening refusals that state a need today. Profiles — a cited,
 versioned bundle of declarations — and a declared screening depth are the remaining groups of
 that change, and the rest of the library's refusals have yet to state their needs.

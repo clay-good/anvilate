@@ -119,6 +119,36 @@ _NEEDS_A_TOLERANCED_DIMENSION = Need(
     takes="at least one explicitly toleranced dimension, with its nominal and band",
     sources=(ValueSource.USER, ValueSource.STANDARD),
 )
+_NEEDS_THE_CHAINS_DIMENSION = Need(
+    declaration="dimensions",
+    takes="the dimension a declared chain links, with its nominal and band",
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+_NEEDS_A_SEISMIC_BASIS = Need(
+    declaration="combination_basis",
+    takes=(
+        "asce7_lrfd_seismic or asce7_asd_seismic, the basis that reads the seismic "
+        "parameters this document already states"
+    ),
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_THE_T1_TIER = Need(
+    declaration="acceptance.tiers",
+    takes="T1_analytical among the demanded tiers, so the element's pack screen runs",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_THE_T2_TIER = Need(
+    declaration="acceptance.tiers",
+    takes="T2_dfm among the demanded tiers, so the declared bands meet the process floor",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_A_DECLARED_WALL = Need(
+    declaration="element_params.thickness",
+    takes="a wall thickness on the declared element, for min_wall to be compared against",
+    dimension="[length]",
+    units=("mm", "in"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
 _NEEDS_A_LOAD_NATURE = Need(
     declaration="load_cases[].nature",
     takes="what kind of load each force-carrying case is — dead, live, wind, seismic",
@@ -522,6 +552,7 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
                 name="stack-up chains",
                 status=CheckStatus.NOT_EVALUATED,
                 detail=f"a declared chain references an undeclared dimension tag: {unknown}",
+                needs=(_NEEDS_THE_CHAINS_DIMENSION,),
             )
         ]
     except ToleranceRangeError as unresolved:
@@ -1089,6 +1120,7 @@ def _declared_bound_entries(
                     "combination_basis: asce7_lrfd_seismic or asce7_asd_seismic to reach "
                     "anything. Declared without one, a seismic design is stated and not applied"
                 ),
+                needs=(_NEEDS_A_SEISMIC_BASIS,),
             )
         )
     # The FEA convergence tolerance, when the tier that would consume it was not requested.
@@ -1213,6 +1245,7 @@ def _min_wall_entry(spec: DesignSpec) -> ScorecardEntry:
             f"the spec declares min_wall {minimum}, and nothing screened it: this element "
             f"declares no thickness, so the document states no wall to compare it against"
         ),
+        needs=(_NEEDS_A_DECLARED_WALL,),
     )
 
 
@@ -1486,6 +1519,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
                     f"acceptance.tiers does not demand {ValidationTier.T1_ANALYTICAL.value}, "
                     "so no pack screen ran against it"
                 ),
+                needs=(_NEEDS_THE_T1_TIER,),
             )
         )
     if ValidationTier.T2_DFM in tiers:
@@ -1504,6 +1538,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
                     f"acceptance.tiers does not demand {ValidationTier.T2_DFM.value}, so "
                     "none was screened against the process floor"
                 ),
+                needs=(_NEEDS_THE_T2_TIER,),
             )
         )
     if ValidationTier.T3_FEA in tiers:

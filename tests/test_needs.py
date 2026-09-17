@@ -212,3 +212,125 @@ element_params:
     # Declaring the element moves the gap on: now it is the factor the screen is judged by.
     factor = needs_report(screen_spec(declared))
     assert [item.need.declaration for item in factor.items] == ["constraints.min_safety_factor"]
+
+
+# --- the ratchet on refusals that state no need ----------------------------------------
+
+_SCREENING = "src/anvilate/screening.py"
+_EXCLUSIONS = "docs/api/refusals-without-needs.txt"
+
+
+def _refusal_sites() -> list[tuple[str, str, int, bool]]:
+    """Every NOT_EVALUATED `ScorecardEntry(...)` in the screening module.
+
+    `(function, entry name as written, line, whether it carries needs=)`. Read off the AST
+    rather than by grepping: a refusal is a call with a status keyword, and a text search
+    for the status would match the enum's every other mention.
+    """
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).parents[1] / _SCREENING).read_text()
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+    def enclosing(node: ast.AST) -> str:
+        current: ast.AST | None = node
+        while current is not None:
+            if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef):
+                return current.name
+            current = parents.get(current)
+        return "<module>"
+
+    sites = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "ScorecardEntry"):
+            continue
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        status = keywords.get("status")
+        if not (isinstance(status, ast.Attribute) and status.attr == "NOT_EVALUATED"):
+            continue
+        name = keywords.get("name")
+        if isinstance(name, ast.Constant):
+            label = str(name.value)
+        elif isinstance(name, ast.JoinedStr):
+            label = "".join(
+                part.value if isinstance(part, ast.Constant) else f"{{{ast.unparse(part.value)}}}"
+                for part in name.values
+            )
+        else:
+            label = ast.unparse(name) if name is not None else "?"
+        sites.append((enclosing(node), label, node.lineno, "needs" in keywords))
+    return sites
+
+
+def _excused() -> dict[tuple[str, str], str]:
+    from pathlib import Path
+
+    text = (Path(__file__).parents[1] / _EXCLUSIONS).read_text()
+    excused = {}
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        function, name, cause = (part.strip() for part in line.split("|", 2))
+        excused[(function, name)] = cause
+    return excused
+
+
+def test_every_refusal_states_its_need_or_says_why_it_cannot() -> None:
+    """A refusal that names no declaration leaves a reader with nothing to do next.
+
+    The population floor is what stops this passing by finding nothing: the detector looks
+    for one call shape in one module, and a refactor that moved the refusals elsewhere would
+    otherwise turn the gate green by emptying it.
+    """
+    sites = _refusal_sites()
+    assert len(sites) >= 30, f"the sweep found only {len(sites)} refusals in {_SCREENING}"
+    excused = _excused()
+    silent = sorted(
+        {(function, name) for function, name, _line, has_needs in sites if not has_needs}
+        - set(excused)
+    )
+    assert not silent, (
+        f"these refusals name no declaration and are not excused in {_EXCLUSIONS}: {silent}. "
+        "Attach `needs=` naming what the check was waiting on, or add a line stating why no "
+        "declaration would resolve it."
+    )
+    stated = {(function, name) for function, name, _line, _has in sites}
+    stale = sorted(set(excused) - stated)
+    assert not stale, f"{_EXCLUSIONS} excuses refusals that no longer exist: {stale}"
+    for site, cause in excused.items():
+        assert len(cause.split()) >= 8, f"{site} is excused without a stated cause"
+
+
+def test_the_ratchet_only_turns_one_way() -> None:
+    """The count of refusals that state a need cannot fall without this failing.
+
+    A floor rather than an equality, so wiring another refusal is an ordinary green change
+    and un-wiring one is not.
+    """
+    wired = sum(1 for *_rest, has_needs in _refusal_sites() if has_needs)
+    assert wired >= 9, f"{wired} refusals state their needs; nine did when this was written"
+
+
+def test_the_page_counts_are_the_sweeps_own() -> None:
+    # Counts in prose expire. These two are held against the sweep that produced them.
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "declaration-needs.md").read_text()
+    sites = _refusal_sites()
+    wired = sum(1 for *_rest, has_needs in sites if has_needs)
+    words = {
+        4: "Four",
+        5: "Five",
+        6: "Six",
+        7: "Seven",
+        8: "Eight",
+        9: "Nine",
+        10: "Ten",
+        11: "Eleven",
+        12: "Twelve",
+    }
+    tens = {30: "thirty", 32: "thirty-two", 33: "thirty-three", 35: "thirty-five", 40: "forty"}
+    assert f"{words[wired]} of the screening module's {tens[len(sites)]} refusals" in page
+    assert f"the {words[wired].lower()} screening refusals that state a need today" in page
