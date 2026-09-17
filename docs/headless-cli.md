@@ -425,6 +425,13 @@ and the exit code are all read off it.
 of passing checks that carry no safety factor — because a missing key and a card with
 nothing to govern must not look the same. That is the rule the text line already followed.
 
+Each checked spec also carries `margins`: the conservatism the spec declares under
+`constraints.margins`, with every entry, each quantity's cumulative and code-required
+products and itemized multiplication, the dominant entries, and any same-kind factors from
+two origins named as a possible double count. It is present with empty lists when the spec
+declares none. The text rendering prints the same ledger under the card, only when there is
+one, and the verdict and exit code never read it. See [the margin ledger](margin-ledger.md).
+
 The published schema is a closed union: unknown fields and fields from the wrong command
 variant do not validate. Evidence and QIF export documents additionally carry `artifact`,
 so a script can select the variant without inspecting its payload. The schema is generated,

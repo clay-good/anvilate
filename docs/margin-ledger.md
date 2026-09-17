@@ -70,9 +70,12 @@ from anvilate.margin import MarginLedger
 ledger = MarginLedger(entries=spec.constraints.margins)
 ```
 
+`anvilate check` prints that ledger under the card and carries it in `--format json` as
+`margins`; the verdict and exit code never read it.
+
 ## Status
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1
-and 3) and the spec field that declares entries. The scorecard does not yet carry a ledger,
-the screens do not yet record the factors they apply, and the report does not render the
-table; those are the remaining groups of that change.
+and 3), the spec field that declares entries, and its rendering on `anvilate check`. The
+screens do not yet record the factors they apply themselves, and the calculation report does
+not render the table; those are the remaining groups of that change.

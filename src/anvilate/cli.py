@@ -71,6 +71,7 @@ from typing import Any, Literal, TextIO
 from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
+from .margin import MarginLedger
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, UnitSystem
 
@@ -2393,6 +2394,34 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     return EXIT_OK
 
 
+def _margin_summary(spec) -> dict[str, Any]:
+    """The declared margins as `_cli_output.MarginSummary` describes them."""
+    ledger = MarginLedger(entries=spec.constraints.margins)
+    return {
+        "entries": [entry.model_dump(mode="json") for entry in ledger.entries],
+        "stacks": [
+            {
+                "quantity": stack.quantity,
+                "cumulative": stack.cumulative,
+                "physics_limited": stack.physics_limited,
+                "elected": stack.elected,
+                "multiplication": stack.multiplication(),
+                "dominant": [entry.label for entry in stack.dominant()],
+            }
+            for stack in ledger.stacks()
+        ],
+        "double_counts": [
+            {
+                "quantity": double.quantity,
+                "kind": double.kind.value,
+                "combined": double.combined,
+                "origins": sorted({entry.origin for entry in double.entries}),
+            }
+            for double in ledger.double_counts()
+        ],
+    }
+
+
 def _check(args: argparse.Namespace, *, out, err) -> int:
     """``check``, over one spec or every spec under a directory.
 
@@ -2440,6 +2469,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                             else {"name": governing.name, "status": governing.status.value}
                         ),
                         "scorecard": card.model_dump(mode="json"),
+                        "margins": _margin_summary(spec),
                     }
                     for path, spec, card in results
                 ],
@@ -2464,6 +2494,11 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 ),
                 file=out,
             )
+            # Only when the spec declares margins: the quickstart's card is byte-for-byte what
+            # the README shows, and a spec that states no conservatism has no ledger to print.
+            # The JSON payload carries the empty summary either way.
+            if spec.constraints.margins:
+                print("\n" + str(MarginLedger(entries=spec.constraints.margins)), file=out)
         if len(results) > 1:
             worst = _worst_status(card for _p, _s, card in results)
             statuses = [card.status for _p, _s, card in results]

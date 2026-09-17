@@ -229,7 +229,7 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     assert sorted(payload) == ["command", "schema", "schema_version", "specs", "status"]
     assert len(payload["specs"]) == 1
     entry = payload["specs"][0]
-    assert sorted(entry) == ["governing", "name", "path", "scorecard", "status"]
+    assert sorted(entry) == ["governing", "margins", "name", "path", "scorecard", "status"]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
     assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated", "pass"]
     assert code == EXIT_NOT_EVALUATED
@@ -4285,3 +4285,60 @@ def test_diff_says_nothing_moved_when_nothing_moved(tmp_path):
     # side that has none.
     gained = _margin_move(entry(2.0), ScorecardEntry(name="b", status=CheckStatus.PASS, detail="d"))
     assert gained is not None and gained["after"] is None and gained["worse"] is True
+
+
+_MARGINS = """  margins:
+    - {label: BTH-1 design factor, kind: code_required, value: 2.0, quantity: padeye tension,
+       action: lowers_capacity, origin: "spec: constraints.min_safety_factor",
+       authority: "ASME BTH-1-2020 §1-5"}
+    - {label: sling angle allowance, kind: contingency_or_growth, value: 1.15,
+       quantity: padeye tension, action: raises_demand, origin: "spec: loads",
+       authority: "company practice LP-7"}
+    - {label: dynamic allowance, kind: contingency_or_growth, value: 1.1,
+       quantity: padeye tension, action: raises_demand, origin: "rigging plan RP-3",
+       authority: "company practice LP-7"}
+"""
+
+
+def test_check_prints_the_declared_margin_ledger_beside_the_card(tmp_path):
+    spec_file = tmp_path / "padeye.yaml"
+    spec_file.write_text(_LUG_SPEC + _MARGINS)
+    code, out, _err = _run("check", str(spec_file))
+    assert code == 0
+    assert "margin ledger: 3 entries" in out
+    assert "2 x 1.15 x 1.1 = 2.53" in out
+    assert "code-required x2, elected x1.265" in out
+    assert "possible double count on padeye tension" in out
+    # The ledger informs and never decides: the same card, with or without it.
+    plain = tmp_path / "plain.yaml"
+    plain.write_text(_LUG_SPEC)
+    plain_code, plain_out, _ = _run("check", str(plain))
+    assert plain_code == code
+    assert "margin ledger" not in plain_out
+    assert out.startswith(plain_out.rstrip("\n"))
+
+
+def test_check_json_carries_the_margin_summary_and_an_empty_one(tmp_path):
+    from anvilate._cli_output import CheckOutput
+
+    declared = tmp_path / "declared.yaml"
+    declared.write_text(_LUG_SPEC + _MARGINS)
+    plain = tmp_path / "plain.yaml"
+    plain.write_text(_LUG_SPEC)
+    _code, raw, _err = _run("check", "--format", "json", str(declared), str(plain))
+    document = json.loads(raw)
+    CheckOutput.model_validate(document)
+    by_path = {spec["path"]: spec["margins"] for spec in document["specs"]}
+    summary = by_path[str(declared)]
+    assert [entry["label"] for entry in summary["entries"]] == [
+        "BTH-1 design factor",
+        "sling angle allowance",
+        "dynamic allowance",
+    ]
+    (stack,) = summary["stacks"]
+    assert stack["cumulative"] == pytest.approx(2.0 * 1.15 * 1.1, rel=1e-12)
+    assert stack["physics_limited"] == pytest.approx(2.0, rel=1e-12)
+    assert stack["dominant"] == ["BTH-1 design factor"]
+    (double,) = summary["double_counts"]
+    assert double["origins"] == ["rigging plan RP-3", "spec: loads"]
+    assert by_path[str(plain)] == {"entries": [], "stacks": [], "double_counts": []}

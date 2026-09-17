@@ -35,7 +35,7 @@
 
 - [ ] 5.1 Ledger table in the calculation report: entry, kind, value, origin, authority
 - [ ] 5.2 Cumulative factor and physics-limited comparison beside the verdict
-- [ ] 5.3 Possible-double-count entries rendered with both origins
+- [x] 5.3 Possible-double-count entries rendered with both origins
 
 ## 6. Tests
 

@@ -26,14 +26,15 @@ from .geometry import (
     PlanarGapClearanceCheck,
     StepInterfaceCandidates,
 )
+from .margin import MarginEntry, MarginKind
 from .scorecard import CheckStatus, Scorecard
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.29.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.30.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.29.0.json"]
-SchemaVersion = Literal["1.29.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.30.0.json"]
+SchemaVersion = Literal["1.30.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -45,12 +46,37 @@ class GoverningCheck(_WireModel):
     status: CheckStatus
 
 
+class MarginStackSummary(_WireModel):
+    quantity: Named
+    cumulative: float
+    physics_limited: float
+    elected: float
+    multiplication: str
+    dominant: tuple[Named, ...]
+
+
+class MarginDoubleCountSummary(_WireModel):
+    quantity: Named
+    kind: MarginKind
+    combined: float
+    origins: tuple[str, ...]
+
+
+class MarginSummary(_WireModel):
+    """The spec's declared margins, multiplied out; empty lists when it declares none."""
+
+    entries: tuple[MarginEntry, ...]
+    stacks: tuple[MarginStackSummary, ...]
+    double_counts: tuple[MarginDoubleCountSummary, ...]
+
+
 class CheckedSpec(_WireModel):
     path: str
     name: Named
     status: CheckStatus
     governing: GoverningCheck | None
     scorecard: Scorecard
+    margins: MarginSummary
 
 
 class CheckOutput(_WireModel):
