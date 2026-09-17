@@ -5060,8 +5060,7 @@ def test_the_task_worker_is_the_only_process_boundary():
     calls = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and _resolved_call(node, bindings).startswith("subprocess.")
+        if isinstance(node, ast.Call) and _resolved_call(node, bindings).startswith("subprocess.")
     ]
     assert [_resolved_call(node, bindings) for node in calls] == ["subprocess.Popen"]
     command = calls[0].args[0]

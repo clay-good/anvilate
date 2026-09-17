@@ -74,9 +74,7 @@ def _poll_terminal(task_id: str, timeout: float = 5.0) -> dict:
     raise AssertionError(f"task {task_id} did not reach a terminal status")
 
 
-def test_fea_task_is_durable_before_return_and_retrievable_after_completion(
-    monkeypatch, tmp_path
-):
+def test_fea_task_is_durable_before_return_and_retrievable_after_completion(monkeypatch, tmp_path):
     monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
     created = _task_call()["result"]
 

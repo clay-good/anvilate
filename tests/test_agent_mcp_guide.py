@@ -131,11 +131,11 @@ def test_every_tool_the_guide_names_is_in_the_catalog():
         "read_scorecard",
         # The two fields a document uses to say what kind of element it is. Spec-IR field
         # names rather than tool names, like `anvilate_spec` above.
-            "element_type",
-            "element_params",
-            "base_plate",
-            "cover_plate",
-            "transmission_shaft",
+        "element_type",
+        "element_params",
+        "base_plate",
+        "cover_plate",
+        "transmission_shaft",
         "min_safety_factor",
         "face_count",
         "plate_thickness",

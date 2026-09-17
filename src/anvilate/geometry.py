@@ -340,8 +340,7 @@ class SolidInterferenceCandidate(StatableModel):
         if self.first_solid_id == self.second_solid_id:
             raise ValueError("a solid interference must join two different solids")
         if any(
-            low > high
-            for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
+            low > high for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
         ):
             raise ValueError("interference bounds minimum must not exceed its maximum")
         if any(
@@ -566,9 +565,7 @@ class CylindricalMateEngagementCheck(StatableModel):
 
     @model_validator(mode="after")
     def _matches_its_minimum(self) -> CylindricalMateEngagementCheck:
-        expected_margin = (
-            self.confirmed_mate.axial_engagement_mm - self.minimum_axial_engagement_mm
-        )
+        expected_margin = self.confirmed_mate.axial_engagement_mm - self.minimum_axial_engagement_mm
         if abs(self.margin_above_minimum_mm - expected_margin) > 1e-9:
             raise ValueError("engagement margin must match the measured axial engagement")
         expected_status = "pass" if expected_margin >= 0 else "fail"
@@ -617,9 +614,7 @@ class CylindricalMateFitCheck(StatableModel):
             raise ValueError("minimum design clearance must not exceed maximum design clearance")
         measured = self.confirmed_mate.diametral_clearance_mm
         clearance_ok = (
-            self.minimum_design_clearance_mm
-            <= measured
-            <= self.maximum_design_clearance_mm
+            self.minimum_design_clearance_mm <= measured <= self.maximum_design_clearance_mm
         )
         if self.measured_clearance_within_design_range is not clearance_ok:
             raise ValueError("measured clearance result must match the design clearance range")
@@ -1318,9 +1313,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         warnings.append(
             "cylindrical mates report measured signed clearance only; they do not judge fit"
         )
-        warnings.append(
-            "positive common solid volume is a failed assembly interference check"
-        )
+        warnings.append("positive common solid volume is a failed assembly interference check")
     result_data: dict[str, Any] = {
         "source_name": path.name,
         "source_sha256": sha256(source_bytes).hexdigest(),

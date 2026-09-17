@@ -1196,8 +1196,7 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         if engagement_check_supplied:
             if args.accept_mate is None:
                 print(
-                    "anvilate interfaces: --min-engagement and --requirement require "
-                    "--accept-mate",
+                    "anvilate interfaces: --min-engagement and --requirement require --accept-mate",
                     file=err,
                 )
                 return EXIT_BAD_REQUEST
@@ -1517,12 +1516,9 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
             file=out,
         )
     if accepted_contact is not None:
-        contact_identity = (
-            f"{accepted_contact.name} ({accepted_contact.contact_candidate_id})"
-        )
+        contact_identity = f"{accepted_contact.name} ({accepted_contact.contact_candidate_id})"
         print(
-            f"  accepted contact: {contact_identity}, "
-            f"confirmed by {accepted_contact.confirmed_by}",
+            f"  accepted contact: {contact_identity}, confirmed by {accepted_contact.confirmed_by}",
             file=out,
         )
     if contact_check is not None:

@@ -85,9 +85,7 @@ class TaskStore:
             "lastUpdatedAt": timestamp,
             "ttlMs": None,
             "pollIntervalMs": 250,
-            "_meta": _progress(
-                f"Queued {operation}.", completed=0, total=None, indeterminate=True
-            ),
+            "_meta": _progress(f"Queued {operation}.", completed=0, total=None, indeterminate=True),
             "_operation": operation,
             "_arguments": arguments,
             "_pid": None,
@@ -112,9 +110,7 @@ class TaskStore:
                 return
             record["statusMessage"] = message
             record["lastUpdatedAt"] = _now()
-            record["_meta"] = _progress(
-                message, completed=0, total=None, indeterminate=True
-            )
+            record["_meta"] = _progress(message, completed=0, total=None, indeterminate=True)
             self._write(task_id, record)
 
     def complete(self, task_id: str, result: dict[str, Any], message: str) -> None:
@@ -191,9 +187,7 @@ class TaskStore:
     def public(self, task_id: str) -> dict[str, Any]:
         record = self.read(task_id)
         return {
-            key: value
-            for key, value in record.items()
-            if key == "_meta" or not key.startswith("_")
+            key: value for key, value in record.items() if key == "_meta" or not key.startswith("_")
         }
 
     def worker_input(self, task_id: str, nonce: str) -> tuple[str, dict[str, Any]]:
@@ -335,9 +329,7 @@ def _run_worker(task_id: str, nonce: str) -> int:
 
 def main() -> None:
     if len(sys.argv) != 4 or sys.argv[1] != "--worker":
-        raise SystemExit(
-            "usage: python -m anvilate._mcp_tasks --worker TASK_ID NONCE"
-        )
+        raise SystemExit("usage: python -m anvilate._mcp_tasks --worker TASK_ID NONCE")
     raise SystemExit(_run_worker(sys.argv[2], sys.argv[3]))
 
 

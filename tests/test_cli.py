@@ -152,9 +152,7 @@ def _write_cylindrical_mate_step(
         Location((0, 0, -5))
     )
     if extra_collision:
-        pin += Box(8, 4, 5, align=(Align.MIN, Align.CENTER, Align.MIN)).moved(
-            Location((3, 0, 0))
-        )
+        pin += Box(8, 4, 5, align=(Align.MIN, Align.CENTER, Align.MIN)).moved(Location((3, 0, 0)))
     export_step(Compound(children=[plate, pin]), path)
     return path
 
@@ -1973,9 +1971,7 @@ def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     interference_step = _write_cylindrical_mate_step(
         tmp_path / "passing-interference-fit.step", shaft_radius=5.01
     )
-    code, interference_raw, err = _run(
-        "interfaces", str(interference_step), "--format", "json"
-    )
+    code, interference_raw, err = _run("interfaces", str(interference_step), "--format", "json")
     interference_payload = json.loads(interference_raw)
     interference_mate = interference_payload["candidates"]["cylindrical_mates"][0]
     assert code == EXIT_FAILED and err == ""
@@ -2484,8 +2480,7 @@ def test_interfaces_refuses_partial_acceptance_without_reading_it_as_confirmatio
     )
     assert code == EXIT_BAD_REQUEST and out == ""
     assert (
-        "--accept, --accept-contact, --accept-mate, and --accept-gap are mutually exclusive"
-        in err
+        "--accept, --accept-contact, --accept-mate, and --accept-gap are mutually exclusive" in err
     )
 
 
