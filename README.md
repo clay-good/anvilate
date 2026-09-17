@@ -258,7 +258,7 @@ Ambiguous nested blind steps and nonconcentric locators remain limits.
 | `tolerance_stackup.py` | A 1D stack-up worst-case rejects the design, yet Monte Carlo predicts 99%+ assembly yield. |
 | `lifting_lug_calc_report.py` | The same padeye screening rendered as a submittal: formula, substituted values, result, and clause for every check. See [calculation reports](docs/calculation-reports.md). |
 | `sheave_repair_from_inverse.py` | A failing bending check that carries its own fix: a design inverse names the sheave diameter that lands the margin in one solve. See [typed repair feedback](docs/repair-feedback.md). |
-| `optical_bench_budgets.py` | A mass budget and a pointing budget on one optical bench. The mass budget passes with 0.40 kg in hand; the pointing budget fails at 68.7 µrad against 65 µrad with every screen behind it inside its own limit, because two of its four terms are thermal and are summed before the quadrature — the same numbers give 59.4 µrad if the correlation is ignored. See [performance budgets](docs/performance-budgets.md). |
+| `optical_bench_budgets.py` | A mass budget and a pointing budget on one optical bench. The mass budget passes; the pointing budget fails at 68.7 µrad against 65 µrad with every screen behind it inside its own limit, because two of its four terms are thermal and are summed before the quadrature — the same numbers give 59.4 µrad if the correlation is ignored. See [performance budgets](docs/performance-budgets.md). |
 | `bracket_margin_stack.py` | One cantilevered bracket plate at code minimum (16 mm stock) and as delivered with an elected factor, two contingencies and a stock snap (20 mm, 1.25x the mass). The ledger multiplies the stack out to x2.71, names the two contingencies as a possible double count, and shows the delivered plate at 0.60 utilization at code minimum against 0.95 with every factor. See [margin ledger](docs/margin-ledger.md). |
 | `bracket_load_scatter_fragility.py` | A bracket that passes at SF 1.70 nominal but falls below the required 1.5 one run in five once the load scatters ±15% — a shortfall probability no single-point check reports. See [uncertainty margins](docs/uncertainty-margins.md). |
 | `feature_control_frame_legality.py` | Five drawing callouts that do not parse — flatness to a datum, perpendicularity to nothing, Ⓜ on a surface, symmetry on a 2018 drawing, a fourth datum — refused with the reason, plus what a position tolerance contributes to a 1D stack. See [semantic GD&T](docs/semantic-gdt.md). |
@@ -312,7 +312,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,762 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,758 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
