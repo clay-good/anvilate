@@ -64,7 +64,16 @@ is [`examples/lifting_lug_calc_report.py`](../examples/lifting_lug_calc_report.p
 
 In reading order: a header (project, preparer, date, unit system), the standards and
 editions relied upon, the assumptions in force, one section per check, a margin
-summary naming the governing check, and the screening disclaimer.
+summary naming the governing check, the margin ledger, and the screening disclaimer.
+
+**The margin ledger says how much of each margin was chosen.** `CalculationReport(margins=...)`
+takes [margin ledger](margin-ledger.md) entries and renders them as a table of entry, kind,
+value, quantity, origin and authority, then each quantity's cumulative factor with its
+multiplication beside its code-required share, then any same-kind factors from two origins
+as a possible double count with both origins named. A code-required factor and a
+user-elected one with the same label render with different kinds, and the verdict never
+reads the ledger. With no entries the heading stays and says `none declared`. The calc
+record carries the entries from schema 1.2.
 
 **A two-sided check shows its band in the Required column**, not just the floor:
 `OVER MARGIN  net tension: 6.67 vs 2.00–4.00 required`. The column used to show the

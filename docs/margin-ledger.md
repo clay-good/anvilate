@@ -76,10 +76,12 @@ plate at code minimum and as delivered, side by side.
 
 `anvilate check` prints that ledger under the card and carries it in `--format json` as
 `margins`; the verdict and exit code never read it.
+A [calculation report](calculation-reports.md) renders the same ledger as a table from
+`CalculationReport(margins=...)`.
 
 ## Status
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1
-and 3), a worked example, the spec field that declares entries, and its rendering on `anvilate check`. The
-screens do not yet record the factors they apply themselves, and the calculation report does
-not render the table; those are the remaining groups of that change.
+and 3), a worked example, the spec field that declares entries, and its rendering on
+`anvilate check` and in the calculation report. The screens do not yet record the factors
+they apply themselves, which is the remaining group of that change.

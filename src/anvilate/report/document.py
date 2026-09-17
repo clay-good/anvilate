@@ -28,6 +28,7 @@ from pydantic import ConfigDict, computed_field
 
 from .._models import StatableModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
+from ..margin import MarginEntry, MarginLedger
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
 from ..units import UnitSystem
@@ -44,8 +45,9 @@ __all__ = [
 # The calc-record schema version. Bump the minor for additive fields, the major
 # for a change that older readers cannot ignore. 1.1 added the optional scorecard
 # annotations (repair hint, upper safety-factor band, uncertainty distribution);
-# a 1.0 reader ignores them and still loads the record.
-CALC_RECORD_SCHEMA_VERSION = "1.1"
+# a 1.0 reader ignores them and still loads the record. 1.2 added the report's margin
+# ledger entries.
+CALC_RECORD_SCHEMA_VERSION = "1.2"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -302,6 +304,10 @@ class CalculationReport(StatableModel):
     standards: tuple[str, ...] = ()
     assumptions: tuple[Provenanced[str], ...] = ()
     sections: tuple[ReportSection, ...] = ()
+    # Every conservatism the design carries, attributed. Rendered as its own section beside
+    # the margin summary: the summary says how far each check is from its limit, the ledger
+    # says how much of that distance was chosen rather than required.
+    margins: tuple[MarginEntry, ...] = ()
 
     def scorecard(self) -> Scorecard:
         """The report's checks as a scorecard, for the usual roll-up rules."""
@@ -388,6 +394,13 @@ class CalculationReport(StatableModel):
             out.append(f"  governing check: {governing.name}")
         out.append(f"  overall: {_STATUS_LABEL[self.status]}")
         out.append("")
+        out.append("Margin ledger")
+        out.append("-------------")
+        if not self.margins:
+            out.append(f"  {_NONE_DECLARED}")
+        out.extend(f"  - {entry}" for entry in self.margins)
+        out.extend(f"  {line}" for line in self._ledger_lines())
+        out.append("")
         out.append(SCREENING_DISCLAIMER)
         return "\n".join(out) + "\n"
 
@@ -417,6 +430,7 @@ class CalculationReport(StatableModel):
         for section in self.sections:
             out.extend(self._html_section(section))
         out.extend(self._html_summary())
+        out.extend(self._html_ledger())
         out.append(f'<p class="disclaimer">{escape(SCREENING_DISCLAIMER)}</p>')
         out.append("</body>")
         out.append("</html>")
@@ -612,6 +626,44 @@ class CalculationReport(StatableModel):
         if governing is not None:
             out.append(f"<p>Governing check: <strong>{escape(governing.name)}</strong></p>")
         out.append(f"<p>Overall: <strong>{_STATUS_LABEL[self.status]}</strong></p>")
+        return out
+
+    def _ledger_lines(self) -> list[str]:
+        """Each quantity's product beside its code-required share, then the double counts."""
+        ledger = MarginLedger(entries=self.margins)
+        lines = [
+            f"{stack.quantity}: cumulative x{stack.cumulative:.4g} ({stack.multiplication()}); "
+            f"code-required x{stack.physics_limited:.4g}"
+            for stack in ledger.stacks()
+        ]
+        lines.extend(str(double) for double in ledger.double_counts())
+        return lines
+
+    def _html_ledger(self) -> list[str]:
+        out = ["<h2>Margin ledger</h2>"]
+        if not self.margins:
+            return [*out, f'<p class="none">{_NONE_DECLARED}</p>']
+        out.append('<table class="ledger">')
+        out.append(
+            "<tr><th>Entry</th><th>Kind</th><th>Value</th><th>Quantity</th>"
+            "<th>Origin</th><th>Authority</th></tr>"
+        )
+        for entry in self.margins:
+            cells = (
+                entry.label,
+                entry.kind_label,
+                f"{entry.value:.4g}",
+                entry.quantity,
+                entry.origin,
+                entry.authority,
+            )
+            out.append(
+                f'<tr class="{entry.kind.value}">'
+                + "".join(f"<td>{escape(cell)}</td>" for cell in cells)
+                + "</tr>"
+            )
+        out.append("</table>")
+        out.extend(f"<p>{escape(line)}</p>" for line in self._ledger_lines())
         return out
 
 

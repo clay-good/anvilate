@@ -1832,3 +1832,77 @@ def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence()
     ).to_html()
     table = html[html.index('<table class="summary">') :]
     assert "<td>—</td><td>—</td>" in table, "the table lost the empty-cell rendering"
+
+
+def _ledgered_report() -> CalculationReport:
+    from anvilate.margin import MarginAction, MarginEntry, MarginKind
+
+    def entry(label, kind, value, origin, authority):
+        return MarginEntry(
+            label=label,
+            kind=kind,
+            value=value,
+            quantity="lug tension",
+            action=MarginAction.RAISES_DEMAND,
+            origin=origin,
+            authority=authority,
+        )
+
+    return _report().model_copy(
+        update={
+            "margins": (
+                entry(
+                    "design factor",
+                    MarginKind.CODE_REQUIRED,
+                    2.0,
+                    "spec: constraints.min_safety_factor",
+                    "ASME BTH-1-2020 §1-5",
+                ),
+                entry(
+                    "design factor",
+                    MarginKind.USER_ELECTED,
+                    1.25,
+                    "design review DR-12",
+                    "user election: lead engineer",
+                ),
+                entry("sling angle", MarginKind.CONTINGENCY, 1.15, "spec: loads", "LP-7"),
+                entry("dynamic", MarginKind.CONTINGENCY, 1.1, "rigging plan RP-3", "LP-7"),
+            )
+        }
+    )
+
+
+def test_the_report_renders_its_margin_ledger_in_text_and_html():
+    report = _ledgered_report()
+    text = report.to_text()
+    ledger = text[text.index("Margin ledger") :]
+    assert "cumulative x3.163 (2 x 1.25 x 1.15 x 1.1 = 3.163); code-required x2" in ledger
+    assert "possible double count on lug tension" in ledger
+    assert "rigging plan RP-3" in ledger and "spec: loads" in ledger
+    # An obligation and a choice with the same label and different kinds never read alike.
+    code, elected = (line for line in ledger.splitlines() if "design factor:" in line)
+    assert "code-required" in code and "user-elected" in elected
+
+    html = report.to_html()
+    assert "<h2>Margin ledger</h2>" in html
+    assert '<tr class="code_required"><td>design factor</td><td>code-required</td>' in html
+    assert '<tr class="user_elected"><td>design factor</td><td>user-elected</td>' in html
+    assert "possible double count on lug tension" in html
+    # The ledger informs and never decides.
+    assert report.status == _report().status
+
+
+def test_a_report_with_no_margins_says_so_rather_than_omitting_the_section():
+    report = _report()
+    text = report.to_text()
+    assert "Margin ledger\n-------------\n  none declared\n" in text
+    assert '<h2>Margin ledger</h2><p class="none">none declared</p>' in "".join(
+        report.to_html().splitlines()
+    )
+
+
+def test_the_calc_record_carries_the_margin_ledger_back():
+    report = _ledgered_report()
+    record = json.loads(json.dumps(report.to_record()))
+    assert record["schema_version"] == "1.2"
+    assert report_from_record(record) == report

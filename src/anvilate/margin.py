@@ -160,6 +160,11 @@ class MarginEntry(StatableModel):
     def code_required(self) -> bool:
         return _KINDS[self.kind][1]
 
+    @property
+    def kind_label(self) -> str:
+        """How the kind reads on every surface — never the same for two kinds."""
+        return _KINDS[self.kind][0]
+
     def __str__(self) -> str:
         on = "demand" if self.action is MarginAction.RAISES_DEMAND else "capacity"
         return (
