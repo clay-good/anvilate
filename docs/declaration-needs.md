@@ -48,6 +48,44 @@ card says so positively — and the report indented below it when anything is mi
 carries the same thing per spec under `needs`, present with an empty `items` list when
 nothing is missing. Neither changes the verdict or the exit code.
 
+## Profiles: many declarations in one action
+
+Answering the report one value at a time is the other half of the friction. A `Profile` is a
+cited, versioned set of declarations — an environment, a shop practice, a handling case —
+bound in a single action:
+
+```python
+from anvilate.profile import Applicability, Profile, SuppliedValue
+from anvilate.units import Quantity
+
+coastal = Profile(
+    id="ENV-COASTAL", version="v2.1",
+    citation="ISO 12944-2 C5-M, company practice EP-3",
+    applicability=(Applicability(context="ambient temperature",
+                                 minimum=Quantity(magnitude=253.15, unit="K"),
+                                 maximum=Quantity(magnitude=323.15, unit="K")),),
+    supplies=(SuppliedValue(declaration="environment.corrosivity", value="C5-M"),
+              SuppliedValue(declaration="manufacturing.min_wall",
+                            value=Quantity(magnitude=6.0, unit="mm"))),
+)
+
+binding = coastal.bind({"ambient temperature": Quantity(magnitude=300.0, unit="K")})
+binding.declarations()   # every value the profile supplies, in one mapping
+binding.attribution()    # per declaration: "profile ENV-COASTAL v2.1 (ISO 12944-2 …)"
+tightened = binding.override("manufacturing.min_wall", Quantity(magnitude=8.0, unit="mm"))
+tightened.attribution()["manufacturing.min_wall"]  # "user override of profile ENV-COASTAL v2.1"
+```
+
+| Rule | What it means |
+| --- | --- |
+| Applicability is checked, not documented | Binding outside the profile's own stated range is refused naming the value and the bound. A bound the context does not state is refused too: an applicability nobody checked is an applicability nobody has. |
+| Every value is attributed | A profile-supplied value carries the profile's id, version and citation wherever it appears, so a number that governs a verdict never reads as one the engineer stated. |
+| An override is the user's, and keeps what the profile said | The profile's value stays beside the override, so a reader can see what changed and from what. Overriding a declaration the profile never supplied is refused. |
+| A profile supplies declarations only | It does not screen, weaken a refusal, or change a verdict. |
+
+Profile-supplied values are not yet threaded into the Design Spec, the scorecard or the
+evidence bundle; that is the rest of group 2.
+
 ## The refusals that state nothing
 
 Nine of the screening module's thirty-two refusals state a need today. The rest are listed
@@ -68,6 +106,7 @@ needs.
 
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
-with the nine screening refusals that state a need today. Profiles — a cited,
-versioned bundle of declarations — and a declared screening depth are the remaining groups of
-that change, and the rest of the library's refusals have yet to state their needs.
+with the nine screening refusals that state a need today. A profile's record, binding,
+applicability check and overrides ship too (group 2.1, 2.2 and 2.4). Marking profile-sourced
+values through the spec, the card and the bundle (2.3) and the declared screening depth
+(group 3) are what remain.

@@ -9,10 +9,10 @@
 
 ## 2. Profiles
 
-- [ ] 2.1 Profile record type: id, version, source citation, the declarations it supplies
-- [ ] 2.2 Binding a profile; per-value override; override recorded with user provenance
+- [x] 2.1 Profile record type: id, version, source citation, the declarations it supplies
+- [x] 2.2 Binding a profile; per-value override; override recorded with user provenance
 - [ ] 2.3 Profile-sourced values marked in every result and in the evidence bundle
-- [ ] 2.4 A profile supplying a value outside its own declared applicability is refused
+- [x] 2.4 A profile supplying a value outside its own declared applicability is refused
 
 ## 3. Screening depth
 

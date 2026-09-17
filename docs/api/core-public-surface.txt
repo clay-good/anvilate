@@ -279,6 +279,11 @@ needs.NeedItem
 needs.NeedsReport
 needs.LEVERAGE_IS_NOT_IMPORTANCE
 needs.needs_report
+profile.Applicability
+profile.SuppliedValue
+profile.Profile
+profile.ProfileBinding
+profile.OutsideApplicability
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem

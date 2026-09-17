@@ -84,6 +84,8 @@ that already ran and does one more thing with them:
   place.
 - :mod:`anvilate.needs` — every declaration a build needed and did not get, in one
   report ordered by how many screens each would unblock — leverage, never severity.
+- :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
+  action, refused outside its own applicability and attributed wherever a value appears.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.
