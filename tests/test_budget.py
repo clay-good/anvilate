@@ -346,3 +346,82 @@ def test_a_bound_check_of_the_wrong_dimension_is_refused() -> None:
     card = Scorecard(entries=(_checked("mount tilt", 4.0, unit="mm"), _checked("bench tilt", 3.0)))
     with pytest.raises(ValidationError, match="'mount'.*length"):
         _bound_budget().bind(card)
+
+
+_DECLARED_BUDGET = """budgets:
+  - name: hook travel
+    quantity: vertical deflection
+    limit: {magnitude: 3.0, unit: mm}
+    limit_basis: requirement
+    limit_source: "lift plan LP-9"
+    rule: worst_case
+    contributors:
+      - {name: sling stretch, value: {magnitude: 1.4, unit: mm}, source: "vendor data",
+         basis: estimated}
+      - {name: padeye bending, value: {magnitude: 0.9, unit: mm}, source: "T1 screen",
+         basis: calculated}
+      - {name: beam sag, value: {magnitude: 1.2, unit: mm}, source: "site survey",
+         basis: measured}
+"""
+
+
+def _padeye_with(declaration: str):
+    from pathlib import Path
+
+    from anvilate.spec import load_spec_yaml
+
+    text = (Path(__file__).parents[1] / "examples" / "padeye.spec.yaml").read_text()
+    (anchor,) = [line for line in text.splitlines() if line.startswith("constraints:")]
+    return load_spec_yaml(text.replace(anchor + "\n", declaration + anchor + "\n"))
+
+
+def test_a_declared_budget_fails_a_card_whose_every_other_check_passes() -> None:
+    from anvilate.screening import screen_spec
+
+    spec = _padeye_with(_DECLARED_BUDGET)
+    card = screen_spec(spec)
+    (entry,) = [e for e in card.entries if e.name == "budget hook travel"]
+    # The defect class: each check is inside its own limit and the combination is not.
+    assert all(e.status is CheckStatus.PASS for e in card.entries if e is not entry)
+    assert entry.status is CheckStatus.FAIL
+    assert "total 3.5 mm against 3 mm" in entry.detail
+    assert "governing: sling stretch" in entry.detail
+    assert card.status is CheckStatus.FAIL
+    assert card.governing() is entry
+
+
+def test_a_declared_budget_round_trips_through_the_document() -> None:
+    from anvilate.spec import parse_spec
+
+    spec = _padeye_with(_DECLARED_BUDGET)
+    assert parse_spec(spec.model_dump(mode="json")) == spec
+    assert spec.anvilate_spec == "1.8.0"
+    assert _padeye_with("").budgets == ()
+
+
+def test_a_budget_bound_to_a_check_that_measured_nothing_is_named_never_dropped() -> None:
+    from anvilate.screening import screen_spec
+
+    bound = _DECLARED_BUDGET.replace(
+        'source: "T1 screen",\n         basis: calculated}',
+        'source: "T1 screen", basis: calculated, check: "padeye net tension"}',
+    )
+    (entry,) = [e for e in screen_spec(_padeye_with(bound)).entries if e.name.startswith("budget")]
+    # The safety-factor check states two factors and no measured quantity, so there is
+    # nothing to bind — said plainly, rather than the budget quietly leaving the card.
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "carries no measured quantity to bind" in entry.detail
+
+
+def test_a_budget_refused_by_its_own_binding_is_an_entry_not_a_traceback() -> None:
+    from anvilate.screening import _budget_entries
+
+    bound = _DECLARED_BUDGET.replace(
+        'source: "T1 screen",\n         basis: calculated}',
+        'source: "T1 screen", basis: calculated, check: "tilt"}',
+    )
+    spec = _padeye_with(bound)
+    # The bound check measured an angle where the budget is allocated in millimetres.
+    (entry,) = _budget_entries(spec, [_checked("tilt", 30.0)])
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "could not be evaluated" in entry.detail and "padeye bending" in entry.detail

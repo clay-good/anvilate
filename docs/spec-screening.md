@@ -217,6 +217,7 @@ That is the whole rule. What it means field by field:
 | `material`, and each `interfaces` entry naming a standard component | resolved, with the near misses named on a refusal |
 | an *imported* interface | `NOT_EVALUATED`: a screen of one document cannot fetch another |
 | `manufacturing.tolerance_class` | resolved like any other identifier |
+| `budgets` | one entry per declared [performance budget](performance-budgets.md), evaluated last against the checks its contributors bind to: the total under the declared rule against the allocation, with the governing contributor named. A budget can fail a card whose every other check passes, and one the screen could not evaluate is `NOT_EVALUATED` naming it |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |
 | `constraints.max_mass`, `constraints.max_cost` | `NOT_EVALUATED`, naming the declared value and what checking it would take — and for `constraints.max_mass`, the mass of the solid the document *does* declare, stated beside the bound and not compared to it |

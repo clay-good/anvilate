@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.8.0: a spec can declare performance budgets
+
+`budgets` is an optional list of [performance budgets](performance-budgets.md): an allocated
+limit with its own provenance, the contributors that spend it with their bases and
+correlation groups, and the declared combination rule. The screen evaluates each declared
+budget last, binding contributors to the checks that just ran, and emits it as a scorecard
+entry — so a card of individually passing checks fails when their combination exceeds the
+allocation. A budget the screen could not evaluate is `not_evaluated` naming it, never absent.
+
 ### Design Spec 1.7.0: a spec can declare its margins
 
 `constraints.margins` is an optional list of margin-ledger entries: the conservatism an author

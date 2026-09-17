@@ -1673,6 +1673,7 @@ _ANSWERED_BY_A_CHECK = {
         "the process picks the tolerance floor, the class resolves, min_wall is reported"
     ),
     "acceptance": "the tiers it demands are what produce the entries",
+    "budgets": "one budget entry each, evaluated against the checks its contributors bind to",
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
     "anvilate_spec": "the schema version the document was written against",
@@ -2342,6 +2343,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "exports",
         "seismic_design_acceleration",
         "seismic_redundancy_factor",
+        "budgets",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
     assert not missing, (

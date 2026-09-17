@@ -48,6 +48,15 @@ run, or measured nothing leaves the contributor unresolved with that reason, and
 is not evaluated. A value declared beside a binding is not kept, because a stale number is
 worse than none. A bound check of the wrong dimension is refused like any other contributor.
 
+## Declared in a spec, evaluated on the card
+
+A Design Spec (1.8.0 and later) declares budgets under a top-level `budgets:` list, with the
+same fields as `Budget`. `screen_spec` evaluates each one last, after the checks its
+contributors bind to have run, and emits it as an ordinary scorecard entry — so a budget can
+fail a card whose every other check passes, and it is eligible to be the governing check and
+gates export like any other failure. A declared budget the screen could not evaluate is a
+`not_evaluated` entry naming it; a budget is never missing from the card.
+
 ## The rules
 
 | Rule | What it means |
@@ -68,6 +77,5 @@ a strain; the contributor's name and source are what distinguish them.
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,
-groups 1 and 2, entry emission and check binding). A Design Spec cannot declare a budget
-yet, nested budgets and growth allowances are not built, and the calculation report does
-not itemize a budget.
+groups 1-3). Nested budgets and growth allowances are not built, and the calculation report
+does not itemize a budget.

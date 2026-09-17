@@ -1362,6 +1362,40 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
     return entries
 
 
+def _budget_entries(spec: DesignSpec, entries: list[ScorecardEntry]) -> list[ScorecardEntry]:
+    """One entry per declared budget, evaluated against the checks that just ran.
+
+    Last, because a budget's contributors bind to those checks by name. A budget the
+    document declares is always an entry: one this screen could not evaluate is NOT_EVALUATED
+    naming it, never absent from the card — a budget in the document and missing from the
+    verdict is the silent green everything else here refuses.
+
+    `bind` refuses a contributor whose bound check measured another dimension, and a refusal
+    about the document is an entry rather than a traceback out of `screen_spec`.
+    """
+    card = Scorecard(entries=tuple(entries))
+    produced = []
+    for budget in spec.budgets:
+        try:
+            produced.append(budget.bind(card).evaluate().to_entry())
+        except ValidationError as refused:
+            reasons = "; ".join(
+                _refusal_line(".".join(str(part) for part in error["loc"]), error["msg"])
+                for error in refused.errors()
+            )
+            produced.append(
+                ScorecardEntry(
+                    name=f"budget {budget.name}",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"the budget could not be evaluated against the checks it binds to "
+                        f"— {reasons}"
+                    ),
+                )
+            )
+    return produced
+
+
 def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) -> Scorecard:
     """Screen ``spec`` on the tiers its acceptance criteria demand.
 
@@ -1463,4 +1497,5 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     combination = _combination_entry(spec)
     if combination is not None:
         entries.append(combination)
+    entries.extend(_budget_entries(spec, entries))
     return Scorecard(entries=tuple(entries))

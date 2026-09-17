@@ -16,7 +16,7 @@
 
 ## 3. Wiring
 
-- [ ] 3.1 Spec IR budget declaration, schema-validated and diffable
+- [x] 3.1 Spec IR budget declaration, schema-validated and diffable
 - [x] 3.2 Contributor binding to scorecard check ids; recompute on screen change
 - [x] 3.3 Scorecard entry emission; not-evaluated propagation from any unevaluated
       contributor

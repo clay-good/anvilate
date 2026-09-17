@@ -22,6 +22,7 @@ from pydantic import (
 )
 
 from .._models import FrozenMap, Named, Provenance, StatableModel, rebuilt_quantities
+from ..budget import Budget
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -652,12 +653,13 @@ class AcceptanceCriteria(_Base):
 # in-plane hole centers, preserving a measured pattern's clocking. 1.5.0 added an optional
 # concentric circular locator (pilot bore or boss). 1.6.0 extended that locator with a
 # counterbore kind and its required through diameter. 1.7.0 added constraints.margins, the
-# declared conservatism a margin ledger multiplies out. All additive, which is
+# declared conservatism a margin ledger multiplies out. 1.8.0 added budgets, a requirement
+# on the combination of several checks. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.7.0"
+SCHEMA_VERSION = "1.8.0"
 
 
 class DesignSpec(_Base):
@@ -700,6 +702,11 @@ class DesignSpec(_Base):
     # what a lifting lug is. `anvilate.screening.element_registry` resolves the tag.
     element_type: str | None = None
     element_params: FrozenMap[str, Any] = Field(default_factory=dict)
+    # Performance budgets: a requirement on a COMBINATION of checks, which no per-check
+    # screen can see. Declared here rather than under `constraints`, because a budget is not
+    # a bound on one number — it carries its own contributors, their sources and the rule
+    # they combine under, and the screen evaluates it against the card the other checks made.
+    budgets: tuple[Budget, ...] = ()
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
 
