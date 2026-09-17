@@ -15,9 +15,10 @@ The implemented layers everything else builds on:
 - :mod:`anvilate.analysis` — T1 closed-form analytical checks (beam, column,
   torsion, pressure vessel, bolted joint, von Mises).
 - :mod:`anvilate.scorecard` — the check-result vocabulary: ``pass``, ``fail``,
-  ``not_evaluated`` and ``over_margin``. Called tri-state throughout, because those are
-  three *answers* and ``over_margin`` is a qualified pass — but it is a fourth value a
-  caller will see, and this line used to enumerate only three of them.
+  ``not_evaluated``, ``over_margin`` and ``out_of_depth``. Called tri-state throughout,
+  because those are three *answers* — ``over_margin`` is a qualified pass and
+  ``out_of_depth`` is a check the document deferred — but they are values a caller will
+  see, and this line used to enumerate only three of them.
 - :mod:`anvilate.specbench` — an external structured-spec suite read case by case,
   with the cases nothing could compile named rather than counted as failures.
 - :mod:`anvilate.store` — the content-addressed store an MCP tool resolves its

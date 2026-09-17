@@ -15,6 +15,7 @@ from anvilate.budget import (
     LimitBasis,
 )
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+from anvilate.spec import SCHEMA_VERSION
 from anvilate.units import Quantity
 
 
@@ -398,7 +399,7 @@ def test_a_declared_budget_round_trips_through_the_document() -> None:
 
     spec = _padeye_with(_DECLARED_BUDGET)
     assert parse_spec(spec.model_dump(mode="json")) == spec
-    assert spec.anvilate_spec == "1.10.0"
+    assert spec.anvilate_spec == SCHEMA_VERSION
     assert _padeye_with("").budgets == ()
 
 

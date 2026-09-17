@@ -160,6 +160,7 @@ spec.StaticReferenceResolver
 spec.ToleranceDimension
 spec.UnknownReferenceError
 spec.UnsupportedSchemaVersion
+spec.ScreeningDepth
 spec.ValidationTier
 spec.default_resolver
 spec.dump_spec_yaml

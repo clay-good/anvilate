@@ -71,7 +71,7 @@ from ._models import (
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
-from .spec import DesignSpec, ReferenceResolver, ValidationTier
+from .spec import DesignSpec, ReferenceResolver, ScreeningDepth, ValidationTier
 from .standards import default_standards_resolver
 from .standards.materials import (
     MaterialPropertyUnavailable,
@@ -1432,6 +1432,61 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
     return entries
 
 
+# What each detailed-depth family of checks is, and why it belongs to the drawing rather than
+# to the concept. A TOTAL statement about the families a concept screen defers: keyed on the
+# entry-name prefix each producer writes, with the declaration whose presence means the
+# document would have produced it.
+_DEEPER_THAN_CONCEPT: dict[str, tuple[str, str]] = {
+    "tolerance achievability": (
+        "dimensions",
+        "a toleranced dimension is judged against a manufacturing process floor, which is a "
+        "question about the drawing and not about the concept",
+    ),
+    "stack-up": (
+        "chains",
+        "a stack-up adds up the tolerances of a chain, which exists once the dimensions do",
+    ),
+    "geometric tolerance": (
+        "geometric_tolerances",
+        "a feature control frame is checked against the tagged feature and its zone, which "
+        "the drawing states",
+    ),
+    "published interface contracts": (
+        "exports",
+        "a published contract states a mating geometry for another part to build against",
+    ),
+}
+
+
+def _deferred_by_depth(spec: DesignSpec) -> list[ScorecardEntry]:
+    """One entry per detailed-depth family this document declares work for.
+
+    Produced instead of the checks themselves, not by discarding them afterwards: a concept
+    screen that computed every stack-up and then threw the results away would cost what the
+    depth declaration exists to save. The entry names the family, the declaration that would
+    have driven it, and the depth that would run it — a deferral a reader can act on by
+    raising `acceptance.depth`.
+    """
+    deferred = []
+    for family, (declaration, reason) in _DEEPER_THAN_CONCEPT.items():
+        declared = getattr(spec, declaration, None)
+        if not declared:
+            continue
+        deferred.append(
+            ScorecardEntry(
+                name=family,
+                status=CheckStatus.OUT_OF_DEPTH,
+                detail=(
+                    f"the spec declares {len(declared)} {declaration} and "
+                    f"acceptance.depth is {ScreeningDepth.CONCEPT.value}: {reason}. Declare "
+                    f"acceptance.depth: {ScreeningDepth.DETAILED.value} to screen "
+                    f"{'it' if len(declared) == 1 else 'them'}"
+                ),
+            )
+        )
+    return deferred
+
+
 def _budget_entries(spec: DesignSpec, entries: list[ScorecardEntry]) -> list[ScorecardEntry]:
     """One entry per declared budget, evaluated against the checks that just ran.
 
@@ -1522,8 +1577,13 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
                 needs=(_NEEDS_THE_T1_TIER,),
             )
         )
+    concept = spec.acceptance.depth is ScreeningDepth.CONCEPT
     if ValidationTier.T2_DFM in tiers:
-        entries.extend(_dfm_entries(spec))
+        # Nested rather than `and not concept`, because the `elif` below says the tier was
+        # not demanded — which is false for a document that demanded it and deferred it by
+        # depth. A deferral is reported by `_deferred_by_depth`, in its own words.
+        if not concept:
+            entries.extend(_dfm_entries(spec))
     elif spec.dimensions:
         # The same shape as the element above, and it bites harder: a spec declaring a
         # ±0.0001 mm band — achievable on no process this library knows — and demanding only
@@ -1559,10 +1619,11 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
     entries.extend(_declared_bound_entries(spec, entries))
-    geometric = _geometric_tolerance_entry(spec)
+    geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:
         entries.append(geometric)
-    entries.extend(_chain_entries(spec))
+    if not concept:
+        entries.extend(_chain_entries(spec))
     load = _load_entry(spec)
     if load is not None:
         entries.append(load)
@@ -1570,4 +1631,6 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     if combination is not None:
         entries.append(combination)
     entries.extend(_budget_entries(spec, entries))
+    if concept:
+        entries.extend(_deferred_by_depth(spec))
     return Scorecard(entries=tuple(entries))

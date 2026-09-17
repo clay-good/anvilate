@@ -211,7 +211,10 @@ def test_every_scorecard_status_has_an_exit_code_and_only_pass_is_zero():
     """
     assert set(EXIT_CODES) == set(CheckStatus), "a status has no exit code"
     zero = {status for status, code in EXIT_CODES.items() if code == EXIT_OK}
-    assert zero == {CheckStatus.PASS, CheckStatus.OVER_MARGIN}
+    # Over-margin and a deliberate deferral are the two non-blocking statuses: an
+    # over-engineered part is still a part that passed, and a concept screen is what the
+    # engineer asked for. Everything else has to be a non-zero decision.
+    assert zero == {CheckStatus.PASS, CheckStatus.OVER_MARGIN, CheckStatus.OUT_OF_DEPTH}
     assert EXIT_CODES[CheckStatus.NOT_EVALUATED] != EXIT_CODES[CheckStatus.FAIL], (
         "a card that could not be evaluated and one that failed are different answers"
     )
@@ -3834,7 +3837,15 @@ def test_no_transition_into_not_evaluated_is_ever_an_improvement():
     # to "we do not know" loses the check; going the other way reveals a failure. Neither is
     # an improvement, so both directions are reported, and a single ordering cannot say that —
     # which is exactly how the blocking order came to be read as one.
-    incomparable = {frozenset({CheckStatus.FAIL, CheckStatus.NOT_EVALUATED})}
+    # The pairs where both directions are a regression: one side loses a check that ran or
+    # reveals a failure, and neither side is an improvement on the other. Every one of them
+    # has a status the check did not run in on at least one side.
+    incomparable = {
+        frozenset({CheckStatus.FAIL, CheckStatus.NOT_EVALUATED}),
+        frozenset({CheckStatus.FAIL, CheckStatus.OUT_OF_DEPTH}),
+        frozenset({CheckStatus.OVER_MARGIN, CheckStatus.OUT_OF_DEPTH}),
+        frozenset({CheckStatus.NOT_EVALUATED, CheckStatus.OUT_OF_DEPTH}),
+    }
     for was in statuses:
         for now in statuses:
             if was is now:
@@ -3845,7 +3856,16 @@ def test_no_transition_into_not_evaluated_is_ever_an_improvement():
                 f"pair that is genuinely incomparable"
             )
 
-    # The rule this exists for: losing the check is never an improvement.
+    # The rule this exists for: losing the check is never an improvement — in either of the
+    # two ways a check stops running.
+    for stopped in (CheckStatus.NOT_EVALUATED, CheckStatus.OUT_OF_DEPTH):
+        for was in statuses:
+            if was is stopped:
+                continue
+            assert _moved_for_the_worse(was, stopped), (
+                f"{was.value} → {stopped.value} read as no regression; a check that does not "
+                f"run is not a check that passed, deliberately or otherwise"
+            )
     for was in statuses:
         if was is CheckStatus.NOT_EVALUATED:
             continue
@@ -3863,7 +3883,12 @@ def test_no_transition_into_not_evaluated_is_ever_an_improvement():
         for now in statuses
         if _moved_for_the_worse(was, now) != by_blocking_order(was, now)
     }
-    assert moved == {("fail", "not_evaluated")}, (
+    assert moved == {
+        ("fail", "not_evaluated"),
+        ("fail", "out_of_depth"),
+        ("over_margin", "out_of_depth"),
+        ("not_evaluated", "out_of_depth"),
+    }, (
         f"this rule differs from the blocking order on {sorted(moved)}; it is meant to differ "
         f"on exactly the transition that deleted a failing check"
     )

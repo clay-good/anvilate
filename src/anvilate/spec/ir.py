@@ -626,10 +626,34 @@ class ValidationTier(StrEnum):
     T3_FEA = "T3_fea"
 
 
+class ScreeningDepth(StrEnum):
+    """How deep a document asks to be screened, defined by what each depth screens.
+
+    ``CONCEPT`` screens the part itself and what it is made of: the element's own pack
+    checks, the references they resolve, the loads and their combination, and the bounds the
+    document states. ``DETAILED`` adds the work that only makes sense once the drawing
+    exists — the toleranced dimensions against the process floor, the stack-up chains, the
+    geometric tolerances, and the interfaces this part publishes.
+
+    The default is ``DETAILED``: screening everything the document supports is what this
+    library did before a depth could be declared, and it is the conservative answer. A
+    document declaring ``CONCEPT`` gets a shorter card whose deferred checks are reported
+    as :attr:`~anvilate.scorecard.CheckStatus.OUT_OF_DEPTH` and counted, never as passes.
+    """
+
+    CONCEPT = "concept"
+    DETAILED = "detailed"
+
+
 class AcceptanceCriteria(_Base):
     """Which checks must run and the thresholds they are judged against."""
 
     tiers: list[ValidationTier] = Field(min_length=1)
+    # How deep the document asks to be screened. Defaulted rather than required, because
+    # screening everything a document supports is what this library did before depth
+    # existed — and a default that changed what a spec means would be a silent re-reading
+    # of every document already written.
+    depth: ScreeningDepth = ScreeningDepth.DETAILED
     fea_convergence_tol: float | None = Field(default=None, gt=0)
     max_displacement: Length | None = None
 
@@ -655,12 +679,14 @@ class AcceptanceCriteria(_Base):
 # counterbore kind and its required through diameter. 1.7.0 added constraints.margins, the
 # declared conservatism a margin ledger multiplies out. 1.8.0 added budgets, a requirement
 # on the combination of several checks, 1.9.0 their per-basis growth allowances, and
-# 1.10.0 a sub-budget as a contributor. All additive, which is
+# 1.10.0 a sub-budget as a
+# contributor, and 1.11.0 acceptance.depth, the screening depth a document asks for. All
+# additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.10.0"
+SCHEMA_VERSION = "1.11.0"
 
 
 class DesignSpec(_Base):

@@ -45,11 +45,18 @@ class CheckStatus(StrEnum):
     not run is reported as such. ``OVER_MARGIN`` is a passing check whose margin
     ran past a declared upper band: acceptable, never blocking, but flagged so an
     over-engineered candidate is as visible as a failing one.
+
+    ``OUT_OF_DEPTH`` is a check the document *deliberately deferred*: the spec declared a
+    screening depth this check sits below. It is not blocking — the engineer asked for a
+    concept screen and got one — and it is not ``NOT_EVALUATED`` either, because "I chose
+    not to screen that yet" and "I could not screen that" are different facts about a
+    design that a reader acts on differently. Every surface states both counts.
     """
 
     PASS = "pass"
     FAIL = "fail"
     OVER_MARGIN = "over_margin"
+    OUT_OF_DEPTH = "out_of_depth"
     NOT_EVALUATED = "not_evaluated"
 
 
@@ -68,9 +75,14 @@ class CheckStatus(StrEnum):
 #: one place that has to decide.
 _STATUS_RANK: dict[CheckStatus, int] = {
     CheckStatus.PASS: 0,
-    CheckStatus.OVER_MARGIN: 1,
-    CheckStatus.NOT_EVALUATED: 2,
-    CheckStatus.FAIL: 3,
+    # A deferral outranks a clean pass and nothing else: the reader deliberately postponed
+    # it, so it is news about the card's completeness rather than about the design, and a
+    # deferred check must never be named the governing one over an over-engineered or an
+    # unevaluated one.
+    CheckStatus.OUT_OF_DEPTH: 1,
+    CheckStatus.OVER_MARGIN: 2,
+    CheckStatus.NOT_EVALUATED: 3,
+    CheckStatus.FAIL: 4,
 }
 
 
@@ -448,9 +460,11 @@ class ScorecardEntry(StatableModel):
 
     @property
     def evaluated(self) -> bool:
-        """Whether the check ran at all (pass, fail, or over-margin — not
-        ``NOT_EVALUATED``)."""
-        return self.status is not CheckStatus.NOT_EVALUATED
+        """Whether the check ran at all — not ``NOT_EVALUATED`` and not ``OUT_OF_DEPTH``.
+
+        A deferred check did not run either, and a caller asking "did this produce a
+        verdict?" must not be told yes because the deferral was deliberate."""
+        return self.status not in (CheckStatus.NOT_EVALUATED, CheckStatus.OUT_OF_DEPTH)
 
     @classmethod
     def from_safety_factor(
@@ -698,6 +712,11 @@ class Scorecard(ItemCollection, StatableModel):
             return CheckStatus.NOT_EVALUATED
         if any(e.status is CheckStatus.OVER_MARGIN for e in self.entries):
             return CheckStatus.OVER_MARGIN
+        # The last rung before a clean pass: a card whose only blemish is a deliberate
+        # deferral is not blocked, and it is not complete either. Reporting PASS here is the
+        # one reading of a declared depth that would turn a deferral into a green.
+        if any(e.status is CheckStatus.OUT_OF_DEPTH for e in self.entries):
+            return CheckStatus.OUT_OF_DEPTH
         return CheckStatus.PASS
 
     @property
@@ -705,9 +724,14 @@ class Scorecard(ItemCollection, StatableModel):
         """True when there is at least one check and every one met its minimum.
 
         Includes a card whose only blemish is over-margin checks — over-margin is
-        a warning, not a blocker. Never true while a check failed or could not run.
+        a warning, not a blocker — and one whose only blemish is a deliberate deferral.
+        Never true while a check failed or could not run.
         """
-        return self.status in (CheckStatus.PASS, CheckStatus.OVER_MARGIN)
+        return self.status in (
+            CheckStatus.PASS,
+            CheckStatus.OVER_MARGIN,
+            CheckStatus.OUT_OF_DEPTH,
+        )
 
     def failures(self) -> tuple[ScorecardEntry, ...]:
         """The checks that ran and failed — the blocking issues."""
@@ -716,6 +740,20 @@ class Scorecard(ItemCollection, StatableModel):
     def over_margin(self) -> tuple[ScorecardEntry, ...]:
         """The checks that passed but ran past their band — the over-engineered."""
         return tuple(e for e in self.entries if e.status is CheckStatus.OVER_MARGIN)
+
+    def out_of_depth(self) -> tuple[ScorecardEntry, ...]:
+        """The checks the declared screening depth deferred — postponed, not attempted."""
+        return tuple(e for e in self.entries if e.status is CheckStatus.OUT_OF_DEPTH)
+
+    def completeness(self) -> tuple[int, int]:
+        """``(not evaluated, out of depth)`` — the two counts every surface states.
+
+        Reported together and never collapsed: a screen that could not run and one the
+        engineer deferred are different facts, and a single "incomplete" number would let a
+        reader act on the wrong one. Both zero is the positive statement that the card is
+        complete, which is why every rendering prints them even then.
+        """
+        return (len(self.not_evaluated()), len(self.out_of_depth()))
 
     def repair_hints(self) -> tuple[RepairHint, ...]:
         """The repair hints carried by failing checks — the actionable feedback."""

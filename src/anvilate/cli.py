@@ -91,6 +91,9 @@ EXIT_INTERNAL_ERROR = 5
 EXIT_CODES: dict[CheckStatus, int] = {
     CheckStatus.PASS: EXIT_OK,
     CheckStatus.OVER_MARGIN: EXIT_OK,
+    # A deliberate deferral is not a failure: the engineer asked for a concept screen and
+    # got one. The card and every rendering still state the count.
+    CheckStatus.OUT_OF_DEPTH: EXIT_OK,
     CheckStatus.FAIL: EXIT_FAILED,
     CheckStatus.NOT_EVALUATED: EXIT_NOT_EVALUATED,
 }
@@ -100,10 +103,18 @@ EXIT_CODES: dict[CheckStatus, int] = {
 #: "2 is worse than 1" is a fact about this list, not about the integers.
 _BLOCKING_ORDER = [
     CheckStatus.PASS,
+    # A deferral blocks nothing, so it sits between a clean pass and an over-margin warning
+    # — see `_STATUS_RANK`, which this mirrors. How hard a verdict blocks is not how bad it
+    # is, which is why `_moved_for_the_worse` does not read this list alone.
+    CheckStatus.OUT_OF_DEPTH,
     CheckStatus.OVER_MARGIN,
     CheckStatus.NOT_EVALUATED,
     CheckStatus.FAIL,
 ]
+
+#: The statuses in which a check actually produced a verdict. The two that are not here are
+#: the two ways a check does not run: it could not, or the document deferred it.
+_RAN = frozenset({CheckStatus.PASS, CheckStatus.OVER_MARGIN, CheckStatus.FAIL})
 _EXIT_SEVERITY = [EXIT_OK, EXIT_NOT_EVALUATED, EXIT_FAILED]
 
 # Where the specification for the missing half lives. A URL rather than `openspec/specs/…`:
@@ -816,11 +827,23 @@ def _moved_for_the_worse(was: CheckStatus, now: CheckStatus) -> bool:
 
     **FAIL and NOT_EVALUATED are therefore incomparable, and that is the point.** Both
     directions between them are reported: one loses the check, the other reveals a failure, and
-    neither is an improvement. No single ordering of the four statuses can say that, which is
+    neither is an improvement. No single ordering of the five statuses can say that, which is
     how a list built to rank blocking urgency came to be read as a scale of badness.
+
+    ``OUT_OF_DEPTH`` is the same rule stated once more, for a check that stops running because
+    the document deferred it. A deliberate deferral is an honest answer and it is not an
+    improvement on a check that ran: `fail → out_of_depth` silences a failing gate exactly as
+    `fail → not_evaluated` does, and by declaring a depth rather than by deleting an element.
+    Nor is `not_evaluated → out_of_depth` an improvement — the check still does not run, and a
+    revision that only relabels why must not report progress. The one ordered pair is
+    `out_of_depth → pass`, which is a check that now runs and passes.
     """
-    if now is CheckStatus.NOT_EVALUATED:
-        return was is not CheckStatus.NOT_EVALUATED
+    if was is now:
+        return False
+    if was in _RAN and now not in _RAN:
+        return True  # the check stopped producing a verdict, however deliberately
+    if was not in _RAN and now not in _RAN:
+        return True  # it still does not run; relabelling why is not progress
     return _BLOCKING_ORDER.index(now) > _BLOCKING_ORDER.index(was)
 
 
@@ -2398,8 +2421,10 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
 def _needs_summary(card: Scorecard) -> dict[str, Any]:
     """The consolidated needs report as `_cli_output.NeedsSummary` describes it."""
     report = needs_report(card)
+    not_evaluated, out_of_depth = card.completeness()
     return {
-        "not_evaluated": len(card.not_evaluated()),
+        "not_evaluated": not_evaluated,
+        "out_of_depth": out_of_depth,
         "ordering": LEVERAGE_IS_NOT_IMPORTANCE,
         "items": [
             {
@@ -2708,8 +2733,12 @@ def _render(
     # Completeness beside the verdict, stated in both directions. A reader's question is not
     # only what passed but what nobody looked at, and a card that says nothing about its
     # unevaluated checks reads as complete whether it is or not — so the zero is printed too.
-    blocked = card.not_evaluated()
+    blocked, deferred = card.not_evaluated(), card.out_of_depth()
     lines.append(f"  not evaluated: {len(blocked)}")
+    # Its own line, never folded into the one above: a check the engineer deferred and one
+    # that could not run are different facts, and one "incomplete" number would let a
+    # reader act on the wrong one.
+    lines.append(f"  out of depth:  {len(deferred)}")
     report = needs_report(card)
     if len(report):
         # Indented under the card and with no blank line before it: a run over a directory

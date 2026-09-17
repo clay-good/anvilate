@@ -86,6 +86,30 @@ tightened.attribution()["manufacturing.min_wall"]  # "user override of profile E
 Profile-supplied values are not yet threaded into the Design Spec, the scorecard or the
 evidence bundle; that is the rest of group 2.
 
+## Declared screening depth
+
+A document can say how deep it wants to be screened, so an early-concept run is a short
+honest card rather than a long red one:
+
+```yaml
+acceptance: {tiers: [T1_analytical, T2_dfm], depth: concept}
+```
+
+`concept` screens the part and what it is made of — the element's pack checks, the
+references they resolve, the loads and their combination, the bounds the document states.
+`detailed`, the default, adds the work that only makes sense once the drawing exists: the
+toleranced dimensions against the process floor, the stack-up chains, the geometric
+tolerances, and the interfaces this part publishes.
+
+| Rule | What it means |
+| --- | --- |
+| A deferral is its own status | `out_of_depth` is neither a pass nor `not_evaluated`: "I chose not to screen that yet" and "I could not screen that" are different facts, and no surface renders them alike. |
+| Both counts, always | The card, `anvilate check` and the calculation report state the unevaluated count and the out-of-depth count separately, zeros included, so a complete card says so positively. |
+| A deferral blocks nothing | The exit code is unchanged and the verdict is not a failure — but a card whose only blemish is a deferral rolls up as `out_of_depth`, never as `pass`. |
+| Deferring is never an improvement | `anvilate diff` treats a check that stops running as a regression, whether it became `not_evaluated` or was deferred: declaring a depth must not be a way to silence a failing gate. Only `out_of_depth → pass` is an improvement. |
+| The deferral says how to undo it | Each out-of-depth entry names the declaration that would have driven the check and the depth that would run it. |
+| The default changes nothing | A document that declares no depth is screened exactly as before. |
+
 ## The refusals that state nothing
 
 Nine of the screening module's thirty-two refusals state a need today. The rest are listed
@@ -107,6 +131,6 @@ needs.
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
 with the nine screening refusals that state a need today. A profile's record, binding,
-applicability check and overrides ship too (group 2.1, 2.2 and 2.4). Marking profile-sourced
-values through the spec, the card and the bundle (2.3) and the declared screening depth
-(group 3) are what remain.
+applicability check and overrides ship too (group 2.1, 2.2 and 2.4). The declared screening depth ships too (group 3.1 and 3.2).
+Marking profile-sourced values through the spec, the card and the bundle (2.3), and the
+report that names what raising the depth newly requires (3.3), are what remain.

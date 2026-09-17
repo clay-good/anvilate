@@ -157,8 +157,18 @@ def test_each_schema_declares_the_dialect_the_tool_contracts_need():
 def test_the_scorecard_contract_shows_the_tri_state_to_a_consumer():
     """A client reading this contract must not be able to model the result as a boolean
     without noticing what it is dropping."""
+    from anvilate.scorecard import CheckStatus
+
     statuses = _published("scorecard.schema.json")["$defs"]["CheckStatus"]["enum"]
-    assert set(statuses) == {"pass", "fail", "over_margin", "not_evaluated"}
+    # Both halves: the contract carries every status the library can write, and the answers
+    # that are not a plain pass or fail are named here by hand. The first half catches a
+    # status the contract forgot; the second is the claim itself, which a comparison against
+    # the enum alone cannot make — it would agree with a library that had two statuses.
+    assert set(statuses) == {status.value for status in CheckStatus}
+    assert {"fail", "over_margin", "not_evaluated", "out_of_depth"} <= set(statuses), (
+        "a client reading this contract could model the result as a boolean without "
+        "noticing the answers that are neither a clean pass nor a failure"
+    )
 
 
 def test_the_spec_contract_carries_its_own_version_number():

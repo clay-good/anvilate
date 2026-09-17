@@ -217,6 +217,7 @@ That is the whole rule. What it means field by field:
 | `material`, and each `interfaces` entry naming a standard component | resolved, with the near misses named on a refusal |
 | an *imported* interface | `NOT_EVALUATED`: a screen of one document cannot fetch another |
 | `manufacturing.tolerance_class` | resolved like any other identifier |
+| `acceptance.depth` | which families of checks run: detailed (the default) screens everything the document supports, concept defers the drawing's work — the toleranced dimensions, the stack-up chains, the geometric tolerances and the published contracts — as `OUT_OF_DEPTH` entries naming what would have driven each one. Both the out-of-depth and not-evaluated counts are stated beside the verdict. See [what the build needs next](declaration-needs.md) |
 | `budgets` | one entry per declared [performance budget](performance-budgets.md), evaluated last against the checks its contributors bind to: the total under the declared rule against the allocation, with the governing contributor named. A budget can fail a card whose every other check passes, and one the screen could not evaluate is `NOT_EVALUATED` naming it |
 | `constraints.min_safety_factor` | the figure every judged screen is measured against |
 | `constraints.max_safety_factor` | the top of the band; a check above it is `OVER_MARGIN`, passing and flagged |

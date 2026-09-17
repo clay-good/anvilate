@@ -1816,14 +1816,18 @@ def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence()
         )
         # Every check is still in the table, and the ones that DO carry margins still read
         # as a comparison.
-        rows = [line for line in summary if line.startswith("  ") and ": " in line]
+        # The summary's trailing lines — the governing check, the completeness counts and
+        # the overall verdict — are not rows about a check, and the filter says so by name
+        # rather than by position, which is what broke when a count was added.
+        trailing = ("  governing check:", "  not evaluated:", "  overall:")
+        rows = [
+            line
+            for line in summary
+            if line.startswith("  ") and ": " in line and not line.startswith(trailing)
+        ]
         assert len(rows) >= len(card.entries), "the summary dropped a check rather than showing it"
         assert sum(1 for line in rows if " vs " in line and "required" in line) == expected
-        assert all(
-            "no safety factor to compare" in line or " vs " in line
-            for line in rows
-            if "governing check" not in line and "overall" not in line
-        )
+        assert all("no safety factor to compare" in line or " vs " in line for line in rows)
 
     # The grid form keeps the dash, which is what a numeric column under a header wants.
     html = CalculationReport(

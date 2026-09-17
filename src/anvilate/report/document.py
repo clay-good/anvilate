@@ -69,10 +69,11 @@ _ORIGIN_LABEL = {
     Origin.DEFAULT: "library default",
 }
 
-_STATUS_LABEL = {
+_STATUS_LABEL: dict[CheckStatus, str] = {
     CheckStatus.PASS: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.OVER_MARGIN: "OVER MARGIN",
+    CheckStatus.OUT_OF_DEPTH: "OUT OF DEPTH",
     CheckStatus.NOT_EVALUATED: "NOT EVALUATED",
 }
 
@@ -396,6 +397,8 @@ class CalculationReport(StatableModel):
         governing = self.governing()
         if governing is not None:
             out.append(f"  governing check: {governing.name}")
+        not_evaluated, out_of_depth = self.scorecard().completeness()
+        out.append(f"  not evaluated: {not_evaluated}, out of declared depth: {out_of_depth}")
         out.append(f"  overall: {_STATUS_LABEL[self.status]}")
         out.append("")
         out.append("Performance budgets")
@@ -637,6 +640,8 @@ class CalculationReport(StatableModel):
         out.append("</table>")
         if governing is not None:
             out.append(f"<p>Governing check: <strong>{escape(governing.name)}</strong></p>")
+        not_evaluated, out_of_depth = self.scorecard().completeness()
+        out.append(f"<p>Not evaluated: {not_evaluated}. Out of declared depth: {out_of_depth}.</p>")
         out.append(f"<p>Overall: <strong>{_STATUS_LABEL[self.status]}</strong></p>")
         return out
 

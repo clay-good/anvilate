@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.11.0: a document can declare its screening depth
+
+`acceptance.depth` is `concept` or `detailed`, defaulting to `detailed` — which is what this
+library screened before depth existed, so no document already written changes meaning. A
+`concept` screen defers the drawing's work and reports each deferred family as an
+`out_of_depth` scorecard entry. That status is new in the scorecard contract (1.8.0): a fifth
+value a consumer will see, which is why the version moved. It is not blocking and it is not
+`not_evaluated`; every surface states both counts.
+
 ### Design Spec 1.10.0: a budget contributor can be a budget
 
 `budgets[].contributors[].sub_budget` makes a contributor another budget, evaluated under its

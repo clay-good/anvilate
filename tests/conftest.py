@@ -446,7 +446,15 @@ def _uncrossed_shapes() -> list[str]:
         CheckStatus.OVER_MARGIN: "PASS",  # QIF has no "passed too well"; the finding is prose
         CheckStatus.FAIL: "FAIL",
         CheckStatus.NOT_EVALUATED: "NOT_ANALYZED",
+        # A deferred characteristic was not analyzed either. Written here independently, as
+        # the comment above says: this is the reference the export is held against.
+        CheckStatus.OUT_OF_DEPTH: "NOT_ANALYZED",
     }
+    assert set(in_qif) == set(CheckStatus), (
+        f"this reference does not cover {sorted(set(CheckStatus) - set(in_qif))}; a status it "
+        "does not name would be a KeyError in the middle of the sweep below rather than a "
+        "statement about what QIF should say"
+    )
 
     shapes = _export_shapes()
     if not shapes:

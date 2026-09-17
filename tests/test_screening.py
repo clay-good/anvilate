@@ -1800,6 +1800,10 @@ _ACCEPTANCE_FIELDS = {
     "tiers": "the tiers it demands are what produce the entries",
     "max_displacement": "reported as unscreened, naming where the limit does belong",
     "fea_convergence_tol": "answered by the T3 gap entry, which names the convergence criterion",
+    "depth": (
+        "gates which families run; the ones it defers are out-of-depth entries naming what "
+        "would have driven them and the depth that would screen them"
+    ),
 }
 _MANUFACTURING_FIELDS = {
     "process": "selects the achievable-tolerance floor a T2 screen compares against",

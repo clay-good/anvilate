@@ -32,10 +32,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.35.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.36.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.35.0.json"]
-SchemaVersion = Literal["1.35.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.36.0.json"]
+SchemaVersion = Literal["1.36.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -85,6 +85,7 @@ class NeedsSummary(_WireModel):
     """What the build needs next; `items` is empty when nothing is missing."""
 
     not_evaluated: Annotated[int, Field(ge=0)]
+    out_of_depth: Annotated[int, Field(ge=0)]
     ordering: Literal[LEVERAGE_IS_NOT_IMPORTANCE]  # type: ignore[valid-type]
     items: tuple[NeedSummary, ...]
 

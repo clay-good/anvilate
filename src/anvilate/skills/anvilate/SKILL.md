@@ -98,10 +98,11 @@ safety factor 2.39 vs required minimum 1.50
 ```
 
 `card.governing()` names the check to quote, and its ordering is **status first, then
-utilization**. The four rungs are the card's own roll-up order — `fail`, then
-`not_evaluated`, then `over_margin`, then `pass` — so a failing check outranks one that
-could not run, which outranks an over-engineered one, which outranks an ordinary passing
-check however close to its limit. So the tear-out check governs here at a utilization of
+utilization**. The five rungs are the card's own roll-up order — `fail`, then
+`not_evaluated`, then `over_margin`, then `out_of_depth`, then `pass` — so a failing check
+outranks one that could not run, which outranks an over-engineered one, which outranks a
+check the document deferred by declaring a shallower `acceptance.depth`, which outranks an
+ordinary passing check however close to its limit. So the tear-out check governs here at a utilization of
 `None`, ahead of a bolt at 63% — pointing you at the thing that blocks rather than at the
 tightest number.
 

@@ -136,6 +136,10 @@ _CHARACTERISTIC_STATUS: dict[CheckStatus, str] = {
     CheckStatus.OVER_MARGIN: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.NOT_EVALUATED: "NOT_ANALYZED",
+    # A deferred characteristic was not analyzed either. QIF has no word for "deliberately
+    # postponed", and the distinction this library keeps is carried in the Description
+    # rather than lost by mapping a deferral onto PASS.
+    CheckStatus.OUT_OF_DEPTH: "NOT_ANALYZED",
 }
 
 # The same roll-up onto the document-level InspectionStatus enumeration, which is a
@@ -147,6 +151,7 @@ _INSPECTION_STATUS: dict[CheckStatus, str] = {
     CheckStatus.OVER_MARGIN: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.NOT_EVALUATED: "NOT_CALCULATED",
+    CheckStatus.OUT_OF_DEPTH: "NOT_CALCULATED",
 }
 
 _PASS_VALUE = "pass"
