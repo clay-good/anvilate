@@ -398,7 +398,7 @@ def test_a_declared_budget_round_trips_through_the_document() -> None:
 
     spec = _padeye_with(_DECLARED_BUDGET)
     assert parse_spec(spec.model_dump(mode="json")) == spec
-    assert spec.anvilate_spec == "1.9.0"
+    assert spec.anvilate_spec == "1.10.0"
     assert _padeye_with("").budgets == ()
 
 
@@ -495,3 +495,100 @@ def test_an_allowance_needs_an_authority() -> None:
 
     with pytest.raises(ValidationError, match="must state"):
         GrowthAllowance(basis=ContributorBasis.ESTIMATED, factor=1.1, authority="  ")
+
+
+def _subsystem() -> Budget:
+    return Budget(
+        name="optics module",
+        quantity="module error",
+        limit=Quantity(magnitude=45.0, unit="µrad"),
+        limit_basis=LimitBasis.DERIVED,
+        limit_source="allocated from the system budget",
+        rule=CombinationRule.RSS,
+        contributors=(_term("lens tilt", 24.0), _term("detector", 18.0)),
+    )
+
+
+def _system(sub: Budget | None = None) -> Budget:
+    return _budget(
+        CombinationRule.WORST_CASE,
+        _term("subsystem", None, sub_budget=sub or _subsystem()),
+        _term("structure", 40.0),
+    )
+
+
+def test_a_sub_budget_keeps_its_own_rule_and_enters_as_one_value() -> None:
+    result = _system().evaluate()
+    inner = sqrt(24.0**2 + 18.0**2)  # the subsystem's own quadrature
+    assert result.total == pytest.approx(inner + 40.0, rel=1e-12)  # summed in the parent
+    rendered = str(result)
+    assert "subsystem: 30 µrad" in rendered
+    assert "sub-budget by rss" in rendered
+    assert "by worst case" in rendered.splitlines()[0]
+
+
+def test_a_sub_budget_that_could_not_be_evaluated_stops_the_parent_naming_it() -> None:
+    blocked = _subsystem().model_copy(update={"rule": None})
+    result = _system(blocked).evaluate()
+    assert result.status is CheckStatus.NOT_EVALUATED
+    assert "sub-budget 'optics module', which was not evaluated" in (result.reason or "")
+    assert "no combination rule" in (result.reason or "")
+
+
+def test_a_budget_that_reaches_itself_is_refused_naming_the_chain() -> None:
+    inner = _subsystem().model_copy(update={"name": "line of sight"})
+    with pytest.raises(ValidationError, match="reaches itself.*line of sight -> line of sight"):
+        _system(inner)
+
+
+def test_nesting_deeper_than_the_bound_is_refused() -> None:
+    from anvilate.budget import _MAX_NESTING
+
+    budget = _subsystem().model_copy(update={"name": "level 0"})
+    for level in range(1, _MAX_NESTING):
+        budget = Budget(
+            name=f"level {level}",
+            quantity="module error",
+            limit=Quantity(magnitude=45.0, unit="µrad"),
+            limit_basis=LimitBasis.DERIVED,
+            limit_source="allocated from its parent",
+            rule=CombinationRule.RSS,
+            contributors=(_term("child", None, sub_budget=budget),),
+        )
+    assert budget.evaluate().total is not None  # exactly at the bound
+    with pytest.raises(ValidationError, match=f"nests {_MAX_NESTING + 1} deep"):
+        Budget(
+            name="one too deep",
+            quantity="module error",
+            limit=Quantity(magnitude=45.0, unit="µrad"),
+            limit_basis=LimitBasis.DERIVED,
+            limit_source="allocated from its parent",
+            rule=CombinationRule.RSS,
+            contributors=(_term("child", None, sub_budget=budget),),
+        )
+
+
+def test_a_sub_budget_of_the_wrong_dimension_is_refused_before_it_is_evaluated() -> None:
+    millimetres = _subsystem().model_copy(
+        update={
+            "limit": Quantity(magnitude=3.0, unit="mm"),
+            "contributors": (_term("a", 1.0, "mm"),),
+        }
+    )
+    with pytest.raises(ValidationError, match=r"'subsystem' is \[length\]"):
+        _system(millimetres)
+
+
+@pytest.mark.parametrize(
+    ("fields", "match"),
+    [
+        ({"value": 1.0, "sub_budget": True}, "exactly one"),
+        ({"compensating": True, "sub_budget": True}, "cannot hand back allocation"),
+    ],
+)
+def test_a_malformed_sub_budget_term_is_refused(fields: dict, match: str) -> None:
+    value = fields.pop("value", None)
+    if fields.pop("sub_budget", False):
+        fields["sub_budget"] = _subsystem()
+    with pytest.raises(ValidationError, match=match):
+        _term("subsystem", value, **fields)

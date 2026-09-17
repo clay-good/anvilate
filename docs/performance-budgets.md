@@ -68,6 +68,7 @@ gates export like any other failure. A declared budget the screen could not eval
 | One check, one term | Two contributors bound to the same `check` id are refused, naming both. |
 | Compensation is declared | A negative value must be `compensating=True`, the result reports the total with and without it, and compensation is refused under quadrature, where its sign is squared away. |
 | Shares sum to one | Linearly under worst case; as a share of the squared total under quadrature. |
+| A budget can be a term | `sub_budget=` makes a contributor another budget, evaluated under its own rule and entering as one value, with both rules shown. Nesting is bounded at eight levels, and a sub-budget carrying an ancestor's name is refused naming the chain. A sub-budget that did not evaluate leaves its parent not evaluated. |
 | A growth allowance is ledgered, not folded in | `growth=(GrowthAllowance(basis=..., factor=..., authority=...),)` applies a factor to every contributor of one basis — practice expects an estimate to grow more than a measurement — and `result.ledger()` returns the applied allowances as [margin-ledger](margin-ledger.md) entries of kind contingency-or-growth. At most one allowance per basis, and a factor below 1 is refused. |
 | A spent budget has no headroom | Every headroom is unavailable with the overrun stated, never a negative allowance. |
 | An assumed limit says so | A `working_assumption` limit is labeled on the scorecard entry. |
@@ -96,5 +97,5 @@ in the report's margin ledger with its authority, beside the budget it came from
 ## Status
 
 This is the budget's contract and evaluation (`openspec/changes/add-performance-budgets`,
-groups 1-3, 4, 6.1 and per-basis growth allowances). Nested budgets — a sub-budget as a
-contributor, with bounded depth and cycle refusal — are not built.
+groups 1-4, 6.1, per-basis growth allowances and nested budgets). A top-level performance
+limit declared with no budget allocated against it is not yet reported as such.

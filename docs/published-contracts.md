@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.10.0: a budget contributor can be a budget
+
+`budgets[].contributors[].sub_budget` makes a contributor another budget, evaluated under its
+own combination rule and entering its parent as a single value — the way a system allocation
+decomposes into subsystem allocations. A term states exactly one of a value, a reason it has
+none, or a sub-budget. Nesting is bounded at eight levels, and a sub-budget carrying an
+ancestor's name is refused naming the chain: an allocation cannot be one of the terms that
+spend it. A sub-budget that could not be evaluated leaves its parent not evaluated, naming it.
+
 ### Design Spec 1.9.0: a budget can declare growth allowances
 
 `budgets[].growth` is an optional list of per-basis growth allowances: a factor applied to

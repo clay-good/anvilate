@@ -112,6 +112,11 @@ class Contributor(StatableModel):
     measurement was not supplied — and ``unresolved`` then says why. ``check`` is the id of
     the scorecard check the value came from, when it came from one; it is the identity double
     counting is detected on. ``compensating`` declares a deliberate term of opposite sign.
+
+    ``sub_budget`` makes the term another budget, evaluated under its OWN rule and entering
+    this one as a single value — the way a system allocation decomposes into subsystem
+    allocations. A term states exactly one of the three: a value, a reason it has none, or a
+    sub-budget.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -124,15 +129,34 @@ class Contributor(StatableModel):
     correlation_group: Named | None = None
     compensating: bool = False
     unresolved: Provenance | None = None
+    sub_budget: Budget | None = None
 
     @model_validator(mode="after")
     def _a_term(self) -> Self:
-        if (self.value is None) == (self.unresolved is None):
-            raise ValueError(
-                f"contributor '{self.name}' states a value or the reason it has none, exactly "
-                "one: a missing value with no reason reads as an oversight, and a reason beside "
-                "a value contradicts it"
+        stated = [
+            field
+            for field, value in (
+                ("value", self.value),
+                ("unresolved", self.unresolved),
+                ("sub_budget", self.sub_budget),
             )
+            if value is not None
+        ]
+        if len(stated) != 1:
+            raise ValueError(
+                f"contributor '{self.name}' states a value, the reason it has none, or a "
+                f"sub-budget — exactly one, and this one states {stated or ['nothing']}: a "
+                "missing value with no reason reads as an oversight, and two of the three "
+                "contradict each other"
+            )
+        if self.sub_budget is not None:
+            if self.compensating:
+                raise ValueError(
+                    f"contributor '{self.name}' is a sub-budget declared compensating; a "
+                    "budget's total is what it spends, and a sub-budget cannot hand back "
+                    "allocation to its parent"
+                )
+            return self
         if self.value is None:
             return self
         if not self.value.pint._is_multiplicative:
@@ -182,12 +206,14 @@ class Budget(StatableModel):
             raise ValueError(f"budget '{self.name}' allocates {self.limit}; a limit is positive")
         expected = self.limit.pint.dimensionality
         for term in self.contributors:
-            if term.value is not None and term.value.pint.dimensionality != expected:
+            declared = term.value if term.sub_budget is None else term.sub_budget.limit
+            if declared is not None and declared.pint.dimensionality != expected:
                 raise ValueError(
                     f"budget '{self.name}' is allocated in {self.limit.dimensionality} and "
-                    f"contributor '{term.name}' is {term.value.dimensionality}; a total "
+                    f"contributor '{term.name}' is {declared.dimensionality}; a total "
                     "across two dimensions is not a quantity"
                 )
+        _refuse_unbounded_nesting(self, ())
         bound: dict[str, str] = {}
         for term in self.contributors:
             if term.check is None:
@@ -265,21 +291,35 @@ class Budget(StatableModel):
                     "give different totals, and none is assumed"
                 ),
             )
-        waiting = [term for term in self.contributors if term.value is None]
+        # A sub-budget is evaluated first, under its own rule, and enters as one value. One
+        # that could not be evaluated leaves this budget not evaluated too, naming it: an
+        # allocation whose subsystem is unknown is not an allocation with room.
+        resolved: dict[str, Quantity] = {}
+        waiting = []
+        for term in self.contributors:
+            if term.sub_budget is None:
+                if term.value is None:
+                    waiting.append(f"contributor '{term.name}' has no value: {term.unresolved}")
+                else:
+                    resolved[term.name] = term.value
+                continue
+            inner = term.sub_budget.evaluate()
+            if inner.total is None:
+                waiting.append(
+                    f"contributor '{term.name}' is sub-budget '{term.sub_budget.name}', "
+                    f"which was not evaluated: {inner.reason}"
+                )
+                continue
+            resolved[term.name] = Quantity(magnitude=inner.total, unit=term.sub_budget.limit.unit)
         if waiting:
             return BudgetResult(
-                budget=self,
-                status=CheckStatus.NOT_EVALUATED,
-                reason="; ".join(
-                    f"contributor '{term.name}' has no value: {term.unresolved}" for term in waiting
-                ),
+                budget=self, status=CheckStatus.NOT_EVALUATED, reason="; ".join(waiting)
             )
         allowed = {allowance.basis: allowance for allowance in self.growth}
         values = {}
         margins = []
         for term in self.contributors:
-            assert term.value is not None  # every contributor resolved, checked above
-            magnitude = term.value.to(unit).magnitude
+            magnitude = resolved[term.name].to(unit).magnitude
             allowance = allowed.get(term.basis)
             if allowance is None or allowance.factor == 1.0:
                 values[term.name] = magnitude
@@ -340,6 +380,36 @@ class Budget(StatableModel):
             governing=governing,
             margins=tuple(margins),
         )
+
+
+#: How deep a budget may decompose. An allocation tree this deep is a modelling mistake, and
+#: the bound is what makes the recursion below terminate on any document, however assembled.
+_MAX_NESTING = 8
+
+
+def _refuse_unbounded_nesting(budget: Budget, ancestors: tuple[str, ...]) -> None:
+    """Refuse a budget that reaches itself, or nests deeper than :data:`_MAX_NESTING`.
+
+    A budget's contributors are frozen models, so a literal object cycle cannot be built —
+    what *can* be built is a sub-budget that carries an ancestor's name, which reads to every
+    surface as the same allocation accounting for itself. Both are refused naming the chain,
+    rather than evaluated until something stops the recursion.
+    """
+    if budget.name in ancestors:
+        chain = " -> ".join((*ancestors, budget.name))
+        raise ValueError(
+            f"budget '{budget.name}' reaches itself through its contributors: {chain}; an "
+            "allocation cannot be one of the terms that spend it"
+        )
+    path = (*ancestors, budget.name)
+    if len(path) > _MAX_NESTING:
+        raise ValueError(
+            f"budget '{budget.name}' nests {len(path)} deep and {_MAX_NESTING} is the bound: "
+            f"{' -> '.join(path)}"
+        )
+    for term in budget.contributors:
+        if term.sub_budget is not None:
+            _refuse_unbounded_nesting(term.sub_budget, path)
 
 
 def _read_check(card: Scorecard, check: str) -> tuple[Quantity | None, str | None]:
@@ -527,6 +597,11 @@ class BudgetResult(StatableModel):
         unit = budget.limit.unit
         lines = [str(self.to_entry().detail)]
         lines += [f"  {group}: sum {total:.4g} {unit}" for group, total in self.group_sums]
+        sub = {
+            term.name: term.sub_budget
+            for term in budget.contributors
+            if term.sub_budget is not None
+        }
         for term in self.contributors:
             share = "—" if term.share is None else f"{term.share:.1%}"
             room = (
@@ -534,5 +609,13 @@ class BudgetResult(StatableModel):
                 if term.headroom is not None
                 else f"no headroom: {term.headroom_unavailable}"
             )
-            lines.append(f"  {term.name}: {term.value:.4g} {unit}, {share} of total, {room}")
+            nested = sub.get(term.name)
+            # Both rules shown: a subsystem total computed under its own rule, entering a
+            # parent that combines differently, is two decisions and not one.
+            under = (
+                ""
+                if nested is None or nested.rule is None
+                else f", sub-budget by {spoken(nested.rule, joined_by=' ')}"
+            )
+            lines.append(f"  {term.name}: {term.value:.4g} {unit}, {share} of total, {room}{under}")
         return "\n".join(lines)

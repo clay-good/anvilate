@@ -654,13 +654,13 @@ class AcceptanceCriteria(_Base):
 # concentric circular locator (pilot bore or boss). 1.6.0 extended that locator with a
 # counterbore kind and its required through diameter. 1.7.0 added constraints.margins, the
 # declared conservatism a margin ledger multiplies out. 1.8.0 added budgets, a requirement
-# on the combination of several checks, and 1.9.0 their per-basis growth allowances. All
-# additive, which is
+# on the combination of several checks, 1.9.0 their per-basis growth allowances, and
+# 1.10.0 a sub-budget as a contributor. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.9.0"
+SCHEMA_VERSION = "1.10.0"
 
 
 class DesignSpec(_Base):
