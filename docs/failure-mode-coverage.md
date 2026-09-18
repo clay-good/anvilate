@@ -99,5 +99,5 @@ This is the catalogue, the applicability resolution and the coverage report
 in `docs/api/failure-mode-declarations.txt`, either with the catalogued mode it declares or as
 declaring none yet. A test holds the file to the screen inventory both ways. It checks that
 each recorded declaration is really in the screen's own body, and that no screen recorded as
-declaring none declares one. It also caps the declares-none list, which may only shrink: five
-screens declare a mode today, and 64 declare none.
+declaring none declares one. It also caps the declares-none list, which may only shrink: 22
+screens declare a mode today, and 56 declare none.

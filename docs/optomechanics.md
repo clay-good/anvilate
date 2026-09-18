@@ -109,11 +109,11 @@ take to optical design software; the screen says which one that is.
 ## Status
 
 Built (`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
-5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4 and 11.5):
+5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4, 11.5 and 11.6):
 focus, pointing, wavefront and boresight screens, retention and shock, sealing, breathing
 and condensation, windows, coatings and cements, outgassing and cleanliness, harnesses,
-adjustments, and the three workflow examples above. Not built yet: angular units as a
+adjustments, the three workflow examples above, and a catalogued failure mode declared by
+every screen in the module. Not built yet: angular units as a
 whole (1.1), glass-catalogue ingestion (1.3), the clear aperture against a beam keepout
 (4.1, which waits on the keepout envelopes), the RMS form and focus share of a window's
-wavefront error (the rest of 11.3), failure-mode declarations on the screens that still
-declare none (11.6), and the environment profiles (12.x).
+wavefront error (the rest of 11.3), and the environment profiles (12.x).

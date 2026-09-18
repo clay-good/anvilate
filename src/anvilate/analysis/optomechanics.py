@@ -223,6 +223,7 @@ def athermal_focus_scorecard(
     )
     return ScorecardEntry(
         name=name,
+        addresses=("thermal defocus of a lens housing",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=comparison.sentence(),
         reference=_JAMIESON,
@@ -411,6 +412,7 @@ def wavefront_budget_scorecard(
     symbols = [f"σ_{index}" for index in range(1, len(terms) + 1)]
     return ScorecardEntry(
         name=name,
+        addresses=("image quality lost to stacked wavefront errors",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=comparison.sentence(),
         reference="Maréchal criterion, S = exp(−(2πσ/λ)²)",
@@ -483,6 +485,7 @@ def internal_condensation_scorecard(
     else:
         return ScorecardEntry(
             name=name,
+            addresses=("condensation on the coldest internal surface",),
             status=CheckStatus.NOT_EVALUATED,
             detail=(
                 "not evaluated — the sealed volume declares neither an internal dew point nor "
@@ -505,6 +508,7 @@ def internal_condensation_scorecard(
     )
     return ScorecardEntry(
         name=name,
+        addresses=("condensation on the coldest internal surface",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=f"{comparison.sentence()}{consequence} — {basis}",
         reference=_ALDUCHOV,
@@ -743,6 +747,7 @@ def dynamic_clearance_scorecard(
     if gap is None:
         return ScorecardEntry(
             name=name,
+            addresses=("an optic striking its housing under shock",),
             status=CheckStatus.NOT_EVALUATED,
             detail=(
                 "not evaluated — no internal gap is declared for the shock displacement to be "
@@ -764,6 +769,7 @@ def dynamic_clearance_scorecard(
     )
     return ScorecardEntry(
         name=name,
+        addresses=("an optic striking its housing under shock",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=comparison.sentence(),
         reference=_HARRIS,
@@ -949,6 +955,7 @@ def seal_gland_extremes_scorecard(
     )
     return ScorecardEntry(
         name=name,
+        addresses=("a static seal leaking at a temperature extreme",),
         status=CheckStatus.FAIL if findings else CheckStatus.PASS,
         detail=detail,
         reference="Parker O-Ring Handbook, static-seal squeeze, fill and stretch",
@@ -1141,6 +1148,7 @@ def boresight_scorecard(
     if missing:
         return ScorecardEntry(
             name=name,
+            addresses=("boresight drift between optical paths",),
             status=CheckStatus.NOT_EVALUATED,
             detail=(
                 f"not evaluated — the {' and '.join(missing)} path is not declared, and the "
@@ -1191,6 +1199,7 @@ def boresight_scorecard(
     common_text = ", ".join(common) or "none"
     return ScorecardEntry(
         name=name,
+        addresses=("boresight drift between optical paths",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=(
             f"{comparison.sentence()} — differential: {differential}; common-mode, excluded: "
@@ -1247,6 +1256,7 @@ def enclosure_rise_scorecard(
         verb = "dissipates" if len(dissipations) == 1 else "dissipate"
         return ScorecardEntry(
             name=name,
+            addresses=("self-heating inside an optical enclosure",),
             status=CheckStatus.NOT_EVALUATED,
             detail=(
                 f"not evaluated — {sources} {verb} inside the enclosure and no heat path "
@@ -1266,6 +1276,7 @@ def enclosure_rise_scorecard(
     )
     return ScorecardEntry(
         name=name,
+        addresses=("self-heating inside an optical enclosure",),
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=f"{comparison.sentence()} — from {sources}",
         reference=_INCROPERA,
@@ -1601,6 +1612,7 @@ def preload_temperature_scorecard(
     summary = f"assembled {p0:.1f} N, cold {at['cold']:.1f} N, hot {at['hot']:.1f} N"
     return ScorecardEntry(
         name=name,
+        addresses=("lens preload lost or overstressed at a temperature extreme",),
         status=CheckStatus.FAIL if findings else CheckStatus.PASS,
         detail=("; ".join(findings) + f" ({summary})")
         if findings

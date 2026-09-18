@@ -605,4 +605,8 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
             continue
         assert not declared, f"{screen} declares {declared} and is recorded as declaring none"
     # The ratchet: this may only go down.
-    assert len(none) <= 64, f"the declares-none list grew to {len(none)}"
+    assert len(none) <= 56, f"the declares-none list grew to {len(none)}"
+    # The page quotes both counts, and it said "five" while fourteen screens declared one.
+    page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
+    stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"
+    assert stated in " ".join(page.split()), f"docs/failure-mode-coverage.md should say: {stated}"

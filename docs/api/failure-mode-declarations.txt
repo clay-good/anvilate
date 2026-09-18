@@ -13,6 +13,14 @@ machinery.screen_shaft -> shaft fatigue at a stress raiser
 machinery.screen_gear_mesh -> gear tooth surface pitting
 machinery.screen_rolling_bearing -> rolling-contact fatigue of a bearing
 machinery.screen_compression_spring -> coil spring buckling
+optomechanics.athermal_focus_scorecard -> thermal defocus of a lens housing
+optomechanics.boresight_scorecard -> boresight drift between optical paths
+optomechanics.dynamic_clearance_scorecard -> an optic striking its housing under shock
+optomechanics.enclosure_rise_scorecard -> self-heating inside an optical enclosure
+optomechanics.internal_condensation_scorecard -> condensation on the coldest internal surface
+optomechanics.preload_temperature_scorecard -> lens preload lost or overstressed at a temperature extreme
+optomechanics.seal_gland_extremes_scorecard -> a static seal leaking at a temperature extreme
+optomechanics.wavefront_budget_scorecard -> image quality lost to stacked wavefront errors
 optomechanics.glass_contact_stress_scorecard -> glass fracture at a mount contact
 optomechanics.seal_breathing_scorecard -> condensation in a breathing sealed volume
 optomechanics.pressure_window_scorecard -> window fracture under a pressure differential
@@ -59,14 +67,6 @@ nds_timber.nds_bending_scorecard
 nds_timber.nds_compression_scorecard
 nds_timber.nds_shear_scorecard
 noise_exposure.screen_noise_exposure
-optomechanics.athermal_focus_scorecard
-optomechanics.boresight_scorecard
-optomechanics.dynamic_clearance_scorecard
-optomechanics.enclosure_rise_scorecard
-optomechanics.internal_condensation_scorecard
-optomechanics.preload_temperature_scorecard
-optomechanics.seal_gland_extremes_scorecard
-optomechanics.wavefront_budget_scorecard
 pressure_vessel.asme_appendix_2_flange_stress_scorecard
 pressure_vessel.asme_b313_branch_reinforcement_scorecard
 pressure_vessel.asme_b313_pressure_scorecard

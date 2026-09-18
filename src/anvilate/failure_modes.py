@@ -627,6 +627,104 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="thermal defocus of a lens housing",
+            description=(
+                "a lens and its housing expanding apart so the image leaves the depth of focus at "
+                "a temperature extreme"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Jamieson, Thermal effects in optical systems, Optical Engineering 20(2) (1981)"
+            ),
+        ),
+        FailureMode(
+            id="boresight drift between optical paths",
+            description=(
+                "two channels meant to point together drifting apart, while each channel's own "
+                "pointing screens clean"
+            ),
+            applicability=Applicability(
+                environments=(
+                    "vibration",
+                    "thermal_cycling",
+                )
+            ),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Yoder, Opto-Mechanical Systems Design, boresight between channels",
+        ),
+        FailureMode(
+            id="an optic striking its housing under shock",
+            description=(
+                "a mounted optic swinging across its radial gap under shock and chipping on the "
+                "housing or a neighbor"
+            ),
+            applicability=Applicability(environments=("vibration",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)",
+        ),
+        FailureMode(
+            id="self-heating inside an optical enclosure",
+            description=(
+                "a display, emitter or detector warming the volume the optics sit in past what the"
+                " thermal screens assumed"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), "
+                "thermal resistance"
+            ),
+        ),
+        FailureMode(
+            id="condensation on the coldest internal surface",
+            description=(
+                "the gas sealed inside a housing reaching its dew point on the coldest optic at a "
+                "cold soak"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Alduchov and Eskridge, Improved Magnus form approximation of saturation vapor "
+                "pressure, Journal of Applied Meteorology 35 (1996)"
+            ),
+        ),
+        FailureMode(
+            id="lens preload lost or overstressed at a temperature extreme",
+            description=(
+                "a retainer's preload lost as the cell grows away from the lens, or crushing it as"
+                " the cell shrinks"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Yoder, Opto-Mechanical Systems Design, preload versus temperature",
+        ),
+        FailureMode(
+            id="a static seal leaking at a temperature extreme",
+            description=(
+                "an O-ring squeezed in band at assembly falling out of its squeeze, fill or "
+                "stretch band at an extreme"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Parker O-Ring Handbook, static-seal squeeze, fill and stretch",
+        ),
+        FailureMode(
+            id="image quality lost to stacked wavefront errors",
+            description=(
+                "surface figure, mount distortion and alignment errors each small, together past "
+                "the Strehl the system needs"
+            ),
+            applicability=Applicability(
+                environments=(
+                    "thermal_cycling",
+                    "vibration",
+                )
+            ),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Maréchal criterion, S = exp(−(2πσ/λ)²)",
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "
