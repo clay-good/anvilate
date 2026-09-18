@@ -204,3 +204,30 @@ def test_the_shipped_catalogue_finds_the_modes_a_bolted_joint_carries() -> None:
     # reporting a clean pass over two checks that answered neither question.
     assert report.addressed() == ()
     assert not report.complete()
+
+
+def test_a_mode_renders_its_stage_and_its_citation() -> None:
+    mode = _mode(
+        "bolt self-loosening",
+        stage=DiscoveryStage.QUALIFICATION,
+        citation="Junker, SAE 690055 (1969)",
+    )
+    rendered = str(mode)
+    assert rendered.startswith("bolt self-loosening (qualification): ")
+    assert rendered.endswith("[Junker, SAE 690055 (1969)]")
+    # The description is what a reader acts on, so it is in the line and not just the id.
+    assert mode.description in rendered
+
+
+def test_an_applicability_says_what_it_keys_on() -> None:
+    assert str(Applicability(elements=("bolted_connection",))) == "elements bolted_connection"
+    assert str(Applicability(dissimilar_metals=True)) == "a declared dissimilar-metal pair"
+    both = Applicability(
+        interfaces=("clamped",), environments=("thermal_cycling",), dissimilar_metals=True
+    )
+    assert str(both) == (
+        "interfaces clamped; environments thermal_cycling; a declared dissimilar-metal pair"
+    )
+    # Every shipped mode's applicability renders as something a reader can check.
+    for mode in DEFAULT_CATALOG.modes:
+        assert str(mode.applicability).strip(), f"{mode.id} renders an empty applicability"
