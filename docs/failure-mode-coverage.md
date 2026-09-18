@@ -56,6 +56,21 @@ the mode once it has run. No element screen calls it yet, so a document screened
 spec still reports all five as left to a test — which is the honest state of it, said out loud
 instead of left as a silent card.
 
+Four more modes are answered by checks the machinery pack already runs, and each check
+declares the mode it addresses:
+
+- shaft fatigue at a stress raiser (Shigley), by the shaft's fatigue check;
+- gear tooth surface pitting (ISO 6336-2:2019), by the pitting-resistance check;
+- rolling-contact fatigue of a bearing (ISO 281:2007), by the L10 rating-life check;
+- coil spring buckling (Shigley), by the spring's stability check.
+
+A screened shaft, gear mesh, bearing or spring therefore reports its mode as addressed.
+
+Six of the 29 element classes this build screens reach a catalogued mode. The other 23 are
+listed in `docs/api/uncatalogued-elements.txt`, and a test holds that list to the element
+registry both ways and caps its length. It may only shrink: the fix for a line there is a
+cited mode.
+
 ## Beside the verdict
 
 `anvilate check` prints the coverage under the card whenever a catalogued mode applies to
@@ -80,9 +95,7 @@ left to a defined test, and every archetype is one some mode is left to.
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
-(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3, 5 and 6, and gate 4.1). Two
-gates are still to come: every check declaring its modes or saying why it addresses none
-(4.2), and a catalogue floor per shipped element class (4.3). A report where nothing applies
-already refuses to read as complete, which is the defect 4.3 guards against; the per-element
-floor needs catalogued modes for the element classes this build screens, most of which have
-none yet.
+(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3, 5 and 6, and gates 4.1 and
+4.3). One gate is still to come: every check declaring its modes or saying why it addresses
+none (4.2). That gate is a statement about hundreds of checks, most of which address no
+catalogued mode.

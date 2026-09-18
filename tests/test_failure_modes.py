@@ -461,3 +461,61 @@ def test_nothing_applying_is_not_complete_coverage() -> None:
     assert unreached.applicable == 0 and unreached.catalog_size >= 5
     assert not unreached.complete()
     assert "not that this design has no failure modes" in str(unreached)
+
+
+def _uncatalogued() -> list[str]:
+    path = Path(__file__).resolve().parents[1] / "docs" / "api" / "uncatalogued-elements.txt"
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def test_every_shipped_element_reaches_a_mode_or_is_recorded_as_debt() -> None:
+    """Task 4.3: a floor per element class, as a ratchet that only shrinks.
+
+    An element the catalogue knows nothing about reports that no mode applies — true, and
+    never complete coverage — but the gap must be written down rather than discovered.
+    """
+    from anvilate.screening import element_registry
+
+    elements = sorted(element_registry())
+    assert len(elements) >= 25, f"the element registry holds only {len(elements)}"
+    reached = {e for e in elements if DEFAULT_CATALOG.applicable({"element": e})}
+    recorded = _uncatalogued()
+    assert len(set(recorded)) == len(recorded), "an element is recorded twice"
+    unrecorded = sorted(set(elements) - reached - set(recorded))
+    assert not unrecorded, f"elements no mode reaches and nobody recorded: {unrecorded}"
+    stale = sorted(set(recorded) & reached)
+    assert not stale, f"recorded as uncatalogued and now reached — delete the lines: {stale}"
+    gone = sorted(set(recorded) - set(elements))
+    assert not gone, f"recorded elements the registry no longer ships: {gone}"
+    # The ratchet: this may only go down. Lower it when a mode lands.
+    assert len(recorded) <= 23, f"the uncatalogued list grew to {len(recorded)}"
+    assert len(reached) >= 6
+
+
+def test_each_machinery_check_declares_the_mode_it_addresses() -> None:
+    """The four modes the machinery pack answers are bound by the checks, not by names."""
+    from anvilate.screening import element_registry
+
+    registry = element_registry()
+    for element, mode in (
+        ("transmission_shaft", "shaft fatigue at a stress raiser"),
+        ("spur_gear_mesh", "gear tooth surface pitting"),
+        ("rolling_bearing", "rolling-contact fatigue of a bearing"),
+        ("helical_compression_spring", "coil spring buckling"),
+    ):
+        assert element in registry
+        (applicable,) = DEFAULT_CATALOG.applicable({"element": element})
+        assert applicable.id == mode
+    declared_in_machinery = {
+        mode for where, mode in _declared_modes() if where.startswith("packs/machinery.py")
+    }
+    assert declared_in_machinery == {
+        "shaft fatigue at a stress raiser",
+        "gear tooth surface pitting",
+        "rolling-contact fatigue of a bearing",
+        "coil spring buckling",
+    }

@@ -96,6 +96,13 @@ _SPRING_SHEAR_REFERENCE = "Shigley, Wahl-corrected helical spring shear stress"
 _SPRING_CLEARANCE_REFERENCE = "Shigley, clash allowance above solid height"
 _SPRING_BUCKLING_REFERENCE = "Shigley, absolute stability and critical deflection of a coil"
 
+# The failure modes each of these checks addresses, by the id anvilate.failure_modes
+# catalogues them under. Declared by the check, so coverage reads it off the card.
+_SHAFT_FATIGUE_MODES = ("shaft fatigue at a stress raiser",)
+_PITTING_MODES = ("gear tooth surface pitting",)
+_BEARING_FATIGUE_MODES = ("rolling-contact fatigue of a bearing",)
+_SPRING_BUCKLING_MODES = ("coil spring buckling",)
+
 
 class TransmissionShaft(GuardedInputs):
     """A solid round shaft carrying steady bending and torque, and its screen inputs.
@@ -387,7 +394,9 @@ def screen_shaft(
         entries=(
             _static_entry(shaft, required_safety_factor),
             _twist_entry(shaft, required_safety_factor),
-            _fatigue_entry(shaft, required_safety_factor),
+            _fatigue_entry(shaft, required_safety_factor).model_copy(
+                update={"addresses": _SHAFT_FATIGUE_MODES}
+            ),
         )
     )
 
@@ -749,7 +758,9 @@ def screen_gear_mesh(
     return Scorecard(
         entries=(
             _bending_entry(mesh, required_safety_factor),
-            _pitting_entry(mesh, required_safety_factor),
+            _pitting_entry(mesh, required_safety_factor).model_copy(
+                update={"addresses": _PITTING_MODES}
+            ),
             _contact_ratio_entry(mesh),
             _undercut_entry(mesh),
         )
@@ -1111,7 +1122,9 @@ def screen_rolling_bearing(
     """
     return Scorecard(
         entries=(
-            _bearing_life_entry(unit, required_safety_factor),
+            _bearing_life_entry(unit, required_safety_factor).model_copy(
+                update={"addresses": _BEARING_FATIGUE_MODES}
+            ),
             _bearing_static_entry(unit),
         )
     )
@@ -1404,6 +1417,6 @@ def screen_compression_spring(
         entries=(
             _spring_shear_entry(coil, required_safety_factor),
             _spring_clearance_entry(coil, required_safety_factor),
-            _spring_buckling_entry(coil),
+            _spring_buckling_entry(coil).model_copy(update={"addresses": _SPRING_BUCKLING_MODES}),
         )
     )

@@ -28,7 +28,7 @@
       explicit unaddressed marker with a stated reason — both directions
 - [ ] 4.2 CI: every check declares the modes it addresses; a check addressing none fails
       or declares why
-- [ ] 4.3 CI floor on catalog population per shipped element class, so an empty catalog
+- [x] 4.3 CI floor on catalog population per shipped element class, so an empty catalog
       cannot report full coverage
 
 ## 5. Tests

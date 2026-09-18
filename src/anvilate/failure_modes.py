@@ -421,6 +421,51 @@ TEST_ARCHETYPES: tuple[VerificationArchetype, ...] = (
 DEFAULT_CATALOG = ModeCatalog(
     modes=(
         FailureMode(
+            id="shaft fatigue at a stress raiser",
+            description=(
+                "a rotating shaft cracking at a shoulder, keyway or groove under reversed "
+                "bending, well below the load that would yield it"
+            ),
+            applicability=Applicability(elements=("transmission_shaft",)),
+            stage=DiscoveryStage.FIELD,
+            citation=(
+                "Shigley, Mechanical Engineering Design, 10th ed. (2015), shaft design for fatigue"
+            ),
+        ),
+        FailureMode(
+            id="gear tooth surface pitting",
+            description=(
+                "contact fatigue pitting the flanks of meshing gear teeth, the surface giving "
+                "way long before the tooth root breaks"
+            ),
+            applicability=Applicability(elements=("spur_gear_mesh",)),
+            stage=DiscoveryStage.FIELD,
+            citation="ISO 6336-2:2019 surface durability (pitting)",
+        ),
+        FailureMode(
+            id="rolling-contact fatigue of a bearing",
+            description=(
+                "subsurface fatigue spalling the raceways of a rolling bearing after a number "
+                "of revolutions its rating life predicts only statistically"
+            ),
+            applicability=Applicability(elements=("rolling_bearing",)),
+            stage=DiscoveryStage.FIELD,
+            citation="ISO 281:2007 dynamic load ratings and rating life",
+        ),
+        FailureMode(
+            id="coil spring buckling",
+            description=(
+                "a slender compression spring bowing sideways under deflection, losing its "
+                "force and rubbing its guide, while every stress on it passes"
+            ),
+            applicability=Applicability(elements=("helical_compression_spring",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Shigley, Mechanical Engineering Design, 10th ed. (2015), "
+                "stability of compression springs"
+            ),
+        ),
+        FailureMode(
             id="bolt self-loosening",
             description=(
                 "a preloaded bolt backing off under transverse vibration, losing preload "

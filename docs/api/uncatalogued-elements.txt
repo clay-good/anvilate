@@ -1,0 +1,30 @@
+# Element classes the failure-mode catalogue reaches no mode for yet.
+#
+# A clean card on one of these says nothing about how the element fails beyond its own
+# checks, and the coverage report for it will say that no catalogued mode applies. This is
+# the debt the catalogue carries, one line per shipped element class, and it should shrink,
+# never grow: tests/test_failure_modes.py holds the list to the element registry both ways
+# and caps its length. The fix for a line here is a cited mode, not a longer list.
+base_plate
+beam_column_member
+beam_member
+column_member
+concrete_bearing
+cover_plate
+driven_pile
+feeder
+gusset_plate
+infinite_slope
+lifting_lug
+lighting_installation
+masonry_wall
+pipe_run
+pump_duty
+retaining_wall
+shaft_key
+shallow_footing
+shear_plate
+structure
+tension_member
+ventilation_zone
+worker_noise_exposure
