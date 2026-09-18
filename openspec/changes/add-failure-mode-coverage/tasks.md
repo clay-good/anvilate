@@ -24,7 +24,7 @@
 
 ## 4. Gates
 
-- [ ] 4.1 CI: every catalog entry resolves to a real check id, test archetype, or an
+- [x] 4.1 CI: every catalog entry resolves to a real check id, test archetype, or an
       explicit unaddressed marker with a stated reason — both directions
 - [ ] 4.2 CI: every check declares the modes it addresses; a check addressing none fails
       or declares why

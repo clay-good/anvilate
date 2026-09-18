@@ -25,14 +25,15 @@ ask about; it cannot say that nothing else can go wrong, and every rendering say
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import Any
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import ItemCollection, Named, Provenance, StatableModel
+from ._models import ItemCollection, Named, Provenance, StatableModel, each_one
 from .scorecard import CheckStatus, Scorecard
+from .verification import VerificationArchetype, VerificationMethod
 
 __all__ = [
     "DiscoveryStage",
@@ -42,6 +43,7 @@ __all__ = [
     "ModeCoverage",
     "CoverageReport",
     "DEFAULT_CATALOG",
+    "TEST_ARCHETYPES",
     "coverage",
     "facts_from_spec",
     "CATALOG_IS_A_FLOOR",
@@ -143,8 +145,9 @@ class FailureMode(StatableModel):
     stage: DiscoveryStage
     citation: Provenance
     version: Named = "1.0.0"
-    #: The check names that address this mode, and the verification archetypes that reach
-    #: it where analysis cannot. A mode with neither is one this library can only report.
+    #: The check names that address this mode, and the keys of the verification archetypes
+    #: that reach it where analysis cannot. A mode with neither is one this library can only
+    #: report. A shipped check binds by declaring the mode instead (``ScorecardEntry.addresses``).
     addressed_by: tuple[Named, ...] = ()
     tested_by: tuple[Named, ...] = ()
 
@@ -236,12 +239,17 @@ class CoverageReport(StatableModel):
         return tuple(entry for entry in self.entries if entry.planned)
 
     def complete(self) -> bool:
-        """Whether a check that ran addresses every applicable mode.
+        """Whether a check that ran addresses every applicable mode — and at least one applied.
 
         A mode left to a test is not complete: the test is a plan, and this is the question
         "has anything actually been done about it", which a plan does not answer.
+
+        **Nothing applying is not completeness.** "Every applicable mode is addressed" is
+        vacuously true of none, and an empty catalogue — or one that knows nothing about this
+        element — would otherwise report the fullest coverage there is. No mode applying is a
+        statement about the catalogue, and the rendering says so.
         """
-        return len(self.addressed()) == len(self.entries)
+        return bool(self.entries) and len(self.addressed()) == len(self.entries)
 
     def by_stage(self) -> dict[DiscoveryStage, tuple[ModeCoverage, ...]]:
         """The modes no check reached, grouped by where they are normally discovered.
@@ -261,8 +269,14 @@ class CoverageReport(StatableModel):
             f"{len(self.unaddressed())} unaddressed, from a catalogue of {self.catalog_size}"
         )
         lines = [head, f"  {CATALOG_IS_A_FLOOR}", f"  {UNDECLARABLE_FACTS}"]
+        if not self.catalog_size:
+            lines.append("  the catalogue is empty: nothing was asked, so nothing is covered")
+            return "\n".join(lines)
         if not self.entries:
-            lines.append("  no mode in the catalogue applies to what this document declares")
+            lines.append(
+                "  no mode in the catalogue applies to what this document declares — which says "
+                "what the catalogue knows, not that this design has no failure modes"
+            )
             return "\n".join(lines)
         lines.extend(f"  {entry}" for entry in self.entries)
         for stage, entries in self.by_stage().items():
@@ -276,6 +290,7 @@ def coverage(
     facts: Mapping[str, object],
     *,
     catalog: ModeCatalog | None = None,
+    archetypes: Sequence[VerificationArchetype] = (),
 ) -> CoverageReport:
     """Which catalogued modes apply to ``facts``, and which of them ``card`` addresses.
 
@@ -289,22 +304,34 @@ def coverage(
     says the check did not run, and counting it as coverage would use one gap to hide
     another.
 
+    A mode's ``tested_by`` names verification archetypes by key, resolved against
+    :data:`TEST_ARCHETYPES` and any ``archetypes`` supplied. A key that resolves to nothing is
+    refused: a mode "left to" a test nobody defined is left to nothing.
+
     ``facts`` are the declared facts to match on: ``element``, ``interfaces``,
     ``environment``, ``dissimilar_metals``. What a document does not state cannot make a
     mode apply.
     """
     catalogue = catalog if catalog is not None else DEFAULT_CATALOG
+    supplied = each_one(archetypes, VerificationArchetype, named="archetypes")
+    lookup = {archetype.key: archetype for archetype in (*TEST_ARCHETYPES, *supplied)}
     ran = [entry for entry in card.entries if entry.status is not CheckStatus.NOT_EVALUATED]
     ran_names = {entry.name for entry in ran}
     entries = []
     for mode in catalogue.applicable(facts):
+        unknown = sorted(key for key in mode.tested_by if key not in lookup)
+        if unknown:
+            raise ValueError(
+                f"failure mode '{mode.id}' is left to {unknown}, which no verification "
+                f"archetype defines; known: {sorted(lookup)}"
+            )
         declared = [entry.name for entry in ran if mode.id in entry.addresses]
         named = [name for name in mode.addressed_by if name in ran_names]
         entries.append(
             ModeCoverage(
                 mode=mode,
                 checks=tuple(dict.fromkeys(declared + named)),
-                tests=mode.tested_by,
+                tests=tuple(lookup[key].title for key in mode.tested_by),
             )
         )
     return CoverageReport(entries=tuple(entries), catalog_size=len(catalogue.modes))
@@ -344,6 +371,50 @@ def facts_from_spec(spec: Any) -> dict[str, object]:
     return facts
 
 
+#: The physical tests the shipped catalogue leaves its modes to, as verification archetypes a
+#: mode names by key. None is routed from a check's citation — no shipped check implies one —
+#: so they live here rather than in `anvilate.verification.DEFAULT_ARCHETYPES`, where the
+#: verification plan would carry five tests it can never reach.
+TEST_ARCHETYPES: tuple[VerificationArchetype, ...] = (
+    VerificationArchetype(
+        key="transverse-vibration",
+        method=VerificationMethod.TEST,
+        title="transverse vibration (Junker) test",
+        citation=(
+            "DIN 65151:2002 dynamic testing of the locking characteristics of fasteners "
+            "under transverse loading"
+        ),
+    ),
+    VerificationArchetype(
+        key="salt-spray",
+        method=VerificationMethod.TEST,
+        title="neutral salt spray exposure",
+        citation="ASTM B117-19 Standard Practice for Operating Salt Spray (Fog) Apparatus",
+    ),
+    VerificationArchetype(
+        key="constant-amplitude-fatigue",
+        method=VerificationMethod.TEST,
+        title="constant-amplitude fatigue test",
+        citation=(
+            "ASTM E466-15 Standard Practice for Conducting Force Controlled Constant "
+            "Amplitude Axial Fatigue Tests of Metallic Materials"
+        ),
+    ),
+    VerificationArchetype(
+        key="fretting-fatigue",
+        method=VerificationMethod.TEST,
+        title="fretting fatigue test",
+        citation="ASTM E2789-10 Standard Guide for Fretting Fatigue Testing",
+    ),
+    VerificationArchetype(
+        key="thermal-cycling",
+        method=VerificationMethod.TEST,
+        title="thermal cycling test",
+        citation="ISO 16750-4:2010 temperature cycling of assembled equipment",
+    ),
+)
+
+
 #: What this build knows to ask about. Every entry cites a source a reader can go and read,
 #: and names the checks this library ships that address it — a mode bound to a check nobody
 #: ships would report coverage that does not exist.
@@ -361,7 +432,7 @@ DEFAULT_CATALOG = ModeCatalog(
                 "Junker, 'New Criteria for Self-Loosening of Fasteners Under Vibration', "
                 "SAE 690055 (1969)"
             ),
-            tested_by=("transverse vibration test",),
+            tested_by=("transverse-vibration",),
         ),
         FailureMode(
             id="galvanic corrosion",
@@ -372,7 +443,7 @@ DEFAULT_CATALOG = ModeCatalog(
             applicability=Applicability(dissimilar_metals=True),
             stage=DiscoveryStage.FIELD,
             citation="ASTM G82-98 (2014), Standard Guide for Galvanic Series and Corrosion",
-            tested_by=("salt spray exposure",),
+            tested_by=("salt-spray",),
         ),
         FailureMode(
             id="weld toe fatigue",
@@ -384,7 +455,7 @@ DEFAULT_CATALOG = ModeCatalog(
             stage=DiscoveryStage.FIELD,
             citation="EN 1993-1-9:2005 detail categories for welded joints",
             addressed_by=(),
-            tested_by=("constant-amplitude fatigue test",),
+            tested_by=("constant-amplitude-fatigue",),
         ),
         FailureMode(
             id="fretting at a clamped interface",
@@ -395,7 +466,7 @@ DEFAULT_CATALOG = ModeCatalog(
             applicability=Applicability(interfaces=("clamped", "bolted_face")),
             stage=DiscoveryStage.FIELD,
             citation="Waterhouse, *Fretting Fatigue* (1981), the clamped-joint case",
-            tested_by=("dwell fretting test",),
+            tested_by=("fretting-fatigue",),
         ),
         FailureMode(
             id="thermal ratcheting of a clearance",
@@ -406,7 +477,7 @@ DEFAULT_CATALOG = ModeCatalog(
             applicability=Applicability(environments=("thermal_cycling",)),
             stage=DiscoveryStage.QUALIFICATION,
             citation="ASME BPVC VIII-2 §5.5.6, the ratcheting assessment's premise",
-            tested_by=("thermal cycling test",),
+            tested_by=("thermal-cycling",),
         ),
     )
 )

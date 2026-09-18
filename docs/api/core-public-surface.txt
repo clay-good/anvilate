@@ -162,6 +162,7 @@ failure_modes.ModeCatalog
 failure_modes.ModeCoverage
 failure_modes.CoverageReport
 failure_modes.DEFAULT_CATALOG
+failure_modes.TEST_ARCHETYPES
 failure_modes.coverage
 failure_modes.facts_from_spec
 failure_modes.CATALOG_IS_A_FLOOR

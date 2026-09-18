@@ -34,6 +34,8 @@ three modes its declared facts reach and nothing on the card addresses.
 | Applicability keys on declared facts | A mode applies on an element class, an interface kind, an environment or a declared dissimilar-metal pair — never on free text, because a catalogue that matched prose would fire on the wording of a description rather than on the design. What a document does not state cannot make a mode apply. |
 | A plan is never evidence | A mode left to a physical test is not addressed. The archetype says what would reach it; nothing has been done about it yet, and counting it as coverage is the silent green a coverage number is most likely to produce. |
 | A check says what it addresses | A scorecard entry names the modes it addresses in `addresses`, by catalogue id. The binding is data the screen wrote down, never inferred from a check name that carries a member's name in it. A test holds every id a shipped check declares to the catalogue, reading the declaration rather than matching its spelling. |
+| A test is a defined test | A mode's `tested_by` names a verification archetype by key — the method, a title and a citation. A key nothing defines is refused rather than printed: a mode "left to" a test nobody wrote down is left to nothing. A caller extending the catalogue passes its own archetypes. |
+| Nothing applying is not complete | "Every applicable mode is addressed" is vacuously true when none applies. An empty catalogue, or one that knows nothing about this element, is reported as exactly that — never as full coverage. |
 | A check that did not run addresses nothing | The card already says the check did not run. Counting it would use one gap to hide another. |
 | Never a bare percentage | Every rendering carries the counts, the population they came from, and the unaddressed modes by name. |
 | The stage is a stage | `design`, `qualification`, `production`, `field` say where a mode is normally found — how many stages a discovery would be pulled earlier, not how bad the mode is. Nothing in the rendering ranks the modes against each other. |
@@ -45,7 +47,10 @@ three modes its declared facts reach and nothing on the card addresses.
 Five modes, each cited to a source a reader can go and read: bolt self-loosening (Junker,
 SAE 690055), galvanic corrosion (ASTM G82-98 (2014)), weld-toe fatigue (EN 1993-1-9), fretting at a
 clamped interface (Waterhouse), and thermal ratcheting of a clearance (ASME BPVC VIII-2
-§5.5.6). All five are bound to verification archetypes, and one is also reachable by a check:
+§5.5.6). Each is left to a cited verification archetype in `TEST_ARCHETYPES` — a transverse
+vibration (Junker) test to DIN 65151, neutral salt spray to ASTM B117, a constant-amplitude
+fatigue test to ASTM E466, a fretting fatigue test to ASTM E2789, and a thermal cycling test to
+ISO 16750-4 — and one is also reachable by a check:
 `weld_fatigue_scorecard` declares weld-toe fatigue, so a card carrying that check addresses
 the mode once it has run. No element screen calls it yet, so a document screened from its
 spec still reports all five as left to a test — which is the honest state of it, said out loud
@@ -69,10 +74,15 @@ be one more thing to get wrong. A fact the document leaves out is absent, never 
 mode does not apply, and every rendering says that this is a statement about the document and
 not about the design. A test holds every key the catalogue uses to the vocabulary a document
 can actually declare, so a mode keyed on a misspelt environment cannot quietly never match.
+Another holds the catalogue both ways: every shipped mode is declared by a shipped check or
+left to a defined test, and every archetype is one some mode is left to.
 
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
-(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3 and 5). A check declares the
-modes it addresses (group 2.2); the CI gates in group 4 — every check declaring its modes or
-saying why it addresses none, and a catalogue floor per element class — are still to come.
+(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3, 5 and 6, and gate 4.1). Two
+gates are still to come: every check declaring its modes or saying why it addresses none
+(4.2), and a catalogue floor per shipped element class (4.3). A report where nothing applies
+already refuses to read as complete, which is the defect 4.3 guards against; the per-element
+floor needs catalogued modes for the element classes this build screens, most of which have
+none yet.

@@ -4472,7 +4472,7 @@ def test_check_states_what_nobody_looked_at_beside_the_verdict(tmp_path):
     spec_file.write_text(_BOLTED_SPEC)
     _code, out, _err = _run("check", str(spec_file))
     assert "failure modes: 0 of 1 applicable addressed by a check that ran" in out
-    assert "bolt self-loosening: no check; left to transverse vibration test" in out
+    assert "bolt self-loosening: no check; left to transverse vibration (Junker) test" in out
     assert "catalogue is a floor" in out
     # A card the catalogue does not reach carries no paragraph about it.
     plain = tmp_path / "padeye.yaml"

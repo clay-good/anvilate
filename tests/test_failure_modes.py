@@ -12,6 +12,7 @@ from anvilate.analysis.fatigue import weld_fatigue_scorecard
 from anvilate.failure_modes import (
     CATALOG_IS_A_FLOOR,
     DEFAULT_CATALOG,
+    TEST_ARCHETYPES,
     Applicability,
     DiscoveryStage,
     FailureMode,
@@ -92,7 +93,7 @@ def test_a_mode_left_to_a_physical_test_is_not_addressed() -> None:
     A mode "left to a fretting test" has had nothing done about it, and counting the
     archetype as coverage is the silent green a coverage number is most likely to produce.
     """
-    catalog = ModeCatalog(modes=(_mode("fretting", tested_by=("dwell fretting test",)),))
+    catalog = ModeCatalog(modes=(_mode("fretting", tested_by=("fretting-fatigue",)),))
     report = coverage(
         _card(("anything", CheckStatus.PASS)), {"element": "bolted_connection"}, catalog=catalog
     )
@@ -101,7 +102,7 @@ def test_a_mode_left_to_a_physical_test_is_not_addressed() -> None:
     assert report.addressed() == () and report.unaddressed() == ()
     assert report.planned() == (entry,)
     assert not report.complete()
-    assert "no check; left to dwell fretting test" in str(report)
+    assert "no check; left to fretting fatigue test" in str(report)
 
 
 def test_a_check_that_did_not_run_addresses_nothing() -> None:
@@ -195,9 +196,6 @@ def test_every_shipped_mode_cites_a_source_and_says_when_it_is_found() -> None:
         assert len(mode.citation.split()) >= 3, f"{mode.id} cites {mode.citation!r}"
         assert len(mode.description.split()) >= 8, f"{mode.id} describes itself in a phrase"
         assert mode.stage in set(DiscoveryStage)
-        # A mode bound to a check this library does not ship would report coverage that
-        # does not exist; the shipped ones are all bound to tests, and say so.
-        assert mode.addressed_by or mode.tested_by, f"{mode.id} names neither a check nor a test"
 
 
 def test_the_shipped_catalogue_finds_the_modes_a_bolted_joint_carries() -> None:
@@ -416,3 +414,50 @@ def test_every_mode_a_shipped_check_declares_is_one_the_catalogue_carries() -> N
     known = {mode.id for mode in DEFAULT_CATALOG.modes}
     unknown = sorted((where, mode) for where, mode in declared if mode not in known)
     assert not unknown, f"checks declare modes the catalogue does not carry: {unknown}"
+
+
+def test_every_shipped_mode_resolves_to_a_check_or_a_test_and_every_test_to_a_mode() -> None:
+    """Both directions: a mode reached by nothing is invisible, and a test no mode names is
+    an archetype nobody can be sent to."""
+    declared = {mode for _, mode in _declared_modes()}
+    archetypes = {archetype.key for archetype in TEST_ARCHETYPES}
+    for mode in DEFAULT_CATALOG.modes:
+        assert mode.id in declared or mode.addressed_by or mode.tested_by, (
+            f"{mode.id}: no check declares it and no test reaches it"
+        )
+        assert set(mode.tested_by) <= archetypes, f"{mode.id} is left to an undefined test"
+    named = {key for mode in DEFAULT_CATALOG.modes for key in mode.tested_by}
+    assert archetypes <= named, f"archetypes no mode is left to: {sorted(archetypes - named)}"
+    assert len(archetypes) == len(TEST_ARCHETYPES), "two archetypes share a key"
+
+
+def test_a_mode_left_to_a_test_nobody_defined_is_refused() -> None:
+    catalog = ModeCatalog(modes=(_mode("loosening", tested_by=("shake it and see",)),))
+    with pytest.raises(ValueError, match="shake it and see"):
+        coverage(_card(), {"element": "bolted_connection"}, catalog=catalog)
+
+
+def test_a_caller_can_supply_the_archetype_its_own_mode_is_left_to() -> None:
+    from anvilate.verification import VerificationArchetype, VerificationMethod
+
+    rig = VerificationArchetype(
+        key="shaker-rig",
+        method=VerificationMethod.TEST,
+        title="the team's shaker rig",
+        citation="the team's own procedure",
+    )
+    catalog = ModeCatalog(modes=(_mode("loosening", tested_by=("shaker-rig",)),))
+    report = coverage(_card(), {"element": "bolted_connection"}, catalog=catalog, archetypes=[rig])
+    assert "left to the team's shaker rig" in str(report)
+
+
+def test_nothing_applying_is_not_complete_coverage() -> None:
+    """Vacuously every applicable mode is addressed when none applies — the silent green."""
+    card = _card(("joint bolt shear", CheckStatus.PASS))
+    empty = coverage(card, {"element": "bolted_connection"}, catalog=ModeCatalog())
+    assert not empty.complete()
+    assert "catalogue is empty" in str(empty)
+    unreached = coverage(card, {"element": "shallow_footing"})
+    assert unreached.applicable == 0 and unreached.catalog_size >= 5
+    assert not unreached.complete()
+    assert "not that this design has no failure modes" in str(unreached)

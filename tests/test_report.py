@@ -2007,7 +2007,7 @@ def test_the_report_states_what_nobody_looked_at_beside_the_verdict():
     )
     text = report.to_text()
     section = text[text.index("Failure modes") : text.index("Margin ledger")]
-    assert "bolt self-loosening: no check; left to transverse vibration test" in section
+    assert "bolt self-loosening: no check; left to transverse vibration (Junker) test" in section
     assert "catalogue is a floor" in section
     assert "%" not in section, "a coverage figure with no denominator hides the gap"
     assert "<h2>Failure modes</h2>" in report.to_html()
