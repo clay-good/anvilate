@@ -34,8 +34,8 @@
 
 ## 3. Dynamic screens
 
-- [ ] 3.1 Declared shock environment type: magnitude, pulse shape, duration, axis, cycles
-- [ ] 3.2 Equivalent static acceleration from a classical pulse with the amplification
+- [x] 3.1 Declared shock environment type: magnitude, pulse shape, duration, axis, cycles
+- [x] 3.2 Equivalent static acceleration from a classical pulse with the amplification
       basis stated; Q or damping required, never defaulted
 - [x] 3.3 Random-vibration 3σ equivalent from a declared PSD and fundamental frequency
 - [x] 3.4 Retention preload required to hold an element against declared acceleration

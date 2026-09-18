@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from math import exp, log, pi, sqrt
+from math import exp, log, pi, sin, sqrt
 
 from pydantic import ConfigDict, model_validator
 
@@ -59,6 +59,8 @@ __all__ = [
     "N_BK7",
     "boresight_scorecard",
     "enclosure_rise_scorecard",
+    "ShockPulse",
+    "ShockEnvironment",
 ]
 
 _ALDUCHOV = (
@@ -1219,6 +1221,110 @@ def enclosure_rise_scorecard(
             citation=_INCROPERA,
         ),
     )
+
+
+class ShockPulse(StrEnum):
+    """The classical shock pulse shapes a test specification names (Harris, Shock and Vibration
+    Handbook)."""
+
+    HALF_SINE = "half_sine"
+    SQUARE = "square"
+    TERMINAL_PEAK_SAWTOOTH = "terminal_peak_sawtooth"
+
+
+class ShockEnvironment(StatableModel):
+    """A declared shock: its peak, shape, duration, the axis it acts on, and how many.
+
+    The shape, the duration and the axis are all required: an amplification depends on the
+    first two and a mount's stiffness on the third, and none of them is a default a reader
+    could see (Harris, Shock and Vibration Handbook, on classical pulses).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    peak_acceleration: float
+    pulse_duration: Quantity
+    shape: ShockPulse
+    axis: Named
+    cycles: int = 1
+
+    @model_validator(mode="after")
+    def _a_pulse(self) -> ShockEnvironment:
+        _check(self.pulse_duration, "[time]", "pulse_duration")
+        require_finite(self.peak_acceleration, name="peak_acceleration")
+        if self.peak_acceleration <= 0:
+            raise ValueError(
+                f"peak_acceleration must be positive, in g; got {self.peak_acceleration}"
+            )
+        if self.pulse_duration.to("s").magnitude <= 0:
+            raise ValueError(f"pulse_duration must be positive; got {self.pulse_duration}")
+        if self.cycles < 1:
+            raise ValueError(f"a shock environment applies at least once; got {self.cycles}")
+        return self
+
+    def _pulse(self, t: float, duration: float) -> float:
+        if not 0.0 <= t <= duration:
+            return 0.0
+        if self.shape is ShockPulse.HALF_SINE:
+            return sin(pi * t / duration)
+        if self.shape is ShockPulse.SQUARE:
+            return 1.0
+        return t / duration
+
+    def amplification(self, *, natural_frequency: Quantity, quality_factor: float) -> float:
+        """The maximax absolute-acceleration amplification of a damped single mode.
+
+        The mount of ``natural_frequency`` f_n and ``quality_factor`` Q (damping ζ = 1/(2Q),
+        required — the answer moves with it and a default Q is somebody else's mount) is
+        driven through its base by this pulse, and the peak absolute acceleration it reaches
+        during and after the pulse, over the pulse's peak, is returned: the shock response
+        spectrum ordinate (Harris, Shock and Vibration Handbook). Integrated numerically by
+        fourth-order Runge-Kutta at 1/400 of the shorter of the pulse and the period, over the
+        pulse and two periods after it, where the residual peak of any damped mode has passed.
+        """
+        _check(natural_frequency, "[frequency]", "natural_frequency")
+        quality = require_finite(quality_factor, name="quality_factor")
+        if quality <= 0.5:
+            raise ValueError(f"quality_factor must exceed 0.5 to resonate at all; got {quality}")
+        fn = natural_frequency.to("Hz").magnitude
+        if fn <= 0:
+            raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        omega, zeta = 2 * pi * fn, 1 / (2 * quality)
+        duration = self.pulse_duration.to("s").magnitude
+        period = 1 / fn
+        step = min(duration, period) / 400
+        steps = int((duration + 2 * period) / step) + 1
+
+        def derivatives(t: float, z: float, v: float) -> tuple[float, float]:
+            # Relative motion z of the mass against a base accelerating at the unit pulse.
+            return v, -self._pulse(t, duration) - 2 * zeta * omega * v - omega * omega * z
+
+        z = v = peak = 0.0
+        for index in range(steps):
+            t = index * step
+            k1 = derivatives(t, z, v)
+            k2 = derivatives(t + step / 2, z + step / 2 * k1[0], v + step / 2 * k1[1])
+            k3 = derivatives(t + step / 2, z + step / 2 * k2[0], v + step / 2 * k2[1])
+            k4 = derivatives(t + step, z + step * k3[0], v + step * k3[1])
+            z += step / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0])
+            v += step / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
+            peak = max(peak, abs(2 * zeta * omega * v + omega * omega * z))
+        return peak
+
+    def equivalent_static_acceleration(
+        self, *, natural_frequency: Quantity, quality_factor: float
+    ) -> float:
+        """The static acceleration, in g, that loads the mount as this shock does: A·a₀."""
+        return self.peak_acceleration * self.amplification(
+            natural_frequency=natural_frequency, quality_factor=quality_factor
+        )
+
+    def __str__(self) -> str:
+        repeats = "" if self.cycles == 1 else f", {self.cycles} times"
+        return (
+            f"{self.peak_acceleration:g} g {self.shape.value.replace('_', ' ')} over "
+            f"{self.pulse_duration} along {self.axis}{repeats}"
+        )
 
 
 _INCROPERA = "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), thermal resistance"

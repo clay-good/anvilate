@@ -619,3 +619,63 @@ def test_a_sealed_volume_does_not_shed_heat_by_assumption() -> None:
     assert "display 3 W dissipates inside the enclosure and no heat path" in entry.detail
     with pytest.raises(ValueError, match="at least one dissipating source"):
         enclosure_rise_scorecard("rise", dissipations={}, allowed_rise=q("10 K"))
+
+
+def _shock(shape: str, duration: str = "11 ms"):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import ShockEnvironment, ShockPulse
+
+    return ShockEnvironment(
+        peak_acceleration=30.0,
+        pulse_duration=q(duration),
+        shape=ShockPulse(shape),
+        axis="optical axis",
+    )
+
+
+@pytest.mark.parametrize("frequency", ["30 Hz", "72.7 Hz", "300 Hz", "2000 Hz"])
+def test_a_lightly_damped_half_sine_reproduces_the_closed_form_amplification(
+    frequency: str,
+) -> None:
+    """The numerical response anchored to the exact undamped Duhamel solution."""
+    from anvilate.analysis.dynamics import half_sine_shock_amplification
+
+    numerical = _shock("half_sine").amplification(
+        natural_frequency=q(frequency), quality_factor=1e6
+    )
+    exact = half_sine_shock_amplification(pulse_duration=q("11 ms"), natural_frequency=q(frequency))
+    assert numerical == pytest.approx(exact, rel=1e-4)
+
+
+def test_a_long_square_pulse_is_a_step_and_doubles() -> None:
+    step = _shock("square", "100 ms").amplification(
+        natural_frequency=q("200 Hz"), quality_factor=1e6
+    )
+    assert step == pytest.approx(2.0, rel=1e-4)
+
+
+def test_damping_trims_the_peak_and_the_equivalent_static_load_is_a_times_the_peak() -> None:
+    shock = _shock("half_sine")
+    undamped = shock.amplification(natural_frequency=q("72.7 Hz"), quality_factor=1e6)
+    damped = shock.amplification(natural_frequency=q("72.7 Hz"), quality_factor=10.0)
+    assert damped < undamped
+    assert shock.equivalent_static_acceleration(
+        natural_frequency=q("72.7 Hz"), quality_factor=10.0
+    ) == pytest.approx(30.0 * damped)
+    assert str(shock) == "30 g half sine over 11 ms along optical axis"
+    with pytest.raises(ValueError, match="quality_factor must exceed 0.5"):
+        shock.amplification(natural_frequency=q("72.7 Hz"), quality_factor=0.5)
+
+
+def test_a_shock_states_its_shape_and_duration() -> None:
+    from anvilate.analysis.optomechanics import ShockEnvironment
+
+    with pytest.raises(ValidationError):
+        ShockEnvironment(peak_acceleration=30.0, pulse_duration=q("11 ms"), axis="z")  # type: ignore[call-arg]
+    with pytest.raises(ValidationError, match="at least once"):
+        ShockEnvironment(
+            peak_acceleration=30.0, pulse_duration=q("11 ms"), shape="square", axis="z", cycles=0
+        )
+    sawtooth = _shock("terminal_peak_sawtooth").amplification(
+        natural_frequency=q("300 Hz"), quality_factor=1e6
+    )
+    assert 0.9 < sawtooth < 1.5

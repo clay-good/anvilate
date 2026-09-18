@@ -644,7 +644,9 @@ modules:
   squeeze, fill and stretch bands at both temperature extremes; and optical glass as a
   cited record whose expansion is refused outside the range its catalogue states it for;
   and the boresight between two paths, with common-mode motion named and left out; and the
-  internal rise Q·R an enclosure's own dissipation drives, for thermal screens to consume
+  internal rise Q·R an enclosure's own dissipation drives, for thermal screens to consume;
+  and a declared shock environment whose damped maximax response gives the equivalent
+  static acceleration, Q required
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2486,6 +2488,8 @@ from .optomechanics import (
     OpticalMaterial,
     OutsideValidRange,
     RangedProperty,
+    ShockEnvironment,
+    ShockPulse,
     ThermalCondition,
     ThermalConditionKind,
     athermal_bond_thickness,
@@ -4667,6 +4671,8 @@ __all__ = [
     "N_BK7",
     "boresight_scorecard",
     "enclosure_rise_scorecard",
+    "ShockPulse",
+    "ShockEnvironment",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",
