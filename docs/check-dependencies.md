@@ -47,6 +47,7 @@ run.order                          # the realized order, recorded rather than re
 run.card()                         # the entries as a scorecard, in that order
 run.inherited_margins("shock")     # its own conservatism and every upstream check's
 run.stale_after("modal")           # what a change to modal invalidates: the whole closure
+run.chain("shock")                 # every value handed down to shock, upstream first
 ```
 
 | Rule | What it means |
@@ -55,6 +56,7 @@ run.stale_after("modal")           # what a change to modal invalidates: the who
 | A check that did not run hands nothing on | A `ChainResult` carrying outputs with an unevaluated entry is refused at construction. |
 | Conservatism is inherited | A downstream result's margins are its own plus every upstream check's, read off the graph — a factor on a temperature is still in force on the displacement computed from it. A check that merely ran earlier is not upstream and its factors are not inherited. |
 | Staleness is the whole closure | `stale_after` returns the changed check and every transitive consumer. Recomputing the first hop and leaving the rest on the old value is a card mixing two evaluations of one chain. |
+| A verdict names what it rests on | In `run.card()`, a check that ran on upstream values ends its line `— computed from heat.q = 12 W; temperature.T_part = 340 K; …`: every upstream check and the value it supplied, read off the graph, upstream first. The terminal, the calculation report (which keeps the chain when it restates a comparison in the document's units) and the evidence bundle all print that line. A check that did not run claims no chain. |
 | The run records the order it ran in | `order` is read off the results, not recomputed by a reader who might order them differently. |
 
 The evidence bundle carries that order when it is given one —
@@ -71,8 +73,7 @@ chain refusing to compute anything downstream of an unmeasured heat source.
 ## Status
 
 This is the graph, its ordering and the chain runner
-(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2, 3.1, 3.2 and 3.3), with
-the realized order recorded in the evidence bundle. No screen in the library declares its
-consumptions yet, so nothing in `screen_spec` runs along a graph today: wiring the screens,
-rendering the chain in a derivation, and the CI gate on undeclared consumption are what
-remain.
+(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2 and 3), with the
+realized order recorded in the evidence bundle and each verdict naming its chain. No screen in
+the library declares its consumptions yet, so nothing in `screen_spec` runs along a graph
+today: wiring the screens, and the CI gate on undeclared consumption (1.3), are what remain.

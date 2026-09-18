@@ -399,3 +399,64 @@ def test_the_run_renders_every_check_with_its_verdict_in_the_order_it_ran() -> N
     assert lines[2] == "  not_evaluated  temperature"
     # Every check is on the rendering, including the ones the gap stopped.
     assert len(lines) == 1 + len(run.results)
+
+
+def test_a_verdict_at_the_end_of_the_chain_names_every_upstream_value() -> None:
+    """Task 3.4: each upstream check and the value it supplied, not only the last input."""
+    run_check, _ = _runner(_CHAIN_VALUES)
+    run = run_chain(_six_link_chain(), run_check)
+    links = run.chain("displacement")
+    assert [link.upstream for link in links] == ["heat", "temperature", "modulus", "modal", "shock"]
+    assert links[-1].consumer == "displacement" and links[-1].parameter == "input_g"
+    card = {entry.name: entry for entry in run.card().entries}
+    detail = card["displacement"].detail
+    for fragment in (
+        "heat.q = 12",
+        "temperature.T_part = 340",
+        "modulus.E_hot = 180",
+        "modal.f_n = 95",
+        "shock.peak_g = 4.2",
+    ):
+        assert fragment in detail, detail
+    # The head of the chain consumed nothing, so it names nothing.
+    assert "computed from" not in card["heat"].detail
+    # A check's chain is its own: modal rests on three values, not on what ran after it.
+    assert [link.upstream for link in run.chain("modal")] == ["heat", "temperature", "modulus"]
+
+
+def test_a_check_that_did_not_run_claims_no_chain() -> None:
+    run_check, _ = _runner(_CHAIN_VALUES, blocked={"temperature"})
+    run = run_chain(_six_link_chain(), run_check)
+    card = {entry.name: entry for entry in run.card().entries}
+    assert "computed from" not in card["modulus"].detail
+    assert "computed from" not in card["temperature"].detail
+    assert [link.upstream for link in run.chain("temperature")] == ["heat"]
+
+
+def test_the_report_keeps_the_chain_when_it_restates_a_comparison() -> None:
+    from anvilate.report.document import ReportSection
+    from anvilate.scorecard import Comparison, LimitSense
+
+    def run_check(check: str, inputs):  # type: ignore[no-untyped-def]
+        if check != "displacement":
+            return _ran(check, _CHAIN_VALUES.get(check, {}))
+        comparison = Comparison(
+            measured=Quantity(magnitude=0.12, unit="mm"),
+            limit=Quantity(magnitude=0.5, unit="mm"),
+            sense=LimitSense.AT_MOST,
+            measured_label="displacement",
+            limit_label="allowed",
+        )
+        entry = ScorecardEntry(
+            name=check,
+            status=CheckStatus.PASS,
+            detail=comparison.sentence(),
+            comparison=comparison,
+        )
+        return ChainResult(check=check, entry=entry)
+
+    run = run_chain(_six_link_chain(), run_check)
+    (entry,) = [e for e in run.card().entries if e.name == "displacement"]
+    verdict = ReportSection(entry=entry).verdict()
+    assert verdict.startswith(entry.comparison.sentence())  # type: ignore[union-attr]
+    assert "shock.peak_g = 4.2" in verdict and "heat.q = 12" in verdict

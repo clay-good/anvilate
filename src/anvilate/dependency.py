@@ -40,7 +40,9 @@ __all__ = [
     "DependencyGraph",
     "find_cycles",
     "ChainResult",
+    "ChainLink",
     "ChainRun",
+    "COMPUTED_FROM",
     "run_chain",
 ]
 
@@ -319,6 +321,27 @@ class ChainResult(StatableModel):
         return self
 
 
+#: What a chained entry's detail names its upstream values after. Public because the
+#: calculation report restates a comparison verdict in the document's own units, and that
+#: restatement has to carry the chain over rather than drop it.
+COMPUTED_FROM = " — computed from "
+
+
+class ChainLink(StatableModel):
+    """One value handed down a chain: which check produced it, and which check took it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    upstream: Named
+    output: Named
+    value: Quantity
+    consumer: Named
+    parameter: Named
+
+    def __str__(self) -> str:
+        return f"{self.upstream}.{self.output} = {self.value}"
+
+
 class ChainRun(StatableModel):
     """A whole chain evaluated: the realized order, each result, and what each inherited."""
 
@@ -333,8 +356,48 @@ class ChainRun(StatableModel):
         return tuple(result.check for result in self.results)
 
     def card(self) -> Scorecard:
-        """The entries as a scorecard, in the realized evaluation order."""
-        return Scorecard(entries=tuple(result.entry for result in self.results))
+        """The entries as a scorecard, in the realized evaluation order, each naming its chain.
+
+        A check that ran on upstream values says which, in its own detail line: every
+        upstream check and the value it supplied, upstream first. That sentence is what the
+        terminal, the calculation report and the evidence bundle print, so a displacement
+        verdict at the end of six links reads as resting on the five values it rests on
+        rather than as a substitution whose inputs appeared from nowhere.
+        """
+        entries = []
+        for result in self.results:
+            links = self.chain(result.check) if result.entry.evaluated else ()
+            entry = result.entry
+            if links:
+                named = "; ".join(str(link) for link in links)
+                entry = entry.model_copy(update={"detail": f"{entry.detail}{COMPUTED_FROM}{named}"})
+            entries.append(entry)
+        return Scorecard(entries=tuple(entries))
+
+    def chain(self, check: str) -> tuple[ChainLink, ...]:
+        """Every value handed down to ``check``, transitively, in evaluation order.
+
+        Read off the graph, as :meth:`inherited_margins` is: a check that merely ran earlier
+        supplied nothing to this one. A link whose value was never produced is not in it —
+        the check waiting on it is ``not_evaluated`` and already names the gap.
+        """
+        self.result(check)  # refuses an unknown check by name
+        by_id = {node.id: node for node in self.graph.nodes}
+        links = []
+        for name in (*self.graph.upstream_of(check), check):
+            for consumed in by_id[name].consumes:
+                value = self.result(consumed.upstream).outputs.get(consumed.output)
+                if value is not None:
+                    links.append(
+                        ChainLink(
+                            upstream=consumed.upstream,
+                            output=consumed.output,
+                            value=value,
+                            consumer=name,
+                            parameter=consumed.parameter,
+                        )
+                    )
+        return tuple(links)
 
     def result(self, check: str) -> ChainResult:
         for result in self.results:

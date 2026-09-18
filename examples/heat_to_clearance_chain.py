@@ -207,8 +207,9 @@ def chain_figures() -> dict[str, object]:
 def main() -> None:
     run = run_chain(graph(), run_check)
     print(run)
-    for result in run.results:
-        print(f"  {result.check}: {result.entry.detail}")
+    # The card, not the raw results: each check that ran on upstream values names them.
+    for entry in run.card().entries:
+        print(f"  {entry.name}: {entry.detail}")
     clearance = run.result("running clearance")
     assert clearance.entry.comparison is not None
     print(f"  {clearance.entry.comparison.sentence()}")

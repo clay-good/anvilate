@@ -146,7 +146,9 @@ dependency.CheckNode
 dependency.DependencyGraph
 dependency.find_cycles
 dependency.ChainResult
+dependency.ChainLink
 dependency.ChainRun
+dependency.COMPUTED_FROM
 dependency.run_chain
 derivation.SymbolValue
 derivation.Derivation

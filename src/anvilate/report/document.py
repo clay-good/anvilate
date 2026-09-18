@@ -28,6 +28,7 @@ from pydantic import ConfigDict, computed_field
 
 from .._models import StatableModel
 from ..budget import BudgetResult, LimitBasis
+from ..dependency import COMPUTED_FROM
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..failure_modes import CoverageReport
 from ..margin import MarginEntry, MarginLedger
@@ -217,7 +218,11 @@ class ReportSection(StatableModel):
         """
         if self.entry.comparison is None:
             return self.entry.detail
-        return self.entry.comparison.sentence(system=system)
+        # A chained check names the upstream values it rested on after its verdict; the
+        # restated comparison keeps that tail rather than dropping where the number came from.
+        _, found, chain = self.entry.detail.partition(COMPUTED_FROM)
+        tail = f"{COMPUTED_FROM}{chain}" if found else ""
+        return f"{self.entry.comparison.sentence(system=system)}{tail}"
 
     def headline(self, *, system: UnitSystem | None = None) -> str:
         """The entry's one-line form, with its verdict in ``system``'s units.

@@ -18,7 +18,7 @@
 - [x] 3.1 Not-evaluated propagates downstream naming the upstream check
 - [x] 3.2 Staleness invalidates the transitive closure, never a partial one
 - [x] 3.3 Margin-ledger entries inherit down the chain into the cumulative factor
-- [ ] 3.4 Derivation rendering shows the chain, not only the final substitution
+- [x] 3.4 Derivation rendering shows the chain, not only the final substitution
 
 ## 4. Tests
 
