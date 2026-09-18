@@ -33,6 +33,7 @@ from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
 from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_stretch_fraction
 from .plate import simply_supported_circular_plate_uniform_load
+from .power_screw import power_screw_is_self_locking
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 from .thermal import temperature_rise
 
@@ -84,6 +85,9 @@ __all__ = [
     "iso_cleanroom_concentration",
     "CleanlinessRequirement",
     "cleanliness_scorecard",
+    "AdjustmentMechanism",
+    "adjustment_scorecard",
+    "adjustment_budget_contributors",
 ]
 
 _ALDUCHOV = (
@@ -2549,7 +2553,207 @@ def cleanliness_scorecard(
     )
 
 
+class AdjustmentMechanism(StatableModel):
+    """A declared adjustment: what it can set, how finely, how much it loses, and what holds it.
+
+    ``resolution`` is the smallest step it can make and ``hysteresis`` what it loses on a
+    reversal (backlash), both in the unit of the correction it serves: a length for a
+    decenter or focus, an angle for a tilt. ``travel`` is its range. A mechanism is
+    ``locked`` when a separate feature holds it once set. An unlocked screw can instead
+    declare its ``screw_mean_diameter``, ``screw_lead`` and ``friction_coefficient``, which
+    decide whether it holds by thread friction alone (Shigley, Mechanical Engineering
+    Design).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    mechanism: Named
+    resolution: Quantity | None = None
+    hysteresis: Quantity | None = None
+    travel: Quantity | None = None
+    locked: bool = False
+    screw_mean_diameter: Quantity | None = None
+    screw_lead: Quantity | None = None
+    friction_coefficient: float | None = None
+
+    @model_validator(mode="after")
+    def _a_mechanism(self) -> AdjustmentMechanism:
+        for label, value in (
+            ("resolution", self.resolution),
+            ("hysteresis", self.hysteresis),
+            ("travel", self.travel),
+            ("screw_mean_diameter", self.screw_mean_diameter),
+            ("screw_lead", self.screw_lead),
+        ):
+            if value is None:
+                continue
+            if not isinstance(value, Quantity):
+                raise ValueError(f"'{self.mechanism}': {label} must be a quantity; got {value!r}")
+            require_finite(value, name=label)
+            if value.magnitude < 0 or (value.magnitude == 0 and label != "hysteresis"):
+                raise ValueError(f"'{self.mechanism}': {label} must be positive; got {value}")
+        for label, value in (
+            ("screw_mean_diameter", self.screw_mean_diameter),
+            ("screw_lead", self.screw_lead),
+        ):
+            if value is not None:
+                _check(value, "[length]", label)
+        if self.friction_coefficient is not None:
+            if require_finite(self.friction_coefficient, name="friction_coefficient") < 0:
+                raise ValueError(f"'{self.mechanism}': friction_coefficient cannot be negative")
+        return self
+
+    def missing_for_holding(self) -> tuple[str, ...]:
+        """What an unlocked mechanism needs declared before its holding can be judged."""
+        if self.locked:
+            return ()
+        return tuple(
+            label
+            for label, value in (
+                ("screw mean diameter", self.screw_mean_diameter),
+                ("screw lead", self.screw_lead),
+                ("friction coefficient", self.friction_coefficient),
+            )
+            if value is None
+        )
+
+
+def _in_unit(value: Quantity, unit: str, label: str, mechanism: object) -> float:
+    try:
+        return value.to(unit).magnitude
+    except Exception as mismatch:  # noqa: BLE001 - pint's DimensionalityError is a TypeError
+        raise ValueError(
+            f"'{mechanism}': {label} {value} is not in the same kind of unit as the "
+            f"correction ({unit})"
+        ) from mismatch
+
+
+def adjustment_scorecard(
+    name: str,
+    *,
+    mechanism: AdjustmentMechanism,
+    required_correction: Quantity,
+    vibration: bool,
+) -> ScorecardEntry:
+    """Screen one adjustment for its reach and whether it stays where it is set.
+
+    The mechanism's ``travel`` must cover the ``required_correction`` the other screens say
+    it has to remove; a mechanism that cannot reach fails reporting both. It must hold once
+    set: a separate lock holds it; an unlocked screw holds statically only while its thread
+    friction μ is at least the tangent of its lead angle
+    (:func:`~anvilate.analysis.power_screw.power_screw_is_self_locking`); and under
+    ``vibration`` an unlocked threaded adjustment backs off whatever its static friction,
+    the self-loosening Junker demonstrated (SAE 690055, 1969).
+
+    A mechanism with no resolution, travel or holding data is not evaluated, naming what
+    is missing. The entry states the resolution and hysteresis because the mechanism is an
+    alignment-budget contributor whatever its verdict
+    (:func:`adjustment_budget_contributors`).
+    """
+    if not isinstance(mechanism, AdjustmentMechanism):
+        raise ValueError(f"mechanism must be an AdjustmentMechanism; got {mechanism!r}")
+    if not isinstance(required_correction, Quantity):
+        raise ValueError(f"required_correction must be a quantity; got {required_correction!r}")
+    require_finite(required_correction, name="required_correction")
+    if not isinstance(vibration, bool):
+        raise ValueError(f"vibration must be True or False; got {vibration!r}")
+    unit = str(required_correction.unit)
+    needed = abs(required_correction.magnitude)
+    missing = [
+        label
+        for label, value in (("resolution", mechanism.resolution), ("travel", mechanism.travel))
+        if value is None
+    ]
+    if mechanism.missing_for_holding() and not vibration:
+        missing.append("a lock, or its " + " and ".join(mechanism.missing_for_holding()))
+    stated = []
+    if mechanism.resolution is not None:
+        stated.append(f"resolution {mechanism.resolution}")
+    if mechanism.hysteresis is not None:
+        stated.append(f"hysteresis {mechanism.hysteresis}")
+    findings = []
+    if mechanism.travel is not None:
+        travel = _in_unit(mechanism.travel, unit, "travel", mechanism.mechanism)
+        stated.append(f"travel {mechanism.travel} against a correction of {required_correction}")
+        if travel < needed:
+            findings.append(f"its travel {mechanism.travel} cannot remove {required_correction}")
+    if mechanism.resolution is not None:
+        _in_unit(mechanism.resolution, unit, "resolution", mechanism.mechanism)
+    if mechanism.hysteresis is not None:
+        _in_unit(mechanism.hysteresis, unit, "hysteresis", mechanism.mechanism)
+    if mechanism.locked:
+        stated.append("held by a lock")
+    elif vibration:
+        findings.append(
+            "it is unlocked under vibration, where a threaded adjustment backs off whatever "
+            "its static friction"
+        )
+    elif not mechanism.missing_for_holding():
+        holds = power_screw_is_self_locking(
+            mean_diameter=mechanism.screw_mean_diameter or Quantity(magnitude=1.0, unit="m"),
+            lead=mechanism.screw_lead or Quantity(magnitude=1.0, unit="m"),
+            friction_coefficient=mechanism.friction_coefficient or 0.0,
+        )
+        stated.append("held by thread friction" if holds else "not self-locking")
+        if not holds:
+            findings.append("it is unlocked and its thread is not self-locking, so it backdrives")
+    summary = f"{mechanism.mechanism}: " + ", ".join(stated) if stated else f"{mechanism.mechanism}"
+    if findings:
+        status, verdict = CheckStatus.FAIL, "; ".join(findings)
+    elif missing:
+        status = CheckStatus.NOT_EVALUATED
+        verdict = "not screened without " + "; ".join(
+            item if item.startswith("a lock") else f"its {item}" for item in missing
+        )
+    else:
+        status, verdict = CheckStatus.PASS, "it reaches the correction and holds it"
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"{summary} — {verdict}; an adjustment that can be set can also move, so it "
+        "is an alignment-budget contributor",
+        reference=_SHIGLEY_SCREW,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "travel compared with the correction and holding judged by a lock, by "
+                "vibration, or by μ ≥ tan λ; the mechanism's figures are on the entry"
+            ),
+        ),
+        addresses=("an adjustment that does not reach or does not hold",),
+    )
+
+
+def adjustment_budget_contributors(
+    mechanisms: tuple[AdjustmentMechanism, ...],
+) -> dict[str, Quantity]:
+    """Each adjustment as an alignment-budget contributor, √(resolution² + hysteresis²).
+
+    An adjustment that can be set can also move, so every mechanism bearing on an alignment
+    enters its budget, by what it cannot resolve and what it loses on a reversal (Yoder and
+    Vukobratovich, Opto-Mechanical Systems Design). The two combine as independent terms.
+    A mechanism with no resolution or hysteresis declared is refused by name, because a
+    contributor left out of a budget is one the budget calls zero.
+    """
+    mechanisms = _records(mechanisms, AdjustmentMechanism, "mechanisms")
+    contributors: dict[str, Quantity] = {}
+    for mechanism in mechanisms:
+        if mechanism.resolution is None or mechanism.hysteresis is None:
+            raise ValueError(
+                f"'{mechanism.mechanism}' enters the budget by its resolution and hysteresis; "
+                "declare both"
+            )
+        unit = str(mechanism.resolution.unit)
+        hysteresis = _in_unit(mechanism.hysteresis, unit, "hysteresis", mechanism.mechanism)
+        value = sqrt(mechanism.resolution.magnitude**2 + hysteresis**2)
+        contributors[str(mechanism.mechanism)] = Quantity(magnitude=value, unit=unit)
+    return contributors
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_SHIGLEY_SCREW = (
+    "Shigley, Mechanical Engineering Design, 10th ed. (2015), power screws and self-locking"
+)
 _ISO_14644 = "ISO 14644-1:2015 classification of air cleanliness by particle concentration"
 _ASTM_E595 = (
     "ASTM E595-15 total mass loss and collected volatile condensable materials from "

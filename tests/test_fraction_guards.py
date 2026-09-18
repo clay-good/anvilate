@@ -1321,7 +1321,9 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                     elif (record := _probe_record(module, spelled)) is not None:
                         value = record
                     else:
-                        value = {"float": 1.0, "int": count}.get(spelled)
+                        # A required flag is a declared fact, and False is the one a user
+                        # states first; leaving it unbound kept its function out.
+                        value = {"float": 1.0, "int": count, "bool": False}.get(spelled)
                     if value is not None:
                         arguments[parameter.name] = value
                     elif parameter.default is inspect.Parameter.empty:

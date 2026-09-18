@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from math import sqrt
 
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 
 __all__ = [
     "wind_velocity_pressure",
@@ -556,6 +557,7 @@ def seismic_load_effect(
     uplift cases), giving E = ρ·Q_E − 0.2·SDS·D. Feed the result as the seismic effect to
     :func:`~anvilate.analysis.asce7_lrfd_factored_load`. Returns E in the horizontal effect's units.
     """
+    require_flag(counteracting, name="counteracting")
     if not isinstance(horizontal_effect, Quantity):
         raise ValueError("horizontal_effect must be a Quantity load effect")
     # The same check for the other one. Without it the `.has_dimension` below reached into
@@ -693,6 +695,7 @@ def reduced_live_load(
     full L0 is returned — and is floored at 0.50·L0 for a member supporting one floor or 0.40·L0 for
     one supporting two or more (``supports_multiple_floors``). Returns the reduced live load in kPa.
     """
+    require_flag(supports_multiple_floors, name="supports_multiple_floors")
     _check(unreduced_live_load, "[pressure]", "unreduced_live_load")
     _check(tributary_area, "[area]", "tributary_area")
     l0 = unreduced_live_load.to("kPa").magnitude

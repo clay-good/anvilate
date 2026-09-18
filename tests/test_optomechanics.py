@@ -1235,3 +1235,70 @@ def test_a_cleanliness_level_needs_a_room_that_can_hold_it() -> None:
     assert "no assembly environment is declared" in uncosted.detail
     with pytest.raises(ValueError):
         CleanlinessRequirement(level="x", implies_iso_class=7, basis=" ")
+
+
+def _screw(**overrides: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import AdjustmentMechanism
+
+    fields: dict[str, object] = {
+        "mechanism": "focus screw",
+        "resolution": q("2 µm"),
+        "hysteresis": q("5 µm"),
+        "travel": q("200 µm"),
+        "screw_mean_diameter": q("3 mm"),
+        "screw_lead": q("0.35 mm"),
+        "friction_coefficient": 0.15,
+    } | overrides
+    return AdjustmentMechanism(**fields)  # type: ignore[arg-type]
+
+
+def _adjust(mechanism: object, correction: str = "120 µm", vibration: bool = False):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import adjustment_scorecard
+
+    return adjustment_scorecard(
+        "focus",
+        mechanism=mechanism,  # type: ignore[arg-type]
+        required_correction=q(correction),
+        vibration=vibration,
+    )
+
+
+def test_an_adjustment_must_reach_and_hold() -> None:
+    assert _adjust(_screw()).status is CheckStatus.PASS
+    short = _adjust(_screw(), correction="300 µm")
+    assert short.status is CheckStatus.FAIL
+    assert "its travel 200 µm cannot remove 300 µm" in short.detail
+    # tan λ = 0.35/(π·3) ≈ 0.037: μ = 0.03 is below it and the screw backdrives.
+    slick = _adjust(_screw(friction_coefficient=0.03))
+    assert slick.status is CheckStatus.FAIL and "backdrives" in slick.detail
+    shaken = _adjust(_screw(), vibration=True)
+    assert shaken.status is CheckStatus.FAIL and "unlocked under vibration" in shaken.detail
+    locked = _adjust(_screw(locked=True), vibration=True)
+    assert locked.status is CheckStatus.PASS and "held by a lock" in locked.detail
+    assert "alignment-budget contributor" in locked.detail
+
+
+def test_an_adjustment_with_nothing_declared_is_named() -> None:
+    from anvilate.analysis.optomechanics import AdjustmentMechanism
+
+    entry = _adjust(AdjustmentMechanism(mechanism="shim"))
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "its resolution; its travel; a lock, or its screw mean diameter" in entry.detail
+    with pytest.raises(ValueError, match="same kind of unit"):
+        _adjust(_screw(travel=q("2 deg")))
+
+
+def test_every_adjustment_enters_the_budget() -> None:
+    from anvilate.analysis.optomechanics import (
+        AdjustmentMechanism,
+        adjustment_budget_contributors,
+    )
+
+    tilt = AdjustmentMechanism(
+        mechanism="tilt screw", resolution=q("10 µrad"), hysteresis=q("0.02 mrad")
+    )
+    budget = adjustment_budget_contributors((_screw(), tilt))
+    assert budget["focus screw"].magnitude == pytest.approx((2**2 + 5**2) ** 0.5)
+    assert budget["tilt screw"].to("µrad").magnitude == pytest.approx((10**2 + 20**2) ** 0.5)
+    with pytest.raises(ValueError, match="declare both"):
+        adjustment_budget_contributors((AdjustmentMechanism(mechanism="shim"),))

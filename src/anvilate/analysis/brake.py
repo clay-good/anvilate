@@ -43,6 +43,7 @@ from __future__ import annotations
 from math import exp
 
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 from .belt import belt_max_transmissible_force, belt_slack_tension, capstan_tension_ratio
 
 __all__ = [
@@ -220,6 +221,7 @@ def short_shoe_normal_force(
     b + μ·a and friction fights the application — the same shoe brakes harder in
     one rotation direction than the other. Returns the normal force in newtons.
     """
+    require_flag(self_energizing, name="self_energizing")
     _require(actuation_force, "[force]", "actuation_force")
     f = actuation_force.to("N").magnitude
     if f < 0:

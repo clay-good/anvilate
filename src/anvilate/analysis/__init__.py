@@ -658,7 +658,8 @@ modules:
   verification-only, naming its test; and every coated and cemented surface held to its own
   temperature, humidity and irradiance ratings; and an outgassing census of every
   non-metallic in the sealed volume, the condensable fraction governing; and a cleanliness
-  requirement against the room built in, by the ISO 14644-1 limit 10^N·(0.1/D)^2.08
+  requirement against the room built in, by the ISO 14644-1 limit 10^N·(0.1/D)^2.08; and
+  each adjustment's reach and holding, and its √(resolution² + hysteresis²) budget term
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2497,6 +2498,7 @@ from .optics import (
 )
 from .optomechanics import (
     N_BK7,
+    AdjustmentMechanism,
     BreathingMitigation,
     CleanlinessRequirement,
     HarnessCrossing,
@@ -2512,6 +2514,8 @@ from .optomechanics import (
     SurfaceTreatment,
     ThermalCondition,
     ThermalConditionKind,
+    adjustment_budget_contributors,
+    adjustment_scorecard,
     athermal_bond_thickness,
     athermal_defocus,
     athermal_focus_scorecard,
@@ -4727,6 +4731,9 @@ __all__ = [
     "iso_cleanroom_concentration",
     "CleanlinessRequirement",
     "cleanliness_scorecard",
+    "AdjustmentMechanism",
+    "adjustment_scorecard",
+    "adjustment_budget_contributors",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

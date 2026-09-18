@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 
 __all__ = [
     "CyclicStress",
@@ -842,6 +843,7 @@ def weld_detail_endurance_cycles(
     under a constant-amplitude spectrum, life is infinite below Δσ_D. Returns the
     cycles to failure (``math.inf`` below the governing limit).
     """
+    require_flag(variable_amplitude, name="variable_amplitude")
     ds = _require_stress(stress_range, "stress_range")
     dsc = _require_stress(detail_category, "detail_category")
     if ds <= 0:
@@ -993,6 +995,7 @@ def weld_effective_stress_range(
     claiming the bonus is a statement about the fabrication, not about the geometry, and it
     is the caller's to make. Returns Δσ_eff in MPa.
     """
+    require_flag(stress_relieved, name="stress_relieved")
     smax = _require_stress(max_stress, "max_stress")
     smin = _require_stress(min_stress, "min_stress")
     if smin > smax:
@@ -1063,6 +1066,7 @@ def weld_nominal_stress_range_limit(*, yield_strength: Quantity, shear: bool = F
     enforces: the curve happily returns a life for any range you hand it, and the number
     looks like every other number it returns.
     """
+    require_flag(shear, name="shear")
     stress = _require_stress(yield_strength, "yield_strength")
     if stress <= 0:
         raise ValueError(f"yield_strength must be positive; got {yield_strength}")

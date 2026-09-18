@@ -21,6 +21,7 @@ optomechanics.cycling_retention_scorecard -> alignment loss over repeated cycles
 optomechanics.surface_limits_scorecard -> a cement or coating failing at an environment extreme
 optomechanics.outgassing_census_scorecard -> condensable outgassing on an optical surface
 optomechanics.cleanliness_scorecard -> particulate on an optical surface from the assembly room
+optomechanics.adjustment_scorecard -> an adjustment that does not reach or does not hold
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard

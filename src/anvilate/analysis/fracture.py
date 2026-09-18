@@ -47,6 +47,7 @@ from .._models import RevalidatedModel
 from ..derivation import DerivationAbsence, Underived
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 
 __all__ = [
     "crack_tip_opening_displacement",
@@ -206,6 +207,7 @@ def strain_energy_release_rate(
     the ``poisson_ratio`` ν), so a constrained thick body releases slightly less energy for the same
     K. Fracture runs when G reaches the material's toughness G_c = K_IC²/E'. Returns G in J/m².
     """
+    require_flag(plane_strain, name="plane_strain")
     _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
     _require(youngs_modulus, "[pressure]", "youngs_modulus")
     # Unconditionally, not only under `plane_strain`. In plane stress nu does not enter the
@@ -344,6 +346,7 @@ def crack_tip_plastic_zone_size(
     small compared with the crack length and the remaining ligament, LEFM is invalid and
     an elastic-plastic (J-integral / CTOD) treatment is needed. Returns r_p in mm.
     """
+    require_flag(plane_strain, name="plane_strain")
     _require(stress_intensity, "[pressure] * [length]**0.5", "stress_intensity")
     _require(yield_strength, "[pressure]", "yield_strength")
     k = stress_intensity.to("MPa*m**0.5").magnitude
@@ -413,6 +416,7 @@ def crack_tip_opening_displacement(
     predicts. Plane strain constrains the tip and gives a smaller opening for the same K, so it is
     the conservative choice. Returns the opening displacement in m.
     """
+    require_flag(plane_strain, name="plane_strain")
     _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(youngs_modulus, "[pressure]", "youngs_modulus")

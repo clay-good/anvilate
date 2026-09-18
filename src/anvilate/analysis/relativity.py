@@ -25,6 +25,7 @@ from math import sqrt
 
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+from ._flags import require_flag
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
@@ -133,6 +134,7 @@ def relativistic_doppler_frequency(
     beta = v/c. Unlike the classical Doppler effect it applies to light and folds in time dilation.
     The speed must be below c. Returns the observed frequency in Hz.
     """
+    require_flag(approaching, name="approaching")
     _check(source_frequency, "1/[time]", "source_frequency")
     _check(velocity, "[length]/[time]", "velocity")
     f0 = count_rate_per_second(source_frequency, name="source_frequency")

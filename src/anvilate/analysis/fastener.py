@@ -27,6 +27,7 @@ from collections.abc import Sequence
 from math import log, pi, sqrt
 
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 from .fatigue import CyclicStress, cyclic_stress_components
 
 # ISO 898 tensile-stress-area factor: A_t = (pi/4)(d - 0.9382*P)^2, where the
@@ -419,6 +420,7 @@ def bolt_bearing_strength(
     govern; a generous one lets bearing govern at the 2.4·d·t·F_u cap. This is the
     strength complement to the raw :func:`bearing_stress`. Returns R_n per bolt in kN.
     """
+    require_flag(deformation_at_service_considered, name="deformation_at_service_considered")
     _require(clear_distance, "[length]", "clear_distance")
     _require(plate_thickness, "[length]", "plate_thickness")
     _require(bolt_diameter, "[length]", "bolt_diameter")
@@ -757,6 +759,7 @@ def recommended_bolt_preload(*, proof_load: Quantity, permanent: bool = False) -
     one. ``proof_load`` F_p is the bolt's proof load (:func:`bolt_proof_load`), which
     must be a positive force. Returns the recommended preload in newtons.
     """
+    require_flag(permanent, name="permanent")
     _require(proof_load, "[force]", "proof_load")
     fp = proof_load.to("N").magnitude
     if fp <= 0:

@@ -23,6 +23,7 @@ from math import isfinite, prod, sqrt
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
+from ._flags import require_flag
 
 __all__ = [
     "LoadDuration",
@@ -494,6 +495,7 @@ def nds_euler_buckling_stress(
     formula would give: a column that slender is outside the standard, and the number is
     not a design value.
     """
+    require_flag(during_construction, name="during_construction")
     if not isinstance(min_modulus, Quantity):
         raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
     if not min_modulus.has_dimension("[pressure]"):

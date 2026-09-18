@@ -24,6 +24,7 @@ from math import pi
 
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+from ._flags import require_flag
 
 _STANDARD_ATMOSPHERE_PA = 101325.0
 
@@ -160,6 +161,7 @@ def cylinder_free_air_demand(
     ``gauge_supply_pressure`` p_g, and ``atmospheric_pressure`` p_atm (default 1 atm). This is the
     sizing load a compressor and its receiver are matched to. Returns the free-air demand in L/min.
     """
+    require_flag(double_acting, name="double_acting")
     per_stroke = cylinder_air_consumption_per_stroke(
         bore_diameter=bore_diameter,
         stroke=stroke,

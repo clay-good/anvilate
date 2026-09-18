@@ -614,6 +614,19 @@ DEFAULT_CATALOG = ModeCatalog(
             citation="ISO 14644-1:2015 classification of air cleanliness by particle concentration",
         ),
         FailureMode(
+            id="an adjustment that does not reach or does not hold",
+            description=(
+                "an alignment adjustment whose travel falls short of the correction, or that "
+                "creeps off its setting in service because nothing holds it"
+            ),
+            applicability=Applicability(environments=("vibration", "thermal_cycling")),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Shigley, Mechanical Engineering Design, 10th ed. (2015), power screws and "
+                "self-locking"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "
