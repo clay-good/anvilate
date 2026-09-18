@@ -1835,7 +1835,9 @@ def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence()
         sections=tuple(ReportSection(entry=e) for e in screen_spec(padeye).entries),
     ).to_html()
     table = html[html.index('<table class="summary">') :]
-    assert "<td>—</td><td>—</td>" in table, "the table lost the empty-cell rendering"
+    assert '<td class="num">—</td><td class="num">—</td>' in table, (
+        "the table lost the empty-cell rendering"
+    )
 
 
 def _ledgered_report() -> CalculationReport:
@@ -1950,7 +1952,10 @@ def test_the_report_itemizes_each_budget_in_text_and_html():
     html = report.to_html()
     assert "<h2>Performance budgets</h2>" in html
     assert "<th>Contributor</th><th>Value</th><th>Source</th><th>Share</th>" in html
-    assert "<td>sling stretch</td><td>1.40 mm</td><td>vendor data</td><td>60.9%</td>" in html
+    assert (
+        '<td>sling stretch</td><td class="num">1.40 mm</td><td>vendor data</td>'
+        '<td class="num">60.9%</td>'
+    ) in html
 
 
 def test_a_budget_renders_in_the_readers_unit_system():
@@ -2139,3 +2144,18 @@ def test_the_report_prints_as_a_document() -> None:
     html = _report().to_html()
     assert "<thead><tr><th>" in html
     assert not re.search(r"<table[^>]*>\s*<tr><th>[^<]*</th><th>", html)
+
+
+def test_every_column_of_values_is_set_right_aligned_in_fixed_width_figures() -> None:
+    """Presentation-craft 1.2: numbers line up at the decimal, units at the column's end."""
+    import re
+
+    from anvilate.report.document import _STYLESHEET
+
+    assert "td.num, th.num { text-align: right; white-space: nowrap; }" in _STYLESHEET
+    html = _report().to_html()
+    rows = re.findall(r"<tr[^>]*><td>[^<]*</td><td([^>]*)>[\d.]+</td>", html)
+    assert rows, "the summary rendered no factor column"
+    assert all(attributes == ' class="num"' for attributes in rows)
+    glossary_values = re.findall(r'<td class="num">([^<]*)</td></tr>', html)
+    assert len(glossary_values) >= 3

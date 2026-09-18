@@ -605,7 +605,7 @@ class CalculationReport(StatableModel):
                 rendered = escape(symbol) if typeset is None else typeset
                 out.append(
                     f"<tr><td>{rendered}</td><td>{escape(description)}</td>"
-                    f"<td>{escape(value)}</td></tr>"
+                    f'<td class="num">{escape(value)}</td></tr>'
                 )
             out.append("</table>")
         else:
@@ -617,7 +617,8 @@ class CalculationReport(StatableModel):
                     out.append(
                         f"<tr><td>{escape(item.symbol)}</td>"
                         f"<td>{escape(item.description)}</td>"
-                        f"<td>{escape(item.rendered(system=self.unit_system))}</td></tr>"
+                        f'<td class="num">{escape(item.rendered(system=self.unit_system))}</td>'
+                        "</tr>"
                     )
                 out.append("</table>")
         out.append(f'<p class="detail">{escape(section.verdict(system=self.unit_system))}</p>')
@@ -656,8 +657,8 @@ class CalculationReport(StatableModel):
         for index, (name, factor, required, verdict) in enumerate(self._summary_rows()):
             row_class = ' class="governing"' if index == governing_index else ""
             out.append(
-                f"<tr{row_class}><td>{escape(name)}</td><td>{escape(factor)}</td>"
-                f"<td>{escape(required)}</td><td>{escape(verdict)}</td></tr>"
+                f'<tr{row_class}><td>{escape(name)}</td><td class="num">{escape(factor)}</td>'
+                f'<td class="num">{escape(required)}</td><td>{escape(verdict)}</td></tr>'
             )
         out.append("</table>")
         if governing is not None:
@@ -723,7 +724,17 @@ class CalculationReport(StatableModel):
                 "<thead><tr><th>Contributor</th><th>Value</th><th>Source</th><th>Share</th></tr></thead>"
             )
             for row in self._budget_rows(result):
-                out.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>")
+                numeric = (False, True, False, True)  # value and share are numbers
+                out.append(
+                    "<tr>"
+                    + "".join(
+                        f'<td class="num">{escape(cell)}</td>'
+                        if is_number
+                        else f"<td>{escape(cell)}</td>"
+                        for cell, is_number in zip(row, numeric, strict=True)
+                    )
+                    + "</tr>"
+                )
             out.append("</table>")
         return out
 
@@ -766,7 +777,12 @@ class CalculationReport(StatableModel):
             )
             out.append(
                 f'<tr class="{entry.kind.value}">'
-                + "".join(f"<td>{escape(cell)}</td>" for cell in cells)
+                + "".join(
+                    f'<td class="num">{escape(cell)}</td>'
+                    if index == 2
+                    else f"<td>{escape(cell)}</td>"
+                    for index, cell in enumerate(cells)
+                )
                 + "</tr>"
             )
         out.append("</table>")
@@ -843,6 +859,7 @@ tr.governing td { font-weight: bold; }
 .disclaimer { margin-top: 2em; font-size: 0.9em; color: #444; border-top: 1px solid #bbb;
   padding-top: 0.8em; }
 td, .derivation, .status { font-variant-numeric: tabular-nums lining-nums; }
+td.num, th.num { text-align: right; white-space: nowrap; }
 @media print {
   thead { display: table-header-group; }
   tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
