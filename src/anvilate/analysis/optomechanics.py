@@ -32,6 +32,7 @@ from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
 from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_stretch_fraction
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
+from .thermal import temperature_rise
 
 __all__ = [
     "depth_of_focus",
@@ -57,6 +58,7 @@ __all__ = [
     "OpticalMaterial",
     "N_BK7",
     "boresight_scorecard",
+    "enclosure_rise_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1130,6 +1132,96 @@ def boresight_scorecard(
     )
 
 
+def enclosure_rise_scorecard(
+    name: str,
+    *,
+    dissipations: Mapping[str, Quantity],
+    allowed_rise: Quantity,
+    thermal_resistance: Quantity | None = None,
+) -> ScorecardEntry:
+    """Screen the temperature rise a housing's own dissipation drives inside it.
+
+    A display, an emitter, a detector or its electronics heats the volume the optics sit in.
+    The named ``dissipations`` sum to the heat the enclosure sheds through its declared
+    ``thermal_resistance`` to ambient, and the rise is Q·R
+    (:func:`~anvilate.analysis.thermal.temperature_rise`; Incropera's resistance network).
+    ``PASS`` while it stays within ``allowed_rise``. The rise is the entry's measured quantity,
+    so a thermal or condensation screen downstream can consume it along a dependency chain
+    rather than starting from ambient.
+
+    With sources and no declared heat path the entry is ``not_evaluated`` naming the path: a
+    sealed volume does not shed heat by assumption.
+    """
+    if not dissipations:
+        raise ValueError(
+            "declare at least one dissipating source; an enclosure with none has no rise to screen"
+        )
+    _check(allowed_rise, "[temperature]", "allowed_rise")
+    allowed = temperature_difference_kelvin(allowed_rise, name="allowed_rise")
+    if allowed <= 0:
+        raise ValueError(f"allowed_rise must be positive; got {allowed_rise}")
+    watts = 0.0
+    for label, power in dissipations.items():
+        _check(power, "[power]", f"dissipation '{label}'")
+        if power.to("W").magnitude < 0:
+            raise ValueError(f"dissipation '{label}' cannot be negative: {power}")
+        watts += power.to("W").magnitude
+    sources = ", ".join(f"{label} {power}" for label, power in dissipations.items())
+    if thermal_resistance is None:
+        verb = "dissipates" if len(dissipations) == 1 else "dissipate"
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — {sources} {verb} inside the enclosure and no heat path "
+                "to ambient is declared; a sealed volume does not shed heat by assumption"
+            ),
+        )
+    rise = temperature_rise(
+        power=Quantity(magnitude=watts, unit="W"), thermal_resistance=thermal_resistance
+    )
+    comparison = Comparison(
+        measured=Quantity(magnitude=rise.to("K").magnitude, unit="K"),
+        limit=Quantity(magnitude=allowed, unit="K"),
+        sense=LimitSense.AT_MOST,
+        measured_label="internal rise",
+        limit_label="allowed rise",
+        minimum_decimals=1,
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=f"{comparison.sentence()} — from {sources}",
+        reference=_INCROPERA,
+        comparison=comparison,
+        derivation=Derivation(
+            symbolic="ΔT = Q · R",
+            inputs=(
+                SymbolValue(
+                    symbol="Q",
+                    description=f"total internal dissipation: {sources}",
+                    value=Quantity(magnitude=watts, unit="W"),
+                    unit="W",
+                ),
+                SymbolValue(
+                    symbol="R",
+                    description="the enclosure's declared thermal resistance to ambient",
+                    value=Quantity(magnitude=thermal_resistance.to("K/W").magnitude, unit="K/W"),
+                    unit="K/W",
+                ),
+            ),
+            result=SymbolValue(
+                symbol="ΔT",
+                description="internal temperature rise over ambient",
+                value=Quantity(magnitude=rise.to("K").magnitude, unit="K"),
+                unit="K",
+            ),
+            citation=_INCROPERA,
+        ),
+    )
+
+
+_INCROPERA = "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), thermal resistance"
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
 
 

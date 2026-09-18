@@ -84,7 +84,7 @@
 ## 10. Workflow coverage
 
 - [x] 10.1 Differential boresight between two declared paths, common-mode identified
-- [ ] 10.2 Internal dissipation to internal rise, consumed by thermal and condensation
+- [x] 10.2 Internal dissipation to internal rise, consumed by thermal and condensation
 - [x] 10.3 Thermal-condition kind; soak screen refuses a gradient; dwell versus time
       constant
 - [x] 10.4 Dynamic clearance against shock displacement, distinct from static intrusion

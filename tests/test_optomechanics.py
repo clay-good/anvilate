@@ -544,3 +544,78 @@ def test_one_path_is_not_a_boresight() -> None:
             allowance=_µrad(60),
             rule=CombinationRule.RSS,
         )
+
+
+def test_an_internal_source_raises_the_temperature_the_focus_screen_sees() -> None:
+    """Task 10.2: the rise is consumed along a chain, not assumed to be ambient."""
+    from anvilate.analysis.optomechanics import enclosure_rise_scorecard
+    from anvilate.dependency import (
+        ChainResult,
+        CheckNode,
+        Consumes,
+        DependencyGraph,
+        Output,
+        run_chain,
+    )
+
+    sources = {"display": q("3 W"), "driver": q("1.5 W")}
+    graph = DependencyGraph(
+        nodes=(
+            CheckNode(
+                id="lens focus",
+                consumes=(
+                    Consumes(
+                        upstream="internal rise",
+                        output="rise",
+                        parameter="temperature_change",
+                        dimension="[temperature]",
+                    ),
+                ),
+            ),
+            CheckNode(
+                id="internal rise", produces=(Output(name="rise", dimension="[temperature]"),)
+            ),
+        )
+    )
+
+    def run_check(check: str, inputs):  # type: ignore[no-untyped-def]
+        if check == "internal rise":
+            entry = enclosure_rise_scorecard(
+                check, dissipations=sources, allowed_rise=q("20 K"), thermal_resistance=q("2.5 K/W")
+            )
+            assert entry.comparison is not None
+            return ChainResult(
+                check=check, entry=entry, outputs={"rise": entry.comparison.measured}
+            )
+        entry = athermal_focus_scorecard(
+            check,
+            **_LENS,
+            f_number=4.0,
+            wavelength=q("550 nm"),
+            housing_cte=q("23.1e-6 1/K"),
+            housing_length=q("100 mm"),
+            temperature_change=inputs["temperature_change"],
+        )
+        return ChainResult(check=check, entry=entry)
+
+    run = run_chain(graph, run_check)
+    focus = {entry.name: entry for entry in run.card().entries}["lens focus"]
+    # 4.5 W through 2.5 K/W is 11.25 K, and the focus screen was handed exactly that.
+    assert "internal rise.rise = 11.25 K" in focus.detail
+    direct = _screen("23.1e-6 1/K").comparison
+    assert focus.comparison is not None and direct is not None
+    assert focus.comparison.measured.magnitude == pytest.approx(
+        direct.measured.magnitude * 11.25 / 40
+    )
+
+
+def test_a_sealed_volume_does_not_shed_heat_by_assumption() -> None:
+    from anvilate.analysis.optomechanics import enclosure_rise_scorecard
+
+    entry = enclosure_rise_scorecard(
+        "rise", dissipations={"display": q("3 W")}, allowed_rise=q("10 K")
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "display 3 W dissipates inside the enclosure and no heat path" in entry.detail
+    with pytest.raises(ValueError, match="at least one dissipating source"):
+        enclosure_rise_scorecard("rise", dissipations={}, allowed_rise=q("10 K"))

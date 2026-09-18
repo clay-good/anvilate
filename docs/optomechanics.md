@@ -26,6 +26,7 @@ tracer.
 | `seal_gland_extremes_scorecard(name, ..., assembly_temperature, cold, hot)` | An O-ring gland at both temperature extremes, not only at assembly. The cord scales with the elastomer's CTE and the gland with the housing's, and squeeze, fill and stretch are each held to the Parker handbook's static-seal bands (15-30 %, at most 85 %, at most 5 %) at cold and at hot. The entry names every ratio out of band and at which extreme. A squeeze that vanishes cold is reported as a leak. |
 | `OpticalMaterial`, `N_BK7`, `.cte_over(low, high)`, `.athermal_focus(...)` | Glass as a record, each property carrying its source, with expansion stated per temperature range. The bundled N-BK7 holds only what its CC0 source (the SCHOTT catalogue via refractiveindex.info) states: n_d 1.5168, V_d 64.17, 7.1 ppm/K over 243-343 K, 8.3 ppm/K over 293-573 K, and 2510 kg/m³. dn/dT and the elastic constants are left unstated rather than recalled. Asked for a swing no stated range covers, `cte_over` refuses, and `athermal_focus` reports not evaluated naming the ranges. |
 | `boresight_scorecard(name, first_path, second_path, allowance, rule)` | The angle between two optical paths, not either one's drift. A contributor that moves both paths equally is common-mode: it is named and excluded. One acting on a single path enters in full, named with its path. The terms combine by a declared worst-case or root-sum-square rule. With a path missing the screen is not evaluated, because one path's drift is not a boresight error. |
+| `enclosure_rise_scorecard(name, dissipations, allowed_rise, thermal_resistance)` | The temperature rise a housing's own sources drive inside it: the named dissipations summed and multiplied by the declared resistance to ambient, Q·R. The rise is the entry's measured quantity, so a focus or condensation screen can consume it along a [dependency chain](check-dependencies.md) instead of starting from ambient. With sources and no declared heat path the screen is not evaluated: a sealed volume does not shed heat by assumption. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
 [`examples/lens_housing_athermal.py`](../examples/lens_housing_athermal.py) screens one f/4
@@ -62,6 +63,6 @@ take to optical design software; the screen says which one that is.
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
 screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.1, 10.3, 10.4
+(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.1, 10.2, 10.3, 10.4
 and this scope page). Not built yet: angular units as a whole, preload change with
 temperature, contact stress, and the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.
