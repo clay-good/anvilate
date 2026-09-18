@@ -27,6 +27,11 @@ class Origin(StrEnum):
     USER_STATED = "user_stated"
     DATABASE_RESOLVED = "database_resolved"
     DEFAULT = "default"
+    # Supplied by a bound `anvilate.profile.Profile`. Neither the engineer's statement nor the
+    # library's choice: a cited, versioned record somebody chose to apply, and the rationale
+    # names which one — a profile-supplied number that governs a verdict must never read as
+    # one the engineer stated.
+    PROFILE_SUPPLIED = "profile_supplied"
 
 
 class Provenanced(StatableModel, Generic[T]):
@@ -57,7 +62,8 @@ class Provenanced(StatableModel, Generic[T]):
             f"a provenanced value is written as "
             f"{{value: {data!r}, origin: user_stated}}, not as a bare {data!r}. "
             f"Origin is one of {', '.join(sorted(o.value for o in Origin))}, and "
-            f"{Origin.DEFAULT.value!r} also needs a rationale. It is not filled in for you: "
+            f"{Origin.DEFAULT.value!r} and {Origin.PROFILE_SUPPLIED.value!r} also need a "
+            "rationale. It is not filled in for you: "
             "where a value came from is what this records"
         )
 
@@ -65,6 +71,10 @@ class Provenanced(StatableModel, Generic[T]):
     def _default_needs_rationale(self) -> Provenanced[T]:
         if self.origin is Origin.DEFAULT and not self.rationale:
             raise ValueError("a defaulted value must carry a human-readable rationale")
+        if self.origin is Origin.PROFILE_SUPPLIED and not self.rationale:
+            raise ValueError(
+                "a profile-supplied value must name the profile it came from in its rationale"
+            )
         return self
 
     @classmethod

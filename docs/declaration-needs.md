@@ -83,8 +83,37 @@ tightened.attribution()["manufacturing.min_wall"]  # "user override of profile E
 | An override is the user's, and keeps what the profile said | The profile's value stays beside the override, so a reader can see what changed and from what. Overriding a declaration the profile never supplied is refused. |
 | A profile supplies declarations only | It does not screen, weaken a refusal, or change a verdict. |
 
-Profile-supplied values are not yet threaded into the Design Spec, the scorecard or the
-evidence bundle; that is the rest of group 2.
+### Applying a profile to a document
+
+`binding.apply(spec)` returns the document with every value the profile supplies filled in:
+
+```python
+shop = Profile(
+    id="SHOP-STRUCT", version="1.0.0", citation="the shop's structural practice, rev C",
+    applicability=(Applicability(context="plate thickness",
+                                 minimum=Quantity(magnitude=3.0, unit="mm"),
+                                 maximum=Quantity(magnitude=25.0, unit="mm")),),
+    supplies=(SuppliedValue(declaration="constraints.min_safety_factor", value=2.0),),
+)
+applied = shop.bind({"plate thickness": Quantity(magnitude=10.0, unit="mm")}).apply(spec)
+applied.constraints.min_safety_factor.origin     # Origin.PROFILE_SUPPLIED
+applied.constraints.min_safety_factor.rationale  # "profile SHOP-STRUCT 1.0.0 (the shop's …)"
+```
+
+The value lands with the origin `profile_supplied` and the profile named in its rationale;
+an override lands as the engineer's own (`user_stated`), naming the profile value it replaced.
+Every check judged against a profile-supplied required minimum or upper band says so in its
+own line — `… vs required minimum 2.00 — the required minimum was supplied by profile
+SHOP-STRUCT 1.0.0 (…)` — which is the sentence the terminal, the calculation report and the
+evidence bundle all print. The bundle also carries the document itself, origin included.
+
+Three things are refused, each naming the declaration:
+
+| Refused | Why |
+| --- | --- |
+| A field that cannot record an origin | Only a provenanced field (`units`, and `constraints`' `max_mass`, `min_safety_factor`, `max_safety_factor`, `max_cost`) has somewhere to say where its value came from. Anywhere else the value would read as one the engineer stated. |
+| A value the document already states | A profile fills what is missing. Replacing what the engineer wrote would make their number read as the profile's; override the binding instead. |
+| A path the document does not have | A value put nowhere is a value silently dropped. |
 
 ## Declared screening depth
 
@@ -148,5 +177,7 @@ needs.
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
 with the nine screening refusals that state a need today. A profile's record, binding,
-applicability check and overrides ship too (group 2.1, 2.2 and 2.4). The declared screening depth and the depth-raise report ship too (group 3). Marking
-profile-sourced values through the spec, the card and the bundle (2.3) is what remains.
+applicability check and overrides ship too (group 2), and so does applying a binding to a
+document with every profile-sourced value marked through the spec, the card, the calculation
+report and the bundle (2.3, 4.3). The declared screening depth and the depth-raise report
+ship too (group 3).

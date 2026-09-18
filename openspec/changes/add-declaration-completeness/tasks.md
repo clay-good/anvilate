@@ -11,7 +11,7 @@
 
 - [x] 2.1 Profile record type: id, version, source citation, the declarations it supplies
 - [x] 2.2 Binding a profile; per-value override; override recorded with user provenance
-- [ ] 2.3 Profile-sourced values marked in every result and in the evidence bundle
+- [x] 2.3 Profile-sourced values marked in every result and in the evidence bundle
 - [x] 2.4 A profile supplying a value outside its own declared applicability is refused
 
 ## 3. Screening depth
@@ -25,7 +25,7 @@
 - [x] 4.1 A minimal spec produces a short card plus a needs report, not a wall of red
 - [x] 4.2 Supplying the top-ranked item unblocks the number of screens the report promised
       — the report's claim is asserted, not decorative
-- [ ] 4.3 A profile-sourced value that governs a verdict is marked as profile-sourced on
+- [x] 4.3 A profile-sourced value that governs a verdict is marked as profile-sourced on
       the rendered report, not only in metadata
 - [x] 4.4 Out-of-depth and not-evaluated never render identically, and both counts appear
 

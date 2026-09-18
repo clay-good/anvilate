@@ -723,13 +723,13 @@ class AcceptanceCriteria(_Base):
 # on the combination of several checks, 1.9.0 their per-basis growth allowances, and
 # 1.10.0 a sub-budget as a
 # contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
-# the environment a part lives in with an interface's kind and mating material. All
-# additive, which is
+# the environment a part lives in with an interface's kind and mating material, and 1.13.0
+# the profile_supplied origin a bound profile's values carry. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.12.0"
+SCHEMA_VERSION = "1.13.0"
 
 
 class DesignSpec(_Base):

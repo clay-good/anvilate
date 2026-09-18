@@ -68,6 +68,7 @@ _ORIGIN_LABEL = {
     Origin.USER_STATED: "engineer stated",
     Origin.DATABASE_RESOLVED: "resolved from bundled data",
     Origin.DEFAULT: "library default",
+    Origin.PROFILE_SUPPLIED: "supplied by a profile",
 }
 
 _STATUS_LABEL: dict[CheckStatus, str] = {
@@ -544,7 +545,7 @@ class CalculationReport(StatableModel):
         lines = []
         for assumption in self.assumptions:
             tag = _ORIGIN_LABEL[assumption.origin]
-            if assumption.origin is Origin.DEFAULT:
+            if assumption.origin in (Origin.DEFAULT, Origin.PROFILE_SUPPLIED):
                 tag = f"{tag}: {assumption.rationale}"
             lines.append(f"{assumption.value} [{tag}]")
         return tuple(lines)

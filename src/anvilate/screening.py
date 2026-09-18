@@ -72,6 +72,7 @@ from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .spec import DesignSpec, ReferenceResolver, ScreeningDepth, ValidationTier
+from .spec.provenance import Origin, Provenanced
 from .standards import default_standards_resolver
 from .standards.materials import (
     MaterialPropertyUnavailable,
@@ -454,12 +455,38 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         ]
     stated = spec.constraints.min_safety_factor
     band = spec.constraints.max_safety_factor
-    return _screen_element(
+    entries = _screen_element(
         spec.element_type,
         spec.element_params,
         None if stated is None else stated.value,
         None if band is None else band.value,
     )
+    return [_attributed(entry, stated, band) for entry in entries]
+
+
+def _attributed(
+    entry: ScorecardEntry,
+    stated: Provenanced[float] | None,
+    band: Provenanced[float] | None,
+) -> ScorecardEntry:
+    """``entry`` saying so when a bound it was judged against came from a profile.
+
+    The required factor decides the verdict, and a profile supplied it rather than the
+    engineer. That is said in the entry's own detail — the sentence every surface prints, the
+    calculation report included — and not only in the document's metadata, where a reader of
+    the verdict would never look.
+    """
+    notes = [
+        f"the {what} was supplied by {bound.rationale}"
+        for what, bound, used in (
+            ("required minimum", stated, entry.required_safety_factor),
+            ("upper band", band, entry.upper_safety_factor),
+        )
+        if bound is not None and bound.origin is Origin.PROFILE_SUPPLIED and used is not None
+    ]
+    if not notes:
+        return entry
+    return entry.model_copy(update={"detail": f"{entry.detail} — {'; '.join(notes)}"})
 
 
 def _dfm_entries(spec: DesignSpec) -> list[ScorecardEntry]:

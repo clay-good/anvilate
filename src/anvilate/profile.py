@@ -24,12 +24,18 @@ Three rules make a profile evidence rather than a convenience:
 
 from __future__ import annotations
 
+import typing
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
+from .spec.provenance import Origin, Provenanced
 from .units import Quantity
+
+if TYPE_CHECKING:
+    from .spec.ir import DesignSpec
 
 __all__ = [
     "Applicability",
@@ -38,6 +44,49 @@ __all__ = [
     "ProfileBinding",
     "OutsideApplicability",
 ]
+
+
+def _provenanced_type(model: BaseModel, name: str) -> type[Provenanced] | None:  # type: ignore[type-arg]
+    """The ``Provenanced[...]`` class a field is declared as, or ``None`` for any other field."""
+    annotation = type(model).model_fields[name].annotation
+    for candidate in (annotation, *typing.get_args(annotation)):
+        if isinstance(candidate, type) and issubclass(candidate, Provenanced):
+            return candidate
+    return None
+
+
+def _filled(
+    model: BaseModel, path: list[str], stated: dict[str, object], declaration: str
+) -> typing.Any:
+    """``model`` with the provenanced field at ``path`` set to ``stated``, or a refusal."""
+    name, rest = path[0], path[1:]
+    if name not in type(model).model_fields:
+        raise ValueError(
+            f"a profile supplies '{declaration}', and {type(model).__name__} has no field "
+            f"'{name}'; "
+            f"it has {sorted(type(model).model_fields)}"
+        )
+    current = getattr(model, name)
+    if rest:
+        if not isinstance(current, BaseModel):
+            raise ValueError(
+                f"a profile supplies '{declaration}', and '{name}' is not a section of the "
+                "document a value can be put into"
+            )
+        return model.model_copy(update={name: _filled(current, rest, stated, declaration)})
+    kind = _provenanced_type(model, name)
+    if kind is None:
+        raise ValueError(
+            f"'{declaration}' cannot record where its value came from, so a profile cannot "
+            "supply it: it would read as a value the engineer stated"
+        )
+    if current is not None:
+        raise ValueError(
+            f"the document already states '{declaration}' as {current.value} "
+            f"({current.origin.value}); a profile fills what is missing and never replaces "
+            "what the engineer wrote — override the binding instead"
+        )
+    return model.model_copy(update={name: kind(**stated)})
 
 
 class OutsideApplicability(ValueError):
@@ -228,6 +277,40 @@ class ProfileBinding(StatableModel):
 
     def overrides(self) -> tuple[SuppliedValue, ...]:
         return tuple(supplied for supplied in self.values if supplied.overridden is not None)
+
+    def apply(self, spec: DesignSpec) -> DesignSpec:
+        """``spec`` with every declaration this binding supplies filled in, each attributed.
+
+        A declaration is a dotted path to a field of the document, and only a **provenanced**
+        field can take one: its origin is where "supplied by this profile" is recorded, and a
+        plain field has nowhere to say it. A value the profile supplies lands as
+        ``profile_supplied`` with the profile named in its rationale; an override lands as the
+        engineer's own, with the profile it replaced named beside it.
+
+        Refused, naming the declaration: a path the document does not have, a field that
+        cannot record an origin, and a value the document **already states**. A profile
+        fills what is missing. Replacing what the engineer wrote would make their number
+        read as the profile's, and binding a profile is not a way to change a stated value —
+        overriding the binding is.
+        """
+        for supplied in self.values:
+            spec = _filled(
+                spec, supplied.declaration.split("."), self._stated(supplied), supplied.declaration
+            )
+        return spec
+
+    def _stated(self, supplied: SuppliedValue) -> dict[str, object]:
+        if supplied.overridden is None:
+            return {
+                "value": supplied.value,
+                "origin": Origin.PROFILE_SUPPLIED,
+                "rationale": supplied.attribution(self.profile),
+            }
+        return {
+            "value": supplied.overridden,
+            "origin": Origin.USER_STATED,
+            "rationale": (f"{supplied.attribution(self.profile)}, which supplied {supplied.value}"),
+        }
 
     def __str__(self) -> str:
         lines = [str(self.profile)]

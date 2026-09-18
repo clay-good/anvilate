@@ -114,6 +114,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.13.0: a value a profile supplied says so
+
+`origin` gains `profile_supplied`: a value a bound [profile](declaration-needs.md) filled in,
+neither stated by the engineer nor chosen by the library. Like `default`, it must carry a
+rationale, which names the profile, its version and its citation. Evidence Bundle 1.13.0 and
+CLI output 1.40.0 carry the same document.
+
 ### Scorecard 1.9.0: a check says which failure modes it addresses
 
 A scorecard entry gains `addresses`: the ids of the [failure modes](failure-mode-coverage.md)
