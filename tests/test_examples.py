@@ -4122,6 +4122,19 @@ def test_clean_card_example_passes_and_still_names_three_unchecked_modes():
     assert not report.complete()
 
 
+def test_over_constrained_mount_example_names_the_dowels_and_the_slot_clears_it():
+    namespace = runpy.run_path(str(_EXAMPLES / "over_constrained_mount.py"))
+    as_drawn, slotted = namespace["mount_reports"]()
+    assert as_drawn.removed == 7 and slotted.removed == 6
+    (over,) = as_drawn.over()
+    assert {c.feature for c in over.by} == {"dowel A", "dowel B"}
+    assert as_drawn.entry().status is CheckStatus.FAIL
+    assert slotted.exactly_constrained and slotted.entry().status is CheckStatus.PASS
+    shear = namespace["DOWEL_SHEAR"]
+    assert "indeterminate load path" in as_drawn.qualify(shear).detail
+    assert slotted.qualify(shear) == shear
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()

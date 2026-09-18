@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Fifty-three pages, arranged by what you are trying to do. The [README](../README.md) is the
+Fifty-four pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
@@ -37,6 +37,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | --- | --- |
 | [Uncertainty-aware margins](uncertainty-margins.md) | Input scatter to a shortfall probability, and what the number does not mean. |
 | [Discipline modules](discipline-modules.md) | What each pack declares about itself, held against the pack it names. |
+| [Constraint topology](constraint-topology.md) | A mount's six freedoms counted against its declared constraints — free, exact or over-constrained — and why a stress on an over-constrained path is never rendered unqualified. |
 | [Failure-mode coverage](failure-mode-coverage.md) | The ways a design fails that no check asked about, named beside their population. |
 | [Check dependencies](check-dependencies.md) | What each check reads from which other check, ordered, with cycles refused whole. |
 | [What the build needs next](declaration-needs.md) | Every missing declaration in one list, ordered by how many screens it unblocks. |
