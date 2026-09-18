@@ -551,6 +551,19 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="alignment drift from a harness crossing a mount",
+            description=(
+                "a cable or ribbon routed across an adjustable mount pulling the element off "
+                "its alignment, while every load path the drawing shows is stiff enough"
+            ),
+            applicability=Applicability(interfaces=("clamped", "bonded", "sliding")),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), "
+                "line of sight"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

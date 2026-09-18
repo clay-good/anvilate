@@ -653,7 +653,8 @@ modules:
   stress a retainer puts into the glass, held to an allowable stated as a fracture probability;
   and the pressure swing P_f·(T_h − T_c)/T_f a thermal cycle pumps across a sealed volume,
   the stress it bends into a window in each direction, and the wavefront error
-  0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) the bow leaves
+  0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) the bow leaves; and the mount shift Σk·δ/(k_m + Σk) the
+  harnesses crossing a mount pull into it
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2493,6 +2494,7 @@ from .optics import (
 from .optomechanics import (
     N_BK7,
     BreathingMitigation,
+    HarnessCrossing,
     OpticalMaterial,
     OutsideValidRange,
     Prescription,
@@ -2511,6 +2513,7 @@ from .optomechanics import (
     dynamic_clearance_scorecard,
     enclosure_rise_scorecard,
     glass_contact_stress_scorecard,
+    harness_load_scorecard,
     internal_condensation_scorecard,
     marechal_strehl_ratio,
     miles_random_vibration_grms,
@@ -4700,6 +4703,8 @@ __all__ = [
     "seal_breathing_scorecard",
     "window_pressure_opd",
     "pressure_window_scorecard",
+    "HarnessCrossing",
+    "harness_load_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

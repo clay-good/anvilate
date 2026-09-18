@@ -72,6 +72,8 @@ __all__ = [
     "seal_breathing_scorecard",
     "window_pressure_opd",
     "pressure_window_scorecard",
+    "HarnessCrossing",
+    "harness_load_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1965,7 +1967,147 @@ def pressure_window_scorecard(
     )
 
 
+class HarnessCrossing(StatableModel):
+    """A cable, ribbon or flexible attachment declared crossing a mount interface.
+
+    Its ``stiffness`` is the force per unit offset across the interface, and its
+    ``routing_offset`` is how far the routing holds it from its free shape at assembly. An
+    optional ``lever_arm`` from the mount's centre turns the force into a moment. Either of
+    the first two left undeclared is what the harness screen names, because a harness
+    assumed to be free is a common unmodelled source of alignment drift (Yoder,
+    Opto-Mechanical Systems Design).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    harness: Named
+    stiffness: Quantity | None = None
+    routing_offset: Quantity | None = None
+    lever_arm: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _a_harness(self) -> HarnessCrossing:
+        for label, value, dimension in (
+            ("stiffness", self.stiffness, "[force] / [length]"),
+            ("routing_offset", self.routing_offset, "[length]"),
+            ("lever_arm", self.lever_arm, "[length]"),
+        ):
+            if value is None:
+                continue
+            _check(value, dimension, label)
+            if value.magnitude < 0:
+                raise ValueError(f"'{self.harness}': {label} cannot be negative; got {value}")
+        return self
+
+    def missing(self) -> tuple[str, ...]:
+        """What the screen needs from this harness and was not given."""
+        return tuple(
+            label
+            for label, value in (
+                ("stiffness", self.stiffness),
+                ("routing offset", self.routing_offset),
+            )
+            if value is None
+        )
+
+
+def harness_load_scorecard(
+    name: str,
+    *,
+    crossings: tuple[HarnessCrossing, ...],
+    mount_stiffness: Quantity,
+    focal_length: Quantity,
+    allowed_line_of_sight: Quantity,
+) -> ScorecardEntry:
+    """Screen the alignment shift the harnesses crossing a mount pull into it.
+
+    Each harness pulls with F = k·δ, its stiffness times its routing offset. The harnesses
+    act in parallel with the mount's radial ``mount_stiffness`` k_m, so the mount moves by
+    Δ = Σk·δ/(k_m + Σk), taking every pull in one direction because the routing rarely
+    states which. The element's line of sight then turns through Δ/f
+    (:func:`decenter_line_of_sight`; Yoder, Opto-Mechanical Systems Design), compared against
+    ``allowed_line_of_sight``. Each harness's force, and its moment where a lever arm is
+    declared, is stated on the entry.
+
+    A crossing missing its stiffness or routing offset makes the entry not evaluated,
+    naming each one and what it lacks, rather than screening the harness as free.
+    """
+    _check(mount_stiffness, "[force] / [length]", "mount_stiffness")
+    _check(focal_length, "[length]", "focal_length")
+    k_mount = mount_stiffness.to("N/m").magnitude
+    if k_mount <= 0:
+        raise ValueError(f"mount_stiffness must be positive; got {mount_stiffness}")
+    if focal_length.to("m").magnitude <= 0:
+        raise ValueError(f"focal_length must be positive; got {focal_length}")
+    allowed = _radians(allowed_line_of_sight, "allowed_line_of_sight") * 1e6
+    if allowed <= 0:
+        raise ValueError(f"allowed_line_of_sight must be positive; got {allowed_line_of_sight}")
+    if not crossings:
+        raise ValueError(
+            "crossings is empty; a mount no harness crosses has no parasitic load to screen"
+        )
+    unstated = [
+        f"{crossing.harness} ({' and '.join(crossing.missing())})"
+        for crossing in crossings
+        if crossing.missing()
+    ]
+    if unstated:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "a harness crossing the mount with no declared stiffness or routing is "
+                "screened as free, which it is not; state them for " + ", ".join(unstated)
+            ),
+            reference=_YODER,
+        )
+    pulls = []
+    for crossing in crossings:
+        k = (crossing.stiffness or Quantity(magnitude=0.0, unit="N/m")).to("N/m").magnitude
+        offset = (crossing.routing_offset or Quantity(magnitude=0.0, unit="m")).to("m")
+        force = k * offset.magnitude
+        moment = (
+            f", {force * crossing.lever_arm.to('m').magnitude * 1e3:.1f} N·mm about the mount"
+            if crossing.lever_arm is not None
+            else ""
+        )
+        pulls.append((k, force, f"{crossing.harness} {force:.3f} N{moment}"))
+    stiffness = sum(k for k, _, _ in pulls)
+    shift = sum(force for _, force, _ in pulls) / (k_mount + stiffness)
+    line_of_sight = decenter_line_of_sight(
+        decenter=Quantity(magnitude=shift, unit="m"), focal_length=focal_length
+    ).magnitude
+    comparison = Comparison(
+        measured=Quantity(magnitude=line_of_sight, unit="µrad"),
+        limit=Quantity(magnitude=allowed, unit="µrad"),
+        sense=LimitSense.AT_MOST,
+        measured_label="harness line-of-sight shift",
+        limit_label="allowed",
+        minimum_decimals=1,
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=(
+            f"{comparison.sentence()} (mount shift {shift * 1e6:.2f} µm from "
+            + "; ".join(text for _, _, text in pulls)
+            + ")"
+        ),
+        reference=_YODER,
+        comparison=comparison,
+        addresses=("alignment drift from a harness crossing a mount",),
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "Δ = Σk·δ/(k_m + Σk) over a declared set of harnesses, then Δ/f; each "
+                "harness's force and the mount shift are stated on the entry"
+            ),
+        ),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_YODER = "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), line of sight"
 _TIMOSHENKO = (
     "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. (1959), "
     "simply supported circular plate"

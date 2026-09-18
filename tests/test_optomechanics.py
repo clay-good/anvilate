@@ -1005,3 +1005,50 @@ def test_the_window_wavefront_error_is_sparks_and_cottis() -> None:
             elastic_modulus=q("82 GPa"),
             refractive_index=1.0,
         )
+
+
+def _harnesses(*crossings: object, allowed: str = "100 µrad"):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import harness_load_scorecard
+
+    return harness_load_scorecard(
+        "harness",
+        crossings=crossings,  # type: ignore[arg-type]
+        mount_stiffness=q("1e5 N/m"),
+        focal_length=q("50 mm"),
+        allowed_line_of_sight=q(allowed),
+    )
+
+
+def test_harnesses_crossing_a_mount_pull_its_line_of_sight() -> None:
+    from anvilate.analysis.optomechanics import HarnessCrossing
+
+    ribbon = HarnessCrossing(
+        harness="display ribbon",
+        stiffness=q("200 N/m"),
+        routing_offset=q("2 mm"),
+        lever_arm=q("15 mm"),
+    )
+    lead = HarnessCrossing(harness="lead", stiffness=q("20 N/m"), routing_offset=q("1 mm"))
+    entry = _harnesses(ribbon, lead)
+    # Δ = Σk·δ/(k_m + Σk), then Δ/f.
+    shift = (200 * 0.002 + 20 * 0.001) / (1e5 + 220)
+    assert entry.comparison is not None
+    assert entry.comparison.measured.magnitude == pytest.approx(shift / 0.05 * 1e6)
+    assert entry.status is CheckStatus.PASS
+    assert "display ribbon 0.400 N, 6.0 N·mm about the mount" in entry.detail
+    assert _harnesses(ribbon, lead, allowed="50 µrad").status is CheckStatus.FAIL
+
+
+def test_a_harness_with_nothing_declared_is_named_not_screened_as_free() -> None:
+    from anvilate.analysis.optomechanics import HarnessCrossing
+
+    entry = _harnesses(
+        HarnessCrossing(harness="flex", stiffness=q("50 N/m")),
+        HarnessCrossing(harness="coax", stiffness=q("5 N/m"), routing_offset=q("1 mm")),
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "flex (routing offset)" in entry.detail and "coax" not in entry.detail
+    with pytest.raises(ValueError, match="crossings is empty"):
+        _harnesses()
+    with pytest.raises(ValueError, match="cannot be negative"):
+        HarnessCrossing(harness="flex", stiffness=q("-1 N/m"))

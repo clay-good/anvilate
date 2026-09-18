@@ -16,6 +16,7 @@ machinery.screen_compression_spring -> coil spring buckling
 optomechanics.glass_contact_stress_scorecard -> glass fracture at a mount contact
 optomechanics.seal_breathing_scorecard -> condensation in a breathing sealed volume
 optomechanics.pressure_window_scorecard -> window fracture under a pressure differential
+optomechanics.harness_load_scorecard -> alignment drift from a harness crossing a mount
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard
