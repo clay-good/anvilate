@@ -61,6 +61,8 @@ __all__ = [
     "enclosure_rise_scorecard",
     "ShockPulse",
     "ShockEnvironment",
+    "SurfaceDeformation",
+    "Prescription",
 ]
 
 _ALDUCHOV = (
@@ -1324,6 +1326,147 @@ class ShockEnvironment(StatableModel):
         return (
             f"{self.peak_acceleration:g} g {self.shape.value.replace('_', ' ')} over "
             f"{self.pulse_duration} along {self.axis}{repeats}"
+        )
+
+
+class SurfaceDeformation(StatableModel):
+    """One surface's deformation as an optical-design or FEA tool exported it.
+
+    A surface displaced by an RMS error δ changes the wavefront by 2δ on reflection and by
+    (n − 1)·δ on transmission through an index-n boundary (Hecht, Optics; Yoder,
+    Opto-Mechanical Systems Design), so a refracting surface needs its index and a mirror
+    does not.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    surface: Named
+    rms: Quantity
+    reflective: bool
+    refractive_index: float | None = None
+
+    @model_validator(mode="after")
+    def _a_surface(self) -> SurfaceDeformation:
+        _check(self.rms, "[length]", "rms")
+        if self.rms.to("m").magnitude < 0:
+            raise ValueError(f"an RMS deformation cannot be negative; got {self.rms}")
+        if not self.reflective:
+            if self.refractive_index is None:
+                raise ValueError(
+                    f"'{self.surface}' refracts, so its wavefront error needs the index across it"
+                )
+            if require_finite(self.refractive_index, name="refractive_index") <= 1:
+                raise ValueError(f"'{self.surface}': refractive_index must exceed 1")
+        return self
+
+    def wavefront_rms(self) -> Quantity:
+        """The RMS wavefront error this deformation puts in the beam, in nanometres."""
+        factor = 2.0 if self.reflective else (self.refractive_index or 1.0) - 1.0
+        return Quantity(magnitude=factor * self.rms.to("nm").magnitude, unit="nm")
+
+
+class Prescription(StatableModel):
+    """What an optical-design tool exported, typed, with the tool that exported it.
+
+    Every quantity a screen reads from the prescription is optional here, because an export
+    may not carry it, and a screen that needs one it lacks reports not evaluated naming it —
+    it is never estimated. The ``tool`` and ``tool_version`` travel into every entry, so a
+    verdict can be traced to the model it came from (Yoder, Opto-Mechanical Systems Design,
+    on the optical and mechanical models agreeing).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tool: Named
+    tool_version: Named
+    effective_focal_length: Quantity | None = None
+    f_number: float | None = None
+    wavelength: Quantity | None = None
+    deformations: tuple[SurfaceDeformation, ...] = ()
+
+    def _refused(self, name: str, needed: dict[str, object]) -> ScorecardEntry | None:
+        missing = [field.replace("_", " ") for field, value in needed.items() if value is None]
+        if not missing:
+            return None
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — the {self.tool} {self.tool_version} prescription does not "
+                f"carry {', '.join(missing)}, and a prescription input is never estimated"
+            ),
+        )
+
+    def _traced(self, entry: ScorecardEntry) -> ScorecardEntry:
+        return entry.model_copy(
+            update={"detail": f"{entry.detail} — from {self.tool} {self.tool_version}"}
+        )
+
+    def athermal_focus(
+        self,
+        name: str,
+        *,
+        refractive_index: float,
+        dn_dt: Quantity,
+        glass_cte: Quantity,
+        housing_cte: Quantity,
+        housing_length: Quantity,
+        temperature_change: Quantity,
+    ) -> ScorecardEntry:
+        """:func:`athermal_focus_scorecard` with focal length, f-number and wavelength read
+        from this prescription."""
+        refused = self._refused(
+            name,
+            {
+                "effective_focal_length": self.effective_focal_length,
+                "f_number": self.f_number,
+                "wavelength": self.wavelength,
+            },
+        )
+        if refused is not None:
+            return refused
+        assert self.effective_focal_length is not None and self.wavelength is not None
+        assert self.f_number is not None
+        return self._traced(
+            athermal_focus_scorecard(
+                name,
+                focal_length=self.effective_focal_length,
+                f_number=self.f_number,
+                wavelength=self.wavelength,
+                refractive_index=refractive_index,
+                dn_dt=dn_dt,
+                glass_cte=glass_cte,
+                housing_cte=housing_cte,
+                housing_length=housing_length,
+                temperature_change=temperature_change,
+            )
+        )
+
+    def wavefront_budget(
+        self,
+        name: str,
+        *,
+        strehl_threshold: float,
+        others: Mapping[str, Quantity] | None = None,
+    ) -> ScorecardEntry:
+        """:func:`wavefront_budget_scorecard` over this prescription's surface deformations,
+        each converted to wavefront error, plus any ``others`` the caller states."""
+        refused = self._refused(
+            name,
+            {"wavelength": self.wavelength, "surface deformations": self.deformations or None},
+        )
+        if refused is not None:
+            return refused
+        assert self.wavelength is not None
+        contributors = {d.surface: d.wavefront_rms() for d in self.deformations}
+        contributors.update(others or {})
+        return self._traced(
+            wavefront_budget_scorecard(
+                name,
+                contributors=contributors,
+                wavelength=self.wavelength,
+                strehl_threshold=strehl_threshold,
+            )
         )
 
 

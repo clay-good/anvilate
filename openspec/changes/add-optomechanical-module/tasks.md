@@ -70,9 +70,9 @@
 
 ## 8. Interop
 
-- [ ] 8.1 Typed import of prescription and surface-deformation quantities with tool
+- [x] 8.1 Typed import of prescription and surface-deformation quantities with tool
       identity and version recorded
-- [ ] 8.2 Refusal when a screen's prescription inputs are absent — never estimated
+- [x] 8.2 Refusal when a screen's prescription inputs are absent — never estimated
 
 ## 9. Docs & examples
 

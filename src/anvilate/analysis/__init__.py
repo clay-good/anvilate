@@ -646,7 +646,8 @@ modules:
   and the boresight between two paths, with common-mode motion named and left out; and the
   internal rise Q·R an enclosure's own dissipation drives, for thermal screens to consume;
   and a declared shock environment whose damped maximax response gives the equivalent
-  static acceleration, Q required
+  static acceleration, Q required; and a design tool's prescription, typed and traced to the
+  tool, whose missing inputs are reported rather than estimated
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2487,9 +2488,11 @@ from .optomechanics import (
     N_BK7,
     OpticalMaterial,
     OutsideValidRange,
+    Prescription,
     RangedProperty,
     ShockEnvironment,
     ShockPulse,
+    SurfaceDeformation,
     ThermalCondition,
     ThermalConditionKind,
     athermal_bond_thickness,
@@ -4673,6 +4676,8 @@ __all__ = [
     "enclosure_rise_scorecard",
     "ShockPulse",
     "ShockEnvironment",
+    "SurfaceDeformation",
+    "Prescription",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

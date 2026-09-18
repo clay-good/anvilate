@@ -679,3 +679,75 @@ def test_a_shock_states_its_shape_and_duration() -> None:
         natural_frequency=q("300 Hz"), quality_factor=1e6
     )
     assert 0.9 < sawtooth < 1.5
+
+
+def _prescription(**fields: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import Prescription, SurfaceDeformation
+
+    declared: dict[str, object] = {
+        "tool": "Zemax OpticStudio",
+        "tool_version": "2024 R1",
+        "effective_focal_length": q("100 mm"),
+        "f_number": 4.0,
+        "wavelength": q("550 nm"),
+        "deformations": (
+            SurfaceDeformation(surface="fold mirror", rms=q("8 nm"), reflective=True),
+            SurfaceDeformation(
+                surface="L1 S1", rms=q("20 nm"), reflective=False, refractive_index=1.5168
+            ),
+        ),
+    }
+    declared.update(fields)
+    return Prescription(**declared)  # type: ignore[arg-type]
+
+
+def test_a_surface_deformation_becomes_wavefront_error_by_how_light_meets_it() -> None:
+    from anvilate.analysis.optomechanics import SurfaceDeformation
+
+    mirror = SurfaceDeformation(surface="M", rms=q("8 nm"), reflective=True)
+    lens = SurfaceDeformation(surface="S", rms=q("20 nm"), reflective=False, refractive_index=1.5)
+    assert mirror.wavefront_rms().to("nm").magnitude == pytest.approx(16.0)
+    assert lens.wavefront_rms().to("nm").magnitude == pytest.approx(10.0)
+    with pytest.raises(ValidationError, match="needs the index across it"):
+        SurfaceDeformation(surface="S", rms=q("20 nm"), reflective=False)
+
+
+def test_a_prescription_feeds_the_screens_and_is_named_in_their_verdicts() -> None:
+    prescription = _prescription()
+    focus = prescription.athermal_focus(
+        "focus",
+        refractive_index=1.5168,
+        dn_dt=q("1.6e-6 1/K"),
+        glass_cte=q("7.1e-6 1/K"),
+        housing_cte=q("1.2e-6 1/K"),
+        housing_length=q("100 mm"),
+        temperature_change=q("40 K"),
+    )
+    assert focus.detail == (
+        "defocus 11.2 µm vs depth of focus 17.6 µm — from Zemax OpticStudio 2024 R1"
+    )
+    wavefront = prescription.wavefront_budget(
+        "wavefront", strehl_threshold=0.8, others={"alignment": q("20 nm")}
+    )
+    assert wavefront.comparison is not None
+    # 2·8, 0.5168·20 and 20 nm, in quadrature.
+    expected = (16.0**2 + (0.5168 * 20) ** 2 + 20.0**2) ** 0.5
+    assert wavefront.comparison.measured.magnitude == pytest.approx(expected)
+
+
+def test_an_input_the_export_does_not_carry_is_never_estimated() -> None:
+    bare = _prescription(effective_focal_length=None, wavelength=None, deformations=())
+    focus = bare.athermal_focus(
+        "focus",
+        refractive_index=1.5168,
+        dn_dt=q("1.6e-6 1/K"),
+        glass_cte=q("7.1e-6 1/K"),
+        housing_cte=q("1.2e-6 1/K"),
+        housing_length=q("100 mm"),
+        temperature_change=q("40 K"),
+    )
+    assert focus.status is CheckStatus.NOT_EVALUATED
+    assert "does not carry effective focal length, wavelength" in focus.detail
+    wavefront = bare.wavefront_budget("wavefront", strehl_threshold=0.8)
+    assert wavefront.status is CheckStatus.NOT_EVALUATED
+    assert "surface deformations" in wavefront.detail
