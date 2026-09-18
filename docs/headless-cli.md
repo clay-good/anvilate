@@ -533,11 +533,14 @@ The script is read off the command-line parser itself, so every command and ever
 completes is one the parser defines, and a flag added tomorrow completes without anyone
 editing a list.
 
-### Progress
+### Progress and width
 
 `anvilate check` over a directory prints `[i/n] screening <path>` to stderr as it goes, so a
 run over many specs does not look hung. It does this only when stderr is a terminal: piped
-or redirected, the run prints no progress, and stdout is byte-identical either way.
+or redirected, the run prints no progress, and stdout is byte-identical either way. On a
+terminal, text output is also wrapped to the terminal's width, each continuation indented
+under its line and no word broken; a pipe, a file and `--format json` get the lines exactly as
+written.
 
 ### On a terminal that cannot print Unicode
 

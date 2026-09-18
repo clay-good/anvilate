@@ -64,7 +64,9 @@ import codecs
 import contextlib
 import io
 import json
+import shutil
 import sys
+import textwrap
 from collections import Counter
 from pathlib import Path
 from typing import Any, Literal, TextIO
@@ -2968,10 +2970,67 @@ def _degrade_gracefully(json_requested: bool) -> None:
             stream.reconfigure(errors=handler)
 
 
+class _Wrapped(io.TextIOBase):
+    """A text stream that wraps each line it is given to ``width`` columns.
+
+    Continuation lines are indented under the line they continue, words are never broken, and
+    a line already within the width passes through untouched. Only a terminal gets one: a
+    pipe or a file receives exactly the lines the command wrote.
+    """
+
+    def __init__(self, target: TextIO, width: int) -> None:
+        self._target = target
+        self._width = width
+        self._pending = ""
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, text: str) -> int:
+        self._pending += text
+        *lines, self._pending = self._pending.split("\n")
+        for line in lines:
+            self._target.write(self._wrap(line) + "\n")
+        return len(text)
+
+    def flush(self) -> None:
+        if self._pending:
+            self._target.write(self._wrap(self._pending))
+            self._pending = ""
+        self._target.flush()
+
+    def _wrap(self, line: str) -> str:
+        if len(line) <= self._width:
+            return line
+        indent = line[: len(line) - len(line.lstrip())]
+        return textwrap.fill(
+            line.strip(),
+            width=self._width,
+            initial_indent=indent,
+            subsequent_indent=indent + "    ",
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+
+
+def _for_the_terminal(stream: TextIO, json_requested: bool) -> TextIO:
+    """``stream`` wrapped to the terminal's width when a person is reading text on it."""
+    if json_requested or not _is_terminal(stream):
+        return stream
+    width = shutil.get_terminal_size(fallback=(100, 24)).columns
+    return _Wrapped(stream, max(width, 40))  # type: ignore[return-value]
+
+
 def main() -> None:
     """The ``anvilate`` console script."""
-    _degrade_gracefully(_wants_json(sys.argv[1:]))
-    raise SystemExit(run())
+    json_requested = _wants_json(sys.argv[1:])
+    _degrade_gracefully(json_requested)
+    out = _for_the_terminal(sys.stdout, json_requested)
+    try:
+        code = run(stdout=out)
+    finally:
+        out.flush()
+    raise SystemExit(code)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised as a subprocess in the tests

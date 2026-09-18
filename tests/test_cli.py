@@ -4610,3 +4610,28 @@ def test_the_completion_flag_prints_the_script_before_any_command_is_required():
     assert zsh.returncode == 0
     assert zsh.stdout.decode().startswith("autoload -U +X bashcompinit && bashcompinit")
     assert b"complete -o filenames -F _anvilate anvilate" in zsh.stdout
+
+
+def test_a_terminal_gets_lines_wrapped_to_its_width_and_nothing_else_does() -> None:
+    """Interaction-quality 3.1: width awareness, for a person reading on a terminal only."""
+    from anvilate.cli import _for_the_terminal, _Wrapped
+
+    target = io.StringIO()
+    wrapped = _Wrapped(target, 40)
+    long_line = (
+        "  [PASS] pin bearing: safety factor 2.70 vs required minimum 2.00 [ASME BTH-1 §3-3.3]"
+    )
+    wrapped.write(long_line + "\nshort line\n")
+    wrapped.flush()
+    lines = target.getvalue().splitlines()
+    assert lines[-1] == "short line"
+    body = lines[:-1]
+    assert len(body) > 1 and all(len(line) <= 40 for line in body)
+    assert body[0].startswith("  [PASS]") and all(rest.startswith("      ") for rest in body[1:])
+    assert " ".join(" ".join(body).split()) == " ".join(long_line.split())
+    # A pipe, a file and JSON are left as the command wrote them.
+    buffer = io.StringIO()
+    assert _for_the_terminal(buffer, json_requested=False) is buffer
+    terminal = _Terminal()
+    assert _for_the_terminal(terminal, json_requested=True) is terminal
+    assert isinstance(_for_the_terminal(terminal, json_requested=False), _Wrapped)
