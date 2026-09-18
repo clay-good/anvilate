@@ -37,8 +37,8 @@
 - [ ] 3.1 Declared shock environment type: magnitude, pulse shape, duration, axis, cycles
 - [ ] 3.2 Equivalent static acceleration from a classical pulse with the amplification
       basis stated; Q or damping required, never defaulted
-- [ ] 3.3 Random-vibration 3σ equivalent from a declared PSD and fundamental frequency
-- [ ] 3.4 Retention preload required to hold an element against declared acceleration
+- [x] 3.3 Random-vibration 3σ equivalent from a declared PSD and fundamental frequency
+- [x] 3.4 Retention preload required to hold an element against declared acceleration
 - [ ] 3.5 Mount-compliance to element tilt and decenter to angular line-of-sight shift
 
 ## 4. Optical-interface screens
@@ -47,8 +47,8 @@
       emitted as a keepout
 - [ ] 4.2 Glass contact stress at the retention interface by declared interface geometry,
       against user-supplied allowable tensile stress with the Weibull caveat rendered
-- [ ] 4.3 Stress birefringence retardance from stress and stress-optic coefficient
-- [ ] 4.4 RMS wavefront error budget with the Maréchal criterion as a declared threshold
+- [x] 4.3 Stress birefringence retardance from stress and stress-optic coefficient
+- [x] 4.4 RMS wavefront error budget with the Maréchal criterion as a declared threshold
 
 ## 5. Environment and sealing
 

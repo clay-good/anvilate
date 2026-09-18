@@ -260,3 +260,7 @@ Fischer
 # Yoder's Opto-Mechanical Systems Design for the athermal housing condition.
 Jamieson
 Yoder
+# Miles's equation for a single mode's RMS response to flat random input (1954), and the
+# Maréchal approximation relating RMS wavefront error to Strehl ratio.
+Miles
+Maréchal

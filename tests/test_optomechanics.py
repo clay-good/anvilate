@@ -119,3 +119,115 @@ def test_an_aluminium_housing_throws_the_image_out_of_focus_and_invar_does_not()
 def test_a_lens_or_housing_outside_the_formula_is_refused(call, match: str) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(ValueError, match=match):
         call()
+
+
+def test_miles_equation_is_the_square_root_of_half_pi_fn_q_asd() -> None:
+    from math import pi, sqrt
+
+    from anvilate.analysis.optomechanics import miles_random_vibration_grms
+
+    grms = miles_random_vibration_grms(
+        natural_frequency=q("200 Hz"), quality_factor=10.0, input_asd=q("0.04 1/Hz")
+    )
+    assert grms == pytest.approx(sqrt(pi / 2 * 200 * 10 * 0.04))
+    # The answer goes as √Q, which is why Q is never defaulted.
+    doubled = miles_random_vibration_grms(
+        natural_frequency=q("200 Hz"), quality_factor=40.0, input_asd=q("0.04 1/Hz")
+    )
+    assert doubled == pytest.approx(2 * grms)
+    with pytest.raises(ValueError, match="quality_factor must exceed 0.5"):
+        miles_random_vibration_grms(
+            natural_frequency=q("200 Hz"), quality_factor=0.5, input_asd=q("0.04 1/Hz")
+        )
+
+
+def test_a_retainer_must_press_as_hard_as_the_acceleration_lifts() -> None:
+    from anvilate.analysis.optomechanics import retention_preload
+
+    assert retention_preload(mass=q("50 g"), acceleration=20.0).to("N").magnitude == pytest.approx(
+        0.05 * 20 * 9.80665
+    )
+    with pytest.raises(ValueError, match="acceleration must be positive"):
+        retention_preload(mass=q("50 g"), acceleration=-1.0)
+
+
+def test_stress_birefringence_is_k_sigma_t() -> None:
+    from anvilate.analysis.optomechanics import stress_birefringence_retardance
+
+    # K = 2.77e-6 mm²/N, 1 MPa over 10 mm of glass: 27.7 nm, by hand.
+    opd = stress_birefringence_retardance(
+        stress_optic_coefficient=q("2.77e-6 mm**2/N"), stress=q("1 MPa"), path_length=q("10 mm")
+    )
+    assert opd.to("nm").magnitude == pytest.approx(27.7)
+
+
+def test_the_marechal_strehl_at_a_fourteenth_of_a_wave_is_about_point_eight() -> None:
+    from math import exp, pi
+
+    from anvilate.analysis.optomechanics import marechal_strehl_ratio
+
+    strehl = marechal_strehl_ratio(
+        rms_wavefront_error=Quantity(magnitude=550 / 14, unit="nm"), wavelength=q("550 nm")
+    )
+    assert strehl == pytest.approx(exp(-((2 * pi / 14) ** 2)))
+    assert 0.80 < strehl < 0.82
+    assert marechal_strehl_ratio(rms_wavefront_error=q("0 nm"), wavelength=q("550 nm")) == 1.0
+
+
+def test_a_wavefront_budget_is_the_root_sum_square_against_a_declared_strehl() -> None:
+    from anvilate.analysis.optomechanics import wavefront_budget_scorecard
+
+    budget = {"figure": q("20 nm"), "mount": q("15 nm"), "alignment": q("25 nm")}
+    entry = wavefront_budget_scorecard(
+        "wavefront", contributors=budget, wavelength=q("550 nm"), strehl_threshold=0.8
+    )
+    # √(20² + 15² + 25²) = 35.4 nm against λ/(2π)·√(−ln 0.8) = 41.3 nm.
+    assert entry.status is CheckStatus.PASS
+    assert entry.detail == "RSS wavefront error 35.4 nm vs RMS error at Strehl 0.8 41.3 nm"
+    # One contributor more and the same budget fails: the total is not the largest term.
+    grown = {**budget, "thermal": q("25 nm")}
+    failed = wavefront_budget_scorecard(
+        "wavefront", contributors=grown, wavelength=q("550 nm"), strehl_threshold=0.8
+    )
+    assert failed.status is CheckStatus.FAIL
+    with pytest.raises(ValueError, match="at least one contributor"):
+        wavefront_budget_scorecard(
+            "wavefront", contributors={}, wavelength=q("550 nm"), strehl_threshold=0.8
+        )
+    with pytest.raises(ValueError, match="strictly between 0 and 1"):
+        wavefront_budget_scorecard(
+            "wavefront", contributors=budget, wavelength=q("550 nm"), strehl_threshold=1.0
+        )
+
+
+def test_every_figure_the_scope_page_quotes_is_one_the_library_computes() -> None:
+    """docs/optomechanics.md argues from numbers; each is recomputed here, not restated."""
+    from pathlib import Path
+
+    from anvilate.analysis.optomechanics import (
+        marechal_strehl_ratio,
+        stress_birefringence_retardance,
+    )
+
+    page = (Path(__file__).resolve().parents[1] / "docs" / "optomechanics.md").read_text(
+        encoding="utf-8"
+    )
+    dof = _um(depth_of_focus(wavelength=q("550 nm"), f_number=4.0))
+    aluminium = _screen("23.1e-6 1/K").comparison
+    titanium = _screen("8.6e-6 1/K").comparison
+    assert aluminium is not None and titanium is not None
+    retardance = stress_birefringence_retardance(
+        stress_optic_coefficient=q("2.77e-6 mm**2/N"), stress=q("1 MPa"), path_length=q("10 mm")
+    )
+    strehl = marechal_strehl_ratio(
+        rms_wavefront_error=Quantity(magnitude=550 / 14, unit="nm"), wavelength=q("550 nm")
+    )
+    quoted = {
+        f"±{dof:.1f} µm": "the f/4 depth of focus",
+        f"{aluminium.measured.magnitude:.1f} µm out": "the aluminium defocus",
+        f"misses by {titanium.measured.magnitude - titanium.limit.magnitude:.1f} µm": "titanium",
+        f"is {retardance.to('nm').magnitude:.1f} nm": "the N-BK7 retardance",
+        f"S ≈ {strehl:.1f}": "the Strehl at a fourteenth of a wave",
+    }
+    missing = {text: what for text, what in quoted.items() if text not in page}
+    assert not missing, f"the page no longer states what the library computes: {missing}"

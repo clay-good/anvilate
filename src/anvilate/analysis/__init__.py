@@ -632,7 +632,9 @@ modules:
 - :mod:`~anvilate.analysis.optomechanics` — a lens kept in focus across temperature: the
   diffraction-limited depth of focus ±2·λ·N², the thin-lens thermal focal shift
   f·(α_g − (dn/dT)/(n − 1))·ΔT, the housing's own growth α_h·L·ΔT, and the defocus between
-  them judged against the depth of focus
+  them judged against the depth of focus; Miles' random-vibration G_rms = √(π/2·f_n·Q·ASD),
+  the axial retention preload m·a, stress birefringence K·σ·t, and a root-sum-square
+  wavefront budget judged by the Maréchal Strehl ratio exp(−(2πσ/λ)²)
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2473,7 +2475,12 @@ from .optomechanics import (
     athermal_defocus,
     athermal_focus_scorecard,
     depth_of_focus,
+    marechal_strehl_ratio,
+    miles_random_vibration_grms,
+    retention_preload,
+    stress_birefringence_retardance,
     thermal_focal_shift,
+    wavefront_budget_scorecard,
 )
 from .orbital_mechanics import (
     circular_orbit_velocity,
@@ -4615,6 +4622,11 @@ __all__ = [
     "thermal_focal_shift",
     "athermal_defocus",
     "athermal_focus_scorecard",
+    "miles_random_vibration_grms",
+    "retention_preload",
+    "stress_birefringence_retardance",
+    "marechal_strehl_ratio",
+    "wavefront_budget_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

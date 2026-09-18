@@ -18,6 +18,9 @@ is a confident wrong answer. The caller states the value and owns where it came 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from math import exp, log, pi, sqrt
+
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
@@ -27,6 +30,11 @@ __all__ = [
     "thermal_focal_shift",
     "athermal_defocus",
     "athermal_focus_scorecard",
+    "miles_random_vibration_grms",
+    "retention_preload",
+    "stress_birefringence_retardance",
+    "marechal_strehl_ratio",
+    "wavefront_budget_scorecard",
 ]
 
 _JAMIESON = "Jamieson, Thermal effects in optical systems, Optical Engineering 20(2) (1981)"
@@ -201,6 +209,178 @@ def athermal_focus_scorecard(
             citation=_JAMIESON,
         ),
     )
+
+
+def miles_random_vibration_grms(
+    *, natural_frequency: Quantity, quality_factor: float, input_asd: Quantity
+) -> float:
+    """The RMS response of a single mode to flat random input, by Miles' equation.
+
+    G_rms = √(π/2 · f_n · Q · ASD) (Miles, Journal of the Aeronautical Sciences, 1954), for a
+    single-degree-of-freedom mount of ``natural_frequency`` f_n and amplification
+    ``quality_factor`` Q under an ``input_asd`` flat across the resonance, in g²/Hz — written
+    as a per-hertz quantity (``0.04 1/Hz``), because in a unit string ``g`` is the gram.
+    Returned in g (standard gravities). Three times it is the 3σ peak a mount is sized to.
+
+    Q is required and never defaulted: the answer scales with √Q, and the common "Q = 10"
+    is an assumption about somebody else's mount. The flat-input premise is the caller's to
+    hold; a spectrum that rolls off across the resonance is not what this answers.
+    """
+    _check(natural_frequency, "[frequency]", "natural_frequency")
+    _check(input_asd, "1 / [frequency]", "input_asd")
+    fn = natural_frequency.to("Hz").magnitude
+    quality = require_finite(quality_factor, name="quality_factor")
+    asd = input_asd.to("1/Hz").magnitude
+    if fn <= 0:
+        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+    if quality <= 0.5:
+        raise ValueError(
+            f"quality_factor must exceed 0.5 for a mode that resonates at all; got {quality}"
+        )
+    if asd <= 0:
+        raise ValueError(f"input_asd must be positive (g²/Hz); got {input_asd}")
+    return sqrt(pi / 2 * fn * quality * asd)
+
+
+def retention_preload(*, mass: Quantity, acceleration: float) -> Quantity:
+    """The axial preload that keeps an optic seated against an ``acceleration`` in g.
+
+    P = m·a·g₀ (Yoder, Opto-Mechanical Systems Design): the retainer must press the element
+    against its seat at least as hard as the acceleration tries to lift it off, or the lens
+    unseats, rattles and comes back somewhere else. ``mass`` is the element's; the
+    ``acceleration`` is the worst axial one it must hold through, in g, positive. Returned in
+    newtons. Friction does not enter an axial hold, which is why this is the floor.
+    """
+    _check(mass, "[mass]", "mass")
+    m = mass.to("kg").magnitude
+    a = require_finite(acceleration, name="acceleration")
+    if m <= 0:
+        raise ValueError(f"mass must be positive; got {mass}")
+    if a <= 0:
+        raise ValueError(f"acceleration must be positive, in g; got {acceleration}")
+    return Quantity(magnitude=m * a * _STANDARD_GRAVITY, unit="N")
+
+
+def stress_birefringence_retardance(
+    *, stress_optic_coefficient: Quantity, stress: Quantity, path_length: Quantity
+) -> Quantity:
+    """The optical path difference stress induces in glass, OPD = K·σ·t.
+
+    A stressed glass is birefringent: the two polarizations see different indices, and over
+    ``path_length`` t under ``stress`` σ they separate by K·σ·t for a ``stress_optic_coefficient``
+    K (Yoder, Opto-Mechanical Systems Design; the coefficient is the glass maker's, quoted in
+    mm²/N or 1/Pa). Signed as the stress is. Returned in nanometres, the unit a retardance
+    budget is written in.
+    """
+    _check(stress_optic_coefficient, "1 / [pressure]", "stress_optic_coefficient")
+    _check(stress, "[pressure]", "stress")
+    _check(path_length, "[length]", "path_length")
+    t = path_length.to("m").magnitude
+    if t <= 0:
+        raise ValueError(f"path_length must be positive; got {path_length}")
+    opd = stress_optic_coefficient.to("1/Pa").magnitude * stress.to("Pa").magnitude * t
+    return Quantity(magnitude=opd * 1e9, unit="nm")
+
+
+def marechal_strehl_ratio(*, rms_wavefront_error: Quantity, wavelength: Quantity) -> float:
+    """The Strehl ratio an RMS wavefront error allows, S ≈ exp(−(2π·σ/λ)²).
+
+    The Maréchal approximation: the peak intensity of the aberrated image relative to a
+    perfect one, for an ``rms_wavefront_error`` σ at ``wavelength`` λ. Good for small errors —
+    the region a diffraction-limited design lives in — and optimistic well beyond it.
+    Maréchal's criterion calls an image diffraction-limited at S ≥ 0.8, σ ≈ λ/14.
+    """
+    _check(rms_wavefront_error, "[length]", "rms_wavefront_error")
+    _check(wavelength, "[length]", "wavelength")
+    sigma = rms_wavefront_error.to("m").magnitude
+    lam = wavelength.to("m").magnitude
+    if sigma < 0:
+        raise ValueError(f"rms_wavefront_error cannot be negative; got {rms_wavefront_error}")
+    if lam <= 0:
+        raise ValueError(f"wavelength must be positive; got {wavelength}")
+    return exp(-((2 * pi * sigma / lam) ** 2))
+
+
+def wavefront_budget_scorecard(
+    name: str,
+    *,
+    contributors: Mapping[str, Quantity],
+    wavelength: Quantity,
+    strehl_threshold: float,
+) -> ScorecardEntry:
+    """Screen a root-sum-square wavefront error budget against a declared Strehl threshold.
+
+    The ``contributors`` are independent RMS wavefront errors, each named: surface figure,
+    mount distortion, alignment, thermal. They combine as the root sum of squares, and the
+    total passes when its Maréchal Strehl ratio (:func:`marechal_strehl_ratio`) meets
+    ``strehl_threshold``. The threshold is declared, never defaulted: 0.8 is Maréchal's
+    diffraction limit, and a system that only needs to resolve a feature twice the size may
+    declare less.
+
+    An empty budget is refused: a total of nothing is a zero error, which would pass.
+    """
+    threshold = require_finite(strehl_threshold, name="strehl_threshold")
+    if not 0 < threshold < 1:
+        raise ValueError(
+            f"strehl_threshold must lie strictly between 0 and 1; got {strehl_threshold}"
+        )
+    if not contributors:
+        raise ValueError(
+            "a wavefront budget needs at least one contributor; a total of none is a zero "
+            "error, and a budget that passes on nothing has not been written"
+        )
+    _check(wavelength, "[length]", "wavelength")
+    lam = wavelength.to("nm").magnitude
+    if lam <= 0:
+        raise ValueError(f"wavelength must be positive; got {wavelength}")
+    terms = []
+    for label, error in contributors.items():
+        _check(error, "[length]", f"contributor '{label}'")
+        value = error.to("nm").magnitude
+        if value < 0:
+            raise ValueError(f"contributor '{label}' is a negative RMS error: {error}")
+        terms.append(value)
+    total = sqrt(sum(value * value for value in terms))
+    # The RMS error at which the declared Strehl is exactly met, from S = exp(−(2πσ/λ)²).
+    allowed = lam / (2 * pi) * sqrt(-log(threshold))
+    comparison = Comparison(
+        measured=Quantity(magnitude=total, unit="nm"),
+        limit=Quantity(magnitude=allowed, unit="nm"),
+        sense=LimitSense.AT_MOST,
+        measured_label="RSS wavefront error",
+        limit_label=f"RMS error at Strehl {threshold:g}",
+        minimum_decimals=1,
+    )
+    symbols = [f"σ_{index}" for index in range(1, len(terms) + 1)]
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=comparison.sentence(),
+        reference="Maréchal criterion, S = exp(−(2πσ/λ)²)",
+        comparison=comparison,
+        derivation=Derivation(
+            symbolic="σ = √(" + " + ".join(f"{symbol}²" for symbol in symbols) + ")",
+            inputs=tuple(
+                SymbolValue(
+                    symbol=symbol,
+                    description=f"{label}, RMS",
+                    value=Quantity(magnitude=value, unit="nm"),
+                    unit="nm",
+                )
+                for symbol, label, value in zip(symbols, contributors, terms, strict=True)
+            ),
+            result=SymbolValue(
+                symbol="σ",
+                description="the budget's root-sum-square total",
+                value=Quantity(magnitude=total, unit="nm"),
+                unit="nm",
+            ),
+            citation="Maréchal criterion, S = exp(−(2πσ/λ)²)",
+        ),
+    )
+
+
+_STANDARD_GRAVITY = 9.80665  # m/s², the conventional g₀ of the CGPM (1901)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
