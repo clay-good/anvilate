@@ -301,7 +301,8 @@ def _screen_element(
                 status=CheckStatus.NOT_EVALUATED,
                 detail=(
                     f"element_type {tag!r} is not one of the "
-                    f"{len(registry)} elements this library screens{suggestion}"
+                    f"{len(registry)} elements this library screens. The modules that "
+                    f"screen elements are {_modules_that_cover()}{suggestion}"
                 ),
             )
         ]
@@ -1492,6 +1493,21 @@ def _deferred_by_depth(spec: DesignSpec) -> list[ScorecardEntry]:
             )
         )
     return deferred
+
+
+def _modules_that_cover() -> str:
+    """The discipline modules and what each of them screens, for a refusal to name.
+
+    A document naming a tag nothing covers is told which modules exist and what they take,
+    so the next move is choosing an element rather than guessing at the list. Read off the
+    manifests, which the module gate holds to the registry this function just searched.
+    """
+    from .modules import MODULE_MANIFESTS
+
+    return ", ".join(
+        f"{manifest.id} ({', '.join(manifest.covers)})"
+        for manifest in sorted(MODULE_MANIFESTS.manifests, key=lambda m: m.id)
+    )
 
 
 def _budget_entries(spec: DesignSpec, entries: list[ScorecardEntry]) -> list[ScorecardEntry]:

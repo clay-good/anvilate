@@ -15,6 +15,7 @@ from anvilate.modules import (
     ModuleRegistry,
     manifest_for,
 )
+from anvilate.scorecard import CheckStatus
 from anvilate.spec import ValidationTier
 from anvilate.units import UnitSystem
 
@@ -46,6 +47,7 @@ def _manifest(**fields: object) -> ModuleManifest:
         "unit_default": UnitSystem.SI,
         "tiers": (ValidationTier.T1_ANALYTICAL,),
         "screens": ("screen_example",),
+        "covers": ("example_element",),
         "summary": "an example module, for the tests below",
     }
     declared.update(fields)
@@ -336,3 +338,42 @@ def test_reading_the_registry_imports_no_discipline() -> None:
         check=True,
     )
     assert result.stdout.strip() == "[]", f"reading the registry imported {result.stdout}"
+
+
+def test_a_manifest_covers_the_element_tags_its_pack_is_selected_by() -> None:
+    """Coverage, like the screens, is held to the registry rather than trusted."""
+    import inspect
+    from pathlib import Path
+
+    from anvilate.screening import element_registry
+
+    by_pack: dict[str, set[str]] = {}
+    for tag, (_model, screen) in element_registry().items():
+        by_pack.setdefault(Path(inspect.getfile(screen)).stem, set()).add(tag)
+    drift = []
+    for manifest in MODULE_MANIFESTS.manifests:
+        actual = by_pack.get(manifest.id, set())
+        if actual != set(manifest.covers):
+            drift.append(f"{manifest.id}: {sorted(actual ^ set(manifest.covers))}")
+    assert not drift, (
+        f"these manifests do not cover the tags their pack is selected by: {drift}. A "
+        "document naming a tag its module does not claim would be refused by a list that "
+        "is wrong about itself."
+    )
+    covered = {tag for manifest in MODULE_MANIFESTS.manifests for tag in manifest.covers}
+    # The floor and the one tag no module owns: `structure` is registered by the screening
+    # layer itself, because a structure's members can come from any discipline.
+    assert len(covered) >= 25
+    assert set(element_registry()) - covered == {"structure"}
+
+
+def test_an_element_nothing_covers_is_refused_naming_the_modules_and_what_they_take() -> None:
+    from anvilate.screening import _screen_element
+
+    (entry,) = _screen_element("lifting_lugg", {}, 2.0)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    # The modules and their tags, so the next move is choosing an element.
+    assert "structural (base_plate" in entry.detail
+    assert "machinery (helical_compression_spring" in entry.detail
+    # And the near miss still comes last, where a reader looks for it.
+    assert entry.detail.endswith("; did you mean 'lifting_lug'?")

@@ -77,6 +77,11 @@ class ModuleManifest(StatableModel):
     tiers: tuple[ValidationTier, ...] = Field(min_length=1)
     depends_on: tuple[Named, ...] = ()
     screens: tuple[Named, ...] = Field(min_length=1)
+    # What a document may declare and have this module screen: the `element_type` tags its
+    # screens are selected by. A document naming a tag no enabled module covers is told so,
+    # naming the modules — which is what makes a missing module a reported gap rather than
+    # a screen that quietly did not run.
+    covers: tuple[Named, ...] = Field(min_length=1)
     summary: Provenance
     deprecated: Deprecation | None = None
 
@@ -88,6 +93,7 @@ class ModuleManifest(StatableModel):
             ("tiers", self.tiers),
             ("depends_on", self.depends_on),
             ("screens", self.screens),
+            ("covers", self.covers),
         ):
             listed = [str(value) for value in values]
             if len(set(listed)) != len(listed):
@@ -147,6 +153,7 @@ def _manifest(
     identifier: str,
     *,
     screens: tuple[str, ...],
+    covers: tuple[str, ...],
     summary: str,
     standards: tuple[str, ...] = (),
     material_properties: tuple[str, ...] = (),
@@ -161,6 +168,7 @@ def _manifest(
         material_properties=material_properties,
         tiers=tiers,
         screens=screens,
+        covers=covers,
         summary=summary,
     )
 
@@ -172,12 +180,19 @@ MODULE_MANIFESTS = ModuleRegistry(
     manifests=(
         _manifest(
             "electrical",
+            covers=("feeder",),
             screens=("screen_feeder",),
             standards=("NEC",),
             summary="branch and feeder circuits: conductor ampacity, voltage drop, breaker size",
         ),
         _manifest(
             "geotechnical",
+            covers=(
+                "driven_pile",
+                "infinite_slope",
+                "retaining_wall",
+                "shallow_footing",
+            ),
             screens=(
                 "screen_driven_pile",
                 "screen_infinite_slope",
@@ -189,6 +204,10 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "hydraulics",
+            covers=(
+                "pipe_run",
+                "pump_duty",
+            ),
             screens=(
                 "screen_pipe_run",
                 "screen_pump_duty",
@@ -198,6 +217,7 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "industrial",
+            covers=("cover_plate",),
             screens=("screen_cover_plate",),
             # No standards. The pack's own docstring calls its members "AISC-flavored", and
             # a phrase in prose is not a citation: the both-directions gate measured what
@@ -207,12 +227,20 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "lighting",
+            covers=("lighting_installation",),
             screens=("screen_lighting",),
             standards=("ASHRAE",),
             summary="interior lighting: illuminance from a layout against the task requirement",
         ),
         _manifest(
             "machinery",
+            covers=(
+                "helical_compression_spring",
+                "rolling_bearing",
+                "shaft_key",
+                "spur_gear_mesh",
+                "transmission_shaft",
+            ),
             screens=(
                 "screen_compression_spring",
                 "screen_gear_mesh",
@@ -226,6 +254,7 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "masonry",
+            covers=("masonry_wall",),
             screens=("screen_masonry_wall",),
             standards=("TMS",),
             material_properties=("masonry compressive strength",),
@@ -233,11 +262,25 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "noise_exposure",
+            covers=("worker_noise_exposure",),
             screens=("screen_noise_exposure",),
             summary="occupational noise: daily dose against the exposure limit",
         ),
         _manifest(
             "structural",
+            covers=(
+                "base_plate",
+                "beam_column_member",
+                "beam_member",
+                "bolted_connection",
+                "column_member",
+                "concrete_bearing",
+                "gusset_plate",
+                "lifting_lug",
+                "shear_plate",
+                "tension_member",
+                "welded_connection",
+            ),
             screens=(
                 "screen_base_plate",
                 "screen_beam_column",
@@ -259,6 +302,7 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "ventilation",
+            covers=("ventilation_zone",),
             screens=("screen_ventilation",),
             standards=("ASHRAE",),
             summary="outdoor-air ventilation: the rate a space needs against the rate supplied",

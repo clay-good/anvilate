@@ -26,6 +26,7 @@ print(MODULE_MANIFESTS)              # every module this build ships
 | `tiers` | The pipeline tiers it touches. |
 | `depends_on` | Other modules it composes with. A dependency this build does not carry is refused, and so is a module depending on itself. |
 | `screens` | The `screen_*` functions the element registry selects. |
+| `covers` | The `element_type` tags a document may declare and have this module screen. Derived from the registry and gated against it, and named in the refusal a document gets for a tag nothing covers — so a missing module is a reported gap rather than a screen that quietly did not run. |
 | `summary` | What the module is for, in a sentence. |
 | `deprecated` | When it goes, and what to use instead — rendered wherever the manifest is. |
 
@@ -74,6 +75,15 @@ screen frame on the stack rather than the nearest one, because `screen_structure
 dispatches to member screens and builds no entry of its own; with a nearest-frame detector
 the one screen that composes the others was the single screen reported as unexercised.
 
+## What a module claims it can screen
+
+`covers` is the set of `element_type` tags a module's screens are selected by, held to the
+element registry the same way its screens are. A document naming a tag nothing covers is
+refused with the modules and their tags listed — the next move is choosing an element, not
+guessing at the list — and the near-miss suggestion still comes last, where a reader looks
+for it. One tag belongs to no module: `structure`, which the screening layer registers
+itself, because a structure's members can come from any discipline.
+
 ## A declared standard is one its own checks cite
 
 The standards a manifest declares are held to what its screens write, in both directions.
@@ -99,6 +109,6 @@ makes it true.
 
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
 exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
-3.3) and the loader (2.2). Duplicate-limit-state detection across modules — which wants a
+3.3), the loader (2.2) and declared coverage (1.2). Duplicate-limit-state detection across modules — which wants a
 limit-state identity the library does not have yet, since a check is named after its
 element instance — and out-of-tree modules are what remain.

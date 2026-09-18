@@ -8,7 +8,7 @@
       produced it (`col_base plate bending`), not after its module, so a declared namespace
       is a string no gate could hold a pack to. It lands with the check-naming change that
       makes it checkable; see docs/discipline-modules.md
-- [ ] 1.2 Declared screening coverage type: what the module claims it can screen
+- [x] 1.2 Declared screening coverage type: what the module claims it can screen
 - [x] 1.3 Deprecation state on a manifest, and what a deprecated module renders
 
 ## 2. Registry
