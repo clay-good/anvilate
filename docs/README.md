@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Fifty-two pages, arranged by what you are trying to do. The [README](../README.md) is the
+Fifty-three pages, arranged by what you are trying to do. The [README](../README.md) is the
 argument for the whole thing; this is the map.
 
 ## Start here
@@ -37,6 +37,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | --- | --- |
 | [Uncertainty-aware margins](uncertainty-margins.md) | Input scatter to a shortfall probability, and what the number does not mean. |
 | [Discipline modules](discipline-modules.md) | What each pack declares about itself, held against the pack it names. |
+| [Failure-mode coverage](failure-mode-coverage.md) | The ways a design fails that no check asked about, named beside their population. |
 | [Check dependencies](check-dependencies.md) | What each check reads from which other check, ordered, with cycles refused whole. |
 | [What the build needs next](declaration-needs.md) | Every missing declaration in one list, ordered by how many screens it unblocks. |
 | [Performance budgets](performance-budgets.md) | An allocated limit, itemized contributors and a declared rule — a card of passing checks that still fails. |

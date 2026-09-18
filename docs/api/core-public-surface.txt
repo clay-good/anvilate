@@ -155,6 +155,15 @@ derivation.Underived
 evidence.SourceRecord
 evidence.collect_provenance
 evidence.provenance_for
+failure_modes.DiscoveryStage
+failure_modes.Applicability
+failure_modes.FailureMode
+failure_modes.ModeCatalog
+failure_modes.ModeCoverage
+failure_modes.CoverageReport
+failure_modes.DEFAULT_CATALOG
+failure_modes.coverage
+failure_modes.CATALOG_IS_A_FLOOR
 fetch.ConsentRequired
 fetch.DatasetRecipe
 fetch.FetchProvenance
