@@ -650,7 +650,8 @@ modules:
   static acceleration, Q required; and a design tool's prescription, typed and traced to the
   tool, whose missing inputs are reported rather than estimated; and a retained lens's
   preload at each temperature extreme, P₀ − k·(α_M − α_G)·t_E·ΔT; and the Hertz contact
-  stress a retainer puts into the glass, held to an allowable stated as a fracture probability
+  stress a retainer puts into the glass, held to an allowable stated as a fracture probability;
+  and the pressure swing P_f·(T_h − T_c)/T_f a thermal cycle pumps across a sealed volume
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2489,6 +2490,7 @@ from .optics import (
 )
 from .optomechanics import (
     N_BK7,
+    BreathingMitigation,
     OpticalMaterial,
     OutsideValidRange,
     Prescription,
@@ -2514,6 +2516,7 @@ from .optomechanics import (
     mount_decenter,
     preload_temperature_scorecard,
     retention_preload,
+    seal_breathing_scorecard,
     seal_gland_extremes_scorecard,
     stress_birefringence_retardance,
     thermal_focal_shift,
@@ -4689,6 +4692,8 @@ __all__ = [
     "Prescription",
     "preload_temperature_scorecard",
     "glass_contact_stress_scorecard",
+    "BreathingMitigation",
+    "seal_breathing_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

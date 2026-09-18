@@ -870,3 +870,70 @@ def test_a_tilted_plate_refuses_what_is_not_a_plate_or_an_angle(
     } | change
     with pytest.raises(ValueError, match=message):
         tilted_plate_image_shift(**arguments)  # type: ignore[arg-type]
+
+
+def _breathing(cycles: int, mitigation: object = None):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import seal_breathing_scorecard
+
+    return seal_breathing_scorecard(
+        "housing seal",
+        fill_pressure=q("101.325 kPa"),
+        fill_temperature=q("20 degC"),
+        cold=q("-40 degC"),
+        hot=q("71 degC"),
+        cycles=cycles,
+        mitigation=mitigation,  # type: ignore[arg-type]
+    )
+
+
+def test_a_cycling_seal_with_nothing_declared_breathes_and_fails() -> None:
+    bare = _breathing(500)
+    # ΔP = P_f·(T_h − T_c)/T_f at constant volume.
+    swing = 101.325 * (344.15 - 233.15) / 293.15
+    assert bare.derivation is not None
+    assert bare.derivation.result.value.magnitude == pytest.approx(swing)
+    assert f"{swing:.2f} kPa per cycle" in bare.detail
+    assert bare.status is CheckStatus.FAIL
+    assert "breathes" in bare.detail and "fog" in bare.detail
+    assert "condensation in a breathing sealed volume" in bare.addresses
+
+
+def test_each_mitigation_says_what_it_does_and_what_is_left_to_test() -> None:
+    from anvilate.analysis.optomechanics import BreathingMitigation
+
+    vented = _breathing(500, BreathingMitigation.EQUALIZATION_PATH)
+    assert vented.status is CheckStatus.PASS
+    assert "carries no differential" in vented.detail
+    for resisting in (BreathingMitigation.DESICCANT, BreathingMitigation.PURGE):
+        entry = _breathing(500, resisting)
+        assert entry.status is CheckStatus.PASS
+        assert "verification-only" in entry.detail and "humidity-cycling test" in entry.detail
+        assert resisting.value in entry.detail
+    # One excursion accumulates nothing, whatever is declared.
+    assert _breathing(1).status is CheckStatus.PASS
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"hot": q("-50 degC")}, "hot must exceed cold"),
+        ({"cycles": 0}, "cycles must be a whole number"),
+        ({"cycles": True}, "cycles must be a whole number"),
+        ({"fill_pressure": q("0 kPa")}, "fill_pressure must be positive"),
+        ({"cold": q("1 m")}, r"cold must be a \[temperature\]"),
+    ],
+)
+def test_seal_breathing_refuses_an_impossible_cycle(
+    change: dict[str, object], message: str
+) -> None:
+    from anvilate.analysis.optomechanics import seal_breathing_scorecard
+
+    arguments: dict[str, object] = {
+        "fill_pressure": q("101.325 kPa"),
+        "fill_temperature": q("20 degC"),
+        "cold": q("-40 degC"),
+        "hot": q("71 degC"),
+        "cycles": 10,
+    } | change
+    with pytest.raises(ValueError, match=message):
+        seal_breathing_scorecard("seal", **arguments)  # type: ignore[arg-type]

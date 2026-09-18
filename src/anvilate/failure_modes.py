@@ -524,6 +524,20 @@ DEFAULT_CATALOG = ModeCatalog(
             citation="Johnson, Contact Mechanics (1985), Hertzian line contact",
         ),
         FailureMode(
+            id="condensation in a breathing sealed volume",
+            description=(
+                "a sealed housing drawing moist air past its seal on every thermal cycle and "
+                "keeping the water, until the optics fog, while the seal passes every leak test"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.FIELD,
+            citation=(
+                "Cengel and Boles, Thermodynamics: An Engineering Approach, 9th ed. (2019), "
+                "ideal-gas equation of state"
+            ),
+            tested_by=("thermal-cycling",),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

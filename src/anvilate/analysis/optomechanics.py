@@ -67,6 +67,8 @@ __all__ = [
     "Prescription",
     "preload_temperature_scorecard",
     "glass_contact_stress_scorecard",
+    "BreathingMitigation",
+    "seal_breathing_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1689,7 +1691,141 @@ def glass_contact_stress_scorecard(
     )
 
 
+class BreathingMitigation(StrEnum):
+    """What a sealed volume declares against the air a thermal cycle pumps through its seal.
+
+    An equalization path, usually a membrane that passes air and stops liquid water, admits
+    the differential. A desiccant absorbs the water the seal lets in, and a dry purge fill
+    starts the volume with none. Only the path removes the differential; the other two let
+    the seal resist it and deal with what leaks past (Yoder, Opto-Mechanical Systems Design,
+    on sealing and purging).
+    """
+
+    EQUALIZATION_PATH = "equalization_path"
+    DESICCANT = "desiccant"
+    PURGE = "purge"
+
+
+def seal_breathing_scorecard(
+    name: str,
+    *,
+    fill_pressure: Quantity,
+    fill_temperature: Quantity,
+    cold: Quantity,
+    hot: Quantity,
+    cycles: int,
+    mitigation: BreathingMitigation | None = None,
+) -> ScorecardEntry:
+    """Screen the pressure a thermal cycle drives across a sealed volume's boundary.
+
+    A rigid volume sealed at ``fill_pressure`` and ``fill_temperature`` follows the ideal-gas
+    law at constant volume, P = P_f·T/T_f (Cengel and Boles), so cycling between ``cold`` and
+    ``hot`` swings its pressure by ΔP = P_f·(T_h − T_c)/T_f. Temperatures are absolute. The
+    ambient pressure is taken as the fill pressure; a volume that also changes altitude sees
+    more.
+
+    A seal resisting that swing on every one of many ``cycles`` leaks ambient air in and
+    keeps its water, which is the mechanism behind most fogged instruments. With repeated
+    cycles and no declared ``mitigation``, the entry is a failure that names the mechanism.
+    With an equalization path, the differential is admitted. With a desiccant or a purge,
+    the seal still resists it, and the water accumulated over the cycles is a matter for a
+    humidity-cycling test, which the entry names because no formula here predicts it.
+    """
+    _check(fill_pressure, "[pressure]", "fill_pressure")
+    temperatures = {}
+    for label, value in (("fill_temperature", fill_temperature), ("cold", cold), ("hot", hot)):
+        _check(value, "[temperature]", label)
+        kelvin = value.to("K").magnitude
+        if kelvin <= 0:
+            raise ValueError(f"{label} must be above absolute zero; got {value}")
+        temperatures[label] = kelvin
+    p_fill = fill_pressure.to("kPa").magnitude
+    if p_fill <= 0:
+        raise ValueError(f"fill_pressure must be positive; got {fill_pressure}")
+    if temperatures["hot"] <= temperatures["cold"]:
+        raise ValueError(f"hot must exceed cold; got hot {hot} and cold {cold}")
+    if isinstance(cycles, bool) or not isinstance(cycles, int) or cycles < 1:
+        raise ValueError(f"cycles must be a whole number of at least 1; got {cycles!r}")
+    t_fill, t_cold, t_hot = (
+        temperatures["fill_temperature"],
+        temperatures["cold"],
+        temperatures["hot"],
+    )
+    swing = p_fill * (t_hot - t_cold) / t_fill
+    over = p_fill * (t_hot / t_fill - 1.0)
+    under = p_fill * (t_cold / t_fill - 1.0)
+    state = (
+        f"the sealed volume swings {swing:.2f} kPa per cycle ({over:+.2f} kPa hot, "
+        f"{under:+.2f} kPa cold) over {cycles} cycle{'s' if cycles != 1 else ''}"
+    )
+    status = CheckStatus.PASS
+    if mitigation is BreathingMitigation.EQUALIZATION_PATH:
+        verdict = "the declared equalization path admits it, so the seal carries no differential"
+    elif cycles == 1:
+        verdict = "one excursion, which the seal resists; nothing accumulates over one cycle"
+    elif mitigation is None:
+        status = CheckStatus.FAIL
+        verdict = (
+            "with no equalization path, desiccant or purge declared, the seal breathes: each "
+            "cycle draws ambient air in past it and the water stays, accumulating until the "
+            "optics fog"
+        )
+    else:
+        verdict = (
+            f"the seal resists it and the declared {mitigation.value} takes the water that "
+            f"leaks past; how much accumulates over {cycles} cycles is verification-only, "
+            "for a humidity-cycling test of the sealed unit"
+        )
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"{state} — {verdict}",
+        reference=_CENGEL,
+        derivation=Derivation(
+            symbolic="ΔP = P_f · (T_h − T_c) / T_f",
+            inputs=(
+                SymbolValue(
+                    symbol="P_f",
+                    description="the fill pressure",
+                    value=Quantity(magnitude=p_fill, unit="kPa"),
+                    unit="kPa",
+                ),
+                SymbolValue(
+                    symbol="T_h",
+                    description="the hot extreme, absolute",
+                    value=Quantity(magnitude=t_hot, unit="K"),
+                    unit="K",
+                ),
+                SymbolValue(
+                    symbol="T_c",
+                    description="the cold extreme, absolute",
+                    value=Quantity(magnitude=t_cold, unit="K"),
+                    unit="K",
+                ),
+                SymbolValue(
+                    symbol="T_f",
+                    description="the fill temperature, absolute",
+                    value=Quantity(magnitude=t_fill, unit="K"),
+                    unit="K",
+                ),
+            ),
+            result=SymbolValue(
+                symbol="ΔP",
+                description="the pressure swing per cycle",
+                value=Quantity(magnitude=swing, unit="kPa"),
+                unit="kPa",
+            ),
+            citation=_CENGEL,
+        ),
+        addresses=("condensation in a breathing sealed volume",),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_CENGEL = (
+    "Cengel and Boles, Thermodynamics: An Engineering Approach, 9th ed. (2019), "
+    "ideal-gas equation of state"
+)
 _INCROPERA = "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), thermal resistance"
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
 

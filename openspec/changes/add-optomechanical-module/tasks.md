@@ -99,7 +99,7 @@
 
 - [ ] 11.1 Outgassing census over declared non-metallics; condensable fraction governing;
       population size reported
-- [ ] 11.2 Seal breathing per thermal cycle; equalization path, desiccant, or purge
+- [x] 11.2 Seal breathing per thermal cycle; equalization path, desiccant, or purge
       required for a cycling sealed volume; ingress accumulation verification-only
 - [ ] 11.3 Window and closure screens under declared differential, both directions, with
       induced bow entering the focus and wavefront budgets

@@ -14,6 +14,7 @@ machinery.screen_gear_mesh -> gear tooth surface pitting
 machinery.screen_rolling_bearing -> rolling-contact fatigue of a bearing
 machinery.screen_compression_spring -> coil spring buckling
 optomechanics.glass_contact_stress_scorecard -> glass fracture at a mount contact
+optomechanics.seal_breathing_scorecard -> condensation in a breathing sealed volume
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard
