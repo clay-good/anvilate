@@ -388,3 +388,14 @@ def test_upstream_of_is_the_mirror_of_downstream_of() -> None:
     for name in graph.order():
         for other in graph.order():
             assert (other in graph.upstream_of(name)) == (name in graph.downstream_of(other))
+
+
+def test_the_run_renders_every_check_with_its_verdict_in_the_order_it_ran() -> None:
+    run = run_chain(_six_link_chain(), _runner(_CHAIN_VALUES, blocked={"temperature"})[0])
+    lines = str(run).splitlines()
+    assert lines[0] == "chain of 6 checks, in evaluation order"
+    assert [line.split()[-1] for line in lines[1:]] == list(run.order)
+    assert lines[1] == "  pass           heat"
+    assert lines[2] == "  not_evaluated  temperature"
+    # Every check is on the rendering, including the ones the gap stopped.
+    assert len(lines) == 1 + len(run.results)
