@@ -477,3 +477,70 @@ def test_a_ranged_property_needs_a_range_and_a_source() -> None:
         RangedProperty(value=q("1e-6 1/K"), low=q("300 K"), high=q("200 K"), source="s")
     with pytest.raises(ValidationError, match="must state where it came from"):
         RangedProperty(value=q("1e-6 1/K"), low=q("200 K"), high=q("300 K"), source=" ")
+
+
+def _µrad(value: float) -> Quantity:
+    return Quantity(magnitude=value, unit="µrad")
+
+
+def test_common_mode_motion_is_named_and_left_out_of_the_boresight() -> None:
+    from anvilate.analysis.optomechanics import boresight_scorecard
+    from anvilate.budget import CombinationRule
+
+    direct = {"housing tilt": _µrad(80), "fold mirror": _µrad(30)}
+    injected = {"housing tilt": _µrad(80), "combiner mount": _µrad(40)}
+    rss = boresight_scorecard(
+        "overlay",
+        first_path=direct,
+        second_path=injected,
+        allowance=_µrad(60),
+        rule=CombinationRule.RSS,
+    )
+    # √(30² + 40²): the 80 µrad housing tilt moves both paths and is not overlay error.
+    assert rss.status is CheckStatus.PASS
+    assert rss.comparison is not None and rss.comparison.measured.magnitude == pytest.approx(50)
+    assert "common-mode, excluded: housing tilt" in rss.detail
+    assert "combiner mount (second path only)" in rss.detail
+    worst = boresight_scorecard(
+        "overlay",
+        first_path=direct,
+        second_path=injected,
+        allowance=_µrad(60),
+        rule=CombinationRule.WORST_CASE,
+    )
+    assert worst.status is CheckStatus.FAIL
+    assert "by worst case 70.0 µrad" in worst.detail
+    # A shared contributor that moves the paths unequally enters as its difference.
+    skewed = {**injected, "housing tilt": _µrad(95)}
+    unequal = boresight_scorecard(
+        "overlay",
+        first_path=direct,
+        second_path=skewed,
+        allowance=_µrad(60),
+        rule=CombinationRule.WORST_CASE,
+    )
+    assert unequal.comparison is not None
+    assert unequal.comparison.measured.magnitude == pytest.approx(15 + 30 + 40)
+
+
+def test_one_path_is_not_a_boresight() -> None:
+    from anvilate.analysis.optomechanics import boresight_scorecard
+    from anvilate.budget import CombinationRule
+
+    entry = boresight_scorecard(
+        "overlay",
+        first_path={"housing tilt": _µrad(80)},
+        second_path=None,
+        allowance=_µrad(60),
+        rule=CombinationRule.RSS,
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "the second path is not declared" in entry.detail
+    with pytest.raises(ValueError, match="must be an angle"):
+        boresight_scorecard(
+            "overlay",
+            first_path={"tilt": q("80 mm")},
+            second_path={"tilt": _µrad(1)},
+            allowance=_µrad(60),
+            rule=CombinationRule.RSS,
+        )

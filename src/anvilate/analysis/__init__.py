@@ -642,7 +642,8 @@ modules:
   displacement A·a₀·g₀/ω² a half-sine shock drives across it; and Bayar's athermal
   elastomer bond thickness (D/2)·(α_M − α_G)/(α_e − α_M); and an O-ring gland held to its
   squeeze, fill and stretch bands at both temperature extremes; and optical glass as a
-  cited record whose expansion is refused outside the range its catalogue states it for
+  cited record whose expansion is refused outside the range its catalogue states it for;
+  and the boresight between two paths, with common-mode motion named and left out
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2489,6 +2490,7 @@ from .optomechanics import (
     athermal_bond_thickness,
     athermal_defocus,
     athermal_focus_scorecard,
+    boresight_scorecard,
     decenter_line_of_sight,
     depth_of_focus,
     dynamic_clearance_scorecard,
@@ -4661,6 +4663,7 @@ __all__ = [
     "RangedProperty",
     "OpticalMaterial",
     "N_BK7",
+    "boresight_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

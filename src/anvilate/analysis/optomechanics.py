@@ -25,6 +25,7 @@ from math import exp, log, pi, sqrt
 from pydantic import ConfigDict, model_validator
 
 from .._models import Named, Provenance, StatableModel
+from ..budget import CombinationRule
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
@@ -55,6 +56,7 @@ __all__ = [
     "RangedProperty",
     "OpticalMaterial",
     "N_BK7",
+    "boresight_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1032,6 +1034,100 @@ class OpticalMaterial(StatableModel):
             f"{self.name}: n_d {self.refractive_index}, V_d {self.abbe_number}, "
             f"CTE {'; '.join(str(r) for r in self.cte)}"
         )
+
+
+def boresight_scorecard(
+    name: str,
+    *,
+    first_path: Mapping[str, Quantity] | None,
+    second_path: Mapping[str, Quantity] | None,
+    allowance: Quantity,
+    rule: CombinationRule,
+) -> ScorecardEntry:
+    """Screen the boresight between two optical paths: their difference, not either's drift.
+
+    Each path maps a named contributor to the line-of-sight shift it causes on that path —
+    a housing's tilt, a combiner mount, a fold mirror — as an angle. A contributor that moves
+    both paths equally is **common-mode**: it moves the two together and is named and left
+    out of the differential. One that moves them unequally enters as the difference; one that
+    acts on a single path enters in full, named with its path. The differential terms combine
+    under the declared ``rule`` — worst case or root-sum-square, with no default — against
+    the ``allowance`` (Yoder, Opto-Mechanical Systems Design, on boresight between channels).
+
+    With either path missing the entry is ``not_evaluated`` naming it: the drift of one path
+    is not a boresight error.
+    """
+    missing = [
+        label for label, path in (("first", first_path), ("second", second_path)) if not path
+    ]
+    if missing:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — the {' and '.join(missing)} path is not declared, and the "
+                "drift of one path is not a boresight error"
+            ),
+        )
+    assert first_path is not None and second_path is not None
+    if rule is CombinationRule.HYBRID:
+        raise ValueError(
+            "a boresight takes worst_case or rss; hybrid needs correlation groups this screen "
+            "does not carry"
+        )
+    limit = _radians(allowance, "allowance") * 1e6
+    if limit <= 0:
+        raise ValueError(f"allowance must be positive; got {allowance}")
+    first = {
+        label: _radians(v, f"'{label}' on the first path") * 1e6 for label, v in first_path.items()
+    }
+    second = {
+        label: _radians(v, f"'{label}' on the second path") * 1e6
+        for label, v in second_path.items()
+    }
+    common, terms = [], []
+    for label in dict.fromkeys([*first, *second]):
+        a, b = first.get(label), second.get(label)
+        if a is not None and b is not None and abs(a - b) <= 1e-9 * max(abs(a), abs(b), 1.0):
+            common.append(label)
+        elif a is not None and b is not None:
+            terms.append((f"{label} ({a:g} vs {b:g} µrad)", a - b))
+        elif a is not None:
+            terms.append((f"{label} (first path only)", a))
+        else:
+            assert b is not None
+            terms.append((f"{label} (second path only)", -b))
+    if rule is CombinationRule.WORST_CASE:
+        total = sum(abs(value) for _, value in terms)
+    else:
+        total = sqrt(sum(value * value for _, value in terms))
+    comparison = Comparison(
+        measured=Quantity(magnitude=total, unit="µrad"),
+        limit=Quantity(magnitude=limit, unit="µrad"),
+        sense=LimitSense.AT_MOST,
+        measured_label=f"differential boresight by {rule.value.replace('_', ' ')}",
+        limit_label="allowance",
+        minimum_decimals=1,
+    )
+    differential = "; ".join(label for label, _ in terms) or "none"
+    common_text = ", ".join(common) or "none"
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=(
+            f"{comparison.sentence()} — differential: {differential}; common-mode, excluded: "
+            f"{common_text}"
+        ),
+        reference="Yoder, Opto-Mechanical Systems Design, boresight between channels",
+        comparison=comparison,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "the per-contributor differences of two declared paths, combined by the "
+                "declared rule; the terms are listed on the entry"
+            ),
+        ),
+    )
 
 
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
