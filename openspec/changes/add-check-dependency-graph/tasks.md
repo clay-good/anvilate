@@ -11,7 +11,7 @@
 
 - [x] 2.1 Topological ordering within a tier; stable order for equal-depth checks
 - [x] 2.2 Cycle detection refusing with every member of the cycle named
-- [ ] 2.3 Realized evaluation order recorded in the evidence bundle
+- [x] 2.3 Realized evaluation order recorded in the evidence bundle
 
 ## 3. Propagation
 

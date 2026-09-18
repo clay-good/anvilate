@@ -57,6 +57,12 @@ run.stale_after("modal")           # what a change to modal invalidates: the who
 | Staleness is the whole closure | `stale_after` returns the changed check and every transitive consumer. Recomputing the first hop and leaving the rest on the old value is a card mixing two evaluations of one chain. |
 | The run records the order it ran in | `order` is read off the results, not recomputed by a reader who might order them differently. |
 
+The evidence bundle carries that order when it is given one —
+`BundleSections(scorecard=run.card(), evaluation_order=run.order)` — as `evaluationOrder` in
+the exported document and an `evaluated in dependency order: …` line under its checks. An
+order naming a check the card does not carry, or one check twice, is refused. It stays out of
+the roll-up that signed attestations hash, so recording it moves no existing digest.
+
 [`examples/heat_to_clearance_chain.py`](../examples/heat_to_clearance_chain.py) runs a real
 six-link chain — a motor's dissipation through a rail's thermal growth to a running
 clearance — with the library's own closed-form functions at each link, and shows the same
@@ -65,8 +71,8 @@ chain refusing to compute anything downstream of an unmeasured heat source.
 ## Status
 
 This is the graph, its ordering and the chain runner
-(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2.1, 2.2, 3.1, 3.2 and 3.3).
-No screen in the library declares its consumptions yet, so nothing in `screen_spec` runs
-along a graph today: wiring the screens, recording the realized order in the evidence bundle,
+(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2, 3.1, 3.2 and 3.3), with
+the realized order recorded in the evidence bundle. No screen in the library declares its
+consumptions yet, so nothing in `screen_spec` runs along a graph today: wiring the screens,
 rendering the chain in a derivation, and the CI gate on undeclared consumption are what
 remain.

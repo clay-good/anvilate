@@ -114,6 +114,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Evidence Bundle 1.14.0: the order a dependency chain ran in
+
+The exported document gains `evaluationOrder`, absent unless the checks ran as a
+[dependency chain](check-dependencies.md): the order they actually ran in, every name one the
+scorecard carries. Outside the signed roll-up, so no attestation digest moves. CLI output
+1.41.0 carries the same document.
+
 ### Design Spec 1.13.0: a value a profile supplied says so
 
 `origin` gains `profile_supplied`: a value a bound [profile](declaration-needs.md) filled in,

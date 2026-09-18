@@ -1124,6 +1124,7 @@ def _every_section() -> BundleSections:
         ),
         exports=(ExportRecord(artifact="part.dxf", authorization=authorize_export(_card())),),
         assumptions=("linear elastic, small deflection",),
+        evaluation_order=("net tension", "pin bearing"),
         citations=(
             SourceRecord(
                 ref="AA-6061-T6",
@@ -1661,3 +1662,77 @@ def test_the_roll_up_precedence_covers_every_status_and_matches_the_scorecards()
 
     assert set(_PRECEDENCE) == set(CheckStatus)
     assert list(_PRECEDENCE) == sorted(CheckStatus, key=lambda status: _STATUS_RANK[status])
+
+
+# --- the realized evaluation order --------------------------------------------------------
+
+
+def _chain_run():  # type: ignore[no-untyped-def]
+    """A three-link chain declared out of order, run for real."""
+    from anvilate.dependency import (
+        ChainResult,
+        CheckNode,
+        Consumes,
+        DependencyGraph,
+        Output,
+        run_chain,
+    )
+
+    graph = DependencyGraph(
+        nodes=(
+            CheckNode(
+                id="shock response",
+                consumes=(
+                    Consumes(
+                        upstream="frequency", output="f", parameter="f", dimension="[frequency]"
+                    ),
+                ),
+            ),
+            CheckNode(
+                id="frequency",
+                produces=(Output(name="f", dimension="[frequency]"),),
+                consumes=(
+                    Consumes(
+                        upstream="temperature", output="t", parameter="t", dimension="[temperature]"
+                    ),
+                ),
+            ),
+            CheckNode(id="temperature", produces=(Output(name="t", dimension="[temperature]"),)),
+        )
+    )
+    outputs = {"temperature": {"t": _q(350.0, "K")}, "frequency": {"f": _q(120.0, "Hz")}}
+
+    def run_check(check, inputs):  # type: ignore[no-untyped-def]
+        entry = ScorecardEntry.from_safety_factor(check, computed=2.5, required=2.0)
+        return ChainResult(check=check, entry=entry, outputs=outputs.get(check, {}))
+
+    return run_chain(graph, run_check)
+
+
+def test_the_bundle_records_the_order_the_chain_actually_ran_in():
+    run = _chain_run()
+    assert run.order == ("temperature", "frequency", "shock response")
+    sections = BundleSections(scorecard=run.card(), evaluation_order=run.order)
+    assert sections.to_document_dict()["evaluationOrder"] == [
+        "temperature",
+        "frequency",
+        "shock response",
+    ]
+    assert (
+        "evaluated in dependency order: temperature -> frequency -> shock response"
+        in sections.render_document()
+    )
+    # Out of the roll-up: a signed digest does not move because the bundle says how it ran.
+    assert sections.to_json_dict() == BundleSections(scorecard=run.card()).to_json_dict()
+
+
+@pytest.mark.parametrize(
+    ("order", "match"),
+    [
+        (("temperature", "cooling"), "does not carry"),
+        (("temperature", "temperature"), "names one check twice"),
+    ],
+)
+def test_an_evaluation_order_of_checks_the_card_does_not_carry_is_refused(order, match):
+    with pytest.raises(ValidationError, match=match):
+        BundleSections(scorecard=_chain_run().card(), evaluation_order=order)

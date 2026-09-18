@@ -224,6 +224,10 @@ class BundleDocument(BaseModel):
     geometric_tolerances: tuple[str, ...] | None = Field(
         default=None, serialization_alias="geometricTolerances", alias="geometricTolerances"
     )
+    # Absent unless the checks ran as a dependency chain: the order they actually ran in.
+    evaluation_order: tuple[str, ...] | None = Field(
+        default=None, serialization_alias="evaluationOrder", alias="evaluationOrder"
+    )
 
 
 def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
@@ -329,6 +333,27 @@ class BundleSections(RevalidatedModel):
     # same. It stays out of the roll-up — `to_json_dict` is hashed into signed attestations,
     # and a spec is not a layer with a verdict — so adding it moves no existing digest.
     spec: DesignSpec | None = None
+    # The order the checks were actually evaluated in, when they ran as a dependency chain
+    # (`anvilate.dependency.ChainRun.order`). Recorded rather than recomputed, because a
+    # reader re-deriving it from the graph gets the order the checks *should* have run in,
+    # which is not evidence of the order they did. Out of the roll-up on the same terms as
+    # `spec`: a signed digest must not move because a bundle says more about how it ran.
+    evaluation_order: tuple[Named, ...] = ()
+
+    @model_validator(mode="after")
+    def _an_order_of_checks_the_card_carries(self) -> BundleSections:
+        if len(set(self.evaluation_order)) != len(self.evaluation_order):
+            raise ValueError(
+                f"the evaluation order names one check twice: {list(self.evaluation_order)}"
+            )
+        carried = {entry.name for entry in self.scorecard.entries}
+        stray = [name for name in self.evaluation_order if name not in carried]
+        if stray:
+            raise ValueError(
+                f"the evaluation order names {stray}, which the scorecard does not carry; an "
+                "order of checks nobody can read the result of is an order of nothing"
+            )
+        return self
 
     @model_validator(mode="after")
     def _an_assumption_says_something(self) -> BundleSections:
@@ -641,12 +666,19 @@ class BundleSections(RevalidatedModel):
                 self._render_rollup(),
                 "checks:",
                 *self._check_lines(),
+                *self.evaluation_order_block(),
                 *self.callout_checks_block(),
                 *self.citations_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def evaluation_order_block(self) -> tuple[str, ...]:
+        """The realized dependency order, when the checks ran as a chain; nothing otherwise."""
+        if not self.evaluation_order:
+            return ()
+        return (f"evaluated in dependency order: {' -> '.join(self.evaluation_order)}",)
 
     def callout_checks_block(self) -> tuple[str, ...]:
         """The callout layer's own checks, when there is a callout layer.
@@ -777,6 +809,8 @@ class BundleSections(RevalidatedModel):
         # different facts, and `[]` asserts the second.
         if self.citations:
             document["citations"] = [record.model_dump(mode="json") for record in self.citations]
+        if self.evaluation_order:
+            document["evaluationOrder"] = list(self.evaluation_order)
         return document
 
     def to_json_dict(self) -> dict[str, object]:
