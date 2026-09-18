@@ -52,6 +52,29 @@ ledger.stack("anchor bolt tension")     # "anchor bolt tension: no conservatism 
 Rounding is recorded as the ratio of delivered to nominal on the dimension itself. How
 strongly that ratio moves a stress (as t² or t³) is the check's business, not the ledger's.
 
+## Why it reports conservatism and never removes it
+
+Stacked conservatism is real and it costs mass, money and stiffness. A part carrying a code
+factor, an elected factor, a statistical allowable, a load contingency and a stock-size
+rounding can carry far more margin than anyone chose. The ledger exists to make that
+visible. It still does not act on it, for three reasons:
+
+- **A factor's reason is not in the number.** An elected 1.25 may cover a load nobody has
+  measured, a weld nobody will inspect, or a customer's standing instruction. The ledger
+  records who elected it and on what authority. Whether that authority still holds is a
+  judgement about the project, and the project is not in the ledger.
+- **Removing a factor is a design decision with an owner.** A tool that trimmed a
+  "redundant" factor would make the lighter part the default and turn a safety
+  argument into a line nobody signed. Surfacing the stack puts the decision in front of
+  the engineer who can own it.
+- **The asymmetry of the errors.** A factor kept that could have gone costs material. A
+  factor removed that was carrying an unstated load costs the part. A screening tool
+  should be wrong in the first direction.
+
+So the ledger multiplies the factors out, names the double counts, shows which factor
+dominates, and reports the physics-limited utilization beside the delivered verdict. What
+to do with that is left to the reader, deliberately.
+
 ## What it does not do
 
 The ledger informs and never decides. It does not remove, reduce or recommend relaxing any

@@ -48,4 +48,5 @@
 ## 7. Docs & examples
 
 - [x] 7.1 Worked example: the same bracket at code-minimum and as delivered, side by side
-- [ ] 7.2 Explanation page: why the tool reports conservatism and never removes it
+- [x] 7.2 Explanation page: why the tool reports conservatism and never removes it —
+      docs/margin-ledger.md, "Why it reports conservatism and never removes it"
