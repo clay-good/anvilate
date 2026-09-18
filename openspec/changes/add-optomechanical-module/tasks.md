@@ -102,7 +102,9 @@
 - [x] 11.2 Seal breathing per thermal cycle; equalization path, desiccant, or purge
       required for a cycling sealed volume; ingress accumulation verification-only
 - [ ] 11.3 Window and closure screens under declared differential, both directions, with
-      induced bow entering the focus and wavefront budgets
+      induced bow entering the focus and wavefront budgets — stress, face and bow in both
+      directions and the Sparks–Cottis wavefront error are built; converting that error to
+      an RMS budget contributor, and its focus share, remain
 - [ ] 11.4 Coating and cement environmental limits per surface
 - [ ] 11.5 Cleanliness level against the declared assembly environment
 - [ ] 11.6 Opto-mechanical failure-mode catalog contributions, each check declaring the

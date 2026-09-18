@@ -31,6 +31,7 @@ from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
 from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_stretch_fraction
+from .plate import simply_supported_circular_plate_uniform_load
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 from .thermal import temperature_rise
 
@@ -69,6 +70,8 @@ __all__ = [
     "glass_contact_stress_scorecard",
     "BreathingMitigation",
     "seal_breathing_scorecard",
+    "window_pressure_opd",
+    "pressure_window_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1821,7 +1824,152 @@ def seal_breathing_scorecard(
     )
 
 
+def window_pressure_opd(
+    *,
+    differential: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    refractive_index: float,
+) -> Quantity:
+    """The transmitted wavefront error a pressure differential bends into a window, in nm.
+
+    A rim-mounted window bows under a ``differential`` ΔP, and because both faces bend
+    together the first-order change cancels. What remains is the second-order term
+    OPD = 0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) of Sparks and Cottis (1973), J. Appl. Phys. 44(2), for
+    the window's unsupported ``diameter`` D. It goes as ΔP², so it has the same sign in both
+    directions. The value is the error the source states, not an RMS, so a budget of RMS
+    contributors needs it converted for the declared aperture's shape.
+    """
+    _check(differential, "[pressure]", "differential")
+    _check(diameter, "[length]", "diameter")
+    _check(thickness, "[length]", "thickness")
+    _check(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not (isfinite(refractive_index) and refractive_index > 1.0):
+        raise ValueError(f"refractive_index must exceed 1; got {refractive_index}")
+    d = diameter.to("m").magnitude
+    t = thickness.to("m").magnitude
+    e = elastic_modulus.to("Pa").magnitude
+    for label, value, given in (
+        ("diameter", d, diameter),
+        ("thickness", t, thickness),
+        ("elastic_modulus", e, elastic_modulus),
+    ):
+        if value <= 0:
+            raise ValueError(f"{label} must be positive; got {given}")
+    dp = differential.to("Pa").magnitude
+    opd = 0.00889 * (refractive_index - 1.0) * dp**2 * d**6 / (e**2 * t**5)
+    return Quantity(magnitude=opd * 1e9, unit="nm")
+
+
+def pressure_window_scorecard(
+    name: str,
+    *,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+    allowable_tensile_stress: Quantity,
+    outward: Quantity | None = None,
+    inward: Quantity | None = None,
+) -> ScorecardEntry:
+    """Screen a sealing window under the declared pressure differential in both directions.
+
+    A volume sealed at one pressure sees an ``outward`` differential at altitude or when it
+    warms, and an ``inward`` one under immersion or when it cools. Both are magnitudes. The
+    window is taken as rim-mounted over its unsupported ``diameter``, the Timoshenko simply
+    supported plate (:func:`~anvilate.analysis.plate.simply_supported_circular_plate_uniform_load`):
+    peak stress 3·(3 + ν)·ΔP·R²/(8·t²) at the centre, on the face the pressure bows convex,
+    which is the outer face for an outward differential and the inner one for an inward.
+    The larger differential governs, and the entry names it.
+
+    A window with neither differential declared is not evaluated, naming both, rather than
+    assumed to see sea-level fill. The allowable is the caller's, a fracture probability
+    under Weibull flaw statistics and not a strength, and the entry says so.
+    """
+    for label, value, dimension in (
+        ("diameter", diameter, "[length]"),
+        ("thickness", thickness, "[length]"),
+        ("elastic_modulus", elastic_modulus, "[pressure]"),
+        ("allowable_tensile_stress", allowable_tensile_stress, "[pressure]"),
+    ):
+        _check(value, dimension, label)
+        if value.magnitude <= 0:
+            raise ValueError(f"{label} must be positive; got {value}")
+    if not 0 < require_finite(poisson_ratio, name="poisson_ratio") < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+    allowable = allowable_tensile_stress.to("MPa").magnitude
+    declared = {
+        label: value
+        for label, value in (("outward", outward), ("inward", inward))
+        if value is not None
+    }
+    if not declared:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "no pressure differential declared: state the outward differential (altitude, "
+                "warm) and the inward one (immersion, cold) from the fill condition; a sea-level "
+                "fill is not assumed"
+            ),
+            reference=_TIMOSHENKO,
+        )
+    faces = {"outward": "outer", "inward": "inner"}
+    results = {}
+    for label, value in declared.items():
+        _check(value, "[pressure]", label)
+        if value.magnitude < 0:
+            raise ValueError(f"{label} is a magnitude and cannot be negative; got {value}")
+        results[label] = simply_supported_circular_plate_uniform_load(
+            pressure=value,
+            diameter=diameter,
+            thickness=thickness,
+            elastic_modulus=elastic_modulus,
+            poisson_ratio=poisson_ratio,
+        )
+    governing = max(results, key=lambda label: results[label].max_bending_stress.magnitude)
+    stress = results[governing].max_bending_stress.to("MPa").magnitude
+    comparison = Comparison(
+        measured=Quantity(magnitude=stress, unit="MPa"),
+        limit=Quantity(magnitude=allowable, unit="MPa"),
+        sense=LimitSense.AT_MOST,
+        measured_label=f"{governing} window stress",
+        limit_label="allowable",
+        minimum_decimals=2,
+    )
+    each = "; ".join(
+        f"{label} {declared[label].to('kPa').magnitude:.1f} kPa: "
+        f"{result.max_bending_stress.to('MPa').magnitude:.2f} MPa on the {faces[label]} face, "
+        f"bow {result.max_deflection.to('µm').magnitude:.1f} µm"
+        for label, result in results.items()
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=(
+            f"{comparison.sentence()} ({each}; the {governing} differential governs) — the "
+            "allowable is a probability of fracture set by the Weibull statistics of the "
+            "surface flaws under stress, not a strength"
+        ),
+        reference=_TIMOSHENKO,
+        comparison=comparison,
+        addresses=("window fracture under a pressure differential",),
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "the plate module's Timoshenko closed form, evaluated for each declared "
+                "direction; each direction's stress and bow are stated on the entry"
+            ),
+        ),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_TIMOSHENKO = (
+    "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. (1959), "
+    "simply supported circular plate"
+)
 _CENGEL = (
     "Cengel and Boles, Thermodynamics: An Engineering Approach, 9th ed. (2019), "
     "ideal-gas equation of state"

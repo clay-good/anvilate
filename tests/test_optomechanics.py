@@ -937,3 +937,71 @@ def test_seal_breathing_refuses_an_impossible_cycle(
     } | change
     with pytest.raises(ValueError, match=message):
         seal_breathing_scorecard("seal", **arguments)  # type: ignore[arg-type]
+
+
+def _window(**declared: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import pressure_window_scorecard
+
+    return pressure_window_scorecard(
+        "window",
+        diameter=q("50 mm"),
+        thickness=q("5 mm"),
+        elastic_modulus=q("82 GPa"),
+        poisson_ratio=0.206,
+        allowable_tensile_stress=q("7 MPa"),
+        **declared,  # type: ignore[arg-type]
+    )
+
+
+def test_a_window_is_screened_both_ways_and_the_larger_differential_governs() -> None:
+    entry = _window(outward=q("38 kPa"), inward=q("100 kPa"))
+    # σ = 3·(3 + ν)·ΔP·R²/(8·t²), the rim-mounted plate's centre.
+    stress = 3 * 3.206 * 100e3 * 0.025**2 / (8 * 0.005**2) / 1e6
+    assert entry.comparison is not None
+    assert entry.comparison.measured.magnitude == pytest.approx(stress)
+    assert entry.status is CheckStatus.PASS
+    assert "the inward differential governs" in entry.detail
+    assert "on the outer face" in entry.detail and "on the inner face" in entry.detail
+    assert "window fracture under a pressure differential" in entry.addresses
+    flipped = _window(outward=q("100 kPa"), inward=q("38 kPa"))
+    assert "the outward differential governs" in flipped.detail
+    assert _window(inward=q("300 kPa")).status is CheckStatus.FAIL
+
+
+def test_a_window_with_no_differential_declared_is_not_evaluated() -> None:
+    entry = _window()
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "sea-level fill is not assumed" in entry.detail
+    with pytest.raises(ValueError, match="cannot be negative"):
+        _window(inward=q("-1 kPa"))
+
+
+def test_the_window_wavefront_error_is_sparks_and_cottis() -> None:
+    from anvilate.analysis.optomechanics import window_pressure_opd
+
+    def opd(differential: str, thickness: str) -> float:
+        return (
+            window_pressure_opd(
+                differential=q(differential),
+                diameter=q("50 mm"),
+                thickness=q(thickness),
+                elastic_modulus=q("82 GPa"),
+                refractive_index=1.5168,
+            )
+            .to("nm")
+            .magnitude
+        )
+
+    expected = 0.00889 * 0.5168 * 100e3**2 * 0.05**6 / (82e9**2 * 0.005**5) * 1e9
+    assert opd("100 kPa", "5 mm") == pytest.approx(expected)
+    # Second order in the differential, and the fifth power of thickness.
+    assert opd("200 kPa", "5 mm") == pytest.approx(4 * expected)
+    assert opd("100 kPa", "2.5 mm") == pytest.approx(32 * expected)
+    with pytest.raises(ValueError, match="refractive_index must exceed 1"):
+        window_pressure_opd(
+            differential=q("1 kPa"),
+            diameter=q("50 mm"),
+            thickness=q("5 mm"),
+            elastic_modulus=q("82 GPa"),
+            refractive_index=1.0,
+        )

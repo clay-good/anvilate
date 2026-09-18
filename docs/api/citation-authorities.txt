@@ -277,3 +277,5 @@ Bayar
 Johnson
 # Smith's Modern Optical Engineering, for plane-parallel plate displacement.
 Smith
+# Sparks and Cottis, J. Appl. Phys. 44(2) (1973), pressure-induced window distortion.
+Sparks

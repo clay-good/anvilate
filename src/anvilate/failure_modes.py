@@ -538,6 +538,19 @@ DEFAULT_CATALOG = ModeCatalog(
             tested_by=("thermal-cycling",),
         ),
         FailureMode(
+            id="window fracture under a pressure differential",
+            description=(
+                "a sealing window cracking from the tension on the face a pressure "
+                "differential bows convex, in the direction nobody screened"
+            ),
+            applicability=Applicability(environments=("submerged", "thermal_cycling")),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. "
+                "(1959), simply supported circular plate"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "
