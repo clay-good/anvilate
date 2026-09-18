@@ -6,7 +6,7 @@
       kind, and whether it is declared intentionally redundant with a justification
 - [x] 1.2 Constraint archetypes for the common interfaces (planar face, pin in hole, slot,
       ball in vee, ball in cone, flat contact, bonded joint, flexure blade)
-- [ ] 1.3 Spec IR declaration, round-trip, and diff legibility
+- [x] 1.3 Spec IR declaration, round-trip, and diff legibility
 
 ## 2. Counting
 

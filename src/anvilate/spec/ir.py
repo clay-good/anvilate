@@ -48,11 +48,13 @@ from ..tolerance import (
     resolve_class,
     tolerance_is_achievable,
 )
+from ..topology import Constraint, Frame, IntendedFreedom, tally
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
 
 __all__ = [
     "DesignSpec",
+    "ConstraintDeclaration",
     "Envelope",
     "MaterialRef",
     "ManufacturingProcess",
@@ -300,6 +302,26 @@ Interface = Annotated[
     StandardComponentInterface | ImportedInterface,
     Field(discriminator="type"),
 ]
+
+
+class ConstraintDeclaration(_Base):
+    """How the part is located: each interface constraining it, counted in a named frame.
+
+    Every constraint's ``feature`` is a tag the document already carries — an interface, a
+    toleranced dimension or a controlled feature — so a change in how a part is located
+    shows in the diff as a change to this list, not only as moved hole geometry.
+    """
+
+    frame: Frame
+    constraints: tuple[Constraint, ...] = Field(min_length=1)
+    intended: tuple[IntendedFreedom, ...] = ()
+
+    @model_validator(mode="after")
+    def _counts(self) -> ConstraintDeclaration:
+        # The tally's own refusals — an intended freedom a constraint removes anyway, one
+        # declared twice — belong at load, where the document is wrong, not at screening.
+        tally("the part", self.frame, self.constraints, intended=self.intended)
+        return self
 
 
 # --- Toleranced dimensions ---
@@ -724,12 +746,13 @@ class AcceptanceCriteria(_Base):
 # 1.10.0 a sub-budget as a
 # contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
 # the environment a part lives in with an interface's kind and mating material, and 1.13.0
-# the profile_supplied origin a bound profile's values carry. All additive, which is
+# the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
+# how the part is located. All additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.13.0"
+SCHEMA_VERSION = "1.14.0"
 
 
 class DesignSpec(_Base):
@@ -781,6 +804,10 @@ class DesignSpec(_Base):
     # a bound on one number — it carries its own contributors, their sources and the rule
     # they combine under, and the screen evaluates it against the card the other checks made.
     budgets: tuple[Budget, ...] = ()
+    # How the part is located, counted before any stress on it is trusted: an
+    # over-constrained load path is indeterminate, and every element check the part's own
+    # screen runs then says so. Optional: a document that says nothing is not counted.
+    constraint_topology: ConstraintDeclaration | None = None
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
 
@@ -798,6 +825,23 @@ class DesignSpec(_Base):
         serialiser emits: a mapping that does not parse stays a mapping.
         """
         return rebuilt_quantities(value)
+
+    @model_validator(mode="after")
+    def _a_constraint_acts_at_a_declared_feature(self) -> DesignSpec:
+        if self.constraint_topology is None:
+            return self
+        tags = {
+            *(interface.tag for interface in self.interfaces),
+            *(dimension.tag for dimension in self.dimensions),
+            *(tolerance.feature for tolerance in self.geometric_tolerances),
+        }
+        for constraint in self.constraint_topology.constraints:
+            if constraint.feature not in tags:
+                raise ValueError(
+                    f"constraint_topology names the feature '{constraint.feature}', which this "
+                    f"document does not tag; its tags are {sorted(tags) or 'none'}"
+                )
+        return self
 
     @model_validator(mode="after")
     def _an_element_is_a_tag_and_its_fields(self) -> DesignSpec:

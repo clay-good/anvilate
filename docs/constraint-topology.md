@@ -55,10 +55,31 @@ Each freedom comes out in one of five states:
 [`examples/over_constrained_mount.py`](../examples/over_constrained_mount.py) runs the same
 plate with two round dowels and then with one dowel moved into a slot, side by side.
 
+## In a Design Spec
+
+A document declares how its part is located under `constraint_topology`, each constraint
+acting at a feature the document already tags:
+
+```yaml
+constraint_topology:
+  frame: {name: plate frame, x: along the dowel line, y: across it, z: the plate normal}
+  constraints:
+    - {feature: mounting_face, kind: planar_face, removes: [tz, rx, ry]}
+    - {feature: dowel_a, kind: pin_in_hole, removes: [tx, ty]}
+    - {feature: dowel_b, kind: slot, removes: [rz]}
+  intended: []
+```
+
+`screen_spec` adds one `constraint topology` entry, and when the count says the load path is
+indeterminate, every element check that ran carries the qualifier in its own line. Moving
+location duty from one feature to another shows in the spec diff as a change to this list. A
+constraint at an untagged feature, or an intended freedom that a constraint removes, is
+refused when the document is read.
+
 ## Status
 
-This is the constraint type, its archetypes, the per-freedom tally and the indeterminacy
-qualifier (`openspec/changes/add-constraint-topology`, groups 1.1, 1.2, 2, 3.1, 3.3, 4 and 5).
-Two pieces are still to come. The Design Spec cannot declare constraints yet (1.3), and the
-qualifier is applied by the caller rather than carried automatically along declared
-consumption into downstream screens (3.2).
+This is the constraint type, its archetypes, the per-freedom tally, the indeterminacy
+qualifier and the Design Spec declaration (`openspec/changes/add-constraint-topology`, all but
+3.2). Screening a document qualifies every element check on an indeterminate part. What is
+not built is propagation through declared consumption (3.2): carrying the qualifier along a
+[dependency chain](check-dependencies.md) to checks outside the part's own screen.

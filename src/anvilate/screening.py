@@ -81,6 +81,7 @@ from .standards.materials import (
 )
 from .tolerance.general import ToleranceClass, ToleranceRangeError, resolve_class
 from .tolerance.process import tolerance_is_achievable
+from .topology import ConstraintTally, tally
 from .units import Quantity, spoken
 
 __all__ = [
@@ -462,6 +463,28 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         None if band is None else band.value,
     )
     return [_attributed(entry, stated, band) for entry in entries]
+
+
+def _topology(spec: DesignSpec) -> ConstraintTally:
+    declared = spec.constraint_topology
+    assert declared is not None
+    return tally(spec.name, declared.frame, declared.constraints, intended=declared.intended)
+
+
+def _on_the_declared_load_path(
+    spec: DesignSpec, entries: list[ScorecardEntry]
+) -> list[ScorecardEntry]:
+    """The element's checks, each carrying the indeterminacy when the part is over-constrained.
+
+    Every strength and deflection check the element's screen runs rests on how the part is
+    held. When the document's own constraint count says that load division is indeterminate,
+    a clean number with a citation would be the confident answer this library refuses to
+    give, so each check that ran says what it rests on.
+    """
+    if spec.constraint_topology is None:
+        return entries
+    counted = _topology(spec)
+    return [counted.qualify(entry) for entry in entries]
 
 
 def _attributed(
@@ -1607,7 +1630,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
             )
         )
     if ValidationTier.T1_ANALYTICAL in tiers:
-        entries.extend(_element_entries(spec))
+        entries.extend(_on_the_declared_load_path(spec, _element_entries(spec)))
     elif spec.element_type is not None:
         # An element is a declaration the *document* makes, like a reference or a chain, and
         # the note below says what this library does with those. Before the tag existed this
@@ -1668,6 +1691,8 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     # tiers it names.
     entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_constraint_entries(spec))
+    if spec.constraint_topology is not None:
+        entries.append(_topology(spec).entry())
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:

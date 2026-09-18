@@ -239,3 +239,107 @@ def test_every_kind_counts_and_every_mechanism_rules_on_load_division() -> None:
         RedundancyMechanism.MACHINED_AT_ASSEMBLY: False,
     }
     assert str(IntendedFreedom(freedom=F.RZ, purpose="alignment")) == "rz: alignment"
+
+
+_PLATE_DOCUMENT = """
+anvilate_spec: "1.14.0"
+name: sensor_plate
+description: A sensor plate clamped to a machined face and located by two dowels.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+interfaces:
+  - {type: standard_component, ref: ISO2338-6, tag: dowel_a}
+  - {type: standard_component, ref: ISO2338-6, tag: dowel_b}
+  - {type: standard_component, ref: ISO4014-M12, tag: clamp_bolts}
+dimensions:
+  - tag: mounting_face
+    nominal: {magnitude: 10.0, unit: mm}
+    tolerance: {type: symmetric, plus_minus: {magnitude: 0.1, unit: mm}}
+element_type: bolted_connection
+element_params:
+  name: clamp
+  bolt_diameter: {magnitude: 12.0, unit: mm}
+  plate_thickness: {magnitude: 10.0, unit: mm}
+  load: {magnitude: 8.0, unit: kN}
+  bolt_material: AISI-1045-CD
+  plate_material: ASTM-A36
+constraint_topology:
+  frame: {name: plate frame, x: along the dowel line, y: across it, z: the plate normal}
+  constraints:
+    - {feature: mounting_face, kind: planar_face, removes: [tz, rx, ry]}
+    - {feature: dowel_a, kind: pin_in_hole, removes: [tx, ty]}
+    - {feature: dowel_b, kind: pin_in_hole, removes: [tx, rz]}
+"""
+_SLOTTED = _PLATE_DOCUMENT.replace(
+    "{feature: dowel_b, kind: pin_in_hole, removes: [tx, rz]}",
+    "{feature: dowel_b, kind: slot, removes: [rz]}",
+)
+
+
+def _spec(document: str):  # type: ignore[no-untyped-def]
+    from anvilate.spec import load_spec_yaml
+
+    return load_spec_yaml(document)
+
+
+def test_a_documents_constraint_declaration_round_trips_unchanged() -> None:
+    from anvilate.spec.validate import dump_spec_yaml
+
+    spec = _spec(_PLATE_DOCUMENT)
+    assert spec.constraint_topology is not None
+    assert [c.feature for c in spec.constraint_topology.constraints] == [
+        "mounting_face",
+        "dowel_a",
+        "dowel_b",
+    ]
+    assert _spec(dump_spec_yaml(spec)) == spec
+    # Moving location duty from a round dowel to a slot is a change to the declaration
+    # itself, and the dump says so line by line rather than burying it in hole geometry.
+    before = dump_spec_yaml(spec).splitlines()
+    after = dump_spec_yaml(_spec(_SLOTTED)).splitlines()
+    changed = [line for line in after if line not in before]
+    assert changed and all("slot" in line or "rz" in line for line in changed), changed
+
+
+def test_a_screened_document_counts_its_constraints_and_qualifies_its_element_checks() -> None:
+    from anvilate.screening import screen_spec
+
+    card = screen_spec(_spec(_PLATE_DOCUMENT))
+    by_name = {entry.name: entry for entry in card.entries}
+    topology = by_name["constraint topology: sensor_plate"]
+    assert topology.status is CheckStatus.FAIL
+    assert "dowel_a" in topology.detail and "dowel_b" in topology.detail
+    element = [e for e in card.entries if e.name.startswith("clamp ") and e.evaluated]
+    assert element, sorted(by_name)
+    for entry in element:
+        assert "on an indeterminate load path" in entry.detail, entry.detail
+    # The declaration's own lines are not strength checks, and are not qualified.
+    assert "indeterminate" not in by_name["material resolution"].detail
+
+
+def test_resolving_the_redundancy_clears_every_qualifier_on_the_card() -> None:
+    from anvilate.screening import screen_spec
+
+    card = screen_spec(_spec(_SLOTTED))
+    by_name = {entry.name: entry for entry in card.entries}
+    assert by_name["constraint topology: sensor_plate"].status is CheckStatus.PASS
+    assert not any("indeterminate" in entry.detail for entry in card.entries)
+
+
+def test_a_constraint_at_a_feature_the_document_does_not_tag_is_refused() -> None:
+    from anvilate.spec.validate import SpecValidationError
+
+    with pytest.raises(SpecValidationError, match="'dowel_c', which this document does not tag"):
+        _spec(_PLATE_DOCUMENT.replace("feature: dowel_b", "feature: dowel_c"))
+
+
+def test_a_declaration_the_tally_refuses_is_refused_when_the_document_is_read() -> None:
+    from anvilate.spec.validate import SpecValidationError
+
+    with pytest.raises(SpecValidationError, match="the declaration and the constraints disagree"):
+        _spec(
+            _PLATE_DOCUMENT + "  intended:\n    - {freedom: rz, purpose: rotation for alignment}\n"
+        )

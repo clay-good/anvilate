@@ -135,6 +135,7 @@ spec.ChainAnalysis
 spec.ChainLink
 spec.CircularLocator
 spec.Constraints
+spec.ConstraintDeclaration
 spec.DesignSpec
 spec.DimensionChain
 spec.Envelope
@@ -170,6 +171,7 @@ spec.ir.AcceptanceCriteria
 spec.ir.ChainAnalysis
 spec.ir.ChainLink
 spec.ir.CircularLocator
+spec.ir.ConstraintDeclaration
 spec.ir.Constraints
 spec.ir.DesignSpec
 spec.ir.DimensionChain

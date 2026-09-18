@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.14.0: how the part is located
+
+`constraint_topology` declares a named frame, the constraints locating the part — each with
+the feature it acts at (a tag the document already carries), its kind, the freedoms it
+removes and any declared redundancy — and the freedoms kept on purpose. Screening counts
+them; see [constraint topology](constraint-topology.md). A constraint at a feature the
+document does not tag is refused naming it. Evidence Bundle 1.15.0 and CLI output 1.42.0
+carry the same document.
+
 ### Evidence Bundle 1.14.0: the order a dependency chain ran in
 
 The exported document gains `evaluationOrder`, absent unless the checks ran as a
