@@ -25,6 +25,9 @@
 ## 3. Output adaptation
 
 - [ ] 3.1 TTY detection, `NO_COLOR`, dumb terminals, width awareness, ASCII fallback
+      — the ASCII fallback and dumb terminals are done: a stream that cannot encode the
+      output gets ASCII spellings (text) or `\u` escapes (JSON) instead of exit 5, and the
+      CLI emits no colour, so `NO_COLOR` has nothing to turn off. Width awareness remains
 - [x] 3.2 Machine-readable output on every command with a stable, versioned schema
       — `cli-output` 1.3.0 covers every completed-result path plus parser, bad-input,
       and unbuilt refusals while preserving their exit codes and stderr diagnostics

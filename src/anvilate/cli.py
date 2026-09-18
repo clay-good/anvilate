@@ -60,6 +60,7 @@ that genuinely wants "nothing failed" say so, deliberately, in one place.
 from __future__ import annotations
 
 import argparse
+import codecs
 import contextlib
 import io
 import json
@@ -2825,8 +2826,85 @@ def _worst_status(cards):
     return max((card.status for card in cards), key=_BLOCKING_ORDER.index)
 
 
+# What a character this library prints becomes on a stream that cannot encode it — a dumb
+# terminal, `LANG=C`, a CI log opened as ASCII. Spellings a reader understands, not `?`: a
+# clause sign read as "Sec." still sends them to the clause.
+_ASCII_SPELLINGS = {
+    "§": "Sec.",
+    "→": "->",
+    "←": "<-",
+    "≤": "<=",
+    "≥": ">=",
+    "≠": "!=",
+    "±": "+/-",
+    "×": "x",
+    "·": "*",
+    "−": "-",
+    "–": "-",
+    "—": "--",
+    "µ": "u",
+    "μ": "u",
+    "°": " deg",
+    "²": "^2",
+    "³": "^3",
+    "√": "sqrt",
+    "π": "pi",
+    "Δ": "delta ",
+    "…": "...",
+    "‘": "'",
+    "’": "'",
+    "“": '"',
+    "”": '"',
+}
+
+
+def _ascii_spelling(error: UnicodeError) -> tuple[str, int]:
+    """Transliterate what the stream cannot encode, falling back to `?` for the rest."""
+    assert isinstance(error, UnicodeEncodeError)
+    text = error.object[error.start : error.end]
+    return "".join(_ASCII_SPELLINGS.get(char, "?") for char in text), error.end
+
+
+def _json_escape(error: UnicodeError) -> tuple[str, int]:
+    """Escape what the stream cannot encode as JSON does, so the document is unchanged."""
+    assert isinstance(error, UnicodeEncodeError)
+    text = error.object[error.start : error.end]
+    escaped = "".join(
+        f"\\u{ord(char):04x}"
+        if ord(char) < 0x10000
+        else "".join(f"\\u{unit:04x}" for unit in _surrogates(ord(char)))
+        for char in text
+    )
+    return escaped, error.end
+
+
+def _surrogates(code: int) -> tuple[int, int]:
+    code -= 0x10000
+    return 0xD800 + (code >> 10), 0xDC00 + (code & 0x3FF)
+
+
+codecs.register_error("anvilate-ascii", _ascii_spelling)
+codecs.register_error("anvilate-json", _json_escape)
+
+
+def _degrade_gracefully(json_requested: bool) -> None:
+    """Keep the real streams writable when they cannot encode what the library prints.
+
+    Only characters the stream cannot encode are touched: a UTF-8 terminal sees exactly what
+    it always did. JSON gets `\\u` escapes, which leave the document it describes unchanged;
+    text gets ASCII spellings a reader can follow.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            handler = (
+                "anvilate-json" if json_requested and stream is sys.stdout else "anvilate-ascii"
+            )
+            stream.reconfigure(errors=handler)
+
+
 def main() -> None:
     """The ``anvilate`` console script."""
+    _degrade_gracefully(_wants_json(sys.argv[1:]))
     raise SystemExit(run())
 
 

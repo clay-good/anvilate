@@ -521,6 +521,15 @@ is 3 now. `--help` still exits 0, because asking for help is not a failure.
 The mapping is a total map over the four scorecard statuses, so a fifth status is a
 decision somebody has to make rather than a silent zero.
 
+### On a terminal that cannot print Unicode
+
+The text output carries clause signs, arrows, inequality signs and µ. On a stream that cannot
+encode them — a dumb terminal, `LANG=C`, a CI log opened as ASCII — `anvilate` used to stop
+with exit 5 and print nothing. Now each character the stream cannot take is spelled in ASCII
+a reader can follow (`§` as `Sec.`, `→` as `->`, `≤` as `<=`, `µ` as `u`), and `?` stands in
+for the rest. JSON is written with `\u` escapes, so on any stream it decodes to the same
+document. A UTF-8 terminal sees exactly what it always did.
+
 ## `anvilate export`
 
 ```bash

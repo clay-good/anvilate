@@ -17,6 +17,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -4497,3 +4498,37 @@ def test_check_json_carries_the_failure_mode_coverage(tmp_path):
     assert mode["stage"] == "qualification"
     assert mode["citation"].startswith("Junker")
     assert len(modes["caveats"]) == 2
+
+
+def _console(arguments: list[str], encoding: str) -> subprocess.CompletedProcess[bytes]:
+    """The installed console script's own entry point, on a stream of ``encoding``."""
+    source = str(Path(__file__).resolve().parents[1] / "src")
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.argv = ['anvilate', *{arguments!r}]; "
+            "from anvilate.cli import main; main()",
+        ],
+        capture_output=True,
+        env={**os.environ, "PYTHONPATH": source, "PYTHONIOENCODING": encoding},
+        timeout=300,
+    )
+
+
+def test_an_ascii_only_terminal_gets_a_readable_card_not_an_internal_error() -> None:
+    """A dumb terminal or `LANG=C` log crashed `check` with exit 5 and printed nothing."""
+    spec = str(Path(__file__).resolve().parents[1] / "examples" / "padeye.spec.yaml")
+    result = _console(["check", spec], "ascii")
+    assert result.returncode == 0, result.stderr
+    text = result.stdout.decode("ascii")
+    assert "ASME BTH-1 Sec.3-3" in text
+
+
+def test_an_ascii_only_stream_gets_json_that_decodes_to_the_same_document() -> None:
+    spec = str(Path(__file__).resolve().parents[1] / "examples" / "padeye.spec.yaml")
+    ascii_run = _console(["check", "--format", "json", spec], "ascii")
+    utf8_run = _console(["check", "--format", "json", spec], "utf-8")
+    assert ascii_run.returncode == utf8_run.returncode == 0
+    ascii_run.stdout.decode("ascii")  # nothing unencodable reached the stream
+    assert json.loads(ascii_run.stdout) == json.loads(utf8_run.stdout)
