@@ -39,7 +39,7 @@
       basis stated; Q or damping required, never defaulted
 - [x] 3.3 Random-vibration 3σ equivalent from a declared PSD and fundamental frequency
 - [x] 3.4 Retention preload required to hold an element against declared acceleration
-- [ ] 3.5 Mount-compliance to element tilt and decenter to angular line-of-sight shift
+- [x] 3.5 Mount-compliance to element tilt and decenter to angular line-of-sight shift
 
 ## 4. Optical-interface screens
 

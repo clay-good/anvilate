@@ -273,3 +273,30 @@ def test_an_unstated_fill_is_not_a_dry_purge() -> None:
             fill_temperature=q("298.15 K"),
             fill_relative_humidity=50.0,
         )
+
+
+def test_a_mount_decenter_becomes_a_line_of_sight_shift() -> None:
+    from anvilate.analysis.optomechanics import decenter_line_of_sight, mount_decenter
+
+    # 50 g at 10 g on 5 N/µm: 0.05 · 10 · 9.80665 / 5e6 m, by hand.
+    decenter = mount_decenter(mass=q("50 g"), acceleration=10.0, radial_stiffness=q("5e6 N/m"))
+    assert decenter.to("µm").magnitude == pytest.approx(0.05 * 10 * 9.80665 / 5e6 * 1e6)
+    shift = decenter_line_of_sight(decenter=decenter, focal_length=q("100 mm"))
+    assert shift.to("µrad").magnitude == pytest.approx(decenter.to("m").magnitude / 0.1 * 1e6)
+    # A longer lens forgives the same decenter.
+    longer = decenter_line_of_sight(decenter=decenter, focal_length=q("400 mm"))
+    assert longer.to("µrad").magnitude == pytest.approx(shift.to("µrad").magnitude / 4)
+
+
+def test_a_mirror_doubles_its_tilt_and_refuses_a_strain_for_an_angle() -> None:
+    from math import pi
+
+    from anvilate.analysis.optomechanics import mirror_tilt_line_of_sight
+
+    ten_arcsec = mirror_tilt_line_of_sight(tilt=Quantity(magnitude=10, unit="arcsec"))
+    assert ten_arcsec.to("µrad").magnitude == pytest.approx(2 * 10 / 3600 * pi / 180 * 1e6)
+    fifty = mirror_tilt_line_of_sight(tilt=Quantity(magnitude=50, unit="µrad"))
+    assert fifty.to("µrad").magnitude == pytest.approx(100.0)
+    for not_an_angle in ("mm/m", "mm", "dimensionless"):
+        with pytest.raises(ValueError, match="must be an angle"):
+            mirror_tilt_line_of_sight(tilt=Quantity(magnitude=1, unit=not_an_angle))

@@ -37,6 +37,9 @@ __all__ = [
     "marechal_strehl_ratio",
     "wavefront_budget_scorecard",
     "internal_condensation_scorecard",
+    "mount_decenter",
+    "decenter_line_of_sight",
+    "mirror_tilt_line_of_sight",
 ]
 
 _ALDUCHOV = (
@@ -466,6 +469,87 @@ def internal_condensation_scorecard(
             ),
         ),
     )
+
+
+def mount_decenter(*, mass: Quantity, acceleration: float, radial_stiffness: Quantity) -> Quantity:
+    """How far an element moves sideways in its mount under a lateral acceleration, m·a·g₀/k.
+
+    The mount's ``radial_stiffness`` k resists the inertial load of the element's ``mass``
+    under an ``acceleration`` in g (Yoder, Opto-Mechanical Systems Design): a quasi-static
+    decenter, the input to :func:`decenter_line_of_sight`. A resonant input amplifies it —
+    scale the acceleration by the mount's response first (:func:`miles_random_vibration_grms`).
+    Returned in micrometres.
+    """
+    _check(mass, "[mass]", "mass")
+    _check(radial_stiffness, "[force] / [length]", "radial_stiffness")
+    m = mass.to("kg").magnitude
+    a = require_finite(acceleration, name="acceleration")
+    k = radial_stiffness.to("N/m").magnitude
+    if m <= 0:
+        raise ValueError(f"mass must be positive; got {mass}")
+    if k <= 0:
+        raise ValueError(f"radial_stiffness must be positive; got {radial_stiffness}")
+    return Quantity(magnitude=m * a * _STANDARD_GRAVITY / k * 1e6, unit="µm")
+
+
+def decenter_line_of_sight(*, decenter: Quantity, focal_length: Quantity) -> Quantity:
+    """The line-of-sight shift a lens decenter causes, θ = Δ/f.
+
+    A lens of ``focal_length`` f imaging a distant object moves its image sideways by as much
+    as the lens moves, so a ``decenter`` Δ turns the line of sight through Δ/f (Yoder,
+    Opto-Mechanical Systems Design). A long focal length forgives a decenter that a short one
+    does not. Returned in microradians.
+    """
+    _check(decenter, "[length]", "decenter")
+    _check(focal_length, "[length]", "focal_length")
+    f = focal_length.to("m").magnitude
+    if f <= 0:
+        raise ValueError(f"focal_length must be positive; got {focal_length}")
+    return Quantity(magnitude=decenter.to("m").magnitude / f * 1e6, unit="µrad")
+
+
+def mirror_tilt_line_of_sight(*, tilt: Quantity) -> Quantity:
+    """The line-of-sight shift a mirror tilt causes: twice the tilt.
+
+    By the law of reflection (Hecht, Optics) a mirror turned through an angle turns the
+    reflected ray through twice it, which is why a fold mirror's mount is held to half the
+    pointing error of a lens's. ``tilt`` is an angle quantity in rad, mrad, µrad, deg, arcmin or
+    arcsec; any other unit is refused, because a strain in mm/m would otherwise convert to
+    radians without complaint. Returned in microradians.
+    """
+    return Quantity(magnitude=2.0 * _radians(tilt, "tilt") * 1e6, unit="µrad")
+
+
+# The unit layer counts an angle as dimensionless, so a strain in mm/m would convert to
+# radians without complaint. An angle is accepted only in a unit that is one.
+_ANGLE_UNITS = frozenset(
+    {
+        "rad",
+        "radian",
+        "mrad",
+        "milliradian",
+        "µrad",
+        "urad",
+        "microradian",
+        "deg",
+        "degree",
+        "arcmin",
+        "arcminute",
+        "arcsec",
+        "arcsecond",
+    }
+)
+
+
+def _radians(value: Quantity, name: str) -> float:
+    if not isinstance(value, Quantity):
+        raise ValueError(f"{name} must be an angle quantity; got {value!r}")
+    if str(value.unit).strip() not in _ANGLE_UNITS:
+        raise ValueError(
+            f"{name} must be an angle — rad, mrad, µrad, deg, arcmin or arcsec; got {value}"
+        )
+    require_finite(value, name=name)
+    return value.to("rad").magnitude
 
 
 _STANDARD_GRAVITY = 9.80665  # m/s², the conventional g₀ of the CGPM (1901)

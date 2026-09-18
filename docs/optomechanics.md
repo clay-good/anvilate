@@ -17,6 +17,9 @@ tracer.
 | `stress_birefringence_retardance(stress_optic_coefficient, stress, path_length)` | The retardance stress puts into glass, K·σ·t, in nanometres. N-BK7's 2.77×10⁻⁶ mm²/N at 1 MPa over 10 mm is 27.7 nm. |
 | `marechal_strehl_ratio(rms_wavefront_error, wavelength)` | The Maréchal approximation S ≈ exp(−(2πσ/λ)²). λ/14 gives S ≈ 0.8, the diffraction limit. |
 | `internal_condensation_scorecard(name, coldest_surface_temperature, internal_dew_point or fill_temperature and fill_relative_humidity)` | Whether a sealed housing fogs at its cold soak: the internal dew point against the coldest internal surface. The dew point is the declared purge specification, or the one a fill condition implies through the Magnus relations — a fill at 25 °C and 50% relative humidity condenses below 13.9 °C. With neither declared the screen is not evaluated: an unstated purge is not a dry one. |
+| `mount_decenter(mass, acceleration, radial_stiffness)` | How far an element moves sideways in its mount under a lateral acceleration in g: m·a·g₀/k. A 50 g lens at 10 g on a 5 N/µm mount moves 0.98 µm. |
+| `decenter_line_of_sight(decenter, focal_length)` | The line-of-sight shift a lens decenter causes, Δ/f: that 0.98 µm behind a 100 mm lens is 9.8 µrad. |
+| `mirror_tilt_line_of_sight(tilt)` | A mirror turned through an angle turns the beam through twice it. The tilt must be in an angle unit (rad, mrad, µrad, deg, arcmin, arcsec), because the unit layer would otherwise take a strain in mm/m for radians. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
 [`examples/lens_housing_athermal.py`](../examples/lens_housing_athermal.py) screens one f/4
@@ -53,7 +56,7 @@ take to optical design software; the screen says which one that is.
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
 screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 4.3, 4.4, 5.1 and this scope
+(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1 and this scope
 page). Not built yet: angular units, optical material records, preload change with
-temperature, the shock and mount-compliance screens, contact stress, the gland screen at temperature extremes, and
+temperature, the shock screen, contact stress, the gland screen at temperature extremes, and
 the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.

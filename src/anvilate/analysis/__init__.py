@@ -635,7 +635,8 @@ modules:
   them judged against the depth of focus; Miles' random-vibration G_rms = √(π/2·f_n·Q·ASD),
   the axial retention preload m·a, stress birefringence K·σ·t, and a root-sum-square
   wavefront budget judged by the Maréchal Strehl ratio exp(−(2πσ/λ)²), and a sealed
-  housing's internal dew point against its coldest surface at cold soak
+  housing's internal dew point against its coldest surface at cold soak; and the line of
+  sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, and a mirror's doubled tilt
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2475,10 +2476,13 @@ from .optics import (
 from .optomechanics import (
     athermal_defocus,
     athermal_focus_scorecard,
+    decenter_line_of_sight,
     depth_of_focus,
     internal_condensation_scorecard,
     marechal_strehl_ratio,
     miles_random_vibration_grms,
+    mirror_tilt_line_of_sight,
+    mount_decenter,
     retention_preload,
     stress_birefringence_retardance,
     thermal_focal_shift,
@@ -4630,6 +4634,9 @@ __all__ = [
     "marechal_strehl_ratio",
     "wavefront_budget_scorecard",
     "internal_condensation_scorecard",
+    "mount_decenter",
+    "decenter_line_of_sight",
+    "mirror_tilt_line_of_sight",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

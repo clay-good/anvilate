@@ -778,12 +778,15 @@ def test_the_front_door_takes_the_offset_temperatures_and_angles_it_writes():
     # A bare C is the coulomb and stays the coulomb: the degree sign is what disambiguates.
     assert Quantity.parse("20 C").has_dimension("[current] * [time]")
 
-    for text in ("30 degree", "0.5 rad", "12 arcminute"):
+    # The prefixed radians too: a line-of-sight error is written in µrad, and the parse
+    # used to refuse "50 µrad" as a bare number while printing it itself.
+    for text in ("30 degree", "0.5 rad", "12 arcminute", "1 mrad", "50 µrad", "3 nrad"):
         assert Quantity.parse(text).magnitude == float(text.split()[0])
+    assert Quantity.parse("50 µrad").to("rad").magnitude == pytest.approx(50e-6)
     assert Quantity.parse("30 degree").to("rad").magnitude == pytest.approx(0.5235987755982988)
 
     # And the guard the angle exception has to leave standing: a ratio states no unit.
-    for ratio in ("12 %", "3 dimensionless", "75"):
+    for ratio in ("12 %", "3 dimensionless", "75", "1 mm/m"):
         with pytest.raises(MissingUnitError):
             Quantity.parse(ratio)
     # As does the refusal that keeps a range from multiplying itself out.

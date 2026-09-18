@@ -39,7 +39,20 @@ _OFFSET_TEMPERATURE_UNITS = frozenset(
 # same empty dimensionality as a ratio, so `12 %` converts to radians perfectly happily
 # and only the unit itself says which of the two a value is.
 _ANGLE_UNITS = frozenset(
-    UREG.Unit(name) for name in ("radian", "degree", "arcminute", "arcsecond", "gradian", "turn")
+    UREG.Unit(name)
+    for name in (
+        "radian",
+        # Pointing and line-of-sight errors are written in the prefixed radians, and the
+        # library prints them; leaving them out refused "50 µrad" as a bare number.
+        "milliradian",
+        "microradian",
+        "nanoradian",
+        "degree",
+        "arcminute",
+        "arcsecond",
+        "gradian",
+        "turn",
+    )
 )
 
 
