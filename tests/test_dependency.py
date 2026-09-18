@@ -5,7 +5,17 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from anvilate.dependency import CheckNode, Consumes, DependencyGraph, Output, find_cycles
+from anvilate.dependency import (
+    ChainResult,
+    CheckNode,
+    Consumes,
+    DependencyGraph,
+    Output,
+    find_cycles,
+    run_chain,
+)
+from anvilate.scorecard import CheckStatus, ScorecardEntry
+from anvilate.units import Quantity
 
 
 def _node(
@@ -211,3 +221,170 @@ def test_the_rendering_shows_the_chain_in_order_with_what_each_check_reads() -> 
 def test_find_cycles_refuses_what_is_not_a_sequence_of_nodes(nodes) -> None:
     with pytest.raises(ValueError, match="nodes"):
         find_cycles(nodes)
+
+
+# --- running a chain ------------------------------------------------------------------
+
+
+def _ran(check: str, outputs: dict[str, Quantity] | None = None, **fields) -> ChainResult:
+    return ChainResult(
+        check=check,
+        entry=ScorecardEntry(
+            name=check, status=fields.pop("status", CheckStatus.PASS), detail="ran"
+        ),
+        outputs=outputs or {},
+        **fields,
+    )
+
+
+def _runner(values: dict[str, dict[str, Quantity]], blocked: set[str] = frozenset()):
+    """A `run_check` that hands back the declared outputs, recording what it was called with."""
+    seen: dict[str, dict[str, Quantity]] = {}
+
+    def run_check(check: str, inputs):
+        seen[check] = dict(inputs)
+        if check in blocked:
+            return ChainResult(
+                check=check,
+                entry=ScorecardEntry(
+                    name=check, status=CheckStatus.NOT_EVALUATED, detail="no material property"
+                ),
+            )
+        return _ran(check, values.get(check, {}))
+
+    return run_check, seen
+
+
+_CHAIN_VALUES = {
+    "heat": {"q": Quantity(magnitude=12.0, unit="W")},
+    "temperature": {"T_part": Quantity(magnitude=340.0, unit="K")},
+    "modulus": {"E_hot": Quantity(magnitude=180.0, unit="GPa")},
+    "modal": {"f_n": Quantity(magnitude=95.0, unit="Hz")},
+    "shock": {"peak_g": Quantity(magnitude=4.2, unit="")},
+}
+
+
+def test_a_chain_runs_in_dependency_order_and_feeds_each_check_its_inputs() -> None:
+    graph = _six_link_chain()
+    run_check, seen = _runner(_CHAIN_VALUES)
+    run = run_chain(graph, run_check)
+    assert run.order == graph.order()
+    assert [result.check for result in run.results] == list(graph.order())
+    assert run.card().status is CheckStatus.PASS
+    # Each check was handed exactly the parameters it declared, bound to upstream values.
+    assert seen["temperature"] == {"heat_in": Quantity(magnitude=12.0, unit="W")}
+    assert seen["modal"] == {"modulus": Quantity(magnitude=180.0, unit="GPa")}
+    assert seen["heat"] == {}
+
+
+def test_an_upstream_gap_makes_every_downstream_check_not_evaluated_naming_it() -> None:
+    graph = _six_link_chain()
+    run_check, seen = _runner(_CHAIN_VALUES, blocked={"temperature"})
+    run = run_chain(graph, run_check)
+    # The defect class: the chain does not compute a displacement from a modulus nobody
+    # produced. Nothing past the gap is even called.
+    assert set(seen) == {"heat", "temperature"}
+    statuses = {result.check: result.entry.status for result in run.results}
+    assert statuses["heat"] is CheckStatus.PASS
+    for downstream in ("modulus", "modal", "shock", "displacement"):
+        assert statuses[downstream] is CheckStatus.NOT_EVALUATED
+    # The immediate upstream is named, and so is the head of the broken chain.
+    assert "'temperature.T_part'" in run.result("modulus").entry.detail
+    far = run.result("displacement").entry.detail
+    assert "'shock.peak_g'" in far and "waiting on 'temperature'" in far
+    assert run.card().status is CheckStatus.NOT_EVALUATED
+
+
+def test_a_check_that_did_not_run_cannot_hand_a_value_downstream() -> None:
+    with pytest.raises(ValidationError, match="did not run produced no value"):
+        _ran(
+            "modal", {"f_n": Quantity(magnitude=95.0, unit="Hz")}, status=CheckStatus.NOT_EVALUATED
+        )
+
+
+def test_mutating_a_links_value_changes_every_downstream_input() -> None:
+    """The chain is wired, not merely declared: change a link and the change arrives."""
+    graph = _six_link_chain()
+    hotter = {**_CHAIN_VALUES, "temperature": {"T_part": Quantity(magnitude=420.0, unit="K")}}
+    _run_check, before = _runner(_CHAIN_VALUES)
+    run_chain(graph, _run_check)
+    _run_check, after = _runner(hotter)
+    run_chain(graph, _run_check)
+    assert before["modulus"]["temperature"].magnitude == 340.0
+    assert after["modulus"]["temperature"].magnitude == 420.0
+
+
+def test_a_downstream_result_inherits_the_conservatism_of_its_whole_chain() -> None:
+    from anvilate.margin import MarginAction, MarginEntry, MarginKind
+
+    def factor(check: str, value: float) -> MarginEntry:
+        return MarginEntry(
+            label=f"{check} allowance",
+            kind=MarginKind.CONTINGENCY,
+            value=value,
+            quantity="displacement",
+            action=MarginAction.RAISES_DEMAND,
+            origin=f"check {check}",
+            authority="company practice DP-104",
+        )
+
+    graph = _six_link_chain()
+
+    def run_check(check: str, inputs):
+        margins = ()
+        if check == "temperature":
+            margins = (factor("temperature", 1.2),)
+        elif check == "displacement":
+            margins = (factor("displacement", 1.1),)
+        elif check == "mass_like_sibling":  # pragma: no cover - not in this graph
+            margins = (factor(check, 2.0),)
+        return _ran(check, _CHAIN_VALUES.get(check, {}), margins=margins)
+
+    run = run_chain(graph, run_check)
+    inherited = run.inherited_margins("displacement")
+    assert [entry.label for entry in inherited] == [
+        "temperature allowance",
+        "displacement allowance",
+    ]
+    # An upstream factor is in force downstream; a downstream one is not in force upstream.
+    assert [e.label for e in run.inherited_margins("temperature")] == ["temperature allowance"]
+    assert run.inherited_margins("heat") == ()
+    from anvilate.margin import MarginLedger
+
+    stack = MarginLedger(entries=inherited).stack("displacement")
+    assert stack.cumulative == pytest.approx(1.2 * 1.1, rel=1e-12)
+
+
+def test_staleness_invalidates_the_whole_closure_never_the_first_hop() -> None:
+    run = run_chain(_six_link_chain(), _runner(_CHAIN_VALUES)[0])
+    assert run.stale_after("temperature") == (
+        "temperature",
+        "modulus",
+        "modal",
+        "shock",
+        "displacement",
+    )
+    assert run.stale_after("displacement") == ("displacement",)
+    with pytest.raises(ValueError, match="carries no check 'nobody'"):
+        run.stale_after("nobody")
+
+
+def test_a_mislabelled_result_is_refused_rather_than_recorded() -> None:
+    graph = DependencyGraph(nodes=(_node("a"), _node("b")))
+    with pytest.raises(ValueError, match="asked for 'a' and returned a result for 'b'"):
+        run_chain(graph, lambda _check, _inputs: _ran("b"))
+
+
+def test_upstream_of_is_the_mirror_of_downstream_of() -> None:
+    graph = _six_link_chain()
+    assert graph.upstream_of("displacement") == (
+        "heat",
+        "temperature",
+        "modulus",
+        "modal",
+        "shock",
+    )
+    assert graph.upstream_of("heat") == ()
+    for name in graph.order():
+        for other in graph.order():
+            assert (other in graph.upstream_of(name)) == (name in graph.downstream_of(other))

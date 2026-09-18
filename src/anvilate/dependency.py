@@ -24,11 +24,14 @@ before anything is evaluated along it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import ItemCollection, Named, StatableModel, each_one
+from ._models import EMPTY_MAP, FrozenMap, ItemCollection, Named, StatableModel, each_one
+from .margin import MarginEntry
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+from .units import Quantity
 
 __all__ = [
     "Output",
@@ -36,6 +39,9 @@ __all__ = [
     "CheckNode",
     "DependencyGraph",
     "find_cycles",
+    "ChainResult",
+    "ChainRun",
+    "run_chain",
 ]
 
 
@@ -188,6 +194,28 @@ class DependencyGraph(ItemCollection, StatableModel):
             reached |= frontier
         return tuple(name for name in self.order() if name in reached)
 
+    def upstream_of(self, check: str) -> tuple[str, ...]:
+        """Every check ``check`` reads from, directly or through others, in evaluation order.
+
+        The mirror of :meth:`downstream_of`, and the set whose conservatism a downstream
+        result inherits: a factor applied to a temperature is still in force on the
+        displacement computed from it.
+        """
+        by_id = {node.id: node for node in self.nodes}
+        if check not in by_id:
+            raise ValueError(f"this graph carries no check '{check}'")
+        reached: set[str] = set()
+        frontier = {check}
+        while frontier:
+            frontier = {
+                consumed.upstream
+                for name in frontier
+                for consumed in by_id[name].consumes
+                if consumed.upstream not in reached
+            }
+            reached |= frontier
+        return tuple(name for name in self.order() if name in reached)
+
     def __str__(self) -> str:
         if not self.nodes:
             return "dependency graph: no checks declared"
@@ -259,3 +287,154 @@ def find_cycles(nodes: Sequence[CheckNode]) -> tuple[tuple[str, ...], ...]:
         if name not in index:
             strongconnect(name)
     return tuple(found)
+
+
+class ChainResult(StatableModel):
+    """One check's contribution to a chain run: its entry, its outputs, and its margins.
+
+    ``outputs`` are the values downstream checks consume, keyed by the output name this node
+    declared. ``margins`` are the conservatism this check applied; every downstream result
+    inherits them, because a factor on a temperature is still in force on the displacement
+    computed from it and a cumulative factor that stopped at the last link would understate
+    the chain.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    check: Named
+    entry: ScorecardEntry
+    # `EMPTY_MAP`, not `dict`: a default_factory's value does not go through the
+    # annotation's validator, so the empty default was a writable dict on a frozen model.
+    outputs: FrozenMap[str, Quantity] = Field(default_factory=lambda: EMPTY_MAP)
+    margins: tuple[MarginEntry, ...] = ()
+
+    @model_validator(mode="after")
+    def _a_result(self) -> ChainResult:
+        if self.outputs and not self.entry.evaluated:
+            raise ValueError(
+                f"check '{self.check}' is {self.entry.status.value} and hands "
+                f"{sorted(self.outputs)} downstream; a check that did not run produced no "
+                "value, and passing one on is how a number nobody computed reaches a verdict"
+            )
+        return self
+
+
+class ChainRun(StatableModel):
+    """A whole chain evaluated: the realized order, each result, and what each inherited."""
+
+    model_config = ConfigDict(frozen=True)
+
+    graph: DependencyGraph
+    results: tuple[ChainResult, ...]
+
+    @property
+    def order(self) -> tuple[str, ...]:
+        """The order the checks actually ran in — recorded, not recomputed by a reader."""
+        return tuple(result.check for result in self.results)
+
+    def card(self) -> Scorecard:
+        """The entries as a scorecard, in the realized evaluation order."""
+        return Scorecard(entries=tuple(result.entry for result in self.results))
+
+    def result(self, check: str) -> ChainResult:
+        for result in self.results:
+            if result.check == check:
+                return result
+        raise ValueError(f"this run carries no check '{check}'")
+
+    def inherited_margins(self, check: str) -> tuple[MarginEntry, ...]:
+        """Every margin in force on ``check``: its own and every upstream one, upstream first.
+
+        Read off the graph rather than off position in the run: a check that happened to run
+        earlier is not upstream of this one, and inheriting its conservatism would attribute
+        a factor to a chain it is not in.
+        """
+        self.result(check)  # refuses an unknown check by name
+        in_force = (*self.graph.upstream_of(check), check)
+        return tuple(margin for name in in_force for margin in self.result(name).margins)
+
+    def stale_after(self, changed: str) -> tuple[str, ...]:
+        """What a change to ``changed`` invalidates: itself and its transitive consumers.
+
+        The whole closure, never the first hop: recomputing the immediate consumer and
+        leaving its consumers on the old value is a card mixing two evaluations of one
+        chain, which reads as current and is not.
+        """
+        return (changed, *self.graph.downstream_of(changed))
+
+    def __str__(self) -> str:
+        lines = [f"chain of {len(self.results)} checks, in evaluation order"]
+        lines += [f"  {result.entry.status.value:<14} {result.check}" for result in self.results]
+        return "\n".join(lines)
+
+
+def run_chain(
+    graph: DependencyGraph,
+    run_check: Callable[[str, Mapping[str, Quantity]], ChainResult],
+) -> ChainRun:
+    """Evaluate every check in dependency order, feeding each the inputs it declared.
+
+    ``run_check`` is called with a check id and the mapping of its declared parameters to
+    the upstream values they were bound to, and returns that check's :class:`ChainResult`.
+    It is only called for a check whose inputs are all present.
+
+    **A check downstream of one that did not run is NOT_EVALUATED, naming what it waited
+    on, and is never called.** That is the whole point of ordering the chain: a screen given
+    a default in place of a missing upstream value would compute a verdict from a number
+    nobody produced, which is the silent green this library exists to refuse. The refusal
+    names the immediate upstream and the check at the head of the chain, so a reader is sent
+    to the one thing to fix rather than to the last link that broke.
+    """
+    by_id = {node.id: node for node in graph.nodes}
+    results: list[ChainResult] = []
+    produced: dict[str, dict[str, Quantity]] = {}
+    blocked: dict[str, str] = {}  # check -> the check at the head of its broken chain
+    for name in graph.order():
+        node = by_id[name]
+        upstream_gap = next(
+            (
+                consumed
+                for consumed in node.consumes
+                if consumed.upstream in blocked
+                or consumed.output not in produced.get(consumed.upstream, {})
+            ),
+            None,
+        )
+        if upstream_gap is not None:
+            head = blocked.get(upstream_gap.upstream, upstream_gap.upstream)
+            blocked[name] = head
+            through = (
+                "" if head == upstream_gap.upstream else f", which is waiting on '{head}' in turn"
+            )
+            results.append(
+                ChainResult(
+                    check=name,
+                    entry=ScorecardEntry(
+                        name=name,
+                        status=CheckStatus.NOT_EVALUATED,
+                        detail=(
+                            f"this check takes '{upstream_gap.parameter}' from "
+                            f"'{upstream_gap.upstream}.{upstream_gap.output}', which was not "
+                            f"produced{through}. A value nobody computed is not a value to "
+                            "screen against"
+                        ),
+                    ),
+                )
+            )
+            continue
+        inputs = {
+            consumed.parameter: produced[consumed.upstream][consumed.output]
+            for consumed in node.consumes
+        }
+        result = run_check(name, inputs)
+        if result.check != name:
+            raise ValueError(
+                f"run_check was asked for '{name}' and returned a result for "
+                f"'{result.check}'; a chain assembled from mislabelled results would record "
+                "an order it did not run in"
+            )
+        if not result.entry.evaluated:
+            blocked[name] = name
+        produced[name] = dict(result.outputs)
+        results.append(result)
+    return ChainRun(graph=graph, results=tuple(results))

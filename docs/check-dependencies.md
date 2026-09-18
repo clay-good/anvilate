@@ -34,10 +34,34 @@ print(graph)                 # the chain, with what each check reads
 | One parameter, one source | A parameter fed from two upstream outputs is refused: which one wins is a question, not a default. |
 | A check is not upstream of itself | Refused at the node, before the graph is assembled. |
 
+## Running a chain
+
+`run_chain(graph, run_check)` evaluates the checks in dependency order, calling `run_check`
+with each check's declared parameters already bound to the upstream values:
+
+```python
+from anvilate.dependency import run_chain
+
+run = run_chain(graph, run_check)
+run.order                          # the realized order, recorded rather than recomputed
+run.card()                         # the entries as a scorecard, in that order
+run.inherited_margins("shock")     # its own conservatism and every upstream check's
+run.stale_after("modal")           # what a change to modal invalidates: the whole closure
+```
+
+| Rule | What it means |
+| --- | --- |
+| A gap propagates, and the blocked check is never called | A check downstream of one that did not run is `not_evaluated`, naming the upstream output it takes and the check at the head of the broken chain. It is not handed a default: a verdict computed from a value nobody produced is the silent green this library exists to refuse. |
+| A check that did not run hands nothing on | A `ChainResult` carrying outputs with an unevaluated entry is refused at construction. |
+| Conservatism is inherited | A downstream result's margins are its own plus every upstream check's, read off the graph — a factor on a temperature is still in force on the displacement computed from it. A check that merely ran earlier is not upstream and its factors are not inherited. |
+| Staleness is the whole closure | `stale_after` returns the changed check and every transitive consumer. Recomputing the first hop and leaving the rest on the old value is a card mixing two evaluations of one chain. |
+| The run records the order it ran in | `order` is read off the results, not recomputed by a reader who might order them differently. |
+
 ## Status
 
-This is the graph's contract and its ordering (`openspec/changes/add-check-dependency-graph`,
-groups 1.1, 1.2 and 2.1, 2.2). No screen declares its consumptions yet, so nothing is
-evaluated along a graph today: propagation of a not-evaluated verdict downstream, staleness
-invalidating the transitive closure, the realized order recorded in the evidence bundle, and
-the CI gate on undeclared consumption are the remaining groups of that change.
+This is the graph, its ordering and the chain runner
+(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2.1, 2.2, 3.1, 3.2 and 3.3).
+No screen in the library declares its consumptions yet, so nothing in `screen_spec` runs
+along a graph today: wiring the screens, recording the realized order in the evidence bundle,
+rendering the chain in a derivation, and the CI gate on undeclared consumption are what
+remain.

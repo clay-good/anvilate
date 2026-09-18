@@ -15,20 +15,20 @@
 
 ## 3. Propagation
 
-- [ ] 3.1 Not-evaluated propagates downstream naming the upstream check
-- [ ] 3.2 Staleness invalidates the transitive closure, never a partial one
-- [ ] 3.3 Margin-ledger entries inherit down the chain into the cumulative factor
+- [x] 3.1 Not-evaluated propagates downstream naming the upstream check
+- [x] 3.2 Staleness invalidates the transitive closure, never a partial one
+- [x] 3.3 Margin-ledger entries inherit down the chain into the cumulative factor
 - [ ] 3.4 Derivation rendering shows the chain, not only the final substitution
 
 ## 4. Tests
 
 - [x] 4.1 A six-link chain evaluates in dependency order regardless of declaration order
-- [ ] 4.2 An upstream not-evaluated makes every downstream check not-evaluated — the
+- [x] 4.2 An upstream not-evaluated makes every downstream check not-evaluated — the
       defect class this capability exists to catch
-- [ ] 4.3 Changing an upstream input changes every downstream value in one evaluation; no
+- [x] 4.3 Changing an upstream input changes every downstream value in one evaluation; no
       scorecard mixes two evaluations of one chain
 - [x] 4.4 A cycle is refused naming all its members, not just the edge that closed it
-- [ ] 4.5 Mutating a link's return value fails a downstream assertion, proving the chain
+- [x] 4.5 Mutating a link's return value fails a downstream assertion, proving the chain
       is wired rather than merely declared
 
 ## 5. Docs & examples
