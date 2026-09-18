@@ -636,7 +636,8 @@ modules:
   the axial retention preload m·a, stress birefringence K·σ·t, and a root-sum-square
   wavefront budget judged by the Maréchal Strehl ratio exp(−(2πσ/λ)²), and a sealed
   housing's internal dew point against its coldest surface at cold soak; and the line of
-  sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, and a mirror's doubled tilt;
+  sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, a mirror's doubled tilt, and a
+  tilted plate's offset t·[1 − cosθ/√(n² − sin²θ)] into boresight and focus;
   a thermal condition declared as a soak, gradient or transient, which a soak screen refuses
   or calls optimistic when it does not describe; and an internal gap against the
   displacement A·a₀·g₀/ω² a half-sine shock drives across it; and Bayar's athermal
@@ -2516,6 +2517,8 @@ from .optomechanics import (
     seal_gland_extremes_scorecard,
     stress_birefringence_retardance,
     thermal_focal_shift,
+    tilted_plate_focus_shift,
+    tilted_plate_image_shift,
     wavefront_budget_scorecard,
 )
 from .orbital_mechanics import (
@@ -4667,6 +4670,8 @@ __all__ = [
     "mount_decenter",
     "decenter_line_of_sight",
     "mirror_tilt_line_of_sight",
+    "tilted_plate_image_shift",
+    "tilted_plate_focus_shift",
     "ThermalConditionKind",
     "ThermalCondition",
     "dynamic_clearance_scorecard",

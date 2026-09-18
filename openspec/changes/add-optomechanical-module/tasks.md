@@ -5,9 +5,9 @@
 - [ ] 0.1 `add-physical-domain-modules` landed — manifest and composition rules exist
 - [x] 0.2 `add-performance-budgets` landed — budgets exist
 - [ ] 0.3 `add-keepout-envelopes` landed — the beam envelope has a home
-- [ ] 0.4 `add-check-dependency-graph` landed — self-heating can reach the focus screen
-- [ ] 0.5 `add-constraint-topology` landed — mount tallies qualify alignment results
-- [ ] 0.6 `add-failure-mode-coverage` landed — the module has a catalog to contribute to
+- [x] 0.4 `add-check-dependency-graph` landed — self-heating can reach the focus screen
+- [x] 0.5 `add-constraint-topology` landed — mount tallies qualify alignment results
+- [x] 0.6 `add-failure-mode-coverage` landed — the module has a catalog to contribute to
 - [x] 0.7 `add-declaration-completeness` landed — profiles and screening depth exist
 - [ ] 0.8 `add-assembly-feasibility` landed — post-closure access can be screened
 
@@ -89,7 +89,7 @@
       constant
 - [x] 10.4 Dynamic clearance against shock displacement, distinct from static intrusion
 - [ ] 10.5 Adjustment mechanism screens; every mechanism a budget contributor
-- [ ] 10.6 Tilted plane-parallel element image displacement into focus and boresight
+- [x] 10.6 Tilted plane-parallel element image displacement into focus and boresight
 - [ ] 10.7 Parasitic harness load across a mount interface
 - [ ] 10.8 Retention-after-cycling as a verification-only entry, never inferred
 - [ ] 10.9 Three end-to-end workflow examples, each exercising a real failure; CI fails a

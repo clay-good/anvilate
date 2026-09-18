@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from math import exp, log, pi, sin, sqrt
+from math import cos, exp, isfinite, log, pi, sin, sqrt
 
 from pydantic import ConfigDict, model_validator
 
@@ -48,6 +48,8 @@ __all__ = [
     "mount_decenter",
     "decenter_line_of_sight",
     "mirror_tilt_line_of_sight",
+    "tilted_plate_image_shift",
+    "tilted_plate_focus_shift",
     "ThermalConditionKind",
     "ThermalCondition",
     "dynamic_clearance_scorecard",
@@ -543,6 +545,53 @@ def mirror_tilt_line_of_sight(*, tilt: Quantity) -> Quantity:
     radians without complaint. Returned in microradians.
     """
     return Quantity(magnitude=2.0 * _radians(tilt, "tilt") * 1e6, unit="µrad")
+
+
+def _plate_normal_shift(thickness: Quantity, refractive_index: float, tilt: Quantity) -> float:
+    _check(thickness, "[length]", "thickness")
+    t = thickness.to("m").magnitude
+    if t <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    if not (isfinite(refractive_index) and refractive_index >= 1.0):
+        raise ValueError(f"refractive_index must be at least 1; got {refractive_index}")
+    theta = _radians(tilt, "tilt")
+    if not abs(theta) < pi / 2:
+        raise ValueError(f"tilt must be less than 90° from the plate normal; got {tilt}")
+    return t * (1.0 - cos(theta) / sqrt(refractive_index**2 - sin(theta) ** 2))
+
+
+def tilted_plate_image_shift(
+    *, thickness: Quantity, refractive_index: float, tilt: Quantity
+) -> Quantity:
+    """The sideways image shift a tilted plane-parallel plate causes, in µm.
+
+    A window, filter or beamsplitter plate of ``thickness`` t and index n, tilted by θ to the
+    beam, offsets each ray along the plate normal by s = t·[1 − cosθ/√(n² − sin²θ)] (Smith,
+    Modern Optical Engineering). The offset across the beam, s·sinθ, moves the image sideways
+    by that much, with the sign of the tilt. With the plate in a converging beam, that shift
+    divided by the focal length is the line-of-sight change, which
+    :func:`decenter_line_of_sight` computes. The same plate adds astigmatism in a converging
+    beam, and this function does not screen for it.
+    """
+    s = _plate_normal_shift(thickness, refractive_index, tilt)
+    return Quantity(magnitude=s * sin(_radians(tilt, "tilt")) * 1e6, unit="µm")
+
+
+def tilted_plate_focus_shift(
+    *, thickness: Quantity, refractive_index: float, tilt: Quantity
+) -> Quantity:
+    """How far tilting a plane-parallel plate moves focus, relative to the plate square on.
+
+    A plate square to a converging beam already moves focus back by t·(n − 1)/n, which the
+    design absorbs. Tilting it by θ changes the shift along the axis to s·cosθ, where
+    s = t·[1 − cosθ/√(n² − sin²θ)] (Smith, Modern Optical Engineering). The difference is what
+    enters a focus budget as a contributor. Returned in µm, positive away from the plate.
+    """
+    s = _plate_normal_shift(thickness, refractive_index, tilt)
+    n = refractive_index
+    nominal = thickness.to("m").magnitude * (n - 1.0) / n
+    axial = s * cos(_radians(tilt, "tilt"))
+    return Quantity(magnitude=(axial - nominal) * 1e6, unit="µm")
 
 
 class ThermalConditionKind(StrEnum):

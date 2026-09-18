@@ -1138,6 +1138,8 @@ optomechanics.internal_condensation_scorecard
 optomechanics.mount_decenter
 optomechanics.decenter_line_of_sight
 optomechanics.mirror_tilt_line_of_sight
+optomechanics.tilted_plate_image_shift
+optomechanics.tilted_plate_focus_shift
 optomechanics.ThermalConditionKind
 optomechanics.ThermalCondition
 optomechanics.dynamic_clearance_scorecard

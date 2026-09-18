@@ -275,3 +275,5 @@ Harris
 Bayar
 # Johnson's Contact Mechanics, for Hertz line contact at a lens retainer.
 Johnson
+# Smith's Modern Optical Engineering, for plane-parallel plate displacement.
+Smith

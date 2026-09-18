@@ -822,3 +822,51 @@ def test_a_sharp_retainer_edge_overstresses_the_glass_and_a_toroid_does_not() ->
 def test_a_concave_seat_flatter_than_the_glass_is_refused() -> None:
     with pytest.raises(ValueError, match="flatter than the glass"):
         _contact("-40 mm")
+
+
+def test_a_tilted_plate_shifts_the_image_and_focus_by_snells_law() -> None:
+    from math import cos, radians, sin, sqrt
+
+    from anvilate.analysis.optomechanics import tilted_plate_focus_shift, tilted_plate_image_shift
+
+    theta = radians(5)
+    offset = 10.0 * (1 - cos(theta) / sqrt(1.5**2 - sin(theta) ** 2))  # mm, along the normal
+    plate = {"thickness": q("10 mm"), "refractive_index": 1.5}
+    lateral = tilted_plate_image_shift(**plate, tilt=q("5 deg"))
+    assert lateral.to("mm").magnitude == pytest.approx(offset * sin(theta))
+    assert lateral.to("µm").magnitude == pytest.approx(291.8, abs=0.05)
+    focus = tilted_plate_focus_shift(**plate, tilt=q("5 deg"))
+    assert focus.to("mm").magnitude == pytest.approx(offset * cos(theta) - 10.0 * 0.5 / 1.5)
+    # Square on, the plate moves nothing sideways and focus by no more than it already does.
+    assert tilted_plate_image_shift(**plate, tilt=q("0 deg")).magnitude == 0.0
+    assert tilted_plate_focus_shift(**plate, tilt=q("0 deg")).magnitude == pytest.approx(0.0)
+    # A plate of air is no plate at all, and the shift follows the sign of the tilt.
+    assert tilted_plate_image_shift(
+        thickness=q("10 mm"), refractive_index=1.0, tilt=q("5 deg")
+    ).magnitude == pytest.approx(0.0)
+    assert tilted_plate_image_shift(**plate, tilt=q("-5 deg")).magnitude == pytest.approx(
+        -lateral.magnitude
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"refractive_index": 0.9}, "at least 1"),
+        ({"thickness": q("0 mm")}, "thickness must be positive"),
+        ({"tilt": q("90 deg")}, "less than 90°"),
+        ({"tilt": Quantity(magnitude=5, unit="mm/m")}, "must be an angle"),
+    ],
+)
+def test_a_tilted_plate_refuses_what_is_not_a_plate_or_an_angle(
+    change: dict[str, object], message: str
+) -> None:
+    from anvilate.analysis.optomechanics import tilted_plate_image_shift
+
+    arguments: dict[str, object] = {
+        "thickness": q("10 mm"),
+        "refractive_index": 1.5,
+        "tilt": q("5 deg"),
+    } | change
+    with pytest.raises(ValueError, match=message):
+        tilted_plate_image_shift(**arguments)  # type: ignore[arg-type]

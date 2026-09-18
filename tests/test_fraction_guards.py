@@ -1079,6 +1079,9 @@ def _unit_for(dimension: str) -> str | None:
     return " * ".join(parts) or None
 
 
+_ANGLE = "angle"
+
+
 @cache
 def _declared_dimensions() -> dict[str, dict[str, str]]:
     """Each analysis module's ``_check(x, "[dimension]", "x")`` calls, by parameter name.
@@ -1110,6 +1113,11 @@ def _declared_dimensions() -> dict[str, dict[str, str]]:
                 and "[" in second.value
             ):
                 wanted.setdefault(first.id, second.value)
+            # An angle is dimensionless to pint, so it has no bracketed dimension to state.
+            # A module that reads one through `_radians(x, "x")` is declaring it all the same,
+            # and a metre handed to it is refused before any guard the probe is looking for.
+            elif node.func.id == "_radians" and isinstance(first, ast.Name):
+                wanted.setdefault(first.id, _ANGLE)
     return found
 
 
@@ -1265,7 +1273,8 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         else getattr(annotation, "__name__", "")
                     )
                     if spelled == "Quantity":
-                        unit = _unit_for(wanted.get(parameter.name, "[length]")) or "m"
+                        dimension = wanted.get(parameter.name, "[length]")
+                        unit = "rad" if dimension == _ANGLE else _unit_for(dimension) or "m"
                         value = Quantity(magnitude=1.0, unit=unit)
                     elif spelled == "str" and parameter.name == "name":
                         # A scorecard's display label: any text is a valid one, and leaving
