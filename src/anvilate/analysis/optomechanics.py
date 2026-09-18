@@ -1639,7 +1639,7 @@ def glass_contact_stress_scorecard(
     glass_poisson: float,
     mount_modulus: Quantity,
     mount_poisson: float,
-    allowable_tensile_stress: Quantity,
+    allowable_tensile_stress: Quantity | None = None,
 ) -> ScorecardEntry:
     """Screen the stress a retainer's preload puts into the glass at its contact ring.
 
@@ -1655,13 +1655,13 @@ def glass_contact_stress_scorecard(
     ``PASS`` while σ_T stays within ``allowable_tensile_stress``, which is the caller's. The
     entry says what that number is: a glass allowable is a probability of fracture, set by
     the Weibull statistics of the surface flaws under stress, not a strength like a metal's.
-    A concave mount profile is a negative ``mount_radius``.
+    A concave mount profile is a negative ``mount_radius``. With no allowable declared, the
+    entry states the tension and is not evaluated, naming the allowable: it is a property of
+    this glass and its surface finish, and no environment profile supplies one.
     """
-    for value, label in (
-        (preload, "preload"),
-        (allowable_tensile_stress, "allowable_tensile_stress"),
-    ):
-        _check(value, "[force]" if label == "preload" else "[pressure]", label)
+    _check(preload, "[force]", "preload")
+    if allowable_tensile_stress is not None:
+        _check(allowable_tensile_stress, "[pressure]", "allowable_tensile_stress")
     for value, label in (
         (contact_diameter, "contact_diameter"),
         (glass_radius, "glass_radius"),
@@ -1677,7 +1677,9 @@ def glass_contact_stress_scorecard(
             raise ValueError(f"{label} must lie in [0, 0.5); got {nu}")
     force = preload.to("N").magnitude
     diameter = contact_diameter.to("m").magnitude
-    allowable = allowable_tensile_stress.to("Pa").magnitude
+    allowable = (
+        allowable_tensile_stress.to("Pa").magnitude if allowable_tensile_stress is not None else 1.0
+    )
     if force <= 0 or diameter <= 0 or allowable <= 0:
         raise ValueError("preload, contact_diameter and the allowable must all be positive")
     curvature = 1 / glass_radius.to("m").magnitude + 1 / mount_radius.to("m").magnitude
@@ -1693,6 +1695,19 @@ def glass_contact_stress_scorecard(
     line_load = force / (pi * diameter)
     compressive = sqrt(line_load * modulus * curvature / pi)
     tensile = (1 - 2 * nu_g) / 3 * compressive
+    if allowable_tensile_stress is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"glass tensile stress {tensile / 1e6:.2f} MPa (peak contact compression "
+                f"{compressive / 1e6:.1f} MPa) against no declared allowable_tensile_stress: a "
+                "fracture probability for this glass and its surface finish, which the design "
+                "must state and no environment profile supplies"
+            ),
+            reference=_JOHNSON,
+            addresses=("glass fracture at a mount contact",),
+        )
     comparison = Comparison(
         measured=Quantity(magnitude=tensile / 1e6, unit="MPa"),
         limit=Quantity(magnitude=allowable / 1e6, unit="MPa"),

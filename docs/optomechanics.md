@@ -74,6 +74,27 @@ requires each of those entries to pass in `repaired_card()`.
 The beam-path keepout the display workflow also needs is not generated, because the keepout
 envelopes are not built yet.
 
+## Environment profiles
+
+`anvilate.environment_profiles` ships five cited profiles, one per operating class. Binding one
+supplies the environment its screens need; `ProfileBinding.mark(entry, ...)` then writes
+each value it supplied onto the entry that used it, citation and all, as a class default to
+confirm. An override is marked as the user's, naming the value it replaced.
+
+| Profile | Supplies | From | Applies for |
+| --- | --- | --- | --- |
+| `BENCHTOP` | 20 °C assembly, 101.325 kPa fill | ISO 1:2022, ISO 2533:1975 | operating altitude at most 500 m |
+| `HANDHELD` | −32 °C to 43 °C, 40 G 11 ms | MIL-STD-810H Tables 501.7-I, 502.7-I, 516.8-IV (ground) | item mass at most 45.4 kg |
+| `VEHICLE_MOUNTED` | −33 °C to 63 °C induced, 20 G 11 ms | the same tables, induced; 516.8-IV note 3 (trucks) | item mass at most 136 kg |
+| `AIRBORNE` | −33 °C to 43 °C, 20 G 11 ms, 57.2 kPa ambient | the same tables (flight); Method 500.6 §2.3.1 | item mass at most 136 kg |
+| `SEALED_AND_PURGED` | −32 °C to 43 °C, 20 °C and 101.325 kPa fill, a purge | Tables 501.7-I and 502.7-I; ISO 2533:1975 | operating altitude at most 500 m |
+
+A profile supplies where the instrument lives and never what it is. Every declaration a
+profile may supply is in `ENVIRONMENT_DECLARATIONS`, and a test holds all five to it. So a
+screen that needs a design property still reports it missing by name under any binding.
+The glass allowable is one: without it, the contact-stress screen states the tension and is
+not evaluated. A profile bound outside its own applicability is refused, naming the bound.
+
 ## Drawing indications
 
 `anvilate.optical_tolerances` declares an element's optical tolerances once and renders the
@@ -109,11 +130,11 @@ take to optical design software; the screen says which one that is.
 ## Status
 
 Built (`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
-5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4, 11.5 and 11.6):
+5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4, 11.5, 11.6 and 12.1–12.3):
 focus, pointing, wavefront and boresight screens, retention and shock, sealing, breathing
 and condensation, windows, coatings and cements, outgassing and cleanliness, harnesses,
-adjustments, the three workflow examples above, and a catalogued failure mode declared by
-every screen in the module. Not built yet: angular units as a
+adjustments, the three workflow examples above, a catalogued failure mode declared by
+every screen in the module, and the five environment profiles. Not built yet: angular units as a
 whole (1.1), glass-catalogue ingestion (1.3), the clear aperture against a beam keepout
 (4.1, which waits on the keepout envelopes), the RMS form and focus share of a window's
-wavefront error (the rest of 11.3), and the environment profiles (12.x).
+wavefront error (the rest of 11.3).

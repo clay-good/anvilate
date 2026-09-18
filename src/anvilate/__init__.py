@@ -97,6 +97,8 @@ that already ran and does one more thing with them:
   rendered as ISO 10110 indications, a scratch-dig kept in its own named convention.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
   action, refused outside its own applicability and attributed wherever a value appears.
+- :mod:`anvilate.environment_profiles` — five cited operating environments, benchtop to
+  airborne, that supply where an instrument lives and never what it is.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.

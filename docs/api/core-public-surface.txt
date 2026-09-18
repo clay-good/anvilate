@@ -335,6 +335,13 @@ profile.SuppliedValue
 profile.Profile
 profile.ProfileBinding
 profile.OutsideApplicability
+environment_profiles.BENCHTOP
+environment_profiles.HANDHELD
+environment_profiles.VEHICLE_MOUNTED
+environment_profiles.AIRBORNE
+environment_profiles.SEALED_AND_PURGED
+environment_profiles.ENVIRONMENT_PROFILES
+environment_profiles.ENVIRONMENT_DECLARATIONS
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem

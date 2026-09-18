@@ -35,6 +35,7 @@ from .spec.provenance import Origin, Provenanced
 from .units import Quantity
 
 if TYPE_CHECKING:
+    from .scorecard import ScorecardEntry
     from .spec.ir import DesignSpec
 
 __all__ = [
@@ -274,6 +275,38 @@ class ProfileBinding(StatableModel):
                 for supplied in self.values
             ),
         )
+
+    def mark(self, entry: ScorecardEntry, *used: str) -> ScorecardEntry:
+        """``entry`` with each declaration it ``used`` from this binding named in its detail.
+
+        A profile-supplied value reads as the profile's, with its citation, and as a class
+        default the user should confirm, so a verdict it governs is never read as resting
+        on a number the engineer stated. An override reads as the user's own, naming the
+        profile value it replaced. A declaration this binding does not supply is refused:
+        marking it would attribute a value to a profile that never gave it.
+        """
+        supplied = {value.declaration: value for value in self.values}
+        unknown = [name for name in used if name not in supplied]
+        if unknown:
+            raise ValueError(
+                f"profile {self.profile.id} supplies {sorted(supplied)} and not {unknown}"
+            )
+        if not used:
+            raise ValueError("name the declarations the entry used; marking none marks nothing")
+        notes = []
+        for name in used:
+            value = supplied[name]
+            if value.overridden is None:
+                notes.append(
+                    f"{name} {value.value} from {value.attribution(self.profile)}, a class "
+                    "default to confirm"
+                )
+            else:
+                notes.append(
+                    f"{name} {value.overridden} is the user's, overriding profile "
+                    f"{self.profile.id}'s {value.value}"
+                )
+        return entry.model_copy(update={"detail": f"{entry.detail} [{'; '.join(notes)}]"})
 
     def overrides(self) -> tuple[SuppliedValue, ...]:
         return tuple(supplied for supplied in self.values if supplied.overridden is not None)

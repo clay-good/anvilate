@@ -112,6 +112,6 @@
 
 ## 12. Day-one usability
 
-- [ ] 12.1 Five cited environment profiles with applicability statements
-- [ ] 12.2 Profile-sourced values marked on every surface; per-value override
-- [ ] 12.3 Design-specific properties still refuse by name under any bound profile
+- [x] 12.1 Five cited environment profiles with applicability statements
+- [x] 12.2 Profile-sourced values marked on every surface; per-value override
+- [x] 12.3 Design-specific properties still refuse by name under any bound profile
