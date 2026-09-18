@@ -2159,3 +2159,35 @@ def test_every_column_of_values_is_set_right_aligned_in_fixed_width_figures() ->
     assert all(attributes == ' class="num"' for attributes in rows)
     glossary_values = re.findall(r'<td class="num">([^<]*)</td></tr>', html)
     assert len(glossary_values) >= 3
+
+
+def test_identical_input_renders_identical_figures_in_separate_processes() -> None:
+    """Presentation-craft 1.4: the same report, rendered twice from scratch, is byte-identical.
+
+    Within one process this is close to a tautology — shared caches, one hash seed — so each
+    render runs in its own interpreter with its own hash randomisation.
+    """
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    tests = Path(__file__).resolve().parent
+    script = (
+        f"import hashlib, sys; sys.path.insert(0, {str(tests)!r}); "
+        "from test_report import _report; r = _report(); "
+        "print(hashlib.sha256((r.to_html() + r.to_text()).encode()).hexdigest())"
+    )
+    digests = set()
+    for seed in ("1", "2"):
+        environment = {**os.environ, "PYTHONHASHSEED": seed}
+        out = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=environment,
+            timeout=120,
+        )
+        digests.add(out.stdout.strip())
+    assert len(digests) == 1, digests

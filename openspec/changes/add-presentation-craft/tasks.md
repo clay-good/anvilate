@@ -7,7 +7,8 @@
       value column in the calculation report is right-aligned in tabular figures, so decimals
       and units line up at the column's end
 - [ ] 1.3 A value that updates keeps its width and does not move its neighbours
-- [ ] 1.4 Significant figures stable across renders of identical input
+- [x] 1.4 Significant figures stable across renders of identical input — the calculation
+      report renders byte-identical from two interpreters with different hash seeds
 
 ## 2. Layout
 
