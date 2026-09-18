@@ -256,3 +256,7 @@ Rattan
 Parker
 Leishman
 Fischer
+# Opto-mechanics (2026-09-18): Jamieson's glass thermal constant for a lens's focal shift, and
+# Yoder's Opto-Mechanical Systems Design for the athermal housing condition.
+Jamieson
+Yoder

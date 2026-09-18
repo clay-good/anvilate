@@ -240,7 +240,7 @@ Ambiguous nested blind steps and nonconcentric locators remain limits.
 
 ## What you can do today
 
-502 runnable examples, each executed in CI so they stay honest. A few:
+503 runnable examples, each executed in CI so they stay honest. A few:
 
 | Run this | What it shows |
 |---|---|
@@ -315,8 +315,8 @@ Full annotated gallery: [`examples/README.md`](examples/README.md).
 The deterministic core is real, tested, and runnable today: a units layer, the typed
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
-(236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 6,005 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+(237 closed-form modules and 1,829 public symbols, each dimension-checked and
+hand-verified, 6,017 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -349,6 +349,7 @@ nobody can act on.
 | [Typed repair feedback](docs/repair-feedback.md) | A failing check names the parameter and the value that fixes it. The required factor is read from `constraints.min_safety_factor` and never invented; `constraints.max_safety_factor` is the other end of that band, so a check carrying more margin than the design asked for comes back `over_margin` with the excess stated. |
 | [Uncertainty-aware margins](docs/uncertainty-margins.md) | Input scatter propagated to a shortfall probability and a sensitivity ranking, with the sampling method and the screening citation printed beneath the number. |
 | [Discipline modules](docs/discipline-modules.md) | Each pack's manifest: its version, the standards its checks cite, the material properties its screens need, the tiers it touches and the screens it exports — derived from the package and gated against it, so a manifest cannot describe a pack that has moved on without it. |
+| [Opto-mechanics](docs/optomechanics.md) | Does a lens stay in focus across its temperature range: the ±2·λ·N² depth of focus, a thin lens's thermal focal shift from its own glass constants, and the housing's growth between lens and detector. One f/4 singlet over 40 K is 76.4 µm out in aluminium and inside its ±17.6 µm in Invar. Glass data is the caller's, never bundled. |
 | [Constraint topology](docs/constraint-topology.md) | A body's six freedoms counted against the constraints its document declares, in a named frame: each free, exact or over-constrained, with every competing constraint named and the arithmetic shown. An over-constrained load path is indeterminate, and a stress screened across it is never printed without saying so. |
 | [Failure-mode coverage](docs/failure-mode-coverage.md) | A cited catalogue of the ways a design fails, resolved against the facts a document declares: which modes apply, which a check that ran addresses, which are left to a physical test, and which nobody looked at — named, with the population they were counted from and the caveat that the catalogue is a floor. A clean card with an unaddressed applicable mode does not read as complete. |
 | [Check dependencies](docs/check-dependencies.md) | What each check reads from which other check, declared with its dimension and checked when the graph is built. Evaluation follows the dependencies whatever order the checks were declared in, ties keep declaration order so a run is reproducible, and a cycle is refused naming every member rather than the edge that closed it. The graph ships; no screen declares its consumptions yet. |
@@ -364,7 +365,7 @@ nobody can act on.
 | [Requirements ingestion](docs/requirements-ingestion.md) | Reads an RFQ sheet into a *draft* spec and refuses to release it while any load-bearing value is unconfirmed. Every value carries the line it came from; a bare number is recorded as not-extracted rather than guessed at, and a sheet that contradicts itself is reported rather than silently resolved. |
 | [Screening a spec on its own terms](docs/spec-screening.md) | Every pack screens a typed element you build by hand; this screens the document — tolerance achievability, load combinations, material resolution — so a spec no longer compiles and stops. |
 | [Calculation reports](docs/calculation-reports.md) | Every check renders as a reviewable document: the formula, the values put into it, the result, and the clause. Units are chosen to *compose* rather than to look familiar. |
-| [What a citation means](docs/citations.md) | What a clause reference does and does not claim — and every one of the 1,825 public analysis symbols names one. Eight of the seventeen bundled materials carry a specification minimum and screen unchanged; the other nine report `not_evaluated` until the caller declares that this screen accepts a typical value — a declaration that then lands on every entry the screen produced, including the passing ones. A [fatigue record](docs/citations.md) carries its curve, its survival level, what it was measured on, and where it came from, and cannot be built without all four. Data the library may read but may not ship goes through [fetch-on-first-use](docs/citations.md), where consent is an argument rather than a default. |
+| [What a citation means](docs/citations.md) | What a clause reference does and does not claim — and every one of the 1,829 public analysis symbols names one. Eight of the seventeen bundled materials carry a specification minimum and screen unchanged; the other nine report `not_evaluated` until the caller declares that this screen accepts a typical value — a declaration that then lands on every entry the screen produced, including the passing ones. A [fatigue record](docs/citations.md) carries its curve, its survival level, what it was measured on, and where it came from, and cannot be built without all four. Data the library may read but may not ship goes through [fetch-on-first-use](docs/citations.md), where consent is an argument rather than a default. |
 | [Values and units](docs/units-and-quantities.md) | Every number is a magnitude and a unit, and a `Quantity` refuses arithmetic, ordering, rounding and format specs rather than choosing a unit the caller never wrote down. Each refusal names the mistake and the line to write instead; `.to(unit).magnitude` is where the unit a comparison was made in gets recorded. |
 | [Analysis interop](docs/analysis-interop.md) | Externally computed member forces and section properties come in through a typed doorway that makes the axis mapping, the axial sign convention, and every component you chose *not* to screen explicit rather than inferred. |
 | [Semantic GD&T](docs/semantic-gdt.md) | A feature control frame as data, with Y14.5's grammar enforced in the constructor: flatness cannot reference a datum, Ⓜ cannot sit on a surface, and symmetry cannot appear on a 2018 drawing. |

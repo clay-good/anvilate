@@ -4135,6 +4135,20 @@ def test_over_constrained_mount_example_names_the_dowels_and_the_slot_clears_it(
     assert slotted.qualify(shear) == shear
 
 
+def test_lens_housing_example_fails_aluminium_and_titanium_and_passes_invar():
+    namespace = runpy.run_path(str(_EXAMPLES / "lens_housing_athermal.py"))
+    screened = namespace["screen_housings"]()
+    statuses = {housing: entry.status for housing, entry in screened.items()}
+    assert statuses == {
+        "aluminium 6061": CheckStatus.FAIL,
+        "titanium Ti-6Al-4V": CheckStatus.FAIL,
+        "Invar 36": CheckStatus.PASS,
+    }
+    assert screened["aluminium 6061"].detail == "defocus 76.4 µm vs depth of focus 17.6 µm"
+    assert screened["titanium Ti-6Al-4V"].detail == "defocus 18.4 µm vs depth of focus 17.6 µm"
+    assert screened["Invar 36"].detail == "defocus 11.2 µm vs depth of focus 17.6 µm"
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()

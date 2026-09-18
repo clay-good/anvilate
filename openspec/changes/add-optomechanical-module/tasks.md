@@ -24,9 +24,9 @@
 
 ## 2. Thermal screens
 
-- [ ] 2.1 Athermal focus shift: housing, cell, and element differential expansion plus
+- [x] 2.1 Athermal focus shift: housing, cell, and element differential expansion plus
       dn/dT, against declared depth of focus
-- [ ] 2.2 Depth-of-focus computation from f-number and wavelength, composing existing
+- [x] 2.2 Depth-of-focus computation from f-number and wavelength, composing existing
       `optics` functions
 - [ ] 2.3 Axial preload change with temperature; loss-of-contact and overstress bounds
 - [ ] 2.4 Elastomeric annular bond thickness for athermal radial behavior, with Poisson's
@@ -78,7 +78,7 @@
 
 - [ ] 9.1 Example: a sealed housing holding a lens cell through a declared thermal range
       and shock environment, ending in a line-of-sight budget
-- [ ] 9.2 Scope page: what this module screens, what it refuses, and why it is not a ray
+- [x] 9.2 Scope page: what this module screens, what it refuses, and why it is not a ray
       tracer
 
 ## 10. Workflow coverage

@@ -629,6 +629,10 @@ modules:
   refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA; and lens
   design — the lensmaker's f from (n−1)(1/R₁−1/R₂), the diopter power 1/f, and two thin lenses in
   contact combining as 1/f = 1/f₁ + 1/f₂
+- :mod:`~anvilate.analysis.optomechanics` — a lens kept in focus across temperature: the
+  diffraction-limited depth of focus ±2·λ·N², the thin-lens thermal focal shift
+  f·(α_g − (dn/dT)/(n − 1))·ΔT, the housing's own growth α_h·L·ΔT, and the defocus between
+  them judged against the depth of focus
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2464,6 +2468,12 @@ from .optics import (
     lensmaker_focal_length,
     snell_refraction_angle,
     thin_lens_image_distance,
+)
+from .optomechanics import (
+    athermal_defocus,
+    athermal_focus_scorecard,
+    depth_of_focus,
+    thermal_focal_shift,
 )
 from .orbital_mechanics import (
     circular_orbit_velocity,
@@ -4601,6 +4611,10 @@ __all__ = [
     "lensmaker_focal_length",
     "lens_power",
     "combined_thin_lens_focal_length",
+    "depth_of_focus",
+    "thermal_focal_shift",
+    "athermal_defocus",
+    "athermal_focus_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

@@ -1125,6 +1125,10 @@ optics.abbe_number
 optics.lensmaker_focal_length
 optics.lens_power
 optics.combined_thin_lens_focal_length
+optomechanics.depth_of_focus
+optomechanics.thermal_focal_shift
+optomechanics.athermal_defocus
+optomechanics.athermal_focus_scorecard
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity
