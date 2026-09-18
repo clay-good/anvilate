@@ -343,3 +343,69 @@ def test_a_declaration_the_tally_refuses_is_refused_when_the_document_is_read() 
         _spec(
             _PLATE_DOCUMENT + "  intended:\n    - {freedom: rz, purpose: rotation for alignment}\n"
         )
+
+
+def _joint_run():  # type: ignore[no-untyped-def]
+    """Bolt load feeds bolt shear, which feeds joint slip; paint thickness stands apart."""
+    from anvilate.dependency import (
+        ChainResult,
+        CheckNode,
+        Consumes,
+        DependencyGraph,
+        Output,
+        run_chain,
+    )
+    from anvilate.units import Quantity
+
+    force = "[force]"
+
+    def reads(upstream: str, output: str) -> tuple[Consumes, ...]:
+        return (Consumes(upstream=upstream, output=output, parameter=output, dimension=force),)
+
+    graph = DependencyGraph(
+        nodes=(
+            CheckNode(id="bolt load", produces=(Output(name="P", dimension=force),)),
+            CheckNode(
+                id="bolt shear",
+                produces=(Output(name="V", dimension=force),),
+                consumes=(
+                    Consumes(upstream="bolt load", output="P", parameter="P", dimension=force),
+                ),
+            ),
+            CheckNode(
+                id="joint slip",
+                consumes=(
+                    Consumes(upstream="bolt shear", output="V", parameter="V", dimension=force),
+                ),
+            ),
+            CheckNode(id="paint thickness"),
+        )
+    )
+    outputs = {
+        "bolt load": {"P": Quantity(magnitude=4.0, unit="kN")},
+        "bolt shear": {"V": Quantity(magnitude=2.0, unit="kN")},
+    }
+
+    def run_check(check: str, inputs):  # type: ignore[no-untyped-def]
+        entry = ScorecardEntry.from_safety_factor(check, computed=2.5, required=2.0)
+        return ChainResult(check=check, entry=entry, outputs=outputs.get(check, {}))
+
+    return run_chain(graph, run_check)
+
+
+def test_the_indeterminacy_travels_along_declared_consumption_and_nowhere_else() -> None:
+    """Task 3.2: who carries the qualifier is read off the dependency graph."""
+    over = _counted(_FACE, _DOWEL_A, _DOWEL_B)
+    card = {e.name: e for e in over.qualify_downstream(_joint_run(), "bolt load").entries}
+    for rests_on_it in ("bolt load", "bolt shear", "joint slip"):
+        assert "on an indeterminate load path" in card[rests_on_it].detail, rests_on_it
+    assert "indeterminate" not in card["paint thickness"].detail
+    # Starting further down the path qualifies only what is downstream of that point.
+    partial = {e.name: e for e in over.qualify_downstream(_joint_run(), "bolt shear").entries}
+    assert "indeterminate" not in partial["bolt load"].detail
+    assert "indeterminate" in partial["joint slip"].detail
+    # A determinate body leaves the whole run as it was.
+    exact = _counted(_FACE, _DOWEL_A, _SLOT_B).qualify_downstream(_joint_run(), "bolt load")
+    assert exact == _joint_run().card()
+    with pytest.raises(ValueError, match="carries no check 'bolt torque'"):
+        over.qualify_downstream(_joint_run(), "bolt torque")

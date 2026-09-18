@@ -34,12 +34,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, ScorecardEntry
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+if TYPE_CHECKING:
+    from .dependency import ChainRun
 
 __all__ = [
     "Freedom",
@@ -405,6 +409,24 @@ class ConstraintTally(StatableModel):
             "determined by the declared geometry"
         )
         return entry.model_copy(update={"detail": f"{entry.detail}{note}"})
+
+    def qualify_downstream(self, run: ChainRun, load_path: str) -> Scorecard:
+        """``run``'s card with every check resting on ``load_path`` carrying the indeterminacy.
+
+        Which checks rest on it is read off the run's dependency graph, not guessed: the
+        ``load_path`` check itself and every check that consumes it, directly or through
+        others (:meth:`~anvilate.dependency.DependencyGraph.downstream_of`). A check the graph
+        does not connect to the path is left as it ran, because its number does not depend on
+        how this body divides its load.
+        """
+        run.result(load_path)  # refuses a check the run does not carry, by name
+        affected = {load_path, *run.graph.downstream_of(load_path)}
+        return Scorecard(
+            entries=tuple(
+                self.qualify(entry) if entry.name in affected else entry
+                for entry in run.card().entries
+            )
+        )
 
     def __str__(self) -> str:
         if not self.constraints:

@@ -79,7 +79,9 @@ refused when the document is read.
 ## Status
 
 This is the constraint type, its archetypes, the per-freedom tally, the indeterminacy
-qualifier and the Design Spec declaration (`openspec/changes/add-constraint-topology`, all but
-3.2). Screening a document qualifies every element check on an indeterminate part. What is
-not built is propagation through declared consumption (3.2): carrying the qualifier along a
-[dependency chain](check-dependencies.md) to checks outside the part's own screen.
+qualifier and the Design Spec declaration (`openspec/changes/add-constraint-topology`, every
+task). Screening a document qualifies every element check on an indeterminate part. Along a
+[dependency chain](check-dependencies.md),
+`tally.qualify_downstream(run, "bolt load")` qualifies the named check and every check the
+graph says consumes it, directly or through others. A check the graph does not connect to the
+load path is left as it ran.

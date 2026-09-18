@@ -18,7 +18,7 @@
 ## 3. Consequences
 
 - [x] 3.1 Indeterminacy qualifier on the affected load path
-- [ ] 3.2 Propagation: downstream screens consuming that path carry the qualifier or
+- [x] 3.2 Propagation: downstream screens consuming that path carry the qualifier or
       decline, via the declared-consumption mechanism
 - [x] 3.3 Declared intentional redundancy suppresses the finding and records the reason
 
