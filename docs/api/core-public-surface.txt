@@ -29,6 +29,9 @@ assembly.Part
 assembly.Blocking
 assembly.AssemblyOrder
 assembly.assembly_order
+assembly.AssemblyState
+assembly.Adjustment
+assembly.screen_adjustment_access
 attestation.STATEMENT_TYPE
 attestation.PREDICATE_TYPE
 attestation.DSSE_PAYLOAD_TYPE

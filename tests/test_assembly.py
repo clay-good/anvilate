@@ -89,3 +89,69 @@ def test_an_ambiguous_declaration_is_refused() -> None:
     assert str(Part(name="pin", insertion=D.PLUS_X)) == "pin (inserted +x)"
     assert "no insertion direction" in str(Part(name="pin"))
     assert str(_cell_and_retainer(retainer_first=False)).startswith("[PASS] assembly order")
+
+
+def _sealed_housing(*, adjustment_state: str, access: tuple[str, ...] = ("top opening",)):
+    from anvilate.assembly import Adjustment, AssemblyState, screen_adjustment_access
+
+    parts = [
+        Part(name="housing", insertion=D.MINUS_Z, occupies=("shell",)),
+        Part(name="lens cell", insertion=D.MINUS_Z, occupies=("bore",)),
+        Part(name="cover", insertion=D.MINUS_Z, occupies=("top opening",)),
+    ]
+    states = [
+        AssemblyState(name="open", installs=("housing", "lens cell")),
+        AssemblyState(name="closed", installs=("cover",)),
+    ]
+    adjustment = Adjustment(feature="focus screw", performed_in=adjustment_state, access=access)
+    (entry,) = screen_adjustment_access(states, parts, [adjustment])
+    return entry
+
+
+def test_an_adjustment_reachable_open_is_unreachable_closed_naming_the_state() -> None:
+    """Task 4.2: the opto-mechanical case — set focus, close the housing, find it sealed."""
+    open_ = _sealed_housing(adjustment_state="open")
+    assert open_.status is CheckStatus.PASS
+    assert open_.detail == "focus screw is reachable in open via top opening"
+    closed = _sealed_housing(adjustment_state="closed")
+    assert closed.status is CheckStatus.FAIL
+    assert closed.name == "access: focus screw in closed"
+    assert "cover (installed in closed) occupies top opening" in closed.detail
+
+
+def test_a_declared_port_makes_a_post_closure_adjustment_reachable() -> None:
+    entry = _sealed_housing(adjustment_state="closed", access=("side port",))
+    assert entry.status is CheckStatus.PASS
+
+
+def test_an_adjustment_with_no_access_route_is_not_evaluated() -> None:
+    entry = _sealed_housing(adjustment_state="closed", access=())
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "declares no access route" in entry.detail
+
+
+def test_an_adjustment_in_a_state_the_build_never_defines_is_refused() -> None:
+    with pytest.raises(ValueError, match="names the state 'potted'"):
+        _sealed_housing(adjustment_state="potted")
+
+
+def test_a_state_list_that_contradicts_itself_is_refused() -> None:
+    from anvilate.assembly import Adjustment, AssemblyState, screen_adjustment_access
+
+    part = Part(name="cover", insertion=D.MINUS_Z, occupies=("top opening",))
+    with pytest.raises(ValueError, match="installed in both"):
+        screen_adjustment_access(
+            [
+                AssemblyState(name="a", installs=("cover",)),
+                AssemblyState(name="b", installs=("cover",)),
+            ],
+            [part],
+            [],
+        )
+    with pytest.raises(ValueError, match="no declared part"):
+        screen_adjustment_access([AssemblyState(name="a", installs=("lid",))], [part], [])
+    assert str(AssemblyState(name="a")) == "a: installs nothing new"
+    assert (
+        str(Adjustment(feature="screw", performed_in="a"))
+        == "adjust screw in a with no access route"
+    )

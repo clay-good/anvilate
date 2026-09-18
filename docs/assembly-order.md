@@ -31,9 +31,28 @@ order.entry()    # PASS: "a valid order exists: housing -> lens cell -> retainer
 | A valid order is a result | It is reported, so a screened assembly reads differently from one nobody screened. |
 | Nothing is inferred | The screen reads declarations, never geometry. A part with no insertion direction makes the entry `not_evaluated`, naming it. It is never treated as insertable from anywhere. |
 
+## Reaching an adjustment in the state it is made
+
+A build passes through states, and a part installed in one stays installed in every later
+one. An adjustment names the state it is made in and the route a tool takes to it:
+
+```python
+from anvilate.assembly import Adjustment, AssemblyState, screen_adjustment_access
+
+states = [AssemblyState(name="open", installs=("housing", "lens cell")),
+          AssemblyState(name="closed", installs=("cover",))]
+focus = Adjustment(feature="focus screw", performed_in="closed", access=("top opening",))
+screen_adjustment_access(states, parts, [focus])
+# FAIL: focus screw cannot be reached in closed: cover (installed in closed) occupies top opening
+```
+
+The same adjustment made in `open` passes. Routed through a declared side port, it passes
+in `closed` too. With no route declared, it is not evaluated: an undeclared route is not a
+clear one. An adjustment in a state the build never defines is refused by name.
+
 ## Status
 
-This is part insertion and order feasibility (`openspec/changes/add-assembly-feasibility`,
-1.4, 2.4, 4.3 and 4.5). Not built yet: assembly states, tool envelopes and access, swing
-arcs, and serviceability. Those need the keepout mechanism, and the Design Spec cannot declare
-parts yet.
+This is part insertion, order feasibility, assembly states and adjustment reachability
+(`openspec/changes/add-assembly-feasibility`, 1.3, 1.4, 2.4, 4.2, 4.3 and 4.5). Not built
+yet: tool envelopes, swing arcs and access sweeps checked as geometry. Those need the keepout
+mechanism, and the Design Spec cannot declare parts yet.

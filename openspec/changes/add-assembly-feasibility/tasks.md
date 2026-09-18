@@ -4,7 +4,7 @@
 
 - [ ] 1.1 Tool envelope records for the common drivers and wrenches, with provenance
 - [ ] 1.2 Per-feature access requirement: tool, approach direction, swing arc needed
-- [ ] 1.3 Assembly-state declaration: the ordered states a build passes through
+- [x] 1.3 Assembly-state declaration: the ordered states a build passes through
 - [x] 1.4 Part insertion direction and the features a part occupies
 
 ## 2. Screens
@@ -26,7 +26,7 @@
 ## 4. Tests
 
 - [ ] 4.1 A cap screw whose head clears and whose driver does not is caught
-- [ ] 4.2 An adjustment reachable open and unreachable closed is caught, with the state
+- [x] 4.2 An adjustment reachable open and unreachable closed is caught, with the state
       named — the opto-mechanical case this exists for
 - [x] 4.3 A three-part assembly with no valid order reports the cycle, not a pass
 - [ ] 4.4 Widening a clearance changes the verdict, proving the screen reads geometry

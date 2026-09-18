@@ -120,6 +120,7 @@ thermal.junction_temperature_scorecard -> thermal_resistance (solved)
 ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
 ## no lever recorded
+assembly.screen_adjustment_access
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard

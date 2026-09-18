@@ -32,6 +32,9 @@ __all__ = [
     "Blocking",
     "AssemblyOrder",
     "assembly_order",
+    "AssemblyState",
+    "Adjustment",
+    "screen_adjustment_access",
 ]
 
 
@@ -239,3 +242,131 @@ def _cycles(names: list[str], edges: dict[str, set[str]]) -> tuple[tuple[str, ..
         if name not in index:
             visit(name)
     return tuple(sorted(found, key=lambda cycle: names.index(cycle[0])))
+
+
+class AssemblyState(StatableModel):
+    """One state a build passes through, and the parts installed on reaching it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    installs: tuple[Named, ...] = ()
+
+    def __str__(self) -> str:
+        parts = ", ".join(self.installs) if self.installs else "nothing new"
+        return f"{self.name}: installs {parts}"
+
+
+class Adjustment(StatableModel):
+    """Something done to a feature in a given state, and the route a tool takes to it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    feature: Named
+    performed_in: Named
+    access: tuple[Named, ...] = ()
+
+    def __str__(self) -> str:
+        route = " via " + ", ".join(self.access) if self.access else " with no access route"
+        return f"adjust {self.feature} in {self.performed_in}{route}"
+
+
+def screen_adjustment_access(
+    states: Sequence[AssemblyState],
+    parts: Sequence[Part],
+    adjustments: Sequence[Adjustment],
+) -> tuple[ScorecardEntry, ...]:
+    """Whether each ``adjustment`` can still be reached in the state it is performed in.
+
+    ``states`` are the build's states in order; a part installed in one stays installed in
+    every later one. An adjustment is blocked when a part installed by its state occupies a
+    feature its access route passes through — the housing closed over the screw you set after
+    closing it. Each finding names the adjustment, the state, the blocking part and the
+    feature it occupies.
+
+    An adjustment declared in a state the build does not define is refused by name, so access
+    is never evaluated against a configuration nobody described; one with no access route is
+    ``not_evaluated``, naming the missing route, because an undeclared route is not a clear
+    one.
+    """
+    states = each_one(states, AssemblyState, named="states")
+    parts = each_one(parts, Part, named="parts")
+    adjustments = each_one(adjustments, Adjustment, named="adjustments")
+    order = [state.name for state in states]
+    if len(set(order)) != len(order):
+        raise ValueError(f"two assembly states share a name: {order}")
+    by_name = {part.name: part for part in parts}
+    installed_in: dict[str, str] = {}
+    for state in states:
+        for part in state.installs:
+            if part not in by_name:
+                raise ValueError(
+                    f"state '{state.name}' installs '{part}', which is no declared part"
+                )
+            if part in installed_in:
+                raise ValueError(
+                    f"'{part}' is installed in both '{installed_in[part]}' and '{state.name}'"
+                )
+            installed_in[part] = state.name
+    entries = []
+    for adjustment in adjustments:
+        if adjustment.performed_in not in order:
+            raise ValueError(
+                f"{adjustment} names the state '{adjustment.performed_in}', which the build "
+                f"does not define; its states are {order}"
+            )
+        name = f"access: {adjustment.feature} in {adjustment.performed_in}"
+        if not adjustment.access:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"not evaluated — adjusting {adjustment.feature} in "
+                        f"{adjustment.performed_in} declares no access route: no port, window "
+                        "or tool path, and an undeclared route is not a clear one"
+                    ),
+                )
+            )
+            continue
+        reached = order[: order.index(adjustment.performed_in) + 1]
+        blockers = sorted(
+            (part, feature)
+            for part, state in installed_in.items()
+            if state in reached
+            for feature in by_name[part].occupies
+            if feature in adjustment.access
+        )
+        absence = Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason="declared access routes checked against the parts installed by that state",
+        )
+        if blockers:
+            closed = "; ".join(
+                f"{part} (installed in {installed_in[part]}) occupies {feature}"
+                for part, feature in blockers
+            )
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.FAIL,
+                    detail=(
+                        f"{adjustment.feature} cannot be reached in {adjustment.performed_in}: "
+                        f"{closed}"
+                    ),
+                    underived=absence,
+                )
+            )
+        else:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.PASS,
+                    detail=(
+                        f"{adjustment.feature} is reachable in {adjustment.performed_in} via "
+                        f"{', '.join(adjustment.access)}"
+                    ),
+                    underived=absence,
+                )
+            )
+    return tuple(entries)
