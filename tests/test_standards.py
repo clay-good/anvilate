@@ -2269,6 +2269,97 @@ def test_the_bundled_tables_are_read_once_and_shared():
         assert factory() is factory(), f"{factory.__name__} rebuilds its table per call"
 
 
+# Every bundled loader, discovered rather than listed: a new table added without `@cache`
+# is exactly the regression the list above could not see. The one exclusion is named with
+# its cause.
+_NOT_A_CACHED_TABLE = {
+    "default_standards_resolver": (
+        "assembles the cached tables into a resolver per call, and screening caches the "
+        "resolver it builds, so the tables underneath are what is shared"
+    ),
+}
+
+
+def _bundled_loaders():  # type: ignore[no-untyped-def]
+    import inspect
+
+    import anvilate.standards as standards
+
+    return {
+        name: getattr(standards, name)
+        for name in dir(standards)
+        if name.startswith("default_")
+        and callable(getattr(standards, name))
+        and not inspect.signature(getattr(standards, name)).parameters
+    }
+
+
+def test_every_bundled_loader_is_cached_and_a_repeat_screen_hits_the_cache():
+    """Present is not hit: a cache nothing reads through saves nothing.
+
+    The identity check above holds four hand-picked factories. This holds every loader the
+    package exports, and then runs a real screen twice: the second run has to be served from
+    the cache — hits up, misses flat — or the cache is decoration.
+    """
+    from anvilate.packs.structural import BoltedConnection, screen_bolted_connection
+    from anvilate.units import Quantity
+
+    loaders = _bundled_loaders()
+    assert len(loaders) >= 13, f"found only {sorted(loaders)}"
+    stray = sorted(set(_NOT_A_CACHED_TABLE) - set(loaders))
+    assert not stray, f"exclusions for loaders that no longer exist: {stray}"
+    uncached = sorted(
+        name
+        for name, loader in loaders.items()
+        if name not in _NOT_A_CACHED_TABLE and not hasattr(loader, "cache_info")
+    )
+    assert not uncached, f"bundled loaders that rebuild their table per call: {uncached}"
+
+    connection = BoltedConnection(
+        name="joint",
+        bolt_diameter=Quantity.parse("12 mm"),
+        plate_thickness=Quantity.parse("10 mm"),
+        load=Quantity.parse("8 kN"),
+        bolt_material="AISI-1045-CD",
+        plate_material="ASTM-A36",
+    )
+    materials = loaders["default_materials_db"]
+    screen_bolted_connection(connection, required_safety_factor=2.0)
+    before = materials.cache_info()
+    screen_bolted_connection(connection, required_safety_factor=2.0)
+    after = materials.cache_info()
+    assert after.misses == before.misses, "a repeat screen re-read the materials table"
+    assert after.hits > before.hits, "a repeat screen never asked the cache at all"
+
+
+def _typo_probe(name: str, table):  # type: ignore[no-untyped-def]
+    """A real key with one character added, and the call that looks it up."""
+    if name == "default_pipe_schedule_table":
+        size, schedule = table.nominal_sizes()[0], table.schedules()[0]
+        return size, lambda: table.get(f"{size}x", schedule)
+    for listing in ("designations", "sizes", "known_materials", "known_components"):
+        if hasattr(table, listing):
+            key = sorted(getattr(table, listing)())[0]
+            return key, lambda key=key: table.get(f"{key}x")
+    raise AssertionError(f"{name} lists no keys a probe could misspell")
+
+
+def test_every_bundled_table_answers_a_typo_with_the_entry_it_nearly_named():
+    """An unknown name is answered from the real registry, not with a bare refusal."""
+    tables = {
+        name: loader()
+        for name, loader in _bundled_loaders().items()
+        if name not in _NOT_A_CACHED_TABLE
+    }
+    assert len(tables) >= 12, f"found only {sorted(tables)}"
+    for name, table in tables.items():
+        real, lookup = _typo_probe(name, table)
+        with pytest.raises(LookupError) as refused:
+            lookup()
+        message = str(refused.value)
+        assert "did you mean" in message and real in message, f"{name}: {message}"
+
+
 def test_extending_a_shared_database_leaves_the_shared_one_alone():
     """The risk the cache introduces, held directly: `extended` must build a new database
     rather than reach into the one every other caller now holds."""

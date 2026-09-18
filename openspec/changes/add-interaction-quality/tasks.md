@@ -18,7 +18,9 @@
 - [ ] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails
 - [ ] 2.3 CI gate carries a population floor and enumerated exclusions with causes
-- [ ] 2.4 Near-miss suggestions for unknown names, keyed on the real registry
+- [x] 2.4 Near-miss suggestions for unknown names, keyed on the real registry — every bundled
+      table answers a one-character typo with the entry it nearly named, held by a sweep over
+      the discovered tables rather than a list of them
 
 ## 3. Output adaptation
 
@@ -46,7 +48,9 @@
 ## 6. Budgets
 
 - [ ] 6.1 Interactive responsiveness budget, measured per release on the reference profile
-- [ ] 6.2 Cache repeated loads of bundled data; assert the cache is hit, not just present
+- [x] 6.2 Cache repeated loads of bundled data; assert the cache is hit, not just present —
+      every discovered loader is cached, and a repeat screen is served with hits up and misses
+      flat
 
 ## 7. Tests
 
