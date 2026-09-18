@@ -4,7 +4,7 @@
 
 - [x] 1.1 Declared-consumption annotation: which upstream check id and which output
 - [x] 1.2 Dimension agreement between the declared output and the consuming parameter
-- [ ] 1.3 CI gate: a check that reads another check's result without declaring it fails —
+- [x] 1.3 CI gate: a check that reads another check's result without declaring it fails —
       detected structurally, with a population floor and enumerated exclusions
 
 ## 2. Evaluation

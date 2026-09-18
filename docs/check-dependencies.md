@@ -73,7 +73,10 @@ chain refusing to compute anything downstream of an unmeasured heat source.
 ## Status
 
 This is the graph, its ordering and the chain runner
-(`openspec/changes/add-check-dependency-graph`, groups 1.1, 1.2, 2 and 3), with the
-realized order recorded in the evidence bundle and each verdict naming its chain. No screen in
-the library declares its consumptions yet, so nothing in `screen_spec` runs along a graph
-today: wiring the screens, and the CI gate on undeclared consumption (1.3), are what remain.
+(`openspec/changes/add-check-dependency-graph`, every group), with the realized order recorded
+in the evidence bundle and each verdict naming its chain. A CI gate scans the library for
+every function that reads a screen's result, whether through a name or a chained call. Each
+such read is either declared along a graph or listed with its cause. Today there are five, and
+all of them roll a card up, render it or report on it rather than compute a verdict from
+another check's number. A synthetic consumer is held to be caught. No pack screen declares its
+consumptions yet, so `screen_spec` does not run along a graph.

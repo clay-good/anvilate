@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import ast
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -460,3 +464,101 @@ def test_the_report_keeps_the_chain_when_it_restates_a_comparison() -> None:
     verdict = ReportSection(entry=entry).verdict()
     assert verdict.startswith(entry.comparison.sentence())  # type: ignore[union-attr]
     assert "shock.peak_g = 4.2" in verdict and "heat.q = 12" in verdict
+
+
+# --- A check that reads another check's result must declare it (task 1.3) ---------------
+
+_SCREEN_NAME = re.compile(r"^screen_|_scorecard$")
+_RESULT_READS = frozenset(
+    {
+        "safety_factor",
+        "comparison",
+        "status",
+        "entries",
+        "utilization",
+        "passed",
+        "evaluated",
+        "required_safety_factor",
+        "governing",
+    }
+)
+
+# Every place a function reads a screen's result, each with the reason it is not an
+# undeclared consumption. None of them computes a verdict from another check's number:
+# they roll a card up, render it or report on it. A new site is either declared as a
+# `dependency.Consumes` along a graph or added here with its cause — it never goes quietly.
+_READS_A_RESULT_AND_IS_NOT_A_CHECK = {
+    "bundle.py:sections<-design_basis_scorecard": "rolls the design-basis card into the bundle",
+    "cli.py:_build<-screen_spec": "the build command gates on the card's status",
+    "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",
+    "needs.py:deepening<-screen_spec": "the needs report reads which checks could not run",
+    "packs/structural.py:screen_structure<-screen_shear_plate": (
+        "a structure's card is its members' cards, aggregated, not computed from them"
+    ),
+}
+
+
+def _result_reads(tree: ast.AST, where: str) -> set[str]:
+    """Every `function<-screen` pair in ``tree`` where a screen's result is read."""
+
+    def called(node: ast.AST) -> str:
+        if isinstance(node, ast.Call):
+            target = node.func
+            if isinstance(target, ast.Name):
+                return target.id
+            if isinstance(target, ast.Attribute):
+                return target.attr
+        return ""
+
+    found: set[str] = set()
+    for function in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        bound: dict[str, str] = {}
+        for node in ast.walk(function):
+            if isinstance(node, ast.Assign) and _SCREEN_NAME.search(called(node.value)):
+                if called(node.value) != function.name:
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            bound[target.id] = called(node.value)
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Attribute) or node.attr not in _RESULT_READS:
+                continue
+            if isinstance(node.value, ast.Name) and node.value.id in bound:
+                found.add(f"{where}:{function.name}<-{bound[node.value.id]}")
+            screen = called(node.value)
+            if _SCREEN_NAME.search(screen) and screen != function.name:
+                found.add(f"{where}:{function.name}<-{screen}")
+    return found
+
+
+def test_no_check_reads_another_checks_result_without_declaring_it() -> None:
+    from conftest import library_sources
+
+    src = Path(__file__).resolve().parents[1] / "src" / "anvilate"
+    found: set[str] = set()
+    for path, tree in library_sources():
+        found |= _result_reads(tree, str(path.relative_to(src)))
+    assert len(found) >= 5, f"the scan found only {sorted(found)}; it has stopped looking"
+    undeclared = sorted(found - set(_READS_A_RESULT_AND_IS_NOT_A_CHECK))
+    assert not undeclared, (
+        "these read another check's result and are neither declared along a dependency "
+        f"graph nor excused with a cause: {undeclared}"
+    )
+    stale = sorted(set(_READS_A_RESULT_AND_IS_NOT_A_CHECK) - found)
+    assert not stale, f"exclusions for reads that no longer exist: {stale}"
+    for cause in _READS_A_RESULT_AND_IS_NOT_A_CHECK.values():
+        assert len(cause.split()) >= 5, f"an exclusion with no stated cause: {cause!r}"
+
+
+def test_the_consumption_scan_sees_both_ways_a_result_is_read() -> None:
+    """The attack: a synthetic check that reads another's number must be caught."""
+    source = (
+        "def screen_shock(member):\n"
+        "    modal = frequency_scorecard('f', frequency=1, min_frequency=None)\n"
+        "    return modal.comparison\n"
+        "def screen_drop(member):\n"
+        "    return weld_fatigue_scorecard('w').safety_factor\n"
+    )
+    assert _result_reads(ast.parse(source), "synthetic.py") == {
+        "synthetic.py:screen_shock<-frequency_scorecard",
+        "synthetic.py:screen_drop<-weld_fatigue_scorecard",
+    }
