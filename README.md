@@ -316,7 +316,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (237 closed-form modules and 1,854 public symbols, each dimension-checked and
-hand-verified, 6,099 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 6,103 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -350,6 +350,7 @@ nobody can act on.
 | [Uncertainty-aware margins](docs/uncertainty-margins.md) | Input scatter propagated to a shortfall probability and a sensitivity ranking, with the sampling method and the screening citation printed beneath the number. |
 | [Discipline modules](docs/discipline-modules.md) | Each pack's manifest: its version, the standards its checks cite, the material properties its screens need, the tiers it touches and the screens it exports — derived from the package and gated against it, so a manifest cannot describe a pack that has moved on without it. |
 | [Opto-mechanics](docs/optomechanics.md) | Does a lens stay in focus across its temperature range: the ±2·λ·N² depth of focus, a thin lens's thermal focal shift from its own glass constants, and the housing's growth between lens and detector. One f/4 singlet over 40 K is 76.4 µm out in aluminium and inside its ±17.6 µm in Invar. Glass data is the caller's, never bundled. |
+| [Voice](docs/voice.md) | An instrument, not a companion. No string the library prints congratulates, jokes, apologises, exclaims, speaks as a person or carries an emoji. A test reads every user-facing string literal against those rules, and a planted slip of each kind has to be caught. |
 | [Assembly order](docs/assembly-order.md) | Whether the parts can be inserted at all: each declares its insertion direction, what it occupies and what its insertion sweeps through, and the screen returns an order that respects every blocking, or fails naming every part in the cycle and what each sweeps. A part with no insertion direction is never treated as insertable from anywhere. |
 | [Constraint topology](docs/constraint-topology.md) | A body's six freedoms counted against the constraints its document declares, in a named frame: each free, exact or over-constrained, with every competing constraint named and the arithmetic shown. An over-constrained load path is indeterminate, and a stress screened across it is never printed without saying so. |
 | [Failure-mode coverage](docs/failure-mode-coverage.md) | A cited catalogue of the ways a design fails, resolved against the facts a document declares: which modes apply, which a check that ran addresses, which are left to a physical test, and which nobody looked at — named, with the population they were counted from and the caveat that the catalogue is a floor. A clean card with an unaddressed applicable mode does not read as complete. |

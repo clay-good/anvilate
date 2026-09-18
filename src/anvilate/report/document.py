@@ -592,7 +592,7 @@ class CalculationReport(StatableModel):
                     out.append(f'<p class="math">{math}</p>')
             out.append("</div>")
             out.append('<table class="glossary">')
-            out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")
+            out.append("<thead><tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr></thead>")
             for symbol, description, value in derivation.glossary(system=self.unit_system):
                 # Typeset, so the legend and the formula above it show one symbol rather than
                 # two spellings of it. The formula rendered `σ_b` as a subscript and the
@@ -612,7 +612,7 @@ class CalculationReport(StatableModel):
             out.append(f'<p class="fallback">[{escape(section.fallback_label)}]</p>')
             if section.inputs:
                 out.append('<table class="glossary">')
-                out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")
+                out.append("<thead><tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr></thead>")
                 for item in section.inputs:
                     out.append(
                         f"<tr><td>{escape(item.symbol)}</td>"
@@ -647,7 +647,10 @@ class CalculationReport(StatableModel):
 
     def _html_summary(self) -> list[str]:
         out = ["<h2>Margin summary</h2>", '<table class="summary">']
-        out.append("<tr><th>Check</th><th>Safety factor</th><th>Required</th><th>Result</th></tr>")
+        out.append(
+            "<thead><tr><th>Check</th><th>Safety factor</th><th>Required</th>"
+            "<th>Result</th></tr></thead>"
+        )
         governing = self.governing()
         governing_index = self._governing_index()
         for index, (name, factor, required, verdict) in enumerate(self._summary_rows()):
@@ -716,7 +719,9 @@ class CalculationReport(StatableModel):
             if not result.contributors:
                 continue
             out.append('<table class="budget">')
-            out.append("<tr><th>Contributor</th><th>Value</th><th>Source</th><th>Share</th></tr>")
+            out.append(
+                "<thead><tr><th>Contributor</th><th>Value</th><th>Source</th><th>Share</th></tr></thead>"
+            )
             for row in self._budget_rows(result):
                 out.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>")
             out.append("</table>")
@@ -747,8 +752,8 @@ class CalculationReport(StatableModel):
             return [*out, f'<p class="none">{_NONE_DECLARED}</p>']
         out.append('<table class="ledger">')
         out.append(
-            "<tr><th>Entry</th><th>Kind</th><th>Value</th><th>Quantity</th>"
-            "<th>Origin</th><th>Authority</th></tr>"
+            "<thead><tr><th>Entry</th><th>Kind</th><th>Value</th><th>Quantity</th>"
+            "<th>Origin</th><th>Authority</th></tr></thead>"
         )
         for entry in self.margins:
             cells = (
@@ -837,4 +842,11 @@ section.check { page-break-inside: avoid; }
 tr.governing td { font-weight: bold; }
 .disclaimer { margin-top: 2em; font-size: 0.9em; color: #444; border-top: 1px solid #bbb;
   padding-top: 0.8em; }
+td, .derivation, .status { font-variant-numeric: tabular-nums lining-nums; }
+@media print {
+  thead { display: table-header-group; }
+  tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+  body, .status, .repair, .uncertainty.fragile { color: #000; }
+}
 """.strip()

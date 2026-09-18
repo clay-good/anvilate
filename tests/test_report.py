@@ -2121,3 +2121,21 @@ def test_every_status_the_report_colours_also_says_in_words():
     spans = re.findall(r'<span class="status">([^<]*)</span>', html)
     assert len(spans) >= 2, "the report rendered no status to check"
     assert all(span in _STATUS_LABEL.values() and span.strip() for span in spans), spans
+
+
+def test_the_report_prints_as_a_document() -> None:
+    """Presentation-craft 5.1: headers repeat, derivations stay whole, figures line up."""
+    import re
+
+    from anvilate.report.document import _STYLESHEET
+
+    print_rules = re.search(r"@media print \{(.*)\}\s*$", _STYLESHEET, re.S)
+    assert print_rules is not None, "the stylesheet has no print rules"
+    body = print_rules.group(1)
+    assert "thead { display: table-header-group; }" in body
+    assert re.search(r"\.derivation[^{]*\{ break-inside: avoid;", body)
+    assert "tabular-nums" in _STYLESHEET
+    # Every column-header row is a <thead>, or it would not repeat across a page break.
+    html = _report().to_html()
+    assert "<thead><tr><th>" in html
+    assert not re.search(r"<table[^>]*>\s*<tr><th>[^<]*</th><th>", html)
