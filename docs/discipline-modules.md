@@ -38,6 +38,21 @@ matches. It carries a floor on the number of screens it is reading, so a refacto
 turn the gate green by emptying it. Both mutations — dropping a screen from a manifest and
 deleting a manifest — were run against it.
 
+## Every declared screen has to run
+
+A screen a module declares and nothing exercises is a check that ships and has never
+produced a verdict. At the end of a clean full run the suite reports the fraction of
+declared screens that ran, against the population it measured, and fails on any that did
+not. All 29 run today.
+
+The record comes off the call stack of each scorecard entry, not from wrapping the screen
+functions: a test that writes `from anvilate.packs.structural import screen_base_plate`
+binds the original at import time, and a wrapper installed on the module would record
+nothing for it — the gate would then report a screen nobody runs. It records **every**
+screen frame on the stack rather than the nearest one, because `screen_structure`
+dispatches to member screens and builds no entry of its own; with a nearest-frame detector
+the one screen that composes the others was the single screen reported as unexercised.
+
 A **check-name namespace** is not a field here. The spec asks a module to reserve one, and
 nothing in this library could hold a pack to it today: a check is named after the element
 instance that produced it (`col_base plate bending`), not after its module. A declared
@@ -46,8 +61,8 @@ makes it true.
 
 ## Status
 
-This is the manifest contract, the ten shipped manifests and the completeness gate
-(`openspec/changes/add-physical-domain-modules`, tasks 1.1, 1.3, 2.1 and 3.1). The loader
-with enable/disable and lazy import, duplicate-limit-state detection across modules, the
-per-module exercise floor, the both-directions standards gate, and out-of-tree modules are
-what remain.
+This is the manifest contract, the ten shipped manifests, the completeness gate and the
+exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1 and
+3.2). The loader with enable/disable and lazy import, duplicate-limit-state detection
+across modules, the both-directions standards gate, and out-of-tree modules are what
+remain.

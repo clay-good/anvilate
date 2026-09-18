@@ -126,6 +126,7 @@ def pytest_configure(config: pytest.Config) -> None:
     pytest.approx = _recording_approx
     _install_the_coverage_collector()
     _install_the_rendering_collector()
+    _install_the_screen_collector()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -292,6 +293,29 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             "list stays honest:\n  " + "\n  ".join(armed)
         )
         session.exitstatus = 1
+
+    # Every screen a module declares has to have produced a verdict somewhere in this run.
+    # An absence, so it is below the full-run guard; and reported as a counted fraction
+    # against the population, because "nothing unexercised" over an empty set of declared
+    # screens is what a gate reading a broken registry would also say.
+    declared_screens = _declared_screen_count()
+    unexercised = _unexercised_screens()
+    if declared_screens < 25:
+        print(
+            f"\nMODULE EXERCISE: only {declared_screens} screens are declared across the "
+            "module manifests, so this gate is measuring an all but empty population"
+        )
+        session.exitstatus = 1
+        return
+    if unexercised:
+        share = (declared_screens - len(unexercised)) / declared_screens
+        print(
+            f"\nMODULE EXERCISE: {len(unexercised)} of {declared_screens} declared screens "
+            f"({share:.1%} exercised) never ran in this suite. A screen that ships and has "
+            "never produced a verdict is a check nobody has read:\n  " + "\n  ".join(unexercised)
+        )
+        session.exitstatus = 1
+        return
 
     # The same, for the assurance sweep: a renderer that started returning blank would
     # empty it without failing anything. The library builds thousands of entries on a full
@@ -606,6 +630,67 @@ def _built_by_the_library() -> bool:
                 return True
         frame = frame.f_back
     return False
+
+
+# ---------------------------------------------------------------------------
+# Which discipline screen each module declares, and which of them the suite runs.
+#
+# A module manifest names the screens its pack exports. A screen nothing exercises is a
+# check that ships and has never produced a verdict — the shape `add-physical-domain-modules`
+# asks for an exercise floor about. Recorded by wrapping each pack's screens once, at
+# configure time, so the record is what the suite CALLED rather than what it imported.
+
+_screens_run: set[str] = set()
+
+#: Where a pack's screens live, for the stack walk below.
+_PACKS_DIR = _SRC / "packs"
+
+
+def _install_the_screen_collector() -> None:
+    """Record the screen that built each entry, off the stack that built it.
+
+    Not by wrapping the functions: a test that writes `from anvilate.packs.structural import
+    screen_base_plate` binds the original at import time, so a wrapper installed on the
+    module records nothing for it and the gate reports a screen nobody ran. The stack is the
+    one place that cannot be bypassed — the frame is there however the caller reached it.
+    """
+    from anvilate.scorecard import ScorecardEntry
+
+    original_init = ScorecardEntry.__init__
+
+    def recording_init(self, **data):
+        original_init(self, **data)
+        frame = inspect.currentframe()
+        while frame is not None:
+            path = Path(frame.f_code.co_filename)
+            if path.parent == _PACKS_DIR and frame.f_code.co_name.startswith("screen_"):
+                # EVERY screen frame on the stack, not the nearest one. `screen_structure`
+                # dispatches each member back through the element registry, so the entries
+                # are built inside the member's screen and it has no entry of its own — a
+                # detector that stopped at the innermost frame reported the one screen that
+                # composes the others as the one screen nobody runs.
+                _screens_run.add(f"{path.stem}.{frame.f_code.co_name}")
+            frame = frame.f_back
+
+    ScorecardEntry.__init__ = recording_init
+
+
+def _unexercised_screens() -> list[str]:
+    """Every declared screen this run never called, as `module.screen_name`."""
+    from anvilate.modules import MODULE_MANIFESTS
+
+    declared = {
+        f"{manifest.id}.{screen}"
+        for manifest in MODULE_MANIFESTS.manifests
+        for screen in manifest.screens
+    }
+    return sorted(declared - _screens_run)
+
+
+def _declared_screen_count() -> int:
+    from anvilate.modules import MODULE_MANIFESTS
+
+    return sum(len(manifest.screens) for manifest in MODULE_MANIFESTS.manifests)
 
 
 # ---------------------------------------------------------------------------

@@ -165,3 +165,53 @@ def test_a_registry_round_trips_through_its_own_serialization() -> None:
     assert ModuleRegistry.model_validate_json(MODULE_MANIFESTS.model_dump_json()) == (
         MODULE_MANIFESTS
     )
+
+
+def test_the_exercise_gate_reads_what_the_suite_actually_ran() -> None:
+    """The collector behind the MODULE EXERCISE gate, exercised in both directions.
+
+    The gate itself only fires at the end of a clean full run — it reads an absence — so
+    its helper is tested here, where a wrong answer in either direction is visible.
+    """
+    import conftest
+
+    saved = set(conftest._screens_run)
+    try:
+        conftest._screens_run.clear()
+        every = conftest._unexercised_screens()
+        assert len(every) == conftest._declared_screen_count() >= 25
+        assert "structural.screen_lifting_lug" in every
+        conftest._screens_run.update(every)
+        assert conftest._unexercised_screens() == []
+    finally:
+        conftest._screens_run.clear()
+        conftest._screens_run.update(saved)
+
+
+def test_a_screen_that_composes_others_is_recorded_as_run() -> None:
+    """`screen_structure` builds no entry of its own — it dispatches to member screens.
+
+    The collector records every screen frame on the stack rather than the nearest one, so
+    the one screen that composes the others is not reported as the one nobody runs. With a
+    nearest-frame detector it was exactly that: the single unexercised screen of the 29.
+    """
+    import sys
+
+    import conftest
+
+    sys.path.insert(0, str(conftest.Path(__file__).parent))
+    from anvilate.packs.structural import LoadType, Support, screen_structure
+    from test_structural import _column, _member  # the suite's own members
+
+    saved = set(conftest._screens_run)
+    try:
+        conftest._screens_run.clear()
+        screen_structure(
+            [_member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N"), _column("500 mm")],
+            required_safety_factor=2.0,
+        )
+        assert "structural.screen_structure" in conftest._screens_run
+        assert "structural.screen_beam_member" in conftest._screens_run
+    finally:
+        conftest._screens_run.clear()
+        conftest._screens_run.update(saved)
