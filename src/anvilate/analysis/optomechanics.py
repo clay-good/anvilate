@@ -19,8 +19,12 @@ is a confident wrong answer. The caller states the value and owns where it came 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from enum import StrEnum
 from math import exp, log, pi, sqrt
 
+from pydantic import ConfigDict, model_validator
+
+from .._models import StatableModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
@@ -40,6 +44,8 @@ __all__ = [
     "mount_decenter",
     "decenter_line_of_sight",
     "mirror_tilt_line_of_sight",
+    "ThermalConditionKind",
+    "ThermalCondition",
 ]
 
 _ALDUCHOV = (
@@ -518,6 +524,100 @@ def mirror_tilt_line_of_sight(*, tilt: Quantity) -> Quantity:
     radians without complaint. Returned in microradians.
     """
     return Quantity(magnitude=2.0 * _radians(tilt, "tilt") * 1e6, unit="µrad")
+
+
+class ThermalConditionKind(StrEnum):
+    """What a thermal condition is — the thing every thermal screen is only valid for some of.
+
+    Uniform soak, spatial gradient and transient are the three cases Yoder's Opto-Mechanical
+    Systems Design treats separately, because each moves an optic differently.
+    """
+
+    SOAK = "soak"
+    GRADIENT = "gradient"
+    TRANSIENT = "transient"
+
+
+# How close to equilibrium a dwell must bring the assembly before an equilibrium screen's
+# answer describes it: three time constants, 1 − e⁻³ ≈ 95% of the change. A practice
+# convention for a lumped first-order response, not a cited clause.
+_EQUILIBRIUM_TIME_CONSTANTS = 3.0
+
+
+class ThermalCondition(StatableModel):
+    """A declared thermal condition, with its kind stated rather than assumed.
+
+    A ``soak`` brings the whole assembly to one temperature; a ``gradient`` holds it across
+    one; a ``transient`` is a change over a ``dwell``, reaching equilibrium only as the dwell
+    approaches the assembly's ``time_constant``. The kind has no default: a gradient read as a
+    soak misses the wedge and surface deformation the gradient actually causes (Yoder,
+    Opto-Mechanical Systems Design). The transient's approach to equilibrium is the
+    first-order lumped response 1 − exp(−t/τ) of Incropera's lumped-capacitance method.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: ThermalConditionKind
+    temperature_change: Quantity
+    dwell: Quantity | None = None
+    time_constant: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _complete(self) -> ThermalCondition:
+        _check(self.temperature_change, "[temperature]", "temperature_change")
+        if self.kind is ThermalConditionKind.TRANSIENT:
+            if self.dwell is None or self.time_constant is None:
+                raise ValueError(
+                    "a transient condition needs its dwell and the assembly's time constant; "
+                    "without them nothing says whether it reaches equilibrium"
+                )
+        for value, name in ((self.dwell, "dwell"), (self.time_constant, "time_constant")):
+            if value is not None:
+                _check(value, "[time]", name)
+                if value.to("s").magnitude <= 0:
+                    raise ValueError(f"{name} must be positive; got {value}")
+        return self
+
+    @property
+    def equilibrium_fraction(self) -> float:
+        """How much of the change a first-order assembly reaches by the end of the dwell.
+
+        ``1 − exp(−dwell/τ)``; 1.0 for a soak or a gradient, which are equilibrium states.
+        """
+        if self.dwell is None or self.time_constant is None:
+            return 1.0
+        return 1.0 - exp(-self.dwell.to("s").magnitude / self.time_constant.to("s").magnitude)
+
+    def qualify(self, entry: ScorecardEntry) -> ScorecardEntry:
+        """A soak screen's ``entry`` as this condition allows it to stand.
+
+        Under a gradient the entry is replaced by ``not_evaluated``, naming the mismatch: a
+        uniform-soak screen does not describe a part held across a gradient. Under a transient
+        whose dwell falls short of three time constants the verdict stands and says it is
+        optimistic, naming both durations. A soak leaves the entry as it was.
+        """
+        if self.kind is ThermalConditionKind.GRADIENT:
+            return ScorecardEntry(
+                name=entry.name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    "not evaluated — this screen requires a uniform soak and the declared "
+                    "thermal condition is a gradient, which bends and wedges the element in "
+                    "ways a soak does not"
+                ),
+            )
+        if self.kind is ThermalConditionKind.TRANSIENT and entry.evaluated:
+            assert self.dwell is not None and self.time_constant is not None
+            needed = _EQUILIBRIUM_TIME_CONSTANTS * self.time_constant.to("s").magnitude
+            if self.dwell.to("s").magnitude < needed:
+                note = (
+                    f" — optimistic: the declared dwell of {self.dwell} does not reach "
+                    f"equilibrium against a time constant of {self.time_constant} "
+                    f"({self.equilibrium_fraction:.0%} of the change), and this is an "
+                    "equilibrium result"
+                )
+                return entry.model_copy(update={"detail": f"{entry.detail}{note}"})
+        return entry
 
 
 # The unit layer counts an angle as dimensionless, so a strain in mm/m would convert to

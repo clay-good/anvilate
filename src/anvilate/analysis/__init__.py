@@ -636,7 +636,9 @@ modules:
   the axial retention preload m·a, stress birefringence K·σ·t, and a root-sum-square
   wavefront budget judged by the Maréchal Strehl ratio exp(−(2πσ/λ)²), and a sealed
   housing's internal dew point against its coldest surface at cold soak; and the line of
-  sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, and a mirror's doubled tilt
+  sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, and a mirror's doubled tilt;
+  a thermal condition declared as a soak, gradient or transient, which a soak screen refuses
+  or calls optimistic when it does not describe
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2474,6 +2476,8 @@ from .optics import (
     thin_lens_image_distance,
 )
 from .optomechanics import (
+    ThermalCondition,
+    ThermalConditionKind,
     athermal_defocus,
     athermal_focus_scorecard,
     decenter_line_of_sight,
@@ -4637,6 +4641,8 @@ __all__ = [
     "mount_decenter",
     "decenter_line_of_sight",
     "mirror_tilt_line_of_sight",
+    "ThermalConditionKind",
+    "ThermalCondition",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

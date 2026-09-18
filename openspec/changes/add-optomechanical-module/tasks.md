@@ -3,12 +3,12 @@
 ## 0. Prerequisites
 
 - [ ] 0.1 `add-physical-domain-modules` landed — manifest and composition rules exist
-- [ ] 0.2 `add-performance-budgets` landed — budgets exist
+- [x] 0.2 `add-performance-budgets` landed — budgets exist
 - [ ] 0.3 `add-keepout-envelopes` landed — the beam envelope has a home
 - [ ] 0.4 `add-check-dependency-graph` landed — self-heating can reach the focus screen
 - [ ] 0.5 `add-constraint-topology` landed — mount tallies qualify alignment results
 - [ ] 0.6 `add-failure-mode-coverage` landed — the module has a catalog to contribute to
-- [ ] 0.7 `add-declaration-completeness` landed — profiles and screening depth exist
+- [x] 0.7 `add-declaration-completeness` landed — profiles and screening depth exist
 - [ ] 0.8 `add-assembly-feasibility` landed — post-closure access can be screened
 
 ## 1. Units and data
@@ -85,7 +85,7 @@
 
 - [ ] 10.1 Differential boresight between two declared paths, common-mode identified
 - [ ] 10.2 Internal dissipation to internal rise, consumed by thermal and condensation
-- [ ] 10.3 Thermal-condition kind; soak screen refuses a gradient; dwell versus time
+- [x] 10.3 Thermal-condition kind; soak screen refuses a gradient; dwell versus time
       constant
 - [ ] 10.4 Dynamic clearance against shock displacement, distinct from static intrusion
 - [ ] 10.5 Adjustment mechanism screens; every mechanism a budget contributor

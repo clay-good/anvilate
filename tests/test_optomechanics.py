@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.analysis.optomechanics import (
     athermal_defocus,
@@ -300,3 +301,42 @@ def test_a_mirror_doubles_its_tilt_and_refuses_a_strain_for_an_angle() -> None:
     for not_an_angle in ("mm/m", "mm", "dimensionless"):
         with pytest.raises(ValueError, match="must be an angle"):
             mirror_tilt_line_of_sight(tilt=Quantity(magnitude=1, unit=not_an_angle))
+
+
+def _condition(kind: str, **fields: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import ThermalCondition, ThermalConditionKind
+
+    return ThermalCondition(kind=ThermalConditionKind(kind), temperature_change=q("40 K"), **fields)
+
+
+def test_a_soak_screen_refuses_a_gradient_naming_the_kind_it_needs() -> None:
+    entry = _screen("1.2e-6 1/K")
+    refused = _condition("gradient").qualify(entry)
+    assert refused.status is CheckStatus.NOT_EVALUATED
+    assert "requires a uniform soak" in refused.detail
+    assert _condition("soak").qualify(entry) == entry
+
+
+def test_a_short_dwell_makes_an_equilibrium_verdict_say_it_is_optimistic() -> None:
+    from math import exp
+
+    entry = _screen("1.2e-6 1/K")
+    short = _condition("transient", dwell=q("30 min"), time_constant=q("20 min"))
+    assert short.equilibrium_fraction == pytest.approx(1 - exp(-1.5))
+    qualified = short.qualify(entry)
+    assert qualified.status is entry.status
+    assert "optimistic: the declared dwell of 30 min" in qualified.detail
+    assert "time constant of 20 min" in qualified.detail
+    long = _condition("transient", dwell=q("2 h"), time_constant=q("20 min"))
+    assert long.qualify(entry) == entry
+
+
+def test_a_thermal_condition_states_its_kind_and_a_transient_its_durations() -> None:
+    from anvilate.analysis.optomechanics import ThermalCondition
+
+    with pytest.raises(ValidationError):
+        ThermalCondition(temperature_change=q("40 K"))  # type: ignore[call-arg]
+    with pytest.raises(ValidationError, match="needs its dwell"):
+        _condition("transient", dwell=q("30 min"))
+    with pytest.raises(ValidationError, match="dwell must be positive"):
+        _condition("transient", dwell=q("0 min"), time_constant=q("20 min"))

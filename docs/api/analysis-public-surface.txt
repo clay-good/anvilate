@@ -1138,6 +1138,8 @@ optomechanics.internal_condensation_scorecard
 optomechanics.mount_decenter
 optomechanics.decenter_line_of_sight
 optomechanics.mirror_tilt_line_of_sight
+optomechanics.ThermalConditionKind
+optomechanics.ThermalCondition
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity
