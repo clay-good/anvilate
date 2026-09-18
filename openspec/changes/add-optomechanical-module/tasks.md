@@ -61,7 +61,7 @@
 
 - [ ] 6.1 Focus budget, line-of-sight budget, and wavefront budget as declared budgets
       with contributors bound to the screens above
-- [ ] 6.2 Worked example proving the defect class: every screen green, budget red
+- [x] 6.2 Worked example proving the defect class: every screen green, budget red
 
 ## 7. Drawings
 

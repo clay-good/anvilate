@@ -23,6 +23,11 @@ tracer.
 singlet across 40 K in three housings. Aluminium leaves the image 76.4 µm out of a ±17.6 µm
 depth of focus. Titanium misses by 0.8 µm. Invar holds it.
 
+[`examples/lens_focus_budget.py`](../examples/lens_focus_budget.py) is the defect class the
+budgets exist for. Three focus screens each pass, and the depth of focus declared as a
+[budget](performance-budgets.md) with each term bound to its check fails. Worst-case, they
+spend 25.4 µm of ±17.6 µm.
+
 ## What it refuses
 
 | Refused | Why |
@@ -51,4 +56,4 @@ screens, stress birefringence, the wavefront budget and internal condensation
 (`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 4.3, 4.4, 5.1 and this scope
 page). Not built yet: angular units, optical material records, preload change with
 temperature, the shock and mount-compliance screens, contact stress, the gland screen at temperature extremes, and
-the focus and line-of-sight budgets.
+the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.

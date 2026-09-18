@@ -4149,6 +4149,19 @@ def test_lens_housing_example_fails_aluminium_and_titanium_and_passes_invar():
     assert screened["Invar 36"].detail == "defocus 11.2 µm vs depth of focus 17.6 µm"
 
 
+def test_lens_focus_budget_fails_with_every_contributing_screen_green():
+    namespace = runpy.run_path(str(_EXAMPLES / "lens_focus_budget.py"))
+    card = namespace["focus_card"]()
+    assert card.entries and all(entry.status is CheckStatus.PASS for entry in card.entries)
+    results = namespace["budget_results"]()
+    worst = results["worst case"].to_entry()
+    assert worst.status is CheckStatus.FAIL
+    assert results["worst case"].total == pytest.approx(25.38, abs=0.01)
+    # The same three terms under root-sum-square would pass: the rule decides.
+    assert results["rss"].to_entry().status is CheckStatus.PASS
+    assert results["rss"].total == pytest.approx(14.67, abs=0.01)
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()
