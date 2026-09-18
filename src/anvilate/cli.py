@@ -71,6 +71,8 @@ from typing import Any, Literal, TextIO
 from ._cli_output import error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
+from .failure_modes import CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS, facts_from_spec
+from .failure_modes import coverage as mode_coverage
 from .margin import MarginLedger
 from .needs import LEVERAGE_IS_NOT_IMPORTANCE, needs_report
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -2418,6 +2420,31 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     return EXIT_OK
 
 
+def _mode_summary(card: Scorecard, spec) -> dict[str, Any]:
+    """The failure-mode coverage as `_cli_output.ModeSummary` describes it."""
+    report = mode_coverage(card, facts_from_spec(spec))
+    return {
+        "catalog_size": report.catalog_size,
+        "applicable": report.applicable,
+        "caveats": [CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS],
+        "modes": [
+            {
+                "id": entry.mode.id,
+                "stage": entry.mode.stage.value,
+                "citation": entry.mode.citation,
+                "checks": list(entry.checks),
+                "tests": list(entry.tests),
+                "state": (
+                    "addressed"
+                    if entry.addressed
+                    else ("left_to_a_test" if entry.planned else "unaddressed")
+                ),
+            }
+            for entry in report.entries
+        ],
+    }
+
+
 def _needs_summary(card: Scorecard) -> dict[str, Any]:
     """The consolidated needs report as `_cli_output.NeedsSummary` describes it."""
     report = needs_report(card)
@@ -2518,6 +2545,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                         "scorecard": card.model_dump(mode="json"),
                         "margins": _margin_summary(spec),
                         "needs": _needs_summary(card),
+                        "failure_modes": _mode_summary(card, spec),
                     }
                     for path, spec, card in results
                 ],
@@ -2539,6 +2567,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                     card,
                     show_work=args.show_work,
                     system=spec.units.value if spec.units else None,
+                    spec=spec,
                 ),
                 file=out,
             )
@@ -2669,6 +2698,7 @@ def _render(
     *,
     show_work: bool = False,
     system: UnitSystem | None = None,
+    spec=None,
 ) -> str:
     """The card as a person reads it, with the governing check named at the end.
 
@@ -2739,6 +2769,12 @@ def _render(
     # that could not run are different facts, and one "incomplete" number would let a
     # reader act on the wrong one.
     lines.append(f"  out of depth:  {len(deferred)}")
+    if spec is not None:
+        modes = mode_coverage(card, facts_from_spec(spec))
+        if modes.entries:
+            # Only when a mode applies: the caveats belong beside a finding, and a card that
+            # reaches none of the catalogue would otherwise carry two paragraphs saying so.
+            lines.extend(f"  {line}" for line in str(modes).splitlines())
     report = needs_report(card)
     if len(report):
         # Indented under the card and with no blank line before it: a run over a directory

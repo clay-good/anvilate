@@ -440,6 +440,14 @@ the unevaluated count under the card in both directions, zero included, and the 
 indented under it when there is one, so a directory run's one-blank-line-per-spec layout is
 unchanged. Neither reads the verdict or the exit code.
 
+Each checked spec also carries `failure_modes`: the catalogued
+[failure modes](failure-mode-coverage.md) that apply to what the document declares, each
+with its state — addressed by a check that ran, left to a physical test, or unaddressed —
+its discovery stage and its citation, beside the size of the catalogue they were drawn from
+and the caveats that the catalogue is a floor and that a document cannot yet state three of
+the four applicability keys. The text rendering prints the same report under the card when a
+mode applies. Neither reads the verdict or the exit code.
+
 The published schema is a closed union: unknown fields and fields from the wrong command
 variant do not validate. Evidence and QIF export documents additionally carry `artifact`,
 so a script can select the variant without inspecting its payload. The schema is generated,

@@ -15,6 +15,7 @@ from pydantic import ConfigDict, Field, TypeAdapter
 from ._models import FrozenMap, Named, RevalidatedModel
 from .attestation import SignatureState
 from .bundle import BundleDocument
+from .failure_modes import DiscoveryStage
 from .geometry import (
     ConfirmedCylindricalMate,
     ConfirmedPlanarContact,
@@ -32,10 +33,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.36.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.37.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.36.0.json"]
-SchemaVersion = Literal["1.36.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.37.0.json"]
+SchemaVersion = Literal["1.37.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -90,6 +91,24 @@ class NeedsSummary(_WireModel):
     items: tuple[NeedSummary, ...]
 
 
+class ModeSummary(_WireModel):
+    id: Named
+    stage: DiscoveryStage
+    citation: Named
+    checks: tuple[Named, ...]
+    tests: tuple[Named, ...]
+    state: Literal["addressed", "left_to_a_test", "unaddressed"]
+
+
+class FailureModeSummary(_WireModel):
+    """The catalogued modes that apply, and what addressed each; empty when none apply."""
+
+    catalog_size: Annotated[int, Field(ge=0)]
+    applicable: Annotated[int, Field(ge=0)]
+    caveats: tuple[Named, ...]
+    modes: tuple[ModeSummary, ...]
+
+
 class CheckedSpec(_WireModel):
     path: str
     name: Named
@@ -98,6 +117,7 @@ class CheckedSpec(_WireModel):
     scorecard: Scorecard
     margins: MarginSummary
     needs: NeedsSummary
+    failure_modes: FailureModeSummary
 
 
 class CheckOutput(_WireModel):

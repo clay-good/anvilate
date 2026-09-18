@@ -1908,7 +1908,7 @@ def test_a_report_with_no_margins_says_so_rather_than_omitting_the_section():
 def test_the_calc_record_carries_the_margin_ledger_back():
     report = _ledgered_report()
     record = json.loads(json.dumps(report.to_record()))
-    assert record["schema_version"] == "1.3"
+    assert record["schema_version"] == "1.4"
     assert report_from_record(record) == report
 
 
@@ -1993,3 +1993,29 @@ def test_an_unevaluated_budget_states_its_reason_in_the_report():
     text = report.to_text()
     assert "no combination rule is declared" in text
     assert "sling stretch:" not in text  # nothing itemized from a budget that did not run
+
+
+def test_the_report_states_what_nobody_looked_at_beside_the_verdict():
+    from anvilate.failure_modes import coverage
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(ScorecardEntry(name="joint bolt shear", status=CheckStatus.PASS, detail="fine"),)
+    )
+    report = _report().model_copy(
+        update={"failure_modes": coverage(card, {"element": "bolted_connection"})}
+    )
+    text = report.to_text()
+    section = text[text.index("Failure modes") : text.index("Margin ledger")]
+    assert "bolt self-loosening: no check; left to transverse vibration test" in section
+    assert "catalogue is a floor" in section
+    assert "%" not in section, "a coverage figure with no denominator hides the gap"
+    assert "<h2>Failure modes</h2>" in report.to_html()
+
+
+def test_a_report_with_no_coverage_says_so_rather_than_omitting_the_section():
+    text = _report().to_text()
+    assert "Failure modes\n-------------\n  no coverage report was supplied" in text
+    assert '<h2>Failure modes</h2><p class="none">no coverage report was supplied</p>' in "".join(
+        _report().to_html().splitlines()
+    )

@@ -233,6 +233,7 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     assert len(payload["specs"]) == 1
     entry = payload["specs"][0]
     assert sorted(entry) == [
+        "failure_modes",
         "governing",
         "margins",
         "name",
@@ -4443,3 +4444,56 @@ def test_check_json_carries_the_needs_summary(tmp_path):
     # Present and empty on a complete card, not absent: the key is the answer either way.
     assert by_path[str(complete)]["items"] == []
     assert by_path[str(complete)]["not_evaluated"] == 0
+
+
+_BOLTED_SPEC = """
+anvilate_spec: "1.3.0"
+name: flange_joint
+description: A bolted flange joint.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+element_type: bolted_connection
+element_params:
+  name: flange
+  bolt_designation: M12
+  bolt_grade: "8.8"
+  bolt_count: 4
+  shear_load: {magnitude: 20.0, unit: kN}
+  plate_thickness: {magnitude: 10.0, unit: mm}
+  plate_material: ASTM-A36
+"""
+
+
+def test_check_states_what_nobody_looked_at_beside_the_verdict(tmp_path):
+    spec_file = tmp_path / "flange.yaml"
+    spec_file.write_text(_BOLTED_SPEC)
+    _code, out, _err = _run("check", str(spec_file))
+    assert "failure modes: 0 of 1 applicable addressed by a check that ran" in out
+    assert "bolt self-loosening: no check; left to transverse vibration test" in out
+    assert "catalogue is a floor" in out
+    # A card the catalogue does not reach carries no paragraph about it.
+    plain = tmp_path / "padeye.yaml"
+    plain.write_text(_LUG_SPEC)
+    _plain_code, plain_out, _ = _run("check", str(plain))
+    assert "failure modes" not in plain_out
+
+
+def test_check_json_carries_the_failure_mode_coverage(tmp_path):
+    from anvilate._cli_output import CheckOutput
+
+    spec_file = tmp_path / "flange.yaml"
+    spec_file.write_text(_BOLTED_SPEC)
+    _code, raw, _err = _run("check", "--format", "json", str(spec_file))
+    document = json.loads(raw)
+    CheckOutput.model_validate(document)
+    modes = document["specs"][0]["failure_modes"]
+    assert modes["applicable"] == 1 and modes["catalog_size"] >= 5
+    (mode,) = modes["modes"]
+    assert mode["id"] == "bolt self-loosening"
+    assert mode["state"] == "left_to_a_test"
+    assert mode["stage"] == "qualification"
+    assert mode["citation"].startswith("Junker")
+    assert len(modes["caveats"]) == 2

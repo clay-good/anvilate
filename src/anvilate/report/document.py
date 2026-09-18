@@ -29,6 +29,7 @@ from pydantic import ConfigDict, computed_field
 from .._models import StatableModel
 from ..budget import BudgetResult, LimitBasis
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
+from ..failure_modes import CoverageReport
 from ..margin import MarginEntry, MarginLedger
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
@@ -47,8 +48,8 @@ __all__ = [
 # for a change that older readers cannot ignore. 1.1 added the optional scorecard
 # annotations (repair hint, upper safety-factor band, uncertainty distribution);
 # a 1.0 reader ignores them and still loads the record. 1.2 added the report's margin
-# ledger entries, and 1.3 its evaluated performance budgets.
-CALC_RECORD_SCHEMA_VERSION = "1.3"
+# ledger entries, 1.3 its evaluated performance budgets, and 1.4 its failure-mode coverage.
+CALC_RECORD_SCHEMA_VERSION = "1.4"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -310,6 +311,10 @@ class CalculationReport(StatableModel):
     # the margin summary: the summary says how far each check is from its limit, the ledger
     # says how much of that distance was chosen rather than required.
     margins: tuple[MarginEntry, ...] = ()
+    # What nobody looked at. Carried beside the checks because a reviewer's question is not
+    # only what passed: a card with unaddressed applicable modes is not a complete answer,
+    # and a report that printed the verdict alone would read as one.
+    failure_modes: CoverageReport | None = None
     # Evaluated budgets, itemized in their own section. A budget's verdict is already a
     # check in `sections`; this is the arithmetic behind it, which no single line can carry.
     budgets: tuple[BudgetResult, ...] = ()
@@ -408,6 +413,13 @@ class CalculationReport(StatableModel):
         for result in self.budgets:
             out.extend(self._budget_lines(result))
         out.append("")
+        out.append("Failure modes")
+        out.append("-------------")
+        if self.failure_modes is None:
+            out.append("  no coverage report was supplied with this document")
+        else:
+            out.extend(f"  {line}" for line in str(self.failure_modes).splitlines())
+        out.append("")
         out.append("Margin ledger")
         out.append("-------------")
         if not self.margins:
@@ -445,6 +457,7 @@ class CalculationReport(StatableModel):
             out.extend(self._html_section(section))
         out.extend(self._html_summary())
         out.extend(self._html_budgets())
+        out.extend(self._html_failure_modes())
         out.extend(self._html_ledger())
         out.append(f'<p class="disclaimer">{escape(SCREENING_DISCLAIMER)}</p>')
         out.append("</body>")
@@ -702,6 +715,14 @@ class CalculationReport(StatableModel):
                 out.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>")
             out.append("</table>")
         return out
+
+    def _html_failure_modes(self) -> list[str]:
+        out = ["<h2>Failure modes</h2>"]
+        if self.failure_modes is None:
+            return [*out, '<p class="none">no coverage report was supplied</p>']
+        return out + [
+            f"<p>{escape(line.strip())}</p>" for line in str(self.failure_modes).splitlines()
+        ]
 
     def _ledger_lines(self) -> list[str]:
         """Each quantity's product beside its code-required share, then the double counts."""

@@ -44,10 +44,27 @@ clamped interface (Waterhouse), and thermal ratcheting of a clearance (ASME BPVC
 honest state of it: this library screens none of the five, and the report says so instead
 of leaving the card silent.
 
+## Beside the verdict
+
+`anvilate check` prints the coverage under the card whenever a catalogued mode applies to
+what the document declares, and `--format json` carries it per spec under `failure_modes`
+with each mode's state — `addressed`, `left_to_a_test` or `unaddressed` — its stage and its
+citation. A [calculation report](calculation-reports.md) renders the same report as its own
+section, and says so plainly when no coverage was supplied rather than omitting the heading.
+Neither reads the verdict: a mode nobody addressed is a statement about what the analysis
+did not look at, not a check that failed.
+
+What a document can state today is its element. The Spec IR has no environment, no
+interface *kind* — an interface carries a semantic tag like `motor_pilot_bore`, which names
+a feature and not a kind of joint — and no material pair, so three of the four applicability
+keys cannot be satisfied from a document at all. Every rendering says that out loud, because
+a reader owed "what did nobody look at" must not be handed a short list that is short
+because the document had no way to say the rest.
+
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
-(`openspec/changes/add-failure-mode-coverage`, groups 1, 2 and 3). Binding modes to the
-checks that address them needs each check to declare its modes, which is group 2.2 and the
-gates in group 4; the card does not yet carry its own coverage report, and no screen
-declares the modes it addresses.
+(`openspec/changes/add-failure-mode-coverage`, groups 1, 2 bar the per-check binding, 3 and
+5). Binding modes to the checks that address them needs each check to declare its modes —
+group 2.2 and the gates in group 4 — and the Spec IR needs the environment, interface-kind
+and material-pair facts three of the five shipped modes key on.

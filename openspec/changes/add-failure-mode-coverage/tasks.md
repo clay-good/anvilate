@@ -20,7 +20,7 @@
 - [x] 3.1 Count, population size, and the enumerated unaddressed set — never a bare
       percentage
 - [x] 3.2 Discovery-stage attribution, rendered as a stage and not as a severity
-- [ ] 3.3 Card-level completeness statement referencing the unaddressed set
+- [x] 3.3 Card-level completeness statement referencing the unaddressed set
 
 ## 4. Gates
 

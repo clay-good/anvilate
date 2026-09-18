@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from typing import Any
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -42,8 +43,19 @@ __all__ = [
     "CoverageReport",
     "DEFAULT_CATALOG",
     "coverage",
+    "facts_from_spec",
     "CATALOG_IS_A_FLOOR",
+    "UNDECLARABLE_FACTS",
 ]
+
+#: What a Design Spec cannot state today, so a mode keyed on it can never apply from a
+#: document. Said out loud rather than left as an empty result: a coverage report that
+#: silently cannot reach half its catalogue is the shape this module exists to refuse.
+UNDECLARABLE_FACTS = (
+    "a Design Spec states its element, and cannot yet declare an environment, an interface "
+    "kind or a dissimilar-metal pair — so modes keyed on those are in the catalogue and "
+    "cannot apply from a document until the IR can say them"
+)
 
 #: Printed wherever coverage is. The catalogue is what this library knows to ask about, and
 #: a reader who takes it for the set of things that can go wrong has been given false
@@ -247,7 +259,7 @@ class CoverageReport(StatableModel):
             f"addressed by a check that ran, {len(self.planned())} left to a physical test, "
             f"{len(self.unaddressed())} unaddressed, from a catalogue of {self.catalog_size}"
         )
-        lines = [head, f"  {CATALOG_IS_A_FLOOR}"]
+        lines = [head, f"  {CATALOG_IS_A_FLOOR}", f"  {UNDECLARABLE_FACTS}"]
         if not self.entries:
             lines.append("  no mode in the catalogue applies to what this document declares")
             return "\n".join(lines)
@@ -287,6 +299,19 @@ def coverage(
             )
         )
     return CoverageReport(entries=tuple(entries), catalog_size=len(catalogue.modes))
+
+
+def facts_from_spec(spec: Any) -> dict[str, object]:
+    """The declared facts a Design Spec can state today, for :func:`coverage` to match on.
+
+    One key: the element the document declares. The IR has no environment, no interface
+    kind and no material pair — an interface carries a semantic tag (``motor_pilot_bore``),
+    which names a feature and not a kind of joint — so the other three applicability keys
+    cannot be satisfied from a document at all. :data:`UNDECLARABLE_FACTS` says so, and the
+    report prints it, because a reader owed "what did nobody look at" must not be handed a
+    short list that is short because the document had no way to say the rest.
+    """
+    return {"element": spec.element_type}
 
 
 #: What this build knows to ask about. Every entry cites a source a reader can go and read,
