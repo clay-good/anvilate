@@ -376,3 +376,47 @@ element_params:
     assert not (promised & still_blocked)
     assert len(after.entries) > len(before.entries) - len(promised)
     assert needs_report(after).items == ()
+
+
+def test_what_applies_to_a_partial_spec_says_what_runs_and_what_the_rest_need() -> None:
+    """Interaction-quality 5.1: capability discoverable before commitment."""
+    from anvilate.needs import ScreenState, what_applies
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    spec = load_spec_yaml(
+        """
+anvilate_spec: "1.14.0"
+name: partial
+description: A part with no element declared yet.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+"""
+    )
+    applies = what_applies(screen_spec(spec))
+    (waiting,) = applies.of(ScreenState.NEEDS)
+    assert waiting.name == "T1 analytical"
+    assert waiting.needs == ("element_type", "element_params")
+    assert [s.name for s in applies.of(ScreenState.RUNS_NOW)] == ["material resolution"]
+    rendered = str(applies)
+    assert rendered.startswith("2 screens apply (1 runs now, 1 needs, 0 deferred)")
+    assert "T1 analytical: needs element_type, element_params" in rendered
+
+
+def test_a_deferred_screen_and_a_reasoned_gap_render_as_themselves() -> None:
+    from anvilate.needs import ApplicableScreen, ScreenState, what_applies
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(name="dfm", status=CheckStatus.OUT_OF_DEPTH, detail="deferred"),
+            ScorecardEntry(name="t0", status=CheckStatus.NOT_EVALUATED, detail="no solid built"),
+        )
+    )
+    applies = what_applies(card)
+    assert [s.state for s in applies.screens] == [ScreenState.DEFERRED, ScreenState.NEEDS]
+    assert str(applies.screens[0]) == "dfm: deferred by the declared screening depth"
+    assert str(applies.screens[1]) == "t0: needs no solid built"
+    assert str(ApplicableScreen(name="x", state=ScreenState.RUNS_NOW)) == "x: runs now"

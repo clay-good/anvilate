@@ -48,6 +48,23 @@ card says so positively — and the report indented below it when anything is mi
 carries the same thing per spec under `needs`, present with an empty `items` list when
 nothing is missing. Neither changes the verdict or the exit code.
 
+## What applies to this document
+
+`what_applies(card)` answers the question before the needs report does: every screen the
+document reaches, and for each whether it runs now, is deferred by the declared screening
+depth, or needs something, with the declarations it needs:
+
+```python
+from anvilate.needs import what_applies
+
+print(what_applies(screen_spec(spec)))
+# 2 screens apply (1 runs now, 1 needs, 0 deferred)
+#   T1 analytical: needs element_type, element_params
+#   material resolution: runs now
+```
+
+A screen that could not run and names no typed need shows the reason its own check gives.
+
 ## Profiles: many declarations in one action
 
 Answering the report one value at a time is the other half of the friction. A `Profile` is a

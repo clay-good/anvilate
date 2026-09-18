@@ -318,6 +318,10 @@ needs.NeedsReport
 needs.LEVERAGE_IS_NOT_IMPORTANCE
 needs.needs_report
 needs.deepening
+needs.ScreenState
+needs.ApplicableScreen
+needs.WhatApplies
+needs.what_applies
 optical_tolerances.ImperfectionConvention
 optical_tolerances.StressBirefringence
 optical_tolerances.BubblesAndInclusions

@@ -23,6 +23,7 @@ Nothing in this module infers a value, weakens a refusal, or changes a verdict.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
 from pydantic import ConfigDict, Field
@@ -37,6 +38,10 @@ __all__ = [
     "LEVERAGE_IS_NOT_IMPORTANCE",
     "needs_report",
     "deepening",
+    "ScreenState",
+    "ApplicableScreen",
+    "WhatApplies",
+    "what_applies",
 ]
 
 #: Printed wherever the report is rendered. The ordering is a measure of how much work a
@@ -188,3 +193,78 @@ def deepening(spec: Any, to_depth: Any) -> DepthChange:
         newly_run=newly_run,
         newly_required=newly_required,
     )
+
+
+class ScreenState(StrEnum):
+    """Where one screen on a card stands for this document."""
+
+    RUNS_NOW = "runs_now"
+    NEEDS = "needs"
+    DEFERRED = "deferred"
+
+
+class ApplicableScreen(StatableModel):
+    """One screen the document reaches, and what, if anything, it waits on."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: Named
+    state: ScreenState
+    needs: tuple[Named, ...] = ()
+    reason: str = ""
+
+    def __str__(self) -> str:
+        if self.state is ScreenState.RUNS_NOW:
+            return f"{self.name}: runs now"
+        if self.state is ScreenState.DEFERRED:
+            return f"{self.name}: deferred by the declared screening depth"
+        waiting = ", ".join(self.needs) if self.needs else self.reason
+        return f"{self.name}: needs {waiting}"
+
+
+class WhatApplies(ItemCollection, StatableModel):
+    """Every screen that applies to a document: what runs now and what the rest need."""
+
+    model_config = ConfigDict(frozen=True)
+
+    screens: tuple[ApplicableScreen, ...] = ()
+
+    def of(self, state: ScreenState) -> tuple[ApplicableScreen, ...]:
+        return tuple(screen for screen in self.screens if screen.state is state)
+
+    def __str__(self) -> str:
+        counts = ", ".join(
+            f"{len(self.of(state))} {state.value.replace('_', ' ')}" for state in ScreenState
+        )
+        return "\n".join(
+            [f"{len(self.screens)} screens apply ({counts})"] + [f"  {s}" for s in self.screens]
+        )
+
+
+def what_applies(card: Scorecard) -> WhatApplies:
+    """What applies to the document behind ``card``: each screen, and whether it can run.
+
+    A screen that ran runs now. One the document deferred by depth is deferred. One that
+    could not run names what it needs — the declarations its typed needs list, and failing
+    those the reason the check itself gives — so a partly declared spec answers "what would
+    it take" rather than only "what failed".
+    """
+    screens = []
+    for entry in card.entries:
+        if entry.status is CheckStatus.OUT_OF_DEPTH:
+            state = ScreenState.DEFERRED
+        elif entry.status is CheckStatus.NOT_EVALUATED:
+            state = ScreenState.NEEDS
+        else:
+            state = ScreenState.RUNS_NOW
+        screens.append(
+            ApplicableScreen(
+                name=entry.name,
+                state=state,
+                needs=tuple(dict.fromkeys(need.declaration for need in entry.needs))
+                if state is ScreenState.NEEDS
+                else (),
+                reason=entry.detail if state is ScreenState.NEEDS and not entry.needs else "",
+            )
+        )
+    return WhatApplies(screens=tuple(screens))
