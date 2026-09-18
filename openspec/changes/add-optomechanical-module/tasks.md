@@ -65,8 +65,8 @@
 
 ## 7. Drawings
 
-- [ ] 7.1 ISO 10110 indications rendered from the existing tolerance model
-- [ ] 7.2 Scratch-dig equivalent rendered only when the user declares that convention
+- [x] 7.1 ISO 10110 indications rendered from the existing tolerance model
+- [x] 7.2 Scratch-dig equivalent rendered only when the user declares that convention
 
 ## 8. Interop
 

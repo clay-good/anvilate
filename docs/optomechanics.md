@@ -44,6 +44,17 @@ end. A sealed housing is screened for self-heating, focus at the hot extreme, fo
 extreme and its cell gap under shock. Three line-of-sight terms are then bound into a pointing
 budget, which passes at 36.2 µrad against 40 µrad in quadrature.
 
+## Drawing indications
+
+`anvilate.optical_tolerances` declares an element's optical tolerances once and renders the
+ISO 10110 indications a drawing carries: `0/20` for stress birefringence, `1/3×0.16` for
+bubbles, `2/1;1` for inhomogeneity and striae, `3/2(0.5)` for surface form, `4/1'` for
+centring, and `5/3×0.16` for surface imperfections. A surface tolerance must name a surface
+the element declares as optical, or it is refused. A scratch-dig declared under MIL-PRF-13830B
+renders as `60-40 scratch-dig (MIL-PRF-13830B)`, named, and nothing converts it to the ISO
+form: the two grade different things. The drawing is the one consumer today. STEP PMI and QIF
+do not carry optical characteristics yet.
+
 ## What it refuses
 
 | Refused | Why |
@@ -69,6 +80,6 @@ take to optical design software; the screen says which one that is.
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
 screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.1, 10.2, 10.3, 10.4
+(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 7.1, 7.2, 10.1, 10.2, 10.3, 10.4
 and this scope page). Not built yet: angular units as a whole, preload change with
-temperature, contact stress, and the ISO 10110 drawing indications and prescription import. The focus and pointing budgets are worked examples built on the existing budget type.
+temperature, contact stress, and prescription import. The focus and pointing budgets are worked examples built on the existing budget type.

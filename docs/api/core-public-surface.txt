@@ -318,6 +318,14 @@ needs.NeedsReport
 needs.LEVERAGE_IS_NOT_IMPORTANCE
 needs.needs_report
 needs.deepening
+optical_tolerances.ImperfectionConvention
+optical_tolerances.StressBirefringence
+optical_tolerances.BubblesAndInclusions
+optical_tolerances.Inhomogeneity
+optical_tolerances.SurfaceForm
+optical_tolerances.Centring
+optical_tolerances.SurfaceImperfections
+optical_tolerances.OpticalElementTolerances
 profile.Applicability
 profile.SuppliedValue
 profile.Profile

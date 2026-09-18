@@ -93,6 +93,8 @@ that already ran and does one more thing with them:
   version, standards, material properties, tiers, screens — held against the pack it names.
 - :mod:`anvilate.needs` — every declaration a build needed and did not get, in one
   report ordered by how many screens each would unblock — leverage, never severity.
+- :mod:`anvilate.optical_tolerances` — optical element tolerances declared once and
+  rendered as ISO 10110 indications, a scratch-dig kept in its own named convention.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
   action, refused outside its own applicability and attributed wherever a value appears.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
