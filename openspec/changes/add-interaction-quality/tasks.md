@@ -15,9 +15,9 @@
 
 - [ ] 2.1 Remedy field on every refusal: the action, its concrete subject, and where a
       value may come from
-- [ ] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
-      imperative with no noun fails
-- [ ] 2.3 CI gate carries a population floor and enumerated exclusions with causes
+- [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
+      imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
+- [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed
 - [x] 2.4 Near-miss suggestions for unknown names, keyed on the real registry — every bundled
       table answers a one-character typo with the entry it nearly named, held by a sweep over
       the discovered tables rather than a list of them

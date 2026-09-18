@@ -160,7 +160,7 @@ class SubjectStore:
             raise UnknownSubject(
                 f"{handle} is in the subject store at {self._root} and is not UTF-8 text: "
                 f"{unreadable}. Publishing is atomic and writes UTF-8, so this is a file "
-                f"something outside this library wrote; delete it and publish the document "
+                f"something outside this library wrote; delete {path} and publish the document "
                 f"again"
             ) from unreadable
         except OSError as missing:
@@ -190,7 +190,7 @@ class SubjectStore:
                 f"to sha256:{actual}, so the file no longer holds the document the handle "
                 f"names. A handle is the digest of its own record and nothing here rewrites "
                 f"an entry, so this file was edited or replaced after it was published; "
-                f"delete it and publish the document again"
+                f"delete {path} and publish the document again"
             )
         try:
             record = json.loads(text)
@@ -204,13 +204,13 @@ class SubjectStore:
             raise UnknownSubject(
                 f"{handle} is in the store at {self._root} and is not readable JSON: "
                 f"{unreadable}. Publishing is atomic, so this is a file something outside "
-                f"this library wrote or truncated; delete it and publish the document again"
+                f"this library wrote or truncated; delete {path} and publish the document again"
             ) from unreadable
         if not isinstance(record, dict):
             raise UnknownSubject(
                 f"{handle} is in the store at {self._root} and holds a JSON "
                 f"{type(record).__name__}, not a record. Every entry is an object with a "
-                f"'kind' and a 'document'; delete it and publish the document again"
+                f"'kind' and a 'document'; delete {path} and publish the document again"
             )
         if kind is not None and record.get("kind") != kind:
             raise UnknownSubject(
@@ -222,7 +222,7 @@ class SubjectStore:
             # written for, on the one line that had not been given the treatment.
             raise UnknownSubject(
                 f"{handle} is in the store at {self._root} and carries no 'document'. Every "
-                f"entry is an object with a 'kind' and a 'document'; delete it and publish "
+                f"entry is an object with a 'kind' and a 'document'; delete {path} and publish "
                 f"the document again"
             )
         return record["document"]

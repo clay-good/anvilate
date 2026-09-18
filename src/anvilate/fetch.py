@@ -233,7 +233,7 @@ def cached_dataset(
     if not sidecar.exists():
         raise IntegrityError(
             f"{payload} is cached with no {sidecar.name} beside it, so nothing can say "
-            "where it came from or under what licence. Delete it and fetch again."
+            f"where it came from or under what licence. Delete {payload} and fetch again."
         )
     _verify(payload.read_bytes(), recipe, where="in the cache")
     try:

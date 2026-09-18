@@ -343,7 +343,8 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
         raise ValueError(
             f"{record.member}: {unaccounted} was exported but is neither mapped nor "
             f"ignored. Dropping a component silently is how a member gets screened "
-            f"without its minor-axis moment; name it in the mapping or in `ignored`"
+            f"without its minor-axis moment; name each of {unaccounted} in the mapping or "
+            "in `ignored`"
         )
     components: dict[ForceComponent, Quantity] = {}
     stations: dict[ForceComponent, Quantity] = {}

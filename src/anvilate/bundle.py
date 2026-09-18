@@ -361,7 +361,7 @@ class BundleSections(RevalidatedModel):
             if not assumption.strip():
                 raise ValueError(
                     "a blank modelling assumption is a line that reads as a declared one; "
-                    "state it or leave it out"
+                    "state the assumption or leave the line out"
                 )
         # The same rule, two fields along, where it was missing. `design_basis` and
         # `assumptions` refuse a blank and these did not — a bundle naming its base material
@@ -369,7 +369,8 @@ class BundleSections(RevalidatedModel):
         # `None` that means "this bundle does not say".
         if self.base_material is not None and not self.base_material.strip():
             raise ValueError(
-                "a blank base material reads as a declared one; name it or leave it None, "
+                "a blank base material reads as a declared one; name the material or leave "
+                "base_material None, "
                 "which is what 'this bundle does not say' looks like"
             )
         for material in self.known_materials:

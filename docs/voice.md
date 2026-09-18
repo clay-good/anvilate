@@ -10,6 +10,7 @@ user reads — scorecard lines, refusals, reports, CLI and MCP output.
 | No jokes, no apologies | "Oops" and "sorry" turn a refusal into a mood. A refusal says what is wrong, what it takes, and where a value can come from. |
 | No exclamations | Nothing the library prints ends in an exclamation mark. Urgency comes from the status word, which is FAIL or NOT EVALUATED, not from punctuation. |
 | No anthropomorphism | The tool does not think, believe, feel, or become happy. It computed, it compared, and it could not do something. |
+| A remedy names what to act on | A refusal that tells the reader to act names the thing: "delete {path} and publish the document again", not "delete it". `tests/test_remedies.py` reads every refusal message in the library and fails on an imperative whose object is only a pronoun or nothing at all. |
 | No emoji, no easter eggs | Every mark on the output encodes something a reader needs. Ornament is noise on an instrument. |
 
 The status is always a word. Colour, where a surface has any, repeats the word and never
