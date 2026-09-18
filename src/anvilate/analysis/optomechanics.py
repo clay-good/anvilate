@@ -48,6 +48,7 @@ __all__ = [
     "ThermalConditionKind",
     "ThermalCondition",
     "dynamic_clearance_scorecard",
+    "athermal_bond_thickness",
 ]
 
 _ALDUCHOV = (
@@ -710,6 +711,53 @@ def dynamic_clearance_scorecard(
             citation=_HARRIS,
         ),
     )
+
+
+def athermal_bond_thickness(
+    *,
+    glass_diameter: Quantity,
+    glass_cte: Quantity,
+    cell_cte: Quantity,
+    elastomer_cte: Quantity,
+) -> Quantity:
+    """The elastomer bond thickness that keeps a bonded lens radially athermal, Bayar (1981).
+
+    A lens of ``glass_diameter`` D and ``glass_cte`` α_G, bonded into a cell of ``cell_cte`` α_M
+    by an annulus of elastomer with ``elastomer_cte`` α_e, stays unstressed across temperature
+    when the cell's bore grows exactly as fast as the glass and the bond together:
+    α_M·(D/2 + h) = α_G·D/2 + α_e·h, so h = (D/2)·(α_M − α_G)/(α_e − α_M) (Bayar, Lens barrel
+    optomechanical design principles, Optical Engineering 20(2) 1981; Yoder,
+    Opto-Mechanical Systems Design). A 50 mm crown lens in aluminium with a silicone bond
+    needs about 1.8 mm.
+
+    **Poisson's ratio is not in it.** The formula treats the elastomer as free to expand in
+    thickness alone; a nearly incompressible elastomer confined in a thin annulus cannot, and
+    its effective radial expansion is larger than α_e, so the true athermal thickness is
+    smaller than this. Read the result as the classical estimate that corrections refine,
+    not as the answer to a bond with a Poisson's ratio near 0.5.
+
+    A thickness exists only for α_e > α_M > α_G — an elastomer that out-expands the cell, in
+    a cell that out-expands the glass. Any other ordering has no positive solution and is
+    refused naming it. Returned in millimetres.
+    """
+    _check(glass_diameter, "[length]", "glass_diameter")
+    for value, name in (
+        (glass_cte, "glass_cte"),
+        (cell_cte, "cell_cte"),
+        (elastomer_cte, "elastomer_cte"),
+    ):
+        _check(value, "1 / [temperature]", name)
+    diameter = glass_diameter.to("mm").magnitude
+    if diameter <= 0:
+        raise ValueError(f"glass_diameter must be positive; got {glass_diameter}")
+    a_g, a_m, a_e = (v.to("1/K").magnitude for v in (glass_cte, cell_cte, elastomer_cte))
+    if not a_e > a_m > a_g:
+        raise ValueError(
+            "an athermal bond needs α_e > α_M > α_G — an elastomer that out-expands the cell, "
+            f"in a cell that out-expands the glass; got α_e = {elastomer_cte}, "
+            f"α_M = {cell_cte}, α_G = {glass_cte}, which has no positive thickness"
+        )
+    return Quantity(magnitude=diameter / 2 * (a_m - a_g) / (a_e - a_m), unit="mm")
 
 
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"

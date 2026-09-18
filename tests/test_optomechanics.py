@@ -368,3 +368,30 @@ def test_a_gap_clear_at_rest_closes_under_a_declared_shock() -> None:
     undeclared = dynamic_clearance_scorecard("cell gap", gap=None, **shock)
     assert undeclared.status is CheckStatus.NOT_EVALUATED
     assert "an undeclared gap is not a generous one" in undeclared.detail
+
+
+def test_an_athermal_bond_grows_the_bore_as_fast_as_the_glass_and_the_bond() -> None:
+    from anvilate.analysis.optomechanics import athermal_bond_thickness
+
+    thickness = (
+        athermal_bond_thickness(
+            glass_diameter=q("50 mm"),
+            glass_cte=q("7.1e-6 1/K"),
+            cell_cte=q("23.6e-6 1/K"),
+            elastomer_cte=q("250e-6 1/K"),
+        )
+        .to("mm")
+        .magnitude
+    )
+    assert thickness == pytest.approx(25 * (23.6 - 7.1) / (250 - 23.6))
+    assert 1.7 < thickness < 1.9
+    # The defining balance, checked directly rather than by restating the formula.
+    radius = 25.0
+    assert 23.6e-6 * (radius + thickness) == pytest.approx(7.1e-6 * radius + 250e-6 * thickness)
+    with pytest.raises(ValueError, match="no positive thickness"):
+        athermal_bond_thickness(
+            glass_diameter=q("50 mm"),
+            glass_cte=q("7.1e-6 1/K"),
+            cell_cte=q("5e-6 1/K"),
+            elastomer_cte=q("250e-6 1/K"),
+        )

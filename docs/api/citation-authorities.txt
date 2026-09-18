@@ -268,3 +268,5 @@ Maréchal
 Alduchov
 # Harris' Shock and Vibration Handbook, for a shock's relative displacement A·a₀·g₀/ω².
 Harris
+# Bayar's athermal elastomer bond thickness for a bonded lens (1981).
+Bayar
