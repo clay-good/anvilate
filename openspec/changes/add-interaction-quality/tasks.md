@@ -70,7 +70,9 @@
 
 - [x] 7.1 A long operation piped to a file writes clean stdout and progress to stderr —
       stdout is byte-identical watched or piped (tests/test_cli.py)
-- [ ] 7.2 Ctrl-C during export leaves no partial artifact presented as complete
+- [x] 7.2 Ctrl-C during export leaves no partial artifact presented as complete — DXF writes
+      go to a hidden sibling renamed on completion, and the STEP writer removes its file on
+      a KeyboardInterrupt as well as on an error
 - [ ] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
 - [x] 7.4 Rendering with color disabled loses no information — the terminal carries no
       ANSI escape (tests/test_cli.py), and every coloured status in the HTML report is a word

@@ -16,6 +16,10 @@ a clear :class:`ImportError`.
 
 from __future__ import annotations
 
+import os
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from io import StringIO
 from math import cos, pi, radians, sin, tan
 from pathlib import Path
@@ -28,6 +32,27 @@ from .._models import RevalidatedModel, each_one
 from ..gdt import FeatureControlFrame
 from ..units import Quantity
 from .gate import ExportAuthorization
+
+
+@contextmanager
+def _atomic_path(path: Path) -> Iterator[Path]:
+    """A hidden sibling of ``path`` to write to, renamed onto ``path`` only once complete.
+
+    A drawing interrupted mid-write — Ctrl-C, a killed process, a full disk — used to leave a
+    truncated DXF at the path a finished one belongs at, which a CAM tool would open. The
+    rename is atomic on one filesystem, so ``path`` holds the old file or the whole new one,
+    and a partial write is removed rather than left beside it.
+    """
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".partial", delete=False
+    ) as handle:
+        partial = Path(handle.name)
+    try:
+        yield partial
+        os.replace(partial, path)
+    finally:
+        partial.unlink(missing_ok=True)
+
 
 if TYPE_CHECKING:
     from ..geometry import BuiltGeometry
@@ -608,7 +633,8 @@ def export_plate_dxf(
         )
 
     path = Path(path)
-    doc.saveas(path)
+    with _atomic_path(path) as partial:
+        doc.saveas(partial)
     return path
 
 
@@ -669,7 +695,8 @@ def export_gear_blank_dxf(
         text.set_placement((-od / 2, -od / 2 - 1.5 * text_height), align=TextEntityAlignment.LEFT)
 
     out_path = Path(path)
-    doc.saveas(out_path)
+    with _atomic_path(out_path) as partial:
+        doc.saveas(partial)
     return out_path
 
 
@@ -736,5 +763,6 @@ def export_feature_control_frame_dxf(
         entity.set_placement(text.center, align=TextEntityAlignment.MIDDLE_CENTER)
 
     out_path = Path(path)
-    doc.saveas(out_path)
+    with _atomic_path(out_path) as partial:
+        doc.saveas(partial)
     return out_path

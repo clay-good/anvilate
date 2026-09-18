@@ -2352,7 +2352,9 @@ def _write_step_shape(
                 raise GeometryError("STEP writer could not transfer the built solid")
             if writer.Write(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
                 raise GeometryError("STEP writer could not write the built solid")
-        except Exception:
+        except BaseException:
+            # BaseException, not Exception: a Ctrl-C mid-write is a KeyboardInterrupt, and
+            # it used to leave a truncated STEP file at the path a finished one belongs at.
             path.unlink(missing_ok=True)
             raise
         finally:
