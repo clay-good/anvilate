@@ -521,6 +521,12 @@ is 3 now. `--help` still exits 0, because asking for help is not a failure.
 The mapping is a total map over the four scorecard statuses, so a fifth status is a
 decision somebody has to make rather than a silent zero.
 
+### Progress
+
+`anvilate check` over a directory prints `[i/n] screening <path>` to stderr as it goes, so a
+run over many specs does not look hung. It does this only when stderr is a terminal: piped
+or redirected, the run prints no progress, and stdout is byte-identical either way.
+
 ### On a terminal that cannot print Unicode
 
 The text output carries clause signs, arrows, inequality signs and µ. On a stream that cannot

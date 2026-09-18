@@ -2497,6 +2497,12 @@ def _margin_summary(spec) -> dict[str, Any]:
     }
 
 
+def _is_terminal(stream: object) -> bool:
+    """Whether ``stream`` is an interactive terminal; a file, a pipe or a buffer is not."""
+    isatty = getattr(stream, "isatty", None)
+    return bool(isatty()) if callable(isatty) else False
+
+
 def _check(args: argparse.Namespace, *, out, err) -> int:
     """``check``, over one spec or every spec under a directory.
 
@@ -2511,8 +2517,13 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     if isinstance(paths, int):
         return paths
 
+    # Progress on stderr, and only for a person watching: a directory of specs can take
+    # long enough to look hung, and stdout must stay the result alone so it still pipes.
+    progress = len(paths) > 1 and _is_terminal(err)
     results = []
-    for path in paths:
+    for index, path in enumerate(paths, start=1):
+        if progress:
+            print(f"[{index}/{len(paths)}] screening {path}", file=err, flush=True)
         spec = _load(path, err=err, command="check")
         if isinstance(spec, int):
             return spec

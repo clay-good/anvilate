@@ -4549,3 +4549,29 @@ def test_no_command_output_depends_on_colour() -> None:
         assert not escape.search(out) and not escape.search(err), arguments
     _code, out, _ = _run("check", spec)
     assert re.search(r"\b(PASS|FAIL|NOT_EVALUATED|OVER_MARGIN)\b", out)
+
+
+class _Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def _two_specs(tmp_path: Path) -> Path:
+    source = (Path(__file__).resolve().parents[1] / "examples" / "padeye.spec.yaml").read_text()
+    for name in ("a.yaml", "b.yaml"):
+        (tmp_path / name).write_text(source)
+    return tmp_path
+
+
+def test_a_long_check_reports_progress_on_stderr_and_leaves_stdout_the_result(tmp_path):
+    """Interaction-quality 3.4, 7.1: progress for a person watching, stdout still pipes."""
+    directory = str(_two_specs(tmp_path))
+    watched_out, watched_err = io.StringIO(), _Terminal()
+    code = run(["check", directory], stdout=watched_out, stderr=watched_err)
+    piped_out, piped_err = io.StringIO(), io.StringIO()
+    piped_code = run(["check", directory], stdout=piped_out, stderr=piped_err)
+    assert code == piped_code
+    assert watched_out.getvalue() == piped_out.getvalue(), "progress leaked into stdout"
+    assert "[1/2] screening" in watched_err.getvalue()
+    assert "[2/2] screening" in watched_err.getvalue()
+    assert "screening" not in piped_err.getvalue(), "progress printed into a pipe"

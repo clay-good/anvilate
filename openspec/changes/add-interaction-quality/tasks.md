@@ -33,7 +33,8 @@
       and unbuilt refusals while preserving their exit codes and stderr diagnostics
 - [x] 3.3 Exit codes: success, refusal, failed verdict, internal error — distinct and
       documented; unexpected command defects exit 5 and JSON schema 1.2.0 identifies them
-- [ ] 3.4 Progress to stderr so stdout stays pipeable
+- [x] 3.4 Progress to stderr so stdout stays pipeable — `check` over several specs prints
+      `[i/n] screening <path>` to stderr when stderr is a terminal, and nothing into a pipe
 
 ## 4. Accessibility
 
@@ -62,7 +63,8 @@
 
 ## 7. Tests
 
-- [ ] 7.1 A long operation piped to a file writes clean stdout and progress to stderr
+- [x] 7.1 A long operation piped to a file writes clean stdout and progress to stderr —
+      stdout is byte-identical watched or piped (tests/test_cli.py)
 - [ ] 7.2 Ctrl-C during export leaves no partial artifact presented as complete
 - [ ] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
 - [x] 7.4 Rendering with color disabled loses no information — the terminal carries no
