@@ -1077,3 +1077,62 @@ def test_retention_after_cycling_is_named_and_never_passes() -> None:
         cycling_retention_scorecard("r", requirement="x", cycles=5, test_method=" ")
     with pytest.raises(ValueError, match="at least 2"):
         cycling_retention_scorecard("r", requirement="x", cycles=1, test_method="t")
+
+
+def _surfaces():  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import SurfaceLimits, SurfaceTreatment
+
+    cement = SurfaceLimits(
+        surface="doublet joint",
+        treatment=SurfaceTreatment.CEMENT,
+        coldest=q("-40 degC"),
+        hottest=q("60 degC"),
+    )
+    coating = SurfaceLimits(
+        surface="front AR",
+        treatment=SurfaceTreatment.COATING,
+        coldest=q("-62 degC"),
+        hottest=q("100 degC"),
+        relative_humidity=0.95,
+    )
+    return cement, coating
+
+
+def test_a_cement_rated_below_the_environment_fails_naming_both() -> None:
+    from anvilate.analysis.optomechanics import surface_limits_scorecard
+
+    cement, coating = _surfaces()
+    hot = surface_limits_scorecard(
+        "limits", surfaces=(cement, coating), cold=q("-40 degC"), hot=q("71 degC")
+    )
+    assert hot.status is CheckStatus.FAIL
+    assert "2 surfaces examined" in hot.detail
+    assert "doublet joint (cement) rated to 60 °C, environment reaches 71 °C" in hot.detail
+    assert "front AR" not in hot.detail
+    mild = surface_limits_scorecard(
+        "limits", surfaces=(cement, coating), cold=q("-40 degC"), hot=q("55 degC")
+    )
+    assert mild.status is CheckStatus.PASS
+    humid = surface_limits_scorecard(
+        "limits",
+        surfaces=(coating,),
+        cold=q("-40 degC"),
+        hot=q("55 degC"),
+        relative_humidity=0.98,
+    )
+    assert humid.status is CheckStatus.FAIL and "95% relative humidity" in humid.detail
+
+
+def test_a_surface_with_no_rating_for_the_condition_is_named() -> None:
+    from anvilate.analysis.optomechanics import SurfaceLimits, surface_limits_scorecard
+
+    cement, _ = _surfaces()
+    entry = surface_limits_scorecard(
+        "limits", surfaces=(cement,), cold=q("-40 degC"), hot=q("55 degC"), relative_humidity=0.9
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "doublet joint (cement): no humidity rating" in entry.detail
+    with pytest.raises(ValueError, match="surfaces is empty"):
+        surface_limits_scorecard("limits", surfaces=(), cold=q("-40 degC"), hot=q("55 degC"))
+    with pytest.raises(ValueError, match="hottest must exceed coldest"):
+        SurfaceLimits(surface="x", treatment="cement", coldest=q("50 degC"), hottest=q("40 degC"))

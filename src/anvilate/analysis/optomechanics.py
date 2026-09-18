@@ -75,6 +75,9 @@ __all__ = [
     "HarnessCrossing",
     "harness_load_scorecard",
     "cycling_retention_scorecard",
+    "SurfaceTreatment",
+    "SurfaceLimits",
+    "surface_limits_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -2145,7 +2148,167 @@ def cycling_retention_scorecard(
     )
 
 
+class SurfaceTreatment(StrEnum):
+    """What sits on an optical surface with environmental limits of its own.
+
+    A thin-film coating and an optical cement are the two Yoder and Vukobratovich
+    (Opto-Mechanical Systems Design) treat as rated separately from the glass they sit on.
+    """
+
+    COATING = "coating"
+    CEMENT = "cement"
+
+
+class SurfaceLimits(StatableModel):
+    """A coated or cemented surface and the environment its maker rates it for.
+
+    A cement softens, and a coating crazes or delaminates, at a temperature or humidity the
+    housing around it survives (Yoder and Vukobratovich, Opto-Mechanical Systems Design).
+    ``coldest`` and ``hottest`` bound the rated temperature. ``relative_humidity`` is the
+    highest rated exposure, as a fraction from 0 to 1, and ``irradiance`` the highest rated
+    flux. Each is optional, and a limit left out is one the screen names when the
+    environment states that condition.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    surface: Named
+    treatment: SurfaceTreatment
+    coldest: Quantity | None = None
+    hottest: Quantity | None = None
+    relative_humidity: float | None = None
+    irradiance: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _limits(self) -> SurfaceLimits:
+        for label, value in (("coldest", self.coldest), ("hottest", self.hottest)):
+            if value is not None:
+                _check(value, "[temperature]", label)
+        if self.coldest is not None and self.hottest is not None:
+            if self.hottest.to("K").magnitude <= self.coldest.to("K").magnitude:
+                raise ValueError(
+                    f"'{self.surface}': hottest must exceed coldest; got {self.hottest} and "
+                    f"{self.coldest}"
+                )
+        if self.relative_humidity is not None:
+            humidity = require_finite(self.relative_humidity, name="relative_humidity")
+            if not 0 < humidity <= 1:
+                raise ValueError(
+                    f"'{self.surface}': relative_humidity must lie in (0, 1]; got {humidity}"
+                )
+        if self.irradiance is not None:
+            _check(self.irradiance, "[power] / [area]", "irradiance")
+            if self.irradiance.magnitude <= 0:
+                raise ValueError(f"'{self.surface}': irradiance must be positive")
+        return self
+
+
+def surface_limits_scorecard(
+    name: str,
+    *,
+    surfaces: tuple[SurfaceLimits, ...],
+    cold: Quantity,
+    hot: Quantity,
+    relative_humidity: float | None = None,
+    irradiance: Quantity | None = None,
+) -> ScorecardEntry:
+    """Screen every coated and cemented surface against the declared environment.
+
+    Each surface's rated temperature range must cover ``cold`` to ``hot``, and where the
+    environment states a ``relative_humidity`` (a fraction) or an ``irradiance``, each
+    surface's rating for it must cover that too. A surface exceeded is a failure naming
+    the surface, the limit and the environment. A surface with no rating for a condition
+    the environment states is not evaluated, naming it: a cement softening at a temperature
+    the housing survives is a failure no mechanical screen sees (Yoder and Vukobratovich,
+    Opto-Mechanical Systems Design).
+    """
+    _check(cold, "[temperature]", "cold")
+    _check(hot, "[temperature]", "hot")
+    if hot.to("K").magnitude <= cold.to("K").magnitude:
+        raise ValueError(f"hot must exceed cold; got hot {hot} and cold {cold}")
+    if relative_humidity is not None:
+        require_finite(relative_humidity, name="relative_humidity")
+        if not 0 <= relative_humidity <= 1:
+            raise ValueError(f"relative_humidity must lie in [0, 1]; got {relative_humidity}")
+    if irradiance is not None:
+        _check(irradiance, "[power] / [area]", "irradiance")
+    if not surfaces:
+        raise ValueError(
+            "surfaces is empty; declare each coated or cemented surface with its ratings"
+        )
+    exceeded: list[str] = []
+    unrated: list[str] = []
+    for limits in surfaces:
+        label = f"{limits.surface} ({limits.treatment.value})"
+        missing = []
+        if limits.coldest is None:
+            missing.append("coldest rating")
+        elif cold.to("K").magnitude < limits.coldest.to("K").magnitude:
+            exceeded.append(f"{label} rated to {limits.coldest}, environment reaches {cold}")
+        if limits.hottest is None:
+            missing.append("hottest rating")
+        elif hot.to("K").magnitude > limits.hottest.to("K").magnitude:
+            exceeded.append(f"{label} rated to {limits.hottest}, environment reaches {hot}")
+        if relative_humidity is not None:
+            if limits.relative_humidity is None:
+                missing.append("humidity rating")
+            elif relative_humidity > limits.relative_humidity:
+                exceeded.append(
+                    f"{label} rated to {limits.relative_humidity:.0%} relative humidity, "
+                    f"environment reaches {relative_humidity:.0%}"
+                )
+        if irradiance is not None:
+            if limits.irradiance is None:
+                missing.append("irradiance rating")
+            elif irradiance.to("W/m**2").magnitude > limits.irradiance.to("W/m**2").magnitude:
+                exceeded.append(
+                    f"{label} rated to {limits.irradiance}, environment reaches {irradiance}"
+                )
+        if missing:
+            unrated.append(f"{label}: no {' or '.join(missing)}")
+    population = f"{len(surfaces)} surface{'s' if len(surfaces) != 1 else ''} examined"
+    if exceeded:
+        status = CheckStatus.FAIL
+        detail = f"{population}; the environment exceeds " + "; ".join(exceeded)
+        if unrated:
+            detail += "; and unrated: " + "; ".join(unrated)
+    elif unrated:
+        status = CheckStatus.NOT_EVALUATED
+        detail = f"{population}; a rating the environment needs is missing for " + "; ".join(
+            unrated
+        )
+    else:
+        status = CheckStatus.PASS
+        detail = (
+            f"{population}; every rating covers {cold} to {hot}"
+            + (
+                f" at {relative_humidity:.0%} relative humidity"
+                if relative_humidity is not None
+                else ""
+            )
+            + (f" under {irradiance}" if irradiance is not None else "")
+        )
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=detail,
+        reference=_YODER_BONDED,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "each surface's rated limits compared with the declared environment; the "
+                "exceeded and unrated surfaces are named on the entry"
+            ),
+        ),
+        addresses=("a cement or coating failing at an environment extreme",),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_YODER_BONDED = (
+    "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), bonded and "
+    "cemented optics"
+)
 _YODER = "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), line of sight"
 _TIMOSHENKO = (
     "Timoshenko and Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. (1959), "

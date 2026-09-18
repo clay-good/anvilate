@@ -578,6 +578,19 @@ DEFAULT_CATALOG = ModeCatalog(
             tested_by=("thermal-cycling",),
         ),
         FailureMode(
+            id="a cement or coating failing at an environment extreme",
+            description=(
+                "a cemented joint softening or a coating crazing at a temperature or humidity "
+                "the housing survives, with every mechanical screen clean"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), "
+                "bonded and cemented optics"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

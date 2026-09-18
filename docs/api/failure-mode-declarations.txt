@@ -18,6 +18,7 @@ optomechanics.seal_breathing_scorecard -> condensation in a breathing sealed vol
 optomechanics.pressure_window_scorecard -> window fracture under a pressure differential
 optomechanics.harness_load_scorecard -> alignment drift from a harness crossing a mount
 optomechanics.cycling_retention_scorecard -> alignment loss over repeated cycles
+optomechanics.surface_limits_scorecard -> a cement or coating failing at an environment extreme
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard
