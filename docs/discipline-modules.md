@@ -105,10 +105,39 @@ instance that produced it (`col_base plate bending`), not after its module. A de
 namespace would be a string no gate could check, so it arrives with the naming change that
 makes it true.
 
+## Writing a module
+
+A tenth domain is a pack plus a manifest. The order that works, and what holds you to each
+step:
+
+1. **Write the screens.** A `screen_*` function per element, taking the element's model and
+   returning a `Scorecard`. [Contributing analysis](contributing-analysis.md) is the
+   contract for the checks themselves — cited formulas, dimensioned quantities, an anchored
+   number, a runnable example.
+2. **Export them.** The element registry derives the tags from each pack's `__all__`, so a
+   screen that is not exported is a screen no document can reach.
+3. **Add the manifest** to `MODULE_MANIFESTS`: id, version, unit default, the standards its
+   checks cite, the material properties it needs, the tiers it touches, its dependencies,
+   its screens, its coverage, and a sentence saying what it is for.
+4. **Run the suite.** Five gates will disagree with you if the manifest and the pack do not
+   match: the screens it names against the pack's exports, the tags it covers against the
+   registry, the standards it declares against the citations its own entries write, the
+   exercise floor over every screen it declares, and the registry's own refusal of a
+   duplicate id or an unresolvable dependency.
+5. **Write the capability spec** for the domain under `openspec/changes/`, not as an
+   appendix to `discipline-packs`. A domain that needs the shared contract changed is
+   telling you the contract is wrong, which is a different change.
+
+Composition over duplication: a module reuses an existing screen where one exists rather
+than shipping a second implementation of the same limit state. Detecting that automatically
+needs an identity for a limit state, which is the one part of this contract the library
+cannot check yet — a check is named after its element instance, so two modules implementing
+"plate bending" do not say so in any way a gate can read.
+
 ## Status
 
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
 exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
-3.3), the loader (2.2) and declared coverage (1.2). Duplicate-limit-state detection across modules — which wants a
+3.3), the loader (2.2), declared coverage (1.2) and the authoring page (5.1). Duplicate-limit-state detection across modules — which wants a
 limit-state identity the library does not have yet, since a check is named after its
 element instance — and out-of-tree modules are what remain.

@@ -172,6 +172,13 @@ are bundled with a provenance record, and retrieved rather than recalled.
 
 ---
 
+## A whole discipline, not one check
+
+The rules above are for a check. A new **discipline** — a tenth pack — is a manifest as well:
+what the module is, which standards its checks cite, which element tags it covers, and the
+screens it exports, each held against the pack itself by a gate. See
+[discipline modules](discipline-modules.md) for the contract and the order to build it in.
+
 ## The rule behind the rules
 
 Every one of these is the same rule wearing different clothes: **a check must not be able

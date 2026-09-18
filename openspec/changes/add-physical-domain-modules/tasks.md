@@ -32,5 +32,5 @@
 
 ## 5. Docs
 
-- [ ] 5.1 "Write a module" page: the manifest, the composition rule, the coverage floor
-- [ ] 5.2 Update `discipline-packs` docs to point domain specs at their own capability
+- [x] 5.1 "Write a module" page: the manifest, the composition rule, the coverage floor
+- [x] 5.2 Update `discipline-packs` docs to point domain specs at their own capability
