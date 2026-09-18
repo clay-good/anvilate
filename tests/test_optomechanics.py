@@ -751,3 +751,33 @@ def test_an_input_the_export_does_not_carry_is_never_estimated() -> None:
     wavefront = bare.wavefront_budget("wavefront", strehl_threshold=0.8)
     assert wavefront.status is CheckStatus.NOT_EVALUATED
     assert "surface deformations" in wavefront.detail
+
+
+def _preload(**changes: str):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import preload_temperature_scorecard
+
+    return preload_temperature_scorecard(
+        "lens preload",
+        preload=q("100 N"),
+        axial_stiffness=q("5e7 N/m"),
+        edge_thickness=q("5 mm"),
+        glass_cte=q("7.1e-6 1/K"),
+        cell_cte=q("23.6e-6 1/K"),
+        max_preload=q("300 N"),
+        cold_change=q(changes.get("cold", "-40 K")),
+        hot_change=q(changes.get("hot", "30 K")),
+    )
+
+
+def test_an_aluminium_cell_loses_its_preload_hot_and_gains_it_cold() -> None:
+    # k·(α_M − α_G)·t_E = 5e7 · 16.5e-6 · 0.005 = 4.125 N/K, by hand.
+    loose = _preload()
+    assert loose.status is CheckStatus.FAIL
+    assert "hot: preload -23.8 N — the element comes loose" in loose.detail
+    assert "cold 265.0 N" in loose.detail
+    held = _preload(hot="20 K")
+    assert held.status is CheckStatus.PASS
+    assert "hot 17.5 N" in held.detail
+    crushed = _preload(cold="-60 K", hot="10 K")
+    assert crushed.status is CheckStatus.FAIL
+    assert "cold: preload 347.5 N above the 300.0 N the seat may carry" in crushed.detail

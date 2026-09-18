@@ -647,7 +647,8 @@ modules:
   internal rise Q·R an enclosure's own dissipation drives, for thermal screens to consume;
   and a declared shock environment whose damped maximax response gives the equivalent
   static acceleration, Q required; and a design tool's prescription, typed and traced to the
-  tool, whose missing inputs are reported rather than estimated
+  tool, whose missing inputs are reported rather than estimated; and a retained lens's
+  preload at each temperature extreme, P₀ − k·(α_M − α_G)·t_E·ΔT
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2508,6 +2509,7 @@ from .optomechanics import (
     miles_random_vibration_grms,
     mirror_tilt_line_of_sight,
     mount_decenter,
+    preload_temperature_scorecard,
     retention_preload,
     seal_gland_extremes_scorecard,
     stress_birefringence_retardance,
@@ -4678,6 +4680,7 @@ __all__ = [
     "ShockEnvironment",
     "SurfaceDeformation",
     "Prescription",
+    "preload_temperature_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

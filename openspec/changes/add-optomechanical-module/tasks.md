@@ -28,7 +28,7 @@
       dn/dT, against declared depth of focus
 - [x] 2.2 Depth-of-focus computation from f-number and wavelength, composing existing
       `optics` functions
-- [ ] 2.3 Axial preload change with temperature; loss-of-contact and overstress bounds
+- [x] 2.3 Axial preload change with temperature; loss-of-contact and overstress bounds
 - [x] 2.4 Elastomeric annular bond thickness for athermal radial behavior, with Poisson's
       ratio effect stated
 

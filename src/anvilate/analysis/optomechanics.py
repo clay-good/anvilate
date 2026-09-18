@@ -63,6 +63,7 @@ __all__ = [
     "ShockEnvironment",
     "SurfaceDeformation",
     "Prescription",
+    "preload_temperature_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1468,6 +1469,80 @@ class Prescription(StatableModel):
                 strehl_threshold=strehl_threshold,
             )
         )
+
+
+def preload_temperature_scorecard(
+    name: str,
+    *,
+    preload: Quantity,
+    axial_stiffness: Quantity,
+    edge_thickness: Quantity,
+    glass_cte: Quantity,
+    cell_cte: Quantity,
+    cold_change: Quantity,
+    hot_change: Quantity,
+    max_preload: Quantity,
+) -> ScorecardEntry:
+    """Screen a retained lens's axial preload across its temperature range.
+
+    The cell's clamping length and the glass edge it clamps grow at different rates: over an
+    ``edge_thickness`` t_E their mismatch is (α_M − α_G)·t_E·ΔT, and the clamped stack's
+    ``axial_stiffness`` k turns it into a preload change ΔP = −k·(α_M − α_G)·t_E·ΔT — a
+    compatibility statement, Yoder's Opto-Mechanical Systems Design treatment of preload
+    versus temperature. A cell that out-expands its glass loses preload hot and gains it
+    cold. ``cold_change`` and ``hot_change`` are the signed temperature changes from
+    assembly to each extreme.
+
+    ``FAIL`` when the ``preload`` falls to nothing at either extreme — the element comes loose
+    and moves — or rises above ``max_preload``, the load the glass and seat may carry. The
+    stiffness is required: it is the whole of the answer, and a default one describes no
+    mount.
+    """
+    _check(preload, "[force]", "preload")
+    _check(axial_stiffness, "[force] / [length]", "axial_stiffness")
+    _check(edge_thickness, "[length]", "edge_thickness")
+    _check(glass_cte, "1 / [temperature]", "glass_cte")
+    _check(cell_cte, "1 / [temperature]", "cell_cte")
+    _check(max_preload, "[force]", "max_preload")
+    p0 = preload.to("N").magnitude
+    k = axial_stiffness.to("N/m").magnitude
+    t = edge_thickness.to("m").magnitude
+    limit = max_preload.to("N").magnitude
+    for value, label in ((p0, "preload"), (k, "axial_stiffness"), (t, "edge_thickness")):
+        if value <= 0:
+            raise ValueError(f"{label} must be positive; got {value}")
+    if limit <= p0:
+        raise ValueError(f"max_preload must exceed the assembled preload; got {max_preload}")
+    mismatch = cell_cte.to("1/K").magnitude - glass_cte.to("1/K").magnitude
+    at: dict[str, float] = {}
+    for label, change in (("cold", cold_change), ("hot", hot_change)):
+        delta = temperature_difference_kelvin(change, name=f"{label}_change")
+        at[label] = p0 - k * mismatch * t * delta
+    findings = [
+        f"{label}: preload {value:.1f} N — the element comes loose"
+        for label, value in at.items()
+        if value <= 0
+    ] + [
+        f"{label}: preload {value:.1f} N above the {limit:.1f} N the seat may carry"
+        for label, value in at.items()
+        if value > limit
+    ]
+    summary = f"assembled {p0:.1f} N, cold {at['cold']:.1f} N, hot {at['hot']:.1f} N"
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.FAIL if findings else CheckStatus.PASS,
+        detail=("; ".join(findings) + f" ({summary})")
+        if findings
+        else f"held at both extremes ({summary})",
+        reference="Yoder, Opto-Mechanical Systems Design, preload versus temperature",
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "the preload at each extreme, P₀ − k·(α_M − α_G)·t_E·ΔT, held to two bounds; "
+                "the three values are on the entry"
+            ),
+        ),
+    )
 
 
 _INCROPERA = "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), thermal resistance"
