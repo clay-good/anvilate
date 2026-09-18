@@ -1249,3 +1249,48 @@ def test_the_string_bound_is_clear_of_every_scorecard_this_repository_screens():
         f"{where} holds {widest} items against a bound of {_MAX_COLLECTION_ITEMS}; the bound "
         f"is no longer comfortably clear of the cards this repository screens"
     )
+
+
+def test_a_comparison_sentence_never_contradicts_its_own_verdict() -> None:
+    """The sign is dropped where `passes()` drops it, and nowhere else.
+
+    An AT_LEAST comparison of a signed quantity — a clearance left after thermal growth —
+    printed `clearance left 0.041 mm vs minimum 0.000 mm` beside the FAIL it was rendered
+    with, because the sentence took an absolute value the verdict did not.
+    """
+    import re
+
+    from anvilate.scorecard import Comparison, LimitSense
+    from anvilate.units import Quantity
+
+    interference = Comparison(
+        measured=Quantity(magnitude=-0.041, unit="mm"),
+        limit=Quantity(magnitude=0.0, unit="mm"),
+        sense=LimitSense.AT_LEAST,
+        measured_label="clearance left",
+        limit_label="minimum",
+    )
+    assert not interference.passes()
+    assert interference.sentence().startswith("clearance left -0.041 mm")
+
+    # AT_MOST is a limit on a magnitude, and both halves still read it that way: a
+    # deflection of -5 mm is 5 mm of deflection, and it passes a 6 mm limit.
+    deflection = Comparison(
+        measured=Quantity(magnitude=-5.0, unit="mm"),
+        limit=Quantity(magnitude=6.0, unit="mm"),
+        sense=LimitSense.AT_MOST,
+        measured_label="deflection",
+        limit_label="limit",
+    )
+    assert deflection.passes()
+    assert deflection.sentence().startswith("deflection 5.000 mm")
+
+    # And the property both halves share: whichever figure the sentence prints, the
+    # comparison it states agrees with the verdict.
+    for comparison in (interference, deflection):
+        measured, limit = (
+            float(part) for part in re.findall(r"-?\d+\.\d+", comparison.sentence())[:2]
+        )
+        at_most = comparison.sense is LimitSense.AT_MOST
+        stated = measured <= limit if at_most else measured >= limit
+        assert stated is comparison.passes()

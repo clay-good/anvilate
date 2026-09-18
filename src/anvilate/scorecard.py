@@ -300,9 +300,17 @@ class Comparison(StatableModel):
         Both sides are converted to ONE unit before the figures are written, so the two
         numbers a reviewer is asked to compare are in the same units — which is the whole
         of what the line is for.
+
+        **The sign is dropped exactly where :meth:`passes` drops it, and nowhere else.** An
+        AT_MOST limit is on a magnitude — a deflection of −5 mm is 5 mm of deflection — so
+        that sense reads the absolute value in both places. An AT_LEAST limit is not: a
+        clearance of −0.041 mm is a 0.041 mm interference, and printing it as `clearance
+        left 0.041 mm vs minimum 0.000 mm` states the opposite of the FAIL it is rendered
+        beside. The verdict and its sentence now take the sign from one rule.
         """
         unit = render(self.measured, system=system).rsplit(" ", 1)[1]
-        measured = abs(self.measured.to(unit).magnitude)
+        magnitude = self.measured.to(unit).magnitude
+        measured = abs(magnitude) if self.sense is LimitSense.AT_MOST else magnitude
         limit = self.limit.to(unit).magnitude
         places = decimals_distinguishing(measured, limit, minimum=self.minimum_decimals)
         return (

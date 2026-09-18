@@ -209,6 +209,9 @@ def main() -> None:
     print(run)
     for result in run.results:
         print(f"  {result.check}: {result.entry.detail}")
+    clearance = run.result("running clearance")
+    assert clearance.entry.comparison is not None
+    print(f"  {clearance.entry.comparison.sentence()}")
     print(f"\ncard: {run.card().status.value.upper()}")
     print("\nwith the heat source unmeasured:")
     print(run_chain(graph(), _cold_start))
