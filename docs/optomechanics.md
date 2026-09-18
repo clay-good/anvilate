@@ -24,6 +24,7 @@ tracer.
 | `dynamic_clearance_scorecard(name, gap, natural_frequency, peak_acceleration, pulse_duration)` | An internal gap against the peak relative displacement a half-sine shock drives across it, x = A·a₀·g₀/ω², with A the undamped shock amplification. A 300 Hz mount under 30 g for 11 ms moves 97.3 µm, which closes a 50 µm gap even though the gap is clear at rest. With no gap declared, the screen is not evaluated. |
 | `athermal_bond_thickness(glass_diameter, glass_cte, cell_cte, elastomer_cte)` | The elastomer annulus that keeps a bonded lens radially unstressed across temperature, h = (D/2)·(α_M − α_G)/(α_e − α_M) (Bayar, 1981). A 50 mm crown lens in aluminium with a silicone bond needs about 1.8 mm. Poisson's ratio is not in the formula. A confined, nearly incompressible elastomer expands more effectively than α_e, so the true thickness is smaller. The docstring says so, and the result is the classical estimate. An ordering with no positive thickness is refused. |
 | `seal_gland_extremes_scorecard(name, ..., assembly_temperature, cold, hot)` | An O-ring gland at both temperature extremes, not only at assembly. The cord scales with the elastomer's CTE and the gland with the housing's, and squeeze, fill and stretch are each held to the Parker handbook's static-seal bands (15-30 %, at most 85 %, at most 5 %) at cold and at hot. The entry names every ratio out of band and at which extreme. A squeeze that vanishes cold is reported as a leak. |
+| `OpticalMaterial`, `N_BK7`, `.cte_over(low, high)`, `.athermal_focus(...)` | Glass as a record, each property carrying its source, with expansion stated per temperature range. The bundled N-BK7 holds only what its CC0 source (the SCHOTT catalogue via refractiveindex.info) states: n_d 1.5168, V_d 64.17, 7.1 ppm/K over 243-343 K, 8.3 ppm/K over 293-573 K, and 2510 kg/m³. dn/dT and the elastic constants are left unstated rather than recalled. Asked for a swing no stated range covers, `cte_over` refuses, and `athermal_focus` reports not evaluated naming the ranges. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
 [`examples/lens_housing_athermal.py`](../examples/lens_housing_athermal.py) screens one f/4
@@ -60,6 +61,6 @@ take to optical design software; the screen says which one that is.
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
 screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.3, 10.4
-and this scope page). Not built yet: angular units, optical material records, preload change with
+(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.3, 10.4
+and this scope page). Not built yet: angular units as a whole, preload change with
 temperature, contact stress, and the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.

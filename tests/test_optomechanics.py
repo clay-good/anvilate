@@ -437,3 +437,43 @@ def test_a_squeeze_that_vanishes_is_reported_as_a_leak_not_raised() -> None:
     leak = _gland("2.6 mm")
     assert leak.status is CheckStatus.FAIL
     assert "no squeeze" in leak.detail and "a leak" in leak.detail
+
+
+def test_a_glass_record_states_only_what_its_source_does() -> None:
+    from anvilate.analysis.optomechanics import N_BK7
+
+    assert (N_BK7.refractive_index, N_BK7.abbe_number) == (1.5168, 64.17)
+    assert N_BK7.dn_dt is None and N_BK7.elastic_modulus is None
+    assert "refractiveindex.info" in N_BK7.source and "243 K to 343 K" in str(N_BK7)
+
+
+def test_an_expansion_is_refused_outside_the_range_its_catalogue_states() -> None:
+    from anvilate.analysis.optomechanics import N_BK7, OutsideValidRange
+
+    assert N_BK7.cte_over(q("253.15 K"), q("293.15 K")).to("1/K").magnitude == 7.1e-6
+    assert N_BK7.cte_over(q("400 K"), q("300 K")).to("1/K").magnitude == 8.3e-6
+    with pytest.raises(OutsideValidRange, match="233.15 K to 293.15 K is inside none"):
+        N_BK7.cte_over(q("233.15 K"), q("293.15 K"))
+    lens = {
+        "dn_dt": q("1.6e-6 1/K"),
+        "focal_length": q("100 mm"),
+        "f_number": 4.0,
+        "wavelength": q("550 nm"),
+        "housing_cte": q("1.2e-6 1/K"),
+        "housing_length": q("100 mm"),
+    }
+    inside = N_BK7.athermal_focus("focus", **lens, low=q("253.15 K"), high=q("293.15 K"))
+    assert inside.status is CheckStatus.PASS
+    assert inside.detail == _screen("1.2e-6 1/K").detail
+    outside = N_BK7.athermal_focus("focus", **lens, low=q("233.15 K"), high=q("293.15 K"))
+    assert outside.status is CheckStatus.NOT_EVALUATED
+    assert "stated for 243 K to 343 K" in outside.detail
+
+
+def test_a_ranged_property_needs_a_range_and_a_source() -> None:
+    from anvilate.analysis.optomechanics import RangedProperty
+
+    with pytest.raises(ValidationError, match="runs low to high"):
+        RangedProperty(value=q("1e-6 1/K"), low=q("300 K"), high=q("200 K"), source="s")
+    with pytest.raises(ValidationError, match="must state where it came from"):
+        RangedProperty(value=q("1e-6 1/K"), low=q("200 K"), high=q("300 K"), source=" ")

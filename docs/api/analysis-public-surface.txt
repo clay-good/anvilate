@@ -1143,6 +1143,10 @@ optomechanics.ThermalCondition
 optomechanics.dynamic_clearance_scorecard
 optomechanics.athermal_bond_thickness
 optomechanics.seal_gland_extremes_scorecard
+optomechanics.OutsideValidRange
+optomechanics.RangedProperty
+optomechanics.OpticalMaterial
+optomechanics.N_BK7
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

@@ -24,7 +24,7 @@ from math import exp, log, pi, sqrt
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import StatableModel
+from .._models import Named, Provenance, StatableModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
@@ -51,6 +51,10 @@ __all__ = [
     "dynamic_clearance_scorecard",
     "athermal_bond_thickness",
     "seal_gland_extremes_scorecard",
+    "OutsideValidRange",
+    "RangedProperty",
+    "OpticalMaterial",
+    "N_BK7",
 ]
 
 _ALDUCHOV = (
@@ -878,6 +882,158 @@ def seal_gland_extremes_scorecard(
     )
 
 
+class OutsideValidRange(ValueError):
+    """A property asked for outside the temperature range its source states it for.
+
+    Glass catalogues such as SCHOTT's state expansion per temperature range, not as one
+    number good everywhere.
+    """
+
+
+class RangedProperty(StatableModel):
+    """A material property, the temperature range its source states it for, and that source.
+
+    The shape SCHOTT's catalogue uses for expansion: 7.1 ppm/K over 243-343 K for N-BK7, and
+    a different value over 293-573 K.
+
+    A coefficient of expansion quoted for 243-343 K is not a value at 400 K: using it there is
+    an invented number with a citation attached, so :meth:`covers` is checked by everything
+    that reads one.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    value: Quantity
+    low: Quantity
+    high: Quantity
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _a_range(self) -> RangedProperty:
+        _check(self.low, "[temperature]", "low")
+        _check(self.high, "[temperature]", "high")
+        require_finite(self.value, name="value")
+        if not self.low.to("K").magnitude < self.high.to("K").magnitude:
+            raise ValueError(f"a valid range runs low to high; got {self.low} to {self.high}")
+        return self
+
+    def covers(self, low: Quantity, high: Quantity) -> bool:
+        return (
+            self.low.to("K").magnitude <= low.to("K").magnitude
+            and high.to("K").magnitude <= self.high.to("K").magnitude
+        )
+
+    def __str__(self) -> str:
+        return f"{self.value} over {self.low} to {self.high} [{self.source}]"
+
+
+class OpticalMaterial(StatableModel):
+    """An optical glass as a record: every property with where it came from.
+
+    ``refractive_index`` and ``abbe_number`` are at the d line. Expansion is a set of
+    :class:`RangedProperty` values, each good only over its own temperature range. The
+    thermo-optic, elastic, hardness and stress-optic properties are optional: a catalogue
+    that does not state one leaves it ``None``, and a screen that needs it says so rather
+    than using a recalled number. Glass data in this library comes from sources it may
+    redistribute — the bundled :data:`N_BK7` from the SCHOTT catalogue via the CC0
+    refractiveindex.info database.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    source: Provenance
+    refractive_index: float
+    abbe_number: float
+    cte: tuple[RangedProperty, ...]
+    density: Quantity | None = None
+    dn_dt: RangedProperty | None = None
+    elastic_modulus: Quantity | None = None
+    poisson_ratio: float | None = None
+    stress_optic_coefficient: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _a_glass(self) -> OpticalMaterial:
+        if not self.refractive_index > 1:
+            raise ValueError(f"{self.name}: refractive_index must exceed 1")
+        if not self.cte:
+            raise ValueError(f"{self.name}: a glass record needs at least one stated CTE range")
+        for ranged in self.cte:
+            _check(ranged.value, "1 / [temperature]", "cte")
+        return self
+
+    def cte_over(self, low: Quantity, high: Quantity) -> Quantity:
+        """The stated expansion coefficient for a swing from ``low`` to ``high``.
+
+        Refused with :class:`OutsideValidRange`, naming every stated range, when no single
+        range covers the swing — a coefficient carried past its range is an invented one.
+        """
+        _check(low, "[temperature]", "low")
+        _check(high, "[temperature]", "high")
+        lo, hi = sorted((low, high), key=lambda t: t.to("K").magnitude)
+        for ranged in self.cte:
+            if ranged.covers(lo, hi):
+                return ranged.value
+        stated = "; ".join(f"{r.low} to {r.high}" for r in self.cte)
+        raise OutsideValidRange(
+            f"{self.name}'s expansion is stated for {stated}, and {lo} to {hi} is inside none "
+            "of them"
+        )
+
+    def athermal_focus(
+        self,
+        name: str,
+        *,
+        dn_dt: Quantity,
+        focal_length: Quantity,
+        f_number: float,
+        wavelength: Quantity,
+        housing_cte: Quantity,
+        housing_length: Quantity,
+        low: Quantity,
+        high: Quantity,
+    ) -> ScorecardEntry:
+        """:func:`athermal_focus_scorecard` with the index and expansion read from this record.
+
+        The swing from ``low`` to ``high`` must lie inside a stated expansion range, or the
+        entry is ``not_evaluated`` naming the ranges. ``dn_dt`` stays the caller's unless the
+        record states one covering the swing, because it depends on wavelength and the
+        medium it is quoted against.
+        """
+        try:
+            cte = self.cte_over(low, high)
+        except OutsideValidRange as outside:
+            return ScorecardEntry(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=f"not evaluated — {outside}",
+            )
+        if self.dn_dt is not None and self.dn_dt.covers(
+            *sorted((low, high), key=lambda t: t.to("K").magnitude)
+        ):
+            dn_dt = self.dn_dt.value
+        return athermal_focus_scorecard(
+            name,
+            focal_length=focal_length,
+            f_number=f_number,
+            wavelength=wavelength,
+            refractive_index=self.refractive_index,
+            dn_dt=dn_dt,
+            glass_cte=cte,
+            housing_cte=housing_cte,
+            housing_length=housing_length,
+            temperature_change=Quantity(
+                magnitude=high.to("K").magnitude - low.to("K").magnitude, unit="K"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.name}: n_d {self.refractive_index}, V_d {self.abbe_number}, "
+            f"CTE {'; '.join(str(r) for r in self.cte)}"
+        )
+
+
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
 
 
@@ -924,3 +1080,33 @@ def _check(value: Quantity, expected: str, name: str) -> None:
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
     require_finite(value, name=name)
+
+
+_REFRACTIVEINDEX = (
+    "SCHOTT Zemax catalog 2017-01-20b, via the refractiveindex.info database (CC0 1.0)"
+)
+
+#: N-BK7, only what the cited source states. dn/dT, the elastic constants, hardness and the
+#: stress-optic coefficient are not on that page, so they are left unstated rather than
+#: recalled.
+N_BK7 = OpticalMaterial(
+    name="N-BK7",
+    source=_REFRACTIVEINDEX,
+    refractive_index=1.5168,
+    abbe_number=64.17,
+    cte=(
+        RangedProperty(
+            value=Quantity(magnitude=7.1e-6, unit="1/K"),
+            low=Quantity(magnitude=243.0, unit="K"),
+            high=Quantity(magnitude=343.0, unit="K"),
+            source=_REFRACTIVEINDEX,
+        ),
+        RangedProperty(
+            value=Quantity(magnitude=8.3e-6, unit="1/K"),
+            low=Quantity(magnitude=293.0, unit="K"),
+            high=Quantity(magnitude=573.0, unit="K"),
+            source=_REFRACTIVEINDEX,
+        ),
+    ),
+    density=Quantity(magnitude=2510.0, unit="kg/m**3"),
+)

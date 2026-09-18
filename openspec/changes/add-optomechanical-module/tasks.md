@@ -15,11 +15,11 @@
 
 - [ ] 1.1 Angular units first-class: mrad, µrad, arcsec, arcmin, deg, MOA; bare angular
       values refused on input and on render
-- [ ] 1.2 Optical material record: index at declared wavelengths, Abbe, dn/dT, CTE over a
+- [x] 1.2 Optical material record: index at declared wavelengths, Abbe, dn/dT, CTE over a
       declared range, E, ν, density, Knoop, stress-optic coefficient — all with provenance
 - [ ] 1.3 refractiveindex.info (CC0) ingestion path; vendor catalogs user-supplied or
       fetch-on-first-use, never redistributed
-- [ ] 1.4 Property-at-temperature contract: a property used outside its declared valid
+- [x] 1.4 Property-at-temperature contract: a property used outside its declared valid
       range reports not-evaluated naming the range
 
 ## 2. Thermal screens

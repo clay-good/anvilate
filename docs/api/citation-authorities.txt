@@ -266,6 +266,9 @@ Miles
 Maréchal
 # The Magnus coefficients psychrometrics evaluates (610.94 Pa, 17.625, 243.04 °C).
 Alduchov
+# Glass data: the SCHOTT catalogue, redistributed CC0 by the refractiveindex.info database.
+SCHOTT
+refractiveindex.info
 # Harris' Shock and Vibration Handbook, for a shock's relative displacement A·a₀·g₀/ω².
 Harris
 # Bayar's athermal elastomer bond thickness for a bonded lens (1981).

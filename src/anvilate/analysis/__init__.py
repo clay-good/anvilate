@@ -641,7 +641,8 @@ modules:
   or calls optimistic when it does not describe; and an internal gap against the
   displacement A·a₀·g₀/ω² a half-sine shock drives across it; and Bayar's athermal
   elastomer bond thickness (D/2)·(α_M − α_G)/(α_e − α_M); and an O-ring gland held to its
-  squeeze, fill and stretch bands at both temperature extremes
+  squeeze, fill and stretch bands at both temperature extremes; and optical glass as a
+  cited record whose expansion is refused outside the range its catalogue states it for
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2479,6 +2480,10 @@ from .optics import (
     thin_lens_image_distance,
 )
 from .optomechanics import (
+    N_BK7,
+    OpticalMaterial,
+    OutsideValidRange,
+    RangedProperty,
     ThermalCondition,
     ThermalConditionKind,
     athermal_bond_thickness,
@@ -4652,6 +4657,10 @@ __all__ = [
     "dynamic_clearance_scorecard",
     "athermal_bond_thickness",
     "seal_gland_extremes_scorecard",
+    "OutsideValidRange",
+    "RangedProperty",
+    "OpticalMaterial",
+    "N_BK7",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",
