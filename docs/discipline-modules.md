@@ -38,6 +38,27 @@ matches. It carries a floor on the number of screens it is reading, so a refacto
 turn the gate green by emptying it. Both mutations — dropping a screen from a manifest and
 deleting a manifest — were run against it.
 
+## Choosing which modules a run uses
+
+```python
+from anvilate.modules import load_modules
+
+run = load_modules()                              # every shipped module
+run = load_modules(["structural", "industrial"])  # or a named subset
+run.screens()                                     # what a document can reach in this run
+run.disabled                                      # and what it cannot, recorded
+module = run.load("structural")                   # imported here, not at declaration
+```
+
+Nothing is imported when the registry is read: a caller that wants one discipline does not
+pay for the other nine, and a test proves it in a subprocess, because a suite that has
+already imported every pack cannot see the claim. Two refusals, both about a set that would
+screen less than it looks like it does: a name no manifest carries, because a typo that
+silently enabled nothing would screen a document against a subset nobody chose; and a
+module whose dependency is not in the set, named with what it needs. The enabled set is
+carried as data because two builds of one document that enabled different modules screened
+different things, and a verdict alone cannot say so.
+
 ## Every declared screen has to run
 
 A screen a module declares and nothing exercises is a check that ships and has never
@@ -78,5 +99,6 @@ makes it true.
 
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
 exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
-3.3). The loader with enable/disable and lazy import, duplicate-limit-state detection
-across modules, and out-of-tree modules are what remain.
+3.3) and the loader (2.2). Duplicate-limit-state detection across modules — which wants a
+limit-state identity the library does not have yet, since a check is named after its
+element instance — and out-of-tree modules are what remain.

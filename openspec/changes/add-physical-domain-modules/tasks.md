@@ -14,7 +14,7 @@
 ## 2. Registry
 
 - [x] 2.1 Manifests for the nine shipped packs, asserted against what each already exposes
-- [ ] 2.2 Loader honoring enable/disable, lazy import, and declared dependencies
+- [x] 2.2 Loader honoring enable/disable, lazy import, and declared dependencies
 - [ ] 2.3 Duplicate-limit-state detection across loaded modules
 
 ## 3. Gates

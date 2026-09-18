@@ -255,3 +255,84 @@ def test_the_standards_drift_helper_reads_both_directions() -> None:
     finally:
         conftest._screen_standards.clear()
         conftest._screen_standards.update(saved)
+
+
+# --- loading ---------------------------------------------------------------------------
+
+
+def test_the_default_run_enables_every_shipped_module() -> None:
+    from anvilate.modules import load_modules
+
+    run = load_modules()
+    assert set(run.enabled) == {manifest.id for manifest in MODULE_MANIFESTS.manifests}
+    assert run.disabled == ()
+    assert len(run.screens()) == sum(len(m.screens) for m in MODULE_MANIFESTS.manifests)
+    assert str(run) == f"{len(run.enabled)} modules enabled, none disabled"
+
+
+def test_a_subset_records_what_it_turned_off_and_reaches_only_its_own_screens() -> None:
+    from anvilate.modules import load_modules
+
+    run = load_modules(["structural", "industrial"])
+    assert run.enabled == ("structural", "industrial")
+    assert "machinery" in run.disabled
+    assert set(run.screens()) == set(manifest_for("structural").screens) | set(
+        manifest_for("industrial").screens
+    )
+    assert "screen_gear_mesh" not in run.screens()
+    assert "8 disabled" in str(run)
+
+
+def test_a_module_nobody_enabled_cannot_be_loaded() -> None:
+    from anvilate.modules import load_modules
+
+    run = load_modules(["structural"])
+    assert run.load("structural").__name__ == "anvilate.packs.structural"
+    with pytest.raises(ValueError, match="'machinery' is not enabled in this run"):
+        run.load("machinery")
+
+
+def test_an_unknown_module_is_refused_rather_than_silently_enabling_nothing() -> None:
+    from anvilate.modules import load_modules
+
+    with pytest.raises(ValueError, match=r"no discipline module \['strutural'\]"):
+        load_modules(["strutural"])
+
+
+def test_enabling_a_module_without_its_dependency_is_refused_naming_what_it_needs() -> None:
+    from anvilate.modules import load_modules
+
+    registry = ModuleRegistry(
+        manifests=(_manifest(id="base"), _manifest(id="upper", depends_on=("base",)))
+    )
+    with pytest.raises(ValueError, match=r"'upper' needs \['base'\]"):
+        load_modules(["upper"], registry=registry)
+    both = load_modules(["upper", "base"], registry=registry)
+    assert set(both.enabled) == {"upper", "base"}
+
+
+def test_reading_the_registry_imports_no_discipline() -> None:
+    """A caller that wants one discipline does not pay for the other nine.
+
+    Run in a subprocess, because this process has imported every pack already — the claim
+    is about what `import anvilate.modules` does on its own, and a check inside a suite
+    that imported them all could not see it.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source = (
+        "import sys\n"
+        "from anvilate.modules import MODULE_MANIFESTS, load_modules\n"
+        "run = load_modules()\n"
+        "print(sorted(name for name in sys.modules if name.startswith('anvilate.packs.')))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": str(Path(__file__).parents[1] / "src"), "PATH": "/usr/bin:/bin"},
+        check=True,
+    )
+    assert result.stdout.strip() == "[]", f"reading the registry imported {result.stdout}"

@@ -30,6 +30,8 @@ release note nobody reads.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
@@ -41,7 +43,9 @@ __all__ = [
     "ModuleManifest",
     "ModuleRegistry",
     "MODULE_MANIFESTS",
+    "LoadedModules",
     "manifest_for",
+    "load_modules",
 ]
 
 
@@ -261,6 +265,88 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
     )
 )
+
+
+class LoadedModules(StatableModel):
+    """The modules a run has enabled, and the screens they make reachable.
+
+    The enabled set is part of what a run is: two builds of one document that enabled
+    different modules screened different things, and a bundle that recorded only the
+    verdict could not say so. It is carried here as data rather than left in a caller's
+    head, and :meth:`screens` is what a document can actually reach.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: tuple[Named, ...]
+    disabled: tuple[Named, ...] = ()
+
+    def screens(self) -> tuple[str, ...]:
+        """Every screen the enabled modules export, in module then declaration order."""
+        return tuple(
+            screen for identifier in self.enabled for screen in manifest_for(identifier).screens
+        )
+
+    def load(self, module: str):
+        """Import an enabled module and hand it back, refusing one that is not enabled.
+
+        The import happens here rather than at declaration: a manifest is data about a
+        module, and reading the registry must not drag every discipline's dependencies into
+        a process that wanted one of them.
+        """
+        import importlib
+
+        if module not in self.enabled:
+            raise ValueError(
+                f"module '{module}' is not enabled in this run; enabled are "
+                f"{sorted(self.enabled)}. A screen from a module nobody enabled would be a "
+                "verdict the run cannot account for"
+            )
+        return importlib.import_module(f"anvilate.packs.{module}")
+
+    def __str__(self) -> str:
+        if not self.disabled:
+            return f"{len(self.enabled)} modules enabled, none disabled"
+        return (
+            f"{len(self.enabled)} modules enabled, {len(self.disabled)} disabled: "
+            f"{', '.join(sorted(self.disabled))}"
+        )
+
+
+def load_modules(
+    enabled: Iterable[str] | None = None, *, registry: ModuleRegistry | None = None
+) -> LoadedModules:
+    """The modules to run with: every shipped one by default, or the named subset.
+
+    Nothing is imported here. The manifests already say what each module is, and a caller
+    that enables one discipline should not pay for the other nine — :meth:`LoadedModules.load`
+    imports a module when something actually reaches for it.
+
+    Two refusals, both about a set that would screen less than it looks like it does:
+
+    - a name no manifest carries, because a typo that silently enabled nothing would screen
+      a document against a subset nobody chose;
+    - a module whose dependency is not in the set, named with what it needs, because a
+      module composing with another and running without it is the same gap one layer down.
+    """
+    catalogue = registry if registry is not None else MODULE_MANIFESTS
+    shipped = {manifest.id: manifest for manifest in catalogue.manifests}
+    chosen = list(shipped) if enabled is None else list(dict.fromkeys(enabled))
+    unknown = sorted(set(chosen) - set(shipped))
+    if unknown:
+        raise ValueError(f"no discipline module {unknown}; this build ships {sorted(shipped)}")
+    missing = {
+        identifier: sorted(set(shipped[identifier].depends_on) - set(chosen))
+        for identifier in chosen
+        if set(shipped[identifier].depends_on) - set(chosen)
+    }
+    if missing:
+        named = "; ".join(f"'{module}' needs {needs}" for module, needs in sorted(missing.items()))
+        raise ValueError(
+            f"these enabled modules depend on modules this run disabled: {named}. A module "
+            "composing with another and running without it screens less than it says it does"
+        )
+    return LoadedModules(enabled=tuple(chosen), disabled=tuple(sorted(set(shipped) - set(chosen))))
 
 
 def manifest_for(module: str) -> ModuleManifest:

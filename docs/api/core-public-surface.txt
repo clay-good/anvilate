@@ -287,7 +287,9 @@ modules.Deprecation
 modules.ModuleManifest
 modules.ModuleRegistry
 modules.MODULE_MANIFESTS
+modules.LoadedModules
 modules.manifest_for
+modules.load_modules
 needs.DepthChange
 needs.NeedItem
 needs.NeedsReport
