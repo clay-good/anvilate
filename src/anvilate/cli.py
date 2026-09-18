@@ -221,6 +221,54 @@ def _installed_version() -> str:
         return "0+not-installed"
 
 
+def completion_script(parser: argparse.ArgumentParser, shell: str) -> str:
+    """A completion script for ``shell``, read off ``parser`` so it cannot drift from it.
+
+    Every command and every option each command takes comes from the parser itself; a
+    hand-written list is the one that falls behind the day a flag is added. zsh loads the
+    same function through its bash-completion layer.
+    """
+    top = sorted(o for a in parser._actions for o in a.option_strings)
+    (subparsers,) = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
+    cases = []
+    for name, sub in sorted(subparsers.choices.items()):
+        options = sorted(o for a in sub._actions for o in a.option_strings)
+        cases.append(f'    {name}) options="{" ".join(options)}" ;;')
+    commands = " ".join(sorted(subparsers.choices))
+    script = "\n".join(
+        [
+            "_anvilate() {",
+            '  local current="${COMP_WORDS[COMP_CWORD]}" command="${COMP_WORDS[1]}" options=""',
+            '  if [ "$COMP_CWORD" -eq 1 ]; then',
+            f'    COMPREPLY=( $(compgen -W "{commands} {" ".join(top)}" -- "$current") )',
+            "    return",
+            "  fi",
+            '  case "$command" in',
+            *cases,
+            "  esac",
+            '  if [[ "$current" == -* ]]; then',
+            '    COMPREPLY=( $(compgen -W "$options" -- "$current") )',
+            "  else",
+            '    COMPREPLY=( $(compgen -f -- "$current") )',
+            "  fi",
+            "}",
+            "complete -o filenames -F _anvilate anvilate",
+            "",
+        ]
+    )
+    if shell == "zsh":
+        return "autoload -U +X bashcompinit && bashcompinit\n" + script
+    return script
+
+
+class _Completion(argparse.Action):
+    """``--completion SHELL``: print the script and exit, before a command is required."""
+
+    def __call__(self, parser, namespace, values, option_string=None):  # type: ignore[no-untyped-def]
+        parser._print_message(completion_script(parser, str(values)), sys.stdout)
+        parser.exit()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     # The description says what is true of *every* command. An earlier version stated
     # `check`'s rule — "exit 0 only when every check passed" — as though it were the
@@ -244,6 +292,13 @@ def _build_parser() -> argparse.ArgumentParser:
     # tool its version is asking what is installed, and the two are the same only because a
     # gate says so.
     parser.add_argument("--version", action="version", version=f"anvilate {_installed_version()}")
+    parser.add_argument(
+        "--completion",
+        choices=("bash", "zsh"),
+        action=_Completion,
+        help="print a shell completion script built from this parser, and exit; "
+        'e.g. `eval "$(anvilate --completion bash)"`',
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     interfaces = commands.add_parser(

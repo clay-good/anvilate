@@ -13,6 +13,7 @@ a merge gate must not go green on it.
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import io
@@ -4575,3 +4576,37 @@ def test_a_long_check_reports_progress_on_stderr_and_leaves_stdout_the_result(tm
     assert "[1/2] screening" in watched_err.getvalue()
     assert "[2/2] screening" in watched_err.getvalue()
     assert "screening" not in piped_err.getvalue(), "progress printed into a pipe"
+
+
+def test_the_completion_script_is_read_off_the_parser_and_completes_in_bash(tmp_path):
+    """Interaction-quality 5.3: every command and each command's options, from the parser."""
+    import shutil
+
+    from anvilate.cli import _build_parser, completion_script
+
+    parser = _build_parser()
+    script = completion_script(parser, "bash")
+    (subparsers,) = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
+    for name, sub in subparsers.choices.items():
+        assert f"    {name}) options=" in script, name
+        for action in sub._actions:
+            for option in action.option_strings:
+                assert option in script, (name, option)
+    if shutil.which("bash") is None:  # pragma: no cover - every CI image has bash
+        pytest.skip("no bash to run the script in")
+    path = tmp_path / "anvilate.bash"
+    path.write_text(script)
+    probe = (
+        f"source {path}; "
+        'COMP_WORDS=(anvilate ch); COMP_CWORD=1; _anvilate; echo "${COMPREPLY[@]}"; '
+        'COMP_WORDS=(anvilate check --fo); COMP_CWORD=2; _anvilate; echo "${COMPREPLY[@]}"'
+    )
+    result = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, check=True)
+    assert result.stdout.split("\n")[:2] == ["check", "--format"]
+
+
+def test_the_completion_flag_prints_the_script_before_any_command_is_required():
+    zsh = _console(["--completion", "zsh"], "utf-8")
+    assert zsh.returncode == 0
+    assert zsh.stdout.decode().startswith("autoload -U +X bashcompinit && bashcompinit")
+    assert b"complete -o filenames -F _anvilate anvilate" in zsh.stdout

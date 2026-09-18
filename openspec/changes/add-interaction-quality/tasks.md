@@ -53,7 +53,8 @@
 
 - [ ] 5.1 "What applies to this spec" listing of available screens with what each needs
 - [x] 5.2 Runnable examples in every command's help, held against the parser's command set
-- [ ] 5.3 Shell completion for the supported shells
+- [x] 5.3 Shell completion for the supported shells — `anvilate --completion bash|zsh`,
+      built from the live parser and exercised in bash by a test
 
 ## 6. Budgets
 

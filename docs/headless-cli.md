@@ -521,6 +521,18 @@ is 3 now. `--help` still exits 0, because asking for help is not a failure.
 The mapping is a total map over the four scorecard statuses, so a fifth status is a
 decision somebody has to make rather than a silent zero.
 
+### Shell completion
+
+`anvilate --completion bash` (or `zsh`) prints a completion script and exits:
+
+```bash
+eval "$(anvilate --completion bash)"
+```
+
+The script is read off the command-line parser itself, so every command and every option it
+completes is one the parser defines, and a flag added tomorrow completes without anyone
+editing a list.
+
 ### Progress
 
 `anvilate check` over a directory prints `[i/n] screening <path>` to stderr as it goes, so a
