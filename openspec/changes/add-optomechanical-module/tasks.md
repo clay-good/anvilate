@@ -59,7 +59,7 @@
 
 ## 6. Budgets
 
-- [ ] 6.1 Focus budget, line-of-sight budget, and wavefront budget as declared budgets
+- [x] 6.1 Focus budget, line-of-sight budget, and wavefront budget as declared budgets
       with contributors bound to the screens above
 - [x] 6.2 Worked example proving the defect class: every screen green, budget red
 
@@ -76,7 +76,7 @@
 
 ## 9. Docs & examples
 
-- [ ] 9.1 Example: a sealed housing holding a lens cell through a declared thermal range
+- [x] 9.1 Example: a sealed housing holding a lens cell through a declared thermal range
       and shock environment, ending in a line-of-sight budget
 - [x] 9.2 Scope page: what this module screens, what it refuses, and why it is not a ray
       tracer

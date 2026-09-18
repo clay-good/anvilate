@@ -4162,6 +4162,19 @@ def test_lens_focus_budget_fails_with_every_contributing_screen_green():
     assert results["rss"].total == pytest.approx(14.67, abs=0.01)
 
 
+def test_sealed_lens_housing_passes_its_screens_and_its_pointing_budget_by_rss():
+    namespace = runpy.run_path(str(_EXAMPLES / "sealed_lens_housing.py"))
+    card = namespace["housing_card"]()
+    assert len(card.entries) == 7
+    assert all(entry.status is CheckStatus.PASS for entry in card.entries)
+    rss = namespace["pointing_budget"]()
+    assert rss.to_entry().status is CheckStatus.PASS
+    assert rss.total == pytest.approx(36.2, abs=0.05)
+    worst = namespace["pointing_budget"](namespace["CombinationRule"].WORST_CASE)
+    assert worst.to_entry().status is CheckStatus.FAIL
+    assert worst.total == pytest.approx(55.3, abs=0.05)
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()

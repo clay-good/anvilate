@@ -38,6 +38,11 @@ budgets exist for. Three focus screens each pass, and the depth of focus declare
 [budget](performance-budgets.md) with each term bound to its check fails. Worst-case, they
 spend 25.4 µm of ±17.6 µm.
 
+[`examples/sealed_lens_housing.py`](../examples/sealed_lens_housing.py) runs the module end to
+end. A sealed housing is screened for self-heating, focus at the hot extreme, fogging at the cold
+extreme and its cell gap under shock. Three line-of-sight terms are then bound into a pointing
+budget, which passes at 36.2 µrad against 40 µrad in quadrature.
+
 ## What it refuses
 
 | Refused | Why |
@@ -65,4 +70,4 @@ This is the depth of focus, the athermal focus screen, the random-vibration and 
 screens, stress birefringence, the wavefront budget and internal condensation
 (`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 10.1, 10.2, 10.3, 10.4
 and this scope page). Not built yet: angular units as a whole, preload change with
-temperature, contact stress, and the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.
+temperature, contact stress, and the ISO 10110 drawing indications and prescription import. The focus and pointing budgets are worked examples built on the existing budget type.
