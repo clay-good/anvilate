@@ -54,17 +54,18 @@ section, and says so plainly when no coverage was supplied rather than omitting 
 Neither reads the verdict: a mode nobody addressed is a statement about what the analysis
 did not look at, not a check that failed.
 
-What a document can state today is its element. The Spec IR has no environment, no
-interface *kind* — an interface carries a semantic tag like `motor_pilot_bore`, which names
-a feature and not a kind of joint — and no material pair, so three of the four applicability
-keys cannot be satisfied from a document at all. Every rendering says that out loud, because
-a reader owed "what did nobody look at" must not be handed a short list that is short
-because the document had no way to say the rest.
+A document states the four facts a mode keys on directly: its `element_type`, its
+`environment`, and for each interface its `kind` and `mating_material`. Whether a joint is a
+dissimilar-metal pair is **derived** from the part's material and the mating material rather
+than ticked by the author — the pair is already written down, and a self-reported flag would
+be one more thing to get wrong. A fact the document leaves out is absent, never false: the
+mode does not apply, and every rendering says that this is a statement about the document and
+not about the design. A test holds every key the catalogue uses to the vocabulary a document
+can actually declare, so a mode keyed on a misspelt environment cannot quietly never match.
 
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
 (`openspec/changes/add-failure-mode-coverage`, groups 1, 2 bar the per-check binding, 3 and
 5). Binding modes to the checks that address them needs each check to declare its modes —
-group 2.2 and the gates in group 4 — and the Spec IR needs the environment, interface-kind
-and material-pair facts three of the five shipped modes key on.
+group 2.2 and the gates in group 4.

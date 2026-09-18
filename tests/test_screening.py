@@ -1674,6 +1674,10 @@ _ANSWERED_BY_A_CHECK = {
     ),
     "acceptance": "the tiers it demands are what produce the entries",
     "budgets": "one budget entry each, evaluated against the checks its contributors bind to",
+    "environment": (
+        "read by the failure-mode catalogue, whose coverage `anvilate check` states beside the "
+        "verdict"
+    ),
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
     "anvilate_spec": "the schema version the document was written against",
@@ -2348,6 +2352,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "seismic_design_acceleration",
         "seismic_redundancy_factor",
         "budgets",
+        "environment",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
     assert not missing, (

@@ -13,6 +13,7 @@ from anvilate.failure_modes import (
     FailureMode,
     ModeCatalog,
     coverage,
+    facts_from_spec,
 )
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
 
@@ -231,3 +232,89 @@ def test_an_applicability_says_what_it_keys_on() -> None:
     # Every shipped mode's applicability renders as something a reader can check.
     for mode in DEFAULT_CATALOG.modes:
         assert str(mode.applicability).strip(), f"{mode.id} renders an empty applicability"
+
+
+def test_every_key_the_catalogue_uses_is_one_a_document_can_declare() -> None:
+    """A mode keyed on a word nothing can state is a mode that can never apply.
+
+    The catalogue and the Spec IR carry two vocabularies — interface kinds and environments
+    — and a typo in either would not fail anything: the mode would simply never match, and
+    the report would say "does not apply" about a design that is exposed to it.
+    """
+    from anvilate.screening import element_registry
+    from anvilate.spec import Environment, InterfaceKind
+
+    kinds = {kind.value for kind in InterfaceKind}
+    environments = {environment.value for environment in Environment}
+    elements = set(element_registry())
+    for mode in DEFAULT_CATALOG.modes:
+        applies = mode.applicability
+        assert set(applies.interfaces) <= kinds, f"{mode.id} keys on {applies.interfaces}"
+        assert set(applies.environments) <= environments, (
+            f"{mode.id} keys on {applies.environments}"
+        )
+        assert set(applies.elements) <= elements, f"{mode.id} keys on {applies.elements}"
+    # And the vocabularies are actually used: a catalogue keyed only on elements would pass
+    # the three assertions above while the two new IR facts reached nothing.
+    keyed = {
+        "interfaces": any(mode.applicability.interfaces for mode in DEFAULT_CATALOG.modes),
+        "environments": any(mode.applicability.environments for mode in DEFAULT_CATALOG.modes),
+        "dissimilar": any(mode.applicability.dissimilar_metals for mode in DEFAULT_CATALOG.modes),
+        "elements": any(mode.applicability.elements for mode in DEFAULT_CATALOG.modes),
+    }
+    assert all(keyed.values()), f"these applicability keys are unused: {keyed}"
+
+
+def test_a_document_that_states_its_joint_and_its_environment_reaches_those_modes() -> None:
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    document = """
+anvilate_spec: "1.12.0"
+name: coastal_bracket
+description: A bracket bolted to an aluminium rail beside the sea.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+environment: marine
+interfaces:
+  - {type: standard_component, ref: "M12", tag: rail_bolts, kind: bolted_face,
+     mating_material: {ref: AA-6061-T6}}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
+"""
+    spec = load_spec_yaml(document)
+    facts = facts_from_spec(spec)
+    # Dissimilarity is derived from the two material references, not ticked by the author.
+    assert facts["dissimilar_metals"] is True
+    assert facts["interfaces"] == ("bolted_face",)
+    report = coverage(screen_spec(spec), facts)
+    assert {entry.mode.id for entry in report.entries} == {
+        "galvanic corrosion",
+        "fretting at a clamped interface",
+    }
+    # The same joint in the same material is not a dissimilar pair.
+    same = load_spec_yaml(document.replace("AA-6061-T6", "ASTM-A36"))
+    assert facts_from_spec(same)["dissimilar_metals"] is False
+    assert "galvanic corrosion" not in {
+        entry.mode.id for entry in coverage(screen_spec(same), facts_from_spec(same)).entries
+    }
+
+
+def test_a_fact_the_document_omits_is_absent_and_never_false() -> None:
+    from anvilate.spec import load_spec_yaml
+
+    spec = load_spec_yaml(
+        """
+anvilate_spec: "1.12.0"
+name: plain
+description: A part whose document says nothing about its joints or its environment.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+"""
+    )
+    facts = facts_from_spec(spec)
+    assert "environment" not in facts and "dissimilar_metals" not in facts
+    assert facts["interfaces"] == ()

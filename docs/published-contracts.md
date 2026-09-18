@@ -114,6 +114,16 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.12.0: an environment, and what a joint is
+
+`environment` is one of a closed vocabulary — indoor dry, outdoor sheltered, marine, thermal
+cycling, vibration, submerged — and an interface gains an optional `kind` (bolted face,
+clamped, welded, bonded, press fit, sliding) and `mating_material`. They are the declared
+facts the [failure-mode catalogue](failure-mode-coverage.md) keys on, and none could be stated
+before. Whether a joint is a dissimilar-metal pair is derived from the two material
+references, not declared by the author. All optional: a document that says nothing is not
+assumed to mean anything.
+
 ### Design Spec 1.11.0: a document can declare its screening depth
 
 `acceptance.depth` is `concept` or `detailed`, defaulting to `detailed` — which is what this

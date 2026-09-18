@@ -52,9 +52,10 @@ __all__ = [
 #: document. Said out loud rather than left as an empty result: a coverage report that
 #: silently cannot reach half its catalogue is the shape this module exists to refuse.
 UNDECLARABLE_FACTS = (
-    "a Design Spec states its element, and cannot yet declare an environment, an interface "
-    "kind or a dissimilar-metal pair — so modes keyed on those are in the catalogue and "
-    "cannot apply from a document until the IR can say them"
+    "a mode applies only on a fact the document states: an element, an interface kind, an "
+    "environment, or a material pair the two references make dissimilar. A key the document "
+    "leaves out is never read as benign — the mode simply cannot apply, and the design may "
+    "still be exposed to it"
 )
 
 #: Printed wherever coverage is. The catalogue is what this library knows to ask about, and
@@ -302,16 +303,37 @@ def coverage(
 
 
 def facts_from_spec(spec: Any) -> dict[str, object]:
-    """The declared facts a Design Spec can state today, for :func:`coverage` to match on.
+    """The declared facts of a Design Spec, for :func:`coverage` to match on.
 
-    One key: the element the document declares. The IR has no environment, no interface
-    kind and no material pair — an interface carries a semantic tag (``motor_pilot_bore``),
-    which names a feature and not a kind of joint — so the other three applicability keys
-    cannot be satisfied from a document at all. :data:`UNDECLARABLE_FACTS` says so, and the
-    report prints it, because a reader owed "what did nobody look at" must not be handed a
-    short list that is short because the document had no way to say the rest.
+    Four keys, each read off something the document states: the element, the kinds of its
+    declared interfaces, the environment it declares, and whether any interface names a
+    mating material different from the part's own.
+
+    **Dissimilarity is derived, not declared.** An author does not tick a "dissimilar
+    metals" box: the document names the part's material and the material on the other side
+    of a joint, and this compares the two references. A self-reported flag would be one more
+    thing to get wrong, and the pair is already written down.
+
+    A key the document omits is absent, never false-by-default: the mode does not apply, and
+    :data:`UNDECLARABLE_FACTS` — printed with every report — says that this is a statement
+    about the document and not about the design.
     """
-    return {"element": spec.element_type}
+    interfaces = tuple(
+        interface.kind.value
+        for interface in getattr(spec, "interfaces", ())
+        if getattr(interface, "kind", None) is not None
+    )
+    mating = {
+        interface.mating_material.ref
+        for interface in getattr(spec, "interfaces", ())
+        if getattr(interface, "mating_material", None) is not None
+    }
+    facts: dict[str, object] = {"element": spec.element_type, "interfaces": interfaces}
+    if spec.environment is not None:
+        facts["environment"] = spec.environment.value
+    if mating:
+        facts["dissimilar_metals"] = any(ref != spec.material.ref for ref in mating)
+    return facts
 
 
 #: What this build knows to ask about. Every entry cites a source a reader can go and read,

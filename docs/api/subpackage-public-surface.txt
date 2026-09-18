@@ -160,6 +160,8 @@ spec.StaticReferenceResolver
 spec.ToleranceDimension
 spec.UnknownReferenceError
 spec.UnsupportedSchemaVersion
+spec.Environment
+spec.InterfaceKind
 spec.ScreeningDepth
 spec.ValidationTier
 spec.default_resolver

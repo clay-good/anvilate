@@ -237,12 +237,52 @@ class InterfaceContract(_Base):
     locator: CircularLocator | None = None
 
 
+class InterfaceKind(StrEnum):
+    """What kind of joint an interface is, for the checks and modes that turn on it.
+
+    A ``tag`` names the *feature* an interface produces (``motor_pilot_bore``); it says
+    nothing about how the two parts are held together, and a failure mode like fretting or
+    self-loosening applies to the joint and not to the feature. This is the closed
+    vocabulary that distinction needs.
+    """
+
+    BOLTED_FACE = "bolted_face"
+    CLAMPED = "clamped"
+    WELDED = "welded"
+    BONDED = "bonded"
+    PRESS_FIT = "press_fit"
+    SLIDING = "sliding"
+
+
+class Environment(StrEnum):
+    """What the part lives in, where that changes which failure modes apply.
+
+    A closed vocabulary rather than free text, because a catalogue that matched prose would
+    fire on the wording of a description. Absent means the document does not say, which is
+    never read as "benign": a mode keyed on an environment nobody declared does not apply,
+    and the coverage report states that the document could not say.
+    """
+
+    INDOOR_DRY = "indoor_dry"
+    OUTDOOR_SHELTERED = "outdoor_sheltered"
+    MARINE = "marine"
+    THERMAL_CYCLING = "thermal_cycling"
+    VIBRATION = "vibration"
+    SUBMERGED = "submerged"
+
+
 class StandardComponentInterface(_Base):
     """An interface to a standard component, referenced by database ID."""
 
     type: Literal["standard_component"] = "standard_component"
     ref: Provenance  # e.g. "NEMA23", resolved from the standards DB at build time
     tag: str  # semantic tag for the resulting feature, e.g. "motor_pilot_bore"
+    # How the joint is made, and what is on the other side of it. Both optional: a document
+    # that does not say is not assumed to mean anything, and `mating_material` is a material
+    # reference rather than a "dissimilar metals" flag — whether the pair is dissimilar is
+    # derived from the two references, not self-reported by the author.
+    kind: InterfaceKind | None = None
+    mating_material: MaterialRef | None = None
 
 
 class ImportedInterface(_Base):
@@ -252,6 +292,8 @@ class ImportedInterface(_Base):
     source_spec: str  # identifier of the spec that publishes the contract
     contract: str  # name of the imported InterfaceContract
     tag: str
+    kind: InterfaceKind | None = None
+    mating_material: MaterialRef | None = None
 
 
 Interface = Annotated[
@@ -680,13 +722,14 @@ class AcceptanceCriteria(_Base):
 # declared conservatism a margin ledger multiplies out. 1.8.0 added budgets, a requirement
 # on the combination of several checks, 1.9.0 their per-basis growth allowances, and
 # 1.10.0 a sub-budget as a
-# contributor, and 1.11.0 acceptance.depth, the screening depth a document asks for. All
+# contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
+# the environment a part lives in with an interface's kind and mating material. All
 # additive, which is
 # what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
 # not this one. The
 # version a document carries is a record of what it is, never an assertion that it is
 # current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.11.0"
+SCHEMA_VERSION = "1.12.0"
 
 
 class DesignSpec(_Base):
@@ -727,6 +770,10 @@ class DesignSpec(_Base):
     # rather than waved through -- each element's own schema is published beside this one
     # and named by the same tag, so the contract stays complete without this file learning
     # what a lifting lug is. `anvilate.screening.element_registry` resolves the tag.
+    # What the part lives in. Read by the failure-mode catalogue, which cannot otherwise
+    # ask about corrosion, thermal ratcheting or vibration at all: those modes turn on the
+    # environment and nothing in a document could state one.
+    environment: Environment | None = None
     element_type: str | None = None
     element_params: FrozenMap[str, Any] = Field(default_factory=dict)
     # Performance budgets: a requirement on a COMBINATION of checks, which no per-check

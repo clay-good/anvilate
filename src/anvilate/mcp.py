@@ -131,7 +131,7 @@ REQUIRED_OPERATIONS = frozenset(
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.11.0.json"
+_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.12.0.json"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -173,7 +173,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.8.0.json"
 # carries the same optional interface-frame fields.
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.10.0.json"
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.11.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"
