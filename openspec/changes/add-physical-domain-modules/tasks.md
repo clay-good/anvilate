@@ -22,7 +22,7 @@
 - [x] 3.1 CI gate: manifest completeness, enumerating missing items on failure
 - [x] 3.2 CI gate: per-module exercise floor as a counted fraction with a population size
       assertion, so an empty or shrunken module fails rather than passes
-- [ ] 3.3 CI gate: a module's declared standards resolve in the standards database, both
+- [x] 3.3 CI gate: a module's declared standards resolve in the standards database, both
       directions — every declared standard is used, every used standard is declared
 
 ## 4. Third-party modules

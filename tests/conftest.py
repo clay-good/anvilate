@@ -317,6 +317,26 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    # And what each module's checks actually cite, against what its manifest declares.
+    # Below the full-run guard with the exercise floor above, for the same reason: the
+    # "declares and nothing cites" half reads an absence.
+    observed_citations = _observed_standard_citations()
+    if observed_citations < 6:
+        print(
+            f"\nMODULE STANDARDS: only {observed_citations} module/standard pairs were "
+            "observed, so this gate is measuring an all but empty population"
+        )
+        session.exitstatus = 1
+        return
+    drift = _standards_drift()
+    if drift:
+        print(
+            "\nMODULE STANDARDS: a manifest and the citations its own screens write "
+            "disagree:\n  " + "\n  ".join(drift)
+        )
+        session.exitstatus = 1
+        return
+
     # The same, for the assurance sweep: a renderer that started returning blank would
     # empty it without failing anything. The library builds thousands of entries on a full
     # run, so a few hundred texts is a floor no honest run comes near.
@@ -642,6 +662,12 @@ def _built_by_the_library() -> bool:
 
 _screens_run: set[str] = set()
 
+#: Which standards bodies each pack's screens actually cited, `pack -> {body}`. Attributed
+#: to the INNERMOST pack frame — the screen that wrote the citation — where the exercise
+#: record above takes every frame, because a member screen's clause belongs to the member's
+#: pack and not to whatever composed it.
+_screen_standards: dict[str, set[str]] = {}
+
 #: Where a pack's screens live, for the stack walk below.
 _PACKS_DIR = _SRC / "packs"
 
@@ -657,13 +683,21 @@ def _install_the_screen_collector() -> None:
     from anvilate.scorecard import ScorecardEntry
 
     original_init = ScorecardEntry.__init__
+    original_copy = ScorecardEntry.model_copy
 
-    def recording_init(self, **data):
-        original_init(self, **data)
+    def _record(entry) -> None:
+        """Attribute this entry to the pack screens on the stack that built it."""
+        from anvilate.standards.effectivity import names_a_standard
+
+        body = names_a_standard(entry.reference or "")
+        innermost = True
         frame = inspect.currentframe()
         while frame is not None:
             path = Path(frame.f_code.co_filename)
             if path.parent == _PACKS_DIR and frame.f_code.co_name.startswith("screen_"):
+                if body is not None and innermost:
+                    _screen_standards.setdefault(path.stem, set()).add(body)
+                innermost = False
                 # EVERY screen frame on the stack, not the nearest one. `screen_structure`
                 # dispatches each member back through the element registry, so the entries
                 # are built inside the member's screen and it has no entry of its own — a
@@ -672,7 +706,51 @@ def _install_the_screen_collector() -> None:
                 _screens_run.add(f"{path.stem}.{frame.f_code.co_name}")
             frame = frame.f_back
 
+    def recording_init(self, **data):
+        original_init(self, **data)
+        _record(self)
+
+    def recording_copy(self, **kwargs):
+        # The copy too, and this is where the citations are: a pack builds an entry through
+        # `from_safety_factor` — which knows no clause — and attaches `reference` with a
+        # `model_copy`. Reading only `__init__` saw one standard in the whole library.
+        copied = original_copy(self, **kwargs)
+        _record(copied)
+        return copied
+
     ScorecardEntry.__init__ = recording_init
+    ScorecardEntry.model_copy = recording_copy
+
+
+def _standards_drift() -> list[str]:
+    """Where a module's declared standards and the ones its entries cite disagree.
+
+    Both directions. A body a screen cites and the manifest omits is a dependency nobody
+    can pin an edition to; a body a manifest declares and no entry cites is a claim about
+    the module that its own output does not support — the shape a hand-written list drifts
+    into, and the one this gate was written after finding (`industrial` declared AISC
+    because its docstring says "AISC-flavored").
+
+    Read off what the suite ran, so it reports the subset it reached and nothing more.
+    """
+    from anvilate.modules import MODULE_MANIFESTS
+
+    drift = []
+    for manifest in MODULE_MANIFESTS.manifests:
+        cited = _screen_standards.get(manifest.id, set())
+        declared = set(manifest.standards)
+        undeclared = sorted(cited - declared)
+        uncited = sorted(declared - cited)
+        if undeclared:
+            drift.append(f"{manifest.id} cites {undeclared} and declares {sorted(declared)}")
+        if uncited:
+            drift.append(f"{manifest.id} declares {uncited} and no entry of its own cites them")
+    return drift
+
+
+def _observed_standard_citations() -> int:
+    """How many (module, body) pairs the run saw — the population the gate measured."""
+    return sum(len(bodies) for bodies in _screen_standards.values())
 
 
 def _unexercised_screens() -> list[str]:

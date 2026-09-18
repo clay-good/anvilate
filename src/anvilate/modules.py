@@ -195,7 +195,9 @@ MODULE_MANIFESTS = ModuleRegistry(
         _manifest(
             "industrial",
             screens=("screen_cover_plate",),
-            standards=("AISC",),
+            # No standards. The pack's own docstring calls its members "AISC-flavored", and
+            # a phrase in prose is not a citation: the both-directions gate measured what
+            # its entries actually cite — nothing — and this declaration was the drift.
             material_properties=("yield strength", "elastic modulus"),
             summary="walkable industrial covers: plate bending, deflection and slip",
         ),

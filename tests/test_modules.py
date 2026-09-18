@@ -215,3 +215,43 @@ def test_a_screen_that_composes_others_is_recorded_as_run() -> None:
     finally:
         conftest._screens_run.clear()
         conftest._screens_run.update(saved)
+
+
+def test_the_standards_drift_helper_reads_both_directions() -> None:
+    """The gate behind MODULE STANDARDS, exercised where a wrong answer is visible.
+
+    It only fires at the end of a clean full run, because the "declares and nothing cites"
+    half reads an absence.
+    """
+    import conftest
+
+    saved = {pack: set(bodies) for pack, bodies in conftest._screen_standards.items()}
+    try:
+        conftest._screen_standards.clear()
+        # Nothing observed: every declared standard reads as uncited, and the population
+        # floor is what stops that being reported as a clean run.
+        assert conftest._observed_standard_citations() == 0
+        assert any("declares" in line for line in conftest._standards_drift())
+
+        # What the suite actually finds today, restated here so a pack that starts citing
+        # a body its manifest omits fails in this file as well as in the session gate.
+        conftest._screen_standards.update(
+            {
+                "electrical": {"NEC"},
+                "lighting": {"ASHRAE"},
+                "machinery": {"AGMA"},
+                "masonry": {"TMS"},
+                "structural": {"ACI", "AISC", "ASME"},
+                "ventilation": {"ASHRAE"},
+            }
+        )
+        assert conftest._standards_drift() == []
+        assert conftest._observed_standard_citations() == 8
+
+        # A body cited and not declared is the other direction, and it is named.
+        conftest._screen_standards["hydraulics"] = {"ASME"}
+        (line,) = conftest._standards_drift()
+        assert line == "hydraulics cites ['ASME'] and declares []"
+    finally:
+        conftest._screen_standards.clear()
+        conftest._screen_standards.update(saved)

@@ -53,6 +53,21 @@ screen frame on the stack rather than the nearest one, because `screen_structure
 dispatches to member screens and builds no entry of its own; with a nearest-frame detector
 the one screen that composes the others was the single screen reported as unexercised.
 
+## A declared standard is one its own checks cite
+
+The standards a manifest declares are held to what its screens write, in both directions.
+A body a check cites and the manifest omits is a dependency nobody can pin an edition to; a
+body a manifest declares and no entry of that module cites is a claim its own output does
+not support. The record is attributed to the innermost pack frame — the screen that wrote
+the citation — because a member's clause belongs to the member's pack, not to whatever
+composed it, and it is taken on `model_copy` as well as on construction: a pack builds an
+entry through `from_safety_factor`, which knows no clause, and attaches the reference
+afterwards. Reading only `__init__` saw one standard in the whole library.
+
+This gate found its first drift before it shipped: `industrial` declared AISC because the
+pack's docstring calls its members "AISC-flavored", and no entry it builds cites AISC at
+all. The declaration was removed.
+
 A **check-name namespace** is not a field here. The spec asks a module to reserve one, and
 nothing in this library could hold a pack to it today: a check is named after the element
 instance that produced it (`col_base plate bending`), not after its module. A declared
@@ -62,7 +77,6 @@ makes it true.
 ## Status
 
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
-exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1 and
-3.2). The loader with enable/disable and lazy import, duplicate-limit-state detection
-across modules, the both-directions standards gate, and out-of-tree modules are what
-remain.
+exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
+3.3). The loader with enable/disable and lazy import, duplicate-limit-state detection
+across modules, and out-of-tree modules are what remain.
