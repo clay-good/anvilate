@@ -23,6 +23,10 @@ report.complete()        # never a substitute for the list
 print(report)            # all of it, with the population and the floor caveat
 ```
 
+[`examples/clean_card_failure_modes.py`](../examples/clean_card_failure_modes.py) is the
+case this page exists for: a bolted joint whose card passes every check it runs, beside the
+three modes its declared facts reach and nothing on the card addresses.
+
 ## The rules
 
 | Rule | What it means |

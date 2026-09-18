@@ -41,5 +41,5 @@
 
 ## 6. Docs & examples
 
-- [ ] 6.1 Worked example: a clean card beside its failure-mode report
+- [x] 6.1 Worked example: a clean card beside its failure-mode report
 - [x] 6.2 Page: what the catalog is, why it is a floor and never exhaustive

@@ -240,7 +240,7 @@ Ambiguous nested blind steps and nonconcentric locators remain limits.
 
 ## What you can do today
 
-500 runnable examples, each executed in CI so they stay honest. A few:
+501 runnable examples, each executed in CI so they stay honest. A few:
 
 | Run this | What it shows |
 |---|---|
@@ -316,7 +316,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,949 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,950 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

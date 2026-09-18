@@ -4107,6 +4107,21 @@ def test_hanger_bracket_example_fails_only_the_combined_interaction():
     assert not by_name["bracket combined tension+shear"].passed
 
 
+def test_clean_card_example_passes_and_still_names_three_unchecked_modes():
+    namespace = runpy.run_path(str(_EXAMPLES / "clean_card_failure_modes.py"))
+    card, report = namespace["screen_rail_joint"]()
+    # The point of the example: every check ran and passed, so the card alone reads clean.
+    assert card.status is CheckStatus.PASS
+    assert card.entries and all(entry.passed for entry in card.entries)
+    assert {entry.mode.id for entry in report.entries} == {
+        "bolt self-loosening",
+        "galvanic corrosion",
+        "fretting at a clamped interface",
+    }
+    assert report.addressed() == ()
+    assert not report.complete()
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()
