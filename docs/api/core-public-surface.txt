@@ -283,6 +283,11 @@ mcp.stateless_gaps
 mcp.PROTOCOL_REVISION
 mcp.tool_catalog
 mcp.wire_definitions
+modules.Deprecation
+modules.ModuleManifest
+modules.ModuleRegistry
+modules.MODULE_MANIFESTS
+modules.manifest_for
 needs.DepthChange
 needs.NeedItem
 needs.NeedsReport

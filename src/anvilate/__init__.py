@@ -85,6 +85,8 @@ that already ran and does one more thing with them:
   missed forty-two models, including one where a copy handed back a plain
   ``dict`` in place of a ``MappingProxyType`` and it could then be mutated in
   place.
+- :mod:`anvilate.modules` — what each discipline module declares about itself —
+  version, standards, material properties, tiers, screens — held against the pack it names.
 - :mod:`anvilate.needs` — every declaration a build needed and did not get, in one
   report ordered by how many screens each would unblock — leverage, never severity.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one

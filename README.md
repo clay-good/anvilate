@@ -316,7 +316,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (236 closed-form modules and 1,825 public symbols, each dimension-checked and
-hand-verified, 5,885 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 5,906 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
@@ -341,13 +341,14 @@ clause it came from.
 
 ### On top of the scorecard
 
-Seven cross-cutting layers keep a green from being a silent one, an over-earned one, or one
+Eight cross-cutting layers keep a green from being a silent one, an over-earned one, or one
 nobody can act on.
 
 | Layer | What it adds |
 | --- | --- |
 | [Typed repair feedback](docs/repair-feedback.md) | A failing check names the parameter and the value that fixes it. The required factor is read from `constraints.min_safety_factor` and never invented; `constraints.max_safety_factor` is the other end of that band, so a check carrying more margin than the design asked for comes back `over_margin` with the excess stated. |
 | [Uncertainty-aware margins](docs/uncertainty-margins.md) | Input scatter propagated to a shortfall probability and a sensitivity ranking, with the sampling method and the screening citation printed beneath the number. |
+| [Discipline modules](docs/discipline-modules.md) | Each pack's manifest: its version, the standards its checks cite, the material properties its screens need, the tiers it touches and the screens it exports — derived from the package and gated against it, so a manifest cannot describe a pack that has moved on without it. |
 | [Check dependencies](docs/check-dependencies.md) | What each check reads from which other check, declared with its dimension and checked when the graph is built. Evaluation follows the dependencies whatever order the checks were declared in, ties keep declaration order so a run is reproducible, and a cycle is refused naming every member rather than the edge that closed it. The graph ships; no screen declares its consumptions yet. |
 | [What the build needs next](docs/declaration-needs.md) | Every declaration the screens reached for and did not get, collected into one list ordered by how many checks each would unblock, with the count printed beside it and ties named. A check that ran cannot claim a need, and the ordering states that it is leverage and not importance. |
 | [Performance budgets](docs/performance-budgets.md) | An allocated limit against itemized contributors under a declared worst-case, RSS or hybrid rule, so a budget of individually passing terms can fail with its governing contributor named. Correlated terms are refused under RSS, a missing term makes the budget not evaluated rather than zero, and each contributor's headroom is the inverse. A spec declares budgets under `budgets:`, the screen evaluates each against the checks that just ran, and the calculation report itemizes every contributor. |
