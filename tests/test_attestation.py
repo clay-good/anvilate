@@ -262,7 +262,10 @@ def test_a_changed_spec_changes_the_digest():
 # that could not run says it was waiting on, which the consolidated needs report is built
 # from. Same reasoning once more: what a check needed and did not get is part of what the
 # document says, so a bundle that carries those statements is a different document.
-_GOLDEN_DIGEST = "dcfdb2575b9b81a5d9517f23578faba41529d645070d5e764d53feba78d7f28c"
+# And again, from dcfdb257..., when `ScorecardEntry.addresses` shipped — the failure modes a
+# check says it addresses, which failure-mode coverage reads off the card. Which modes a
+# check answered for is part of what the document says.
+_GOLDEN_DIGEST = "e44d2b829974233ff708b61d41c975d6387533a1158c64cce5cce4c9962db590"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():
