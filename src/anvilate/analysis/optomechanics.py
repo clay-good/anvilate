@@ -39,6 +39,10 @@ __all__ = [
     "internal_condensation_scorecard",
 ]
 
+_ALDUCHOV = (
+    "Alduchov and Eskridge, Improved Magnus form approximation of saturation vapor pressure, "
+    "Journal of Applied Meteorology 35 (1996)"
+)
 _JAMIESON = "Jamieson, Thermal effects in optical systems, Optical Engineering 20(2) (1981)"
 
 
@@ -398,9 +402,9 @@ def internal_condensation_scorecard(
 
     The dew point is the declared ``internal_dew_point`` — a purge gas's specification — or,
     failing that, the one a ``fill_temperature`` and ``fill_relative_humidity`` imply through
-    the Magnus relations of the ASHRAE Handbook — Fundamentals
-    (:func:`~anvilate.analysis.psychrometrics.dew_point_temperature`), taking the water sealed
-    in as fixed. With neither, the entry is ``not_evaluated`` naming both: an unstated purge
+    the Magnus form of Alduchov and Eskridge (1996) that
+    :func:`~anvilate.analysis.psychrometrics.dew_point_temperature` evaluates, taking the water
+    sealed in as fixed. With neither, the entry is ``not_evaluated`` naming both: an unstated purge
     is not a dry one.
     """
     _check(coldest_surface_temperature, "[temperature]", "coldest_surface_temperature")
@@ -452,7 +456,7 @@ def internal_condensation_scorecard(
         name=name,
         status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
         detail=f"{comparison.sentence()}{consequence} — {basis}",
-        reference="ASHRAE Handbook — Fundamentals, Chapter 1 (Psychrometrics)",
+        reference=_ALDUCHOV,
         comparison=comparison,
         underived=Underived(
             kind=DerivationAbsence.LOOKUP,

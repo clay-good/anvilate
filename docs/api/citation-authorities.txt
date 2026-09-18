@@ -264,3 +264,5 @@ Yoder
 # Maréchal approximation relating RMS wavefront error to Strehl ratio.
 Miles
 Maréchal
+# The Magnus coefficients psychrometrics evaluates (610.94 Pa, 17.625, 243.04 °C).
+Alduchov

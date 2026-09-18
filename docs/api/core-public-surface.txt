@@ -24,6 +24,11 @@ agenteval.default_task_set
 agenteval.score_run_set
 agenteval.score_transcript
 agenteval.task_set_issues
+assembly.InsertionDirection
+assembly.Part
+assembly.Blocking
+assembly.AssemblyOrder
+assembly.assembly_order
 attestation.STATEMENT_TYPE
 attestation.PREDICATE_TYPE
 attestation.DSSE_PAYLOAD_TYPE

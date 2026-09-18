@@ -236,7 +236,7 @@ def test_every_figure_the_scope_page_quotes_is_one_the_library_computes() -> Non
 def test_a_sealed_housing_fogs_when_its_coldest_surface_is_below_the_dew_point() -> None:
     from anvilate.analysis.optomechanics import internal_condensation_scorecard
 
-    # Air sealed at 25 °C and 50% relative humidity condenses below 13.9 °C (ASHRAE).
+    # Air sealed at 25 °C and 50% relative humidity condenses below 13.9 °C (the Magnus form).
     humid = internal_condensation_scorecard(
         "fogging",
         coldest_surface_temperature=q("253.15 K"),

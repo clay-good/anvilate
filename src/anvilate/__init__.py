@@ -30,6 +30,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.agenteval` — scoring an agent driving the tool surface:
   completion, iterations and tool-call errors kept apart, because a model that
   abandons the hard tasks improves two of the three.
+- :mod:`anvilate.assembly` — whether the parts can go in at all: an order that respects
+  every declared insertion path, or every part in a blocking cycle named.
 - :mod:`anvilate.attestation` — the evidence bundle as a content-addressed,
   envelope-wrapped claim: in-toto subjects, a versioned predicate, an environment
   BOM, and a verification that never calls an unchecked signature good.
