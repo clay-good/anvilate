@@ -212,6 +212,8 @@ def main() -> None:
     clearance = run.result("running clearance")
     assert clearance.entry.comparison is not None
     print(f"  {clearance.entry.comparison.sentence()}")
+    left = clearance.outputs["clearance"].to("mm").magnitude
+    print(f"  the guide runs {-left:.3f} mm tight")
     print(f"\ncard: {run.card().status.value.upper()}")
     print("\nwith the heat source unmeasured:")
     print(run_chain(graph(), _cold_start))
