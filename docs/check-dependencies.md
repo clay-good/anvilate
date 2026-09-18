@@ -57,6 +57,11 @@ run.stale_after("modal")           # what a change to modal invalidates: the who
 | Staleness is the whole closure | `stale_after` returns the changed check and every transitive consumer. Recomputing the first hop and leaving the rest on the old value is a card mixing two evaluations of one chain. |
 | The run records the order it ran in | `order` is read off the results, not recomputed by a reader who might order them differently. |
 
+[`examples/heat_to_clearance_chain.py`](../examples/heat_to_clearance_chain.py) runs a real
+six-link chain — a motor's dissipation through a rail's thermal growth to a running
+clearance — with the library's own closed-form functions at each link, and shows the same
+chain refusing to compute anything downstream of an unmeasured heat source.
+
 ## Status
 
 This is the graph, its ordering and the chain runner

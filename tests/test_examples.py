@@ -9296,3 +9296,18 @@ def test_concept_and_detailed_depth_example_screens_one_document_two_ways():
     assert result["newly_run"] == 3
     assert result["newly_required"] == 0
     _assert_narrates_computed("concept_and_detailed_depth.py", namespace)
+
+
+def test_heat_to_clearance_chain_example_runs_in_order_and_propagates_its_gap():
+    namespace = runpy.run_path(str(_EXAMPLES / "heat_to_clearance_chain.py"))
+    figures = namespace["chain_figures"]()
+    # The finding is six links from the heat source, and it is a failure.
+    assert figures["status"] is CheckStatus.FAIL
+    assert figures["tight_by_mm"] == pytest.approx(0.041, abs=0.001)
+    # Declaration order does not decide: the graph declares the chain back to front.
+    order = list(figures["order"])
+    assert order.index("heat rise") < order.index("rail growth") < order.index("running clearance")
+    assert order.index("rail stiffness") < order.index("mount frequency")
+    # With the heat source unmeasured, nothing downstream is computed from a default.
+    assert figures["blocked_count"] == 3
+    _assert_narrates_computed("heat_to_clearance_chain.py", namespace)

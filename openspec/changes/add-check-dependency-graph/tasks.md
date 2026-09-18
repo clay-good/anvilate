@@ -33,5 +33,5 @@
 
 ## 5. Docs & examples
 
-- [ ] 5.1 Worked example: an internal heat source through temperature, modulus, frequency,
+- [x] 5.1 Worked example: an internal heat source through temperature, modulus, frequency,
       and shock response to a displacement verdict
