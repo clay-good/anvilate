@@ -21,9 +21,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from math import exp, log, pi, sqrt
 
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
+from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 
 __all__ = [
     "depth_of_focus",
@@ -35,6 +36,7 @@ __all__ = [
     "stress_birefringence_retardance",
     "marechal_strehl_ratio",
     "wavefront_budget_scorecard",
+    "internal_condensation_scorecard",
 ]
 
 _JAMIESON = "Jamieson, Thermal effects in optical systems, Optical Engineering 20(2) (1981)"
@@ -376,6 +378,88 @@ def wavefront_budget_scorecard(
                 unit="nm",
             ),
             citation="Maréchal criterion, S = exp(−(2πσ/λ)²)",
+        ),
+    )
+
+
+def internal_condensation_scorecard(
+    name: str,
+    *,
+    coldest_surface_temperature: Quantity,
+    internal_dew_point: Quantity | None = None,
+    fill_temperature: Quantity | None = None,
+    fill_relative_humidity: float | None = None,
+) -> ScorecardEntry:
+    """Screen a sealed optical housing for fogging at its cold soak.
+
+    Water sealed inside condenses on the first surface colder than its dew point, and on an
+    optic that is fog. ``PASS`` when the ``coldest_surface_temperature`` at the declared cold
+    soak stays at or above the internal dew point, ``FAIL`` below it, naming the margin.
+
+    The dew point is the declared ``internal_dew_point`` — a purge gas's specification — or,
+    failing that, the one a ``fill_temperature`` and ``fill_relative_humidity`` imply through
+    the Magnus relations of the ASHRAE Handbook — Fundamentals
+    (:func:`~anvilate.analysis.psychrometrics.dew_point_temperature`), taking the water sealed
+    in as fixed. With neither, the entry is ``not_evaluated`` naming both: an unstated purge
+    is not a dry one.
+    """
+    _check(coldest_surface_temperature, "[temperature]", "coldest_surface_temperature")
+    surface = coldest_surface_temperature.to("K").magnitude
+    if surface <= 0:
+        raise ValueError("coldest_surface_temperature must be above absolute zero")
+    if internal_dew_point is not None:
+        _check(internal_dew_point, "[temperature]", "internal_dew_point")
+        dew = internal_dew_point.to("K").magnitude
+        basis = "the declared internal dew point"
+    elif fill_temperature is not None and fill_relative_humidity is not None:
+        humidity = require_finite(fill_relative_humidity, name="fill_relative_humidity")
+        if not 0 < fill_relative_humidity <= 1:
+            raise ValueError(
+                f"fill_relative_humidity is a fraction in (0, 1]; got {fill_relative_humidity}"
+            )
+        vapour = saturation_vapor_pressure(temperature=fill_temperature).to("Pa").magnitude
+        dew = (
+            dew_point_temperature(vapor_pressure=Quantity(magnitude=humidity * vapour, unit="Pa"))
+            .to("K")
+            .magnitude
+        )
+        fill = fill_temperature.to("K").magnitude - 273.15
+        basis = f"the dew point of a fill at {fill:.1f} °C and {humidity:.0%} relative humidity"
+    else:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the sealed volume declares neither an internal dew point nor "
+                "a fill temperature and relative humidity; an unstated purge is not a dry one"
+            ),
+        )
+    comparison = Comparison(
+        measured=Quantity(magnitude=surface - 273.15, unit="°C"),
+        limit=Quantity(magnitude=dew - 273.15, unit="°C"),
+        sense=LimitSense.AT_LEAST,
+        measured_label="coldest internal surface",
+        limit_label="internal dew point",
+        minimum_decimals=1,
+    )
+    margin = surface - dew
+    consequence = (
+        f", {margin:.1f} K clear"
+        if comparison.passes()
+        else f": the optic fogs, {-margin:.1f} K short"
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=f"{comparison.sentence()}{consequence} — {basis}",
+        reference="ASHRAE Handbook — Fundamentals, Chapter 1 (Psychrometrics)",
+        comparison=comparison,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "a comparison of two temperatures; the dew point is declared, or read off the "
+                "Magnus curve by its inverse"
+            ),
         ),
     )
 

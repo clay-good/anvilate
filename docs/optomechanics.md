@@ -16,6 +16,7 @@ tracer.
 | `retention_preload(mass, acceleration)` | The axial preload that keeps an element seated against an acceleration in g: P = m·a·g₀. Less, and the lens lifts, rattles and reseats somewhere else. |
 | `stress_birefringence_retardance(stress_optic_coefficient, stress, path_length)` | The retardance stress puts into glass, K·σ·t, in nanometres. N-BK7's 2.77×10⁻⁶ mm²/N at 1 MPa over 10 mm is 27.7 nm. |
 | `marechal_strehl_ratio(rms_wavefront_error, wavelength)` | The Maréchal approximation S ≈ exp(−(2πσ/λ)²). λ/14 gives S ≈ 0.8, the diffraction limit. |
+| `internal_condensation_scorecard(name, coldest_surface_temperature, internal_dew_point or fill_temperature and fill_relative_humidity)` | Whether a sealed housing fogs at its cold soak: the internal dew point against the coldest internal surface. The dew point is the declared purge specification, or the one a fill condition implies through the Magnus relations — a fill at 25 °C and 50% relative humidity condenses below 13.9 °C. With neither declared the screen is not evaluated: an unstated purge is not a dry one. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
 [`examples/lens_housing_athermal.py`](../examples/lens_housing_athermal.py) screens one f/4
@@ -46,8 +47,8 @@ take to optical design software; the screen says which one that is.
 ## Status
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
-screens, stress birefringence and the wavefront budget
-(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 4.3, 4.4 and this scope
+screens, stress birefringence, the wavefront budget and internal condensation
+(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 4.3, 4.4, 5.1 and this scope
 page). Not built yet: angular units, optical material records, preload change with
-temperature, the shock and mount-compliance screens, contact stress, the sealing screens, and
+temperature, the shock and mount-compliance screens, contact stress, the gland screen at temperature extremes, and
 the focus and line-of-sight budgets.

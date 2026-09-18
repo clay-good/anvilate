@@ -199,8 +199,8 @@ Two corollaries worth internalizing:
 **A public analysis function refuses a NaN or an infinity rather than answering one, and
 the gate holds that over most of the surface — not all of it.** It is held by
 `test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash`, which binds
-1,492 of the library's 1,751 public functions and substitutes each poison value one
-parameter at a time. The remaining 259 are not exempt — they are unreached, which is a
+1,499 of the library's 1,761 public functions and substitutes each poison value one
+parameter at a time. The remaining 262 are not exempt — they are unreached, which is a
 different thing, and the share is itself gated by
 `test_the_probe_population_covers_the_share_of_the_surface_it_claims_to`. It has to be:
 the binder builds a call out of a function's own declarations, so a guard it cannot talk
@@ -228,7 +228,7 @@ drove to zero is a `ZeroDivisionError`. Neither is the `ValueError` your docstri
 Order matters — `require_finite` goes **above** any coercion, or the refusal you wrote is
 unreachable for exactly the input it describes.
 
-`_require` (48 modules) and `_check` (164) both call it for you on a `Quantity`. A bare
+`_require` (48 modules) and `_check` (165) both call it for you on a `Quantity`. A bare
 `float` or `int` parameter has no helper, so it is the one you have to remember: a count, an
 exponent, a ratio, a coefficient.
 

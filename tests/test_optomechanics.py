@@ -231,3 +231,45 @@ def test_every_figure_the_scope_page_quotes_is_one_the_library_computes() -> Non
     }
     missing = {text: what for text, what in quoted.items() if text not in page}
     assert not missing, f"the page no longer states what the library computes: {missing}"
+
+
+def test_a_sealed_housing_fogs_when_its_coldest_surface_is_below_the_dew_point() -> None:
+    from anvilate.analysis.optomechanics import internal_condensation_scorecard
+
+    # Air sealed at 25 °C and 50% relative humidity condenses below 13.9 °C (ASHRAE).
+    humid = internal_condensation_scorecard(
+        "fogging",
+        coldest_surface_temperature=q("253.15 K"),
+        fill_temperature=q("298.15 K"),
+        fill_relative_humidity=0.5,
+    )
+    assert humid.status is CheckStatus.FAIL
+    assert humid.comparison is not None
+    assert humid.comparison.limit.magnitude == pytest.approx(13.86, abs=0.01)
+    assert "the optic fogs, 33.9 K short" in humid.detail
+    # A dry-nitrogen purge specified to −40 °C holds at the same cold soak.
+    purged = internal_condensation_scorecard(
+        "fogging", coldest_surface_temperature=q("253.15 K"), internal_dew_point=q("233.15 K")
+    )
+    assert purged.status is CheckStatus.PASS
+    assert "20.0 K clear" in purged.detail
+
+
+def test_an_unstated_fill_is_not_a_dry_purge() -> None:
+    from anvilate.analysis.optomechanics import internal_condensation_scorecard
+
+    entry = internal_condensation_scorecard("fogging", coldest_surface_temperature=q("253.15 K"))
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "an unstated purge is not a dry one" in entry.detail
+    # Half a fill condition is still none.
+    half = internal_condensation_scorecard(
+        "fogging", coldest_surface_temperature=q("253.15 K"), fill_temperature=q("298.15 K")
+    )
+    assert half.status is CheckStatus.NOT_EVALUATED
+    with pytest.raises(ValueError, match="fraction in"):
+        internal_condensation_scorecard(
+            "fogging",
+            coldest_surface_temperature=q("253.15 K"),
+            fill_temperature=q("298.15 K"),
+            fill_relative_humidity=50.0,
+        )
