@@ -411,10 +411,19 @@ class ScorecardEntry(StatableModel):
     # report in `anvilate.needs` is built from these: a screen states its own gap, so the
     # report is never a parse of the detail line's prose.
     needs: tuple[Need, ...] = ()
+    # The failure modes this check addresses, by catalogue id. The check states them, so
+    # which mode a card covers is data the screen wrote down — never inferred from a check
+    # name that carries a member's name in it. `anvilate.failure_modes.coverage` reads this,
+    # and counts it only when the check ran.
+    addresses: tuple[Named, ...] = ()
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:
         _refuse_contradictions(self)
+        if len(set(self.addresses)) != len(self.addresses):
+            raise ValueError(
+                f"check '{self.name}' names one failure mode twice in {list(self.addresses)}"
+            )
         if self.needs and self.status is not CheckStatus.NOT_EVALUATED:
             raise ValueError(
                 f"check '{self.name}' is {self.status.value} and names "

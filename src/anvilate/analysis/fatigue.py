@@ -1072,6 +1072,11 @@ def weld_nominal_stress_range_limit(*, yield_strength: Quantity, shear: bool = F
     return Quantity(magnitude=limit, unit="MPa")
 
 
+#: The failure modes a weld fatigue check addresses, by the id `anvilate.failure_modes`
+#: catalogues them under. Declared by the check, so coverage reads it off the card.
+_WELD_FATIGUE_MODES = ("weld toe fatigue",)
+
+
 def weld_fatigue_scorecard(
     name: str,
     *,
@@ -1122,6 +1127,7 @@ def weld_fatigue_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no EN 1993-1-9 detail category chosen",
             reference="EN 1993-1-9:2005",
+            addresses=_WELD_FATIGUE_MODES,
         )
     if yield_strength is not None:
         limit = weld_nominal_stress_range_limit(yield_strength=yield_strength)
@@ -1137,6 +1143,7 @@ def weld_fatigue_scorecard(
                     "method does not cover it"
                 ),
                 reference="EN 1993-1-9:2005 §8",
+                addresses=_WELD_FATIGUE_MODES,
             )
     category = (
         detail_category
@@ -1161,12 +1168,14 @@ def weld_fatigue_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — the spectrum applies no cycles",
             reference="EN 1993-1-9:2005",
+            addresses=_WELD_FATIGUE_MODES,
         )
     damage = miner_cumulative_damage(applied_cycles=applied_cycles, cycles_to_failure=lives)
     computed = inf if damage == 0 else 1.0 / damage
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={
             "reference": "EN 1993-1-9:2005",
+            "addresses": _WELD_FATIGUE_MODES,
             "derivation": _miner_derivation(
                 applied_cycles=applied_cycles,
                 stress_ranges=stress_ranges,

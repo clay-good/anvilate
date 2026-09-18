@@ -279,6 +279,11 @@ def coverage(
 ) -> CoverageReport:
     """Which catalogued modes apply to ``facts``, and which of them ``card`` addresses.
 
+    A check addresses a mode by **declaring** it: a :class:`~anvilate.scorecard.ScorecardEntry`
+    whose ``addresses`` names the mode's id. That is data the screen wrote down, and it is
+    how every shipped check binds. A catalogue can also bind by check name through
+    :attr:`FailureMode.addressed_by`, for a team's own checks whose names it controls.
+
     A mode is addressed by a check only when that check **ran**: a mode whose only check
     came back not-evaluated is unaddressed, which is the whole point — the card already
     says the check did not run, and counting it as coverage would use one gap to hide
@@ -289,13 +294,16 @@ def coverage(
     mode apply.
     """
     catalogue = catalog if catalog is not None else DEFAULT_CATALOG
-    ran = {entry.name for entry in card.entries if entry.status is not CheckStatus.NOT_EVALUATED}
+    ran = [entry for entry in card.entries if entry.status is not CheckStatus.NOT_EVALUATED]
+    ran_names = {entry.name for entry in ran}
     entries = []
     for mode in catalogue.applicable(facts):
+        declared = [entry.name for entry in ran if mode.id in entry.addresses]
+        named = [name for name in mode.addressed_by if name in ran_names]
         entries.append(
             ModeCoverage(
                 mode=mode,
-                checks=tuple(name for name in mode.addressed_by if name in ran),
+                checks=tuple(dict.fromkeys(declared + named)),
                 tests=mode.tested_by,
             )
         )

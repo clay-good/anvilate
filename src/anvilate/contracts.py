@@ -109,20 +109,20 @@ SPEC_SCHEMA_VERSION = SCHEMA_VERSION
 # The scorecard had no versioned contract before it had a published one. Bump this when the
 # generated schema changes; the gate in tests/test_contracts.py refuses a changed schema
 # under an unchanged version and says so by name.
-SCORECARD_SCHEMA_VERSION = "1.8.0"
+SCORECARD_SCHEMA_VERSION = "1.9.0"
 
 # The evidence bundle, which the `export_artifact` MCP tool serves and `anvilate export`
 # prints. It had no contract at all: the tool published its entire output as
 # `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
 # schema said nothing about. Same rule as the two above — bump on a change to the generated
 # document, and the gate refuses a changed schema under an unchanged version.
-BUNDLE_SCHEMA_VERSION = "1.11.0"
+BUNDLE_SCHEMA_VERSION = "1.12.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.2.0"
 
 # Planar faces and through-hole patterns measured from imported mating STEP solids.
-INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.10.0"
+INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.11.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
 CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"

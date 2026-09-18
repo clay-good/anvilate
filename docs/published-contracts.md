@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Scorecard 1.9.0: a check says which failure modes it addresses
+
+A scorecard entry gains `addresses`: the ids of the [failure modes](failure-mode-coverage.md)
+the check addresses, empty by default. Coverage reads it off the card rather than matching
+check names, and counts it only for a check that ran. An entry naming one mode twice is
+refused. Evidence Bundle 1.12.0, Interface Candidates 1.11.0 and CLI output 1.39.0 carry the
+same entry.
+
 ### Design Spec 1.12.0: an environment, and what a joint is
 
 `environment` is one of a closed vocabulary — indoor dry, outdoor sheltered, marine, thermal

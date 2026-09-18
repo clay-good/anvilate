@@ -10,7 +10,7 @@
 ## 2. Resolution
 
 - [x] 2.1 Applicable-mode resolution from the compiled spec
-- [ ] 2.2 Bind modes to the checks that address them; a check declares which modes it
+- [x] 2.2 Bind modes to the checks that address them; a check declares which modes it
       addresses, so the mapping is data rather than inference
 - [x] 2.3 Bind modes to verification test archetypes where analysis cannot reach
 - [x] 2.4 Unaddressed set: applicable, no check, no test

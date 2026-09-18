@@ -29,6 +29,7 @@ print(report)            # all of it, with the population and the floor caveat
 | --- | --- |
 | Applicability keys on declared facts | A mode applies on an element class, an interface kind, an environment or a declared dissimilar-metal pair — never on free text, because a catalogue that matched prose would fire on the wording of a description rather than on the design. What a document does not state cannot make a mode apply. |
 | A plan is never evidence | A mode left to a physical test is not addressed. The archetype says what would reach it; nothing has been done about it yet, and counting it as coverage is the silent green a coverage number is most likely to produce. |
+| A check says what it addresses | A scorecard entry names the modes it addresses in `addresses`, by catalogue id. The binding is data the screen wrote down, never inferred from a check name that carries a member's name in it. A test holds every id a shipped check declares to the catalogue, reading the declaration rather than matching its spelling. |
 | A check that did not run addresses nothing | The card already says the check did not run. Counting it would use one gap to hide another. |
 | Never a bare percentage | Every rendering carries the counts, the population they came from, and the unaddressed modes by name. |
 | The stage is a stage | `design`, `qualification`, `production`, `field` say where a mode is normally found — how many stages a discovery would be pulled earlier, not how bad the mode is. Nothing in the rendering ranks the modes against each other. |
@@ -40,9 +41,11 @@ print(report)            # all of it, with the population and the floor caveat
 Five modes, each cited to a source a reader can go and read: bolt self-loosening (Junker,
 SAE 690055), galvanic corrosion (ASTM G82-98 (2014)), weld-toe fatigue (EN 1993-1-9), fretting at a
 clamped interface (Waterhouse), and thermal ratcheting of a clearance (ASME BPVC VIII-2
-§5.5.6). All five are bound to verification archetypes rather than to checks, which is the
-honest state of it: this library screens none of the five, and the report says so instead
-of leaving the card silent.
+§5.5.6). All five are bound to verification archetypes, and one is also reachable by a check:
+`weld_fatigue_scorecard` declares weld-toe fatigue, so a card carrying that check addresses
+the mode once it has run. No element screen calls it yet, so a document screened from its
+spec still reports all five as left to a test — which is the honest state of it, said out loud
+instead of left as a silent card.
 
 ## Beside the verdict
 
@@ -66,6 +69,6 @@ can actually declare, so a mode keyed on a misspelt environment cannot quietly n
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
-(`openspec/changes/add-failure-mode-coverage`, groups 1, 2 bar the per-check binding, 3 and
-5). Binding modes to the checks that address them needs each check to declare its modes —
-group 2.2 and the gates in group 4.
+(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3 and 5). A check declares the
+modes it addresses (group 2.2); the CI gates in group 4 — every check declaring its modes or
+saying why it addresses none, and a catalogue floor per element class — are still to come.

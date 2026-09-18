@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
+from anvilate.analysis.fatigue import weld_fatigue_scorecard
 from anvilate.failure_modes import (
     CATALOG_IS_A_FLOOR,
     DEFAULT_CATALOG,
@@ -16,6 +20,8 @@ from anvilate.failure_modes import (
     facts_from_spec,
 )
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+from anvilate.units import Quantity
+from conftest import library_sources
 
 
 def _mode(identifier: str, **fields: object) -> FailureMode:
@@ -318,3 +324,95 @@ acceptance: {tiers: [T1_analytical]}
     facts = facts_from_spec(spec)
     assert "environment" not in facts and "dissimilar_metals" not in facts
     assert facts["interfaces"] == ()
+
+
+def _weld_check(name: str, **overrides: object) -> ScorecardEntry:
+    declared: dict[str, object] = {
+        "applied_cycles": [2.0e5],
+        "stress_ranges": [Quantity.parse("60 MPa")],
+        "detail_category": Quantity.parse("71 MPa"),
+    }
+    declared.update(overrides)
+    return weld_fatigue_scorecard(name, **declared)  # type: ignore[arg-type]
+
+
+def test_a_shipped_check_addresses_a_mode_by_declaring_it_not_by_its_name() -> None:
+    """The weld check's name carries the member's; the binding must not depend on it."""
+    facts = {"element": "welded_connection"}
+    for name in ("gusset weld toe", "anything a caller calls it"):
+        report = coverage(Scorecard(entries=(_weld_check(name),)), facts)
+        assert [entry.checks for entry in report.entries] == [(name,)]
+        assert report.complete()
+
+
+def test_a_declared_check_that_did_not_run_still_addresses_nothing() -> None:
+    """No detail category: the check declares the mode, and did not run, so it is a gap."""
+    entry = _weld_check("gusset weld toe", detail_category=None)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.addresses == ("weld toe fatigue",)
+    report = coverage(Scorecard(entries=(entry,)), {"element": "welded_connection"})
+    assert [(item.mode.id, item.checks) for item in report.entries] == [("weld toe fatigue", ())]
+    assert not report.complete()
+
+
+def test_a_check_naming_one_mode_twice_is_refused() -> None:
+    with pytest.raises(ValidationError, match="names one failure mode twice"):
+        ScorecardEntry(
+            name="weld",
+            status=CheckStatus.PASS,
+            detail="as screened",
+            addresses=("weld toe fatigue", "weld toe fatigue"),
+        )
+
+
+_SRC = Path(__file__).resolve().parents[1] / "src" / "anvilate"
+
+
+def _declared_modes() -> list[tuple[str, str]]:
+    """Every mode id a shipped check declares, as (where, id), resolved rather than matched.
+
+    A declaration is an ``addresses=`` keyword or an ``"addresses"`` key in an update dict.
+    Its value must be a tuple of string literals, or a module-level name bound to one; any
+    other expression fails here rather than being skipped, because a declaration this gate
+    cannot read is one it cannot check.
+    """
+    found: list[tuple[str, str]] = []
+    for path, tree in library_sources():
+        constants = {
+            target.id: node.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        values: list[ast.expr] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                values += [kw.value for kw in node.keywords if kw.arg == "addresses"]
+            elif isinstance(node, ast.Dict):
+                values += [
+                    value
+                    for key, value in zip(node.keys, node.values, strict=True)
+                    if isinstance(key, ast.Constant) and key.value == "addresses"
+                ]
+        for value in values:
+            where = f"{path.relative_to(_SRC)}:{value.lineno}"
+            if isinstance(value, ast.Name):
+                assert value.id in constants, f"{where}: '{value.id}' is not a module constant"
+                value = constants[value.id]
+            assert isinstance(value, ast.Tuple), f"{where}: not a literal tuple of mode ids"
+            for element in value.elts:
+                assert isinstance(element, ast.Constant) and isinstance(element.value, str), (
+                    f"{where}: a mode id that is not a string literal"
+                )
+                found.append((where, element.value))
+    return found
+
+
+def test_every_mode_a_shipped_check_declares_is_one_the_catalogue_carries() -> None:
+    """A check claiming a mode nobody catalogues would report coverage of nothing."""
+    declared = _declared_modes()
+    assert len({where for where, _ in declared}) >= 4, declared  # the weld check's four paths
+    known = {mode.id for mode in DEFAULT_CATALOG.modes}
+    unknown = sorted((where, mode) for where, mode in declared if mode not in known)
+    assert not unknown, f"checks declare modes the catalogue does not carry: {unknown}"
