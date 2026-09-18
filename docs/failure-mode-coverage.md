@@ -95,7 +95,9 @@ left to a defined test, and every archetype is one some mode is left to.
 ## Status
 
 This is the catalogue, the applicability resolution and the coverage report
-(`openspec/changes/add-failure-mode-coverage`, groups 1, 2, 3, 5 and 6, and gates 4.1 and
-4.3). One gate is still to come: every check declaring its modes or saying why it addresses
-none (4.2). That gate is a statement about hundreds of checks, most of which address no
-catalogued mode.
+(`openspec/changes/add-failure-mode-coverage`, every task). Every public screen is recorded
+in `docs/api/failure-mode-declarations.txt`, either with the catalogued mode it declares or as
+declaring none yet. A test holds the file to the screen inventory both ways. It checks that
+each recorded declaration is really in the screen's own body, and that no screen recorded as
+declaring none declares one. It also caps the declares-none list, which may only shrink: five
+screens declare a mode today, and 64 declare none.

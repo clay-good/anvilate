@@ -519,3 +519,90 @@ def test_each_machinery_check_declares_the_mode_it_addresses() -> None:
         "rolling-contact fatigue of a bearing",
         "coil spring buckling",
     }
+
+
+def _declaration_inventory() -> tuple[dict[str, str], list[str]]:
+    path = Path(__file__).resolve().parents[1] / "docs" / "api" / "failure-mode-declarations.txt"
+    declares: dict[str, str] = {}
+    none: list[str] = []
+    section = ""
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line == "#" or line.startswith("# "):
+            continue
+        if line.startswith("## "):
+            section = line
+            continue
+        if section == "## declares":
+            screen, _, mode = line.partition(" -> ")
+            declares[screen] = mode
+        else:
+            none.append(line)
+    return declares, none
+
+
+def _declared_in_body(module: str, screen: str) -> set[str]:
+    """Mode ids declared through `addresses` inside ``screen``'s own body."""
+    source = Path(__file__).resolve().parents[1] / "src" / "anvilate"
+    (path,) = [
+        p
+        for p in (source / "analysis" / f"{module}.py", source / "packs" / f"{module}.py")
+        if p.exists()
+    ]
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    constants = {
+        target.id: node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    (function,) = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == screen]
+    found: set[str] = set()
+    for node in ast.walk(function):
+        values: list[ast.expr] = []
+        if isinstance(node, ast.Call):
+            values += [kw.value for kw in node.keywords if kw.arg == "addresses"]
+        elif isinstance(node, ast.Dict):
+            values += [
+                v
+                for k, v in zip(node.keys, node.values, strict=True)
+                if isinstance(k, ast.Constant) and k.value == "addresses"
+            ]
+        for value in values:
+            if isinstance(value, ast.Name):
+                value = constants[value.id]
+            assert isinstance(value, ast.Tuple)
+            found |= {e.value for e in value.elts if isinstance(e, ast.Constant)}
+    return found
+
+
+def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> None:
+    """Task 4.2: the inventory covers every public screen, and the declared half is true."""
+    levers = Path(__file__).resolve().parents[1] / "docs" / "api" / "repair-levers.txt"
+    screens = {
+        line.split(" ->")[0].strip()
+        for line in levers.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    declares, none = _declaration_inventory()
+    assert len(screens) >= 60, f"the screen inventory holds only {len(screens)}"
+    listed = [*declares, *none]
+    assert len(set(listed)) == len(listed), "a screen is recorded twice"
+    assert set(listed) == screens, sorted(set(listed) ^ screens)
+    known = {mode.id for mode in DEFAULT_CATALOG.modes}
+    for screen, mode in declares.items():
+        assert mode in known, f"{screen} declares '{mode}', which the catalogue does not carry"
+        module, _, function = screen.partition(".")
+        assert mode in _declared_in_body(module, function), (
+            f"{screen} is recorded as declaring '{mode}' and its body does not"
+        )
+    for screen in none:
+        module, _, function = screen.partition(".")
+        try:
+            declared = _declared_in_body(module, function)
+        except ValueError:  # a screen defined outside analysis/ and packs/
+            continue
+        assert not declared, f"{screen} declares {declared} and is recorded as declaring none"
+    # The ratchet: this may only go down.
+    assert len(none) <= 64, f"the declares-none list grew to {len(none)}"

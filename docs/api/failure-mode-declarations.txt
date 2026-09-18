@@ -1,0 +1,81 @@
+# Failure modes each public screen declares it addresses.
+#
+# Every screen in docs/api/repair-levers.txt appears here exactly once: under `declares`
+# with the catalogued mode its own body declares through `ScorecardEntry.addresses`, or
+# under `declares none yet`. tests/test_failure_modes.py holds the first section to the
+# source and caps the second, which should shrink, never grow: a screen that answers a
+# catalogued mode says so on its entries, and the fix for a line below is a cited mode
+# and a declaration, not a longer list.
+
+## declares
+fatigue.weld_fatigue_scorecard -> weld toe fatigue
+machinery.screen_shaft -> shaft fatigue at a stress raiser
+machinery.screen_gear_mesh -> gear tooth surface pitting
+machinery.screen_rolling_bearing -> rolling-contact fatigue of a bearing
+machinery.screen_compression_spring -> coil spring buckling
+
+## declares none yet
+aluminum.aluminum_compression_scorecard
+assembly.screen_adjustment_access
+beam.deflection_scorecard
+callouts.callout_scorecard
+cold_formed_steel.dsm_scorecard
+dynamics.frequency_scorecard
+dynamics.half_sine_shock_scorecard
+dynamics.isolation_scorecard
+dynamics.isolator_selection_scorecard
+electrical.screen_feeder
+embodied_carbon.embodied_carbon_scorecard
+fatigue.gerber_scorecard
+fatigue.goodman_scorecard
+fatigue.soderberg_scorecard
+fracture.fad_scorecard
+geotechnical.screen_driven_pile
+geotechnical.screen_infinite_slope
+geotechnical.screen_retaining_wall
+geotechnical.screen_shallow_footing
+hydraulics.screen_pipe_run
+hydraulics.screen_pump_duty
+industrial.screen_cover_plate
+lifting_device.bth1_fatigue_scorecard
+lifting_device.bth1_member_scorecard
+lifting_device.bth1_pin_plate_scorecard
+lifting_device.screen_lifter_device
+lighting.screen_lighting
+loads.combination_scorecard
+machinery.screen_shaft_key
+masonry.screen_masonry_wall
+nds_timber.nds_bearing_scorecard
+nds_timber.nds_bending_scorecard
+nds_timber.nds_compression_scorecard
+nds_timber.nds_shear_scorecard
+noise_exposure.screen_noise_exposure
+optomechanics.athermal_focus_scorecard
+optomechanics.boresight_scorecard
+optomechanics.dynamic_clearance_scorecard
+optomechanics.enclosure_rise_scorecard
+optomechanics.internal_condensation_scorecard
+optomechanics.preload_temperature_scorecard
+optomechanics.seal_gland_extremes_scorecard
+optomechanics.wavefront_budget_scorecard
+pressure_vessel.asme_appendix_2_flange_stress_scorecard
+pressure_vessel.asme_b313_branch_reinforcement_scorecard
+pressure_vessel.asme_b313_pressure_scorecard
+pressure_vessel.asme_ug37_reinforcement_scorecard
+screening.screen_spec
+screening.screen_structure_element
+stress.strength_scorecard
+structural.screen_base_plate
+structural.screen_beam_column
+structural.screen_beam_member
+structural.screen_bolted_connection
+structural.screen_column_member
+structural.screen_concrete_bearing
+structural.screen_gusset_plate
+structural.screen_lifting_lug
+structural.screen_shear_plate
+structural.screen_structure
+structural.screen_tension_member
+structural.screen_welded_connection
+thermal.junction_temperature_scorecard
+ventilation.screen_ventilation
