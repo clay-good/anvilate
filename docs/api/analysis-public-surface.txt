@@ -1140,6 +1140,7 @@ optomechanics.decenter_line_of_sight
 optomechanics.mirror_tilt_line_of_sight
 optomechanics.ThermalConditionKind
 optomechanics.ThermalCondition
+optomechanics.dynamic_clearance_scorecard
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

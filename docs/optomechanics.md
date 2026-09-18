@@ -21,6 +21,7 @@ tracer.
 | `decenter_line_of_sight(decenter, focal_length)` | The line-of-sight shift a lens decenter causes, Δ/f: that 0.98 µm behind a 100 mm lens is 9.8 µrad. |
 | `mirror_tilt_line_of_sight(tilt)` | A mirror turned through an angle turns the beam through twice it. The tilt must be in an angle unit (rad, mrad, µrad, deg, arcmin, arcsec), because the unit layer would otherwise take a strain in mm/m for radians. |
 | `ThermalCondition(kind, temperature_change, dwell, time_constant)` and `.qualify(entry)` | What a thermal screen is valid for. The kind — `soak`, `gradient` or `transient` — has no default. `qualify` replaces a soak screen's verdict with not evaluated under a gradient. Under a transient whose dwell is shorter than three time constants, the verdict stands and says it is optimistic, with both durations: a 30-minute dwell against a 20-minute time constant reaches 78% of the change. |
+| `dynamic_clearance_scorecard(name, gap, natural_frequency, peak_acceleration, pulse_duration)` | An internal gap against the peak relative displacement a half-sine shock drives across it, x = A·a₀·g₀/ω², with A the undamped shock amplification. A 300 Hz mount under 30 g for 11 ms moves 97.3 µm, which closes a 50 µm gap even though the gap is clear at rest. With no gap declared, the screen is not evaluated. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
 [`examples/lens_housing_athermal.py`](../examples/lens_housing_athermal.py) screens one f/4
@@ -57,7 +58,7 @@ take to optical design software; the screen says which one that is.
 
 This is the depth of focus, the athermal focus screen, the random-vibration and retention
 screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 10.3 and
-this scope page). Not built yet: angular units, optical material records, preload change with
+(`openspec/changes/add-optomechanical-module`, 2.1, 2.2, 3.3, 3.4, 3.5, 4.3, 4.4, 5.1, 10.3, 10.4
+and this scope page). Not built yet: angular units, optical material records, preload change with
 temperature, the shock screen, contact stress, the gland screen at temperature extremes, and
 the line-of-sight budget. The focus budget is a worked example rather than a packaged screen.

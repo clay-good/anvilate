@@ -28,6 +28,7 @@ from .._models import StatableModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
+from .dynamics import half_sine_shock_amplification
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 
 __all__ = [
@@ -46,6 +47,7 @@ __all__ = [
     "mirror_tilt_line_of_sight",
     "ThermalConditionKind",
     "ThermalCondition",
+    "dynamic_clearance_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -618,6 +620,99 @@ class ThermalCondition(StatableModel):
                 )
                 return entry.model_copy(update={"detail": f"{entry.detail}{note}"})
         return entry
+
+
+def dynamic_clearance_scorecard(
+    name: str,
+    *,
+    gap: Quantity | None,
+    natural_frequency: Quantity,
+    peak_acceleration: float,
+    pulse_duration: Quantity,
+) -> ScorecardEntry:
+    """Screen an internal gap against the displacement a half-sine shock drives across it.
+
+    An element on a mount of ``natural_frequency`` f_n under a half-sine pulse of
+    ``peak_acceleration`` a₀ (in g) over ``pulse_duration`` responds with A·a₀, where A is the
+    undamped shock amplification of
+    :func:`~anvilate.analysis.dynamics.half_sine_shock_amplification` — the maximax response
+    spectrum ordinate. Its peak relative displacement is that acceleration over ω²,
+    x = A·a₀·g₀/(2π·f_n)² (Harris, Shock and Vibration Handbook). ``PASS`` while x stays within
+    the declared ``gap``, ``FAIL`` when the element would strike across it — whatever the
+    nominal geometry says, because an intrusion check is computed at rest.
+
+    With no gap declared the entry is ``not_evaluated``, naming it: an undeclared gap is not
+    a generous one.
+    """
+    if gap is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — no internal gap is declared for the shock displacement to be "
+                "judged against; an undeclared gap is not a generous one"
+            ),
+        )
+    _check(gap, "[length]", "gap")
+    _check(natural_frequency, "[frequency]", "natural_frequency")
+    a0 = require_finite(peak_acceleration, name="peak_acceleration")
+    if a0 <= 0:
+        raise ValueError(f"peak_acceleration must be positive, in g; got {peak_acceleration}")
+    if gap.to("m").magnitude <= 0:
+        raise ValueError(f"gap must be positive; got {gap}")
+    amplification = half_sine_shock_amplification(
+        pulse_duration=pulse_duration, natural_frequency=natural_frequency
+    )
+    omega = 2 * pi * natural_frequency.to("Hz").magnitude
+    displacement = amplification * a0 * _STANDARD_GRAVITY / omega**2
+    comparison = Comparison(
+        measured=Quantity(magnitude=displacement * 1e6, unit="µm"),
+        limit=Quantity(magnitude=gap.to("m").magnitude * 1e6, unit="µm"),
+        sense=LimitSense.AT_MOST,
+        measured_label="shock displacement",
+        limit_label="declared gap",
+        minimum_decimals=1,
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=comparison.sentence(),
+        reference=_HARRIS,
+        comparison=comparison,
+        derivation=Derivation(
+            symbolic="x = A · a₀ · g₀ / ω²",
+            inputs=(
+                SymbolValue(
+                    symbol="A",
+                    description="undamped half-sine shock amplification (maximax SRS)",
+                    value=amplification,
+                ),
+                SymbolValue(symbol="a₀", description="pulse peak, in g", value=a0),
+                SymbolValue(
+                    symbol="g₀",
+                    description="standard gravity",
+                    value=Quantity(magnitude=_STANDARD_GRAVITY, unit="m/s**2"),
+                    unit="m/s**2",
+                ),
+                SymbolValue(
+                    symbol="ω",
+                    description="the mount's natural frequency, 2π·f_n",
+                    value=Quantity(magnitude=omega, unit="rad/s"),
+                    unit="rad/s",
+                ),
+            ),
+            result=SymbolValue(
+                symbol="x",
+                description="peak relative displacement",
+                value=Quantity(magnitude=displacement * 1e6, unit="µm"),
+                unit="µm",
+            ),
+            citation=_HARRIS,
+        ),
+    )
+
+
+_HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
 
 
 # The unit layer counts an angle as dimensionless, so a strain in mm/m would convert to

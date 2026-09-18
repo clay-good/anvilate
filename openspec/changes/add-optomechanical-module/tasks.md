@@ -87,7 +87,7 @@
 - [ ] 10.2 Internal dissipation to internal rise, consumed by thermal and condensation
 - [x] 10.3 Thermal-condition kind; soak screen refuses a gradient; dwell versus time
       constant
-- [ ] 10.4 Dynamic clearance against shock displacement, distinct from static intrusion
+- [x] 10.4 Dynamic clearance against shock displacement, distinct from static intrusion
 - [ ] 10.5 Adjustment mechanism screens; every mechanism a budget contributor
 - [ ] 10.6 Tilted plane-parallel element image displacement into focus and boresight
 - [ ] 10.7 Parasitic harness load across a mount interface

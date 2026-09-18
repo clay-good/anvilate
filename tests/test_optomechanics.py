@@ -340,3 +340,31 @@ def test_a_thermal_condition_states_its_kind_and_a_transient_its_durations() -> 
         _condition("transient", dwell=q("30 min"))
     with pytest.raises(ValidationError, match="dwell must be positive"):
         _condition("transient", dwell=q("0 min"), time_constant=q("20 min"))
+
+
+def test_a_gap_clear_at_rest_closes_under_a_declared_shock() -> None:
+    from math import pi
+
+    from anvilate.analysis.dynamics import half_sine_shock_amplification
+    from anvilate.analysis.optomechanics import dynamic_clearance_scorecard
+
+    shock = {
+        "natural_frequency": q("300 Hz"),
+        "peak_acceleration": 30.0,
+        "pulse_duration": q("11 ms"),
+    }
+    closed = dynamic_clearance_scorecard("cell gap", gap=q("50 µm"), **shock)
+    amplification = half_sine_shock_amplification(
+        pulse_duration=q("11 ms"), natural_frequency=q("300 Hz")
+    )
+    expected = amplification * 30 * 9.80665 / (2 * pi * 300) ** 2 * 1e6
+    assert closed.status is CheckStatus.FAIL
+    assert closed.comparison is not None
+    assert closed.comparison.measured.magnitude == pytest.approx(expected)
+    assert closed.detail == f"shock displacement {expected:.1f} µm vs declared gap 50.0 µm"
+    # Widen the gap past the displacement and the same shock passes.
+    opened = dynamic_clearance_scorecard("cell gap", gap=q("150 µm"), **shock)
+    assert opened.status is CheckStatus.PASS
+    undeclared = dynamic_clearance_scorecard("cell gap", gap=None, **shock)
+    assert undeclared.status is CheckStatus.NOT_EVALUATED
+    assert "an undeclared gap is not a generous one" in undeclared.detail

@@ -638,7 +638,8 @@ modules:
   housing's internal dew point against its coldest surface at cold soak; and the line of
   sight — a mount's decenter m·a·g₀/k, the shift Δ/f it causes, and a mirror's doubled tilt;
   a thermal condition declared as a soak, gradient or transient, which a soak screen refuses
-  or calls optimistic when it does not describe
+  or calls optimistic when it does not describe; and an internal gap against the
+  displacement A·a₀·g₀/ω² a half-sine shock drives across it
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2482,6 +2483,7 @@ from .optomechanics import (
     athermal_focus_scorecard,
     decenter_line_of_sight,
     depth_of_focus,
+    dynamic_clearance_scorecard,
     internal_condensation_scorecard,
     marechal_strehl_ratio,
     miles_random_vibration_grms,
@@ -4643,6 +4645,7 @@ __all__ = [
     "mirror_tilt_line_of_sight",
     "ThermalConditionKind",
     "ThermalCondition",
+    "dynamic_clearance_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",
