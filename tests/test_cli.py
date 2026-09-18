@@ -4532,3 +4532,20 @@ def test_an_ascii_only_stream_gets_json_that_decodes_to_the_same_document() -> N
     assert ascii_run.returncode == utf8_run.returncode == 0
     ascii_run.stdout.decode("ascii")  # nothing unencodable reached the stream
     assert json.loads(ascii_run.stdout) == json.loads(utf8_run.stdout)
+
+
+def test_no_command_output_depends_on_colour() -> None:
+    """Interaction-quality 7.4: with colour disabled nothing is lost, because there is none.
+
+    The terminal output carries no ANSI escape at all, so a verdict is always its word — the
+    report's HTML colours are held to repeating a word by tests/test_report.py.
+    """
+    import re
+
+    spec = str(Path(__file__).resolve().parents[1] / "examples" / "padeye.spec.yaml")
+    escape = re.compile(r"\x1b\[")
+    for arguments in (("check", spec), ("check", "--format", "json", spec), ("doctor",)):
+        _code, out, err = _run(*arguments)
+        assert not escape.search(out) and not escape.search(err), arguments
+    _code, out, _ = _run("check", spec)
+    assert re.search(r"\b(PASS|FAIL|NOT_EVALUATED|OVER_MARGIN)\b", out)

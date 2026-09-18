@@ -65,4 +65,6 @@
 - [ ] 7.1 A long operation piped to a file writes clean stdout and progress to stderr
 - [ ] 7.2 Ctrl-C during export leaves no partial artifact presented as complete
 - [ ] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
-- [ ] 7.4 Rendering with color disabled loses no information
+- [x] 7.4 Rendering with color disabled loses no information — the terminal carries no
+      ANSI escape (tests/test_cli.py), and every coloured status in the HTML report is a word
+      (tests/test_report.py)
