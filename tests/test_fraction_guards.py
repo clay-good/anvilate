@@ -29,10 +29,12 @@ import pathlib
 import pkgutil
 import re
 from collections.abc import Callable
+from enum import Enum
 from functools import cache
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 import anvilate.analysis as analysis
 import anvilate.units.quantity as quantity_module
@@ -1081,6 +1083,42 @@ def _unit_for(dimension: str) -> str | None:
 
 _ANGLE = "angle"
 
+_RECORDS = re.compile(r"(?:tuple\[(\w+), \.\.\.\]|(\w+))")
+
+
+def _probe_record(module: object, spelled: str) -> object | None:
+    """A record the function takes, built from its required fields alone, or ``None``.
+
+    Screens that take declared records — a harness crossing, a surface's ratings, an
+    outgassing record — were unbuildable to this probe, so their own guards went
+    unexercised. Every optional field is left at its default, which is the record a user
+    writes first. ``tuple[Record, ...]`` gets a one-record tuple.
+    """
+    found = _RECORDS.fullmatch(spelled)
+    if found is None:
+        return None
+    cls = getattr(module, found.group(1) or found.group(2), None)
+    if not (isinstance(cls, type) and issubclass(cls, BaseModel)):
+        return None
+    fields = {}
+    for field_name, field in cls.model_fields.items():
+        if not field.is_required():
+            continue
+        annotation = field.annotation
+        if isinstance(annotation, type) and issubclass(annotation, Enum):
+            fields[field_name] = next(iter(annotation))
+        elif annotation is str:
+            fields[field_name] = "probe"
+        elif annotation in (float, int):
+            fields[field_name] = annotation(1)
+        else:
+            return None
+    try:
+        record = cls(**fields)
+    except ValueError:
+        return None
+    return (record,) if found.group(1) else record
+
 
 @cache
 def _declared_dimensions() -> dict[str, dict[str, str]]:
@@ -1280,6 +1318,8 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         # A scorecard's display label: any text is a valid one, and leaving
                         # it unbound kept every scorecard out of the probe population.
                         value = "probe"
+                    elif (record := _probe_record(module, spelled)) is not None:
+                        value = record
                     else:
                         value = {"float": 1.0, "int": count}.get(spelled)
                     if value is not None:
@@ -1686,10 +1726,7 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
         "build and still refuse it — the bucket the rotational-speed hole was in. Teach "
         f"the binder to read the new refusal rather than raising this cap: {unpersuaded[:10]}"
     )
-    # 83, not 80: the harness, surface-limits and outgassing screens each take a tuple of
-    # declared records, which the binder has no way to construct. Teaching it to build a
-    # record from its own required fields is what brings this back down.
-    assert len(unbuildable) <= 83, (
+    assert len(unbuildable) <= 80, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )
