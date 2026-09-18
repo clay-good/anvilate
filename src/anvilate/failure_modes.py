@@ -591,6 +591,19 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="condensable outgassing on an optical surface",
+            description=(
+                "an adhesive, jacket or lubricant inside a sealed optical volume releasing "
+                "volatiles that condense on the coldest optic as a haze"
+            ),
+            applicability=Applicability(environments=("thermal_cycling",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "ASTM E595-15 total mass loss and collected volatile condensable materials "
+                "from outgassing in a vacuum environment"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

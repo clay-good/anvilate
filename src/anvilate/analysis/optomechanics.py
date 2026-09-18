@@ -21,10 +21,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from math import cos, exp, isfinite, log, pi, sin, sqrt
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import Named, Provenance, StatableModel
+from .._models import Named, Provenance, StatableModel, cited
 from ..budget import CombinationRule
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
@@ -78,6 +79,8 @@ __all__ = [
     "SurfaceTreatment",
     "SurfaceLimits",
     "surface_limits_scorecard",
+    "OutgassingRecord",
+    "outgassing_census_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1971,6 +1974,15 @@ def pressure_window_scorecard(
     )
 
 
+def _records(value: object, kind: type, label: str) -> tuple:
+    """``value`` as a tuple of ``kind`` records, or a refusal naming ``label``."""
+    if not isinstance(value, tuple | list) or not all(isinstance(v, kind) for v in value):
+        raise ValueError(f"{label} must be a tuple of {kind.__name__} records; got {value!r}")
+    if not value:
+        raise ValueError(f"{label} is empty; declare at least one {kind.__name__}")
+    return tuple(value)
+
+
 class HarnessCrossing(StatableModel):
     """A cable, ribbon or flexible attachment declared crossing a mount interface.
 
@@ -2046,10 +2058,7 @@ def harness_load_scorecard(
     allowed = _radians(allowed_line_of_sight, "allowed_line_of_sight") * 1e6
     if allowed <= 0:
         raise ValueError(f"allowed_line_of_sight must be positive; got {allowed_line_of_sight}")
-    if not crossings:
-        raise ValueError(
-            "crossings is empty; a mount no harness crosses has no parasitic load to screen"
-        )
+    crossings = _records(crossings, HarnessCrossing, "crossings")
     unstated = [
         f"{crossing.harness} ({' and '.join(crossing.missing())})"
         for crossing in crossings
@@ -2232,10 +2241,7 @@ def surface_limits_scorecard(
             raise ValueError(f"relative_humidity must lie in [0, 1]; got {relative_humidity}")
     if irradiance is not None:
         _check(irradiance, "[power] / [area]", "irradiance")
-    if not surfaces:
-        raise ValueError(
-            "surfaces is empty; declare each coated or cemented surface with its ratings"
-        )
+    surfaces = _records(surfaces, SurfaceLimits, "surfaces")
     exceeded: list[str] = []
     unrated: list[str] = []
     for limits in surfaces:
@@ -2304,7 +2310,135 @@ def surface_limits_scorecard(
     )
 
 
+if TYPE_CHECKING:
+    _OutgassingSource = str
+else:
+    _OutgassingSource = cited(
+        "where the outgassing figures came from — a test report, a data sheet or a database"
+    )
+
+
+class OutgassingRecord(StatableModel):
+    """One non-metallic inside a sealed optical volume, and its outgassing figures.
+
+    ``total_mass_loss`` (TML) and ``condensable`` (CVCM, the collected volatile condensable
+    material) are mass fractions from 0 to 1, as ASTM E595-15 reports them in percent.
+    ``test_method`` and ``source`` say where the figures came from. A material declared
+    with neither figure is one the census names rather than assumes clean.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    material: Named
+    total_mass_loss: float | None = None
+    condensable: float | None = None
+    test_method: str | None = None
+    source: _OutgassingSource | None = None
+
+    @model_validator(mode="after")
+    def _figures(self) -> OutgassingRecord:
+        for label, value in (
+            ("total_mass_loss", self.total_mass_loss),
+            ("condensable", self.condensable),
+        ):
+            if value is None:
+                continue
+            require_finite(value, name=label)
+            if not 0 <= value <= 1:
+                raise ValueError(
+                    f"'{self.material}': {label} is a mass fraction in [0, 1]; got {value}"
+                )
+        if (self.total_mass_loss is None) != (self.condensable is None):
+            raise ValueError(
+                f"'{self.material}': a test reports total mass loss and condensable material "
+                "together; state both or neither"
+            )
+        if self.total_mass_loss is not None and not (
+            self.test_method and self.test_method.strip() and self.source and self.source.strip()
+        ):
+            raise ValueError(
+                f"'{self.material}': outgassing figures need the test_method and source they "
+                "came from"
+            )
+        return self
+
+
+def outgassing_census_scorecard(
+    name: str,
+    *,
+    materials: tuple[OutgassingRecord, ...],
+    total_mass_loss_limit: float,
+    condensable_limit: float,
+) -> ScorecardEntry:
+    """Census every non-metallic in a sealed optical volume against declared outgassing limits.
+
+    Adhesives, elastomers, potting, coatings, cable jackets, labels and lubricants each
+    carry a total mass loss and a condensable fraction by the ASTM E595-15 vacuum test.
+    The condensable fraction governs, because it is what deposits on cold and optical
+    surfaces; both are compared and both are stated. The limits are declared, never
+    defaulted, because a programme's own criteria set them. A material with no figures is
+    not evaluated, naming it, and the entry states how many materials it examined, so a
+    clean census is distinguishable from an empty one.
+    """
+    for label, value in (
+        ("total_mass_loss_limit", total_mass_loss_limit),
+        ("condensable_limit", condensable_limit),
+    ):
+        require_finite(value, name=label)
+        if not 0 < value <= 1:
+            raise ValueError(f"{label} is a mass fraction in (0, 1]; got {value}")
+    materials = _records(materials, OutgassingRecord, "materials")
+    exceeded: list[str] = []
+    unstated: list[str] = []
+    listed: list[str] = []
+    for record in materials:
+        if record.total_mass_loss is None or record.condensable is None:
+            unstated.append(str(record.material))
+            continue
+        figures = (
+            f"{record.material} CVCM {record.condensable:.2%}, TML {record.total_mass_loss:.2%} "
+            f"({record.test_method}; {record.source})"
+        )
+        listed.append(figures)
+        if record.condensable > condensable_limit:
+            exceeded.append(f"{record.material} CVCM {record.condensable:.2%}")
+        if record.total_mass_loss > total_mass_loss_limit:
+            exceeded.append(f"{record.material} TML {record.total_mass_loss:.2%}")
+    population = f"{len(materials)} material{'s' if len(materials) != 1 else ''} examined"
+    applied = f"limits CVCM {condensable_limit:.2%} (governing) and TML {total_mass_loss_limit:.2%}"
+    parts = [population, applied]
+    if listed:
+        parts.append("; ".join(listed))
+    if exceeded:
+        status = CheckStatus.FAIL
+        parts.append("over the limit: " + ", ".join(exceeded))
+    elif unstated:
+        status = CheckStatus.NOT_EVALUATED
+    else:
+        status = CheckStatus.PASS
+    if unstated:
+        parts.append("no outgassing data for " + ", ".join(unstated))
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=" — ".join(parts),
+        reference=_ASTM_E595,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "each material's tested figures compared with the declared limits; every "
+                "material, its figures and its source are stated on the entry"
+            ),
+        ),
+        addresses=("condensable outgassing on an optical surface",),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_ASTM_E595 = (
+    "ASTM E595-15 total mass loss and collected volatile condensable materials from "
+    "outgassing in a vacuum environment"
+)
 _YODER_BONDED = (
     "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), bonded and "
     "cemented optics"

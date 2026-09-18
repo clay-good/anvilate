@@ -1167,6 +1167,8 @@ optomechanics.cycling_retention_scorecard
 optomechanics.SurfaceTreatment
 optomechanics.SurfaceLimits
 optomechanics.surface_limits_scorecard
+optomechanics.OutgassingRecord
+optomechanics.outgassing_census_scorecard
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

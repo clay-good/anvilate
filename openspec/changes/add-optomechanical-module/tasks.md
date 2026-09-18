@@ -97,7 +97,7 @@
 
 ## 11. Environmental and contamination
 
-- [ ] 11.1 Outgassing census over declared non-metallics; condensable fraction governing;
+- [x] 11.1 Outgassing census over declared non-metallics; condensable fraction governing;
       population size reported
 - [x] 11.2 Seal breathing per thermal cycle; equalization path, desiccant, or purge
       required for a cycling sealed volume; ingress accumulation verification-only

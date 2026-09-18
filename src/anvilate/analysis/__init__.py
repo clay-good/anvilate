@@ -656,7 +656,8 @@ modules:
   0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) the bow leaves; and the mount shift Σk·δ/(k_m + Σk) the
   harnesses crossing a mount pull into it; with retention after cycling stated as
   verification-only, naming its test; and every coated and cemented surface held to its own
-  temperature, humidity and irradiance ratings
+  temperature, humidity and irradiance ratings; and an outgassing census of every
+  non-metallic in the sealed volume, the condensable fraction governing
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2498,6 +2499,7 @@ from .optomechanics import (
     BreathingMitigation,
     HarnessCrossing,
     OpticalMaterial,
+    OutgassingRecord,
     OutsideValidRange,
     Prescription,
     RangedProperty,
@@ -2524,6 +2526,7 @@ from .optomechanics import (
     miles_random_vibration_grms,
     mirror_tilt_line_of_sight,
     mount_decenter,
+    outgassing_census_scorecard,
     preload_temperature_scorecard,
     pressure_window_scorecard,
     retention_preload,
@@ -4715,6 +4718,8 @@ __all__ = [
     "SurfaceTreatment",
     "SurfaceLimits",
     "surface_limits_scorecard",
+    "OutgassingRecord",
+    "outgassing_census_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

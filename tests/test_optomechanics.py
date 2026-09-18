@@ -1136,3 +1136,65 @@ def test_a_surface_with_no_rating_for_the_condition_is_named() -> None:
         surface_limits_scorecard("limits", surfaces=(), cold=q("-40 degC"), hot=q("55 degC"))
     with pytest.raises(ValueError, match="hottest must exceed coldest"):
         SurfaceLimits(surface="x", treatment="cement", coldest=q("50 degC"), hottest=q("40 degC"))
+
+
+def _materials():  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import OutgassingRecord
+
+    epoxy = OutgassingRecord(
+        material="lens bond epoxy",
+        total_mass_loss=0.0045,
+        condensable=0.0002,
+        test_method="ASTM E595-15",
+        source="vendor data sheet",
+    )
+    jacket = OutgassingRecord(
+        material="ribbon jacket",
+        total_mass_loss=0.008,
+        condensable=0.0015,
+        test_method="ASTM E595-15",
+        source="outgassing database",
+    )
+    return epoxy, jacket, OutgassingRecord(material="label")
+
+
+def _census(*materials: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import outgassing_census_scorecard
+
+    return outgassing_census_scorecard(
+        "outgassing",
+        materials=materials,  # type: ignore[arg-type]
+        total_mass_loss_limit=0.01,
+        condensable_limit=0.001,
+    )
+
+
+def test_the_condensable_fraction_governs_the_outgassing_census() -> None:
+    epoxy, jacket, _ = _materials()
+    clean = _census(epoxy)
+    assert clean.status is CheckStatus.PASS
+    assert clean.detail.startswith("1 material examined — limits CVCM 0.10% (governing)")
+    assert "lens bond epoxy CVCM 0.02%, TML 0.45% (ASTM E595-15; vendor data sheet)" in (
+        clean.detail
+    )
+    # The jacket's total mass loss is inside the limit; its condensable fraction is not.
+    hazy = _census(epoxy, jacket)
+    assert hazy.status is CheckStatus.FAIL
+    assert "over the limit: ribbon jacket CVCM 0.15%" in hazy.detail
+    assert "TML 0.80%" in hazy.detail and "ribbon jacket TML" not in hazy.detail
+
+
+def test_a_material_with_no_data_is_named_not_assumed_clean() -> None:
+    from anvilate.analysis.optomechanics import OutgassingRecord
+
+    epoxy, _, label = _materials()
+    entry = _census(epoxy, label)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.detail.startswith("2 materials examined")
+    assert entry.detail.endswith("no outgassing data for label")
+    with pytest.raises(ValueError, match="materials is empty"):
+        _census()
+    with pytest.raises(ValueError, match="state both or neither"):
+        OutgassingRecord(material="x", total_mass_loss=0.01, test_method="t", source="s")
+    with pytest.raises(ValueError, match="test_method and source"):
+        OutgassingRecord(material="x", total_mass_loss=0.01, condensable=0.001)
