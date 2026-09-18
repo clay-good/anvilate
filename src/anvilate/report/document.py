@@ -801,11 +801,17 @@ def report_from_record(record: dict) -> CalculationReport:
 
 
 # The document declares its own surface. It sets a text colour, and every status colour
-# in it (#a00 failing, #060 passing, #444 for a note) is chosen against paper — so a
+# in it (#8e1b0e failing, #0b5394 passing, #444 for a note) is chosen against paper — so a
 # viewer whose browser is in dark mode and a stylesheet that names no background renders
 # near-black text on near-black, which is a blank page to a reviewer and looked fine in
 # every test the suite had. `color-scheme: light` also keeps the UA's own furniture —
 # scrollbars, form controls — on the same footing as the print it is a stand-in for.
+# The status colours are chosen to survive colour-vision deficiency, and a test holds them
+# to it: each clears WCAG AA text contrast on the white page, and every pair — body text
+# included — stays apart under the Machado 2009 protan, deutan and tritan simulations. The
+# old red and green were nearly the same luminance and ran together for a deuteranope; the
+# old amber failed contrast outright. The status word is always printed as well, so colour
+# is never the only carrier of the verdict.
 _STYLESHEET = """
 html { color-scheme: light; background: #fff; }
 body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: #111;
@@ -819,13 +825,13 @@ section.check { page-break-inside: avoid; }
 .derivation { font-family: "DejaVu Sans Mono", monospace; margin: 0.6em 0 0.6em 1.5em; }
 .derivation p { margin: 0.2em 0; }
 .status { font-size: 0.8em; letter-spacing: 0.08em; }
-.fail .status { color: #a00; }
-.pass .status { color: #060; }
-.over_margin .status { color: #b60; }
-.repair { font-size: 0.9em; color: #a00; }
+.fail .status { color: #8e1b0e; }
+.pass .status { color: #0b5394; }
+.over_margin .status { color: #a86800; }
+.repair { font-size: 0.9em; color: #8e1b0e; }
 .uncertainty { font-size: 0.9em; color: #444; }
 .uncertainty-method { font-size: 0.85em; color: #666; margin-top: -0.4em; }
-.uncertainty.fragile { color: #a00; font-weight: bold; }
+.uncertainty.fragile { color: #8e1b0e; font-weight: bold; }
 .fallback { font-style: italic; color: #666; }
 .source { font-size: 0.9em; color: #444; }
 tr.governing td { font-weight: bold; }

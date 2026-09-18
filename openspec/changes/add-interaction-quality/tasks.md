@@ -34,8 +34,13 @@
 
 ## 4. Accessibility
 
-- [ ] 4.1 No information conveyed by color alone anywhere — status carries a word or mark
-- [ ] 4.2 Palette safe for common color-vision deficiency, checked in CI
+- [x] 4.1 No information conveyed by color alone anywhere — status carries a word or mark
+      — the terminal emits no colour at all, and every coloured status in the HTML report is
+      a status word, held by a test over the rendered spans
+- [x] 4.2 Palette safe for common color-vision deficiency, checked in CI — the report's
+      status colours clear WCAG AA on the page and stay ΔE ≥ 20 apart, body text included,
+      under the Machado 2009 protan, deutan and tritan simulations; the old red and green
+      failed it, and the old amber failed contrast
 - [ ] 4.3 Report structure readable in document order by a screen reader; tables carry
       headers; figures carry text alternatives
 

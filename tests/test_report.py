@@ -2019,3 +2019,105 @@ def test_a_report_with_no_coverage_says_so_rather_than_omitting_the_section():
     assert '<h2>Failure modes</h2><p class="none">no coverage report was supplied</p>' in "".join(
         _report().to_html().splitlines()
     )
+
+
+# --- colour is never the only carrier, and the palette survives colour-vision deficiency ---
+
+# Machado, Oliveira & Fernandes, "A Physiologically-based Model for Simulation of Color
+# Vision Deficiency", IEEE TVCG 15(6), 2009 — Table 1, severity 1.0, applied in linear RGB.
+_CVD = {
+    "protanopia": (
+        (0.152286, 1.052583, -0.204868),
+        (0.114503, 0.786281, 0.099216),
+        (-0.003882, -0.048116, 1.051998),
+    ),
+    "deuteranopia": (
+        (0.367322, 0.860646, -0.227968),
+        (0.280085, 0.672501, 0.047413),
+        (-0.011820, 0.042940, 0.968881),
+    ),
+    "tritanopia": (
+        (1.255528, -0.076749, -0.178779),
+        (-0.078411, 0.930809, 0.147602),
+        (0.004733, 0.691367, 0.303900),
+    ),
+    "typical": ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+}
+# CIE76 ΔE at which two small text colours read as different at a glance. A just-noticeable
+# difference is about 2.3; 20 is this project's practice default for "a different status",
+# not a cited threshold.
+_DISTINCT_DELTA_E = 20.0
+_WCAG_AA_TEXT = 4.5  # WCAG 2.x, 1.4.3 contrast (minimum) for normal text
+
+
+def _linear(hex_colour: str) -> tuple[float, float, float]:
+    digits = hex_colour.lstrip("#")
+    if len(digits) == 3:
+        digits = "".join(ch * 2 for ch in digits)
+    channels = [int(digits[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    return tuple(c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)  # type: ignore[return-value]
+
+
+def _luminance(rgb: tuple[float, float, float]) -> float:
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+
+
+def _lab(rgb: tuple[float, float, float]) -> tuple[float, float, float]:
+    x = (0.4124 * rgb[0] + 0.3576 * rgb[1] + 0.1805 * rgb[2]) / 0.95047
+    y = _luminance(rgb)
+    z = (0.0193 * rgb[0] + 0.1192 * rgb[1] + 0.9505 * rgb[2]) / 1.08883
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+
+    return (116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z)))
+
+
+def _seen(rgb: tuple[float, float, float], matrix) -> tuple[float, ...]:  # type: ignore[no-untyped-def]
+    mixed = (sum(m * c for m, c in zip(row, rgb, strict=True)) for row in matrix)
+    return tuple(min(1.0, max(0.0, value)) for value in mixed)
+
+
+def _stylesheet_colours() -> tuple[dict[str, str], str, str]:
+    """The status colours, the body text and the page background, read from the live CSS."""
+    import re
+
+    from anvilate.report.document import _STYLESHEET
+
+    status = dict(re.findall(r"\.(\w+) \.status \{ color: (#[0-9a-fA-F]{3,6}); \}", _STYLESHEET))
+    text = re.search(r"body \{[^}]*?color: (#[0-9a-fA-F]{3,6})", _STYLESHEET, re.S)
+    page = re.search(r"html \{[^}]*background: (#[0-9a-fA-F]{3,6})", _STYLESHEET)
+    assert text and page
+    return status, text.group(1), page.group(1)
+
+
+def test_the_status_palette_stays_distinct_under_colour_vision_deficiency():
+    """Interaction-quality 4.2, checked in CI rather than asserted in a style guide."""
+    import itertools
+
+    status, text, page = _stylesheet_colours()
+    assert set(status) == {"fail", "pass", "over_margin"}, status
+    background = _luminance(_linear(page))
+    for name, colour in status.items():
+        ratio = (background + 0.05) / (_luminance(_linear(colour)) + 0.05)
+        assert ratio >= _WCAG_AA_TEXT, f"{name} {colour} is {ratio:.2f}:1 against {page}"
+    palette = {**status, "body text": text}
+    for view, matrix in _CVD.items():
+        for (a, first), (b, second) in itertools.combinations(palette.items(), 2):
+            one, two = _lab(_seen(_linear(first), matrix)), _lab(_seen(_linear(second), matrix))
+            distance = sum((p - q) ** 2 for p, q in zip(one, two, strict=True)) ** 0.5
+            assert distance >= _DISTINCT_DELTA_E, (
+                f"{a} {first} and {b} {second} are ΔE {distance:.1f} apart for {view} vision"
+            )
+
+
+def test_every_status_the_report_colours_also_says_in_words():
+    """Interaction-quality 4.1: colour is a second channel, never the only one."""
+    import re
+
+    from anvilate.report.document import _STATUS_LABEL
+
+    html = _report().to_html()
+    spans = re.findall(r'<span class="status">([^<]*)</span>', html)
+    assert len(spans) >= 2, "the report rendered no status to check"
+    assert all(span in _STATUS_LABEL.values() and span.strip() for span in spans), spans
