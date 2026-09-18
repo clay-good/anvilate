@@ -29,6 +29,7 @@ from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
 from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
+from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_stretch_fraction
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "ThermalCondition",
     "dynamic_clearance_scorecard",
     "athermal_bond_thickness",
+    "seal_gland_extremes_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -626,10 +628,10 @@ class ThermalCondition(StatableModel):
 def dynamic_clearance_scorecard(
     name: str,
     *,
-    gap: Quantity | None,
     natural_frequency: Quantity,
     peak_acceleration: float,
     pulse_duration: Quantity,
+    gap: Quantity | None = None,
 ) -> ScorecardEntry:
     """Screen an internal gap against the displacement a half-sine shock drives across it.
 
@@ -645,6 +647,15 @@ def dynamic_clearance_scorecard(
     With no gap declared the entry is ``not_evaluated``, naming it: an undeclared gap is not
     a generous one.
     """
+    # The environment is checked whether or not a gap is declared: a NaN acceleration is a
+    # mistake in the document either way, and must not hide behind the missing gap.
+    _check(natural_frequency, "[frequency]", "natural_frequency")
+    a0 = require_finite(peak_acceleration, name="peak_acceleration")
+    if a0 <= 0:
+        raise ValueError(f"peak_acceleration must be positive, in g; got {peak_acceleration}")
+    amplification = half_sine_shock_amplification(
+        pulse_duration=pulse_duration, natural_frequency=natural_frequency
+    )
     if gap is None:
         return ScorecardEntry(
             name=name,
@@ -655,15 +666,8 @@ def dynamic_clearance_scorecard(
             ),
         )
     _check(gap, "[length]", "gap")
-    _check(natural_frequency, "[frequency]", "natural_frequency")
-    a0 = require_finite(peak_acceleration, name="peak_acceleration")
-    if a0 <= 0:
-        raise ValueError(f"peak_acceleration must be positive, in g; got {peak_acceleration}")
     if gap.to("m").magnitude <= 0:
         raise ValueError(f"gap must be positive; got {gap}")
-    amplification = half_sine_shock_amplification(
-        pulse_duration=pulse_duration, natural_frequency=natural_frequency
-    )
     omega = 2 * pi * natural_frequency.to("Hz").magnitude
     displacement = amplification * a0 * _STANDARD_GRAVITY / omega**2
     comparison = Comparison(
@@ -758,6 +762,120 @@ def athermal_bond_thickness(
             f"α_M = {cell_cte}, α_G = {glass_cte}, which has no positive thickness"
         )
     return Quantity(magnitude=diameter / 2 * (a_m - a_g) / (a_e - a_m), unit="mm")
+
+
+# The Parker O-Ring Handbook's static-seal targets, the bands the o_ring module's docstrings
+# already state: squeeze 15-30 %, gland fill at most 85 %, stretch at most 5 %.
+_SQUEEZE_BAND = (0.15, 0.30)
+_FILL_MAX = 0.85
+_STRETCH_MAX = 0.05
+
+
+def seal_gland_extremes_scorecard(
+    name: str,
+    *,
+    cross_section_diameter: Quantity,
+    inner_diameter: Quantity,
+    gland_depth: Quantity,
+    groove_width: Quantity,
+    groove_diameter: Quantity,
+    elastomer_cte: Quantity,
+    gland_cte: Quantity,
+    assembly_temperature: Quantity,
+    cold: Quantity,
+    hot: Quantity,
+) -> ScorecardEntry:
+    """Screen an O-ring gland at both temperature extremes, not only at assembly.
+
+    An elastomer expands an order of magnitude faster than the metal around it, so a gland
+    that seals at assembly can lose its squeeze cold and overfill hot. The O-ring's
+    ``cross_section_diameter`` and ``inner_diameter`` scale with ``elastomer_cte``, the
+    gland's ``gland_depth``, ``groove_width`` and ``groove_diameter`` with ``gland_cte``, from
+    ``assembly_temperature`` to each of ``cold`` and ``hot``. At each, the squeeze, fill and
+    stretch of :mod:`~anvilate.analysis.o_ring` are held to the Parker O-Ring Handbook's
+    static-seal bands — squeeze 15-30 %, fill at most 85 %, stretch at most 5 % — and the
+    entry fails naming every ratio out of band and at which extreme. A squeeze that falls to
+    nothing cold is a leak, reported as one rather than raised.
+    """
+    _check(elastomer_cte, "1 / [temperature]", "elastomer_cte")
+    _check(gland_cte, "1 / [temperature]", "gland_cte")
+    _check(assembly_temperature, "[temperature]", "assembly_temperature")
+
+    def scaled(value: Quantity, name: str, factor: float) -> Quantity:
+        _check(value, "[length]", name)
+        return Quantity(magnitude=value.to("mm").magnitude * factor, unit="mm")
+
+    ratios: dict[str, dict[str, float | None]] = {}
+    for label, extreme in (("cold", cold), ("hot", hot)):
+        _check(extreme, "[temperature]", label)
+        delta = extreme.to("K").magnitude - assembly_temperature.to("K").magnitude
+        rubber = 1 + elastomer_cte.to("1/K").magnitude * delta
+        metal = 1 + gland_cte.to("1/K").magnitude * delta
+        cs = scaled(cross_section_diameter, "cross_section_diameter", rubber)
+        ring = scaled(inner_diameter, "inner_diameter", rubber)
+        depth = scaled(gland_depth, "gland_depth", metal)
+        width = scaled(groove_width, "groove_width", metal)
+        bottom = scaled(groove_diameter, "groove_diameter", metal)
+        squeeze: float | None
+        try:
+            squeeze = o_ring_squeeze_fraction(cross_section_diameter=cs, gland_depth=depth)
+        except ValueError:
+            squeeze = None  # the gland is at least as deep as the cord: nothing is squeezed
+        stretch: float | None
+        try:
+            stretch = o_ring_stretch_fraction(inner_diameter=ring, groove_diameter=bottom)
+        except ValueError:
+            stretch = 0.0  # the ring is looser than the groove: unstretched
+        ratios[label] = {
+            "squeeze": squeeze,
+            "fill": o_ring_gland_fill_fraction(
+                cross_section_diameter=cs, gland_depth=depth, groove_width=width
+            ),
+            "stretch": stretch,
+        }
+    findings = []
+    for label, values in ratios.items():
+        squeeze = values["squeeze"]
+        if squeeze is None:
+            findings.append(f"{label}: no squeeze — the gland is as deep as the cord, a leak")
+        elif not _SQUEEZE_BAND[0] <= squeeze <= _SQUEEZE_BAND[1]:
+            findings.append(f"{label}: squeeze {squeeze:.1%} outside 15-30 %")
+        fill = values["fill"]
+        assert fill is not None
+        if fill > _FILL_MAX:
+            findings.append(f"{label}: fill {fill:.1%} above 85 %")
+        stretch = values["stretch"]
+        if stretch is not None and stretch > _STRETCH_MAX:
+            findings.append(f"{label}: stretch {stretch:.1%} above 5 %")
+
+    def described(label: str) -> str:
+        values = ratios[label]
+        squeeze = values["squeeze"]
+        shown = "none" if squeeze is None else f"{squeeze:.1%}"
+        return (
+            f"{label} squeeze {shown}, fill {values['fill']:.1%}, stretch {values['stretch']:.1%}"
+        )
+
+    summary = f"{described('cold')}; {described('hot')}"
+    governing = sorted({finding.split(":")[0] for finding in findings})
+    detail = (
+        f"out of band at {' and '.join(governing)} — {'; '.join(findings)} ({summary})"
+        if findings
+        else f"in band at both extremes ({summary})"
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.FAIL if findings else CheckStatus.PASS,
+        detail=detail,
+        reference="Parker O-Ring Handbook, static-seal squeeze, fill and stretch",
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "three geometric ratios at two temperatures, each held to a handbook band; "
+                "the ratios' own arithmetic is in anvilate.analysis.o_ring"
+            ),
+        ),
+    )
 
 
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"

@@ -395,3 +395,45 @@ def test_an_athermal_bond_grows_the_bore_as_fast_as_the_glass_and_the_bond() -> 
             cell_cte=q("5e-6 1/K"),
             elastomer_cte=q("250e-6 1/K"),
         )
+
+
+def _gland(depth: str, **overrides: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import seal_gland_extremes_scorecard
+
+    declared: dict[str, object] = {
+        "cross_section_diameter": q("2.62 mm"),
+        "inner_diameter": q("50 mm"),
+        "gland_depth": q(depth),
+        "groove_width": q("3.6 mm"),
+        "groove_diameter": q("51 mm"),
+        "elastomer_cte": q("1.6e-4 1/K"),
+        "gland_cte": q("23.6e-6 1/K"),
+        "assembly_temperature": q("293.15 K"),
+        "cold": q("233.15 K"),
+        "hot": q("343.15 K"),
+    }
+    declared.update(overrides)
+    return seal_gland_extremes_scorecard("housing seal", **declared)  # type: ignore[arg-type]
+
+
+def test_a_gland_in_band_at_assembly_can_lose_its_squeeze_cold() -> None:
+    from anvilate.analysis.o_ring import o_ring_squeeze_fraction
+
+    # 15.3 % squeeze at assembly: in band, by the existing function.
+    at_assembly = o_ring_squeeze_fraction(
+        cross_section_diameter=q("2.62 mm"), gland_depth=q("2.22 mm")
+    )
+    assert 0.15 < at_assembly < 0.16
+    marginal = _gland("2.22 mm")
+    assert marginal.status is CheckStatus.FAIL
+    assert "out of band at cold" in marginal.detail
+    assert "hot:" not in marginal.detail.split("(")[0]
+    nominal = _gland("2.0 mm")
+    assert nominal.status is CheckStatus.PASS
+    assert "cold squeeze 23.0%" in nominal.detail and "hot squeeze 24.2%" in nominal.detail
+
+
+def test_a_squeeze_that_vanishes_is_reported_as_a_leak_not_raised() -> None:
+    leak = _gland("2.6 mm")
+    assert leak.status is CheckStatus.FAIL
+    assert "no squeeze" in leak.detail and "a leak" in leak.detail

@@ -54,7 +54,7 @@
 
 - [x] 5.1 Internal dew-point / condensation screen at declared cold soak, composing the
       existing psychrometric and thermal screens
-- [ ] 5.2 Seal gland screening composing the existing o-ring set; gland at temperature
+- [x] 5.2 Seal gland screening composing the existing o-ring set; gland at temperature
       extremes, not only at ambient
 
 ## 6. Budgets

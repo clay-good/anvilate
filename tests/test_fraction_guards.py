@@ -1267,6 +1267,10 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                     if spelled == "Quantity":
                         unit = _unit_for(wanted.get(parameter.name, "[length]")) or "m"
                         value = Quantity(magnitude=1.0, unit=unit)
+                    elif spelled == "str" and parameter.name == "name":
+                        # A scorecard's display label: any text is a valid one, and leaving
+                        # it unbound kept every scorecard out of the probe population.
+                        value = "probe"
                     else:
                         value = {"float": 1.0, "int": count}.get(spelled)
                     if value is not None:
@@ -1419,6 +1423,8 @@ def test_no_analysis_function_answers_junk_with_pythons_own_attribute_error():
     for label, function, arguments in population:
         for name in arguments:
             for spelled, junk in (("None", None), ("str", "12 mm"), ("list", [1.0])):
+                if spelled == "str" and isinstance(arguments[name], str):
+                    continue  # a text parameter — a scorecard's label — takes any string
                 probes += 1
                 try:
                     function(**{**arguments, name: junk})
@@ -1662,6 +1668,7 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
                 else getattr(p.annotation, "__name__", "")
             )
             not in ("Quantity", "float", "int")
+            and not (p.name == "name" and p.annotation in ("str", str))
         ]
         (unbuildable if exotic else unpersuaded).append(label)
 

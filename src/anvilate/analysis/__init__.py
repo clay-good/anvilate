@@ -640,7 +640,8 @@ modules:
   a thermal condition declared as a soak, gradient or transient, which a soak screen refuses
   or calls optimistic when it does not describe; and an internal gap against the
   displacement A·a₀·g₀/ω² a half-sine shock drives across it; and Bayar's athermal
-  elastomer bond thickness (D/2)·(α_M − α_G)/(α_e − α_M)
+  elastomer bond thickness (D/2)·(α_M − α_G)/(α_e − α_M); and an O-ring gland held to its
+  squeeze, fill and stretch bands at both temperature extremes
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2492,6 +2493,7 @@ from .optomechanics import (
     mirror_tilt_line_of_sight,
     mount_decenter,
     retention_preload,
+    seal_gland_extremes_scorecard,
     stress_birefringence_retardance,
     thermal_focal_shift,
     wavefront_budget_scorecard,
@@ -4649,6 +4651,7 @@ __all__ = [
     "ThermalCondition",
     "dynamic_clearance_scorecard",
     "athermal_bond_thickness",
+    "seal_gland_extremes_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",
