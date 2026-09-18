@@ -9379,3 +9379,26 @@ def test_heat_to_clearance_chain_example_runs_in_order_and_propagates_its_gap():
     # With the heat source unmeasured, nothing downstream is computed from a default.
     assert figures["blocked_count"] == 3
     _assert_narrates_computed("heat_to_clearance_chain.py", namespace)
+
+
+def test_injected_display_example_fails_on_its_ribbon_and_passes_rerouted():
+    namespace = runpy.run_path(str(_EXAMPLES / "injected_display_housing.py"))
+    assert namespace["card"]().status is CheckStatus.FAIL
+    assert namespace["repaired_card"]().status is CheckStatus.PASS
+    _assert_narrates_rendered("injected_display_housing.py", namespace)
+
+
+def test_ruggedized_example_fails_three_ways_and_passes_repaired():
+    namespace = runpy.run_path(str(_EXAMPLES / "ruggedized_shock_assembly.py"))
+    drawn = namespace["card"]()
+    assert [entry.status for entry in drawn.entries] == [CheckStatus.FAIL] * 3
+    assert namespace["repaired_card"]().status is CheckStatus.PASS
+    _assert_narrates_rendered("ruggedized_shock_assembly.py", namespace)
+
+
+def test_thermal_range_example_repairs_to_not_evaluated_not_to_pass():
+    namespace = runpy.run_path(str(_EXAMPLES / "thermal_range_assembly.py"))
+    assert namespace["card"]().status is CheckStatus.FAIL
+    # Retention after cycling is the test's to show, so the repaired card cannot pass.
+    assert namespace["repaired_card"]().status is CheckStatus.NOT_EVALUATED
+    _assert_narrates_rendered("thermal_range_assembly.py", namespace)

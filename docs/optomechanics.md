@@ -58,6 +58,22 @@ end. A sealed housing is screened for self-heating, focus at the hot extreme, fo
 extreme and its cell gap under shock. Three line-of-sight terms are then bound into a pointing
 budget, which passes at 36.2 µrad against 40 µrad in quadrature.
 
+## Workflows
+
+Each workflow this module claims ships as an example whose card fails as drawn, for a real
+reason, and passes the failing screens once repaired. `tests/test_optomechanics.py` holds
+every row here to that. It runs each example, requires a failing entry in `card()`, and
+requires each of those entries to pass in `repaired_card()`.
+
+| Workflow | Example | Fails as drawn on | Repair |
+| --- | --- | --- | --- |
+| Injected-display housing with a beam combiner | [`examples/injected_display_housing.py`](../examples/injected_display_housing.py) | the display ribbon's pull, 358.9 µrad against 100 µrad, and the display-to-world boresight it drags past 400 µrad | a service loop, so the ribbon sits 0.5 mm off its free shape |
+| Ruggedized assembly under a declared shock | [`examples/ruggedized_shock_assembly.py`](../examples/ruggedized_shock_assembly.py) | the retainer's sharp edge under the shock preload, a 15 µm gap the 22.0 µm shock swing closes, and a focus screw nothing holds in vibration | a 3 mm edge radius, a 30 µm gap and a jam nut |
+| Assembly through a declared thermal range | [`examples/thermal_range_assembly.py`](../examples/thermal_range_assembly.py) | a cement rated to 60 °C in a 71 °C housing, and a sealed volume that breathes | a cement rated to 85 °C and a desiccant; the card then reads not evaluated, because retention after cycling is the test's to show |
+
+The beam-path keepout the display workflow also needs is not generated, because the keepout
+envelopes are not built yet.
+
 ## Drawing indications
 
 `anvilate.optical_tolerances` declares an element's optical tolerances once and renders the
@@ -92,7 +108,12 @@ take to optical design software; the screen says which one that is.
 
 ## Status
 
-This is the depth of focus, the athermal focus screen, the random-vibration and retention
-screens, stress birefringence, the wavefront budget and internal condensation
-(`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 4.3, 4.4, 5.1, 5.2, 7.1, 7.2, 8.1, 8.2, 10.1, 10.2, 10.3, 10.4
-and this scope page). Not built yet: angular units as a whole. The focus and pointing budgets are worked examples built on the existing budget type.
+Built (`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
+5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4 and 11.5):
+focus, pointing, wavefront and boresight screens, retention and shock, sealing, breathing
+and condensation, windows, coatings and cements, outgassing and cleanliness, harnesses,
+adjustments, and the three workflow examples above. Not built yet: angular units as a
+whole (1.1), glass-catalogue ingestion (1.3), the clear aperture against a beam keepout
+(4.1, which waits on the keepout envelopes), the RMS form and focus share of a window's
+wavefront error (the rest of 11.3), failure-mode declarations on the screens that still
+declare none (11.6), and the environment profiles (12.x).

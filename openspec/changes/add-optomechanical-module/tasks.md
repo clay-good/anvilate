@@ -92,7 +92,7 @@
 - [x] 10.6 Tilted plane-parallel element image displacement into focus and boresight
 - [x] 10.7 Parasitic harness load across a mount interface
 - [x] 10.8 Retention-after-cycling as a verification-only entry, never inferred
-- [ ] 10.9 Three end-to-end workflow examples, each exercising a real failure; CI fails a
+- [x] 10.9 Three end-to-end workflow examples, each exercising a real failure; CI fails a
       claimed workflow with no example and an example that cannot fail
 
 ## 11. Environmental and contamination

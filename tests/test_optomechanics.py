@@ -1302,3 +1302,34 @@ def test_every_adjustment_enters_the_budget() -> None:
     assert budget["tilt screw"].to("µrad").magnitude == pytest.approx((10**2 + 20**2) ** 0.5)
     with pytest.raises(ValueError, match="declare both"):
         adjustment_budget_contributors((AdjustmentMechanism(mechanism="shim"),))
+
+
+def test_every_claimed_workflow_is_an_example_that_fails_and_is_repaired() -> None:
+    """A workflow on the page is an example whose card fails as drawn and its repair passes.
+
+    The table is read from docs/optomechanics.md, so a workflow claimed there with no
+    example fails here by name, and an example whose card passes every screen is not
+    showing a verdict. Each entry that fails as drawn must pass in the repaired card, so
+    the repair the page names is one the example demonstrates.
+    """
+    import pathlib
+    import re
+    import runpy
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    page = (root / "docs" / "optomechanics.md").read_text()
+    section = page.split("## Workflows", 1)[1].split("\n## ", 1)[0]
+    rows = re.findall(r"^\| ([^|]+?) \| \[`(examples/[\w.]+)`\]", section, re.M)
+    assert len(rows) >= 3, f"the workflows table names {len(rows)} workflows"
+    for workflow, example in rows:
+        path = root / example
+        assert path.exists(), f"{workflow}: {example} does not exist"
+        namespace = runpy.run_path(str(path))
+        drawn, repaired = namespace["card"](), namespace["repaired_card"]()
+        failing = [entry.name for entry in drawn.entries if entry.status is CheckStatus.FAIL]
+        assert failing, f"{workflow}: {example} passes every screen, so it shows no verdict"
+        after = {entry.name: entry.status for entry in repaired.entries}
+        for name in failing:
+            assert after.get(name) is CheckStatus.PASS, (
+                f"{workflow}: the repair in {example} leaves {name} at {after.get(name)}"
+            )
