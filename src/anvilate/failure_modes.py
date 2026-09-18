@@ -564,6 +564,20 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="alignment loss over repeated cycles",
+            description=(
+                "a bonded or preloaded element walking off its alignment a little on every "
+                "thermal or vibration cycle, while each single excursion screens clean"
+            ),
+            applicability=Applicability(environments=("thermal_cycling", "vibration")),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Yoder and Vukobratovich, Opto-Mechanical Systems Design, 4th ed. (2015), "
+                "line of sight"
+            ),
+            tested_by=("thermal-cycling",),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

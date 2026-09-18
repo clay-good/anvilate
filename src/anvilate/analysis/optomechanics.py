@@ -74,6 +74,7 @@ __all__ = [
     "pressure_window_scorecard",
     "HarnessCrossing",
     "harness_load_scorecard",
+    "cycling_retention_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -2103,6 +2104,44 @@ def harness_load_scorecard(
                 "harness's force and the mount shift are stated on the entry"
             ),
         ),
+    )
+
+
+def cycling_retention_scorecard(
+    name: str,
+    *,
+    requirement: str,
+    cycles: int,
+    test_method: str,
+) -> ScorecardEntry:
+    """The entry a retention-after-cycling requirement carries: not evaluated, by design.
+
+    Bolted joints, adhesives and preloaded interfaces do not return to where they started
+    after a cycle. Every closed-form screen in this module is a single excursion, so none
+    of them models that path dependence (Yoder, Opto-Mechanical Systems Design). The
+    ``requirement``, for example "boresight within 50 µrad", held over ``cycles``, is
+    therefore stated as not evaluated, naming the ``test_method`` that establishes it. A
+    card holding this entry cannot pass on its single-excursion screens alone.
+    """
+    for label, text in (("requirement", requirement), ("test_method", test_method)):
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{label} must name something; got {text!r}")
+    if isinstance(cycles, bool) or not isinstance(cycles, int) or cycles < 2:
+        raise ValueError(
+            f"cycles must be a whole number of at least 2 for a retention-after-cycling "
+            f"requirement; got {cycles!r}"
+        )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"{requirement.strip()} after {cycles} cycles is verification-only: no screen "
+            "here models how a joint, bond or preload drifts over repeated cycles, and a "
+            "single-excursion result does not stand in for it; established by "
+            f"{test_method.strip()}"
+        ),
+        reference=_YODER,
+        addresses=("alignment loss over repeated cycles",),
     )
 
 

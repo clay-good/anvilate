@@ -17,6 +17,7 @@ optomechanics.glass_contact_stress_scorecard -> glass fracture at a mount contac
 optomechanics.seal_breathing_scorecard -> condensation in a breathing sealed volume
 optomechanics.pressure_window_scorecard -> window fracture under a pressure differential
 optomechanics.harness_load_scorecard -> alignment drift from a harness crossing a mount
+optomechanics.cycling_retention_scorecard -> alignment loss over repeated cycles
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard

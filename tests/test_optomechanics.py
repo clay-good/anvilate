@@ -1052,3 +1052,28 @@ def test_a_harness_with_nothing_declared_is_named_not_screened_as_free() -> None
         _harnesses()
     with pytest.raises(ValueError, match="cannot be negative"):
         HarnessCrossing(harness="flex", stiffness=q("-1 N/m"))
+
+
+def test_retention_after_cycling_is_named_and_never_passes() -> None:
+    from anvilate.analysis.optomechanics import cycling_retention_scorecard
+    from anvilate.failure_modes import coverage
+    from anvilate.scorecard import Scorecard
+
+    entry = cycling_retention_scorecard(
+        "boresight retention",
+        requirement="boresight within 50 µrad",
+        cycles=200,
+        test_method="a thermal-cycling test with boresight measured before and after",
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "boresight within 50 µrad after 200 cycles is verification-only" in entry.detail
+    assert entry.detail.endswith("measured before and after")
+    card = Scorecard(entries=(entry,))
+    assert not card.passed
+    # Declaring the mode on an entry that did not run does not address it.
+    report = coverage(card, {"environments": ("thermal_cycling",)})
+    assert not report.complete()
+    with pytest.raises(ValueError, match="test_method must name something"):
+        cycling_retention_scorecard("r", requirement="x", cycles=5, test_method=" ")
+    with pytest.raises(ValueError, match="at least 2"):
+        cycling_retention_scorecard("r", requirement="x", cycles=1, test_method="t")
