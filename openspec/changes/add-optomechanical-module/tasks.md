@@ -106,7 +106,7 @@
       directions and the Sparks–Cottis wavefront error are built; converting that error to
       an RMS budget contributor, and its focus share, remain
 - [x] 11.4 Coating and cement environmental limits per surface
-- [ ] 11.5 Cleanliness level against the declared assembly environment
+- [x] 11.5 Cleanliness level against the declared assembly environment
 - [ ] 11.6 Opto-mechanical failure-mode catalog contributions, each check declaring the
       modes it addresses
 

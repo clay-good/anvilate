@@ -81,6 +81,9 @@ __all__ = [
     "surface_limits_scorecard",
     "OutgassingRecord",
     "outgassing_census_scorecard",
+    "iso_cleanroom_concentration",
+    "CleanlinessRequirement",
+    "cleanliness_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -2434,7 +2437,120 @@ def outgassing_census_scorecard(
     )
 
 
+if TYPE_CHECKING:
+    _CleanlinessBasis = str
+else:
+    _CleanlinessBasis = cited(
+        "why this cleanliness level needs that room — the contamination-control plan, the "
+        "programme requirement or the practice guide the implication was read from"
+    )
+
+
+def iso_cleanroom_concentration(*, iso_class: float, particle_size: Quantity) -> float:
+    """The most particles per m³ at or above ``particle_size`` an ISO class-N room allows.
+
+    ISO 14644-1:2015 classification of air cleanliness sets the limit
+    C = 10^N·(0.1/D)^2.08 for particle size D in µm, and its table rounds the result: class 5
+    allows 3,520 per m³ of 0.5 µm and larger, class 7 allows 352,000. ``iso_class`` runs from
+    1 to 9 and the particle size from 0.1 to 5 µm, the ranges the standard states.
+    """
+    require_finite(iso_class, name="iso_class")
+    if not 1 <= iso_class <= 9:
+        raise ValueError(f"iso_class must lie in [1, 9]; got {iso_class}")
+    _check(particle_size, "[length]", "particle_size")
+    size = particle_size.to("µm").magnitude
+    if not 0.1 <= size <= 5:
+        raise ValueError(f"particle_size must lie in [0.1, 5] µm; got {particle_size}")
+    return 10**iso_class * (0.1 / size) ** 2.08
+
+
+def _three_figures(value: float) -> float:
+    # ISO 14644-1 states its limits rounded to three significant figures, and a report
+    # should print the figure a reader finds in the standard's table.
+    return float(f"{value:.3g}")
+
+
+class CleanlinessRequirement(StatableModel):
+    """A declared surface cleanliness level, and the ISO 14644-1 room class it needs.
+
+    ``level`` is the requirement as the programme states it, for example "IEST-STD-CC1246E
+    level 300". No standard turns a surface level into a room class by formula, so the
+    implication is declared as ``implies_iso_class`` with the ``basis`` it was read from,
+    and a report carries both.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    level: Named
+    implies_iso_class: float
+    basis: _CleanlinessBasis
+
+    @model_validator(mode="after")
+    def _a_class(self) -> CleanlinessRequirement:
+        require_finite(self.implies_iso_class, name="implies_iso_class")
+        if not 1 <= self.implies_iso_class <= 9:
+            raise ValueError(f"implies_iso_class must lie in [1, 9]; got {self.implies_iso_class}")
+        return self
+
+
+def cleanliness_scorecard(
+    name: str,
+    *,
+    requirement: CleanlinessRequirement,
+    assembly_iso_class: float | None = None,
+) -> ScorecardEntry:
+    """Screen a cleanliness requirement against the room the assembly is declared built in.
+
+    The ``requirement`` names the ISO 14644-1 class its level needs. The assembly room's
+    ``assembly_iso_class`` must be that class or cleaner, a lower number. Each room's limit
+    for particles of 0.5 µm and larger, from :func:`iso_cleanroom_concentration`, is stated
+    so the gap reads as particles, not as class numbers. With no assembly room declared,
+    the entry is not evaluated, naming it: a cleanliness requirement nobody costed into the
+    build environment is found at assembly.
+    """
+    if not isinstance(requirement, CleanlinessRequirement):
+        raise ValueError(f"requirement must be a CleanlinessRequirement; got {requirement!r}")
+    needed = requirement.implies_iso_class
+    half_micron = Quantity(magnitude=0.5, unit="µm")
+    limit = _three_figures(iso_cleanroom_concentration(iso_class=needed, particle_size=half_micron))
+    stated = (
+        f"{requirement.level} needs ISO class {needed:g} "
+        f"({limit:,.0f} per m³ at 0.5 µm; {requirement.basis})"
+    )
+    if assembly_iso_class is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"{stated}; no assembly environment is declared to build it in",
+            reference=_ISO_14644,
+        )
+    require_finite(assembly_iso_class, name="assembly_iso_class")
+    if not 1 <= assembly_iso_class <= 9:
+        raise ValueError(f"assembly_iso_class must lie in [1, 9]; got {assembly_iso_class}")
+    room = iso_cleanroom_concentration(iso_class=assembly_iso_class, particle_size=half_micron)
+    achieved = assembly_iso_class <= needed
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if achieved else CheckStatus.FAIL,
+        detail=(
+            f"{stated}; the assembly room is ISO class {assembly_iso_class:g} "
+            f"({_three_figures(room):,.0f} per m³ at 0.5 µm), which "
+            + ("achieves it" if achieved else "cannot achieve it")
+        ),
+        reference=_ISO_14644,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "the declared room class compared with the class the requirement names; "
+                "both rooms' limits C = 10^N·(0.1/D)^2.08 are stated on the entry"
+            ),
+        ),
+        addresses=("particulate on an optical surface from the assembly room",),
+    )
+
+
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
+_ISO_14644 = "ISO 14644-1:2015 classification of air cleanliness by particle concentration"
 _ASTM_E595 = (
     "ASTM E595-15 total mass loss and collected volatile condensable materials from "
     "outgassing in a vacuum environment"

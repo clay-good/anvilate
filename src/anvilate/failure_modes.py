@@ -604,6 +604,16 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="particulate on an optical surface from the assembly room",
+            description=(
+                "an optic built to a surface cleanliness level in a room that cannot hold "
+                "it, found as scatter at acceptance rather than at the drawing"
+            ),
+            applicability=Applicability(environments=("indoor_dry",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="ISO 14644-1:2015 classification of air cleanliness by particle concentration",
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

@@ -1198,3 +1198,40 @@ def test_a_material_with_no_data_is_named_not_assumed_clean() -> None:
         OutgassingRecord(material="x", total_mass_loss=0.01, test_method="t", source="s")
     with pytest.raises(ValueError, match="test_method and source"):
         OutgassingRecord(material="x", total_mass_loss=0.01, condensable=0.001)
+
+
+def test_iso_cleanroom_limits_are_the_standards_table() -> None:
+    from anvilate.analysis.optomechanics import iso_cleanroom_concentration
+
+    half = q("0.5 µm")
+    # ISO 14644-1:2015 Table 1, 0.5 µm column, after its three-figure rounding.
+    for iso_class, table in ((5, 3_520), (6, 35_200), (7, 352_000), (8, 3_520_000)):
+        exact = iso_cleanroom_concentration(iso_class=iso_class, particle_size=half)
+        assert float(f"{exact:.3g}") == table
+    with pytest.raises(ValueError, match=r"iso_class must lie in \[1, 9\]"):
+        iso_cleanroom_concentration(iso_class=10, particle_size=half)
+    with pytest.raises(ValueError, match="particle_size must lie in"):
+        iso_cleanroom_concentration(iso_class=5, particle_size=q("10 µm"))
+
+
+def test_a_cleanliness_level_needs_a_room_that_can_hold_it() -> None:
+    from anvilate.analysis.optomechanics import CleanlinessRequirement, cleanliness_scorecard
+
+    level = CleanlinessRequirement(
+        level="IEST-STD-CC1246E level 300",
+        implies_iso_class=7,
+        basis="the programme's contamination-control plan",
+    )
+    dirty = cleanliness_scorecard("clean", requirement=level, assembly_iso_class=8)
+    assert dirty.status is CheckStatus.FAIL
+    assert "needs ISO class 7 (352,000 per m³ at 0.5 µm" in dirty.detail
+    assert "ISO class 8 (3,520,000 per m³ at 0.5 µm), which cannot achieve it" in dirty.detail
+    assert "contamination-control plan" in dirty.detail
+    assert cleanliness_scorecard("c", requirement=level, assembly_iso_class=6).status is (
+        CheckStatus.PASS
+    )
+    uncosted = cleanliness_scorecard("c", requirement=level)
+    assert uncosted.status is CheckStatus.NOT_EVALUATED
+    assert "no assembly environment is declared" in uncosted.detail
+    with pytest.raises(ValueError):
+        CleanlinessRequirement(level="x", implies_iso_class=7, basis=" ")
