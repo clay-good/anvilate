@@ -273,3 +273,5 @@ refractiveindex.info
 Harris
 # Bayar's athermal elastomer bond thickness for a bonded lens (1981).
 Bayar
+# Johnson's Contact Mechanics, for Hertz line contact at a lens retainer.
+Johnson

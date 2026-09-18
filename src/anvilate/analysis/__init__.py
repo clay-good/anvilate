@@ -648,7 +648,8 @@ modules:
   and a declared shock environment whose damped maximax response gives the equivalent
   static acceleration, Q required; and a design tool's prescription, typed and traced to the
   tool, whose missing inputs are reported rather than estimated; and a retained lens's
-  preload at each temperature extreme, P₀ − k·(α_M − α_G)·t_E·ΔT
+  preload at each temperature extreme, P₀ − k·(α_M − α_G)·t_E·ΔT; and the Hertz contact
+  stress a retainer puts into the glass, held to an allowable stated as a fracture probability
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -2504,6 +2505,7 @@ from .optomechanics import (
     depth_of_focus,
     dynamic_clearance_scorecard,
     enclosure_rise_scorecard,
+    glass_contact_stress_scorecard,
     internal_condensation_scorecard,
     marechal_strehl_ratio,
     miles_random_vibration_grms,
@@ -4681,6 +4683,7 @@ __all__ = [
     "SurfaceDeformation",
     "Prescription",
     "preload_temperature_scorecard",
+    "glass_contact_stress_scorecard",
     "chromatic_dispersion_broadening",
     "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",

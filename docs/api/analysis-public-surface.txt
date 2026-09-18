@@ -1154,6 +1154,7 @@ optomechanics.ShockEnvironment
 optomechanics.SurfaceDeformation
 optomechanics.Prescription
 optomechanics.preload_temperature_scorecard
+optomechanics.glass_contact_stress_scorecard
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

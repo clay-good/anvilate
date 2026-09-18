@@ -13,6 +13,7 @@ machinery.screen_shaft -> shaft fatigue at a stress raiser
 machinery.screen_gear_mesh -> gear tooth surface pitting
 machinery.screen_rolling_bearing -> rolling-contact fatigue of a bearing
 machinery.screen_compression_spring -> coil spring buckling
+optomechanics.glass_contact_stress_scorecard -> glass fracture at a mount contact
 
 ## declares none yet
 aluminum.aluminum_compression_scorecard

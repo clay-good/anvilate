@@ -64,6 +64,7 @@ __all__ = [
     "SurfaceDeformation",
     "Prescription",
     "preload_temperature_scorecard",
+    "glass_contact_stress_scorecard",
 ]
 
 _ALDUCHOV = (
@@ -1545,6 +1546,101 @@ def preload_temperature_scorecard(
     )
 
 
+def glass_contact_stress_scorecard(
+    name: str,
+    *,
+    preload: Quantity,
+    contact_diameter: Quantity,
+    glass_radius: Quantity,
+    mount_radius: Quantity,
+    glass_modulus: Quantity,
+    glass_poisson: float,
+    mount_modulus: Quantity,
+    mount_poisson: float,
+    allowable_tensile_stress: Quantity,
+) -> ScorecardEntry:
+    """Screen the stress a retainer's preload puts into the glass at its contact ring.
+
+    The ``preload`` P spreads around a contact circle of ``contact_diameter`` D_c as a line
+    load p = P/(π·D_c). In section the glass surface (``glass_radius``, the lens's surface
+    radius) and the mount's contact profile (``mount_radius``, a toroid's section radius)
+    meet as two cylinders, so Hertz line contact gives the peak compressive stress
+    p₀ = √(p·E*/(π·R)), with 1/R = 1/R_glass + 1/R_mount and
+    1/E* = (1 − ν_g²)/E_g + (1 − ν_m²)/E_m (Johnson, Contact Mechanics, 1985). Glass breaks in
+    tension, estimated as σ_T ≈ (1 − 2ν_g)/3 · p₀ — the Hertzian edge-tension relation, which
+    is exact for a point contact and an approximation for this annular one.
+
+    ``PASS`` while σ_T stays within ``allowable_tensile_stress``, which is the caller's. The
+    entry says what that number is: a glass allowable is a probability of fracture, set by
+    the Weibull statistics of the surface flaws under stress, not a strength like a metal's.
+    A concave mount profile is a negative ``mount_radius``.
+    """
+    for value, label in (
+        (preload, "preload"),
+        (allowable_tensile_stress, "allowable_tensile_stress"),
+    ):
+        _check(value, "[force]" if label == "preload" else "[pressure]", label)
+    for value, label in (
+        (contact_diameter, "contact_diameter"),
+        (glass_radius, "glass_radius"),
+        (mount_radius, "mount_radius"),
+    ):
+        _check(value, "[length]", label)
+    _check(glass_modulus, "[pressure]", "glass_modulus")
+    _check(mount_modulus, "[pressure]", "mount_modulus")
+    nu_g = require_finite(glass_poisson, name="glass_poisson")
+    nu_m = require_finite(mount_poisson, name="mount_poisson")
+    for nu, label in ((nu_g, "glass_poisson"), (nu_m, "mount_poisson")):
+        if not 0 <= nu < 0.5:
+            raise ValueError(f"{label} must lie in [0, 0.5); got {nu}")
+    force = preload.to("N").magnitude
+    diameter = contact_diameter.to("m").magnitude
+    allowable = allowable_tensile_stress.to("Pa").magnitude
+    if force <= 0 or diameter <= 0 or allowable <= 0:
+        raise ValueError("preload, contact_diameter and the allowable must all be positive")
+    curvature = 1 / glass_radius.to("m").magnitude + 1 / mount_radius.to("m").magnitude
+    if curvature <= 0:
+        raise ValueError(
+            "the mount's concave profile is flatter than the glass it holds: the two do not "
+            "meet in a line contact this relation describes"
+        )
+    modulus = 1 / (
+        (1 - nu_g**2) / glass_modulus.to("Pa").magnitude
+        + (1 - nu_m**2) / mount_modulus.to("Pa").magnitude
+    )
+    line_load = force / (pi * diameter)
+    compressive = sqrt(line_load * modulus * curvature / pi)
+    tensile = (1 - 2 * nu_g) / 3 * compressive
+    comparison = Comparison(
+        measured=Quantity(magnitude=tensile / 1e6, unit="MPa"),
+        limit=Quantity(magnitude=allowable / 1e6, unit="MPa"),
+        sense=LimitSense.AT_MOST,
+        measured_label="glass tensile stress",
+        limit_label="allowable",
+        minimum_decimals=2,
+    )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+        detail=(
+            f"{comparison.sentence()} (peak contact compression {compressive / 1e6:.1f} MPa) "
+            "— the allowable is a probability of fracture set by the Weibull statistics of "
+            "the surface flaws under stress, not a strength"
+        ),
+        reference=_JOHNSON,
+        comparison=comparison,
+        addresses=("glass fracture at a mount contact",),
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "Hertz line contact p₀ = √(p·E*/(π·R)) and σ_T = (1 − 2ν)/3·p₀ over five "
+                "intermediate quantities; both stresses are stated on the entry"
+            ),
+        ),
+    )
+
+
+_JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
 _INCROPERA = "Incropera, Fundamentals of Heat and Mass Transfer, 7th ed. (2011), thermal resistance"
 _HARRIS = "Harris and Piersol, Harris' Shock and Vibration Handbook, 5th ed. (2002)"
 

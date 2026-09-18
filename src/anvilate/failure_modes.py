@@ -514,6 +514,16 @@ DEFAULT_CATALOG = ModeCatalog(
             tested_by=("fretting-fatigue",),
         ),
         FailureMode(
+            id="glass fracture at a mount contact",
+            description=(
+                "a lens clamped by a retainer cracking from the tension beside the contact, "
+                "where the preload holds and no stress in the metal is high"
+            ),
+            applicability=Applicability(interfaces=("clamped",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation="Johnson, Contact Mechanics (1985), Hertzian line contact",
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

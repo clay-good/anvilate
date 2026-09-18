@@ -45,7 +45,7 @@
 
 - [ ] 4.1 Clear aperture and obscuration against a declared beam envelope; beam envelope
       emitted as a keepout
-- [ ] 4.2 Glass contact stress at the retention interface by declared interface geometry,
+- [x] 4.2 Glass contact stress at the retention interface by declared interface geometry,
       against user-supplied allowable tensile stress with the Weibull caveat rendered
 - [x] 4.3 Stress birefringence retardance from stress and stress-optic coefficient
 - [x] 4.4 RMS wavefront error budget with the Maréchal criterion as a declared threshold

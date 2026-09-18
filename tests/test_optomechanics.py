@@ -781,3 +781,44 @@ def test_an_aluminium_cell_loses_its_preload_hot_and_gains_it_cold() -> None:
     crushed = _preload(cold="-60 K", hot="10 K")
     assert crushed.status is CheckStatus.FAIL
     assert "cold: preload 347.5 N above the 300.0 N the seat may carry" in crushed.detail
+
+
+def _contact(mount_radius: str, allowable: str = "7 MPa"):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import glass_contact_stress_scorecard
+
+    return glass_contact_stress_scorecard(
+        "retainer contact",
+        preload=q("100 N"),
+        contact_diameter=q("40 mm"),
+        glass_radius=q("50 mm"),
+        mount_radius=q(mount_radius),
+        glass_modulus=q("82 GPa"),
+        glass_poisson=0.206,
+        mount_modulus=q("69 GPa"),
+        mount_poisson=0.33,
+        allowable_tensile_stress=q(allowable),
+    )
+
+
+def test_a_sharp_retainer_edge_overstresses_the_glass_and_a_toroid_does_not() -> None:
+    from math import pi, sqrt
+
+    sharp = _contact("0.5 mm")
+    # p = 100/(π·0.04); 1/R = 1/0.05 + 1/0.0005; E* from both materials; σ_T = (1 − 2ν)/3·p₀.
+    line_load = 100 / (pi * 0.04)
+    radius = 1 / (1 / 0.05 + 1 / 0.0005)
+    modulus = 1 / ((1 - 0.206**2) / 82e9 + (1 - 0.33**2) / 69e9)
+    tensile = (1 - 2 * 0.206) / 3 * sqrt(line_load * modulus / (pi * radius))
+    assert sharp.comparison is not None
+    assert sharp.comparison.measured.to("Pa").magnitude == pytest.approx(tensile)
+    assert sharp.status is CheckStatus.FAIL
+    assert "Weibull statistics" in sharp.detail and "not a strength" in sharp.detail
+    toroid = _contact("50 mm")
+    assert toroid.comparison is not None
+    assert toroid.comparison.measured.magnitude < sharp.comparison.measured.magnitude / 5
+    assert toroid.status is CheckStatus.PASS
+
+
+def test_a_concave_seat_flatter_than_the_glass_is_refused() -> None:
+    with pytest.raises(ValueError, match="flatter than the glass"):
+        _contact("-40 mm")
