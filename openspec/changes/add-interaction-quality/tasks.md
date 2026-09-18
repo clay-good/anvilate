@@ -45,8 +45,9 @@
       status colours clear WCAG AA on the page and stay ΔE ≥ 20 apart, body text included,
       under the Machado 2009 protan, deutan and tritan simulations; the old red and green
       failed it, and the old amber failed contrast
-- [ ] 4.3 Report structure readable in document order by a screen reader; tables carry
-      headers; figures carry text alternatives
+- [x] 4.3 Report structure readable in document order by a screen reader; tables carry
+      headers; figures carry text alternatives — the report's headings run in order from one h1, every table is headed,
+      and every typeset formula carries a spoken MathML `alttext` ("σ sub b = M · c / I")
 
 ## 5. Discoverability
 

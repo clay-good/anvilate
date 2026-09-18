@@ -471,4 +471,11 @@ def formula_to_mathml(formula: str, *, display: str = "block") -> str | None:
             return None
         emitted.append(_emit(tree))
     body = "<mo>=</mo>".join(emitted)
-    return f'<math xmlns="http://www.w3.org/1998/Math/MathML" display="{display}">{body}</math>'
+    # `alttext` is MathML's own text alternative: what a screen reader announces where it
+    # does not read MathML. Spoken, so a subscript reads "σ sub b" rather than the
+    # underscore spelling the typeset formula exists to replace.
+    alt = escape(" ".join(formula.replace("_", " sub ").split()), {'"': "&quot;"})
+    return (
+        f'<math xmlns="http://www.w3.org/1998/Math/MathML" display="{display}" '
+        f'alttext="{alt}">{body}</math>'
+    )

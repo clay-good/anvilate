@@ -2191,3 +2191,20 @@ def test_identical_input_renders_identical_figures_in_separate_processes() -> No
         )
         digests.add(out.stdout.strip())
     assert len(digests) == 1, digests
+
+
+def test_the_report_reads_in_order_for_a_screen_reader() -> None:
+    """Interaction-quality 4.3: headings in order, headed tables, a text alternative for
+    every typeset formula."""
+    import re
+
+    html = _report().to_html()
+    assert '<html lang="en">' in html
+    levels = [int(level) for level in re.findall(r"<h([1-6])", html)]
+    assert levels and levels[0] == 1
+    assert all(later - earlier <= 1 for earlier, later in zip(levels, levels[1:], strict=False))
+    tables = re.findall(r"<table.*?</table>", html, re.S)
+    assert tables and all("<th>" in table for table in tables)
+    formulas = re.findall(r"<math[^>]*>", html)
+    assert formulas and all('alttext="' in tag for tag in formulas)
+    assert 'alttext="σ sub b = M · c / I"' in html
