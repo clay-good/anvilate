@@ -282,6 +282,7 @@ def screen_adjustment_access(
             entries.append(
                 ScorecardEntry(
                     name=name,
+                    addresses=("an adjustment sealed away by the part closed over it",),
                     status=CheckStatus.NOT_EVALUATED,
                     detail=(
                         f"not evaluated — adjusting {adjustment.feature} in "
@@ -311,6 +312,7 @@ def screen_adjustment_access(
             entries.append(
                 ScorecardEntry(
                     name=name,
+                    addresses=("an adjustment sealed away by the part closed over it",),
                     status=CheckStatus.FAIL,
                     detail=(
                         f"{adjustment.feature} cannot be reached in {adjustment.performed_in}: "
@@ -323,6 +325,7 @@ def screen_adjustment_access(
             entries.append(
                 ScorecardEntry(
                     name=name,
+                    addresses=("an adjustment sealed away by the part closed over it",),
                     status=CheckStatus.PASS,
                     detail=(
                         f"{adjustment.feature} is reachable in {adjustment.performed_in} via "
@@ -632,6 +635,7 @@ def screen_inspectability(
                         f"{', '.join(measurable)}, of {len(order)} states examined"
                     ),
                     underived=_ROUTE_CHECKED,
+                    addresses=("a tolerance nobody can measure on the built article",),
                 )
             )
         else:
@@ -647,6 +651,7 @@ def screen_inspectability(
                         "rather than a control"
                     ),
                     underived=_ROUTE_CHECKED,
+                    addresses=("a tolerance nobody can measure on the built article",),
                 )
             )
     entries.insert(

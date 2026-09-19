@@ -8,6 +8,8 @@
 # and a declaration, not a longer list.
 
 ## declares
+assembly.screen_adjustment_access -> an adjustment sealed away by the part closed over it
+assembly.screen_inspectability -> a tolerance nobody can measure on the built article
 assembly.screen_swing_arc -> a fastener no tool reaches in the state it is driven
 assembly.screen_tool_access -> a fastener no tool reaches in the state it is driven
 fatigue.weld_fatigue_scorecard -> weld toe fatigue
@@ -36,8 +38,6 @@ optomechanics.adjustment_scorecard -> an adjustment that does not reach or does 
 ## declares none yet
 optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
-assembly.screen_adjustment_access
-assembly.screen_inspectability
 beam.deflection_scorecard
 callouts.callout_scorecard
 cold_formed_steel.dsm_scorecard

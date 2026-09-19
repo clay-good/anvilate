@@ -93,3 +93,18 @@ def test_moving_an_operation_to_another_state_is_one_line_in_the_diff() -> None:
         if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
     ]
     assert len(changed) == 2 and all("performed_in" in line for line in changed)
+
+
+def test_a_declared_assembly_reaches_the_assembly_modes_and_its_screens_address_them() -> None:
+    """Assembly 3.3: the modes apply on a fact the document states, and nowhere else."""
+    from anvilate.failure_modes import coverage, facts_from_spec
+
+    spec = load_spec_yaml(_HOUSING)
+    facts = facts_from_spec(spec)
+    assert facts["assembly"] is True
+    report = coverage(screen_spec(spec), facts)
+    by_mode = {entry.mode.id: entry for entry in report.entries}
+    assert by_mode["an adjustment sealed away by the part closed over it"].addressed
+    assert by_mode["a tolerance nobody can measure on the built article"].addressed
+    bare = _HOUSING.split("assembly:")[0]
+    assert "assembly" not in facts_from_spec(load_spec_yaml(bare))

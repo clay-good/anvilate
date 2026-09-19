@@ -113,6 +113,7 @@ refused naming the state.
 
 ## Status
 
-This is part insertion, order feasibility, assembly states, adjustment reachability, tool
-envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1–2.6, 3.1, 3.2, 4.1–4.5, 5.1). Not built yet: the rest of the failure-mode entries.
+Every task in `openspec/changes/add-assembly-feasibility` is built: part insertion and order
+feasibility, assembly states, adjustment and service reachability, tool envelopes and
+access sweeps checked as keepouts, swing arcs, inspectability, repair hints, the assembly a
+Design Spec declares, and three production-stage failure modes the screens answer.

@@ -29,10 +29,10 @@
 - [x] 3.1 Findings name the feature, the tool, the state, and the blocking geometry
 - [x] 3.2 Repair hints in the form the repair loop consumes — directional hints on the
       tool envelope and the handle, the two levers that are monotone
-- [ ] 3.3 Contribute assembly-stage entries to the failure-mode catalog — one so far, a
-      fastener no tool reaches, at the production stage and keyed on a bolted interface. The
-      rest (a sealed-away adjustment, an unmeasurable tolerance) can only apply on facts a
-      document states, so they follow the Design Spec's assembly declarations
+- [x] 3.3 Contribute assembly-stage entries to the failure-mode catalog — three, at the
+      production stage: a fastener no tool reaches (bolted interfaces), an adjustment sealed
+      away and a tolerance nobody can measure (a declared assembly), each declared by the
+      screen that answers it
 
 ## 4. Tests
 

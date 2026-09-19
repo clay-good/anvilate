@@ -55,7 +55,8 @@ __all__ = [
 #: silently cannot reach half its catalogue is the shape this module exists to refuse.
 UNDECLARABLE_FACTS = (
     "a mode applies only on a fact the document states: an element, an interface kind, an "
-    "environment, or a material pair the two references make dissimilar. A key the document "
+    "environment, a material pair the two references make dissimilar, or a declared assembly. "
+    "A key the document "
     "leaves out is never read as benign — the mode simply cannot apply, and the design may "
     "still be exposed to it"
 )
@@ -100,10 +101,19 @@ class Applicability(StatableModel):
     interfaces: tuple[Named, ...] = ()
     environments: tuple[Named, ...] = ()
     dissimilar_metals: bool = False
+    # Whether the document declares how its build goes together. A mode about assembly —
+    # an adjustment sealed away, a tolerance nobody can measure — applies only then.
+    assembly: bool = False
 
     @model_validator(mode="after")
     def _says_something(self) -> Applicability:
-        if not (self.elements or self.interfaces or self.environments or self.dissimilar_metals):
+        if not (
+            self.elements
+            or self.interfaces
+            or self.environments
+            or self.dissimilar_metals
+            or self.assembly
+        ):
             raise ValueError(
                 "an applicability that names no element, interface, environment or material "
                 "pair applies to everything, which is the same as saying nothing about when "
@@ -119,6 +129,8 @@ class Applicability(StatableModel):
             return False
         if self.environments and facts.get("environment") not in self.environments:
             return False
+        if self.assembly and not facts.get("assembly"):
+            return False
         return not (self.dissimilar_metals and not facts.get("dissimilar_metals"))
 
     def __str__(self) -> str:
@@ -131,6 +143,8 @@ class Applicability(StatableModel):
             parts.append(f"environments {', '.join(self.environments)}")
         if self.dissimilar_metals:
             parts.append("a declared dissimilar-metal pair")
+        if self.assembly:
+            parts.append("a declared assembly")
         return "; ".join(parts)
 
 
@@ -340,9 +354,9 @@ def coverage(
 def facts_from_spec(spec: Any) -> dict[str, object]:
     """The declared facts of a Design Spec, for :func:`coverage` to match on.
 
-    Four keys, each read off something the document states: the element, the kinds of its
-    declared interfaces, the environment it declares, and whether any interface names a
-    mating material different from the part's own.
+    Five keys, each read off something the document states: the element, the kinds of its
+    declared interfaces, the environment it declares, whether any interface names a mating
+    material different from the part's own, and whether it declares an assembly.
 
     **Dissimilarity is derived, not declared.** An author does not tick a "dissimilar
     metals" box: the document names the part's material and the material on the other side
@@ -368,6 +382,8 @@ def facts_from_spec(spec: Any) -> dict[str, object]:
         facts["environment"] = spec.environment.value
     if mating:
         facts["dissimilar_metals"] = any(ref != spec.material.ref for ref in mating)
+    if getattr(spec, "assembly", None) is not None:
+        facts["assembly"] = True
     return facts
 
 
@@ -736,6 +752,29 @@ DEFAULT_CATALOG = ModeCatalog(
                 "Boothroyd, Dewhurst and Knight, Product Design for Manufacture and Assembly, "
                 "3rd ed. (2011), accessibility of fastening operations"
             ),
+        ),
+        FailureMode(
+            id="an adjustment sealed away by the part closed over it",
+            description=(
+                "an alignment made after closure through an opening the closing part fills, "
+                "found when the first unit will not focus on the line"
+            ),
+            applicability=Applicability(assembly=True),
+            stage=DiscoveryStage.PRODUCTION,
+            citation=(
+                "Boothroyd, Dewhurst and Knight, Product Design for Manufacture and Assembly, "
+                "3rd ed. (2011), accessibility of fastening operations"
+            ),
+        ),
+        FailureMode(
+            id="a tolerance nobody can measure on the built article",
+            description=(
+                "a toleranced dimension enclosed in every state the build passes through, so "
+                "the control on the drawing is never verified on the part"
+            ),
+            applicability=Applicability(assembly=True),
+            stage=DiscoveryStage.PRODUCTION,
+            citation="ISO 14253-1:2017 decision rules for verifying conformity with specifications",
         ),
         FailureMode(
             id="thermal ratcheting of a clearance",
