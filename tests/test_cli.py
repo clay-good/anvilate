@@ -4725,3 +4725,13 @@ def test_progress_names_the_activity_on_a_terminal_and_stays_off_a_pipe(tmp_path
     _code, _out, watched = _run("export", str(first), str(second))
     assert f"[1/2] assembling the bundle for {first}" in watched
     assert f"[2/2] assembling the bundle for {second}" in watched
+
+
+def test_an_estimate_comes_only_from_finished_work_and_says_so():
+    """Interaction quality 1.3: no number before anything finished, and every one labelled."""
+    from anvilate.cli import _estimate
+
+    assert _estimate([], 5) == ""
+    assert _estimate([2.0, 4.0], 0) == ""
+    assert _estimate([2.0, 4.0], 3) == " (about 9 s left, estimated from 2 finished specs)"
+    assert _estimate([0.2], 2) == " (under 1 s left, estimated from 1 finished spec)"

@@ -64,6 +64,9 @@ _NONDETERMINISM = re.compile(
 # unguessable handle plus creation/update timestamps. Keep the exception to the exact calls
 # in the private task module so a wall clock cannot leak back into a signed document.
 _TASK_METADATA_NONDETERMINISM = {
+    # The time-left estimate on a terminal's progress line: elapsed durations, printed to
+    # stderr only when a person is watching, and never written into any output or artifact.
+    "cli.py": ("time.monotonic()",),
     "_mcp_tasks.py": (
         "datetime.now(UTC)",
         "secrets.token_hex(32)",

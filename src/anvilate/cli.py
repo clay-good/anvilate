@@ -67,6 +67,7 @@ import json
 import shutil
 import sys
 import textwrap
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Literal, TextIO
@@ -102,6 +103,21 @@ EXIT_CANCELLED = 130
 #: sweep of specs counts them, and one geometry build names the build without a count it
 #: does not have. On a pipe it stays silent, so stdout is the result alone.
 RESPONSIVENESS_THRESHOLD_SECONDS = 2.0
+
+
+def _estimate(durations: list[float], remaining: int) -> str:
+    """The time left, from same-kind work already finished, and labelled as an estimate.
+
+    Nothing before the first item finishes: a guess with no completed work behind it is
+    an invented number. After that, the mean of the finished items times the ones left,
+    saying how many it rests on.
+    """
+    if not durations or remaining <= 0:
+        return ""
+    left = sum(durations) / len(durations) * remaining
+    shown = f"about {left:.0f} s" if left >= 1 else "under 1 s"
+    plural = "s" if len(durations) != 1 else ""
+    return f" ({shown} left, estimated from {len(durations)} finished spec{plural})"
 
 
 def _progress(err, activity: str, *, done: int | None = None, total: int | None = None) -> None:
@@ -2635,14 +2651,22 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     # Progress on stderr, and only for a person watching: a directory of specs can take
     # long enough to look hung, and stdout must stay the result alone so it still pipes.
     results = []
+    durations: list[float] = []
     for index, path in enumerate(paths, start=1):
+        started = time.monotonic()
         if len(paths) > 1:
-            _progress(err, f"screening {path}", done=index, total=len(paths))
+            _progress(
+                err,
+                f"screening {path}{_estimate(durations, len(paths) - index + 1)}",
+                done=index,
+                total=len(paths),
+            )
         try:
             spec = _load(path, err=err, command="check")
             if isinstance(spec, int):
                 return spec
             results.append((path, spec, screen_spec(spec)))
+            durations.append(time.monotonic() - started)
         except KeyboardInterrupt:
             raise _Cancelled(
                 f"{len(results)} of {len(paths)} spec{'s' if len(paths) != 1 else ''} screened"

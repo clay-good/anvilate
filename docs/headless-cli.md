@@ -541,7 +541,8 @@ Anything that can run past the two-second responsiveness threshold says what it 
 so a slow run is never mistaken for a hung one. `anvilate check` over a directory prints
 `[i/n] screening <path>` to stderr as it goes, `anvilate export` prints `[i/n] assembling the
 bundle for <path>`, and `anvilate build` names the geometry build it is running without a
-count it does not have. A test holds every command that sweeps specs to the one progress
+count it does not have. After the first spec finishes, a sweep adds the time left, estimated
+from the specs already screened and labelled as an estimate; before that it gives none. A test holds every command that sweeps specs to the one progress
 helper, so a new silent sweep fails. It does this only when stderr is a terminal: piped
 or redirected, the run prints no progress, and stdout is byte-identical either way. On a
 terminal, text output is also wrapped to the terminal's width, each continuation indented

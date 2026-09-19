@@ -9,7 +9,8 @@
 - [x] 1.2 Threshold rule — any operation that can exceed it reports progress — a declared
       two-second threshold; check, export and build report through one helper, and a test
       fails any sweep over specs that does not
-- [ ] 1.3 Estimates derived from completed same-kind work only, and labeled estimates
+- [x] 1.3 Estimates derived from completed same-kind work only, and labeled estimates —
+      the check sweep's time left, from specs already screened, none before the first
 - [x] 1.4 Cancellation at any point; partial artifacts removed or marked partial — the CLI
       reports a cancelled run as its own outcome (exit 130) with what it completed, and
       exports write atomically, so an interrupt leaves no partial artifact
