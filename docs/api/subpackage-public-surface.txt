@@ -135,6 +135,7 @@ spec.ChainAnalysis
 spec.ChainLink
 spec.CircularLocator
 spec.Constraints
+spec.AssemblyDeclaration
 spec.ConstraintDeclaration
 spec.Keepout
 spec.KeepoutRule
@@ -178,6 +179,7 @@ spec.ir.AcceptanceCriteria
 spec.ir.ChainAnalysis
 spec.ir.ChainLink
 spec.ir.CircularLocator
+spec.ir.AssemblyDeclaration
 spec.ir.ConstraintDeclaration
 spec.ir.Keepout
 spec.ir.KeepoutRule

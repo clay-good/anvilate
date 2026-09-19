@@ -11,6 +11,7 @@ from __future__ import annotations
 from .ir import (
     SCHEMA_VERSION,
     AcceptanceCriteria,
+    AssemblyDeclaration,
     ChainAnalysis,
     ChainLink,
     CircularLocator,
@@ -85,6 +86,7 @@ __all__ = [
     "LoadCase",
     "LoadKind",
     "Constraints",
+    "AssemblyDeclaration",
     "ConstraintDeclaration",
     "Keepout",
     "KeepoutRule",

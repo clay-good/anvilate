@@ -114,6 +114,17 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.17.0: how the build goes together
+
+`assembly` declares the build's states in order, its parts with their insertion directions
+and the features they occupy and sweep, the adjustments made in each state and the route to
+each, and the toleranced dimensions to inspect and the route an instrument takes. An
+operation in a state the document does not define, an install of an undeclared part and a
+part declared twice are refused naming them. Screening reads it: the order, each adjustment's
+reach in its state, and whether each dimension can be measured in any state; see
+[assembly order](assembly-order.md). Evidence Bundle 1.19.0 and CLI output 1.46.0 carry the
+same document.
+
 ### Scorecard 1.10.0: a warning status
 
 A check's status gains `warning`: the check met its hard limit and entered a caution band its

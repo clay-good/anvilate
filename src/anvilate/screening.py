@@ -471,6 +471,27 @@ def _topology(spec: DesignSpec) -> ConstraintTally:
     return tally(spec.name, declared.frame, declared.constraints, intended=declared.intended)
 
 
+def _assembly_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """The build the document declares: its order, each adjustment's reach, each measurement.
+
+    Read from the document alone, so a revision that moves an operation to another state
+    changes the card as well as the diff.
+    """
+    from .assembly import assembly_order, screen_adjustment_access, screen_inspectability
+
+    declared = spec.assembly
+    if declared is None:
+        return []
+    entries = [assembly_order(declared.parts).entry()]
+    if declared.adjustments:
+        entries.extend(
+            screen_adjustment_access(declared.states, declared.parts, declared.adjustments)
+        )
+    if declared.inspections:
+        entries.extend(screen_inspectability(declared.states, declared.parts, declared.inspections))
+    return entries
+
+
 def _keepout_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     """One not-evaluated entry per declared keepout, until intrusion is checked on geometry.
 
@@ -1730,6 +1751,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     if spec.constraint_topology is not None:
         entries.append(_topology(spec).entry())
     entries.extend(_keepout_entries(spec))
+    entries.extend(_assembly_entries(spec))
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:

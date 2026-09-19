@@ -1680,6 +1680,7 @@ _ANSWERED_BY_A_CHECK = {
     ),
     "constraint_topology": "constraint topology, and the qualifier on every element check",
     "keepouts": "one keepout entry each, not evaluated until intrusion is measured on geometry",
+    "assembly": "the build order, each adjustment's reach in its state, and inspectability",
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
     "anvilate_spec": "the schema version the document was written against",
@@ -2357,6 +2358,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "environment",
         "constraint_topology",
         "keepouts",
+        "assembly",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
     assert not missing, (

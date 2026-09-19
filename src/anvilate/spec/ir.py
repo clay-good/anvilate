@@ -21,6 +21,7 @@ from pydantic import (
     model_validator,
 )
 
+from .._assembly_declarations import Adjustment, AssemblyState, Inspection, Part
 from .._models import FrozenMap, Named, Provenance, StatableModel, rebuilt_quantities
 from ..budget import Budget
 from ..loads import (
@@ -55,6 +56,7 @@ from .provenance import Provenanced
 __all__ = [
     "DesignSpec",
     "ConstraintDeclaration",
+    "AssemblyDeclaration",
     "Keepout",
     "KeepoutRule",
     "PrismKeepout",
@@ -470,6 +472,57 @@ class Keepout(_Base):
                 f"keepout '{self.tag}': clearance_margin cannot be negative; got "
                 f"{self.clearance_margin}"
             )
+        return self
+
+
+# --- Assembly ---
+
+
+class AssemblyDeclaration(_Base):
+    """How the build goes together: its states in order, its parts, and what is done in each.
+
+    Each part states its insertion direction and the features it occupies; each state the
+    parts it installs; each adjustment and inspection the state it happens in, or the route
+    its instrument takes. Declared here, the build order is part of the document, so moving
+    an operation to another state shows in the diff as that move. An operation in a state the
+    document does not define, an install of an undeclared part, and a part installed twice
+    are refused naming them, so access is never judged against a configuration nobody
+    described.
+    """
+
+    states: tuple[AssemblyState, ...] = Field(min_length=1)
+    parts: tuple[Part, ...] = Field(min_length=1)
+    adjustments: tuple[Adjustment, ...] = ()
+    inspections: tuple[Inspection, ...] = ()
+
+    @model_validator(mode="after")
+    def _a_build(self) -> AssemblyDeclaration:
+        order = [state.name for state in self.states]
+        names = [part.name for part in self.parts]
+        for label, values in (("state", order), ("part", names)):
+            repeated = sorted({value for value in values if values.count(value) > 1})
+            if repeated:
+                raise ValueError(f"the assembly declares the {label} {repeated} more than once")
+        installed: dict[str, str] = {}
+        for state in self.states:
+            for part in state.installs:
+                if part not in names:
+                    raise ValueError(
+                        f"state '{state.name}' installs '{part}', which the assembly does not "
+                        f"declare; its parts are {names}"
+                    )
+                if part in installed:
+                    raise ValueError(
+                        f"'{part}' is installed in both '{installed[part]}' and '{state.name}'"
+                    )
+                installed[part] = state.name
+        for adjustment in self.adjustments:
+            if adjustment.performed_in not in order:
+                raise ValueError(
+                    f"the adjustment of {adjustment.feature} is performed in "
+                    f"'{adjustment.performed_in}', which the assembly does not define; its "
+                    f"states are {order}"
+                )
         return self
 
 
@@ -896,12 +949,13 @@ class AcceptanceCriteria(_Base):
 # contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
 # the environment a part lives in with an interface's kind and mating material, and 1.13.0
 # the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
-# how the part is located, 1.15.0 keepouts, the volumes it must leave empty, and 1.16.0
-# a keepout's offset from its anchor face. All
+# how the part is located, 1.15.0 keepouts, the volumes it must leave empty, 1.16.0 a
+# keepout's offset from its anchor face, and 1.17.0 assembly, how the build goes together.
+# All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.16.0"
+SCHEMA_VERSION = "1.17.0"
 
 
 class DesignSpec(_Base):
@@ -961,6 +1015,9 @@ class DesignSpec(_Base):
     # Declared here and screened as not evaluated until intrusion is checked against built
     # geometry, so a declared keepout can never read as a pass it was not measured for.
     keepouts: tuple[Keepout, ...] = ()
+    # How the build goes together, screened for its order, the reach of each adjustment in
+    # its state, and whether each toleranced dimension can be measured in any state.
+    assembly: AssemblyDeclaration | None = None
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
 

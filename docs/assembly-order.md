@@ -103,6 +103,14 @@ shorter `handle_length`, because a shorter handle sweeps a subset of a longer on
 Neither is solved to a value, which would take the geometry search again. An adjustment or
 inspection blocked by a part has no numeric lever, only a route, so it carries none.
 
+## Declared in the document
+
+A Design Spec can declare the assembly itself: `assembly` carries its states, parts,
+adjustments and inspections, and screening reads it. The same sealed housing, written as a
+document, fails its focus adjustment in `closed` and passes it moved to `open`, and that move
+is one line in `anvilate diff`. An operation in a state the document does not define is
+refused naming the state.
+
 ## Status
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
