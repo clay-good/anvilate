@@ -134,6 +134,10 @@ fatigue.goodman_scorecard
 fatigue.soderberg_scorecard
 fatigue.weld_fatigue_scorecard
 fracture.fad_scorecard
+# keepouts.screen_keepouts does solve a hint: the part dimension along the keepout's axis.
+# It is recorded bare because that parameter is chosen per built pattern at run time, and
+# the lever gates read a parameter the screen's own source states.
+keepouts.screen_keepouts
 lifting_device.bth1_fatigue_scorecard
 lifting_device.bth1_member_scorecard
 lifting_device.bth1_pin_plate_scorecard

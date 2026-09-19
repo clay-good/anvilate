@@ -54,6 +54,7 @@ geotechnical.screen_shallow_footing
 hydraulics.screen_pipe_run
 hydraulics.screen_pump_duty
 industrial.screen_cover_plate
+keepouts.screen_keepouts
 lifting_device.bth1_fatigue_scorecard
 lifting_device.bth1_member_scorecard
 lifting_device.bth1_pin_plate_scorecard

@@ -449,6 +449,10 @@ class Keepout(_Base):
     against a change that wants the space. ``clearance_margin`` is a band around the
     protected core: material inside it warns, material in the core fails. ``owner`` is who
     declared it, the user or a named module.
+
+    The body sits centred on the anchor face with its axis along the face's inward normal,
+    its near end ``offset`` from the face measured into the part: zero starts it on the face,
+    a negative offset starts it in front of the face, outside the part.
     """
 
     tag: Named
@@ -457,6 +461,7 @@ class Keepout(_Base):
     clearance_margin: Length
     reason: Provenance
     owner: Named = "user"
+    offset: Length = Field(default_factory=lambda: Quantity(magnitude=0.0, unit="mm"))
 
     @model_validator(mode="after")
     def _a_margin(self) -> Keepout:
@@ -891,11 +896,12 @@ class AcceptanceCriteria(_Base):
 # contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
 # the environment a part lives in with an interface's kind and mating material, and 1.13.0
 # the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
-# how the part is located, and 1.15.0 keepouts, the volumes it must leave empty. All
+# how the part is located, 1.15.0 keepouts, the volumes it must leave empty, and 1.16.0
+# a keepout's offset from its anchor face. All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.15.0"
+SCHEMA_VERSION = "1.16.0"
 
 
 class DesignSpec(_Base):

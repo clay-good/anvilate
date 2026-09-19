@@ -12,16 +12,21 @@
 
 - [ ] 2.1 Keepout archetypes in the pattern library under the existing contribution
       contract
-- [ ] 2.2 Semantic tagging at creation; tag survives downstream operations
-- [ ] 2.3 Keepouts held separately from the part solid — never unioned into it
+- [x] 2.2 Semantic tagging at creation; tag survives downstream operations — each body is built
+      from its keepout and carries it, anchored to a tagged face of the part
+- [x] 2.3 Keepouts held separately from the part solid — never unioned into it
 
 ## 3. Checking
 
-- [ ] 3.1 T0 intrusion check: intersection volume, worst penetration depth, intruding tag
-- [ ] 3.2 Clearance-margin band: intrusion into the margin warns, into the core fails
+- [x] 3.1 T0 intrusion check: intersection volume, worst penetration depth, intruding tag —
+      `anvilate.keepouts.check_keepouts`, with a summary of what was screened
+- [ ] 3.2 Clearance-margin band: intrusion into the margin warns, into the core fails — the
+      band is measured and named; it fails rather than warns, because the scorecard has no
+      warning status yet
 - [x] 3.3 Not-evaluated when a declared keepout was not generated or not checked — every
       declared keepout until intrusion is measured, naming a lost anchor
-- [ ] 3.4 Repair hint naming the intruding feature and the direction that resolves it
+- [x] 3.4 Repair hint naming the intruding feature and the direction that resolves it — solved
+      for the box patterns' dimension along the keepout axis
 
 ## 4. Export
 
@@ -31,7 +36,8 @@
 
 ## 5. Tests
 
-- [ ] 5.1 A rib added to fix deflection intrudes on a keepout and the card fails
+- [x] 5.1 A rib added to fix deflection intrudes on a keepout and the card fails — a plate
+      thickened to fix deflection reaches into a beam path (the patterns carry no ribs)
 - [x] 5.2 A keepout declared and never generated reports not-evaluated, never a pass
 - [ ] 5.3 Exported keepout body is present, labeled, and absent from the machinable solid
 - [x] 5.4 Zero-volume and inverted keepouts are refused rather than passing vacuously

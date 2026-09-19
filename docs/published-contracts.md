@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.16.0: where a keepout sits on its anchor
+
+A keepout gains `offset`, the distance from its anchor face to its near end, measured into
+the part, zero by default. The body is centred on the anchor face with its axis along the
+face's inward normal, so it moves when the face does. `anvilate.keepouts.screen_keepouts`
+builds each body on the part's own geometry and measures the part against it. Evidence
+Bundle 1.17.0 and CLI output 1.44.0 carry the same document.
+
 ### Design Spec 1.15.0: the volumes the part must leave empty
 
 `keepouts` declares each protected volume: its tag, the tag or datum it is anchored to and
