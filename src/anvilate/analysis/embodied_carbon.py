@@ -362,7 +362,15 @@ def embodied_carbon_scorecard(
     if allowed <= 0:
         raise ValueError(f"budget must be positive; got {budget}")
     computed = None if total == 0 else allowed / total
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=1.0,
+        unavailable=(
+            "the contributions sum to zero kgCO2e, so there is nothing to judge against the "
+            "budget; declare each contribution's mass and carbon factor"
+        ),
+    )
     # The sum written out line by line rather than as a Σ, because embodied carbon is
     # almost always concentrated in one material and a Σ hides which. Each term is one
     # contribution's mass times its factor, already evaluated — the factor's own units
@@ -394,9 +402,12 @@ def embodied_carbon_scorecard(
         ),
         citation=_CLAUSE_EN15978,
     )
+    detail = f"{detail} Budget {allowed:.4g} kgCO2e."
+    if entry.status is CheckStatus.NOT_EVALUATED:
+        detail = f"{entry.detail}; {detail}"
     return entry.model_copy(
         update={
-            "detail": f"{detail} Budget {allowed:.4g} kgCO2e.",
+            "detail": detail,
             "reference": _CLAUSE_EN15978,
             "derivation": derivation,
         }

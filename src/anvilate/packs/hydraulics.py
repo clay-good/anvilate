@@ -114,7 +114,13 @@ def screen_pump_duty(
         citation=_MOTOR_REFERENCE,
     )
     motor_entry = ScorecardEntry.from_safety_factor(
-        "motor rating", computed=motor_sf, required=motor_service_factor
+        "motor rating",
+        computed=motor_sf,
+        required=motor_service_factor,
+        unavailable=(
+            "the shaft power is zero because the duty's flow_rate or total_head is zero, so there "
+            "is no demand on the motor; declare the duty point as `flow_rate` and `total_head`"
+        ),
     ).model_copy(update={"reference": _MOTOR_REFERENCE, "derivation": motor_derivation})
 
     npsh_a = duty.npsh_available.to("m").magnitude
@@ -148,7 +154,13 @@ def screen_pump_duty(
         citation=_NPSH_REFERENCE,
     )
     npsh_entry = ScorecardEntry.from_safety_factor(
-        "NPSH margin", computed=npsh_sf, required=npsh_margin_factor
+        "NPSH margin",
+        computed=npsh_sf,
+        required=npsh_margin_factor,
+        unavailable=(
+            "npsh_required is zero, so the suction side has nothing to clear; take `npsh_required`"
+            " from the pump curve at the duty flow"
+        ),
     ).model_copy(update={"reference": _NPSH_REFERENCE, "derivation": npsh_derivation})
     if motor_entry.status is CheckStatus.FAIL:
         # The shaft power is the duty's, not the motor's, so the rating is what moves and

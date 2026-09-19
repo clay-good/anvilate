@@ -127,7 +127,14 @@ def screen_ventilation(
         citation=_OUTDOOR_AIR_REFERENCE,
     )
     oa_entry = ScorecardEntry.from_safety_factor(
-        "outdoor air", computed=oa_sf, required=required_safety_factor
+        "outdoor air",
+        computed=oa_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "the zone requires no outdoor air, so there is no rate to judge the supply against; "
+            "declare `occupancy`, `people_outdoor_rate`, `floor_area` and `area_outdoor_rate` from"
+            " ASHRAE 62.1 Table 6-1"
+        ),
     ).model_copy(update={"reference": _OUTDOOR_AIR_REFERENCE, "derivation": oa_derivation})
     if oa_entry.status is CheckStatus.FAIL:
         # Both checks in this card are levered by the same knob — the air actually
@@ -183,7 +190,13 @@ def screen_ventilation(
         citation=_AIR_CHANGE_REFERENCE,
     )
     ach_entry = ScorecardEntry.from_safety_factor(
-        "air changes per hour", computed=ach_sf, required=required_safety_factor
+        "air changes per hour",
+        computed=ach_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "required_air_changes is zero, so there is no rate to judge against; declare "
+            "`required_air_changes` for the space"
+        ),
     ).model_copy(update={"reference": _AIR_CHANGE_REFERENCE, "derivation": ach_derivation})
     if ach_entry.status is CheckStatus.FAIL:
         ach_entry = ach_entry.model_copy(

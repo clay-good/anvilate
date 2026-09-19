@@ -162,6 +162,25 @@ if adjusted_bending_value is None:
                           detail="not evaluated — no NDS reference design value supplied")
 ```
 
+A gap also says why it is one and what would let the check run. When a safety factor
+cannot be formed, pass the reason to `ScorecardEntry.from_safety_factor` as `unavailable=`.
+Name the input that is zero or missing, and the field to declare:
+
+```python
+safety = capacity / load if load > 0 else None
+ScorecardEntry.from_safety_factor(
+    "pile capacity", computed=safety, required=2.0,
+    unavailable="the pile's applied_load is zero, so there is no demand to screen; "
+    "declare the axial load it carries as `applied_load`",
+)
+```
+
+Without a reason, the entry reads "safety factor unavailable", which is true and gives the
+reader nothing to act on. `tests/conftest.py` fails the run naming any library call that
+builds such a gap without `unavailable=`. It is floored on the number of reasoned sites it
+saw, so an uninstalled collector cannot pass for a clean library. If your function rewrites
+`detail` afterwards, keep the reason ahead of your figures on the not-evaluated path.
+
 Where the allowable depends on a condition, carry the condition with it. `AllowableStress`
 holds the temperature its value was read at and refuses in both directions, because a
 200 °C allowable used on a 400 °C line is a quarter too high and the arithmetic cannot

@@ -113,7 +113,13 @@ def screen_lighting(
         citation=_ILLUMINANCE_REFERENCE,
     )
     illuminance_entry = ScorecardEntry.from_safety_factor(
-        "task illuminance", computed=illuminance_sf, required=required_safety_factor
+        "task illuminance",
+        computed=illuminance_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "required_illuminance is zero, so the task asks for no light to check against; declare"
+            " `required_illuminance` for the task, from IES or the owner's criteria"
+        ),
     ).model_copy(update={"reference": _ILLUMINANCE_REFERENCE, "derivation": illuminance_derivation})
 
     lpd = lighting_power_density(
@@ -151,7 +157,13 @@ def screen_lighting(
         citation=_LPD_REFERENCE,
     )
     lpd_entry = ScorecardEntry.from_safety_factor(
-        "lighting power density", computed=lpd_sf, required=required_safety_factor
+        "lighting power density",
+        computed=lpd_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "the installed power density is zero, so there is no load against the allowance; "
+            "declare `luminaire_count` and `input_watts_per_luminaire`"
+        ),
     ).model_copy(update={"reference": _LPD_REFERENCE, "derivation": lpd_derivation})
     # The two checks pull in OPPOSITE DIRECTIONS on the same knob: illuminance rises with
     # the luminaire count and the power density rises with it too. A card that answered

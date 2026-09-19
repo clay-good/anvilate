@@ -501,6 +501,7 @@ class ScorecardEntry(StatableModel):
         required: float,
         upper: float | None = None,
         repair_hint: RepairHint | None = None,
+        unavailable: str | None = None,
     ) -> ScorecardEntry:
         """Build an entry from a computed safety factor against a required minimum.
 
@@ -516,6 +517,12 @@ class ScorecardEntry(StatableModel):
         ``repair_hint`` travels with a ``FAIL`` entry to say which parameter to
         move and, when a design inverse supplied it, to what value. It is dropped
         on a passing entry — a hint only belongs on a check that needs one.
+
+        ``unavailable`` says why ``computed`` is ``None`` and what would let the check
+        run: "the pile's applied load is zero, so there is no demand to screen; declare
+        ``applied_load``". Without it the entry reads "safety factor unavailable", which is
+        true and gives the reader nothing to do; every call site in this library states
+        one, held by a gate over what the suite builds.
         """
         # A required factor of zero (or below) makes `computed < required` False for every
         # finite result, so EVERY check on a screen built with one comes back PASS -- a
@@ -538,7 +545,7 @@ class ScorecardEntry(StatableModel):
             return cls(
                 name=name,
                 status=CheckStatus.NOT_EVALUATED,
-                detail="not evaluated — safety factor unavailable",
+                detail=f"not evaluated — {unavailable or 'safety factor unavailable'}",
                 required_safety_factor=required,
                 upper_safety_factor=upper,
             )

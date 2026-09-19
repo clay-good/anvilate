@@ -114,7 +114,13 @@ def screen_noise_exposure(
         citation=reference,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "noise dose", computed=dose_sf, required=required_safety_factor
+        "noise dose",
+        computed=dose_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "the exposure_duration is zero, so there is no dose to screen; declare the "
+            "`exposure_duration` of the shift"
+        ),
     ).model_copy(update={"reference": reference, "derivation": dose_derivation})
     if entry.status is CheckStatus.FAIL:
         # The level is the machines'; the time is the shift. Shortening the exposure — job

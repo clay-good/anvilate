@@ -1224,12 +1224,26 @@ def junction_temperature_scorecard(
     # demand to screen. An infinite safety factor reported that as the strongest possible
     # PASS; `None` -> NOT_EVALUATED says what actually happened.
     computed = None if rise == 0 else allowable / rise
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the temperature rise is zero because the power or the thermal_resistance is zero, so "
+            "there is no thermal demand to screen; pass the dissipated `power` and the path's "
+            "`thermal_resistance`"
+        ),
+    )
     # One fixed place is a wide band to hide a shortfall in: an 85.04 K rise against an
     # 85 K allowable printed "junction rise 85.0 K vs 85.0 K allowable" on a FAIL.
     places = decimals_distinguishing(rise, allowable, minimum=1)
     detail = f"junction rise {rise:.{places}f} K vs {allowable:.{places}f} K allowable"
-    update: dict[str, object] = {"detail": detail}
+    # A check that did not run keeps its reason ahead of the figures that explain it.
+    update: dict[str, object] = {
+        "detail": detail
+        if entry.status is not CheckStatus.NOT_EVALUATED
+        else f"{entry.detail}; {detail}"
+    }
     if entry.status is CheckStatus.FAIL:
         # The lever is the path resistance, and the inverse for it already ships: the
         # whole junction-to-ambient path may be no more resistive than the budget the

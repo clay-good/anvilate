@@ -191,6 +191,10 @@ def screen_shallow_footing(
         "bearing capacity",
         computed=safety_factor,
         required=required_safety_factor,
+        unavailable=(
+            "the footing's applied_load is zero, so there is no bearing pressure to screen; "
+            "declare the column load it carries as `applied_load`"
+        ),
     )
     entry = entry.model_copy(update={"reference": _BEARING_REFERENCE, "derivation": derivation})
     # Monotonicity declaration, not an inverse: widening the footing drops the contact
@@ -573,7 +577,13 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
         citation=_PILE_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "pile capacity", computed=demand_ratio, required=1.0
+        "pile capacity",
+        computed=demand_ratio,
+        required=1.0,
+        unavailable=(
+            "the pile's applied_load is zero, so there is no demand to screen; declare the axial "
+            "load it carries as `applied_load`"
+        ),
     ).model_copy(update={"reference": _PILE_REFERENCE, "derivation": derivation})
     # Shaft friction is linear in the embedded length and end bearing does not depend on it,
     # so the length that reaches a demand ratio of 1.0 is exact: the shaft has to supply

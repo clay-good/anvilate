@@ -1004,18 +1004,29 @@ def half_sine_shock_scorecard(
     response = amplification * a0
     # A zero pulse is a check with nothing to evaluate, not one that passed.
     computed = None if response == 0 else allowable / response
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=1.0,
+        unavailable=(
+            "the peak_acceleration is zero, so there is no shock to screen; pass the pulse's "
+            "`peak_acceleration`"
+        ),
+    )
     ratio = _shock_pulse_ratio(pulse_duration, natural_frequency)
     # A compound adjective in front of a noun: a *quasi-static* response.
     named_regime = spoken(regime.value, joined_by="-")
+    detail = (
+        f"{named_regime} (τ/T = {ratio:.2f}), amplification {amplification:.2f}: "
+        f"response {response / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g "
+        f"vs allowable "
+        f"{allowable / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g"
+    )
+    if entry.status is CheckStatus.NOT_EVALUATED:
+        detail = f"{entry.detail}; {detail}"
     return entry.model_copy(
         update={
-            "detail": (
-                f"{named_regime} (τ/T = {ratio:.2f}), amplification {amplification:.2f}: "
-                f"response {response / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g "
-                f"vs allowable "
-                f"{allowable / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g"
-            ),
+            "detail": detail,
             "reference": "half-sine shock response spectrum",
             # The MARGIN, not the spectrum. A is the larger of the residual and primary
             # branches of the Duhamel solution, and the primary branch is a maximum over
@@ -2245,7 +2256,11 @@ def frequency_scorecard(
         return ScorecardEntry(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
-            detail="not evaluated — minimum frequency unavailable",
+            detail=(
+                "not evaluated — no minimum frequency was declared, so there is no excitation "
+                "to keep the mode clear of; pass `min_frequency`, the highest operating "
+                "excitation"
+            ),
         )
     _require(min_frequency, "[frequency]", "min_frequency")
     # Through `count_rate_per_second` on both, because a frequency and an angular speed are

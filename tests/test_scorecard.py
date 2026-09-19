@@ -1294,3 +1294,47 @@ def test_a_comparison_sentence_never_contradicts_its_own_verdict() -> None:
         at_most = comparison.sense is LimitSense.AT_MOST
         stated = measured <= limit if at_most else measured >= limit
         assert stated is comparison.passes()
+
+
+# --- interaction-quality 2.1: a gap says why, and what would let the check run -----------
+
+
+def test_a_gap_carries_the_reason_it_was_given() -> None:
+    entry = ScorecardEntry.from_safety_factor(
+        "pile capacity", computed=None, required=2.0, unavailable="the applied_load is zero"
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.detail == "not evaluated — the applied_load is zero"
+    assert entry.required_safety_factor == 2.0
+
+
+def test_a_zero_demand_on_a_pack_screen_names_the_declaration_to_supply() -> None:
+    from anvilate.packs.geotechnical import DrivenPile, screen_driven_pile
+    from anvilate.units import Quantity
+
+    pile = DrivenPile(
+        diameter=Quantity(magnitude=0.4, unit="m"),
+        length=Quantity(magnitude=12.0, unit="m"),
+        undrained_shear_strength=Quantity(magnitude=50.0, unit="kPa"),
+        adhesion_factor=0.8,
+        applied_load=Quantity(magnitude=0.0, unit="kN"),
+    )
+    (entry,) = screen_driven_pile(pile).entries
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "`applied_load`" in entry.detail
+
+
+def test_a_site_that_rewrites_its_detail_keeps_the_reason_ahead_of_its_figures() -> None:
+    from anvilate.analysis.thermal import junction_temperature_scorecard
+    from anvilate.units import Quantity
+
+    entry = junction_temperature_scorecard(
+        "driver",
+        power=Quantity(magnitude=0.0, unit="W"),
+        thermal_resistance=Quantity(magnitude=2.0, unit="K/W"),
+        allowable_temperature_rise=Quantity(magnitude=60.0, unit="K"),
+        required=1.5,
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.detail.startswith("not evaluated — the temperature rise is zero")
+    assert "junction rise 0.0 K" in entry.detail

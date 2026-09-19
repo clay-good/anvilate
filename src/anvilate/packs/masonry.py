@@ -106,7 +106,13 @@ def screen_masonry_wall(
         citation=_AXIAL_REFERENCE,
     )
     axial_entry = ScorecardEntry.from_safety_factor(
-        "axial stress", computed=axial_sf, required=required_safety_factor
+        "axial stress",
+        computed=axial_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "the wall's axial_stress is zero, so there is no axial demand to screen; declare the "
+            "`axial_stress` the wall's load produces"
+        ),
     ).model_copy(update={"reference": _AXIAL_REFERENCE, "derivation": axial_derivation})
 
     unity = masonry_combined_stress_ratio(
@@ -152,7 +158,13 @@ def screen_masonry_wall(
         citation=_COMBINED_REFERENCE,
     )
     combined_entry = ScorecardEntry.from_safety_factor(
-        "combined axial + flexure", computed=combined_sf, required=required_safety_factor
+        "combined axial + flexure",
+        computed=combined_sf,
+        required=required_safety_factor,
+        unavailable=(
+            "the wall declares no axial_stress and no flexural_stress, so there is nothing to "
+            "combine; declare the `axial_stress` and `flexural_stress` it carries"
+        ),
     ).model_copy(update={"reference": _COMBINED_REFERENCE, "derivation": combined_derivation})
     if axial_entry.status is CheckStatus.FAIL:
         # The allowable is fixed by the masonry and the slenderness, so the demand is what

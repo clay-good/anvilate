@@ -178,7 +178,13 @@ def _static_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sc
         citation=_STATIC_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "combined bending and torsion", computed=safety, required=required_safety_factor
+        "combined bending and torsion",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=(
+            "the shaft declares no bending_moment and no torque, so there is no stress to screen; "
+            "declare the `bending_moment` and `torque` it carries"
+        ),
     ).model_copy(update={"reference": _STATIC_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # The library's own inverse of the formula above, at the required margin — not a
@@ -259,7 +265,12 @@ def _twist_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sco
         citation=_TWIST_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "torsional twist", computed=safety, required=required_safety_factor
+        "torsional twist",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=(
+            "the shaft's torque is zero, so it does not twist; declare the `torque` it transmits"
+        ),
     ).model_copy(update={"reference": _TWIST_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # θ goes as 1/d⁴ with everything else held, so the diameter that lands the required

@@ -427,6 +427,13 @@ def goodman_safety_factor(
     return inf if goodman_sum <= 0 else 1.0 / goodman_sum
 
 
+#: Why a fatigue check with no endurance limit did not run, and where one comes from.
+_NO_ENDURANCE_LIMIT = (
+    "no endurance limit was given, so there is no fatigue strength to judge the stress "
+    "against; pass `endurance_limit` from a test, a cited S-N curve or the material record"
+)
+
+
 def goodman_scorecard(
     name: str,
     *,
@@ -452,7 +459,12 @@ def goodman_scorecard(
             endurance_limit=endurance_limit,
             ultimate_strength=ultimate_strength,
         )
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=_NO_ENDURANCE_LIMIT,
+    )
 
 
 def soderberg_safety_factor(
@@ -511,7 +523,12 @@ def soderberg_scorecard(
             endurance_limit=endurance_limit,
             yield_strength=yield_strength,
         )
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=_NO_ENDURANCE_LIMIT,
+    )
 
 
 def gerber_safety_factor(
@@ -590,7 +607,12 @@ def gerber_scorecard(
             endurance_limit=endurance_limit,
             ultimate_strength=ultimate_strength,
         )
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=_NO_ENDURANCE_LIMIT,
+    )
 
 
 def _validate_spectrum(applied_cycles: Sequence[float], cycles_to_failure: Sequence[float]) -> None:

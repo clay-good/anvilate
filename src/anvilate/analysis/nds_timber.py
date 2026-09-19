@@ -247,7 +247,15 @@ def nds_bending_scorecard(
     fb_allow = _adjusted_design_value(adjusted_bending_value, "adjusted_bending_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fb == 0 else fb_allow / fb
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the bending_stress is zero, so there is no demand to screen; pass the "
+            "`bending_stress` the load produces"
+        ),
+    ).model_copy(
         update={
             "reference": "NDS",
             "derivation": _nds_margin_derivation(
@@ -326,7 +334,15 @@ def nds_shear_scorecard(
     fv_allow = _adjusted_design_value(adjusted_shear_value, "adjusted_shear_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fv == 0 else fv_allow / fv
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the shear_stress is zero, so there is no demand to screen; pass the `shear_stress` "
+            "the load produces"
+        ),
+    ).model_copy(
         update={
             "reference": "NDS",
             "derivation": _nds_margin_derivation(
@@ -459,7 +475,15 @@ def nds_bearing_scorecard(
     fc_allow = _adjusted_design_value(adjusted_bearing_value, "adjusted_bearing_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the bearing_stress is zero, so there is no demand to screen; pass the "
+            "`bearing_stress` the load produces"
+        ),
+    ).model_copy(
         update={
             "reference": "NDS",
             "derivation": _nds_margin_derivation(
@@ -694,7 +718,15 @@ def nds_compression_scorecard(
     fc_allow = _adjusted_design_value(adjusted_compression_value, "adjusted_compression_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if fc == 0 else fc_allow / fc
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the compression_stress is zero, so there is no demand to screen; pass the "
+            "`compression_stress` the load produces"
+        ),
+    ).model_copy(
         update={
             "reference": "NDS",
             "derivation": _nds_margin_derivation(

@@ -1118,7 +1118,15 @@ def aluminum_compression_scorecard(
     nominal = strength.nominal.to("MPa").magnitude
     # Zero demand is a check with nothing to evaluate, not one that passed.
     computed = None if demand == 0 else nominal / demand
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=required,
+        unavailable=(
+            "the demand_stress is zero, so there is no compression to screen; pass the "
+            "`demand_stress` the load produces"
+        ),
+    )
     detail = (
         f"{strength.governing.value} governs: {nominal:.4g} MPa allowed against a "
         f"demand of {demand:.4g} MPa"
@@ -1138,6 +1146,8 @@ def aluminum_compression_scorecard(
             f"member buckling strength, so the ADM §E.4 local/member interaction "
             f"reduction F_rc = F_c^(1/3)·F_e^(2/3) has been applied"
         )
+    if entry.status is CheckStatus.NOT_EVALUATED:
+        detail = f"{entry.detail}; {detail}"
     return entry.model_copy(
         update={
             "detail": detail,

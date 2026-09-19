@@ -486,9 +486,21 @@ def strength_scorecard(
         # possible PASS, and with an `upper` band it read 'exceeds target band by inf —
         # over-engineered'. `None` -> NOT_EVALUATED, matching loads.combination_scorecard.
         computed = None if sigma == 0 else strength / sigma
+    if allowable is None:
+        reason = (
+            f"no allowable strength was given for {name}; pass `allowable` from the material "
+            "record or a cited table"
+        )
+    else:
+        reason = (
+            f"the stress on {name} is zero, so there is no demand to screen; declare the load "
+            "that stresses it"
+        )
     entry = ScorecardEntry.from_safety_factor(
-        name, computed=computed, required=required, upper=upper
+        name, computed=computed, required=required, upper=upper, unavailable=reason
     )
-    if computed is None and unavailable_detail is not None:
+    # The caller's own reason is about the allowable, so it replaces only that one: a zero
+    # stress beside a known allowable is a missing demand, whatever the allowable's story.
+    if allowable is None and unavailable_detail is not None:
         return entry.model_copy(update={"detail": unavailable_detail})
     return entry

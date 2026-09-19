@@ -272,7 +272,15 @@ def bth1_member_scorecard(
         raise ValueError(f"allowable must be positive; got {allowable}")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if applied == 0 else limit / applied
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=1.0,
+        unavailable=(
+            "the applied stress is zero, so there is no demand to screen; pass the member `stress`"
+            " the lift produces"
+        ),
+    )
     detail = (
         f"{applied:.4g} MPa against a Category {category.value} allowable of "
         f"{limit:.4g} MPa (N_d = {category.design_factor:.2f}, already inside the "
@@ -316,6 +324,8 @@ def bth1_member_scorecard(
             citation=_CLAUSE_ALLOWABLES,
         )
     )
+    if entry.status is CheckStatus.NOT_EVALUATED:
+        detail = f"{entry.detail}; {detail}"
     return entry.model_copy(
         update={
             "detail": detail,

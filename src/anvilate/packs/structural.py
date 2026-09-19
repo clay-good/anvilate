@@ -1135,6 +1135,10 @@ def screen_bolted_connection(
                 f"{connection.name} edge tear-out",
                 computed=tearout_sf,
                 required=required_safety_factor,
+                unavailable=(
+                    "the connection's load is zero, so there is no demand to screen; declare the "
+                    "`load` the joint transfers"
+                ),
             ).model_copy(update={"reference": _CLAUSE_BEARING, "derivation": tearout_derivation})
         )
     if connection.tension is not None:
@@ -1857,7 +1861,13 @@ def screen_gusset_plate(
         citation=_CLAUSE_BLOCK_SHEAR,
     )
     entry = ScorecardEntry.from_safety_factor(
-        f"{gusset.name} block shear", computed=safety, required=required_safety_factor
+        f"{gusset.name} block shear",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=(
+            "the gusset's load is zero, so there is no tear-out demand to screen; declare the "
+            "`load` it transfers"
+        ),
     ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # Block shear adds two areas, so neither is "the" lever on its own — the hint
@@ -2215,7 +2225,13 @@ def screen_beam_column(
         )
     else:
         entry = ScorecardEntry.from_safety_factor(
-            f"{member.name} interaction", computed=safety, required=required_safety_factor
+            f"{member.name} interaction",
+            computed=safety,
+            required=required_safety_factor,
+            unavailable=(
+                "the member carries no axial_load and no moment, so the §H1.1 ratio has nothing in"
+                " it; declare the `axial_load` and `moment` it carries"
+            ),
         ).model_copy(
             update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation}
         )
@@ -2228,7 +2244,20 @@ def screen_beam_column(
     pr = member.axial_load.to("N").magnitude
     axial_safety = axial_capacity / pr if pr > 0 else None
     axial_entry = ScorecardEntry.from_safety_factor(
-        f"{member.name} axial capacity", computed=axial_safety, required=required_safety_factor
+        f"{member.name} axial capacity",
+        computed=axial_safety,
+        required=required_safety_factor,
+        unavailable=(
+            (
+                "the axial_load is zero, so there is no compression for the §E3 curve to "
+                "judge; declare the `axial_load` the member carries"
+            )
+            if pr == 0
+            else (
+                "the axial_load is a net tension, which does not buckle; screen the member "
+                "in tension with `screen_tension_member`"
+            )
+        ),
     ).model_copy(
         update={
             "reference": _CLAUSE_COMPRESSION,
@@ -2358,7 +2387,13 @@ def screen_concrete_bearing(
         citation=_CLAUSE_CONCRETE_BEARING_ACI,
     )
     entry = ScorecardEntry.from_safety_factor(
-        f"{bearing.name} concrete bearing", computed=safety, required=required_safety_factor
+        f"{bearing.name} concrete bearing",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=(
+            "the bearing load is zero, so there is no pressure to screen; declare the `load` the "
+            "plate delivers"
+        ),
     ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI, "derivation": derivation})
     if entry.status is CheckStatus.FAIL and bearing_hint is not None:
         entry = entry.model_copy(update={"repair_hint": bearing_hint})
@@ -2448,6 +2483,10 @@ def screen_shear_plate(
                         f"{plate.name} shear yielding",
                         computed=yield_sf,
                         required=required_safety_factor,
+                        unavailable=(
+                            "the shear plate's load is zero, so there is no shear to screen; "
+                            "declare the `load` it transfers"
+                        ),
                     ).model_copy(
                         update={
                             "reference": _CLAUSE_SHEAR,
@@ -2480,6 +2519,10 @@ def screen_shear_plate(
                         f"{plate.name} shear rupture",
                         computed=rupture_sf,
                         required=required_safety_factor,
+                        unavailable=(
+                            "the shear plate's load is zero, so there is no shear to screen; "
+                            "declare the `load` it transfers"
+                        ),
                     ).model_copy(
                         update={
                             "reference": _CLAUSE_SHEAR,

@@ -1890,16 +1890,30 @@ def asme_b313_pressure_scorecard(
         ),
         citation=_CLAUSE_B313_PRESSURE_DESIGN,
     )
-    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(
+    entry = ScorecardEntry.from_safety_factor(
+        name,
+        computed=computed,
+        required=1.0,
+        unavailable=(
+            "the design_pressure is not positive, so the wall has no internal pressure to contain;"
+            " pass the `design_pressure`, and screen an external pressure as a collapse case"
+        ),
+    ).model_copy(
         update={
             "reference": _CLAUSE_B313_PRESSURE_DESIGN,
             "derivation": derivation,
-            "detail": (
-                f"{available:.2f} mm available wall rates {rating.to('MPa').magnitude:.2f} MPa "
-                f"against a {service:.2f} MPa service ({allowable})"
-            )
-            if computed is not None
-            else "not evaluated — no design pressure",
+            # A check that did not run keeps the reason it was given above.
+            **(
+                {
+                    "detail": (
+                        f"{available:.2f} mm available wall rates "
+                        f"{rating.to('MPa').magnitude:.2f} MPa against a {service:.2f} MPa "
+                        f"service ({allowable})"
+                    )
+                }
+                if computed is not None
+                else {}
+            ),
         }
     )
     return _wall_repair_hint(

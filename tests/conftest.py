@@ -127,6 +127,7 @@ def pytest_configure(config: pytest.Config) -> None:
     _install_the_coverage_collector()
     _install_the_rendering_collector()
     _install_the_screen_collector()
+    _install_the_reasonless_collector()
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
@@ -274,6 +275,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    # Interaction-quality 2.1: a check this library could not run says why, and what would
+    # let it. Positive evidence — the calls this run made — so a filtered run checks its own.
+    if _reasonless_calls:
+        print(
+            "\nNOT EVALUATED WITHOUT A REASON: these call ScorecardEntry.from_safety_factor "
+            "with no computed factor and no `unavailable=` saying why, so the reader is told "
+            "only 'safety factor unavailable':\n  " + "\n  ".join(sorted(_reasonless_calls))
+        )
+        session.exitstatus = 1
+        return
+
     _report_render_truth(session, full_run=False)
     _report_typesetting(session, full_run=False)
     _report_repair_hints(session, full_run=False)
@@ -346,6 +358,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         print(
             "\nMODULE STANDARDS: a manifest and the citations its own screens write "
             "disagree:\n  " + "\n  ".join(drift)
+        )
+        session.exitstatus = 1
+        return
+
+    # The reason gate above reads positive evidence and so passes on an empty record; over a
+    # whole run the library's own gaps are two dozen call sites, so a handful is a broken
+    # collector, not a clean library.
+    if len(_reasoned_calls) < 20:
+        print(
+            f"\nNOT EVALUATED WITHOUT A REASON: only {len(_reasoned_calls)} library call sites "
+            "were seen building a gap, so this gate is measuring an all but empty population"
         )
         session.exitstatus = 1
         return
@@ -707,6 +730,37 @@ _screen_checks: set[tuple[str, str]] = set()
 
 #: Where a pack's screens live, for the stack walk below.
 _PACKS_DIR = _SRC / "packs"
+
+
+#: Library call sites (`file:function`) that built a NOT_EVALUATED entry with no reason.
+_reasonless_calls: set[str] = set()
+#: And the ones that gave a reason — the population the gate measured, floored below.
+_reasoned_calls: set[str] = set()
+
+
+def _install_the_reasonless_collector() -> None:
+    """Record every library caller of `from_safety_factor(computed=None)` that gave no reason.
+
+    Wrapped on the class, which is how every caller reaches it. Only frames in the library
+    count: a test or an example building a bare gap is exercising the default, not shipping it.
+    """
+    from anvilate.scorecard import ScorecardEntry
+
+    original = ScorecardEntry.from_safety_factor.__func__
+
+    def recording(cls, name, *, computed, unavailable=None, **kwargs):
+        if computed is None:
+            caller = inspect.currentframe().f_back
+            path = Path(caller.f_code.co_filename)
+            if _SRC in path.parents:
+                where = f"{path.relative_to(_SRC)}:{caller.f_code.co_name}"
+                if unavailable is None:
+                    _reasonless_calls.add(f"{where} ({name})")
+                else:
+                    _reasoned_calls.add(where)
+        return original(cls, name, computed=computed, unavailable=unavailable, **kwargs)
+
+    ScorecardEntry.from_safety_factor = classmethod(recording)
 
 
 def _install_the_screen_collector() -> None:
