@@ -97,6 +97,21 @@ EXIT_WARNING = 6
 EXIT_CANCELLED = 130
 
 
+#: How long a command may go quiet on a terminal before a person cannot tell a slow tool from
+#: a broken one. Anything that can exceed it says what it is doing through `_progress`: a
+#: sweep of specs counts them, and one geometry build names the build without a count it
+#: does not have. On a pipe it stays silent, so stdout is the result alone.
+RESPONSIVENESS_THRESHOLD_SECONDS = 2.0
+
+
+def _progress(err, activity: str, *, done: int | None = None, total: int | None = None) -> None:
+    """One progress line on a terminal: the activity, with counts only when they are known."""
+    if not _is_terminal(err):
+        return
+    count = f"[{done}/{total}] " if done is not None and total is not None else ""
+    print(f"{count}{activity}", file=err, flush=True)
+
+
 class _Cancelled(Exception):
     """An interrupt caught where the command knows how far it got."""
 
@@ -2180,7 +2195,9 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     if isinstance(paths, int):
         return paths
     results = []
-    for path in paths:
+    for index, path in enumerate(paths, start=1):
+        if len(paths) > 1:
+            _progress(err, f"assembling the bundle for {path}", done=index, total=len(paths))
         spec = _load(path, err=err, command="export")
         if isinstance(spec, int):
             return spec
@@ -2453,6 +2470,9 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     spec = _load(args.spec, err=err, command="build")
     if isinstance(spec, int):
         return spec
+    # One build, so no count: the line names what is running rather than a percentage the
+    # kernel cannot report.
+    _progress(err, f"building geometry for {args.spec}")
     try:
         built = build_spec(spec)
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
@@ -2614,11 +2634,10 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
 
     # Progress on stderr, and only for a person watching: a directory of specs can take
     # long enough to look hung, and stdout must stay the result alone so it still pipes.
-    progress = len(paths) > 1 and _is_terminal(err)
     results = []
     for index, path in enumerate(paths, start=1):
-        if progress:
-            print(f"[{index}/{len(paths)}] screening {path}", file=err, flush=True)
+        if len(paths) > 1:
+            _progress(err, f"screening {path}", done=index, total=len(paths))
         try:
             spec = _load(path, err=err, command="check")
             if isinstance(spec, int):

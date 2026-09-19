@@ -6,7 +6,9 @@
       — MCP task responses carry all four under `_meta["dev.anvilate/progress"]`; queued
       and running work is explicitly indeterminate with no invented total, terminal success
       is 1/1, and cancellation or failure ends at 0/1 without claiming completion
-- [ ] 1.2 Threshold rule — any operation that can exceed it reports progress
+- [x] 1.2 Threshold rule — any operation that can exceed it reports progress — a declared
+      two-second threshold; check, export and build report through one helper, and a test
+      fails any sweep over specs that does not
 - [ ] 1.3 Estimates derived from completed same-kind work only, and labeled estimates
 - [x] 1.4 Cancellation at any point; partial artifacts removed or marked partial — the CLI
       reports a cancelled run as its own outcome (exit 130) with what it completed, and

@@ -4675,3 +4675,53 @@ def test_a_cancelled_run_is_its_own_outcome_and_says_how_far_it_got(tmp_path, mo
     assert code == EXIT_CANCELLED
     assert payload["outcome"] == "cancelled" and payload["exit_code"] == 130
     assert payload["completed"] == "1 of 2 specs screened"
+
+
+def test_every_command_that_sweeps_specs_reports_progress_through_one_helper():
+    """Interaction quality 1.2: a loop over the resolved specs calls `_progress`.
+
+    Read from the source, with a floor, so a new sweep that stays silent fails here.
+    """
+    import ast
+    import inspect
+
+    import anvilate.cli as cli
+
+    tree = ast.parse(inspect.getsource(cli))
+    sweeping, silent = 0, []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        loops = [
+            loop
+            for loop in ast.walk(node)
+            if isinstance(loop, ast.For)
+            and "paths" in {n.id for n in ast.walk(loop.iter) if isinstance(n, ast.Name)}
+            and node.name not in {"_resolve", "_candidates"}
+        ]
+        for loop in loops:
+            sweeping += 1
+            called = {
+                c.func.id
+                for c in ast.walk(loop)
+                if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+            }
+            if "_progress" not in called:
+                silent.append(node.name)
+    assert sweeping >= 2, f"found only {sweeping} sweeps over specs"
+    assert not silent, f"these sweep specs without reporting progress: {silent}"
+    assert cli.RESPONSIVENESS_THRESHOLD_SECONDS > 0
+
+
+def test_progress_names_the_activity_on_a_terminal_and_stays_off_a_pipe(tmp_path, monkeypatch):
+    import anvilate.cli as cli
+
+    first, second = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    first.write_text(_SPEC, encoding="utf-8")
+    second.write_text(_SPEC.replace("deck_plate", "other_plate"), encoding="utf-8")
+    _code, _out, piped = _run("export", str(first), str(second))
+    assert "assembling the bundle" not in piped
+    monkeypatch.setattr(cli, "_is_terminal", lambda _stream: True)
+    _code, _out, watched = _run("export", str(first), str(second))
+    assert f"[1/2] assembling the bundle for {first}" in watched
+    assert f"[2/2] assembling the bundle for {second}" in watched
