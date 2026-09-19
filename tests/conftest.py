@@ -261,6 +261,19 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         session.exitstatus = 1
         return
 
+    # Every check a module screen emitted evaluates a registered limit state. Positive
+    # evidence — only checks this run built are read — so a filtered run checks its subset.
+    unregistered = _unregistered_checks()
+    if unregistered:
+        print(
+            "\nLIMIT STATES: these module checks evaluate no registered limit state. Add each "
+            "to anvilate.limit_states.DEFAULT_LIMIT_STATES — under an existing id if another "
+            "screen already implements it, and then compose that implementation:\n  "
+            + "\n  ".join(unregistered)
+        )
+        session.exitstatus = 1
+        return
+
     _report_render_truth(session, full_run=False)
     _report_typesetting(session, full_run=False)
     _report_repair_hints(session, full_run=False)
@@ -333,6 +346,25 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         print(
             "\nMODULE STANDARDS: a manifest and the citations its own screens write "
             "disagree:\n  " + "\n  ".join(drift)
+        )
+        session.exitstatus = 1
+        return
+
+    # And every registered check was emitted by its screen somewhere in the run: a binding
+    # nothing produces is an identity the duplicate rule keys on for a check that does not
+    # exist. An absence, so below the guard; floored so an empty record cannot pass.
+    if len(_screen_checks) < 200:
+        print(
+            f"\nLIMIT STATES: only {len(_screen_checks)} module checks were observed, so this "
+            "gate is measuring an all but empty population"
+        )
+        session.exitstatus = 1
+        return
+    unemitted = _unemitted_bindings()
+    if unemitted:
+        print(
+            "\nLIMIT STATES: these registered checks were never emitted by their screen in "
+            "this run; strike the binding or fix the check name:\n  " + "\n  ".join(unemitted)
         )
         session.exitstatus = 1
         return
@@ -669,6 +701,10 @@ _screens_run: set[str] = set()
 #: pack and not to whatever composed it.
 _screen_standards: dict[str, set[str]] = {}
 
+#: Every (innermost pack screen, entry name) the suite built, for the limit-state gate: which
+#: registered limit state each module check evaluates, read off what the screens emitted.
+_screen_checks: set[tuple[str, str]] = set()
+
 #: Where a pack's screens live, for the stack walk below.
 _PACKS_DIR = _SRC / "packs"
 
@@ -698,6 +734,8 @@ def _install_the_screen_collector() -> None:
             if path.parent == _PACKS_DIR and frame.f_code.co_name.startswith("screen_"):
                 if body is not None and innermost:
                     _screen_standards.setdefault(path.stem, set()).add(body)
+                if innermost:
+                    _screen_checks.add((f"{path.stem}.{frame.f_code.co_name}", entry.name))
                 innermost = False
                 # EVERY screen frame on the stack, not the nearest one. `screen_structure`
                 # dispatches each member back through the element registry, so the entries
@@ -752,6 +790,34 @@ def _standards_drift() -> list[str]:
 def _observed_standard_citations() -> int:
     """How many (module, body) pairs the run saw — the population the gate measured."""
     return sum(len(bodies) for bodies in _screen_standards.values())
+
+
+def _unregistered_checks() -> list[str]:
+    """Every module check this run built that no registered limit state names."""
+    from anvilate.limit_states import DEFAULT_LIMIT_STATES
+
+    return sorted(
+        f"{screen}: {name}"
+        for screen, name in _screen_checks
+        if DEFAULT_LIMIT_STATES.identify(screen, name) is None
+    )
+
+
+def _unemitted_bindings() -> list[str]:
+    """Every registered (screen, check) no entry of this run was identified as."""
+    from anvilate.limit_states import DEFAULT_LIMIT_STATES
+
+    emitted = set()
+    for screen, name in _screen_checks:
+        match = DEFAULT_LIMIT_STATES._match(screen, name)
+        if match is not None:
+            emitted.add(str(match[1]))
+    return sorted(
+        str(binding)
+        for state in DEFAULT_LIMIT_STATES
+        for binding in state.evaluated_by
+        if str(binding) not in emitted
+    )
 
 
 def _unexercised_screens() -> list[str]:

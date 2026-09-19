@@ -119,6 +119,9 @@ step:
 3. **Add the manifest** to `MODULE_MANIFESTS`: id, version, unit default, the standards its
    checks cite, the material properties it needs, the tiers it touches, its dependencies,
    its screens, its coverage, and a sentence saying what it is for.
+   Then register each limit state its checks evaluate in
+   `anvilate.limit_states.DEFAULT_LIMIT_STATES`: an id, what the limit state is, and the
+   (screen, check) pairs that evaluate it.
 4. **Run the suite.** Five gates will disagree with you if the manifest and the pack do not
    match: the screens it names against the pack's exports, the tags it covers against the
    registry, the standards it declares against the citations its own entries write, the
@@ -129,15 +132,23 @@ step:
    telling you the contract is wrong, which is a different change.
 
 Composition over duplication: a module reuses an existing screen where one exists rather
-than shipping a second implementation of the same limit state. Detecting that automatically
-needs an identity for a limit state, which is the one part of this contract the library
-cannot check yet — a check is named after its element instance, so two modules implementing
-"plate bending" do not say so in any way a gate can read.
+than shipping a second implementation of the same limit state. A check's name can't show
+this, because it is named after its element instance, and one name can cover two limit
+states: the base plate's `concrete bearing` is AISC §J8 unconfined, while the pedestal's is
+ACI 318 §22.8.3 with confinement. So identity is a registry id (`anvilate.limit_states`),
+and three gates key on it:
+
+| Gate | Fails when |
+| --- | --- |
+| Registry | An id is registered twice (naming both implementations), a check is bound to two ids, or two screens share an id without naming the one implementation they call. |
+| Composition (`tests/test_limit_states.py`) | A screen evaluating a shared limit state does not call its named implementation. The check reads the screen's own call graph and the symbol's identity, so a same-named local function does not count. |
+| Emission (`tests/conftest.py`) | A module check the suite built resolves to no registered limit state. On a full run, it also fails when a registered check was never emitted. |
 
 ## Status
 
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
 exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
-3.3), the loader (2.2), declared coverage (1.2) and the authoring page (5.1). Duplicate-limit-state detection across modules — which wants a
-limit-state identity the library does not have yet, since a check is named after its
-element instance — and out-of-tree modules are what remain.
+3.3), the loader (2.2), declared coverage (1.2), the authoring page (5.1) and
+duplicate-limit-state detection by registry id (2.3): 56 limit states across the 59 checks
+the shipped modules emit, one of them shared by two screens through AISC §E3's
+`aisc_flexural_buckling_stress`. Out-of-tree modules are what remain.

@@ -15,7 +15,9 @@
 
 - [x] 2.1 Manifests for the nine shipped packs, asserted against what each already exposes
 - [x] 2.2 Loader honoring enable/disable, lazy import, and declared dependencies
-- [ ] 2.3 Duplicate-limit-state detection across loaded modules
+- [x] 2.3 Duplicate-limit-state detection across loaded modules — `anvilate.limit_states`:
+      a registry id per limit state, with the registry, composition and emission gates in
+      docs/discipline-modules.md
 
 ## 3. Gates
 

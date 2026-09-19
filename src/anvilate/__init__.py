@@ -75,6 +75,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.interop` — the typed doorway for member forces and section
   properties computed by some other tool.
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
+- :mod:`anvilate.limit_states` — limit states by identity: which module check evaluates
+  what, and the one implementation every screen evaluating it composes.
 - :mod:`anvilate.margin` — the margin ledger: every conservatism applied to a
   result, attributed, multiplied out, and its duplicates named.
 - :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
