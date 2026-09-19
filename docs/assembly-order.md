@@ -50,6 +50,8 @@ The same adjustment made in `open` passes. Routed through a declared side port, 
 in `closed` too. With no route declared, it is not evaluated: an undeclared route is not a
 clear one. An adjustment in a state the build never defines is refused by name.
 
+[`examples/sealed_housing_adjustment.py`](../examples/sealed_housing_adjustment.py) is the whole case: a lens focused after its housing is sealed, through the opening the cover closes, and the revision that routes it through a sealed side port instead.
+
 ## Whether the tool reaches
 
 A fastener that fits may still be one no tool can turn. A `ToolEnvelope` is the space a tool
@@ -74,5 +76,4 @@ a part missing.
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
 envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1, 2.3, 2.4, 3.1, 4.1–4.5). Not built yet: the swing-arc screen, serviceability and inspectability, the failure-mode entries and
-the sealed-housing example.
+1.1–1.4, 2.1, 2.3, 2.4, 3.1, 4.1–4.5, 5.1). Not built yet: the swing-arc screen, serviceability and inspectability, repair hints on the access findings, and the rest of the failure-mode entries.

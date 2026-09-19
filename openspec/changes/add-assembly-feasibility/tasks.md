@@ -38,5 +38,5 @@
 
 ## 5. Docs & examples
 
-- [ ] 5.1 Example: a sealed housing whose internal adjustment fails post-closure access,
-      and the revision that fixes it
+- [x] 5.1 Example: a sealed housing whose internal adjustment fails post-closure access,
+      and the revision that fixes it — examples/sealed_housing_adjustment.py

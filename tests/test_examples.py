@@ -9417,3 +9417,13 @@ def test_enclosure_keepouts_example_fails_on_its_corridor_and_passes_repaired():
     assert corridor.repair_hint.corrective_value == pytest.approx(19.5, abs=0.01)
     assert namespace["repaired_card"]().status is CheckStatus.PASS
     _assert_narrates_rendered("enclosure_keepouts.py", namespace)
+
+
+def test_sealed_housing_example_cannot_focus_once_closed_until_the_side_port():
+    namespace = runpy.run_path(str(_EXAMPLES / "sealed_housing_adjustment.py"))
+    (drawn,) = namespace["card"]().entries
+    assert drawn.status is CheckStatus.FAIL
+    assert "cover (installed in closed) occupies top opening" in drawn.detail
+    (revised,) = namespace["repaired_card"]().entries
+    assert revised.status is CheckStatus.PASS
+    assert "reachable in closed via side port" in revised.detail
