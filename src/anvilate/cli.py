@@ -71,7 +71,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Literal, TextIO
 
-from ._cli_output import error_document, machine_document, refusal_document
+from ._cli_output import cancelled_document, error_document, machine_document, refusal_document
 from ._models import _refusal_line
 from .evidence import provenance_for
 from .failure_modes import CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS, facts_from_spec
@@ -92,6 +92,18 @@ EXIT_INTERNAL_ERROR = 5
 # A card whose worst entry is a warning: nothing failed and everything ran, and the design
 # is inside a band its document asked to hear about. Not 0, because it is not a pass.
 EXIT_WARNING = 6
+# The user stopped the run: 128 + SIGINT, the shell's own convention. Not a verdict, a
+# refusal or a defect, and reported as none of them.
+EXIT_CANCELLED = 130
+
+
+class _Cancelled(Exception):
+    """An interrupt caught where the command knows how far it got."""
+
+    def __init__(self, completed: str) -> None:
+        super().__init__(completed)
+        self.completed = completed
+
 
 #: The exit code for each rolled-up scorecard status, and nothing else. Written as a total
 #: map over the enumeration rather than an if-chain with an else, so a fifth status is a
@@ -595,6 +607,27 @@ def run(
             code = _doctor(args, out=command_out)
         else:
             code = _check(args, out=command_out, err=command_err)
+    except (KeyboardInterrupt, _Cancelled) as stopped:
+        completed = (
+            stopped.completed
+            if isinstance(stopped, _Cancelled)
+            else "the command did not reach a result"
+        )
+        print(
+            f"anvilate {args.command}: cancelled — {completed}; nothing was reported as a "
+            "verdict and no partial artifact was left as complete",
+            file=err,
+        )
+        if json_requested:
+            print(
+                json.dumps(
+                    cancelled_document(args.command, completed=completed),
+                    indent=2,
+                    sort_keys=True,
+                ),
+                file=out,
+            )
+        return EXIT_CANCELLED
     except Exception as failure:
         print(
             f"anvilate {args.command}: internal error: {type(failure).__name__}: {failure}",
@@ -2586,10 +2619,15 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     for index, path in enumerate(paths, start=1):
         if progress:
             print(f"[{index}/{len(paths)}] screening {path}", file=err, flush=True)
-        spec = _load(path, err=err, command="check")
-        if isinstance(spec, int):
-            return spec
-        results.append((path, spec, screen_spec(spec)))
+        try:
+            spec = _load(path, err=err, command="check")
+            if isinstance(spec, int):
+                return spec
+            results.append((path, spec, screen_spec(spec)))
+        except KeyboardInterrupt:
+            raise _Cancelled(
+                f"{len(results)} of {len(paths)} spec{'s' if len(paths) != 1 else ''} screened"
+            ) from None
 
     if args.format == "json":
         # A list whatever the count. A shape that changes with the number of arguments is a

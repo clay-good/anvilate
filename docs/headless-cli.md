@@ -385,6 +385,7 @@ than collapsing to pass/fail:
 | 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
 | 5 | Anvilate itself failed unexpectedly; retry once, then report the diagnostic as a bug |
+| 130 | the run was cancelled (Ctrl-C). Its own outcome, never a verdict: stderr says how far it got, `--format json` writes `outcome: "cancelled"` with what it completed, and nothing is reported as a result |
 | 6 | every check ran and met its limit, and one is inside a caution band its document declared, such as a keepout's clearance margin — **not a pass**, and not a failure |
 
 ### The JSON says what the text says

@@ -114,6 +114,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### CLI output 1.47.0: a cancelled run
+
+A run the user stops is its own outcome. `outcome: "cancelled"` with `exit_code: 130` states
+what it completed, such as `1 of 2 specs screened`, and how to finish the rest. It is never a
+verdict, a refusal or an error, and nothing from the run is reported as a result.
+
 ### Design Spec 1.17.0: how the build goes together
 
 `assembly` declares the build's states in order, its parts with their insertion directions

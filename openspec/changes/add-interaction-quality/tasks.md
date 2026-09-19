@@ -8,7 +8,9 @@
       is 1/1, and cancellation or failure ends at 0/1 without claiming completion
 - [ ] 1.2 Threshold rule — any operation that can exceed it reports progress
 - [ ] 1.3 Estimates derived from completed same-kind work only, and labeled estimates
-- [ ] 1.4 Cancellation at any point; partial artifacts removed or marked partial
+- [x] 1.4 Cancellation at any point; partial artifacts removed or marked partial — the CLI
+      reports a cancelled run as its own outcome (exit 130) with what it completed, and
+      exports write atomically, so an interrupt leaves no partial artifact
 - [ ] 1.5 Cancellation terminates subprocess solvers and sandboxes, verified
 
 ## 2. Message quality

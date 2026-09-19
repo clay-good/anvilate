@@ -33,10 +33,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.46.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.47.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.46.0.json"]
-SchemaVersion = Literal["1.46.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.47.0.json"]
+SchemaVersion = Literal["1.47.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -320,6 +320,18 @@ class ErrorOutput(_WireModel):
     remedy: Named
 
 
+class CancelledOutput(_WireModel):
+    """A run the user stopped: its own outcome, neither a verdict, a refusal nor a defect."""
+
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Named
+    outcome: Literal["cancelled"]
+    exit_code: Literal[130]
+    completed: Named
+    remedy: Named
+
+
 class DoctorCheck(_WireModel):
     name: Named
     status: Literal["pass", "fail"]
@@ -363,6 +375,7 @@ CliOutput = (
     | DiffOutput
     | RefusalOutput
     | ErrorOutput
+    | CancelledOutput
     | DoctorOutput
     | InterfacesOutput
 )
@@ -396,6 +409,19 @@ def refusal_document(
             "exit_code": exit_code,
             "diagnostics": diagnostics,
             "remedy": remedy,
+        },
+    )
+
+
+def cancelled_document(command: str, *, completed: str) -> dict:
+    """A run the user stopped, stating what it finished and how to finish the rest."""
+    return machine_document(
+        command,
+        {
+            "outcome": "cancelled",
+            "exit_code": 130,
+            "completed": completed,
+            "remedy": f"Run anvilate {command} again to finish; nothing was reported as a verdict.",
         },
     )
 

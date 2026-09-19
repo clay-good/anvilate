@@ -851,8 +851,13 @@ def test_an_interrupt_is_control_flow_not_an_internal_error(spec_file, monkeypat
         raise KeyboardInterrupt
 
     monkeypatch.setattr(screening, "screen_spec", interrupted)
-    with pytest.raises(KeyboardInterrupt):
-        _run("check", str(spec_file), "--format", "json")
+    # Never swallowed into an internal error (5). Interaction quality 1.4 makes it its own
+    # outcome rather than a traceback: cancelled, 130, saying how far it got.
+    from anvilate.cli import EXIT_CANCELLED, EXIT_INTERNAL_ERROR
+
+    code, raw, _err = _run("check", str(spec_file), "--format", "json")
+    assert code == EXIT_CANCELLED != EXIT_INTERNAL_ERROR
+    assert json.loads(raw)["outcome"] == "cancelled"
 
 
 def test_the_artifact_list_is_the_mcp_tools_own():
@@ -4638,3 +4643,35 @@ def test_a_terminal_gets_lines_wrapped_to_its_width_and_nothing_else_does() -> N
     terminal = _Terminal()
     assert _for_the_terminal(terminal, json_requested=True) is terminal
     assert isinstance(_for_the_terminal(terminal, json_requested=False), _Wrapped)
+
+
+def test_a_cancelled_run_is_its_own_outcome_and_says_how_far_it_got(tmp_path, monkeypatch):
+    """Interaction quality 1.4: cancelled is not a pass, a failure or an error."""
+    import anvilate.screening as screening
+    from anvilate.cli import EXIT_CANCELLED, EXIT_CODES, EXIT_INTERNAL_ERROR
+
+    first, second = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    first.write_text(_SPEC, encoding="utf-8")
+    second.write_text(_SPEC.replace("deck_plate", "other_plate"), encoding="utf-8")
+    real = screening.screen_spec
+    calls = []
+
+    def interrupted(spec, *args, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append(spec.name)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        return real(spec, *args, **kwargs)
+
+    monkeypatch.setattr(screening, "screen_spec", interrupted)
+    code, out, err = _run("check", str(first), str(second))
+    assert code == EXIT_CANCELLED
+    assert code not in set(EXIT_CODES.values()) | {EXIT_INTERNAL_ERROR}
+    assert "cancelled — 1 of 2 specs screened" in err
+    assert "nothing was reported as a verdict" in err
+    assert out == ""  # no card, no summary line: nothing presented as a result
+    calls.clear()
+    code, raw, _err = _run("check", "--format", "json", str(first), str(second))
+    payload = json.loads(raw)
+    assert code == EXIT_CANCELLED
+    assert payload["outcome"] == "cancelled" and payload["exit_code"] == 130
+    assert payload["completed"] == "1 of 2 specs screened"
