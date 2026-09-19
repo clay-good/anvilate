@@ -55,6 +55,13 @@ from .provenance import Provenanced
 __all__ = [
     "DesignSpec",
     "ConstraintDeclaration",
+    "Keepout",
+    "KeepoutRule",
+    "PrismKeepout",
+    "CylinderKeepout",
+    "FrustumKeepout",
+    "SweptProfileKeepout",
+    "ImportedBodyKeepout",
     "Envelope",
     "MaterialRef",
     "ManufacturingProcess",
@@ -321,6 +328,143 @@ class ConstraintDeclaration(_Base):
         # The tally's own refusals — an intended freedom a constraint removes anyway, one
         # declared twice — belong at load, where the document is wrong, not at screening.
         tally("the part", self.frame, self.constraints, intended=self.intended)
+        return self
+
+
+# --- Keepout envelopes ---
+
+
+def _positive(owner: str, **extents: Quantity) -> None:
+    for field, value in extents.items():
+        if value.to("mm").magnitude <= 0:
+            raise ValueError(
+                f"{owner} {field} must be positive; got {value}. A keepout with no volume is a "
+                "constraint nothing can violate, and it would pass forever"
+            )
+
+
+class PrismKeepout(_Base):
+    """A rectangular block of protected space: width by depth by height."""
+
+    rule: Literal["prism"] = "prism"
+    width: Length
+    depth: Length
+    height: Length
+
+    @model_validator(mode="after")
+    def _a_volume(self) -> PrismKeepout:
+        _positive("a prism keepout's", width=self.width, depth=self.depth, height=self.height)
+        return self
+
+
+class CylinderKeepout(_Base):
+    """A cylinder of protected space: a connector's mating bore, a shaft's swept radius."""
+
+    rule: Literal["cylinder"] = "cylinder"
+    diameter: Length
+    height: Length
+
+    @model_validator(mode="after")
+    def _a_volume(self) -> CylinderKeepout:
+        _positive("a cylinder keepout's", diameter=self.diameter, height=self.height)
+        return self
+
+
+class FrustumKeepout(_Base):
+    """A cone or frustum: a beam converging to a focus, a tool's approach cone.
+
+    ``top_diameter`` may be zero, which is a cone, but not both ends: a frustum with no
+    base and no top has no volume.
+    """
+
+    rule: Literal["frustum"] = "frustum"
+    base_diameter: Length
+    top_diameter: Length
+    height: Length
+
+    @model_validator(mode="after")
+    def _a_volume(self) -> FrustumKeepout:
+        _positive("a frustum keepout's", base_diameter=self.base_diameter, height=self.height)
+        if self.top_diameter.to("mm").magnitude < 0:
+            raise ValueError(
+                f"a frustum keepout's top_diameter cannot be negative; got {self.top_diameter}"
+            )
+        return self
+
+
+class SweptProfileKeepout(_Base):
+    """A rectangular section swept along a straight path: a service-access corridor."""
+
+    rule: Literal["swept_profile"] = "swept_profile"
+    profile_width: Length
+    profile_height: Length
+    path_length: Length
+
+    @model_validator(mode="after")
+    def _a_volume(self) -> SweptProfileKeepout:
+        _positive(
+            "a swept-profile keepout's",
+            profile_width=self.profile_width,
+            profile_height=self.profile_height,
+            path_length=self.path_length,
+        )
+        return self
+
+
+class ImportedBodyKeepout(_Base):
+    """A body another tool generated, named by its source and the digest of its file.
+
+    ``volume`` is the body's own, as its tool reported it, and must be positive for the
+    same reason every other rule's extents must be.
+    """
+
+    rule: Literal["imported_body"] = "imported_body"
+    source: Provenance
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    volume: Annotated[Quantity, AfterValidator(require_dimension("[length]**3", name="volume"))]
+
+    @model_validator(mode="after")
+    def _a_volume(self) -> ImportedBodyKeepout:
+        if self.volume.to("mm**3").magnitude <= 0:
+            raise ValueError(
+                f"an imported keepout's volume must be positive; got {self.volume}. A keepout "
+                "with no volume is a constraint nothing can violate, and it would pass forever"
+            )
+        return self
+
+
+KeepoutRule = Annotated[
+    PrismKeepout | CylinderKeepout | FrustumKeepout | SweptProfileKeepout | ImportedBodyKeepout,
+    Field(discriminator="rule"),
+]
+
+
+class Keepout(_Base):
+    """A volume the part must leave empty, why, and what it moves with.
+
+    ``anchor`` is the tag or datum the keepout is positioned against, so it moves when that
+    feature moves; a keepout fixed in absolute space would stop protecting the right region
+    the moment the feature it exists for moved, and its check would keep passing. The
+    ``reason`` is required, because a protected volume nobody can explain cannot be weighed
+    against a change that wants the space. ``clearance_margin`` is a band around the
+    protected core: material inside it warns, material in the core fails. ``owner`` is who
+    declared it, the user or a named module.
+    """
+
+    tag: Named
+    anchor: Named
+    rule: KeepoutRule
+    clearance_margin: Length
+    reason: Provenance
+    owner: Named = "user"
+
+    @model_validator(mode="after")
+    def _a_margin(self) -> Keepout:
+        if self.clearance_margin.to("mm").magnitude < 0:
+            raise ValueError(
+                f"keepout '{self.tag}': clearance_margin cannot be negative; got "
+                f"{self.clearance_margin}"
+            )
         return self
 
 
@@ -747,12 +891,11 @@ class AcceptanceCriteria(_Base):
 # contributor, 1.11.0 acceptance.depth, the screening depth a document asks for, and 1.12.0
 # the environment a part lives in with an interface's kind and mating material, and 1.13.0
 # the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
-# how the part is located. All additive, which is
-# what lets an older 1.x spec load unchanged — and it comes back saying which version it is,
-# not this one. The
-# version a document carries is a record of what it is, never an assertion that it is
-# current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.14.0"
+# how the part is located, and 1.15.0 keepouts, the volumes it must leave empty. All
+# additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
+# which version it is, not this one. The version a document carries is a record of what it
+# is, never an assertion that it is current; see `migrate_to_current`.
+SCHEMA_VERSION = "1.15.0"
 
 
 class DesignSpec(_Base):
@@ -808,6 +951,10 @@ class DesignSpec(_Base):
     # over-constrained load path is indeterminate, and every element check the part's own
     # screen runs then says so. Optional: a document that says nothing is not counted.
     constraint_topology: ConstraintDeclaration | None = None
+    # Volumes the part must leave empty, each with its reason and the feature it moves with.
+    # Declared here and screened as not evaluated until intrusion is checked against built
+    # geometry, so a declared keepout can never read as a pass it was not measured for.
+    keepouts: tuple[Keepout, ...] = ()
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
 
@@ -825,6 +972,14 @@ class DesignSpec(_Base):
         serialiser emits: a mapping that does not parse stays a mapping.
         """
         return rebuilt_quantities(value)
+
+    @model_validator(mode="after")
+    def _one_keepout_per_tag(self) -> DesignSpec:
+        tags = [keepout.tag for keepout in self.keepouts]
+        repeated = sorted({tag for tag in tags if tags.count(tag) > 1})
+        if repeated:
+            raise ValueError(f"keepouts declare the tag {repeated} more than once")
+        return self
 
     @model_validator(mode="after")
     def _a_constraint_acts_at_a_declared_feature(self) -> DesignSpec:

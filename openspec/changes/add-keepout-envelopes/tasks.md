@@ -2,9 +2,11 @@
 
 ## 1. Declaration
 
-- [ ] 1.1 Spec IR keepout type: tag, generating rule, clearance margin, reason, owner
-- [ ] 1.2 Generating rules: prism, cylinder, cone/frustum, swept profile, imported body
-- [ ] 1.3 Schema validation, round-trip, and diff legibility
+- [x] 1.1 Spec IR keepout type: tag, generating rule, clearance margin, reason, owner — `keepouts`
+      on the Design Spec (1.15.0), each anchored to a tag or datum it moves with
+- [x] 1.2 Generating rules: prism, cylinder, cone/frustum, swept profile, imported body — declared
+      and validated; generating their geometry is 2.x
+- [x] 1.3 Schema validation, round-trip, and diff legibility
 
 ## 2. Generation
 
@@ -17,7 +19,8 @@
 
 - [ ] 3.1 T0 intrusion check: intersection volume, worst penetration depth, intruding tag
 - [ ] 3.2 Clearance-margin band: intrusion into the margin warns, into the core fails
-- [ ] 3.3 Not-evaluated when a declared keepout was not generated or not checked
+- [x] 3.3 Not-evaluated when a declared keepout was not generated or not checked — every
+      declared keepout until intrusion is measured, naming a lost anchor
 - [ ] 3.4 Repair hint naming the intruding feature and the direction that resolves it
 
 ## 4. Export
@@ -28,9 +31,9 @@
 ## 5. Tests
 
 - [ ] 5.1 A rib added to fix deflection intrudes on a keepout and the card fails
-- [ ] 5.2 A keepout declared and never generated reports not-evaluated, never a pass
+- [x] 5.2 A keepout declared and never generated reports not-evaluated, never a pass
 - [ ] 5.3 Exported keepout body is present, labeled, and absent from the machinable solid
-- [ ] 5.4 Zero-volume and inverted keepouts are refused rather than passing vacuously
+- [x] 5.4 Zero-volume and inverted keepouts are refused rather than passing vacuously
 
 ## 6. Docs & examples
 

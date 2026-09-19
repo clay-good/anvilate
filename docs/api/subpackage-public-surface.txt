@@ -136,6 +136,13 @@ spec.ChainLink
 spec.CircularLocator
 spec.Constraints
 spec.ConstraintDeclaration
+spec.Keepout
+spec.KeepoutRule
+spec.PrismKeepout
+spec.CylinderKeepout
+spec.FrustumKeepout
+spec.SweptProfileKeepout
+spec.ImportedBodyKeepout
 spec.DesignSpec
 spec.DimensionChain
 spec.Envelope
@@ -172,6 +179,13 @@ spec.ir.ChainAnalysis
 spec.ir.ChainLink
 spec.ir.CircularLocator
 spec.ir.ConstraintDeclaration
+spec.ir.Keepout
+spec.ir.KeepoutRule
+spec.ir.PrismKeepout
+spec.ir.CylinderKeepout
+spec.ir.FrustumKeepout
+spec.ir.SweptProfileKeepout
+spec.ir.ImportedBodyKeepout
 spec.ir.Constraints
 spec.ir.DesignSpec
 spec.ir.DimensionChain

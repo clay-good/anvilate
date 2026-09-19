@@ -175,7 +175,7 @@ as a change of nothing.
 
 ## The refusals that state nothing
 
-Nine of the screening module's thirty-two refusals state a need today. The rest are listed
+Nine of the screening module's thirty-three refusals state a need today. The rest are listed
 in [`docs/api/refusals-without-needs.txt`](api/refusals-without-needs.txt) with a cause per
 site, because not every refusal has a declaration behind it: some report a capability this
 library has not built (T0 geometry, T3 FEA, a published contract that needs built geometry),

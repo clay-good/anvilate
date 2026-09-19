@@ -471,6 +471,42 @@ def _topology(spec: DesignSpec) -> ConstraintTally:
     return tally(spec.name, declared.frame, declared.constraints, intended=declared.intended)
 
 
+def _keepout_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """One not-evaluated entry per declared keepout, until intrusion is checked on geometry.
+
+    A keepout is checked by intersecting it with the built part, which screening a document
+    does not do. So each declared keepout says it was not checked, naming it, its reason and
+    what it is anchored to, and the card cannot pass on a volume nobody measured. An anchor
+    the document no longer carries is named too: a keepout that lost its feature protects
+    nothing in particular.
+    """
+    tags = {
+        *(interface.tag for interface in spec.interfaces),
+        *(dimension.tag for dimension in spec.dimensions),
+        *(tolerance.feature for tolerance in spec.geometric_tolerances),
+    }
+    entries = []
+    for keepout in spec.keepouts:
+        anchored = (
+            f"anchored to '{keepout.anchor}'"
+            if keepout.anchor in tags
+            else f"anchored to '{keepout.anchor}', which this document no longer tags"
+        )
+        entries.append(
+            ScorecardEntry(
+                name=f"keepout {keepout.tag}",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"keepout '{keepout.tag}' ({keepout.reason}; a {keepout.rule.rule} with a "
+                    f"{keepout.clearance_margin} clearance margin, {anchored}, declared by "
+                    f"{keepout.owner}) was not checked: intrusion is measured against the "
+                    "built part's geometry, which screening a document does not generate"
+                ),
+            )
+        )
+    return entries
+
+
 def _on_the_declared_load_path(
     spec: DesignSpec, entries: list[ScorecardEntry]
 ) -> list[ScorecardEntry]:
@@ -1693,6 +1729,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     entries.extend(_constraint_entries(spec))
     if spec.constraint_topology is not None:
         entries.append(_topology(spec).entry())
+    entries.extend(_keepout_entries(spec))
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:

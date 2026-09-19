@@ -114,6 +114,16 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.15.0: the volumes the part must leave empty
+
+`keepouts` declares each protected volume: its tag, the tag or datum it is anchored to and
+moves with, a generating rule (prism, cylinder, frustum, swept profile or an imported body
+named by its digest), a clearance margin, a required reason and its owner. A keepout with
+no volume, no reason or no anchor is refused. Screening reports each one as not evaluated
+until intrusion is checked against built geometry, naming an anchor the document no longer
+tags; see [spec screening](spec-screening.md). Evidence Bundle 1.16.0 and CLI output 1.43.0
+carry the same document.
+
 ### Design Spec 1.14.0: how the part is located
 
 `constraint_topology` declares a named frame, the constraints locating the part — each with

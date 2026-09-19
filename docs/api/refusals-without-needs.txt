@@ -27,3 +27,4 @@ _screen_element | T1 analytical | three correction sites: an element_type the re
 screen_spec | T0 geometry | a capability gap: T0 checks a built solid and no geometry is generated from a spec today
 screen_spec | T3 FEA | a capability gap: T3 is bounded by a convergence criterion rather than by the size of its input
 screen_structure_element | T1 analytical | a correction: a structure cannot be a member of a structure, and the fix is to list its members alongside the others
+_keepout_entries | keepout {keepout.tag} | a capability gap: intrusion is measured by intersecting the keepout with the built part, and screening a document builds no geometry, so no declaration would let it run
