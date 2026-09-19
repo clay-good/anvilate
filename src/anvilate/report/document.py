@@ -536,6 +536,11 @@ class CalculationReport(StatableModel):
                 required = f"{entry.required_safety_factor:.2f}"
             else:
                 required = f"{entry.required_safety_factor:.2f}–{entry.upper_safety_factor:.2f}"
+            # "1.00" beside a pile at factor of safety 3 reads as no margin; the factor the
+            # capacity already carries is shown in the same cell as the requirement.
+            if entry.applied_factors and required != _NO_FIGURE:
+                inside = " × ".join(f"{factor.value:g}" for factor in entry.applied_factors)
+                required = f"{required} (× {inside} inside)"
             rows.append((entry.name, factor, required, _STATUS_LABEL[entry.status]))
         return tuple(rows)
 

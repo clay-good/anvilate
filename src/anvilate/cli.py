@@ -2891,6 +2891,11 @@ def _render(
         # and printed the detail alone, so every cited check read as an uncited one.
         if entry.reference:
             lines.append(f"                 [{entry.reference}]")
+        # A verdict at "1.00 required" whose margin sits inside the capacity reads as no
+        # margin at all unless the factor is printed beside it.
+        inside = entry.inside_capacity()
+        if inside:
+            lines.append(f"                 {inside}")
         # The repair hint is the most actionable thing a failing entry carries — where a
         # design inverse exists it is the value that lands exactly on the required margin —
         # and it was printed by the calculation report and by nothing at the shell. A reader

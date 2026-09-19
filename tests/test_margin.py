@@ -659,3 +659,22 @@ def test_an_applied_factor_renders_its_value_its_authority_and_its_origin():
     assert str(uncited) == "design factor N_d 2 (uncited; from design category A)"
     with pytest.raises(ValidationError, match="at least 1"):
         AppliedFactor(label="relief", value=0.8, origin="element: x")
+
+
+def test_a_factor_inside_the_capacity_is_printed_wherever_the_verdict_is():
+    """ "1.08 vs required minimum 1.00" read as 8% margin on a pile carrying 3.24 on its
+    ultimate capacity; the factor was in the JSON and the ledger and on no line a person read."""
+    from anvilate.cli import _render
+    from anvilate.packs.geotechnical import screen_driven_pile
+    from anvilate.report import CalculationReport, ReportSection
+
+    card = screen_driven_pile(_pile(factor_of_safety=3.0))
+    (entry,) = card.entries
+    inside = "inside the capacity: factor of safety 3"
+    assert inside in str(entry)
+    assert inside in _render("pile", card)
+    report = CalculationReport(title="pile", sections=(ReportSection(entry=entry),))
+    assert "1.00 (× 3 inside)" in report.to_html()
+    # And nothing is said where nothing is inside.
+    bare = screen_driven_pile(_pile(factor_of_safety=1.0))
+    assert "inside the capacity" not in str(bare.entries[0]) + _render("pile", bare)

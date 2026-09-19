@@ -709,7 +709,20 @@ class ScorecardEntry(StatableModel):
         if self.is_fragile():
             shortfall = self.uncertainty.shortfall_probability * 100.0  # type: ignore[union-attr]
             fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
-        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{cite}"
+        inside = self.inside_capacity()
+        inside = f" — {inside}" if inside else ""
+        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{inside}{cite}"
+
+    def inside_capacity(self) -> str | None:
+        """The factors applied inside the capacity, as one sentence, or ``None``.
+
+        A check judged at 1.0 has its margin inside the capacity, so "safety factor 1.08 vs
+        required minimum 1.00" reads as 8% of margin on a pile carrying 3 × 1.08 on its
+        ultimate capacity. Every surface that prints the verdict prints this beside it.
+        """
+        if not self.applied_factors:
+            return None
+        return "inside the capacity: " + "; ".join(str(f) for f in self.applied_factors)
 
 
 def _refuse_contradictions(entry: ScorecardEntry) -> None:

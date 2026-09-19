@@ -141,7 +141,10 @@ the verdict cannot show it. Such a check records the factor on its entry
 | gear mesh, contact ratio | minimum contact ratio above 1 | user-elected, or the screen's default |
 
 `physics_limited` puts both sides back on the raw basis, so a pile at FS 3 shows the
-ultimate capacity over the load against 3. A gate in `tests/test_margin.py` reads the
+ultimate capacity over the load against 3. The factor is also printed beside the verdict
+wherever the verdict appears: on the entry's line, on `anvilate check`'s card, and in the
+report's margin summary as `1.00 (× 3 inside)`. Without it, "1.08 vs required minimum 1.00"
+reads as an 8% margin on a pile carrying 3.24 on its ultimate capacity. A gate in `tests/test_margin.py` reads the
 source (4.1, 4.2): every check whose `required` is the constant 1.0 either records its
 factor or appears in `docs/api/unity-checks-without-inside-factors.txt` with the reason it
 has none. The usual reason is that its limit is a criterion or a budget, not a strength.
