@@ -370,3 +370,68 @@ def test_a_statistical_basis_below_the_typical_value_is_recorded_as_elected_cons
             origin="o",
             authority="a",
         )
+
+
+def test_every_factor_a_check_applied_is_in_the_ledger_attributed_by_its_source() -> None:
+    """Margin ledger 2.1: a factor cannot be applied without being recorded."""
+    from anvilate.margin import MarginKind, ledger_for
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+    from anvilate.spec import Origin, Provenanced
+
+    class _Constraints:
+        margins = ()
+        min_safety_factor = Provenanced(value=2.0, origin=Origin.USER_STATED)
+
+    class _Spec:
+        constraints = _Constraints()
+
+    def check(name: str, required: float, reference: str | None):  # type: ignore[no-untyped-def]
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.PASS,
+            detail="as screened",
+            safety_factor=required * 1.2,
+            required_safety_factor=required,
+            reference=reference,
+        )
+
+    card = Scorecard(
+        entries=(
+            check("bracket bending", 2.0, "AISC 360-22 F11"),
+            check("weld throat", 1.67, "AISC 360-22 J2.4"),
+            check("pin bearing", 1.5, None),
+            check("buckling", 0.9, "AISC 360-22 E3"),  # below 1 applied nothing
+        )
+    )
+    ledger = ledger_for(card, _Spec())
+    by_quantity = {entry.quantity: entry for entry in ledger.entries}
+    assert set(by_quantity) == {"bracket bending", "weld throat", "pin bearing"}
+    assert by_quantity["bracket bending"].kind is MarginKind.USER_ELECTED
+    assert by_quantity["weld throat"].kind is MarginKind.CODE_REQUIRED
+    assert by_quantity["weld throat"].authority == "AISC 360-22 J2.4"
+    assert by_quantity["pin bearing"].kind is MarginKind.USER_ELECTED
+    assert "uncited default" in by_quantity["pin bearing"].authority
+
+
+def test_across_the_shipped_specs_no_applied_factor_escapes_the_ledger() -> None:
+    """Margin ledger 4.1, measured on what the library screens: every applied factor is recorded.
+
+    Read from the cards the shipped example specs screen to, with a floor, so a screen that
+    stops carrying its required factor, or a ledger that stops reading it, fails here.
+    """
+    from pathlib import Path
+
+    from anvilate.margin import ledger_for
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    applied = 0
+    for path in sorted((Path(__file__).resolve().parents[1] / "examples").glob("*.spec.yaml")):
+        spec = load_spec_yaml(path.read_text(encoding="utf-8"))
+        card = screen_spec(spec)
+        recorded = {entry.quantity for entry in ledger_for(card, spec).entries}
+        for entry in card.entries:
+            if entry.required_safety_factor is not None and entry.required_safety_factor > 1:
+                applied += 1
+                assert entry.name in recorded, f"{path.name}: {entry.name} applied a factor"
+    assert applied >= 5, f"the shipped specs applied only {applied} factors"

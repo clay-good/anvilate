@@ -298,6 +298,7 @@ margin.MarginEntry
 margin.DoubleCount
 margin.MarginStack
 margin.MarginLedger
+margin.ledger_for
 mcp.Cost
 mcp.Dispatch
 mcp.Gate

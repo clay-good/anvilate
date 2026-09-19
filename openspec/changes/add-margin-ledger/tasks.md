@@ -10,8 +10,9 @@
 
 ## 2. Capture
 
-- [ ] 2.1 Thread the ledger through check evaluation so a factor cannot be applied
-      without being recorded
+- [x] 2.1 Thread the ledger through check evaluation so a factor cannot be applied
+      without being recorded — `ledger_for` enters each check's required safety factor,
+      attributed by where it came from, and `anvilate check` renders the combined ledger
 - [x] 2.2 Capture statistical-basis conservatism where a material allowable declares one —
       `MarginEntry.statistical_basis`, typical over allowable; the library applies none itself
 - [x] 2.3 Capture rounding conservatism where a value is snapped to a stock size or a
@@ -29,7 +30,9 @@
 ## 4. Gates
 
 - [ ] 4.1 CI gate: every code path that multiplies or divides a demand or capacity by a
-      factor records a ledger entry — detected structurally over the source, not by name
+      factor records a ledger entry — detected structurally over the source, not by name —
+      measured today over the screened results of every shipped spec, with a floor; the
+      source-level detection is still to build
 - [ ] 4.2 The gate carries a population floor and an enumerated exclusion list with a
       stated cause per exclusion, so it cannot pass by finding nothing
 

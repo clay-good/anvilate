@@ -77,7 +77,7 @@ from ._models import _refusal_line
 from .evidence import provenance_for
 from .failure_modes import CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS, facts_from_spec
 from .failure_modes import coverage as mode_coverage
-from .margin import MarginLedger
+from .margin import ledger_for
 from .needs import LEVERAGE_IS_NOT_IMPORTANCE, needs_report
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, UnitSystem
@@ -2600,9 +2600,9 @@ def _needs_summary(card: Scorecard) -> dict[str, Any]:
     }
 
 
-def _margin_summary(spec) -> dict[str, Any]:
+def _margin_summary(spec, card: Scorecard) -> dict[str, Any]:
     """The declared margins as `_cli_output.MarginSummary` describes them."""
-    ledger = MarginLedger(entries=spec.constraints.margins)
+    ledger = ledger_for(card, spec)
     return {
         "entries": [entry.model_dump(mode="json") for entry in ledger.entries],
         "stacks": [
@@ -2698,7 +2698,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                             else {"name": governing.name, "status": governing.status.value}
                         ),
                         "scorecard": card.model_dump(mode="json"),
-                        "margins": _margin_summary(spec),
+                        "margins": _margin_summary(spec, card),
                         "needs": _needs_summary(card),
                         "failure_modes": _mode_summary(card, spec),
                     }
@@ -2730,7 +2730,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             # the README shows, and a spec that states no conservatism has no ledger to print.
             # The JSON payload carries the empty summary either way.
             if spec.constraints.margins:
-                print("\n" + str(MarginLedger(entries=spec.constraints.margins)), file=out)
+                print("\n" + str(ledger_for(card, spec)), file=out)
         if len(results) > 1:
             worst = _worst_status(card for _p, _s, card in results)
             statuses = [card.status for _p, _s, card in results]

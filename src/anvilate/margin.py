@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from math import isclose, isfinite, prod
-from typing import Self
+from typing import Any, Self
 
 from pydantic import ConfigDict, model_validator
 
@@ -37,6 +37,7 @@ __all__ = [
     "DoubleCount",
     "MarginStack",
     "MarginLedger",
+    "ledger_for",
 ]
 
 
@@ -354,3 +355,45 @@ class MarginLedger(ItemCollection, StatableModel):
         lines += [f"  {s}" for s in self.stacks()]
         lines += [f"  {d}" for d in self.double_counts()]
         return "\n".join(lines)
+
+
+def ledger_for(card: Any, spec: Any) -> MarginLedger:
+    """Every conservatism on a screened card: the document's declared margins and each factor
+    a check applied.
+
+    A check that judged its result against a required safety factor above 1 applied that
+    factor to its capacity, whether or not anyone wrote it down, so it is entered here:
+    as the user's election when it is the document's own ``min_safety_factor``, as
+    code-required when the check cites the clause that obliges it, and as an uncited
+    election otherwise, because a factor with no citation cannot claim to be a code's.
+    """
+    declared = tuple(getattr(getattr(spec, "constraints", None), "margins", ()) or ())
+    stated = getattr(getattr(spec, "constraints", None), "min_safety_factor", None)
+    stated_value = None if stated is None else stated.value
+    applied = []
+    for entry in getattr(card, "entries", ()):
+        required = entry.required_safety_factor
+        if required is None or not isfinite(required) or required <= 1.0:
+            continue
+        if stated_value is not None and isclose(required, stated_value):
+            kind, authority = MarginKind.USER_ELECTED, "the document's min_safety_factor"
+            origin = "spec: constraints.min_safety_factor"
+        elif entry.reference is not None and str(entry.reference).strip():
+            kind, authority = MarginKind.CODE_REQUIRED, str(entry.reference)
+            origin = f"check: {entry.name}"
+        else:
+            kind = MarginKind.USER_ELECTED
+            authority = f"an uncited default of the check {entry.name}"
+            origin = f"check: {entry.name}"
+        applied.append(
+            MarginEntry(
+                label=f"required safety factor on {entry.name}",
+                kind=kind,
+                value=required,
+                quantity=entry.name,
+                action=MarginAction.LOWERS_CAPACITY,
+                origin=origin,
+                authority=authority,
+            )
+        )
+    return MarginLedger(entries=(*declared, *applied))

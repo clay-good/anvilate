@@ -66,7 +66,9 @@
 
 ## 6. Budgets
 
-- [ ] 6.1 Interactive responsiveness budget, measured per release on the reference profile
+- [ ] 6.1 Interactive responsiveness budget, measured per release on the reference profile — BLOCKED:
+      the reference hardware profile and the release process the onboarding and benchmarking
+      specs name are both unbuilt, and a timing gate on shared CI runners measures the machine
 - [x] 6.2 Cache repeated loads of bundled data; assert the cache is hit, not just present —
       every discovered loader is cached, and a repeat screen is served with hits up and misses
       flat

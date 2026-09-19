@@ -119,5 +119,11 @@ too: `budget.evaluate().ledger()` returns them as contingency-or-growth entries.
 
 This is the ledger's contract and arithmetic (`openspec/changes/add-margin-ledger`, groups 1
 and 3), a worked example, the spec field that declares entries, and its rendering on
-`anvilate check` and in the calculation report. The screens do not yet record the factors
-they apply themselves, which is the remaining group of that change.
+`anvilate check` and in the calculation report. `ledger_for(card, spec)` adds every factor a
+check applied to the ones the document declares: a check judged against a required safety
+factor above 1 is entered as the user's election when that factor is the document's own
+`min_safety_factor`, as code-required when the check cites the clause, and as an uncited
+election otherwise. A test screens every shipped example spec and fails if any applied
+factor is missing from its ledger. Not built yet: detecting, over the source rather than the
+screened results, every place a factor is applied, with its exclusions stated (4.1, 4.2),
+and re-evaluating a check at code-required factors only (3.2).

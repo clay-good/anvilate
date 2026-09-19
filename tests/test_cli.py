@@ -4357,7 +4357,8 @@ def test_check_prints_the_declared_margin_ledger_beside_the_card(tmp_path):
     spec_file.write_text(_LUG_SPEC + _MARGINS)
     code, out, _err = _run("check", str(spec_file))
     assert code == 0
-    assert "margin ledger: 3 entries" in out
+    # The three declared factors, and the required factor each of the two checks applied.
+    assert "margin ledger: 5 entries" in out
     assert "2 x 1.15 x 1.1 = 2.53" in out
     assert "code-required x2, elected x1.265" in out
     assert "possible double count on padeye tension" in out
@@ -4370,7 +4371,7 @@ def test_check_prints_the_declared_margin_ledger_beside_the_card(tmp_path):
     assert out.startswith(plain_out.rstrip("\n"))
 
 
-def test_check_json_carries_the_margin_summary_and_an_empty_one(tmp_path):
+def test_check_json_carries_the_margin_summary_and_the_applied_factors(tmp_path):
     from anvilate._cli_output import CheckOutput
 
     declared = tmp_path / "declared.yaml"
@@ -4386,14 +4387,23 @@ def test_check_json_carries_the_margin_summary_and_an_empty_one(tmp_path):
         "BTH-1 design factor",
         "sling angle allowance",
         "dynamic allowance",
+        "required safety factor on padeye net tension",
+        "required safety factor on padeye pin bearing",
     ]
-    (stack,) = summary["stacks"]
+    stack = next(s for s in summary["stacks"] if s["quantity"] == "padeye tension")
     assert stack["cumulative"] == pytest.approx(2.0 * 1.15 * 1.1, rel=1e-12)
     assert stack["physics_limited"] == pytest.approx(2.0, rel=1e-12)
     assert stack["dominant"] == ["BTH-1 design factor"]
     (double,) = summary["double_counts"]
     assert double["origins"] == ["rigging plan RP-3", "spec: loads"]
-    assert by_path[str(plain)] == {"entries": [], "stacks": [], "double_counts": []}
+    # A document that declares no margins still carries the factors its checks applied: the
+    # conservatism is there whether or not anyone wrote it down.
+    plain_summary = by_path[str(plain)]
+    assert [entry["label"] for entry in plain_summary["entries"]] == [
+        "required safety factor on padeye net tension",
+        "required safety factor on padeye pin bearing",
+    ]
+    assert plain_summary["double_counts"] == []
 
 
 _BARE_SPEC = """
