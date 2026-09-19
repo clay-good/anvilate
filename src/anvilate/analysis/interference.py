@@ -216,7 +216,11 @@ def interference_axial_capacity(
     """
     _require(contact_pressure, "[pressure]", "contact_pressure")
     _require(interface_diameter, "[length]", "interface_diameter")
+    if interface_diameter.magnitude <= 0:
+        raise ValueError(f"interface_diameter must be positive; got {interface_diameter}")
     _require(engagement_length, "[length]", "engagement_length")
+    if engagement_length.magnitude <= 0:
+        raise ValueError(f"engagement_length must be positive; got {engagement_length}")
     if friction_coefficient <= 0:
         raise ValueError(f"friction_coefficient must be positive; got {friction_coefficient}")
     force = (

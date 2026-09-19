@@ -111,6 +111,8 @@ def remaining_wall_life(
     """
     _check(current_thickness, "[length]", "current_thickness")
     _check(minimum_thickness, "[length]", "minimum_thickness")
+    if minimum_thickness.magnitude < 0:
+        raise ValueError(f"minimum_thickness must be zero or positive; got {minimum_thickness}")
     _check(corrosion_rate, "[length]/[time]", "corrosion_rate")
     remaining = current_thickness.to("mm").magnitude - minimum_thickness.to("mm").magnitude
     if remaining <= 0:

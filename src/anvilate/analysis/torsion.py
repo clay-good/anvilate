@@ -207,6 +207,8 @@ def shaft_von_mises_stress(
     _require(bending_moment, "[force] * [length]", "bending_moment")
     _require(torque, "[force] * [length]", "torque")
     _require(diameter, "[length]", "diameter")
+    if diameter.magnitude <= 0:
+        raise ValueError(f"diameter must be positive; got {diameter}")
     m = bending_moment.to("N*mm").magnitude
     t = torque.to("N*mm").magnitude
     d = diameter.to("mm").magnitude
@@ -819,6 +821,8 @@ def rectangular_bar_twist_angle(
     """
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
+    if length.magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
     _require(shear_modulus, "[pressure]", "shear_modulus")
     a, b = _rectangular_bar_sides(width, thickness)
     j = Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4").pint
@@ -902,6 +906,8 @@ def elliptical_bar_twist_angle(
     """
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
+    if length.magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
     _require(shear_modulus, "[pressure]", "shear_modulus")
     a, b = _elliptical_axes(semi_major_axis, semi_minor_axis)
     jt = Quantity(magnitude=pi * a**3 * b**3 / (a**2 + b**2), unit="mm**4").pint
@@ -947,6 +953,8 @@ def triangular_bar_twist_angle(
     """
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
+    if length.magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
     _require(shear_modulus, "[pressure]", "shear_modulus")
     s = _triangle_side(side_length)
     jt = Quantity(magnitude=sqrt(3.0) * s**4 / 80.0, unit="mm**4").pint

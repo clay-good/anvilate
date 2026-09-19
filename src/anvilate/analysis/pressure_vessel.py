@@ -1392,6 +1392,8 @@ def thin_wall_sphere_stress(
     """
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
+    if radius.magnitude <= 0:
+        raise ValueError(f"radius must be positive; got {radius}")
     _require(wall_thickness, "[length]", "wall_thickness")
     if wall_thickness.to("mm").magnitude <= 0:
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")

@@ -102,6 +102,8 @@ def euler_buckling_load(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(second_moment, "[length]**4", "second_moment")
     _require(length, "[length]", "length")
+    if length.magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
     if effective_length_factor <= 0:
         raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
 
@@ -138,6 +140,8 @@ def euler_second_moment_for_load(
     """
     _require(design_load, "[force]", "design_load")
     _require(length, "[length]", "length")
+    if length.magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if required_safety_factor <= 0:
         raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")

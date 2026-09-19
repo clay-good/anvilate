@@ -1,0 +1,32 @@
+# Length parameters that accept a negative value, and why — the exclusion list for the
+# gate in tests/test_fraction_guards.py.
+#
+# A size is positive. A negative one is not a smaller part: the terms it enters are often
+# even powers, so the answer comes back as if the size were positive — a column of length
+# −L buckles at the same load as +L — or it inverts a section property, and a negative
+# second moment divides into a deflection that then clears every limit.
+#
+# A length that measures a POSITION or a DISPLACEMENT is signed, and refusing one would
+# refuse the case it exists to describe: a site below sea level, a diverging lens, a tendon
+# below the neutral axis, a pump lifting its suction. Each of those is listed here with the
+# case a negative value describes. The gate refuses a length parameter that accepts a
+# negative and is not listed, and a line here whose parameter now refuses one.
+#
+# One line per site, `module.function(parameter) | what a negative value means`.
+atmosphere.barometric_pressure(altitude) | a site below sea level
+atmosphere.lapse_rate_pressure(altitude) | a site below sea level
+cam.cam_pressure_angle(lift_gradient) | the fall side of the cam, where the follower descends
+cam.cam_base_circle_for_pressure_angle(lift_gradient) | the fall side of the cam
+fluid_statics.metacentric_height(buoyancy_to_gravity_distance) | a centre of gravity below the centre of buoyancy, which is the stable hull
+gaussian_beam.beam_radius_at_distance(distance) | a plane before the waist rather than after it
+optics.lens_power(focal_length) | a diverging lens
+optics.lens_transverse_magnification(image_distance) | a virtual image, on the object side
+optomechanics.athermal_defocus(focal_shift) | a focus moving toward the lens rather than away
+optomechanics.decenter_line_of_sight(decenter) | a decentre in the opposite direction
+prestressed_concrete.prestress_bottom_fiber_stress(tendon_eccentricity) | a tendon above the neutral axis
+prestressed_concrete.prestress_cracking_moment(tendon_eccentricity) | a tendon above the neutral axis
+prestressed_concrete.prestress_top_fiber_stress(tendon_eccentricity) | a tendon above the neutral axis
+pump.npsh_available(static_suction_head) | a suction lift: the source below the pump
+pump.npsh_margin(npsh_available) | a suction side already short of what the pump requires, which is the failure this screens for
+work_energy.gravitational_potential_energy(height) | a mass ending below where it started
+work_energy.work_done(distance) | motion against the force, which is negative work

@@ -51,6 +51,8 @@ def key_tangential_force(*, torque: Quantity, shaft_diameter: Quantity) -> Quant
     """
     _require(torque, "[force] * [length]", "torque")
     _require(shaft_diameter, "[length]", "shaft_diameter")
+    if shaft_diameter.magnitude <= 0:
+        raise ValueError(f"shaft_diameter must be positive; got {shaft_diameter}")
     force = 2 * torque.pint / shaft_diameter.pint
     converted = force.to("N")
     return Quantity(magnitude=float(converted.magnitude), unit="N")
@@ -69,7 +71,11 @@ def key_shear_stress(
     the key over the width×length plane. Returns the shear stress in MPa.
     """
     _require(key_width, "[length]", "key_width")
+    if key_width.magnitude <= 0:
+        raise ValueError(f"key_width must be positive; got {key_width}")
     _require(key_length, "[length]", "key_length")
+    if key_length.magnitude <= 0:
+        raise ValueError(f"key_length must be positive; got {key_length}")
     force = key_tangential_force(torque=torque, shaft_diameter=shaft_diameter)
     stress = force.pint / (key_width.pint * key_length.pint)
     converted = stress.to("MPa")
@@ -90,7 +96,11 @@ def key_bearing_stress(
     stress in MPa.
     """
     _require(key_height, "[length]", "key_height")
+    if key_height.magnitude <= 0:
+        raise ValueError(f"key_height must be positive; got {key_height}")
     _require(key_length, "[length]", "key_length")
+    if key_length.magnitude <= 0:
+        raise ValueError(f"key_length must be positive; got {key_length}")
     force = key_tangential_force(torque=torque, shaft_diameter=shaft_diameter)
     stress = force.pint / ((key_height.pint / 2) * key_length.pint)
     converted = stress.to("MPa")
@@ -135,7 +145,11 @@ def key_length_for_torque(
     mode. Every quantity is dimension-checked and the allowables must be positive.
     """
     _require(key_width, "[length]", "key_width")
+    if key_width.magnitude <= 0:
+        raise ValueError(f"key_width must be positive; got {key_width}")
     _require(key_height, "[length]", "key_height")
+    if key_height.magnitude <= 0:
+        raise ValueError(f"key_height must be positive; got {key_height}")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     _require(allowable_bearing, "[pressure]", "allowable_bearing")
     if allowable_shear.to("MPa").magnitude <= 0 or allowable_bearing.to("MPa").magnitude <= 0:

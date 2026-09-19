@@ -122,6 +122,8 @@ def bolt_preload_from_torque(
     """
     _require(torque, "[force] * [length]", "torque")
     _require(nominal_diameter, "[length]", "nominal_diameter")
+    if nominal_diameter.magnitude <= 0:
+        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
     _positive_factor(nut_factor)
     preload = torque.pint / (nut_factor * nominal_diameter.pint)
     converted = preload.to("N")
@@ -142,6 +144,8 @@ def torque_for_preload(
     """
     _require(preload, "[force]", "preload")
     _require(nominal_diameter, "[length]", "nominal_diameter")
+    if nominal_diameter.magnitude <= 0:
+        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
     _positive_factor(nut_factor)
     torque = nut_factor * preload.pint * nominal_diameter.pint
     converted = torque.to("N*m")
@@ -187,6 +191,8 @@ def bolt_shear_stress(
     """
     _require(force, "[force]", "force")
     _require(diameter, "[length]", "diameter")
+    if diameter.magnitude <= 0:
+        raise ValueError(f"diameter must be positive; got {diameter}")
     if shear_planes < 1:
         raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
     area = pi * diameter.pint**2 / 4

@@ -1902,3 +1902,67 @@ def test_a_number_used_as_an_exponent_is_one_the_function_refuses_as_a_nan():
         "`base ** nan` is 1.0 wherever the base is 1.0:\n  "
         + "\n  ".join(f"{where}: {', '.join(names)}" for where, names in sorted(unguarded.items()))
     )
+
+
+_SIGNED_LENGTHS = "docs/api/signed-length-parameters.txt"
+
+
+def _signed_length_exclusions() -> dict[str, str]:
+    from pathlib import Path
+
+    text = (Path(__file__).parents[1] / _SIGNED_LENGTHS).read_text(encoding="utf-8")
+    excused = {}
+    for line in text.splitlines():
+        if line.strip() and not line.startswith("#"):
+            site, cause = (part.strip() for part in line.split("|", 1))
+            excused[site] = cause
+    return excused
+
+
+def _accepts_a_negative_length() -> tuple[list[str], int]:
+    """Every length parameter that takes a negative and still returns, and the population.
+
+    Poisoned one parameter at a time, in the dimension the function itself asks for, through
+    the binder this file already has — a length bound to a pressure parameter is refused for
+    its dimension and says nothing about the sign.
+    """
+    from anvilate.units import Quantity
+
+    accepted, probed = [], 0
+    for label, function, arguments in _uniformly_callable():
+        dimensions = _declared_dimensions().get(label.split(".")[0], {})
+        for name, value in arguments.items():
+            if not isinstance(value, Quantity) or dimensions.get(name) != "[length]":
+                continue
+            probed += 1
+            poisoned = dict(arguments)
+            poisoned[name] = Quantity(magnitude=-abs(value.magnitude), unit=str(value.unit))
+            try:
+                function(**poisoned)
+            except Exception:  # noqa: BLE001 - any refusal is the guard doing its work
+                continue
+            accepted.append(f"{label}({name})")
+    return accepted, probed
+
+
+def test_a_length_that_is_a_size_refuses_a_negative_one() -> None:
+    """A negative size is not a smaller part.
+
+    `euler_buckling_load` returned the same load for a column of length −L as for +L, and
+    `CrossSection.rectangular` returned a negative second moment, which divides into a
+    deflection that clears every limit. Twenty-five sites took one and answered.
+
+    A length that measures a position or a displacement is signed and is listed with the
+    case it describes, so the gate cannot be satisfied by excusing a size.
+    """
+    accepted, probed = _accepts_a_negative_length()
+    assert probed >= 400, f"only {probed} length parameters were poisoned"
+    excused = _signed_length_exclusions()
+    assert all(cause for cause in excused.values()), "every exclusion states its cause"
+    unguarded = sorted(set(accepted) - set(excused))
+    assert not unguarded, (
+        f"these accept a negative length and are not listed in {_SIGNED_LENGTHS}: "
+        f"{unguarded}. Guard the size, or record what a negative value means there"
+    )
+    stale = sorted(set(excused) - set(accepted))
+    assert not stale, f"these lines in {_SIGNED_LENGTHS} name a parameter that now refuses: {stale}"
