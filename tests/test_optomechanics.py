@@ -1333,3 +1333,71 @@ def test_every_claimed_workflow_is_an_example_that_fails_and_is_repaired() -> No
             assert after.get(name) is CheckStatus.PASS, (
                 f"{workflow}: the repair in {example} leaves {name} at {after.get(name)}"
             )
+
+
+def test_moa_is_the_arcminute_and_round_trips() -> None:
+    moa = q("2 MOA")
+    assert moa.to("arcmin").magnitude == pytest.approx(2)
+    assert moa.to("µrad").magnitude == pytest.approx(2 * 290.888, rel=1e-5)
+    assert Quantity.parse(str(moa)).to("arcmin").magnitude == pytest.approx(2)
+
+
+def test_an_angle_is_refused_bare_or_in_a_unit_that_is_not_an_angle() -> None:
+    """Every angle parameter in the module is read through _radians, which refuses both.
+
+    Read from the source, with a floor, so a new angle parameter that skips the check, or
+    a census that finds nothing, fails here.
+    """
+    import ast
+    import pathlib
+    import re
+
+    from anvilate.analysis import optomechanics
+    from anvilate.analysis.optomechanics import mirror_tilt_line_of_sight
+
+    source = pathlib.Path(optomechanics.__file__).read_text()
+    angle_named = re.compile(r"tilt|angle|line_of_sight|allowance")
+    checked, unchecked = 0, []
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+            continue
+        read = {
+            call.args[0].id
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+            and getattr(call.func, "id", None) == "_radians"
+            and isinstance(call.args[0], ast.Name)
+        }
+        for argument in node.args.kwonlyargs + node.args.args:
+            if angle_named.search(argument.arg):
+                checked += 1
+                if argument.arg not in read:
+                    unchecked.append(f"{node.name}({argument.arg})")
+    assert checked >= 5, f"the census found only {checked} angle parameters"
+    assert not unchecked, f"angle parameters not read through _radians: {unchecked}"
+    with pytest.raises(ValueError, match="must be an angle quantity"):
+        mirror_tilt_line_of_sight(tilt=0.001)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="must be an angle"):
+        mirror_tilt_line_of_sight(tilt=Quantity(magnitude=1, unit="mm/m"))
+
+
+def test_an_angular_result_is_rendered_in_the_readers_declared_unit() -> None:
+    from anvilate.analysis.optomechanics import boresight_scorecard
+    from anvilate.budget import CombinationRule
+
+    def boresight(allowance: str):  # type: ignore[no-untyped-def]
+        return boresight_scorecard(
+            "boresight",
+            first_path={"combiner": q("30 arcsec")},
+            second_path={"housing": q("10 µrad")},
+            allowance=q(allowance),
+            rule=CombinationRule.RSS,
+        )
+
+    in_arcsec = boresight("40 arcsec")
+    assert "vs allowance 40.0 arcsec" in in_arcsec.detail
+    assert in_arcsec.comparison is not None
+    total = (145.444**2 + 10**2) ** 0.5  # µrad
+    assert in_arcsec.comparison.measured.to("µrad").magnitude == pytest.approx(total, rel=1e-4)
+    assert "MOA vs allowance 1.0 MOA" in boresight("1 MOA").detail
+    assert "µrad" in boresight("200 µrad").detail

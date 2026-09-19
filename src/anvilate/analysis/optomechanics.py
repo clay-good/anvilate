@@ -1187,9 +1187,12 @@ def boresight_scorecard(
         total = sum(abs(value) for _, value in terms)
     else:
         total = sqrt(sum(value * value for _, value in terms))
+    # In the unit the allowance was declared in: a reader who states arcseconds reads the
+    # result in arcseconds, not in whatever this screen computes with.
+    shown = str(allowance.unit)
     comparison = Comparison(
-        measured=Quantity(magnitude=total, unit="µrad"),
-        limit=Quantity(magnitude=limit, unit="µrad"),
+        measured=Quantity(magnitude=total, unit="µrad").to(shown),
+        limit=allowance,
         sense=LimitSense.AT_MOST,
         measured_label=f"differential boresight by {rule.value.replace('_', ' ')}",
         limit_label="allowance",
@@ -2125,8 +2128,8 @@ def harness_load_scorecard(
         decenter=Quantity(magnitude=shift, unit="m"), focal_length=focal_length
     ).magnitude
     comparison = Comparison(
-        measured=Quantity(magnitude=line_of_sight, unit="µrad"),
-        limit=Quantity(magnitude=allowed, unit="µrad"),
+        measured=Quantity(magnitude=line_of_sight, unit="µrad").to(str(allowed_line_of_sight.unit)),
+        limit=allowed_line_of_sight,
         sense=LimitSense.AT_MOST,
         measured_label="harness line-of-sight shift",
         limit_label="allowed",
@@ -2820,6 +2823,10 @@ _ANGLE_UNITS = frozenset(
         "arcminute",
         "arcsec",
         "arcsecond",
+        "MOA",
+        "minute_of_angle",
+        "nrad",
+        "nanoradian",
     }
 )
 

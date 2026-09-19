@@ -49,6 +49,7 @@ _ANGLE_UNITS = frozenset(
         "nanoradian",
         "degree",
         "arcminute",
+        "minute_of_angle",
         "arcsecond",
         "gradian",
         "turn",

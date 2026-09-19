@@ -13,7 +13,7 @@
 
 ## 1. Units and data
 
-- [ ] 1.1 Angular units first-class: mrad, µrad, arcsec, arcmin, deg, MOA; bare angular
+- [x] 1.1 Angular units first-class: mrad, µrad, arcsec, arcmin, deg, MOA; bare angular
       values refused on input and on render
 - [x] 1.2 Optical material record: index at declared wavelengths, Abbe, dn/dT, CTE over a
       declared range, E, ν, density, Knoop, stress-optic coefficient — all with provenance

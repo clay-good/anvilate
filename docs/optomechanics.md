@@ -20,7 +20,7 @@ tracer.
 | `mount_decenter(mass, acceleration, radial_stiffness)` | How far an element moves sideways in its mount under a lateral acceleration in g: m·a·g₀/k. A 50 g lens at 10 g on a 5 N/µm mount moves 0.98 µm. |
 | `decenter_line_of_sight(decenter, focal_length)` | The line-of-sight shift a lens decenter causes, Δ/f: that 0.98 µm behind a 100 mm lens is 9.8 µrad. |
 | `tilted_plate_image_shift(thickness, refractive_index, tilt)`, `tilted_plate_focus_shift(...)` | A tilted window or filter offsets every ray along its normal by s = t·[1 − cosθ/√(n² − sin²θ)]. The offset across the beam, s·sinθ, shifts the image sideways, which is a boresight contributor. The change in s·cosθ from the square-on value t·(n − 1)/n is a focus contributor. A 10 mm plate of index 1.5 tilted 5° shifts the image by 291.8 µm and moves focus by +1.4 µm. |
-| `mirror_tilt_line_of_sight(tilt)` | A mirror turned through an angle turns the beam through twice it. The tilt must be in an angle unit (rad, mrad, µrad, deg, arcmin, arcsec), because the unit layer would otherwise take a strain in mm/m for radians. |
+| `mirror_tilt_line_of_sight(tilt)` | A mirror turned through an angle turns the beam through twice it. The tilt must be in an angle unit (rad, mrad, µrad, nrad, deg, arcmin, arcsec, MOA), because the unit layer would otherwise take a strain in mm/m for radians. |
 | `ThermalCondition(kind, temperature_change, dwell, time_constant)` and `.qualify(entry)` | What a thermal screen is valid for. The kind — `soak`, `gradient` or `transient` — has no default. `qualify` replaces a soak screen's verdict with not evaluated under a gradient. Under a transient whose dwell is shorter than three time constants, the verdict stands and says it is optimistic, with both durations: a 30-minute dwell against a 20-minute time constant reaches 78% of the change. |
 | `dynamic_clearance_scorecard(name, gap, natural_frequency, peak_acceleration, pulse_duration)` | An internal gap against the peak relative displacement a half-sine shock drives across it, x = A·a₀·g₀/ω², with A the undamped shock amplification. A 300 Hz mount under 30 g for 11 ms moves 97.3 µm, which closes a 50 µm gap even though the gap is clear at rest. With no gap declared, the screen is not evaluated. |
 | `athermal_bond_thickness(glass_diameter, glass_cte, cell_cte, elastomer_cte)` | The elastomer annulus that keeps a bonded lens radially unstressed across temperature, h = (D/2)·(α_M − α_G)/(α_e − α_M) (Bayar, 1981). A 50 mm crown lens in aluminium with a silicone bond needs about 1.8 mm. Poisson's ratio is not in the formula. A confined, nearly incompressible elastomer expands more effectively than α_e, so the true thickness is smaller. The docstring says so, and the result is the classical estimate. An ordering with no positive thickness is refused. |
@@ -57,6 +57,16 @@ spend 25.4 µm of ±17.6 µm.
 end. A sealed housing is screened for self-heating, focus at the hot extreme, fogging at the cold
 extreme and its cell gap under shock. Three line-of-sight terms are then bound into a pointing
 budget, which passes at 36.2 µrad against 40 µrad in quadrature.
+
+## Angles
+
+Every angle this module takes is read through one check that refuses a bare number and a
+unit that is not an angle. The unit layer counts a strain in mm/m as dimensionless too, so
+without that check it would convert straight to radians. A test finds every parameter named
+for an angle in the source and fails on one that skips the check. `MOA` is the minute of
+angle, exactly one arcminute, not the shooter's inch at a hundred yards, which is 4.5%
+smaller. The boresight and harness screens print their result in the unit the allowance was
+declared in, so an allowance in arcseconds reads back in arcseconds.
 
 ## Workflows
 
@@ -129,12 +139,11 @@ take to optical design software; the screen says which one that is.
 
 ## Status
 
-Built (`openspec/changes/add-optomechanical-module`, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
+Built (`openspec/changes/add-optomechanical-module`, 1.1, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
 5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4, 11.5, 11.6 and 12.1–12.3):
 focus, pointing, wavefront and boresight screens, retention and shock, sealing, breathing
 and condensation, windows, coatings and cements, outgassing and cleanliness, harnesses,
 adjustments, the three workflow examples above, a catalogued failure mode declared by
-every screen in the module, and the five environment profiles. Not built yet: angular units as a
-whole (1.1), glass-catalogue ingestion (1.3), the clear aperture against a beam keepout
-(4.1, which waits on the keepout envelopes), the RMS form and focus share of a window's
-wavefront error (the rest of 11.3).
+every screen in the module, and the five environment profiles. Not built yet: glass-catalogue ingestion (1.3),
+the clear aperture against a beam keepout (4.1, which waits on the keepout envelopes),
+and the RMS form and focus share of a window's wavefront error (the rest of 11.3).

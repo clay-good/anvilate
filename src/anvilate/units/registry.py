@@ -22,6 +22,10 @@ def build_registry() -> pint.UnitRegistry:
     # not define these, so we express them in terms of units it does.
     ureg.define("pound_per_foot = pound_force / foot = plf")
     ureg.define("kip_per_foot = kip / foot = klf")
+    # The minute of angle sighting and pointing specifications are written in. It is the
+    # arcminute exactly, 1/60 degree: the "shooter's MOA" of one inch at a hundred yards is
+    # 4.5% smaller and is not this unit.
+    ureg.define("minute_of_angle = arcminute = MOA")
     return ureg
 
 
