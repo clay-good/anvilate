@@ -731,7 +731,7 @@ DEFAULT_CATALOG = ModeCatalog(
                 "before it are in place, found on the assembly line rather than the drawing"
             ),
             applicability=Applicability(interfaces=("bolted_face",)),
-            stage=DiscoveryStage.QUALIFICATION,
+            stage=DiscoveryStage.PRODUCTION,
             citation=(
                 "Boothroyd, Dewhurst and Knight, Product Design for Manufacture and Assembly, "
                 "3rd ed. (2011), accessibility of fastening operations"

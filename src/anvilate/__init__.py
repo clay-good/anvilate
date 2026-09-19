@@ -47,6 +47,8 @@ that already ran and does one more thing with them:
   opposite directions.
 - :mod:`anvilate.contracts` — the Spec IR and the scorecard published as versioned
   JSON Schema 2020-12 artifacts, generated from the models and held against them.
+- :mod:`anvilate._assembly_declarations` — the private home of the parts, states and
+  operations :mod:`anvilate.assembly` re-exports, so a Design Spec can declare an assembly.
 - :mod:`anvilate._cli_output` — the private wire models used to generate and validate
   the versioned schema for completed machine-readable CLI results.
 - :mod:`anvilate.dcc` — Digital Calibration Certificates read as measured inputs,
