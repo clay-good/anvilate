@@ -1252,13 +1252,12 @@ def test_the_calculation_report_pages_rendered_block_is_the_reports_own():
 
 
 def test_the_report_declares_its_own_surface_rather_than_inheriting_the_viewers():
-    """A sealed document cannot depend on the reviewer's browser theme.
+    """A sealed document sets its ground and its ink together, in whichever scheme it renders.
 
     Found by rendering a report and looking at it: the stylesheet set a text colour and
     no background, so in a dark-mode browser the whole document came out near-black on
-    near-black — a blank page to a checker, and green in every test here, because every
-    assertion was about the markup. Every colour in the sheet (a failing red, a passing
-    green, a grey note) is chosen against paper, so the sheet has to say so.
+    near-black. Both schemes now come from one token set, and each defines its ground and
+    its ink as a pair, so neither can inherit the viewer's half of the pair.
     """
     import re
 
@@ -1266,34 +1265,17 @@ def test_the_report_declares_its_own_surface_rather_than_inheriting_the_viewers(
     style = re.search(r"<style>(.*?)</style>", html, re.DOTALL)
     assert style is not None, "the report no longer carries a stylesheet"
     sheet = style.group(1)
-
-    def _declarations(selector: str) -> str:
-        rule = re.search(rf"(?m)^{re.escape(selector)} \{{(.*?)\}}", sheet, re.DOTALL)
-        return "" if rule is None else rule.group(1)
-
-    root, body = _declarations("html"), _declarations("body")
-    assert "color-scheme: light" in root, (
-        "the document renders as print: it must declare the scheme, or the browser's "
-        "furniture and its own colours disagree"
-    )
+    root = re.search(r"(?m)^:root \{(.*?)\}", sheet, re.DOTALL)
+    assert root is not None and "color-scheme: light dark" in root.group(1)
     # On the root, not merely on the body: the canvas outside a max-width column is the
-    # root's, so a background set only on `body` still paints a white page onto whatever
-    # the viewer's theme puts behind it.
-    assert re.search(r"background:\s*#fff", root), (
-        "the stylesheet sets a text colour and no root background, so the page inherits "
-        "the viewer's — which is how a dark-mode reviewer gets a blank document"
-    )
-    # And the text colour it is chosen against is still a dark one, so the pair is a
-    # readable document rather than two settings that happen to be present.
-    text_colour = re.search(r"color:\s*#([0-9a-f]{3,6})", body)
-    assert text_colour is not None, "the body no longer sets a text colour"
-    channels = text_colour.group(1)
-    if len(channels) == 3:
-        channels = "".join(char * 2 for char in channels)
-    assert max(int(channels[index : index + 2], 16) for index in (0, 2, 4)) < 0x80
-
-
-# --- a probability never travels without its method and its label -------------------------
+    # root's, so a background set only on `body` paints onto whatever the viewer's theme
+    # puts behind it.
+    assert re.search(r"(?m)^html \{[^}]*background: var\(--ground\)", sheet)
+    assert re.search(r"(?m)^body \{[^}]*color: var\(--ink\)", sheet, re.DOTALL)
+    for theme in ("light", "dark"):
+        tokens = _theme_tokens(theme)
+        ratio = _contrast(tokens["ink"], tokens["ground"])
+        assert ratio >= 7.0, f"{theme}: ink on ground is only {ratio:.2f}:1"
 
 
 def _annotated_report(**overrides):
@@ -2053,6 +2035,7 @@ _CVD = {
 # not a cited threshold.
 _DISTINCT_DELTA_E = 20.0
 _WCAG_AA_TEXT = 4.5  # WCAG 2.x, 1.4.3 contrast (minimum) for normal text
+_WCAG_NON_TEXT = 3.0  # WCAG 2.x, 1.4.11 non-text contrast (focus indicators)
 
 
 def _linear(hex_colour: str) -> tuple[float, float, float]:
@@ -2083,37 +2066,67 @@ def _seen(rgb: tuple[float, float, float], matrix) -> tuple[float, ...]:  # type
     return tuple(min(1.0, max(0.0, value)) for value in mixed)
 
 
-def _stylesheet_colours() -> tuple[dict[str, str], str, str]:
-    """The status colours, the body text and the page background, read from the live CSS."""
+def _theme_tokens(theme: str) -> dict[str, str]:
+    """Every colour token one scheme defines, read from the live CSS."""
     import re
 
     from anvilate.report.document import _STYLESHEET
 
-    status = dict(re.findall(r"\.(\w+) \.status \{ color: (#[0-9a-fA-F]{3,6}); \}", _STYLESHEET))
-    text = re.search(r"body \{[^}]*?color: (#[0-9a-fA-F]{3,6})", _STYLESHEET, re.S)
-    page = re.search(r"html \{[^}]*background: (#[0-9a-fA-F]{3,6})", _STYLESHEET)
-    assert text and page
-    return status, text.group(1), page.group(1)
+    if theme == "light":
+        block = re.search(r"(?m)^:root \{(.*?)\}", _STYLESHEET, re.DOTALL)
+    else:
+        block = re.search(
+            r"prefers-color-scheme: dark\) \{\s*:root \{(.*?)\}", _STYLESHEET, re.DOTALL
+        )
+    assert block is not None, f"the stylesheet defines no {theme} token set"
+    return dict(re.findall(r"--([\w-]+): (#[0-9a-fA-F]{3,6});", block.group(1)))
+
+
+def _contrast(first: str, second: str) -> float:
+    lighter, darker = sorted(
+        (_luminance(_linear(first)), _luminance(_linear(second))), reverse=True
+    )
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _stylesheet_colours(theme: str = "light") -> tuple[dict[str, str], str, str]:
+    """The status colours, the body text and the page background of one scheme."""
+    tokens = _theme_tokens(theme)
+    status = {
+        name.removeprefix("status-"): colour
+        for name, colour in tokens.items()
+        if name.startswith("status-")
+    }
+    return status, tokens["ink"], tokens["ground"]
 
 
 def test_the_status_palette_stays_distinct_under_colour_vision_deficiency():
     """Interaction-quality 4.2, checked in CI rather than asserted in a style guide."""
     import itertools
 
-    status, text, page = _stylesheet_colours()
-    assert set(status) == {"fail", "pass", "over_margin", "warning"}, status
-    background = _luminance(_linear(page))
-    for name, colour in status.items():
-        ratio = (background + 0.05) / (_luminance(_linear(colour)) + 0.05)
-        assert ratio >= _WCAG_AA_TEXT, f"{name} {colour} is {ratio:.2f}:1 against {page}"
-    palette = {**status, "body text": text}
-    for view, matrix in _CVD.items():
-        for (a, first), (b, second) in itertools.combinations(palette.items(), 2):
-            one, two = _lab(_seen(_linear(first), matrix)), _lab(_seen(_linear(second), matrix))
-            distance = sum((p - q) ** 2 for p, q in zip(one, two, strict=True)) ** 0.5
-            assert distance >= _DISTINCT_DELTA_E, (
-                f"{a} {first} and {b} {second} are ΔE {distance:.1f} apart for {view} vision"
+    # Presentation-craft 3.3: both schemes, from the one token set, checked the same way.
+    for theme in ("light", "dark"):
+        status, text, page = _stylesheet_colours(theme)
+        assert set(status) == {"fail", "pass", "over_margin", "warning"}, (theme, status)
+        accent = _theme_tokens(theme)["accent"]
+        for name, colour in status.items():
+            ratio = _contrast(colour, page)
+            assert ratio >= _WCAG_AA_TEXT, (
+                f"{theme}: {name} {colour} is {ratio:.2f}:1 against {page}"
             )
+        # The accent draws only the focus outline, a non-text element.
+        ratio = _contrast(accent, page)
+        assert ratio >= _WCAG_NON_TEXT, f"{theme}: accent {accent} is {ratio:.2f}:1"
+        palette = {**status, "body text": text, "accent": accent}
+        for view, matrix in _CVD.items():
+            for (a, first), (b, second) in itertools.combinations(palette.items(), 2):
+                one = _lab(_seen(_linear(first), matrix))
+                two = _lab(_seen(_linear(second), matrix))
+                distance = sum((p - q) ** 2 for p, q in zip(one, two, strict=True)) ** 0.5
+                assert distance >= _DISTINCT_DELTA_E, (
+                    f"{theme}: {a} {first} and {b} {second} are ΔE {distance:.1f} apart"
+                    f" for {view} vision"
+                )
 
 
 def test_every_status_the_report_colours_also_says_in_words():
@@ -2208,3 +2221,149 @@ def test_the_report_reads_in_order_for_a_screen_reader() -> None:
     formulas = re.findall(r"<math[^>]*>", html)
     assert formulas and all('alttext="' in tag for tag in formulas)
     assert 'alttext="σ sub b = M · c / I"' in html
+
+
+# Presentation-craft 3.1: the report is built from an enumerated vocabulary. Every element
+# here encodes content, structure or grouping; nothing on the list is ornament.
+_VISUAL_ELEMENTS = frozenset(
+    {
+        # the document shell
+        "html", "head", "meta", "title", "style", "body",
+        # headings, prose and grouping
+        "h1", "h2", "p", "ul", "li", "section", "div", "span", "strong",
+        # tables
+        "table", "thead", "tr", "th", "td",
+        # typeset equations (MathML Core)
+        "math", "mrow", "mi", "mn", "mo", "mfrac", "msqrt", "msub", "msup", "mspace",
+    }
+)  # fmt: skip
+# Typography, spacing, rules and the scheme; nothing that paints an image or a shadow.
+_STYLE_PROPERTIES = frozenset(
+    {
+        "color-scheme", "color", "background", "font-family", "font-size", "font-style",
+        "font-weight", "font-variant-numeric", "letter-spacing", "max-width", "margin",
+        "margin-top", "padding", "padding-bottom", "padding-top", "border", "border-top",
+        "border-bottom", "border-collapse", "text-align", "white-space", "outline",
+        "outline-offset", "display", "break-inside", "break-after", "page-break-inside",
+        "page-break-after",
+    }
+)  # fmt: skip
+_ORNAMENT = ("gradient", "url(", "shadow", "image", "animation", "transition", "filter")
+
+
+def _rendered_corpus() -> list[str]:
+    return [
+        build().to_html()
+        for build in (_report, _annotated_report, _ledgered_report, _budgeted_report)
+    ]
+
+
+def _css_rules(sheet: str) -> list[tuple[str, str, list[tuple[str, str]]]]:
+    """(context, selector, declarations) for every rule; context is "print" or ""."""
+    import re
+
+    rules = []
+    for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", sheet):
+        opened = sheet.rfind("@media", 0, match.start())
+        context = "print" if opened >= 0 and sheet.startswith("@media print", opened) else ""
+        declarations = [
+            (name.strip(), value.strip())
+            for name, _, value in (
+                part.partition(":") for part in match.group(2).split(";") if part.strip()
+            )
+        ]
+        rules.append((context, match.group(1).strip(), declarations))
+    return rules
+
+
+def _elements_in(html: str) -> set[str]:
+    from html.parser import HTMLParser
+
+    seen: set[str] = set()
+
+    class _Collect(HTMLParser):
+        def handle_starttag(self, tag, attrs):  # type: ignore[no-untyped-def]
+            seen.add(tag)
+            assert "style" not in dict(attrs), f"<{tag}> carries an inline style"
+
+    _Collect().feed(html)
+    return seen
+
+
+def test_every_rendered_element_is_in_the_enumerated_vocabulary():
+    """Presentation-craft 3.1: restraint is a gate, not a reviewer's taste."""
+    import re
+    from pathlib import Path
+
+    seen: set[str] = set()
+    for html in _rendered_corpus():
+        seen |= _elements_in(html)
+    # The floor: the corpus reached the tables, the equations and the prose.
+    assert {"table", "td", "math", "p", "h2", "section"} <= seen, seen
+    assert seen <= _VISUAL_ELEMENTS, f"outside the vocabulary: {sorted(seen - _VISUAL_ELEMENTS)}"
+    # Branches the corpus does not reach are read from the renderer's own literals.
+    source_dir = Path(__file__).parents[1] / "src" / "anvilate" / "report"
+    literal: set[str] = set()
+    for path in source_dir.glob("*.py"):
+        literal |= set(re.findall(r"<([a-z][a-z0-9]*)[\s>/]", path.read_text()))
+    assert len(literal) >= 20, literal
+    assert literal <= _VISUAL_ELEMENTS, (
+        f"outside the vocabulary: {sorted(literal - _VISUAL_ELEMENTS)}"
+    )
+
+
+def test_the_stylesheet_uses_only_the_enumerated_properties_and_no_ornament():
+    """Presentation-craft 3.1: no gradient, shadow, image or animation reaches the page."""
+    from anvilate.report.document import _STYLESHEET
+
+    rules = _css_rules(_STYLESHEET)
+    assert len(rules) >= 30, len(rules)
+    for _, selector, declarations in rules:
+        for name, value in declarations:
+            if name.startswith("--"):
+                continue
+            assert name in _STYLE_PROPERTIES, f"{selector}: {name} is outside the vocabulary"
+            for token in _ORNAMENT:
+                assert token not in value, f"{selector}: {name}: {value} is ornament"
+
+
+def test_status_colours_carry_status_and_the_accent_marks_focus_only():
+    """Presentation-craft 3.2: one accent, reserved; status colours never decorate."""
+    import re
+
+    from anvilate.report.document import _STYLESHEET
+
+    used = {"accent": [], "status": []}
+    for context, selector, declarations in _css_rules(_STYLESHEET):
+        for name, value in declarations:
+            if selector == ":root":
+                continue
+            if context == "print":
+                # Print is monochrome: ink is the only colour a page may carry.
+                assert not re.search(r"var\(|#(?!000\b)", value), f"print {selector}: {value}"
+                continue
+            assert "#" not in value, f"{selector}: {name}: {value} bypasses the tokens"
+            for status in re.findall(r"var\(--status-(\w+)\)", value):
+                used["status"].append(status)
+                assert selector == f".{status} .status", (
+                    f"{selector} uses the {status} status colour outside its status mark"
+                )
+            if "var(--accent)" in value:
+                used["accent"].append(selector)
+                assert selector == ":focus-visible", f"{selector} uses the reserved accent"
+    assert used["accent"] == [":focus-visible"], used
+    assert sorted(used["status"]) == ["fail", "over_margin", "pass", "warning"], used
+    # Exactly one accent per scheme, and nothing else in the token set is chromatic.
+    for theme in ("light", "dark"):
+        tokens = _theme_tokens(theme)
+        assert [name for name in tokens if "accent" in name] == ["accent"], tokens
+        for name, colour in tokens.items():
+            if name == "accent" or name.startswith("status-"):
+                continue
+            digits = colour.lstrip("#")
+            if len(digits) == 3:
+                digits = "".join(c * 2 for c in digits)
+            channels = [int(digits[i : i + 2], 16) for i in (0, 2, 4)]
+            assert max(channels) - min(channels) <= 0x10, (
+                f"{theme}: --{name} {colour} is not neutral"
+            )

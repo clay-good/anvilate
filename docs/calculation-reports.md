@@ -220,10 +220,22 @@ show the work for.
 
 The HTML is self-contained: no external stylesheets, scripts, fonts, or images, so
 it opens on an air-gapped machine and survives being emailed. It also declares its own
-surface — white paper, dark ink, `color-scheme: light` — because a document that names
-a text colour and leaves the background to the viewer renders near-black on near-black
-for a reviewer whose browser is in dark mode, which is a blank page rather than a
-report. That was true here until someone opened one and looked. Rendering is pure
+surface in both schemes: one token set defines a light and a dark ground and ink, and
+each scheme sets them as a pair. A document that names a text colour and leaves the
+background to the viewer renders near-black on near-black for a reviewer whose browser
+is in dark mode, which is a blank page rather than a report. That was true here until
+someone opened one and looked. Print is always black on white.
+
+The page is restrained by a gate, not by taste:
+
+| Rule | What the test in `tests/test_report.py` checks |
+| --- | --- |
+| Enumerated vocabulary | Every element a report renders, and every tag the renderer writes, is on a fixed list of prose, table and MathML elements. The stylesheet uses only listed properties, with no gradient, shadow, image or animation. |
+| One accent | A single accent colour draws the keyboard focus outline and nothing else. |
+| Status colours carry status | Each status colour appears only on its own status word, and every other token is a neutral grey. |
+| Contrast, both ways | In each scheme, ink reaches 7:1 and every status word 4.5:1 against its ground, and the focus outline reaches 3:1. The status words, ink and accent also stay ΔE ≥ 20 apart under three simulated colour-vision deficiencies. |
+
+Rendering is pure
 Python — no TeX, no browser, no network — and it is deterministic. The same inputs
 produce byte-identical HTML on every rebuild, which means a diff between two reports
 is an engineering change and never rendering noise. The unit renderer owns its document

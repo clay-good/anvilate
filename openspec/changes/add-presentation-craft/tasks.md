@@ -18,9 +18,9 @@
 
 ## 3. Vocabulary and colour
 
-- [ ] 3.1 Enumerated visual vocabulary; a lint that rejects elements outside it
-- [ ] 3.2 One accent, reserved for current focus; status colours only for status
-- [ ] 3.3 Light and dark from one token set; contrast checked in CI both ways
+- [x] 3.1 Enumerated visual vocabulary; a lint that rejects elements outside it
+- [x] 3.2 One accent, reserved for current focus; status colours only for status
+- [x] 3.3 Light and dark from one token set; contrast checked in CI both ways
 
 ## 4. Motion
 

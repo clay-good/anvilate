@@ -835,33 +835,51 @@ def report_from_record(record: dict) -> CalculationReport:
 # old amber failed contrast outright. The status word is always printed as well, so colour
 # is never the only carrier of the verdict.
 _STYLESHEET = """
-html { color-scheme: light; background: #fff; }
-body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: #111;
-       background: #fff; }
-h1 { border-bottom: 2px solid #111; padding-bottom: 0.2em; }
+:root {
+  color-scheme: light dark;
+  --ground: #fff; --ink: #111; --ink-muted: #444; --ink-faint: #666;
+  --rule: #bbb; --band: #f4f4f4;
+  --status-fail: #8e1b0e; --status-pass: #0b5394; --status-over_margin: #a86800;
+  --status-warning: #9000f8;
+  --accent: #00a878;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #16181d; --ink: #e6e6e3; --ink-muted: #b8b8b4; --ink-faint: #9a9a96;
+    --rule: #4a4d55; --band: #22252c;
+    --status-fail: #f07818; --status-pass: #6078f0; --status-over_margin: #c07848;
+    --status-warning: #d890d8;
+    --accent: #48f090;
+  }
+}
+html { background: var(--ground); }
+body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: var(--ink);
+       background: var(--ground); }
+h1 { border-bottom: 2px solid var(--ink); padding-bottom: 0.2em; }
 h2 { margin-top: 1.6em; font-size: 1.1em; }
 table { border-collapse: collapse; margin: 0.6em 0; }
-th, td { border: 1px solid #bbb; padding: 0.25em 0.6em; text-align: left; }
-table.header th { background: #f4f4f4; }
+th, td { border: 1px solid var(--rule); padding: 0.25em 0.6em; text-align: left; }
+table.header th { background: var(--band); }
 section.check { page-break-inside: avoid; }
 .derivation { font-family: "DejaVu Sans Mono", monospace; margin: 0.6em 0 0.6em 1.5em; }
 .derivation p { margin: 0.2em 0; }
 .status { font-size: 0.8em; letter-spacing: 0.08em; }
-.fail .status { color: #8e1b0e; }
-.pass .status { color: #0b5394; }
-.over_margin .status { color: #a86800; }
-.warning .status { color: #9000f8; }
-.repair { font-size: 0.9em; color: #8e1b0e; }
-.uncertainty { font-size: 0.9em; color: #444; }
-.uncertainty-method { font-size: 0.85em; color: #666; margin-top: -0.4em; }
-.uncertainty.fragile { color: #8e1b0e; font-weight: bold; }
-.fallback { font-style: italic; color: #666; }
-.source { font-size: 0.9em; color: #444; }
+.fail .status { color: var(--status-fail); }
+.pass .status { color: var(--status-pass); }
+.over_margin .status { color: var(--status-over_margin); }
+.warning .status { color: var(--status-warning); }
+.repair { font-size: 0.9em; font-style: italic; }
+.uncertainty { font-size: 0.9em; color: var(--ink-muted); }
+.uncertainty-method { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
+.uncertainty.fragile { color: var(--ink); font-weight: bold; }
+.fallback { font-style: italic; color: var(--ink-faint); }
+.source { font-size: 0.9em; color: var(--ink-muted); }
 tr.governing td { font-weight: bold; }
-.disclaimer { margin-top: 2em; font-size: 0.9em; color: #444; border-top: 1px solid #bbb;
-  padding-top: 0.8em; }
+.disclaimer { margin-top: 2em; font-size: 0.9em; color: var(--ink-muted);
+  border-top: 1px solid var(--rule); padding-top: 0.8em; }
 td, .derivation, .status { font-variant-numeric: tabular-nums lining-nums; }
 td.num, th.num { text-align: right; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media print {
   thead { display: table-header-group; }
   tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
