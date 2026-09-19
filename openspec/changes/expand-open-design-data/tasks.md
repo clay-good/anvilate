@@ -16,7 +16,9 @@
 - [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step
 - [ ] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records
 - [ ] 2.4 AISC shapes fetch-on-first-use importer (checksum, provenance, never bundled)
-- [ ] 2.5 Bundled EN-profile open data with citations
+- [x] 2.5 Bundled EN-profile open data with citations — `standards/data/en_profiles.yaml`:
+      the 42 EN 10365 IPE and HEA profiles as dimensions, CC0, each cited; properties computed
+      with the root fillets and held to the published tabulations (tests/test_profiles.py)
 
 ## 3. Dataset publication
 
@@ -37,7 +39,9 @@
       read; a provenance sidecar the cache is self-describing from; and the retrieval date
       stated by the caller, since nothing in the package may read the clock. The transport
       is injectable, so the whole flow is tested offline.
-- [ ] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data)
+- [ ] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data) — the bundled
+      half is done: `section: IPE 200` in a spec screens as the declared section and records
+      its source (tests/test_profiles.py). The post-fetch half follows the AISC importer (2.4)
 - [x] 4.3 Docs: where each data class comes from, its basis, and its legal status —
       `docs/citations.md`, completed 2026-08-28. The three classes are each answered on
       that page: the **bundled** tables now by name rather than by count, in a table whose

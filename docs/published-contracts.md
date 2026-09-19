@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Evidence Bundle 1.21.0: a named section's source
+
+A provenance record's `kind` gains `section`. A member that names a rolled profile
+(`section: IPE 200`) takes its dimensions from the bundled EN 10365 table, and the trail
+records that table's citation. CLI output 1.49.0 carries the same bundle. The element
+schemas do not move: they publish the section a document resolves to, which is still a
+cross-section.
+
 ### Scorecard 1.11.0: factors applied inside a capacity
 
 A check entry gains `applied_factors`. These are the conservatisms a check applied inside

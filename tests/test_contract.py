@@ -5733,6 +5733,7 @@ _UNBOUNDED_READERS = {
     "NemaFrame": _BUNDLED_TABLE,
     "DowelPin": _BUNDLED_TABLE,
     "ExtrusionProfile": _BUNDLED_TABLE,
+    "RolledProfile": _BUNDLED_TABLE,
     "HexBolt": _BUNDLED_TABLE,
     "HexNut": _BUNDLED_TABLE,
     "Material": _BUNDLED_TABLE,

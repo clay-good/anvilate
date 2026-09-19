@@ -17,8 +17,9 @@ here in the discipline pack, not in the code-agnostic analysis layer.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import ConfigDict, model_validator
+from pydantic import BeforeValidator, ConfigDict, model_validator
 
 from .._models import Named
 from ..analysis import (
@@ -85,7 +86,12 @@ from ..scorecard import (
     Scorecard,
     ScorecardEntry,
 )
-from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
+from ..standards import (
+    AllowableBasis,
+    MaterialsDatabase,
+    default_materials_db,
+    default_profile_table,
+)
 from ..units import Quantity, spoken
 from ._guarded import (
     DESIGN_BASIS,
@@ -148,6 +154,27 @@ __all__ = [
 
 # AISC §J4.3 block-shear rupture: 0.6·Fu·Anv (shear) + Fu·Ant (tension), Ubs=1.
 _BLOCK_SHEAR_SHEAR_FRACTION = 0.6
+
+
+def _named_section(value: object) -> object:
+    """A profile designation such as ``IPE 200`` resolves to its section; anything else passes.
+
+    Resolved from the bundled EN 10365 table with no network call. A name the table does not
+    hold is refused with the entries it nearly named, never read as some other section.
+    """
+    if isinstance(value, str):
+        try:
+            return default_profile_table().get(value).section()
+        except LookupError as unknown:
+            raise ValueError(str(unknown.args[0])) from None
+    return value
+
+
+#: A member's section: its properties, or the designation of a rolled profile the library
+#: carries (``IPE 200``, ``HEA 300``).
+MemberSection = Annotated[
+    CrossSection, BeforeValidator(_named_section, json_schema_input_type=str | CrossSection)
+]
 
 # AISC §J8 nominal concrete bearing on a plate is 0.85·f'c (no confinement bonus).
 _CONCRETE_BEARING_FRACTION = 0.85
@@ -354,7 +381,7 @@ class BeamMember(GuardedInputs):
     )
 
     name: Named
-    section: CrossSection
+    section: MemberSection
     length: Quantity
     support: Support
     load: Quantity
@@ -769,7 +796,7 @@ class ColumnMember(GuardedInputs):
     signed_fields: tuple[str, ...] = ("axial_load",)
 
     name: Named
-    section: CrossSection
+    section: MemberSection
     length: Quantity
     end_condition: ColumnEnd = ColumnEnd.PINNED_PINNED
     axial_load: Quantity
@@ -2068,7 +2095,7 @@ class BeamColumnMember(GuardedInputs):
     )
 
     name: Named
-    section: CrossSection
+    section: MemberSection
     length: Quantity
     axial_load: Quantity
     moment: Quantity

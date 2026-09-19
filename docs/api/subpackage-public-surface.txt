@@ -266,8 +266,10 @@ standards.NemaFrame
 standards.PipeDimensions
 standards.PipeScheduleTable
 standards.PlainWasher
+standards.ProfileTable
 standards.PropertyCitation
 standards.QuantityProperty
+standards.RolledProfile
 standards.STANDARDS_BODIES
 standards.ScalarProperty
 standards.SizeClassification
@@ -286,6 +288,7 @@ standards.UnknownHexBoltError
 standards.UnknownHexNutError
 standards.UnknownMaterialError
 standards.UnknownPipeError
+standards.UnknownProfileError
 standards.UnknownThreadSizeError
 standards.UnknownWasherError
 standards.WRITTEN_AGAINST
@@ -304,6 +307,7 @@ standards.components.ComponentsDatabase
 standards.components.NemaFrame
 standards.components.UnknownComponentError
 standards.components.default_components_db
+standards.canonical_designation
 standards.default_bearing_table
 standards.default_cap_screw_table
 standards.default_clearance_table
@@ -314,6 +318,7 @@ standards.default_hex_bolt_table
 standards.default_hex_nut_table
 standards.default_materials_db
 standards.default_pipe_schedule_table
+standards.default_profile_table
 standards.default_standards_resolver
 standards.default_thread_table
 standards.default_washer_table
@@ -337,6 +342,11 @@ standards.extrusions.ExtrusionProfile
 standards.extrusions.ExtrusionTable
 standards.extrusions.UnknownExtrusionError
 standards.extrusions.default_extrusion_table
+standards.profiles.RolledProfile
+standards.profiles.ProfileTable
+standards.profiles.UnknownProfileError
+standards.profiles.canonical_designation
+standards.profiles.default_profile_table
 standards.fatigue.CurveSurvival
 standards.fatigue.DatasetProvenance
 standards.fatigue.EN1993_NORMAL_DETAIL_CATEGORIES

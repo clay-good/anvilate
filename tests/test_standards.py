@@ -1904,12 +1904,14 @@ def test_the_license_gate_sees_what_it_claims_to(tmp_path, monkeypatch):
         "rows": {"1": 2.0},
     }
 
+    shipped = len(_bundled_datasets())  # the page states the count; the fake has to match it
+
     def _run(document: dict) -> None:
         path = tmp_path / "candidate.yaml"
         path.write_text(yaml.safe_dump(document))
         monkeypatch.setattr(
             f"{__name__}._bundled_datasets",
-            lambda: [("candidate.yaml", yaml.safe_load(path.read_text()))] * 17,
+            lambda: [("candidate.yaml", yaml.safe_load(path.read_text()))] * shipped,
         )
         test_every_bundled_dataset_records_a_redistributable_license()
 

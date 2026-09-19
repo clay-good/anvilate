@@ -7,7 +7,8 @@ ISO 273 clearance-hole and ISO 261/724 metric-thread tables, the ISO 15 ball
 bearing boundary-dimension table, the ISO 2338 dowel-pin table, the ISO 4762
 socket-head cap screw head-geometry table, the ISO 7089 plain-washer table, the
 ISO 4032 hex-nut table, the ISO 4014/4017 hex-bolt table, the T-slot extrusion
-profile table, the ASME B36.10M pipe schedule table, the DB-backed reference resolver, and the
+profile table, the EN 10365 IPE/HEA rolled-profile table, the ASME B36.10M pipe
+schedule table, the DB-backed reference resolver, and the
 standards-effectivity layer that says which EDITION a citation means and refuses to
 let one bundle span two of them without a recorded waiver. Further
 component families land here as they are built out (see
@@ -95,6 +96,13 @@ from .pipe import (
     PipeScheduleTable,
     UnknownPipeError,
     default_pipe_schedule_table,
+)
+from .profiles import (
+    ProfileTable,
+    RolledProfile,
+    UnknownProfileError,
+    canonical_designation,
+    default_profile_table,
 )
 from .records import (
     AllowableBasis,
@@ -202,6 +210,11 @@ __all__ = [
     "ExtrusionTable",
     "UnknownExtrusionError",
     "default_extrusion_table",
+    "RolledProfile",
+    "ProfileTable",
+    "UnknownProfileError",
+    "canonical_designation",
+    "default_profile_table",
     "Fit",
     "ClearanceHoleTable",
     "MetricThread",

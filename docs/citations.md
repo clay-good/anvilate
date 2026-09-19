@@ -181,10 +181,10 @@ because a fatigue curve nobody can retrieve is a number somebody typed.
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
-redistributor inherits. Each of the seventeen bundled datasets — the dimension tables, the
+redistributor inherits. Each of the eighteen bundled datasets — the dimension tables, the
 materials seed, the ISO 286 and ISO 2768 tolerance tables, the process-capability
 estimates — declares a name, a version, the source it was read from, an SPDX licence
-identifier, and the date it was retrieved. All seventeen are CC0-1.0 today: the *values*
+identifier, and the date it was retrieved. All eighteen are CC0-1.0 today: the *values*
 are facts, and no source standard is redistributed.
 
 A gate in the suite reads every one of them and fails the build on a licence that is not
@@ -214,6 +214,7 @@ build rather than going stale in a document.
 | `standards/data/bearings.yaml` | ISO 15 deep-groove ball bearing boundary dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/cap_screws.yaml` | ISO 4762 (DIN 912) socket-head cap screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/dowel_pins.yaml` | ISO 2338 parallel-pin dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/en_profiles.yaml` | EN 10365:2017 hot-rolled I and H section dimensions, as tabulated by eurocodeapplied.com (IPE) and prontubeam.com (HEA) | 0.1.0 | CC0-1.0 | 2026-09-19 |
 | `standards/data/extrusions.yaml` | T-slot profile geometry (Bosch Rexroth / Misumi HFS common metric convention) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/hex_bolts.yaml` | ISO 4014 / ISO 4017 hexagon-head bolt and screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/hex_nuts.yaml` | ISO 4032 style-1 hexagon nut dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
@@ -233,6 +234,27 @@ Fetched data is not in that table, because none of it is in the package. One rec
 today — the MUSE benchmark's case index (CC BY 4.0, pinned to a commit rather than a
 branch, since a leaderboard benchmark moves and a published score has to name the version
 it was measured against) — and what ships is the URL and the digest, never the payload.
+
+## A named profile is a cited section
+
+A structural member can name its section rather than declare its properties:
+
+```yaml
+element_type: beam_member
+element_params:
+  section: IPE 200
+```
+
+The 42 IPE and HEA profiles of EN 10365 ship in `standards/data/en_profiles.yaml` as their
+five dimensions: depth, flange width, web and flange thickness, and root radius. Resolving
+a name makes no network call. The section properties are computed from those dimensions
+with the root fillets included (`CrossSection.rolled_i_section`). The plate-built I shape
+leaves the fillets out and is 4% short on the area of an IPE 200. A test holds every bundled
+profile to the published tabulations' own area and second moments: IPE to 0.1%, and HEA to
+0.5% because that tabulation rounds its areas. The evidence bundle records the section as a
+`section` source with the dataset's citation. A name the table does not hold is refused with
+the profiles it nearly named, and any other section is declared by its properties. AISC
+shapes are a fetch, not a bundle; that importer is still to come.
 
 ## Data this library may read and may not ship
 

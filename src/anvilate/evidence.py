@@ -4,7 +4,8 @@ The evidence bundle an export ships must record where every number came from
 (see openspec/specs/artifact-export/). This module builds the "material and
 standards data provenance" slice of that bundle: given a :class:`DesignSpec` and
 the databases its references resolve against, it walks the spec's material,
-standard-component interfaces, the ISO 2768 general-tolerance class, the ISO 286
+standard-component interfaces, a member section named by its rolled-profile designation, the
+ISO 2768 general-tolerance class, the ISO 286
 fit citations behind its toleranced dimensions, and ISO 1101 for any declared
 geometric tolerances, collecting each referenced record's distinct citation
 sources — the reproducibility trail an independent engineer follows.
@@ -32,6 +33,7 @@ from .standards import (
     default_extrusion_table,
     default_hex_bolt_table,
     default_hex_nut_table,
+    default_profile_table,
     default_washer_table,
 )
 from .tolerance import general_tolerance_source, resolve_class
@@ -49,7 +51,7 @@ class SourceRecord(StatableModel):
     model_config = ConfigDict(frozen=True)
 
     ref: Provenance  # the referenced database ID or dimension tag, e.g. "AA-6061-T6"
-    kind: Literal["material", "component", "tolerance"]
+    kind: Literal["material", "component", "tolerance", "section"]
     name: Named  # the record's name, or a fit designation for a tolerance
     sources: tuple[str, ...]
 
@@ -187,6 +189,19 @@ def collect_provenance(
     for interface in spec.interfaces:
         if isinstance(interface, StandardComponentInterface):
             records.append(_component_source(interface.ref, providers, components))
+    # A member section named by its profile designation resolved from the bundled EN 10365
+    # table, so its dimensions came from there and the trail says so.
+    named_section = (spec.element_params or {}).get("section")
+    if isinstance(named_section, str):
+        profile = default_profile_table().get(named_section)
+        records.append(
+            SourceRecord(
+                ref=named_section,
+                kind="section",
+                name=profile.designation,
+                sources=_distinct_sources(profile.citations()),
+            )
+        )
     # The ISO 2768 general class governs every untoleranced dimension — always,
     # via the default when the spec omits one — so it is always in the trail.
     general_class = resolve_class(spec.manufacturing.tolerance_class)
