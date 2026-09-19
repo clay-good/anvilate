@@ -76,6 +76,7 @@ _STATUS_LABEL: dict[CheckStatus, str] = {
     CheckStatus.PASS: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.OVER_MARGIN: "OVER MARGIN",
+    CheckStatus.WARNING: "WARNING",
     CheckStatus.OUT_OF_DEPTH: "OUT OF DEPTH",
     CheckStatus.NOT_EVALUATED: "NOT EVALUATED",
 }
@@ -849,6 +850,7 @@ section.check { page-break-inside: avoid; }
 .fail .status { color: #8e1b0e; }
 .pass .status { color: #0b5394; }
 .over_margin .status { color: #a86800; }
+.warning .status { color: #9000f8; }
 .repair { font-size: 0.9em; color: #8e1b0e; }
 .uncertainty { font-size: 0.9em; color: #444; }
 .uncertainty-method { font-size: 0.85em; color: #666; margin-top: -0.4em; }

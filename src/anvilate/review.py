@@ -125,12 +125,15 @@ class ReviewPriority(IntEnum):
 
     NOT_EVALUATED = 0
     FAILING = 1
-    FRAGILE_MARGIN = 2
-    UNATTRIBUTED_ASSUMPTION = 3
-    MODEL_ASSUMPTION = 4
-    THIN_MARGIN = 5
-    OVER_MARGIN = 6
-    ROUTINE = 7
+    # Met its limit inside a band the document asked to hear about: the reviewer decides
+    # whether that band was meant to be entered, so it comes straight after the failures.
+    WARNING = 2
+    FRAGILE_MARGIN = 3
+    UNATTRIBUTED_ASSUMPTION = 4
+    MODEL_ASSUMPTION = 5
+    THIN_MARGIN = 6
+    OVER_MARGIN = 7
+    ROUTINE = 8
 
 
 def _an_origin(value: object) -> DecisionOrigin:
@@ -174,6 +177,8 @@ def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewP
         return ReviewPriority.NOT_EVALUATED
     if entry.status is CheckStatus.FAIL:
         return ReviewPriority.FAILING
+    if entry.status is CheckStatus.WARNING:
+        return ReviewPriority.WARNING
     # A nominal PASS whose attached margin distribution shows a material shortfall
     # probability is the dossier's whole reason for existing, and it used to sort as
     # ROUTINE — headline "passes", absent from `attention_first`, and summarised as

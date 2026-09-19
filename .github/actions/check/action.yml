@@ -85,6 +85,7 @@ runs:
         #   2 a card could not be evaluated
         #   3 the request was wrong
         #   4 the operation is unbuilt
+        #   6 a check met its limit inside a declared caution band
         # Only 2 is ever forgiven, and only when the caller asked for it in as many words.
         if [ "$status" -eq 2 ] && [ "$ANVILATE_ALLOW_NOT_EVALUATED" = "true" ]; then
           echo "::warning::a card could not be fully evaluated; allow-not-evaluated is on"

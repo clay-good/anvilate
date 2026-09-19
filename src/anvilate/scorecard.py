@@ -51,10 +51,16 @@ class CheckStatus(StrEnum):
     concept screen and got one — and it is not ``NOT_EVALUATED`` either, because "I chose
     not to screen that yet" and "I could not screen that" are different facts about a
     design that a reader acts on differently. Every surface states both counts.
+
+    ``WARNING`` is a check that met its hard limit and entered a caution band its document
+    declared: material inside a keepout's clearance margin that does not reach the protected
+    core. It is not a pass, so a card holding one does not pass, and it is not a failure,
+    so it neither blocks as one nor reads as one.
     """
 
     PASS = "pass"
     FAIL = "fail"
+    WARNING = "warning"
     OVER_MARGIN = "over_margin"
     OUT_OF_DEPTH = "out_of_depth"
     NOT_EVALUATED = "not_evaluated"
@@ -81,8 +87,11 @@ _STATUS_RANK: dict[CheckStatus, int] = {
     # unevaluated one.
     CheckStatus.OUT_OF_DEPTH: 1,
     CheckStatus.OVER_MARGIN: 2,
-    CheckStatus.NOT_EVALUATED: 3,
-    CheckStatus.FAIL: 4,
+    # A warning outranks every kind of pass and nothing that did not run: the design met its
+    # limit and is inside a band the document asked to be told about.
+    CheckStatus.WARNING: 3,
+    CheckStatus.NOT_EVALUATED: 4,
+    CheckStatus.FAIL: 5,
 }
 
 
@@ -727,6 +736,8 @@ class Scorecard(ItemCollection, StatableModel):
             return CheckStatus.FAIL
         if not self.entries or any(e.status is CheckStatus.NOT_EVALUATED for e in self.entries):
             return CheckStatus.NOT_EVALUATED
+        if any(e.status is CheckStatus.WARNING for e in self.entries):
+            return CheckStatus.WARNING
         if any(e.status is CheckStatus.OVER_MARGIN for e in self.entries):
             return CheckStatus.OVER_MARGIN
         # The last rung before a clean pass: a card whose only blemish is a deliberate
@@ -753,6 +764,10 @@ class Scorecard(ItemCollection, StatableModel):
     def failures(self) -> tuple[ScorecardEntry, ...]:
         """The checks that ran and failed — the blocking issues."""
         return tuple(e for e in self.entries if e.status is CheckStatus.FAIL)
+
+    def warnings(self) -> tuple[ScorecardEntry, ...]:
+        """The checks that met their limit inside a declared caution band."""
+        return tuple(e for e in self.entries if e.status is CheckStatus.WARNING)
 
     def over_margin(self) -> tuple[ScorecardEntry, ...]:
         """The checks that passed but ran past their band — the over-engineered."""

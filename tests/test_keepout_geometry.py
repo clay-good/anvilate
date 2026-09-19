@@ -103,10 +103,11 @@ def test_a_thickened_plate_intrudes_and_the_card_fails_with_a_repair() -> None:
     assert entries["keepout intrusion"].status is CheckStatus.FAIL
 
 
-def test_material_in_the_margin_band_is_not_a_pass() -> None:
+def test_material_in_the_margin_band_is_a_warning_not_a_pass() -> None:
     entries, _, _ = _check("26.7 mm")
     entry = entries["keepout beam_path"]
-    assert entry.status is CheckStatus.FAIL
+    assert entry.status is CheckStatus.WARNING
+    assert entries["keepout intrusion"].status is CheckStatus.WARNING
     assert "stops 0.3 mm from keepout 'beam_path'" in entry.detail
     assert "inside its 0.5 mm clearance margin" in entry.detail
     assert "the core is clear" in entry.detail

@@ -134,6 +134,9 @@ _QIF_ORGANIZATIONS = frozenset(
 _CHARACTERISTIC_STATUS: dict[CheckStatus, str] = {
     CheckStatus.PASS: "PASS",
     CheckStatus.OVER_MARGIN: "PASS",
+    # A warning met its limit; QIF has no word for "inside a declared caution band", so the
+    # characteristic conforms and the finding is carried in its Description.
+    CheckStatus.WARNING: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.NOT_EVALUATED: "NOT_ANALYZED",
     # A deferred characteristic was not analyzed either. QIF has no word for "deliberately
@@ -149,6 +152,7 @@ _CHARACTERISTIC_STATUS: dict[CheckStatus, str] = {
 _INSPECTION_STATUS: dict[CheckStatus, str] = {
     CheckStatus.PASS: "PASS",
     CheckStatus.OVER_MARGIN: "PASS",
+    CheckStatus.WARNING: "PASS",
     CheckStatus.FAIL: "FAIL",
     CheckStatus.NOT_EVALUATED: "NOT_CALCULATED",
     CheckStatus.OUT_OF_DEPTH: "NOT_CALCULATED",
@@ -244,6 +248,11 @@ def _description(entry: ScorecardEntry, layer: str) -> str:
         parts.append(
             "over-margin: this check passed above its declared target band; QIF has no "
             "status for an over-engineered pass, so it is reported here as PASS"
+        )
+    if entry.status is CheckStatus.WARNING:
+        parts.append(
+            "warning: this check met its limit inside a caution band its document declared; "
+            "QIF has no status for that, so it is reported here as PASS"
         )
     if entry.repair_hint is not None:
         parts.append(f"repair: {entry.repair_hint}")

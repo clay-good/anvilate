@@ -3847,6 +3847,7 @@ def test_no_transition_into_not_evaluated_is_ever_an_improvement():
         frozenset({CheckStatus.FAIL, CheckStatus.NOT_EVALUATED}),
         frozenset({CheckStatus.FAIL, CheckStatus.OUT_OF_DEPTH}),
         frozenset({CheckStatus.OVER_MARGIN, CheckStatus.OUT_OF_DEPTH}),
+        frozenset({CheckStatus.WARNING, CheckStatus.OUT_OF_DEPTH}),
         frozenset({CheckStatus.NOT_EVALUATED, CheckStatus.OUT_OF_DEPTH}),
     }
     for was in statuses:
@@ -3891,6 +3892,8 @@ def test_no_transition_into_not_evaluated_is_ever_an_improvement():
         ("fail", "out_of_depth"),
         ("over_margin", "out_of_depth"),
         ("not_evaluated", "out_of_depth"),
+        # A warning deferred deletes a check that ran and flagged something.
+        ("warning", "out_of_depth"),
     }, (
         f"this rule differs from the blocking order on {sorted(moved)}; it is meant to differ "
         f"on exactly the transition that deleted a failing check"

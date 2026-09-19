@@ -89,6 +89,9 @@ EXIT_NOT_EVALUATED = 2
 EXIT_BAD_REQUEST = 3
 EXIT_UNBUILT = 4
 EXIT_INTERNAL_ERROR = 5
+# A card whose worst entry is a warning: nothing failed and everything ran, and the design
+# is inside a band its document asked to hear about. Not 0, because it is not a pass.
+EXIT_WARNING = 6
 
 #: The exit code for each rolled-up scorecard status, and nothing else. Written as a total
 #: map over the enumeration rather than an if-chain with an else, so a fifth status is a
@@ -99,6 +102,7 @@ EXIT_CODES: dict[CheckStatus, int] = {
     # A deliberate deferral is not a failure: the engineer asked for a concept screen and
     # got one. The card and every rendering still state the count.
     CheckStatus.OUT_OF_DEPTH: EXIT_OK,
+    CheckStatus.WARNING: EXIT_WARNING,
     CheckStatus.FAIL: EXIT_FAILED,
     CheckStatus.NOT_EVALUATED: EXIT_NOT_EVALUATED,
 }
@@ -113,14 +117,15 @@ _BLOCKING_ORDER = [
     # is, which is why `_moved_for_the_worse` does not read this list alone.
     CheckStatus.OUT_OF_DEPTH,
     CheckStatus.OVER_MARGIN,
+    CheckStatus.WARNING,
     CheckStatus.NOT_EVALUATED,
     CheckStatus.FAIL,
 ]
 
 #: The statuses in which a check actually produced a verdict. The two that are not here are
 #: the two ways a check does not run: it could not, or the document deferred it.
-_RAN = frozenset({CheckStatus.PASS, CheckStatus.OVER_MARGIN, CheckStatus.FAIL})
-_EXIT_SEVERITY = [EXIT_OK, EXIT_NOT_EVALUATED, EXIT_FAILED]
+_RAN = frozenset({CheckStatus.PASS, CheckStatus.OVER_MARGIN, CheckStatus.WARNING, CheckStatus.FAIL})
+_EXIT_SEVERITY = [EXIT_OK, EXIT_WARNING, EXIT_NOT_EVALUATED, EXIT_FAILED]
 
 # Where the specification for the missing half lives. A URL rather than `openspec/specs/…`:
 # the refusals below are read by somebody who ran `pip install anvilate`, and a bare
@@ -2658,7 +2663,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     for path, spec, card in results:
         system = spec.units.value if spec.units else None
         for entry in card.entries:
-            if entry.status in (CheckStatus.FAIL, CheckStatus.NOT_EVALUATED):
+            if entry.status in (CheckStatus.FAIL, CheckStatus.WARNING, CheckStatus.NOT_EVALUATED):
                 # The spec's units here too. This line is what a CI log shows, and it is
                 # the one place a failing check is reported to somebody who never opens the
                 # card — so it printing millimetres for a US document is the same defect
@@ -2875,6 +2880,7 @@ def _run_summary(noun: str, statuses: list[CheckStatus], worst: CheckStatus) -> 
     for status, word in (
         (CheckStatus.FAIL, "failed"),
         (CheckStatus.NOT_EVALUATED, "not evaluated"),
+        (CheckStatus.WARNING, "warning"),
         (CheckStatus.OVER_MARGIN, "over margin"),
     ):
         if tally[status]:

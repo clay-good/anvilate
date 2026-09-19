@@ -20,9 +20,8 @@
 
 - [x] 3.1 T0 intrusion check: intersection volume, worst penetration depth, intruding tag —
       `anvilate.keepouts.check_keepouts`, with a summary of what was screened
-- [ ] 3.2 Clearance-margin band: intrusion into the margin warns, into the core fails — the
-      band is measured and named; it fails rather than warns, because the scorecard has no
-      warning status yet
+- [x] 3.2 Clearance-margin band: intrusion into the margin warns, into the core fails — a new
+      `warning` status: not a pass, not a failure, its own exit code (6)
 - [x] 3.3 Not-evaluated when a declared keepout was not generated or not checked — every
       declared keepout until intrusion is measured, naming a lost anchor
 - [x] 3.4 Repair hint naming the intruding feature and the direction that resolves it — solved

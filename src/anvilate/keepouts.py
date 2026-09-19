@@ -10,10 +10,8 @@ Each keepout is then measured against the part solid, at nominal geometry:
 
 - material in the protected **core** fails, naming the intersection volume and the worst
   penetration, the intersection's extent along the keepout axis;
-- material in the **clearance margin** band fails too, as a margin intrusion with the
-  clearance that remains. The spec asks for a warning here, and the library has no
-  warning status; a margin the document declared is a requirement it stated, so the entry
-  fails and says the core is untouched rather than passing over it;
+- material in the **clearance margin** band is a warning: the core is clear and the entry
+  says so with the clearance that remains, and a card holding one does not pass;
 - a clean keepout states the clearance it was measured at.
 
 The keepout bodies are returned separately and never unioned into the part. A summary entry
@@ -33,7 +31,7 @@ from .derivation import DerivationAbsence, Underived
 from .export.dxf import _atomic_path
 from .export.gate import ExportAuthorization
 from .geometry import BuiltGeometry, GeometryUnavailable
-from .scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
+from .scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from .spec import (
     CylinderKeepout,
     DesignSpec,
@@ -276,7 +274,7 @@ def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> t
         return (
             ScorecardEntry(
                 name=name,
-                status=CheckStatus.FAIL,
+                status=CheckStatus.WARNING,
                 detail=(
                     f"{part.name} stops {clearance:.3g} mm from keepout {about}, inside its "
                     f"{margin:g} mm clearance margin; the core is clear, {_NOMINAL}"
@@ -323,9 +321,7 @@ def screen_keepouts(
         smallest, tag = min(clearances)
         summary = ScorecardEntry(
             name="keepout intrusion",
-            status=CheckStatus.PASS
-            if all(e.status is CheckStatus.PASS for e in entries)
-            else CheckStatus.FAIL,
+            status=Scorecard(entries=tuple(entries)).status,
             detail=(
                 f"{len(bodies)} of {len(spec.keepouts)} keepouts screened against 1 body "
                 f"({part.name}); smallest clearance {smallest:.3g} mm, at keepout '{tag}', "

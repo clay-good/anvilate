@@ -93,6 +93,7 @@ _PRECEDENCE: tuple[CheckStatus, ...] = (
     CheckStatus.PASS,
     CheckStatus.OUT_OF_DEPTH,
     CheckStatus.OVER_MARGIN,
+    CheckStatus.WARNING,
     CheckStatus.NOT_EVALUATED,
     CheckStatus.FAIL,
 )

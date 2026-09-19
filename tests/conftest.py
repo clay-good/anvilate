@@ -488,6 +488,7 @@ def _uncrossed_shapes() -> list[str]:
     in_qif = {
         CheckStatus.PASS: "PASS",
         CheckStatus.OVER_MARGIN: "PASS",  # QIF has no "passed too well"; the finding is prose
+        CheckStatus.WARNING: "PASS",  # met its limit; the caution band is in the Description
         CheckStatus.FAIL: "FAIL",
         CheckStatus.NOT_EVALUATED: "NOT_ANALYZED",
         # A deferred characteristic was not analyzed either. Written here independently, as

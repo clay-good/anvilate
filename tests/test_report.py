@@ -2101,7 +2101,7 @@ def test_the_status_palette_stays_distinct_under_colour_vision_deficiency():
     import itertools
 
     status, text, page = _stylesheet_colours()
-    assert set(status) == {"fail", "pass", "over_margin"}, status
+    assert set(status) == {"fail", "pass", "over_margin", "warning"}, status
     background = _luminance(_linear(page))
     for name, colour in status.items():
         ratio = (background + 0.05) / (_luminance(_linear(colour)) + 0.05)

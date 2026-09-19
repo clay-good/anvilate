@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Scorecard 1.10.0: a warning status
+
+A check's status gains `warning`: the check met its hard limit and entered a caution band its
+document declared, such as material in a keepout's clearance margin that does not reach the
+core. It is not a pass, so a card holding one does not pass, and it is not a failure. It rolls
+up after `fail` and `not_evaluated` and before `over_margin`, and `anvilate check` exits 6 on
+it. Evidence Bundle 1.18.0, STEP interface candidates 1.12.0 and CLI output 1.45.0 carry the
+status enumeration and move with it.
+
 ### Design Spec 1.16.0: where a keepout sits on its anchor
 
 A keepout gains `offset`, the distance from its anchor face to its near end, measured into

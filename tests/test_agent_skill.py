@@ -664,7 +664,9 @@ def test_the_shipped_skill_states_the_ranking_the_scorecard_actually_uses():
 
     skill = " ".join(skill_text().split())
     order = [status.value for status in sorted(_STATUS_RANK, key=_STATUS_RANK.get, reverse=True)]
-    assert order == ["fail", "not_evaluated", "over_margin", "out_of_depth", "pass"], order
+    assert order == ["fail", "not_evaluated", "warning", "over_margin", "out_of_depth", "pass"], (
+        order
+    )
     # The rungs are named, in order, in one sentence.
     quoted = ", then ".join(f"`{name}`" for name in order)
     assert quoted in skill, f"the skill does not name the rungs in ranking order: {quoted}"
