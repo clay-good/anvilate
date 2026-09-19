@@ -108,10 +108,32 @@ def test_a_root_radius_that_cannot_fit_is_refused():
         )
 
 
-@pytest.mark.parametrize("written", ["IPE 200", "IPE200", "ipe 200", "  Ipe  200 "])
-def test_a_designation_resolves_however_it_is_spaced_or_cased(written):
-    assert canonical_designation(written) == "IPE 200"
-    assert default_profile_table().get(written).designation == "IPE 200"
+@pytest.mark.parametrize(
+    ("written", "profile"),
+    [
+        ("IPE 200", "IPE 200"),
+        ("IPE200", "IPE 200"),
+        ("ipe 200", "IPE 200"),
+        ("  Ipe  200 ", "IPE 200"),
+        ("IPE-200", "IPE 200"),
+        ("IPE_200", "IPE 200"),
+        ("HEA 300", "HEA 300"),
+        # EN 10365's own spelling of the H series, which the table refused before.
+        ("HE 300 A", "HEA 300"),
+        ("HE300A", "HEA 300"),
+        ("he 300a", "HEA 300"),
+    ],
+)
+def test_a_designation_resolves_however_it_is_written(written, profile):
+    assert canonical_designation(written) == profile
+    assert default_profile_table().get(written).designation == profile
+
+
+@pytest.mark.parametrize("written", ["HE 300 B", "HE 300 M", "HEB 300", "IPE 2OO", "HE A 300"])
+def test_a_near_spelling_of_a_profile_the_table_does_not_hold_is_not_read_as_one_it_does(written):
+    """HE 300 B is a heavier section than HE 300 A; resolving it as the A would under-state it."""
+    with pytest.raises(UnknownProfileError):
+        default_profile_table().get(written)
 
 
 def test_a_name_the_table_does_not_hold_is_refused_with_what_it_nearly_named():

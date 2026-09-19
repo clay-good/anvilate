@@ -246,8 +246,10 @@ element_params:
 ```
 
 The 42 IPE and HEA profiles of EN 10365 ship in `standards/data/en_profiles.yaml` as their
-five dimensions: depth, flange width, web and flange thickness, and root radius. Resolving
-a name makes no network call. The section properties are computed from those dimensions
+five dimensions: depth, flange width, web and flange thickness, and root radius. A name
+resolves in any case, with or without a space, hyphen or underscore, and in EN 10365's own
+spelling of the H series (`HE 300 A` is `HEA 300`). `HE 300 B` is refused rather than read
+as the lighter A section. Resolving a name makes no network call. The section properties are computed from those dimensions
 with the root fillets included (`CrossSection.rolled_i_section`). The plate-built I shape
 leaves the fillets out and is 4% short on the area of an IPE 200. A test holds every bundled
 profile to the published tabulations' own area and second moments: IPE to 0.1%, and HEA to

@@ -37,16 +37,24 @@ __all__ = [
 
 Length = Annotated[QuantityProperty, dimensioned("[length]", "profile dimension")]
 
-# A designation as people write it: the series, optional spaces, the nominal depth. Bounded
-# on both counts, because a spec field is a free string.
-_DESIGNATION = re.compile(r"\s{0,8}(IPE|HEA)\s{0,8}(\d{2,4})\s{0,8}", re.IGNORECASE)
+# A designation as people write it: the series, a separator or none, the nominal depth —
+# and EN 10365's own spelling of the H series, ``HE 200 A``. Bounded on every count, because
+# a spec field is a free string.
+_SEP = r"[\s_-]{0,8}"
+_DESIGNATION = re.compile(
+    rf"\s{{0,8}}(?:(IPE|HEA){_SEP}(\d{{2,4}})|HE{_SEP}(\d{{2,4}}){_SEP}A)\s{{0,8}}",
+    re.IGNORECASE,
+)
 
 
 def canonical_designation(text: str) -> str | None:
-    """``IPE 200`` for any spacing or case of it, or ``None`` for something else."""
+    """``IPE 200`` for any spacing, case or separator of it, ``HEA 200`` for ``HE 200 A``, or
+    ``None`` for something else."""
     match = _DESIGNATION.fullmatch(text)
     if match is None:
         return None
+    if match.group(3) is not None:
+        return f"HEA {int(match.group(3))}"
     return f"{match.group(1).upper()} {int(match.group(2))}"
 
 
