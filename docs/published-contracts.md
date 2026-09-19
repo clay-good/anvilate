@@ -118,9 +118,17 @@ exists to avoid.
 
 A provenance record's `kind` gains `section`. A member that names a rolled profile
 (`section: IPE 200`) takes its dimensions from the bundled EN 10365 table, and the trail
-records that table's citation. CLI output 1.49.0 carries the same bundle. The element
-schemas do not move: they publish the section a document resolves to, which is still a
-cross-section.
+records that table's citation. CLI output 1.49.0 carries the same bundle.
+
+### Element schemas describe what a document may write
+
+The element schemas were generated as what a model resolves to. That is right for the
+documents Anvilate writes and wrong for `element_params`, which a user writes: once a member
+could name its section, the published schema still said a section is an object. Element
+schemas are now published in validation mode. `beam_member`, `column_member` and
+`beam_column_member` move to 1.2.0, and `section` accepts a profile name or the properties.
+Every other element's schema is unchanged. A test validates every shipped example's
+`element_params`, as written, against its published schema.
 
 ### Scorecard 1.11.0: factors applied inside a capacity
 

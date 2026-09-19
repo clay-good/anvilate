@@ -451,3 +451,37 @@ def test_the_contract_tables_versions_are_the_constants_own():
         f"these published version constants have no row in the table: "
         f"{sorted(declared - named - {'SPEC_SCHEMA_VERSION'})}"
     )
+
+
+def test_an_element_document_the_library_accepts_its_published_schema_accepts_too():
+    """An element schema is a contract for input, so it is held against real input.
+
+    It was generated in serialization mode, which describes what a model resolves to: when a
+    member learned to take its section as a profile name ("IPE 200"), the published schema
+    still said a section is an object, and a client checking its own document against the
+    contract would have refused one the library screens. Every shipped example's
+    `element_params`, and a member naming its profile, as the user writes them.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent
+    documents = []
+    for path in sorted((root / "examples").rglob("*.yaml")):
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "element_type" in raw:
+            documents.append((path.name, raw["element_type"], raw["element_params"]))
+    assert len(documents) >= 4, documents
+    for tag in ("beam_member", "column_member"):
+        documents.append((f"{tag} naming IPE 200", tag, {"section": "IPE 200"}))
+    for where, tag, params in documents:
+        schema = _published(f"elements/{tag}.schema.json")
+        validator = jsonschema.Draft202012Validator(schema)
+        # The document may be partial (the named-section probes are); what must not happen is
+        # a present field the library accepts being refused by its own contract.
+        wrong = [
+            error.message
+            for error in validator.iter_errors(params)
+            if error.validator != "required"
+        ]
+        assert not wrong, f"{where}: the published {tag} schema refuses {wrong}"

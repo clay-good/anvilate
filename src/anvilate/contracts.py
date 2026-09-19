@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ._cli_output import CLI_OUTPUT_SCHEMA_VERSION
 from .geometry import (
@@ -155,14 +155,23 @@ VIEWPORT_SCHEMA_VERSION = "1.0.0"
 MEASUREMENT_SCHEMA_VERSION = "1.0.0"
 
 
-def _artifact(model: type, *, name: str, version: str, description: str) -> dict[str, Any]:
+def _artifact(
+    model: type,
+    *,
+    name: str,
+    version: str,
+    description: str,
+    mode: Literal["serialization", "validation"] = "serialization",
+) -> dict[str, Any]:
     """One model as a self-describing JSON Schema 2020-12 document.
 
-    ``mode="serialization"`` because the published contract is what Anvilate *writes*: a
-    validation schema built from the input side would describe the coercions pydantic
-    accepts rather than the document a consumer will actually receive.
+    ``mode="serialization"`` by default because most published contracts are what Anvilate
+    *writes*: a validation schema built from the input side would describe the coercions
+    pydantic accepts rather than the document a consumer will actually receive. A document
+    a *user* writes — a pack element's `element_params` — is published in validation mode,
+    because its reader is someone checking their own input against it.
     """
-    schema = model.model_json_schema(mode="serialization", ref_template="#/$defs/{model}")
+    schema = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
     return {
         "$schema": JSON_SCHEMA_DIALECT,
         "$id": f"{_BASE_ID}/{name}/{version}.json",
@@ -450,11 +459,15 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # A single shared number would have re-issued every element on any one element's change,
     # which is what this map exists to avoid. They share a version here because they share a
     # cause; the next bump will be one line.
+    #
+    # 1.2.0 for the three members that take a section: `section` also accepts the designation
+    # of a rolled profile the library carries ("IPE 200"). Element schemas are now published
+    # as what a document may write; for every other element that is the same schema.
     "base_plate": "1.1.0",
-    "beam_column_member": "1.1.0",
-    "beam_member": "1.1.0",
+    "beam_column_member": "1.2.0",
+    "beam_member": "1.2.0",
     "bolted_connection": "1.1.0",
-    "column_member": "1.1.0",
+    "column_member": "1.2.0",
     "concrete_bearing": "1.1.0",
     "cover_plate": "1.1.0",
     "driven_pile": "1.1.0",
@@ -507,6 +520,9 @@ def element_json_schemas() -> dict[str, dict[str, Any]]:
                 f"`element_params` when it declares `element_type: {tag}`. Generated from "
                 f"{model.__module__}.{model.__name__}."
             ),
+            # What a document may write, not what the screen resolves it to: a member names
+            # its section as "IPE 200", which the model resolves into a cross-section.
+            mode="validation",
         )
         for tag, (model, _screen) in sorted(element_registry().items())
     }
