@@ -654,8 +654,10 @@ modules:
   and the pressure swing P_f·(T_h − T_c)/T_f a thermal cycle pumps across a sealed volume,
   the stress it bends into a window in each direction, and the wavefront error
   0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) the bow leaves; and the mount shift Σk·δ/(k_m + Σk) the
-  harnesses crossing a mount pull into it; with retention after cycling stated as
-  verification-only, naming its test; and every coated and cemented surface held to its own
+  harnesses crossing a mount pull into it; a glass record read from a CC0
+  refractiveindex.info page, its index from the stated nd or the page's own Sellmeier
+  formula; with retention after cycling stated as verification-only, naming its test; and
+  every coated and cemented surface held to its own
   temperature, humidity and irradiance ratings; and an outgassing census of every
   non-metallic in the sealed volume, the condensable fraction governing; and a cleanliness
   requirement against the room built in, by the ISO 14644-1 limit 10^N·(0.1/D)^2.08; and
@@ -2534,6 +2536,7 @@ from .optomechanics import (
     miles_random_vibration_grms,
     mirror_tilt_line_of_sight,
     mount_decenter,
+    optical_material_from_refractiveindex,
     outgassing_census_scorecard,
     preload_temperature_scorecard,
     pressure_window_scorecard,
@@ -4722,6 +4725,7 @@ __all__ = [
     "pressure_window_scorecard",
     "HarnessCrossing",
     "harness_load_scorecard",
+    "optical_material_from_refractiveindex",
     "cycling_retention_scorecard",
     "SurfaceTreatment",
     "SurfaceLimits",

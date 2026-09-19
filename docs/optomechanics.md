@@ -41,6 +41,7 @@ tracer.
 | `cleanliness_scorecard(name, requirement, assembly_iso_class)` | A `CleanlinessRequirement` names its level, the ISO 14644-1 room class it needs, and the basis for that. No standard derives the room class from the surface level by formula, so the implication is declared and cited. A room dirtier than that class fails. Both rooms' limits at 0.5 µm come from `iso_cleanroom_concentration`, C = 10^N·(0.1/D)^2.08, rounded to three figures as the standard's table prints them: 352,000 per m³ for class 7. With no room declared, the entry is not evaluated. |
 | `adjustment_scorecard(name, mechanism, required_correction, vibration)` | An `AdjustmentMechanism` must reach the correction the other screens say it removes, and it must hold once set. A lock holds it. An unlocked screw holds statically only while μ ≥ tan λ, the power-screw self-locking condition. Under vibration an unlocked threaded adjustment fails whatever its friction (Junker). Missing resolution, travel or holding data is not evaluated, naming each. |
 | `adjustment_budget_contributors(mechanisms)` | Every adjustment as an alignment-budget contributor, √(resolution² + hysteresis²), because an adjustment that can be set can also move. A 2 µm-resolution screw with 5 µm of backlash contributes 5.39 µm. A mechanism missing either figure is refused, because a contributor left out of a budget is one the budget calls zero. |
+| `optical_material_from_refractiveindex(text, name, source)` | An `OpticalMaterial` read from one page of the CC0 refractiveindex.info database: `nd` and `Vd` where the page states them, else its Sellmeier (formula 2) dispersion at the d, F and C lines. A page whose formula disagrees with its own `nd` by more than 5e-4 is refused. Expansion is read per stated range and density in kg/m³, and nothing unstated is filled in. A vendor catalogue page is the user's to supply, or to fetch once with consent through `anvilate.fetch.fetch_dataset`, and none is bundled. The SCHOTT N-BK7 page reads back as the bundled `N_BK7`: nd 1.5168, Vd 64.17. |
 | `glass_contact_stress_scorecard(name, preload, contact_diameter, glass_radius, mount_radius, ...)` | The stress a retainer's preload puts into the glass where it touches. The preload spreads as a line load around the contact circle, and Hertz line contact gives the peak compression p₀ = √(p·E*/(π·R)). Glass breaks in tension, estimated as (1 − 2ν)/3·p₀. That relation is exact for a point contact and an approximation for this ring, and the docstring says so. A sharp 0.5 mm edge on a crown lens under 100 N reaches 28.3 MPa of tension. The allowable is the caller's, and the entry states what it is: a fracture probability set by Weibull flaw statistics, not a strength. |
 | `wavefront_budget_scorecard(name, contributors, wavelength, strehl_threshold)` | Named RMS contributors combined by root sum of squares and judged against the error at which a **declared** Strehl threshold is met. An empty budget is refused, because a total of nothing would pass. |
 
@@ -139,11 +140,11 @@ take to optical design software; the screen says which one that is.
 
 ## Status
 
-Built (`openspec/changes/add-optomechanical-module`, 1.1, 1.2, 1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
+Built (`openspec/changes/add-optomechanical-module`, 1.1–1.4, 2.1–2.4, 3.1–3.5, 4.2–4.4,
 5.1, 5.2, 6.1, 6.2, 7.1, 7.2, 8.1, 8.2, 9.1, 9.2, 10.1–10.9, 11.1, 11.2, 11.4, 11.5, 11.6 and 12.1–12.3):
 focus, pointing, wavefront and boresight screens, retention and shock, sealing, breathing
 and condensation, windows, coatings and cements, outgassing and cleanliness, harnesses,
 adjustments, the three workflow examples above, a catalogued failure mode declared by
-every screen in the module, and the five environment profiles. Not built yet: glass-catalogue ingestion (1.3),
-the clear aperture against a beam keepout (4.1, which waits on the keepout envelopes),
+every screen in the module, the five environment profiles, and glass records read from
+refractiveindex.info. Not built yet: the clear aperture against a beam keepout (4.1, which waits on the keepout envelopes),
 and the RMS form and focus share of a window's wavefront error (the rest of 11.3).

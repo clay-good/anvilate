@@ -1401,3 +1401,94 @@ def test_an_angular_result_is_rendered_in_the_readers_declared_unit() -> None:
     assert in_arcsec.comparison.measured.to("µrad").magnitude == pytest.approx(total, rel=1e-4)
     assert "MOA vs allowance 1.0 MOA" in boresight("1 MOA").detail
     assert "µrad" in boresight("200 µrad").detail
+
+
+# The SCHOTT N-BK7 page of the refractiveindex.info database (CC0 1.0), as published,
+# with its tabulated extinction data left out because the reader does not use it.
+_N_BK7_PAGE = """\
+# this file is part of refractiveindex.info database
+# refractiveindex.info database is in the public domain
+# copyright and related rights waived via CC0 1.0
+
+REFERENCES: |
+    SCHOTT Zemax catalog 2017-01-20b
+DATA:
+  - type: formula 2
+    wavelength_range: 0.3 2.5
+    coefficients: 0 1.03961212 0.00600069867 0.231792344 0.0200179144 1.01046945 103.560653
+CONDITIONS:
+    temperature: 293
+PROPERTIES:
+    nd: 1.5168
+    Vd: 64.17
+    glass_code: 517642.251
+    density:
+      - value: 2510
+    thermal_expansion:
+      - temperature_range: 243 343
+        value: 7.1e-06
+      - temperature_range: 293 573
+        value: 8.3e-06
+"""
+
+
+def _read(text: str):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import optical_material_from_refractiveindex
+
+    return optical_material_from_refractiveindex(
+        text, name="N-BK7", source="refractiveindex.info (CC0)"
+    )
+
+
+def test_a_refractiveindex_page_reads_back_as_the_bundled_record() -> None:
+    from anvilate.analysis.optomechanics import N_BK7
+
+    glass = _read(_N_BK7_PAGE)
+    assert glass.refractive_index == N_BK7.refractive_index
+    assert glass.abbe_number == N_BK7.abbe_number
+    assert [(c.value.magnitude, c.low.magnitude, c.high.magnitude) for c in glass.cte] == [
+        (c.value.magnitude, c.low.magnitude, c.high.magnitude) for c in N_BK7.cte
+    ]
+    assert glass.density is not None and glass.density.magnitude == 2510
+
+
+def test_without_nd_and_vd_the_page_s_own_sellmeier_formula_supplies_them() -> None:
+    bare = _N_BK7_PAGE.replace("    nd: 1.5168\n", "").replace("    Vd: 64.17\n", "")
+    glass = _read(bare)
+    # SCHOTT's catalogue values, which its own coefficients reproduce.
+    assert glass.refractive_index == pytest.approx(1.5168, abs=5e-5)
+    assert glass.abbe_number == pytest.approx(64.17, abs=0.01)
+
+
+def test_a_page_that_contradicts_itself_or_says_nothing_is_refused() -> None:
+    with pytest.raises(ValueError, match="contradicts itself"):
+        _read(_N_BK7_PAGE.replace("nd: 1.5168", "nd: 1.5268"))
+    with pytest.raises(ValueError, match="does not cover the F, d and C lines"):
+        _read(_N_BK7_PAGE.replace("wavelength_range: 0.3 2.5", "wavelength_range: 0.6 2.5"))
+    with pytest.raises(ValueError, match="neither nd nor"):
+        _read("PROPERTIES:\n    Vd: 60\n")
+    with pytest.raises(ValueError, match="not readable YAML"):
+        _read("DATA: [unclosed")
+    with pytest.raises(ValueError, match="thermal_expansion entry is malformed"):
+        _read(_N_BK7_PAGE.replace("temperature_range: 243 343", "temperature_range: 243"))
+
+
+def test_a_vendor_page_is_fetched_once_with_consent_and_read_offline(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import hashlib
+
+    from anvilate.fetch import ConsentRequired, DatasetRecipe, fetch_dataset
+
+    payload = _N_BK7_PAGE.encode()
+    recipe = DatasetRecipe(
+        name="n-bk7-page",
+        url="https://example.org/N-BK7.yml",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        license="CC0-1.0",
+        source="refractiveindex.info database",
+    )
+    with pytest.raises(ConsentRequired):
+        fetch_dataset(recipe, retrieved="2026-09-18", cache_dir=tmp_path, opener=lambda _: payload)
+    path, _ = fetch_dataset(
+        recipe, retrieved="2026-09-18", consent=True, cache_dir=tmp_path, opener=lambda _: payload
+    )
+    assert _read(path.read_text()).refractive_index == 1.5168

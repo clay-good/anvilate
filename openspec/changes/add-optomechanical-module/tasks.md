@@ -17,7 +17,7 @@
       values refused on input and on render
 - [x] 1.2 Optical material record: index at declared wavelengths, Abbe, dn/dT, CTE over a
       declared range, E, ν, density, Knoop, stress-optic coefficient — all with provenance
-- [ ] 1.3 refractiveindex.info (CC0) ingestion path; vendor catalogs user-supplied or
+- [x] 1.3 refractiveindex.info (CC0) ingestion path; vendor catalogs user-supplied or
       fetch-on-first-use, never redistributed
 - [x] 1.4 Property-at-temperature contract: a property used outside its declared valid
       range reports not-evaluated naming the range

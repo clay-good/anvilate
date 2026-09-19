@@ -23,6 +23,7 @@ from enum import StrEnum
 from math import cos, exp, isfinite, log, pi, sin, sqrt
 from typing import TYPE_CHECKING
 
+import yaml
 from pydantic import ConfigDict, model_validator
 
 from .._models import Named, Provenance, StatableModel, cited
@@ -76,6 +77,7 @@ __all__ = [
     "pressure_window_scorecard",
     "HarnessCrossing",
     "harness_load_scorecard",
+    "optical_material_from_refractiveindex",
     "cycling_retention_scorecard",
     "SurfaceTreatment",
     "SurfaceLimits",
@@ -2778,6 +2780,120 @@ def adjustment_budget_contributors(
         value = sqrt(mechanism.resolution.magnitude**2 + hysteresis**2)
         contributors[str(mechanism.mechanism)] = Quantity(magnitude=value, unit=unit)
     return contributors
+
+
+# The Fraunhofer lines the d-line index and the Abbe number are defined on, in µm.
+_D_LINE, _F_LINE, _C_LINE = 0.5875618, 0.4861327, 0.6562725
+# How far a page's own dispersion formula may sit from the nd it states before the page is
+# refused as contradicting itself: the fifth decimal a catalogue rounds nd to.
+_ND_AGREEMENT = 5e-4
+
+
+def _sellmeier_formula_2(coefficients: list[float], wavelength_um: float) -> float:
+    """refractiveindex.info formula 2: n² = 1 + C0 + Σ Bᵢ·λ²/(λ² − Cᵢ), λ in µm."""
+    square = 1.0 + coefficients[0]
+    for index in range(1, len(coefficients) - 1, 2):
+        b, c = coefficients[index], coefficients[index + 1]
+        square += b * wavelength_um**2 / (wavelength_um**2 - c)
+    if not square > 1:
+        raise ValueError(f"the dispersion formula gives n² = {square:.4f} at {wavelength_um} µm")
+    return sqrt(square)
+
+
+def optical_material_from_refractiveindex(text: str, *, name: str, source: str) -> OpticalMaterial:
+    """An :class:`OpticalMaterial` read from one refractiveindex.info database page.
+
+    The page is the YAML the CC0 refractiveindex.info database publishes, from the
+    database itself or from a vendor catalogue page the user supplies or fetches with
+    :func:`anvilate.fetch.fetch_dataset`; nothing a vendor licenses is bundled here. The
+    d-line index and the Abbe number are the page's ``nd`` and ``Vd`` where it states them,
+    and otherwise come from its formula-2 (Sellmeier) dispersion at the d, F and C lines.
+    Where it states both, the formula must agree with ``nd`` to 5e-4, or the page is refused
+    as contradicting itself. Expansion is read per stated range, in kelvin as the schema
+    states, and density in kg/m³. Nothing the page does not state is filled in.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("text must be the YAML of a refractiveindex.info page")
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("source must say where the page came from")
+    try:
+        page = yaml.safe_load(text)
+    except yaml.YAMLError as broken:
+        raise ValueError(f"'{name}': the page is not readable YAML: {broken}") from broken
+    if not isinstance(page, dict):
+        raise ValueError(f"'{name}': the page is not a refractiveindex.info record")
+    properties = page.get("PROPERTIES") or {}
+    if not isinstance(properties, dict):
+        raise ValueError(f"'{name}': PROPERTIES is not a mapping")
+    formula = None
+    for block in page.get("DATA") or ():
+        if isinstance(block, dict) and block.get("type") == "formula 2":
+            try:
+                coefficients = [float(value) for value in str(block["coefficients"]).split()]
+                low, high = (float(value) for value in str(block["wavelength_range"]).split())
+            except (KeyError, ValueError) as broken:
+                raise ValueError(f"'{name}': a formula 2 block is malformed") from broken
+            if len(coefficients) < 3 or len(coefficients) % 2 == 0:
+                raise ValueError(
+                    f"'{name}': formula 2 takes C0 then pairs of terms; got {len(coefficients)}"
+                )
+            formula = (coefficients, low, high)
+    computed = None
+    if formula is not None:
+        coefficients, low, high = formula
+        if not (low <= _F_LINE and _C_LINE <= high):
+            raise ValueError(
+                f"'{name}': the dispersion formula is stated for {low} to {high} µm, which "
+                "does not cover the F, d and C lines"
+            )
+        n_d, n_f, n_c = (
+            _sellmeier_formula_2(coefficients, line) for line in (_D_LINE, _F_LINE, _C_LINE)
+        )
+        computed = (n_d, (n_d - 1) / (n_f - n_c))
+    stated_nd, stated_vd = properties.get("nd"), properties.get("Vd")
+    if stated_nd is not None and computed is not None:
+        if abs(float(stated_nd) - computed[0]) > _ND_AGREEMENT:
+            raise ValueError(
+                f"'{name}': the page states nd {stated_nd} and its own dispersion formula "
+                f"gives {computed[0]:.5f}; a page that contradicts itself is not data"
+            )
+    if stated_nd is None and computed is None:
+        raise ValueError(f"'{name}': the page states neither nd nor a formula 2 dispersion")
+    index = float(stated_nd) if stated_nd is not None else computed[0]  # type: ignore[index]
+    if stated_vd is not None:
+        abbe = float(stated_vd)
+    elif computed is not None:
+        abbe = computed[1]
+    else:
+        raise ValueError(f"'{name}': the page states neither Vd nor a dispersion formula")
+    cte = []
+    for stated in properties.get("thermal_expansion") or ():
+        try:
+            low_k, high_k = (float(value) for value in str(stated["temperature_range"]).split())
+            value = float(stated["value"])
+        except (KeyError, TypeError, ValueError) as broken:
+            raise ValueError(f"'{name}': a thermal_expansion entry is malformed") from broken
+        cte.append(
+            RangedProperty(
+                value=Quantity(magnitude=value, unit="1/K"),
+                low=Quantity(magnitude=low_k, unit="K"),
+                high=Quantity(magnitude=high_k, unit="K"),
+                source=source,
+            )
+        )
+    density = None
+    for stated in properties.get("density") or ():
+        if isinstance(stated, dict) and "value" in stated:
+            density = Quantity(magnitude=float(stated["value"]), unit="kg/m**3")
+            break
+    return OpticalMaterial(
+        name=name,
+        source=source,
+        refractive_index=index,
+        abbe_number=abbe,
+        cte=tuple(cte),
+        density=density,
+    )
 
 
 _JOHNSON = "Johnson, Contact Mechanics (1985), Hertzian line contact"
