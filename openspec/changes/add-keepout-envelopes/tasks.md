@@ -26,7 +26,8 @@
 ## 4. Export
 
 - [ ] 4.1 Dedicated layer/body on STEP and DXF, labeled non-manufacturing
-- [ ] 4.2 Keepout identity and reason recorded in the evidence bundle
+- [x] 4.2 Keepout identity and reason recorded in the evidence bundle — the exported bundle
+      carries each in its spec and its not-evaluated card entry
 
 ## 5. Tests
 

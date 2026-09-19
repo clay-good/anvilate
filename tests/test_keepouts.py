@@ -134,3 +134,19 @@ def test_a_moved_keepout_reads_as_its_own_line_in_a_diff() -> None:
         if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
     ]
     assert len(changed) == 2 and all("5.0" in line or "2.0" in line for line in changed)
+
+
+def test_the_evidence_bundle_records_each_keepout_with_its_reason() -> None:
+    """Both the bundle's spec and its card name the keepout, its reason and its anchor."""
+    import json
+
+    from anvilate.bundle import BundleSections
+
+    spec = load_spec_yaml(_ENCLOSURE)
+    sections = BundleSections(scorecard=screen_spec(spec), spec=spec)
+    exported = json.dumps(sections.to_document_dict())
+    rendered = sections.render_document()
+    for text in (exported, rendered):
+        assert "service_corridor" in text
+        assert "a technician's hand reaches the fuse through the service door" in text
+        assert "service_door" in text
