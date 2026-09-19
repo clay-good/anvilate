@@ -9402,3 +9402,17 @@ def test_thermal_range_example_repairs_to_not_evaluated_not_to_pass():
     # Retention after cycling is the test's to show, so the repaired card cannot pass.
     assert namespace["repaired_card"]().status is CheckStatus.NOT_EVALUATED
     _assert_narrates_rendered("thermal_range_assembly.py", namespace)
+
+
+def test_enclosure_keepouts_example_fails_on_its_corridor_and_passes_repaired():
+    pytest.importorskip("build123d")
+    namespace = runpy.run_path(str(_EXAMPLES / "enclosure_keepouts.py"))
+    drawn = {entry.name: entry for entry in namespace["card"]().entries}
+    corridor = drawn["keepout service_corridor"]
+    assert corridor.status is CheckStatus.FAIL
+    assert drawn["keepout j1_mating_envelope"].status is CheckStatus.PASS
+    assert corridor.repair_hint is not None
+    assert corridor.repair_hint.parameter == "plate_thickness"
+    assert corridor.repair_hint.corrective_value == pytest.approx(19.5, abs=0.01)
+    assert namespace["repaired_card"]().status is CheckStatus.PASS
+    _assert_narrates_rendered("enclosure_keepouts.py", namespace)

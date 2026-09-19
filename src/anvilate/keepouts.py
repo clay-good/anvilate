@@ -47,6 +47,9 @@ __all__ = ["KeepoutBody", "build_keepout", "screen_keepouts", "keepout_label", "
 
 # Below this the kernel's common volume is round-off, not material (mm³).
 _VOLUME_EPSILON = 1e-6
+# Below this a distance is round-off (mm): a nanometre, far under any clearance a drawing
+# states.
+_DISTANCE_EPSILON = 1e-6
 _NOMINAL = "at nominal geometry, without declared tolerances applied"
 # Which dimension of a box-shaped pattern runs along each axis, for the repair hint.
 _BOX_AXES = {0: "width", 1: "depth", 2: "plate_thickness"}
@@ -198,6 +201,9 @@ def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> t
             0.0,
         )
     clearance = float(solid.distance_to(body.core))
+    # The kernel's distance between touching bodies is round-off, not a gap.
+    if clearance < _DISTANCE_EPSILON:
+        clearance = 0.0
     if clearance < margin:
         return (
             ScorecardEntry(

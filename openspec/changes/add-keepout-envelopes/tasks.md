@@ -45,5 +45,5 @@
 
 ## 6. Docs & examples
 
-- [ ] 6.1 Example: an enclosure with a connector mating envelope and a service-access
-      corridor
+- [x] 6.1 Example: an enclosure with a connector mating envelope and a service-access
+      corridor — examples/enclosure_keepouts.py
