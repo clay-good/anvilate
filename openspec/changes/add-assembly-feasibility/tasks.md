@@ -14,7 +14,8 @@
 
 - [x] 2.1 Tool-access sweep generated as a keepout and checked by the existing intrusion
       mechanism — not a second collision implementation
-- [ ] 2.2 Swing-arc screen against available clearance, reporting the arc achieved
+- [x] 2.2 Swing-arc screen against available clearance, reporting the arc achieved —
+      `screen_swing_arc`, sampled every degree and saying so
 - [x] 2.3 Access evaluated per declared assembly state, not on the bare part —
       `screen_tool_access`
 - [x] 2.4 Order feasibility: report a valid order or the blocking parts

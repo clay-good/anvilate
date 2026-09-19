@@ -122,6 +122,7 @@ ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 ## no lever recorded
 assembly.screen_adjustment_access
 assembly.screen_tool_access
+assembly.screen_swing_arc
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard

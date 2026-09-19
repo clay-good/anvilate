@@ -72,8 +72,18 @@ state and the shelf. A requirement with no state is not evaluated, and so is one
 installed parts were given no geometry, because access is never measured on an assembly with
 a part missing.
 
+`screen_swing_arc` asks whether a wrench can turn. A `SwingRequirement` states the handle's
+length, width and depth, the height it turns at above the face, and the arc it needs, with
+its source: 60° turns a hexagon one flat, 30° is enough for an open-end wrench that can be
+flipped. The handle is placed at every degree around the feature and checked against the
+neighbours the state has installed, and the largest free run, wrapping through 360°, is the
+arc achieved, stated to that 1° sampling. An 80 mm handle between two walls 40 mm either
+side of a nut swings 53°, short of 60° and bounded by the walls; with the walls at 70 mm it
+swings 115°. There is no closed form for an arbitrary obstruction, so the geometry is
+sampled, and the entry says so.
+
 ## Status
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
 envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1, 2.3, 2.4, 3.1, 4.1–4.5, 5.1). Not built yet: the swing-arc screen, serviceability and inspectability, repair hints on the access findings, and the rest of the failure-mode entries.
+1.1–1.4, 2.1–2.4, 3.1, 4.1–4.5, 5.1). Not built yet: serviceability and inspectability, repair hints on the access findings, and the rest of the failure-mode entries.

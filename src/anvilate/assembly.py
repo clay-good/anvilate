@@ -44,6 +44,8 @@ __all__ = [
     "ToolEnvelope",
     "AccessRequirement",
     "screen_tool_access",
+    "SwingRequirement",
+    "screen_swing_arc",
 ]
 
 
@@ -531,3 +533,180 @@ def screen_tool_access(
             )
         )
     return tuple(entries)
+
+
+class SwingRequirement(StatableModel):
+    """A wrench that must turn a feature, the arc it needs, and the state it turns it in.
+
+    The handle is a bar ``handle_length`` long from the feature's axis, ``handle_width`` wide
+    and ``handle_thickness`` deep, turning in a plane ``height`` above ``face``. The arc is
+    the user's to state, with its reason: 60° turns a hexagon one flat, 30° is enough for an
+    open-end wrench that can be flipped. The dimensions come from the user's tool, with
+    ``source`` saying which.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    feature: Named
+    face: Named
+    handle_length: Quantity
+    handle_width: Quantity
+    handle_thickness: Quantity
+    height: Quantity
+    required_arc: Quantity
+    source: Provenance
+    performed_in: Named | None = None
+
+    @model_validator(mode="after")
+    def _a_swing(self) -> SwingRequirement:
+        for label, value in (
+            ("handle_length", self.handle_length),
+            ("handle_width", self.handle_width),
+            ("handle_thickness", self.handle_thickness),
+            ("height", self.height),
+        ):
+            if not value.has_dimension("[length]") or value.to("mm").magnitude <= 0:
+                raise ValueError(
+                    f"'{self.feature}': {label} must be a positive length; got {value}"
+                )
+        arc = _degrees(self.required_arc, "required_arc")
+        if not 0 < arc <= 360:
+            raise ValueError(f"'{self.feature}': required_arc must lie in (0, 360]°; got {arc}")
+        return self
+
+
+def _degrees(value: Quantity, name: str) -> float:
+    if str(value.unit).strip() not in {
+        "deg",
+        "degree",
+        "°",
+        "rad",
+        "radian",
+        "arcmin",
+        "arcminute",
+    }:
+        raise ValueError(f"{name} must be an angle; got {value}")
+    return value.to("degree").magnitude
+
+
+# The swing is sampled at every degree: a handle placed at each angle and checked against the
+# neighbours. The arc reported is a count of free samples, so it is stated to this resolution.
+_SWING_STEP_DEGREES = 1
+
+
+def screen_swing_arc(
+    spec: DesignSpec,
+    part: Any,
+    *,
+    states: Sequence[AssemblyState],
+    bodies: Mapping[str, Any],
+    requirement: SwingRequirement,
+) -> ScorecardEntry:
+    """Whether a wrench can turn through the arc it needs, in the state it is used in.
+
+    The handle is placed at every degree around the feature's axis on ``face`` and checked
+    for a common volume with each neighbour the state has installed (the part itself is
+    what the wrench turns on, so it is not an obstruction). The largest run of free
+    placements, wrapping round through 360°, is the arc achieved, reported to 1° and
+    compared with the arc required; a shortfall names the bodies that bound it. There is no
+    closed form for an arbitrary obstruction, so this samples the declared geometry and says
+    so. States, missing geometry and an unknown state are treated as by
+    :func:`screen_tool_access`.
+    """
+    from .keepouts import _kernel
+
+    b = _kernel()
+    if not isinstance(requirement, SwingRequirement):
+        raise ValueError(f"requirement must be a SwingRequirement; got {requirement!r}")
+    states = each_one(states, AssemblyState, named="states")
+    order = [state.name for state in states]
+    name = f"swing arc: {requirement.feature}" + (
+        f" in {requirement.performed_in}" if requirement.performed_in else ""
+    )
+    if requirement.performed_in is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"the wrench on {requirement.feature} states no assembly state it is used in",
+        )
+    if requirement.performed_in not in order:
+        raise ValueError(
+            f"the swing on {requirement.feature} names the state '{requirement.performed_in}', "
+            f"which the build does not define; its states are {order}"
+        )
+    installed = [
+        installed_part
+        for state in states[: order.index(requirement.performed_in) + 1]
+        for installed_part in state.installs
+    ]
+    missing = [label for label in installed if label not in bodies]
+    if missing:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"in {requirement.performed_in}, {', '.join(missing)} installed with no geometry "
+                "given, and a swing is not measured against an assembly with a part missing"
+            ),
+        )
+    faces = part.faces.get(str(requirement.face))
+    if not faces:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"'{requirement.face}' is not a face this build tags; it tags {sorted(part.faces)}"
+            ),
+        )
+    face = faces[0]
+    centre = face.center()
+    outward = face.normal_at(centre)
+    mm = lambda value: value.to("mm").magnitude  # noqa: E731 - three uses, one line each
+    plane = b.Plane(origin=centre + outward * mm(requirement.height), z_dir=outward)
+    handle = b.Box(
+        mm(requirement.handle_length),
+        mm(requirement.handle_width),
+        mm(requirement.handle_thickness),
+        align=(b.Align.MIN, b.Align.CENTER, b.Align.CENTER),
+    )
+    neighbours = {label: bodies[label] for label in installed}
+    free, blockers = [], {}
+    for angle in range(0, 360, _SWING_STEP_DEGREES):
+        placed = plane.location * b.Rot(0, 0, angle) * handle
+        hit = [
+            label
+            for label, solid in neighbours.items()
+            if (common := solid & placed) is not None and float(common.volume) > 1e-6
+        ]
+        free.append(not hit)
+        blockers[angle] = hit
+    required = _degrees(requirement.required_arc, "required_arc")
+    if all(free):
+        achieved, bounded_by = 360, []
+    elif not any(free):
+        achieved, bounded_by = 0, sorted({label for hit in blockers.values() for label in hit})
+    else:
+        start = free.index(False)  # rotate so the scan begins at a blocked sample
+        rolled = free[start:] + free[:start]
+        best = run = 0
+        for is_free in rolled:
+            run = run + 1 if is_free else 0
+            best = max(best, run)
+        achieved = best * _SWING_STEP_DEGREES
+        bounded_by = sorted({label for hit in blockers.values() for label in hit})
+    context = (
+        f"in {requirement.performed_in}: a {mm(requirement.handle_length):g} mm handle on "
+        f"{requirement.feature} swings {achieved}° free (sampled every "
+        f"{_SWING_STEP_DEGREES}°) against {required:g}° required ({requirement.source})"
+    )
+    passes = achieved >= required
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS if passes else CheckStatus.FAIL,
+        detail=context + ("" if passes else f"; bounded by {', '.join(bounded_by)}"),
+        underived=Underived(
+            kind=DerivationAbsence.NUMERIC_RESULT,
+            reason="a B-Rep common-volume test of the handle at each sampled angle",
+        ),
+        addresses=("a fastener no tool reaches in the state it is driven",),
+    )

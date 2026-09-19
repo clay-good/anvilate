@@ -426,3 +426,64 @@ def test_tool_access_is_judged_in_the_state_it_is_used_in() -> None:
     )
     assert missing.status is CheckStatus.NOT_EVALUATED
     assert "service shelf is installed with no geometry given" in missing.detail
+
+
+def _walls(x: float):  # type: ignore[no-untyped-def]
+    """Two walls either side of the fastener, their inner faces x mm from its axis."""
+    from build123d import Align, Box, Pos
+
+    base = (Align.MIN, Align.CENTER, Align.MIN)
+    return Pos(x, 0, 25) * Box(20, 200, 50, align=base) + Pos(-x - 20, 0, 25) * Box(
+        20, 200, 50, align=base
+    )
+
+
+def _swing(state: str | None = "closed", arc: str = "60 deg"):  # type: ignore[no-untyped-def]
+    from anvilate.assembly import SwingRequirement
+
+    return SwingRequirement(
+        feature="M8 nut",
+        face="top",
+        handle_length=q("80 mm"),
+        handle_width=q("10 mm"),
+        handle_thickness=q("8 mm"),
+        height=q("15 mm"),
+        required_arc=q(arc),
+        source="the workshop's tool catalogue",
+        performed_in=state,
+    )
+
+
+def test_the_swing_arc_is_the_free_window_between_the_walls() -> None:
+    """Assembly 2.2: the arc achieved, to the sampling resolution, and what bounds it."""
+    import re
+    from math import acos, atan2, degrees, sqrt
+
+    from anvilate.assembly import AssemblyState, screen_swing_arc
+
+    states = (AssemblyState(name="open"), AssemblyState(name="closed", installs=("side walls",)))
+    _, _, built = _check("25 mm")
+
+    def free_window(x: float) -> float:
+        # The handle's far corner reaches 80·cos θ + 5·sin θ; it clears the wall at x above
+        # the angle solving that equality, on both sides of 90°.
+        radius, phase = sqrt(80**2 + 5**2), atan2(5, 80)
+        return 180 - 2 * degrees(acos(x / radius) + phase)
+
+    def swing(x: float, **changes):  # type: ignore[no-untyped-def]
+        return screen_swing_arc(
+            _plate_spec(),
+            built,
+            states=states,
+            bodies={"side walls": _walls(x)},
+            requirement=_swing(**changes),
+        )
+
+    tight, roomy = swing(40), swing(70)
+    for entry, x in ((tight, 40), (roomy, 70)):
+        achieved = float(re.search(r"swings (\d+)° free", entry.detail).group(1))  # type: ignore[union-attr]
+        assert abs(achieved - free_window(x)) <= 1.5, (achieved, free_window(x))
+    assert tight.status is CheckStatus.FAIL and "bounded by side walls" in tight.detail
+    assert roomy.status is CheckStatus.PASS
+    assert "swings 360° free" in swing(40, state="open").detail
+    assert swing(40, state=None).status is CheckStatus.NOT_EVALUATED
