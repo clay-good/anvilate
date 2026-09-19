@@ -29,8 +29,12 @@
 
 ## 4. Third-party modules
 
-- [ ] 4.1 Opt-in loading of out-of-tree modules under the existing sandbox
-- [ ] 4.2 Unverified-origin marking that survives into the scorecard and evidence bundle
+- [ ] 4.1 Opt-in loading of out-of-tree modules under the existing sandbox — BLOCKED: there
+      is no sandbox to load them under — the library executes no caller code and claims no
+      sandbox (tests/test_export_gate.py), and importing third-party Python without one is
+      running it unconfined
+- [ ] 4.2 Unverified-origin marking that survives into the scorecard and evidence bundle —
+      follows 4.1: until something out-of-tree can load, there is no contribution to mark
 
 ## 5. Docs
 

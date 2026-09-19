@@ -71,6 +71,8 @@ _TASK_METADATA_NONDETERMINISM = {
         "datetime.now(UTC)",
         "secrets.token_hex(32)",
         "secrets.compare_digest(",  # constant-time comparison, not random generation
+        # The grace a cancelled process group gets before SIGKILL: a timeout, never a value.
+        "time.monotonic()",
     ),
 }
 

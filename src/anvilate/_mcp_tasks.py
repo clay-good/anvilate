@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,9 @@ __all__: list[str] = []
 TASKS_EXTENSION = "io.modelcontextprotocol/tasks"
 _TASK_ID_PREFIX = "task_"
 _TERMINAL = frozenset({"completed", "cancelled", "failed"})
+
+#: How long a cancelled task's process group has to exit on SIGTERM before it is killed.
+CANCEL_GRACE_SECONDS = 2.0
 
 
 def _progress(
@@ -171,6 +175,22 @@ class TaskStore:
                 os.killpg(pid, signal.SIGTERM)
             else:  # pragma: no cover - Windows fallback; CI exercises process groups.
                 os.kill(pid, signal.SIGTERM)
+                return
+        except ProcessLookupError:
+            return
+        # A solver that traps SIGTERM — to write a restart file, say — would otherwise run on
+        # after its task reported cancelled. The group gets a bounded grace to exit, and then
+        # SIGKILL. Ownership was proved above; while any member of the group lives, its id
+        # cannot be handed to another group, so a group still answering here is still ours.
+        deadline = time.monotonic() + CANCEL_GRACE_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.02)
+        try:
+            os.killpg(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
 

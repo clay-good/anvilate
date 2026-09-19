@@ -77,7 +77,9 @@ closed-form or a table lookup — and returns the scorecard in the reply. `run_f
 covers T3, whose stopping condition is a convergence tolerance, and returns a handle. A
 client declaring `io.modelcontextprotocol/tasks` polls that durable handle with `tasks/get`.
 The current task completes with a typed `not_evaluated` T3 row because no FEA solver is
-shipped yet. Cancellation terminates the worker process group and completes with the same
+shipped yet. Cancellation sends SIGTERM to the worker process group, including any solver
+it started, then SIGKILL after a 2-second grace for anything that ignored it. It completes
+with the same
 domain verdict, explicitly naming cancellation, never as passing.
 
 Task responses carry namespaced structured progress in

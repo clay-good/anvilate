@@ -254,3 +254,88 @@ def test_a_late_worker_attachment_cannot_overwrite_a_terminal_result(monkeypatch
     final = store.read(task_id)
     assert final["status"] == "completed"
     assert final["result"]["structuredContent"] == {"scorecard": {}}
+
+
+# A stand-in worker: holds its task's lease, as the real one does, and starts a solver child in
+# its own process group. `stubborn` makes the child ignore SIGTERM, the way a solver that traps
+# the signal to write a restart file does.
+_WORKER = """
+import fcntl, signal, subprocess, sys, time
+lease_path, ready, stubborn = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+lease = open(lease_path, "a+")
+fcntl.flock(lease, fcntl.LOCK_EX)
+solver = (
+    "import signal, sys, time\\n"
+    + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\\n" if stubborn else "")
+    + "open(sys.argv[1], 'w').close()\\n"
+    + "time.sleep(60)\\n"
+)
+child = subprocess.Popen([sys.executable, "-c", solver, ready + ".solver"])
+while True:
+    try:
+        open(ready + ".solver").close()
+        break
+    except OSError:
+        time.sleep(0.01)
+with open(ready, "w") as marker:
+    marker.write(str(child.pid))
+time.sleep(60)
+"""
+
+
+def _cancel_a_worker_with_a_solver_child(tmp_path, *, stubborn: bool) -> tuple[int, int]:
+    import subprocess
+    import sys
+
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    lease = store._path(task_id).with_suffix(".worker")
+    ready = tmp_path / "ready"
+    worker = subprocess.Popen(
+        [sys.executable, "-c", _WORKER, str(lease), str(ready), "1" if stubborn else "0"],
+        start_new_session=True,
+    )
+    threading.Thread(target=worker.wait, daemon=True).start()
+    store.attach_worker(task_id, worker.pid)
+    deadline = time.monotonic() + 10.0
+    while not (ready.exists() and ready.read_text()):
+        assert time.monotonic() < deadline, "the stand-in worker never started its solver"
+        time.sleep(0.02)
+    solver = int(ready.read_text())
+    store.cancel(task_id, {"cancelled": True}, "Cancellation honored.")
+    return worker.pid, solver
+
+
+def _gone(pid: int, within: float) -> bool:
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def test_cancellation_terminates_the_solver_the_worker_started(tmp_path):
+    """Interaction-quality 1.5: the whole process group goes, not only the coordinator."""
+    worker, solver = _cancel_a_worker_with_a_solver_child(tmp_path, stubborn=False)
+    assert _gone(solver, 5.0), "the solver child survived its task's cancellation"
+    assert _gone(worker, 5.0)
+
+
+def test_a_solver_that_ignores_sigterm_is_killed_after_the_grace_period(tmp_path):
+    """A trapped SIGTERM does not keep a cancelled solver running."""
+    worker, solver = _cancel_a_worker_with_a_solver_child(tmp_path, stubborn=True)
+    assert _gone(solver, 5.0), "a solver ignoring SIGTERM outlived its task's cancellation"
+    assert _gone(worker, 5.0)
+
+
+def test_the_docs_quote_the_grace_the_code_gives():
+    from pathlib import Path
+
+    from anvilate._mcp_tasks import CANCEL_GRACE_SECONDS
+
+    docs = Path(__file__).parents[1] / "docs"
+    for page in ("agent-mcp-integration.md", "mcp-tool-contracts.md"):
+        assert f"{CANCEL_GRACE_SECONDS:g}-second grace" in (docs / page).read_text(), page

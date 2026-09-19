@@ -14,7 +14,10 @@
 - [x] 1.4 Cancellation at any point; partial artifacts removed or marked partial — the CLI
       reports a cancelled run as its own outcome (exit 130) with what it completed, and
       exports write atomically, so an interrupt leaves no partial artifact
-- [ ] 1.5 Cancellation terminates subprocess solvers and sandboxes, verified
+- [x] 1.5 Cancellation terminates subprocess solvers and sandboxes, verified — the MCP task
+      worker's whole process group gets SIGTERM, then SIGKILL after a 2 s grace; verified
+      with a stand-in worker whose solver child exits politely and one that ignores SIGTERM
+      (tests/test_mcp_tasks.py). No sandbox exists yet to terminate
 
 ## 2. Message quality
 

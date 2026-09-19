@@ -27,7 +27,8 @@ patterns are callable today:
 Compile, validate, and read are separate stateless calls because every later call names its
 subject handle. T3 adds a durable task handle: `tools/call` returns immediately,
 `tasks/get` reports `statusMessage` progress and eventually carries the ordinary typed tool
-result, and `tasks/cancel` terminates the worker process group. Cancellation completes with
+result, and `tasks/cancel` terminates the worker process group, including any solver it started.
+A solver that ignores SIGTERM is killed after a 2-second grace. Cancellation completes with
 a `not_evaluated` scorecard, not a passing card and not a nonstandard result on MCP's bare
 `cancelled` variant.
 
