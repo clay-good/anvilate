@@ -413,6 +413,8 @@ def test_tool_access_is_judged_in_the_state_it_is_used_in() -> None:
     assert before.name == "tool access: M8 cap screw by 13 mm socket in open"
     after = reach(performed_in="closed")
     assert after.status is CheckStatus.FAIL
+    assert after.repair_hint is not None and after.repair_hint.parameter == "body_diameter"
+    assert before.repair_hint is None
     assert after.detail.startswith("in closed: service shelf intrudes")
     assert reach().status is CheckStatus.NOT_EVALUATED
     with pytest.raises(ValueError, match="does not define"):
@@ -484,6 +486,9 @@ def test_the_swing_arc_is_the_free_window_between_the_walls() -> None:
         achieved = float(re.search(r"swings (\d+)° free", entry.detail).group(1))  # type: ignore[union-attr]
         assert abs(achieved - free_window(x)) <= 1.5, (achieved, free_window(x))
     assert tight.status is CheckStatus.FAIL and "bounded by side walls" in tight.detail
+    assert tight.repair_hint is not None and tight.repair_hint.parameter == "handle_length"
+    assert str(tight.repair_hint.direction) == "decrease"
+    assert swing(70).repair_hint is None
     assert roomy.status is CheckStatus.PASS
     assert "swings 360° free" in swing(40, state="open").detail
     assert swing(40, state=None).status is CheckStatus.NOT_EVALUATED

@@ -97,8 +97,14 @@ side of a nut swings 53°, short of 60° and bounded by the walls; with the wall
 swings 115°. There is no closed form for an arbitrary obstruction, so the geometry is
 sampled, and the entry says so.
 
+A blocked tool or a short swing carries a directional repair hint the repair loop reads: a
+smaller `body_diameter`, because a slimmer tool sweeps a subset of a wider one's space, and a
+shorter `handle_length`, because a shorter handle sweeps a subset of a longer one's disc.
+Neither is solved to a value, which would take the geometry search again. An adjustment or
+inspection blocked by a part has no numeric lever, only a route, so it carries none.
+
 ## Status
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
 envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1–2.6, 3.1, 4.1–4.5, 5.1). Not built yet: repair hints on the access findings, and the rest of the failure-mode entries.
+1.1–1.4, 2.1–2.6, 3.1, 3.2, 4.1–4.5, 5.1). Not built yet: the rest of the failure-mode entries.

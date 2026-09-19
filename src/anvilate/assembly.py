@@ -25,7 +25,7 @@ from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+from .scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from .spec import DesignSpec
 from .units import Quantity
 
@@ -531,6 +531,19 @@ def screen_tool_access(
                     "name": name,
                     "detail": f"in {requirement.performed_in}: {verdict.detail}",
                     "addresses": ("a fastener no tool reaches in the state it is driven",),
+                    # A slimmer tool sweeps a subset of the space a wider one does, so its
+                    # body diameter is a lever that can only help; the part's own hint, when
+                    # the part is what intrudes, stands.
+                    "repair_hint": verdict.repair_hint
+                    or (
+                        RepairHint.directional(
+                            "body_diameter",
+                            direction=Direction.DECREASE,
+                            provenance="subset of space a slimmer tool sweeps",
+                        )
+                        if verdict.status is CheckStatus.FAIL
+                        else None
+                    ),
                 }
             )
         )
@@ -706,6 +719,16 @@ def screen_swing_arc(
         name=name,
         status=CheckStatus.PASS if passes else CheckStatus.FAIL,
         detail=context + ("" if passes else f"; bounded by {', '.join(bounded_by)}"),
+        # A shorter handle sweeps a subset of a longer one's disc, so it can only free arc.
+        repair_hint=(
+            None
+            if passes
+            else RepairHint.directional(
+                "handle_length",
+                direction=Direction.DECREASE,
+                provenance="subset of the disc a shorter handle sweeps",
+            )
+        ),
         underived=Underived(
             kind=DerivationAbsence.NUMERIC_RESULT,
             reason="a B-Rep common-volume test of the handle at each sampled angle",

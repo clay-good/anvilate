@@ -27,7 +27,8 @@
 ## 3. Reporting
 
 - [x] 3.1 Findings name the feature, the tool, the state, and the blocking geometry
-- [ ] 3.2 Repair hints in the form the repair loop consumes
+- [x] 3.2 Repair hints in the form the repair loop consumes — directional hints on the
+      tool envelope and the handle, the two levers that are monotone
 - [ ] 3.3 Contribute assembly-stage entries to the failure-mode catalog
 
 ## 4. Tests
