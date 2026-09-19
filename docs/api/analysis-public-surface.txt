@@ -1164,6 +1164,9 @@ optomechanics.pressure_window_scorecard
 optomechanics.HarnessCrossing
 optomechanics.harness_load_scorecard
 optomechanics.optical_material_from_refractiveindex
+optomechanics.BeamEnvelope
+optomechanics.ApertureStation
+optomechanics.obscuration_scorecard
 optomechanics.cycling_retention_scorecard
 optomechanics.SurfaceTreatment
 optomechanics.SurfaceLimits

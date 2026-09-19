@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from math import cos, exp, isfinite, log, pi, sin, sqrt
+from math import acos, cos, exp, isfinite, log, pi, sin, sqrt, tan
 from typing import TYPE_CHECKING
 
 import yaml
@@ -37,6 +37,9 @@ from .plate import simply_supported_circular_plate_uniform_load
 from .power_screw import power_screw_is_self_locking
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 from .thermal import temperature_rise
+
+if TYPE_CHECKING:
+    from ..spec import Keepout
 
 __all__ = [
     "depth_of_focus",
@@ -78,6 +81,9 @@ __all__ = [
     "HarnessCrossing",
     "harness_load_scorecard",
     "optical_material_from_refractiveindex",
+    "BeamEnvelope",
+    "ApertureStation",
+    "obscuration_scorecard",
     "cycling_retention_scorecard",
     "SurfaceTreatment",
     "SurfaceLimits",
@@ -2893,6 +2899,188 @@ def optical_material_from_refractiveindex(text: str, *, name: str, source: str) 
         abbe_number=abbe,
         cte=tuple(cte),
         density=density,
+    )
+
+
+class BeamEnvelope(StatableModel):
+    """An optical beam's envelope as a cone, from angles the optical design supplies.
+
+    The module traces no rays, so the defining quantities are the user's, with their
+    ``source``: the beam's ``entrance_diameter`` at its start, the ``half_angle`` its edge
+    makes with the axis (negative for a converging beam) and its ``length``. The footprint
+    at a distance z is D₀ + 2·z·tan θ, and it must stay positive over the length: a beam
+    that comes to a focus inside it is two cones, which this record does not describe. The
+    cone is the first-order marginal-ray envelope of Smith's Modern Optical Engineering.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tag: Named
+    reason: Provenance
+    source: Provenance
+    entrance_diameter: Quantity
+    half_angle: Quantity
+    length: Quantity
+
+    @model_validator(mode="after")
+    def _a_beam(self) -> BeamEnvelope:
+        _check(self.entrance_diameter, "[length]", "entrance_diameter")
+        _check(self.length, "[length]", "length")
+        _radians(self.half_angle, "half_angle")
+        if self.entrance_diameter.to("mm").magnitude <= 0 or self.length.to("mm").magnitude <= 0:
+            raise ValueError(f"beam '{self.tag}': entrance_diameter and length must be positive")
+        if not abs(_radians(self.half_angle, "half_angle")) < pi / 2:
+            raise ValueError(f"beam '{self.tag}': half_angle must be less than 90°")
+        if self.footprint(self.length).magnitude <= 0:
+            raise ValueError(
+                f"beam '{self.tag}' comes to a focus inside its length; declare the two cones "
+                "either side of the focus as two envelopes"
+            )
+        return self
+
+    def footprint(self, distance: Quantity) -> Quantity:
+        """The beam's diameter at ``distance`` along it, D₀ + 2·z·tan θ, in mm."""
+        _check(distance, "[length]", "distance")
+        z = distance.to("mm").magnitude
+        slope = tan(_radians(self.half_angle, "half_angle"))
+        return Quantity(
+            magnitude=self.entrance_diameter.to("mm").magnitude + 2 * z * slope, unit="mm"
+        )
+
+    def keepout(
+        self, *, anchor: str, clearance_margin: Quantity, offset: Quantity | None = None
+    ) -> Keepout:
+        """This envelope as a keepout, so material in the beam fails the standard intrusion check.
+
+        A frustum from the entrance footprint, at the anchor, to the exit one, carrying the
+        beam's tag and reason, so a converging and a diverging beam each sit the right way
+        round.
+        """
+        from ..spec import FrustumKeepout, Keepout
+
+        return Keepout(
+            tag=self.tag,
+            anchor=anchor,
+            rule=FrustumKeepout(
+                base_diameter=self.entrance_diameter,
+                top_diameter=self.footprint(self.length),
+                height=self.length,
+            ),
+            clearance_margin=clearance_margin,
+            reason=self.reason,
+            offset=offset if offset is not None else Quantity(magnitude=0.0, unit="mm"),
+        )
+
+
+class ApertureStation(StatableModel):
+    """A mechanical clear aperture along the beam: its distance, diameter and decenter.
+
+    A retainer lip, a baffle or a spacer's bore, each a station at which the structure can
+    vignette the beam (Yoder and Vukobratovich, Opto-Mechanical Systems Design).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    station: Named
+    distance: Quantity
+    clear_aperture: Quantity
+    decenter: Quantity = Quantity(magnitude=0.0, unit="mm")
+
+    @model_validator(mode="after")
+    def _a_station(self) -> ApertureStation:
+        for label, value in (
+            ("distance", self.distance),
+            ("clear_aperture", self.clear_aperture),
+            ("decenter", self.decenter),
+        ):
+            _check(value, "[length]", label)
+            if value.magnitude < 0 or (label == "clear_aperture" and value.magnitude == 0):
+                raise ValueError(f"station '{self.station}': {label} must be positive; got {value}")
+        return self
+
+
+def _circle_overlap(r: float, big_r: float, d: float) -> float:
+    """The area two circles of radii r and R, centres d apart, have in common."""
+    if d >= r + big_r:
+        return 0.0
+    if d <= abs(big_r - r):
+        return pi * min(r, big_r) ** 2
+    lens = (-d + r + big_r) * (d + r - big_r) * (d - r + big_r) * (d + r + big_r)
+    return (
+        r * r * acos((d * d + r * r - big_r * big_r) / (2 * d * r))
+        + big_r * big_r * acos((d * d + big_r * big_r - r * r) / (2 * d * big_r))
+        - 0.5 * sqrt(max(lens, 0.0))
+    )
+
+
+def obscuration_scorecard(
+    name: str,
+    *,
+    beam: BeamEnvelope | None,
+    stations: tuple[ApertureStation, ...],
+) -> ScorecardEntry:
+    """Screen each mechanical clear aperture against the beam footprint at its station.
+
+    At every station the obscured share of the beam is one minus the area its footprint
+    shares with the aperture (the circle-circle intersection, with the aperture's decenter
+    as the distance between centres), over the footprint's area (Yoder and Vukobratovich,
+    Opto-Mechanical Systems Design, on vignetting). Any obscuration fails, naming the
+    station and the fraction. A clean result states how many stations were screened and
+    the smallest clearance, (A − B)/2 − e, at the station that set it, so no obscuration is
+    distinguishable from nothing checked. With no beam declared the entry is not evaluated,
+    naming the angles it needs.
+    """
+    stations = _records(stations, ApertureStation, "stations")
+    if beam is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "no beam envelope declared: the entrance diameter, half angle and length "
+                "come from the optical design, and the footprint is not assumed"
+            ),
+            reference=_YODER,
+        )
+    if not isinstance(beam, BeamEnvelope):
+        raise ValueError(f"beam must be a BeamEnvelope or None; got {beam!r}")
+    obstructed, clearances = [], []
+    for station in stations:
+        if station.distance.to("mm").magnitude > beam.length.to("mm").magnitude:
+            raise ValueError(
+                f"station '{station.station}' is at {station.distance}, beyond the beam's "
+                f"{beam.length}"
+            )
+        footprint = beam.footprint(station.distance).magnitude
+        aperture = station.clear_aperture.to("mm").magnitude
+        offset = station.decenter.to("mm").magnitude
+        shared = _circle_overlap(footprint / 2, aperture / 2, offset)
+        obscured = max(0.0, 1.0 - shared / (pi * (footprint / 2) ** 2))
+        clearance = (aperture - footprint) / 2 - offset
+        clearances.append((clearance, str(station.station)))
+        if obscured > 1e-9:
+            obstructed.append(
+                f"{station.station} obscures {obscured:.1%} of a {footprint:.2f} mm footprint "
+                f"through a {aperture:g} mm aperture"
+            )
+    smallest, at = min(clearances)
+    screened = f"{len(stations)} station{'s' if len(stations) != 1 else ''} screened"
+    if obstructed:
+        status, detail = CheckStatus.FAIL, f"{screened}; " + "; ".join(obstructed)
+    else:
+        status = CheckStatus.PASS
+        detail = f"{screened}, none obscured; smallest clearance {smallest:.2f} mm, at {at}"
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"{detail} (beam '{beam.tag}' from {beam.source})",
+        reference=_YODER,
+        underived=Underived(
+            kind=DerivationAbsence.LOOKUP,
+            reason=(
+                "a circle-circle intersection at each station against D₀ + 2·z·tan θ; each "
+                "station's footprint and obscured share are stated on the entry"
+            ),
+        ),
     )
 
 

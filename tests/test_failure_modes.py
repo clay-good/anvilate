@@ -605,10 +605,11 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
             continue
         assert not declared, f"{screen} declares {declared} and is recorded as declaring none"
     # The ratchet: this may only go down.
-    # 57, not 56: keepouts.screen_keepouts measures an integration clash on the drawing, not a
-    # way the part fails in service, and no applicability key can say "a part declaring a
-    # keepout". Declaring a mode for it would be one the catalogue invented to shrink this.
-    assert len(none) <= 57, f"the declares-none list grew to {len(none)}"
+    # 58, not 56: keepouts.screen_keepouts and optomechanics.obscuration_scorecard each
+    # measure a geometry conflict in the design, not a way the part fails in service, and no
+    # applicability key can say "a part declaring a keepout" or "a part a beam passes".
+    # Declaring a mode for either would be one the catalogue invented to shrink this.
+    assert len(none) <= 58, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

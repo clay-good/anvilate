@@ -32,6 +32,7 @@ optomechanics.cleanliness_scorecard -> particulate on an optical surface from th
 optomechanics.adjustment_scorecard -> an adjustment that does not reach or does not hold
 
 ## declares none yet
+optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
 assembly.screen_adjustment_access
 beam.deflection_scorecard

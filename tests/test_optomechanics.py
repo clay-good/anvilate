@@ -1492,3 +1492,84 @@ def test_a_vendor_page_is_fetched_once_with_consent_and_read_offline(tmp_path) -
         recipe, retrieved="2026-09-18", consent=True, cache_dir=tmp_path, opener=lambda _: payload
     )
     assert _read(path.read_text()).refractive_index == 1.5168
+
+
+def _beam(**changes: object):  # type: ignore[no-untyped-def]
+    from anvilate.analysis.optomechanics import BeamEnvelope
+
+    fields: dict[str, object] = {
+        "tag": "imaging_beam",
+        "reason": "the imaging beam to the detector",
+        "source": "optical prescription rev C",
+        "entrance_diameter": q("20 mm"),
+        "half_angle": q("-5 deg"),
+        "length": q("60 mm"),
+    } | changes
+    return BeamEnvelope(**fields)  # type: ignore[arg-type]
+
+
+def test_the_beam_footprint_is_the_cone_the_design_declares() -> None:
+    from math import radians, tan
+
+    beam = _beam()
+    assert beam.footprint(q("40 mm")).magnitude == pytest.approx(20 + 2 * 40 * tan(radians(-5)))
+    with pytest.raises(ValueError, match="comes to a focus"):
+        _beam(half_angle=q("-10 deg"))
+    with pytest.raises(ValueError, match="must be an angle"):
+        _beam(half_angle=q("5 mm"))
+
+
+def test_an_aperture_inside_the_footprint_obscures_the_share_outside_it() -> None:
+    from math import pi, radians, tan
+
+    from anvilate.analysis.optomechanics import ApertureStation, obscuration_scorecard
+
+    stations = (
+        ApertureStation(station="front retainer", distance=q("0 mm"), clear_aperture=q("22 mm")),
+        ApertureStation(
+            station="baffle",
+            distance=q("40 mm"),
+            clear_aperture=q("12 mm"),
+            decenter=q("0.5 mm"),
+        ),
+    )
+    entry = obscuration_scorecard("obscuration", beam=_beam(), stations=stations)
+    footprint = 20 + 2 * 40 * tan(radians(-5))
+    # The decentred 12 mm aperture sits wholly inside the footprint: 1 − A_aperture/A_beam.
+    obscured = 1 - (pi * 6**2) / (pi * (footprint / 2) ** 2)
+    assert entry.status is CheckStatus.FAIL
+    assert f"baffle obscures {obscured:.1%} of a {footprint:.2f} mm footprint" in entry.detail
+    assert "front retainer" not in entry.detail.split(";", 1)[1]
+    assert "2 stations screened" in entry.detail
+
+
+def test_no_obscuration_is_measured_and_no_beam_is_not_evaluated() -> None:
+    from anvilate.analysis.optomechanics import ApertureStation, obscuration_scorecard
+
+    open_ = (
+        ApertureStation(station="front retainer", distance=q("0 mm"), clear_aperture=q("22 mm")),
+        ApertureStation(station="baffle", distance=q("40 mm"), clear_aperture=q("16 mm")),
+    )
+    clean = obscuration_scorecard("obscuration", beam=_beam(), stations=open_)
+    assert clean.status is CheckStatus.PASS
+    assert "2 stations screened, none obscured; smallest clearance 1.00 mm, at front retainer" in (
+        clean.detail
+    )
+    blind = obscuration_scorecard("obscuration", beam=None, stations=open_)
+    assert blind.status is CheckStatus.NOT_EVALUATED
+    assert "half angle" in blind.detail
+    far = (ApertureStation(station="late", distance=q("80 mm"), clear_aperture=q("16 mm")),)
+    with pytest.raises(ValueError, match="beyond the beam"):
+        obscuration_scorecard("obscuration", beam=_beam(), stations=far)
+
+
+def test_the_beam_is_emitted_as_a_keepout_the_right_way_round() -> None:
+    keepout = _beam().keepout(anchor="top", clearance_margin=q("0.5 mm"))
+    assert keepout.tag == "imaging_beam" and keepout.reason == "the imaging beam to the detector"
+    assert keepout.rule.base_diameter.magnitude == 20  # the entrance, at the anchor
+    assert keepout.rule.top_diameter.magnitude == pytest.approx(
+        _beam().footprint(q("60 mm")).magnitude
+    )
+    diverging = _beam(half_angle=q("5 deg")).keepout(anchor="top", clearance_margin=q("0 mm"))
+    assert diverging.rule.base_diameter.magnitude == 20
+    assert diverging.rule.top_diameter.magnitude > 20

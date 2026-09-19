@@ -160,6 +160,7 @@ optomechanics.seal_breathing_scorecard
 optomechanics.pressure_window_scorecard
 optomechanics.harness_load_scorecard
 optomechanics.cycling_retention_scorecard
+optomechanics.obscuration_scorecard
 optomechanics.surface_limits_scorecard
 optomechanics.outgassing_census_scorecard
 optomechanics.cleanliness_scorecard

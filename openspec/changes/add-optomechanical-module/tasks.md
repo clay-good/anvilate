@@ -43,7 +43,7 @@
 
 ## 4. Optical-interface screens
 
-- [ ] 4.1 Clear aperture and obscuration against a declared beam envelope; beam envelope
+- [x] 4.1 Clear aperture and obscuration against a declared beam envelope; beam envelope
       emitted as a keepout
 - [x] 4.2 Glass contact stress at the retention interface by declared interface geometry,
       against user-supplied allowable tensile stress with the Weibull caveat rendered

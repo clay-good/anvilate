@@ -286,3 +286,21 @@ def test_a_keepout_regenerates_identically() -> None:
         return (round(float(body.core.volume), 9), tuple(box.min), tuple(box.max))
 
     assert signature(first) == signature(second)
+
+
+def test_a_plate_grown_into_the_beam_fails_the_standard_intrusion_check() -> None:
+    """Optomechanical 4.1: the beam, emitted as a keepout, is caught with no optics computed."""
+    from anvilate.analysis.optomechanics import BeamEnvelope
+
+    beam = BeamEnvelope(
+        tag="imaging_beam",
+        reason="the imaging beam to the detector",
+        source="optical prescription rev C",
+        entrance_diameter=q("20 mm"),
+        half_angle=q("-5 deg"),
+        length=q("60 mm"),
+    ).keepout(anchor="bottom", clearance_margin=q("0.5 mm"), offset=q("27 mm"))
+    assert _check("25 mm", beam)[0]["keepout imaging_beam"].status is CheckStatus.PASS
+    grown = _check("28 mm", beam)[0]["keepout imaging_beam"]
+    assert grown.status is CheckStatus.FAIL
+    assert "the imaging beam to the detector" in grown.detail and "protected core" in grown.detail

@@ -656,8 +656,9 @@ modules:
   0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) the bow leaves; and the mount shift Σk·δ/(k_m + Σk) the
   harnesses crossing a mount pull into it; a glass record read from a CC0
   refractiveindex.info page, its index from the stated nd or the page's own Sellmeier
-  formula; with retention after cycling stated as verification-only, naming its test; and
-  every coated and cemented surface held to its own
+  formula; a beam envelope D₀ + 2·z·tan θ emitted as a keepout, and each clear aperture's
+  obscured share of it; with retention after cycling stated as verification-only, naming
+  its test; and every coated and cemented surface held to its own
   temperature, humidity and irradiance ratings; and an outgassing census of every
   non-metallic in the sealed volume, the condensable fraction governing; and a cleanliness
   requirement against the room built in, by the ISO 14644-1 limit 10^N·(0.1/D)^2.08; and
@@ -2501,6 +2502,8 @@ from .optics import (
 from .optomechanics import (
     N_BK7,
     AdjustmentMechanism,
+    ApertureStation,
+    BeamEnvelope,
     BreathingMitigation,
     CleanlinessRequirement,
     HarnessCrossing,
@@ -2536,6 +2539,7 @@ from .optomechanics import (
     miles_random_vibration_grms,
     mirror_tilt_line_of_sight,
     mount_decenter,
+    obscuration_scorecard,
     optical_material_from_refractiveindex,
     outgassing_census_scorecard,
     preload_temperature_scorecard,
@@ -4726,6 +4730,9 @@ __all__ = [
     "HarnessCrossing",
     "harness_load_scorecard",
     "optical_material_from_refractiveindex",
+    "BeamEnvelope",
+    "ApertureStation",
+    "obscuration_scorecard",
     "cycling_retention_scorecard",
     "SurfaceTreatment",
     "SurfaceLimits",
