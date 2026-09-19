@@ -69,3 +69,75 @@ def test_the_remedy_gate_catches_a_pronoun_and_a_bare_imperative() -> None:
     assert _SUBJECTLESS.search("no material was named. Declare.")
     assert not _SUBJECTLESS.search("declare constraints.min_safety_factor")
     assert not _SUBJECTLESS.search("state the assumption or leave the line out")
+
+
+def _pack_screens() -> list[tuple[str, object, object]]:
+    """Every pack screen with the element model its first parameter takes."""
+    import importlib
+    import inspect
+
+    from anvilate.modules import MODULE_MANIFESTS
+
+    found = []
+    for manifest in MODULE_MANIFESTS.manifests:
+        module = importlib.import_module(f"anvilate.packs.{manifest.id}")
+        for screen in manifest.screens:
+            function = getattr(module, screen)
+            first = next(iter(inspect.signature(function).parameters.values()), None)
+            annotation = None if first is None else first.annotation
+            model = getattr(module, annotation, None) if isinstance(annotation, str) else annotation
+            found.append((f"{manifest.id}.{screen}", function, model))
+    return found
+
+
+def test_a_gap_that_says_which_field_to_declare_names_a_field_that_exists() -> None:
+    """A remedy naming `applied_lod` is an instruction the reader cannot carry out.
+
+    Over the reasons a screen gives for a check it could not run (`unavailable=`), against
+    the fields of the element that screen takes — read from its own signature, so a reason
+    moved to another screen is checked against that screen's element. A reason may also name
+    something else the reader can act on, such as the screen to use instead, so a symbol the
+    pack exports counts too; what fails is a name that is neither.
+    """
+    import ast
+    import importlib
+    import re
+
+    from conftest import library_sources
+
+    models = {}
+    for name, _function, model in _pack_screens():
+        if model is not None and hasattr(model, "model_fields"):
+            models[name.split(".")[1]] = (name, set(model.model_fields))
+    assert len(models) >= 20, sorted(models)
+
+    named = 0
+    wrong = []
+    for path, tree in library_sources():
+        if path.parent.name != "packs":
+            continue
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef) or function.name not in models:
+                continue
+            where, fields = models[function.name]
+            pack = importlib.import_module(f"anvilate.packs.{path.stem}")
+            for node in ast.walk(function):
+                if not isinstance(node, ast.Call):
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg != "unavailable":
+                        continue
+                    reason = " ".join(
+                        part.value
+                        for part in ast.walk(keyword.value)
+                        if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                    )
+                    for field in re.findall(r"`([a-z_]+)`", reason):
+                        named += 1
+                        if field not in fields and not hasattr(pack, field):
+                            wrong.append(
+                                f"{where} names `{field}`, which is neither a field of its "
+                                "element nor a symbol its pack carries"
+                            )
+    assert named >= 15, f"only {named} field names were read out of the gaps' reasons"
+    assert not wrong, wrong
