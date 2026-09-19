@@ -342,6 +342,8 @@ environment_profiles.AIRBORNE
 environment_profiles.SEALED_AND_PURGED
 environment_profiles.ENVIRONMENT_PROFILES
 environment_profiles.ENVIRONMENT_DECLARATIONS
+keepouts.KeepoutArchetype
+keepouts.KEEPOUT_ARCHETYPES
 keepouts.KeepoutBody
 keepouts.build_keepout
 keepouts.screen_keepouts

@@ -43,7 +43,15 @@ from .spec import (
     SweptProfileKeepout,
 )
 
-__all__ = ["KeepoutBody", "build_keepout", "screen_keepouts", "keepout_label", "write_keepout_step"]
+__all__ = [
+    "KeepoutArchetype",
+    "KEEPOUT_ARCHETYPES",
+    "KeepoutBody",
+    "build_keepout",
+    "screen_keepouts",
+    "keepout_label",
+    "write_keepout_step",
+]
 
 # Below this the kernel's common volume is round-off, not material (mm³).
 _VOLUME_EPSILON = 1e-6
@@ -56,6 +64,59 @@ _BOX_AXES = {0: "width", 1: "depth", 2: "plate_thickness"}
 
 
 @dataclass(frozen=True)
+class KeepoutArchetype:
+    """One keepout rule as a pattern in the library, answering its contribution contract.
+
+    The contract every pattern ships under: a parametric implementation (``pattern``, built
+    by :func:`build_keepout`), semantic tags (the keepout's own tag, carried by its body),
+    declared parameter bounds (``bounds``, enforced when the document is read), a DFM
+    profile (``dfm``: none, because a keepout is never made), analytical check bindings
+    (``checked_by``), and golden-file tests, which ``tests/test_keepout_geometry.py`` holds
+    at five or more per archetype.
+    """
+
+    rule: str
+    pattern: str
+    parameters: tuple[str, ...]
+    bounds: str
+    dfm: str = "none: a keepout is a protected volume and is never manufactured"
+    checked_by: str = "anvilate.keepouts.screen_keepouts"
+
+
+#: The generated keepout rules. An imported body is not among them: it is read from a file
+#: another tool made, not built from parameters here.
+KEEPOUT_ARCHETYPES: dict[str, KeepoutArchetype] = {
+    archetype.rule: archetype
+    for archetype in (
+        KeepoutArchetype(
+            rule="prism",
+            pattern="keepout_prism/1",
+            parameters=("width", "depth", "height"),
+            bounds="every extent greater than zero",
+        ),
+        KeepoutArchetype(
+            rule="cylinder",
+            pattern="keepout_cylinder/1",
+            parameters=("diameter", "height"),
+            bounds="diameter and height greater than zero",
+        ),
+        KeepoutArchetype(
+            rule="frustum",
+            pattern="keepout_frustum/1",
+            parameters=("base_diameter", "top_diameter", "height"),
+            bounds="base diameter and height greater than zero; top diameter zero or more",
+        ),
+        KeepoutArchetype(
+            rule="swept_profile",
+            pattern="keepout_swept_profile/1",
+            parameters=("profile_width", "profile_height", "path_length"),
+            bounds="every extent greater than zero",
+        ),
+    )
+}
+
+
+@dataclass(frozen=True)
 class KeepoutBody:
     """A keepout's protected core and its margin envelope, placed on the part."""
 
@@ -63,6 +124,11 @@ class KeepoutBody:
     core: Any
     envelope: Any | None
     axis: tuple[float, float, float]
+
+    @property
+    def pattern(self) -> str:
+        """The archetype this body was built from, as the part's own pattern is named."""
+        return KEEPOUT_ARCHETYPES[self.keepout.rule.rule].pattern
 
 
 def _kernel() -> Any:
@@ -99,12 +165,14 @@ def _primitive(b: Any, keepout: Keepout, grow: float) -> Any | None:
     elif isinstance(rule, CylinderKeepout):
         solid = b.Cylinder(_mm(rule.diameter) / 2 + grow, _mm(rule.height) + 2 * grow, align=base)
     elif isinstance(rule, FrustumKeepout):
-        solid = b.Cone(
-            _mm(rule.base_diameter) / 2 + grow,
-            _mm(rule.top_diameter) / 2 + grow,
-            _mm(rule.height) + 2 * grow,
-            align=base,
-        )
+        bottom, top = _mm(rule.base_diameter) / 2 + grow, _mm(rule.top_diameter) / 2 + grow
+        height = _mm(rule.height) + 2 * grow
+        # A frustum whose two ends are equal is a cylinder, and the kernel refuses to build
+        # it as a cone ("cone with two identic radii") with an exception of its own.
+        if abs(bottom - top) <= 1e-9 * max(bottom, 1.0):
+            solid = b.Cylinder(bottom, height, align=base)
+        else:
+            solid = b.Cone(bottom, top, height, align=base)
     else:
         return None  # an imported body is a file this module does not read
     return b.Pos(0, 0, -grow) * solid

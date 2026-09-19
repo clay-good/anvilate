@@ -10,8 +10,8 @@
 
 ## 2. Generation
 
-- [ ] 2.1 Keepout archetypes in the pattern library under the existing contribution
-      contract
+- [x] 2.1 Keepout archetypes in the pattern library under the existing contribution
+      contract — `KEEPOUT_ARCHETYPES`, five golden volumes each, gated
 - [x] 2.2 Semantic tagging at creation; tag survives downstream operations — each body is built
       from its keepout and carries it, anchored to a tagged face of the part
 - [x] 2.3 Keepouts held separately from the part solid — never unioned into it

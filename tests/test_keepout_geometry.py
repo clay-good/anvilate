@@ -201,3 +201,88 @@ def test_the_drawing_carries_each_keepout_on_its_own_non_manufacturing_layer() -
     assert label.dxf.text.startswith("KEEPOUT beam_path (non-manufacturing)")
     outline = drawing.modelspace().query('*[layer=="OUTLINE"]')
     assert len(outline) == 1
+
+
+# Golden cases per archetype: the rule's extents in mm, and the volume a closed form gives.
+# The expected volume is the formula's, never the kernel's, so a kernel change that moved
+# a body would fail here rather than rewrite its own golden value.
+def _golden():  # type: ignore[no-untyped-def]
+    from math import pi
+
+    def frustum(r1: float, r2: float, h: float) -> float:
+        return pi * h * (r1 * r1 + r1 * r2 + r2 * r2) / 3
+
+    return {
+        "prism": [
+            ({"width": w, "depth": d, "height": h}, w * d * h)
+            for w, d, h in ((10, 10, 10), (100, 50, 30), (1, 2, 3), (250, 0.5, 40), (7.5, 7.5, 7.5))
+        ],
+        "cylinder": [
+            ({"diameter": dia, "height": h}, pi * (dia / 2) ** 2 * h)
+            for dia, h in ((20, 10), (24, 38), (1, 1), (200, 5), (3.2, 60))
+        ],
+        "frustum": [
+            ({"base_diameter": b, "top_diameter": t, "height": h}, frustum(b / 2, t / 2, h))
+            for b, t, h in ((20, 0, 30), (40, 20, 10), (10, 10, 5), (100, 1, 50), (6, 3, 12))
+        ],
+        "swept_profile": [
+            ({"profile_width": w, "profile_height": ph, "path_length": run}, w * ph * run)
+            for w, ph, run in ((80, 60, 40), (10, 10, 100), (1, 1, 1), (300, 20, 5), (45, 90, 12))
+        ],
+    }
+
+
+def _rule(name: str, extents: dict):  # type: ignore[no-untyped-def]
+    from anvilate.spec import SweptProfileKeepout
+
+    kind = {
+        "prism": PrismKeepout,
+        "cylinder": CylinderKeepout,
+        "frustum": FrustumKeepout,
+        "swept_profile": SweptProfileKeepout,
+    }[name]
+    return kind(**{key: q(f"{value} mm") for key, value in extents.items()})
+
+
+def test_every_generated_rule_is_an_archetype_meeting_the_contribution_contract() -> None:
+    import typing
+
+    from anvilate.keepouts import KEEPOUT_ARCHETYPES
+    from anvilate.spec import KeepoutRule
+
+    members = typing.get_args(typing.get_args(KeepoutRule)[0])
+    generated = {m.model_fields["rule"].default for m in members} - {"imported_body"}
+    assert generated == set(KEEPOUT_ARCHETYPES)
+    golden = _golden()
+    for rule, archetype in KEEPOUT_ARCHETYPES.items():
+        assert archetype.pattern == f"keepout_{rule}/1"
+        assert archetype.bounds and archetype.checked_by and "never manufactured" in archetype.dfm
+        assert len(golden[rule]) >= 5, f"{rule} has {len(golden[rule])} golden cases"
+
+
+@pytest.mark.parametrize(
+    ("rule", "extents", "volume"),
+    [(rule, extents, volume) for rule, cases in _golden().items() for extents, volume in cases],
+)
+def test_each_archetype_builds_its_golden_volume(rule: str, extents: dict, volume: float) -> None:
+    from anvilate.keepouts import build_keepout
+
+    keepout = _beam_path(tag=f"golden_{rule}", rule=_rule(rule, extents))
+    _, _, built = _check("25 mm")
+    body = build_keepout(keepout, built)
+    assert body is not None and body.pattern == f"keepout_{rule}/1"
+    assert float(body.core.volume) == pytest.approx(volume, rel=1e-6)
+
+
+def test_a_keepout_regenerates_identically() -> None:
+    from anvilate.keepouts import build_keepout
+
+    _, _, built = _check("25 mm")
+    first, second = build_keepout(_beam_path(), built), build_keepout(_beam_path(), built)
+    assert first is not None and second is not None
+
+    def signature(body):  # type: ignore[no-untyped-def]
+        box = body.core.bounding_box()
+        return (round(float(body.core.volume), 9), tuple(box.min), tuple(box.max))
+
+    assert signature(first) == signature(second)
