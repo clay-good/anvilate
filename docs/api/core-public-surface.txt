@@ -34,6 +34,7 @@ assembly.Adjustment
 assembly.screen_adjustment_access
 assembly.ToolEnvelope
 assembly.AccessRequirement
+assembly.screen_tool_access
 attestation.STATEMENT_TYPE
 attestation.PREDICATE_TYPE
 attestation.DSSE_PAYLOAD_TYPE

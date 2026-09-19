@@ -725,6 +725,19 @@ DEFAULT_CATALOG = ModeCatalog(
             citation="Maréchal criterion, S = exp(−(2πσ/λ)²)",
         ),
         FailureMode(
+            id="a fastener no tool reaches in the state it is driven",
+            description=(
+                "a bolt whose head clears but whose driver does not, once the parts installed "
+                "before it are in place, found on the assembly line rather than the drawing"
+            ),
+            applicability=Applicability(interfaces=("bolted_face",)),
+            stage=DiscoveryStage.QUALIFICATION,
+            citation=(
+                "Boothroyd, Dewhurst and Knight, Product Design for Manufacture and Assembly, "
+                "3rd ed. (2011), accessibility of fastening operations"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

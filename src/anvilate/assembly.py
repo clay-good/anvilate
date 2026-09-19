@@ -17,15 +17,16 @@ from anywhere.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
 from .scorecard import CheckStatus, ScorecardEntry
+from .spec import DesignSpec
 from .units import Quantity
 
 if TYPE_CHECKING:
@@ -42,6 +43,7 @@ __all__ = [
     "screen_adjustment_access",
     "ToolEnvelope",
     "AccessRequirement",
+    "screen_tool_access",
 ]
 
 
@@ -421,6 +423,9 @@ class AccessRequirement(StatableModel):
     face: Named
     tool: ToolEnvelope
     clearance_margin: Quantity = Quantity(magnitude=0.0, unit="mm")
+    # The assembly state the tool is used in: access is judged against the parts installed
+    # by then, never against the bare part alone.
+    performed_in: Named | None = None
 
     def keepout(self) -> Keepout:
         """The tool's working envelope as a cylinder keepout in front of the face."""
@@ -437,3 +442,92 @@ class AccessRequirement(StatableModel):
             owner="assembly access",
             offset=Quantity(magnitude=-self.tool.reach.to("mm").magnitude, unit="mm"),
         )
+
+
+def screen_tool_access(
+    spec: DesignSpec,
+    part: Any,
+    *,
+    states: Sequence[AssemblyState],
+    bodies: Mapping[str, Any],
+    requirements: Sequence[AccessRequirement],
+) -> tuple[ScorecardEntry, ...]:
+    """Whether each tool reaches its feature in the assembly state it is used in.
+
+    ``part`` is the built part the features sit on (a :class:`~anvilate.geometry.BuiltGeometry`)
+    and ``bodies`` the solids of the other parts, by name. For each requirement the neighbours
+    are the parts ``states`` has installed up to and including its ``performed_in`` state, so
+    a screw driven before the cover goes on is judged without the cover and one driven after
+    is judged against it. Each sweep is screened by :func:`anvilate.keepouts.screen_keepouts`;
+    the entry names the feature, the tool, the state and the body that blocks it.
+
+    A requirement with no state is not evaluated, naming what it needs: access on the bare
+    part answers a question nobody asked. A state the build does not define is refused. An
+    installed part with no solid in ``bodies`` is not evaluated, naming it, because leaving it
+    out would measure against a configuration with a part missing.
+    """
+    from .keepouts import screen_keepouts
+
+    states = each_one(states, AssemblyState, named="states")
+    requirements = each_one(requirements, AccessRequirement, named="requirements")
+    order = [state.name for state in states]
+    entries = []
+    for requirement in requirements:
+        name = f"tool access: {requirement.feature} by {requirement.tool.tool}" + (
+            f" in {requirement.performed_in}" if requirement.performed_in else ""
+        )
+        if requirement.performed_in is None:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"{requirement.tool.tool} reaching {requirement.feature} states no "
+                        "assembly state it is used in, so which parts are in the way is unknown"
+                    ),
+                )
+            )
+            continue
+        if requirement.performed_in not in order:
+            raise ValueError(
+                f"the access to {requirement.feature} names the state "
+                f"'{requirement.performed_in}', which the build does not define; its states "
+                f"are {order}"
+            )
+        installed = [
+            installed_part
+            for state in states[: order.index(requirement.performed_in) + 1]
+            for installed_part in state.installs
+        ]
+        missing = [name_ for name_ in installed if name_ not in bodies]
+        if missing:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"in {requirement.performed_in}, {', '.join(missing)} "
+                        f"{'is' if len(missing) == 1 else 'are'} installed with no geometry "
+                        "given, and access is not measured against an assembly with a part "
+                        "missing"
+                    ),
+                )
+            )
+            continue
+        screened, _ = screen_keepouts(
+            spec,
+            part,
+            neighbours={name_: bodies[name_] for name_ in installed},
+            keepouts=(requirement.keepout(),),
+        )
+        verdict = screened[1]
+        entries.append(
+            verdict.model_copy(
+                update={
+                    "name": name,
+                    "detail": f"in {requirement.performed_in}: {verdict.detail}",
+                    "addresses": ("a fastener no tool reaches in the state it is driven",),
+                }
+            )
+        )
+    return tuple(entries)

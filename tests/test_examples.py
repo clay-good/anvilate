@@ -4107,7 +4107,7 @@ def test_hanger_bracket_example_fails_only_the_combined_interaction():
     assert not by_name["bracket combined tension+shear"].passed
 
 
-def test_clean_card_example_passes_and_still_names_three_unchecked_modes():
+def test_clean_card_example_passes_and_still_names_four_unchecked_modes():
     namespace = runpy.run_path(str(_EXAMPLES / "clean_card_failure_modes.py"))
     card, report = namespace["screen_rail_joint"]()
     # The point of the example: every check ran and passed, so the card alone reads clean.
@@ -4117,6 +4117,7 @@ def test_clean_card_example_passes_and_still_names_three_unchecked_modes():
         "bolt self-loosening",
         "galvanic corrosion",
         "fretting at a clamped interface",
+        "a fastener no tool reaches in the state it is driven",
     }
     assert report.addressed() == ()
     assert not report.complete()

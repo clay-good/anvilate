@@ -6,10 +6,11 @@ joint is fine.
 
 The document also says three things the checks never read: the part lives in a **marine**
 environment, the joint is a **bolted face**, and the other side of it is **AA-6061-T6**.
-From those, the failure-mode catalogue finds three ways this joint is known to fail that no
+From those, the failure-mode catalogue finds four ways this joint is known to fail that no
 check on the card addresses — self-loosening under vibration, galvanic corrosion of the
-aluminium against the steel, and fretting at the clamped faces. Each is named with the
-stage it is normally found at and the test that would reach it.
+aluminium against the steel, fretting at the clamped faces, and a bolt no tool can reach
+once the parts around it are in place. The first three are each left to a named physical
+test; the last has neither a check nor a test, because no tool-access screen ran.
 
 Nothing here is a failed check. It is the list of questions the analysis did not ask, which
 is what a clean card is silent about.

@@ -15,14 +15,15 @@
 - [x] 2.1 Tool-access sweep generated as a keepout and checked by the existing intrusion
       mechanism — not a second collision implementation
 - [ ] 2.2 Swing-arc screen against available clearance, reporting the arc achieved
-- [ ] 2.3 Access evaluated per declared assembly state, not on the bare part
+- [x] 2.3 Access evaluated per declared assembly state, not on the bare part —
+      `screen_tool_access`
 - [x] 2.4 Order feasibility: report a valid order or the blocking parts
 - [ ] 2.5 Serviceability and post-closure adjustment reachability
 - [ ] 2.6 Inspectability of toleranced dimensions across achievable states
 
 ## 3. Reporting
 
-- [ ] 3.1 Findings name the feature, the tool, the state, and the blocking geometry
+- [x] 3.1 Findings name the feature, the tool, the state, and the blocking geometry
 - [ ] 3.2 Repair hints in the form the repair loop consumes
 - [ ] 3.3 Contribute assembly-stage entries to the failure-mode catalog
 

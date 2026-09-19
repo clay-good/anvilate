@@ -63,10 +63,16 @@ bodies passed in. There is no second collision check. A 20 mm socket reaching a 
 through a 14 mm hole in a shelf above it fails, naming the shelf, while the screw head's own
 envelope clears; widen the hole to 26 mm and the socket clears by 3 mm.
 
+`screen_tool_access` judges each requirement in the assembly state it is used in: its
+neighbours are the parts installed up to and including that state. The same socket that
+reaches a screw while the housing is open fails once the shelf is on, and the entry names the
+state and the shelf. A requirement with no state is not evaluated, and so is one whose
+installed parts were given no geometry, because access is never measured on an assembly with
+a part missing.
+
 ## Status
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
 envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1, 2.4, 4.1–4.5). Not built yet: the swing-arc screen, access evaluated per
-assembly state on geometry, serviceability and inspectability, the failure-mode entries and
+1.1–1.4, 2.1, 2.3, 2.4, 3.1, 4.1–4.5). Not built yet: the swing-arc screen, serviceability and inspectability, the failure-mode entries and
 the sealed-housing example.

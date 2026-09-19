@@ -8,6 +8,7 @@
 # and a declaration, not a longer list.
 
 ## declares
+assembly.screen_tool_access -> a fastener no tool reaches in the state it is driven
 fatigue.weld_fatigue_scorecard -> weld toe fatigue
 machinery.screen_shaft -> shaft fatigue at a stress raiser
 machinery.screen_gear_mesh -> gear tooth surface pitting

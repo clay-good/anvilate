@@ -387,3 +387,42 @@ def test_widening_the_clearance_changes_the_verdict() -> None:
     clear = found["keepout access M8 cap screw by 13 mm socket"]
     assert clear.status is CheckStatus.PASS
     assert "service shelf clears" in clear.detail and "by 3 mm" in clear.detail
+
+
+def test_tool_access_is_judged_in_the_state_it_is_used_in() -> None:
+    """Assembly 2.3 and 3.1: the same socket reaches before the shelf goes on, not after."""
+    from anvilate.assembly import AssemblyState, screen_tool_access
+
+    states = (AssemblyState(name="open"), AssemblyState(name="closed", installs=("service shelf",)))
+    driver = _access("13 mm socket", "20 mm", "50 mm")
+    _, _, built = _check("25 mm")
+
+    def reach(**changes):  # type: ignore[no-untyped-def]
+        requirement = driver.model_copy(update=changes)
+        (entry,) = screen_tool_access(
+            _plate_spec(),
+            built,
+            states=states,
+            bodies={"service shelf": _shelf("14 mm")},
+            requirements=(requirement,),
+        )
+        return entry
+
+    before = reach(performed_in="open")
+    assert before.status is CheckStatus.PASS
+    assert before.name == "tool access: M8 cap screw by 13 mm socket in open"
+    after = reach(performed_in="closed")
+    assert after.status is CheckStatus.FAIL
+    assert after.detail.startswith("in closed: service shelf intrudes")
+    assert reach().status is CheckStatus.NOT_EVALUATED
+    with pytest.raises(ValueError, match="does not define"):
+        reach(performed_in="painted")
+    (missing,) = screen_tool_access(
+        _plate_spec(),
+        built,
+        states=states,
+        bodies={},
+        requirements=(driver.model_copy(update={"performed_in": "closed"}),),
+    )
+    assert missing.status is CheckStatus.NOT_EVALUATED
+    assert "service shelf is installed with no geometry given" in missing.detail

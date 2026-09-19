@@ -296,6 +296,7 @@ constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
     assert {entry.mode.id for entry in report.entries} == {
         "galvanic corrosion",
         "fretting at a clamped interface",
+        "a fastener no tool reaches in the state it is driven",
     }
     # The same joint in the same material is not a dissimilar pair.
     same = load_spec_yaml(document.replace("AA-6061-T6", "ASTM-A36"))
@@ -546,7 +547,11 @@ def _declared_in_body(module: str, screen: str) -> set[str]:
     source = Path(__file__).resolve().parents[1] / "src" / "anvilate"
     (path,) = [
         p
-        for p in (source / "analysis" / f"{module}.py", source / "packs" / f"{module}.py")
+        for p in (
+            source / "analysis" / f"{module}.py",
+            source / "packs" / f"{module}.py",
+            source / f"{module}.py",
+        )
         if p.exists()
     ]
     tree = ast.parse(path.read_text(encoding="utf-8"))
