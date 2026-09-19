@@ -70,9 +70,14 @@ def test_hollow_rectangular_section_properties_and_validation():
     assert s.radius_of_gyration.to("mm").magnitude == pytest.approx(44.4617, rel=1e-4)
     assert s.second_moment_transverse.to("mm**4").magnitude == pytest.approx(1975833.3, rel=1e-4)
     assert s.least_radius_of_gyration.to("mm").magnitude == pytest.approx(32.2477, rel=1e-4)
-    # Walls that meet (or cross) in the middle are not a tube.
-    for t in ("40 mm", "50 mm", "0 mm"):
-        with pytest.raises(ValueError, match="must be positive and below half"):
+    # Walls that meet (or cross) in the middle are not a tube; a wall of no thickness is
+    # refused one step earlier, by the rule that a section dimension is a size.
+    for t, refusal in (
+        ("40 mm", "must be positive and below half"),
+        ("50 mm", "must be positive and below half"),
+        ("0 mm", "must be positive"),
+    ):
+        with pytest.raises(ValueError, match=refusal):
             CrossSection.hollow_rectangular(
                 width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q(t)
             )

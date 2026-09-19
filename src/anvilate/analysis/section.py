@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from math import isfinite, pi
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -71,13 +72,32 @@ def _mm(magnitude: float) -> Quantity:
     return Quantity(magnitude=magnitude, unit="mm")
 
 
-def _require_length(value: Quantity, name: str) -> float:
+def _require_length(
+    value: Quantity, name: str, *, sign: Literal["positive", "non_negative", "any"] = "positive"
+) -> float:
+    """One length in mm, refusing a size that is not one.
+
+    ``sign`` is ``"positive"`` for a size, because a rectangle 50 mm wide the wrong way
+    round returned a NEGATIVE area and second moment — and a negative second moment divides
+    into a deflection, which then clears any limit. ``"non_negative"`` is for a radius that
+    may be absent (a zero fillet is the plate-built shape), and ``"any"`` for a position,
+    which is measured from an origin and is signed.
+    """
     if not isinstance(value, Quantity):
         raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     require_finite(value, name=name)
-    return value.to("mm").magnitude
+    magnitude = value.to("mm").magnitude
+    if sign == "positive" and magnitude <= 0:
+        raise ValueError(
+            f"{name} must be positive; got {value}. A section dimension of zero or "
+            "below is not a smaller section — it inverts the area and second moment it "
+            "computes, and a negative second moment clears every deflection limit"
+        )
+    if sign == "non_negative" and magnitude < 0:
+        raise ValueError(f"{name} must be zero or positive; got {value}")
+    return magnitude
 
 
 def required_section_modulus(
@@ -352,7 +372,7 @@ class CrossSection(RevalidatedModel):
         h = _require_length(depth, "depth")
         tf = _require_length(flange_thickness, "flange_thickness")
         tw = _require_length(web_thickness, "web_thickness")
-        r = _require_length(root_radius, "root_radius")
+        r = _require_length(root_radius, "root_radius", sign="non_negative")
         bf = _require_length(flange_width, "flange_width")
         if 2 * r > bf - tw or 2 * (tf + r) > h:
             raise ValueError(
@@ -594,7 +614,7 @@ def compound_section_properties(
         width, height, centroid = rect
         b = _require_length(width, f"rectangles[{i}].width")
         h = _require_length(height, f"rectangles[{i}].height")
-        y = _require_length(centroid, f"rectangles[{i}].centroid")
+        y = _require_length(centroid, f"rectangles[{i}].centroid", sign="any")
         if b <= 0 or h <= 0:
             raise ValueError(f"rectangles[{i}] width and height must be positive")
         parts.append((b, h, y))
@@ -640,7 +660,7 @@ def compound_plastic_section_modulus(
             )
         b = _require_length(rect[0], f"rectangles[{i}].width")
         h = _require_length(rect[1], f"rectangles[{i}].height")
-        y = _require_length(rect[2], f"rectangles[{i}].centroid")
+        y = _require_length(rect[2], f"rectangles[{i}].centroid", sign="any")
         if b <= 0 or h <= 0:
             raise ValueError(f"rectangles[{i}] width and height must be positive")
         parts.append((b, h, y))

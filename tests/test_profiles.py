@@ -97,6 +97,25 @@ def test_the_fillets_are_what_the_plate_built_section_leaves_out():
     assert _mm2(profile.section().area) == pytest.approx(2848.4, abs=0.1)
 
 
+def test_a_negative_root_radius_is_refused_rather_than_adding_material():
+    """Every fillet term is an even power of r, so r = -5 mm made the section STRONGER than
+    the plate-built shape it should have matched."""
+
+    def build(radius: str) -> CrossSection:
+        return CrossSection.rolled_i_section(
+            depth=Quantity.parse("200 mm"),
+            flange_width=Quantity.parse("100 mm"),
+            flange_thickness=Quantity.parse("8.5 mm"),
+            web_thickness=Quantity.parse("5.6 mm"),
+            root_radius=Quantity.parse(radius),
+        )
+
+    with pytest.raises(ValueError, match="zero or positive"):
+        build("-5 mm")
+    # Zero is the plate-built section, and is allowed.
+    assert _mm2(build("0 mm").area) == pytest.approx(2724.8)
+
+
 def test_a_root_radius_that_cannot_fit_is_refused():
     with pytest.raises(ValueError, match="does not fit"):
         CrossSection.rolled_i_section(
@@ -272,3 +291,30 @@ def test_a_structure_whose_members_name_profiles_screens_them_and_records_each_s
     assert any(name.endswith("joist bending") for name in names), names
     sections = {record.ref for record in provenance_for(spec) if record.kind == "section"}
     assert sections == {"HEA 200", "IPE 160"}
+
+
+@pytest.mark.parametrize(
+    ("label", "build"),
+    [
+        (
+            "a rectangle the wrong way round",
+            lambda: CrossSection.rectangular(
+                width=Quantity.parse("-50 mm"), height=Quantity.parse("100 mm")
+            ),
+        ),
+        (
+            "a round bar of no diameter",
+            lambda: CrossSection.solid_circular(diameter=Quantity.parse("0 mm")),
+        ),
+        (
+            "a round bar of negative diameter",
+            lambda: CrossSection.solid_circular(diameter=Quantity.parse("-40 mm")),
+        ),
+    ],
+)
+def test_a_section_dimension_that_is_not_a_size_is_refused(label, build):
+    """A negative width returned a negative area AND a negative second moment, which divides
+    into a deflection and clears every limit; a negative diameter returned the positive
+    section of its magnitude, because both terms are even powers of d."""
+    with pytest.raises(ValueError, match="must be positive"):
+        build()
