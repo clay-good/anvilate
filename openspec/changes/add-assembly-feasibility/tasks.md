@@ -2,14 +2,17 @@
 
 ## 1. Declarations
 
-- [ ] 1.1 Tool envelope records for the common drivers and wrenches, with provenance
-- [ ] 1.2 Per-feature access requirement: tool, approach direction, swing arc needed
+- [x] 1.1 Tool envelope records for the common drivers and wrenches, with provenance —
+      `ToolEnvelope`; the dimensions are the user's, from their catalogue, because the
+      standards that state them are not redistributable
+- [x] 1.2 Per-feature access requirement: tool, approach direction, swing arc needed —
+      `AccessRequirement`, approaching along the face normal; the swing arc is 2.2
 - [x] 1.3 Assembly-state declaration: the ordered states a build passes through
 - [x] 1.4 Part insertion direction and the features a part occupies
 
 ## 2. Screens
 
-- [ ] 2.1 Tool-access sweep generated as a keepout and checked by the existing intrusion
+- [x] 2.1 Tool-access sweep generated as a keepout and checked by the existing intrusion
       mechanism — not a second collision implementation
 - [ ] 2.2 Swing-arc screen against available clearance, reporting the arc achieved
 - [ ] 2.3 Access evaluated per declared assembly state, not on the bare part
@@ -25,11 +28,11 @@
 
 ## 4. Tests
 
-- [ ] 4.1 A cap screw whose head clears and whose driver does not is caught
+- [x] 4.1 A cap screw whose head clears and whose driver does not is caught
 - [x] 4.2 An adjustment reachable open and unreachable closed is caught, with the state
       named — the opto-mechanical case this exists for
 - [x] 4.3 A three-part assembly with no valid order reports the cycle, not a pass
-- [ ] 4.4 Widening a clearance changes the verdict, proving the screen reads geometry
+- [x] 4.4 Widening a clearance changes the verdict, proving the screen reads geometry
 - [x] 4.5 A part with no declared insertion direction reports not-evaluated, never a pass
 
 ## 5. Docs & examples

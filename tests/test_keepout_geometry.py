@@ -56,6 +56,20 @@ def _beam_path(**changes) -> Keepout:  # type: ignore[no-untyped-def]
     return Keepout(**fields)
 
 
+def _plate_spec(thickness: str = "25 mm", keepouts: tuple = ()) -> DesignSpec:  # type: ignore[type-arg]
+    return DesignSpec(
+        name="bp1",
+        description="A base plate under a sensor's beam.",
+        units=Provenanced(value=UnitSystem.SI, origin=Origin.USER_STATED),
+        material=MaterialRef(ref="ASTM-A36"),
+        manufacturing=Manufacturing(process=ManufacturingProcess.CNC_MILLING),
+        element_type="base_plate",
+        element_params=_plate(thickness),
+        keepouts=keepouts,
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    )
+
+
 def _check(thickness: str, *keepouts: Keepout):  # type: ignore[no-untyped-def]
     spec = DesignSpec(
         name="bp1",
@@ -305,3 +319,71 @@ def test_a_plate_grown_into_the_beam_fails_the_standard_intrusion_check() -> Non
     grown = _check("28 mm", beam)[0]["keepout imaging_beam"]
     assert grown.status is CheckStatus.FAIL
     assert "the imaging beam to the detector" in grown.detail and "protected core" in grown.detail
+
+
+def _shelf(hole: str):  # type: ignore[no-untyped-def]
+    """A shelf 30 mm above the plate's top face, with a hole over the screw."""
+    from build123d import Align, Box, Cylinder, Pos
+
+    top = 25.0
+    base = (Align.CENTER, Align.CENTER, Align.MIN)
+    diameter = q(hole).to("mm").magnitude
+    return Pos(0, 0, top + 30) * (
+        Box(200, 200, 5, align=base) - Cylinder(diameter / 2, 5, align=base)
+    )
+
+
+def _access(tool: str, diameter: str, reach: str):  # type: ignore[no-untyped-def]
+    from anvilate.assembly import AccessRequirement, ToolEnvelope
+
+    return AccessRequirement(
+        feature="M8 cap screw",
+        face="top",
+        tool=ToolEnvelope(
+            tool=tool,
+            body_diameter=q(diameter),
+            reach=q(reach),
+            source="the workshop's tool catalogue",
+        ),
+    )
+
+
+def test_a_cap_screw_whose_head_clears_and_whose_driver_does_not_is_caught() -> None:
+    """Assembly 4.1: the head's own envelope clears the shelf; the socket's does not."""
+    from anvilate.keepouts import screen_keepouts
+
+    head = _access("screw head", "13 mm", "8 mm")
+    driver = _access("13 mm socket", "20 mm", "50 mm")
+    _, _, built = _check("25 mm")
+    entries, _ = screen_keepouts(
+        _plate_spec(),
+        built,
+        neighbours={"service shelf": _shelf("14 mm")},
+        keepouts=(head.keepout(), driver.keepout()),
+    )
+    found = {entry.name: entry for entry in entries}
+    assert found["keepout access M8 cap screw by screw head"].status is CheckStatus.PASS
+    blocked = found["keepout access M8 cap screw by 13 mm socket"]
+    assert blocked.status is CheckStatus.FAIL
+    assert blocked.detail.startswith("service shelf intrudes")
+    assert "the workshop's tool catalogue" in blocked.detail
+    assert blocked.repair_hint is None  # the shelf is not a parameter of this part
+    assert "against 2 bodies (bp1, service shelf)" in found["keepout intrusion"].detail
+
+
+def test_widening_the_clearance_changes_the_verdict() -> None:
+    """Assembly 4.4: the screen reads geometry, so a wider hole passes the socket."""
+    from anvilate.keepouts import screen_keepouts
+
+    driver = _access("13 mm socket", "20 mm", "50 mm")
+    _, _, built = _check("25 mm")
+    entries, _ = screen_keepouts(
+        _plate_spec(),
+        built,
+        neighbours={"service shelf": _shelf("26 mm")},
+        keepouts=(driver.keepout(),),
+    )
+    found = {entry.name: entry for entry in entries}
+    clear = found["keepout access M8 cap screw by 13 mm socket"]
+    assert clear.status is CheckStatus.PASS
+    assert "service shelf clears" in clear.detail and "by 3 mm" in clear.detail

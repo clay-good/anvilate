@@ -32,6 +32,8 @@ assembly.assembly_order
 assembly.AssemblyState
 assembly.Adjustment
 assembly.screen_adjustment_access
+assembly.ToolEnvelope
+assembly.AccessRequirement
 attestation.STATEMENT_TYPE
 attestation.PREDICATE_TYPE
 attestation.DSSE_PAYLOAD_TYPE

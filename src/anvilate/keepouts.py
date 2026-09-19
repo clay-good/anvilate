@@ -23,6 +23,7 @@ nothing was screened.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -225,7 +226,12 @@ def _repair(part: BuiltGeometry, axis: tuple[float, float, float], depth: float,
     )
 
 
-def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> tuple:
+def _entry(
+    keepout: Keepout,
+    part: BuiltGeometry,
+    body: KeepoutBody | None,
+    bodies_to_check: list[tuple[str, Any, bool]],
+) -> tuple:
     name = f"keepout {keepout.tag}"
     about = f"'{keepout.tag}' ({keepout.reason})"
     if body is None:
@@ -243,44 +249,72 @@ def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> t
             ),
             None,
         )
-    solid = part.shape
-    core = solid & body.core
-    volume = float(core.volume) if core is not None else 0.0
     margin = _mm(keepout.clearance_margin)
     reason = Underived(
         kind=DerivationAbsence.NUMERIC_RESULT,
-        reason="exact B-Rep common volume and minimum distance between the part and the body",
+        reason="exact B-Rep common volume and minimum distance between each body and the keepout",
     )
-    if volume > _VOLUME_EPSILON:
-        depth = _extent_along(core, body.axis)
+    # Every body is measured, the part and each neighbour, and the worst governs: the
+    # deepest intrusion into the core, else the nearest approach.
+    intrusions, approaches = [], []
+    # A keepout standing in front of its anchor face and ending exactly on it: a tool
+    # seating on the fastener it serves. The part touching it there is the anchor by
+    # construction, not an approach, so only the part's intrusion is measured then. One
+    # that stops short of the face keeps its real gap to the part.
+    in_front = abs(_mm(keepout.offset) + _extent_along(body.core, body.axis)) <= 1e-6
+    for label, solid, is_part in bodies_to_check:
+        core = solid & body.core
+        volume = float(core.volume) if core is not None else 0.0
+        if volume > _VOLUME_EPSILON:
+            intrusions.append((volume, label, is_part, _extent_along(core, body.axis)))
+            continue
+        if is_part and in_front:
+            continue
+        clearance = float(solid.distance_to(body.core))
+        # The kernel's distance between touching bodies is round-off, not a gap.
+        approaches.append((0.0 if clearance < _DISTANCE_EPSILON else clearance, label, is_part))
+    if intrusions:
+        volume, label, is_part, depth = max(intrusions)
         return (
             ScorecardEntry(
                 name=name,
                 status=CheckStatus.FAIL,
                 detail=(
-                    f"{part.name} intrudes on keepout {about}: {volume:.3g} mm³ in the protected "
+                    f"{label} intrudes on keepout {about}: {volume:.3g} mm³ in the protected "
                     f"core, {depth:.3g} mm deep along its axis, {_NOMINAL}"
                 ),
                 underived=reason,
-                repair_hint=_repair(part, body.axis, depth, margin),
+                repair_hint=_repair(part, body.axis, depth, margin) if is_part else None,
             ),
             0.0,
         )
-    clearance = float(solid.distance_to(body.core))
-    # The kernel's distance between touching bodies is round-off, not a gap.
-    if clearance < _DISTANCE_EPSILON:
-        clearance = 0.0
+    if not approaches:
+        return (
+            ScorecardEntry(
+                name=name,
+                status=CheckStatus.PASS,
+                detail=(
+                    f"keepout {about} stands clear in front of {keepout.anchor}, and no body "
+                    f"reaches into it, {_NOMINAL}"
+                ),
+                underived=reason,
+            ),
+            None,
+        )
+    clearance, label, is_part = min(approaches)
     if clearance < margin:
         return (
             ScorecardEntry(
                 name=name,
                 status=CheckStatus.WARNING,
                 detail=(
-                    f"{part.name} stops {clearance:.3g} mm from keepout {about}, inside its "
+                    f"{label} stops {clearance:.3g} mm from keepout {about}, inside its "
                     f"{margin:g} mm clearance margin; the core is clear, {_NOMINAL}"
                 ),
                 underived=reason,
-                repair_hint=_repair(part, body.axis, 0.0, margin - clearance),
+                repair_hint=(
+                    _repair(part, body.axis, 0.0, margin - clearance) if is_part else None
+                ),
             ),
             clearance,
         )
@@ -289,7 +323,7 @@ def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> t
             name=name,
             status=CheckStatus.PASS,
             detail=(
-                f"{part.name} clears keepout {about} by {clearance:.3g} mm, outside its "
+                f"{label} clears keepout {about} by {clearance:.3g} mm, outside its "
                 f"{margin:g} mm margin, {_NOMINAL}"
             ),
             underived=reason,
@@ -299,19 +333,32 @@ def _entry(keepout: Keepout, part: BuiltGeometry, body: KeepoutBody | None) -> t
 
 
 def screen_keepouts(
-    spec: DesignSpec, part: BuiltGeometry
+    spec: DesignSpec,
+    part: BuiltGeometry,
+    *,
+    neighbours: Mapping[str, Any] | None = None,
+    keepouts: tuple[Keepout, ...] | None = None,
 ) -> tuple[tuple[ScorecardEntry, ...], tuple[KeepoutBody, ...]]:
-    """Each declared keepout measured against ``part``, a summary, and the bodies built.
+    """Each keepout measured against ``part`` and its ``neighbours``, a summary, and the bodies.
 
-    The bodies come back beside the part and are never unioned into it. A spec declaring
-    no keepouts returns nothing: there is no claim to check.
+    ``neighbours`` names the other solids in the assembly, which a keepout protects its
+    volume from as much as from the part: a wall beside a fastener blocks the driver that
+    reaches it. ``keepouts`` defaults to the ones the spec declares; a caller screening a
+    tool's access passes the sweeps it generated, through this same mechanism. The bodies
+    come back beside the part and are never unioned into it. No keepouts returns nothing:
+    there is no claim to check.
     """
-    if not spec.keepouts:
+    declared = spec.keepouts if keepouts is None else keepouts
+    if not declared:
         return (), ()
+    others = dict(neighbours or {})
+    bodies_to_check = [(str(part.name), part.shape, True)] + [
+        (str(label), solid, False) for label, solid in others.items()
+    ]
     entries, bodies, clearances = [], [], []
-    for keepout in spec.keepouts:
+    for keepout in declared:
         body = build_keepout(keepout, part)
-        entry, clearance = _entry(keepout, part, body)
+        entry, clearance = _entry(keepout, part, body, bodies_to_check)
         entries.append(entry)
         if body is not None:
             bodies.append(body)
@@ -323,9 +370,10 @@ def screen_keepouts(
             name="keepout intrusion",
             status=Scorecard(entries=tuple(entries)).status,
             detail=(
-                f"{len(bodies)} of {len(spec.keepouts)} keepouts screened against 1 body "
-                f"({part.name}); smallest clearance {smallest:.3g} mm, at keepout '{tag}', "
-                f"{_NOMINAL}"
+                f"{len(bodies)} of {len(declared)} keepouts screened against "
+                f"{len(bodies_to_check)} bod{'y' if len(bodies_to_check) == 1 else 'ies'} "
+                f"({', '.join(label for label, _, _ in bodies_to_check)}); smallest "
+                f"clearance {smallest:.3g} mm, at keepout '{tag}', {_NOMINAL}"
             ),
             underived=Underived(
                 kind=DerivationAbsence.NUMERIC_RESULT,
@@ -337,7 +385,7 @@ def screen_keepouts(
             name="keepout intrusion",
             status=CheckStatus.NOT_EVALUATED,
             detail=(
-                f"0 of {len(spec.keepouts)} declared keepouts were generated, so nothing was "
+                f"0 of {len(declared)} declared keepouts were generated, so nothing was "
                 "screened; this is not a clean result"
             ),
         )

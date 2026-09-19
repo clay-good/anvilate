@@ -19,12 +19,17 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, model_validator
 
-from ._models import Named, StatableModel, each_one
+from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
 from .scorecard import CheckStatus, ScorecardEntry
+from .units import Quantity
+
+if TYPE_CHECKING:
+    from .spec import Keepout
 
 __all__ = [
     "InsertionDirection",
@@ -35,6 +40,8 @@ __all__ = [
     "AssemblyState",
     "Adjustment",
     "screen_adjustment_access",
+    "ToolEnvelope",
+    "AccessRequirement",
 ]
 
 
@@ -370,3 +377,63 @@ def screen_adjustment_access(
                 )
             )
     return tuple(entries)
+
+
+class ToolEnvelope(StatableModel):
+    """The space a tool occupies while it works: the widest body along its reach.
+
+    A socket, a hex key or a driver sweeps a cylinder from the fastener outward: the
+    ``body_diameter`` is its widest section there and ``reach`` how far that section runs.
+    No tool dimensions ship with the library; the numbers are the user's, from their tool
+    catalogue or measured, and ``source`` records which, the same doctrine as a glass
+    allowable (ISO 2936 and ISO 2725 state them, and neither is redistributable).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tool: Named
+    body_diameter: Quantity
+    reach: Quantity
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _an_envelope(self) -> ToolEnvelope:
+        for label, value in (("body_diameter", self.body_diameter), ("reach", self.reach)):
+            if not value.has_dimension("[length]"):
+                raise ValueError(f"'{self.tool}': {label} must be a length; got {value}")
+            if not value.to("mm").magnitude > 0:
+                raise ValueError(f"'{self.tool}': {label} must be positive; got {value}")
+        return self
+
+
+class AccessRequirement(StatableModel):
+    """A feature a tool must reach, from the face it approaches, and the clearance it needs.
+
+    The tool's envelope is generated as a keepout standing in front of ``face``, the tagged
+    face the feature sits on, out to the tool's reach, and it is checked by the same
+    intrusion mechanism as any other keepout (:func:`anvilate.keepouts.screen_keepouts`),
+    against the part and every neighbouring body. There is no second collision check.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    feature: Named
+    face: Named
+    tool: ToolEnvelope
+    clearance_margin: Quantity = Quantity(magnitude=0.0, unit="mm")
+
+    def keepout(self) -> Keepout:
+        """The tool's working envelope as a cylinder keepout in front of the face."""
+        from .spec import CylinderKeepout, Keepout
+
+        return Keepout(
+            tag=f"access {self.feature} by {self.tool.tool}",
+            anchor=self.face,
+            rule=CylinderKeepout(diameter=self.tool.body_diameter, height=self.tool.reach),
+            clearance_margin=self.clearance_margin,
+            reason=(
+                f"{self.tool.tool} must reach {self.feature} from {self.face} ({self.tool.source})"
+            ),
+            owner="assembly access",
+            offset=Quantity(magnitude=-self.tool.reach.to("mm").magnitude, unit="mm"),
+        )

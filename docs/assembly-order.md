@@ -50,9 +50,23 @@ The same adjustment made in `open` passes. Routed through a declared side port, 
 in `closed` too. With no route declared, it is not evaluated: an undeclared route is not a
 clear one. An adjustment in a state the build never defines is refused by name.
 
+## Whether the tool reaches
+
+A fastener that fits may still be one no tool can turn. A `ToolEnvelope` is the space a tool
+occupies while it works, its widest body diameter along its reach, with the source of those
+numbers: the library ships no tool dimensions, because the standards that state them are not
+redistributable, so they come from the user's tool catalogue or a measurement. An
+`AccessRequirement` puts that envelope in front of the tagged face a feature sits on, and
+`.keepout()` turns it into a cylinder keepout checked by the same intrusion mechanism as any
+other (`anvilate.keepouts.screen_keepouts`), against the part and against the neighbouring
+bodies passed in. There is no second collision check. A 20 mm socket reaching a cap screw
+through a 14 mm hole in a shelf above it fails, naming the shelf, while the screw head's own
+envelope clears; widen the hole to 26 mm and the socket clears by 3 mm.
+
 ## Status
 
-This is part insertion, order feasibility, assembly states and adjustment reachability
-(`openspec/changes/add-assembly-feasibility`, 1.3, 1.4, 2.4, 4.2, 4.3 and 4.5). Not built
-yet: tool envelopes, swing arcs and access sweeps checked as geometry. Those need the keepout
-mechanism, and the Design Spec cannot declare parts yet.
+This is part insertion, order feasibility, assembly states, adjustment reachability, tool
+envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
+1.1–1.4, 2.1, 2.4, 4.1–4.5). Not built yet: the swing-arc screen, access evaluated per
+assembly state on geometry, serviceability and inspectability, the failure-mode entries and
+the sealed-housing example.
