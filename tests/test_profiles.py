@@ -202,3 +202,51 @@ def test_the_evidence_trail_records_where_a_named_section_came_from():
     declared = provenance_for(load_spec_yaml(_BEAM_SPEC.format(section=properties)))
     # A section declared by its properties came from the document, not the table.
     assert not [record for record in declared if record.kind == "section"]
+
+
+_STRUCTURE_SPEC = """
+anvilate_spec: "1.3.0"
+name: platform
+description: A platform whose members name their profiles.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+constraints: {min_safety_factor: {value: 1.5, origin: user_stated}}
+element_type: structure
+element_params:
+  members:
+    - element_type: beam_member
+      element_params:
+        name: girder
+        section: HEA 200
+        length: {magnitude: 5.0, unit: m}
+        support: simply_supported
+        load: {magnitude: 30.0, unit: kN}
+        load_type: point
+        material: ASTM-A36
+    - element_type: beam_member
+      element_params:
+        name: joist
+        section: IPE 160
+        length: {magnitude: 3.0, unit: m}
+        support: simply_supported
+        load: {magnitude: 6.0, unit: kN}
+        load_type: point
+        material: ASTM-A36
+"""
+
+
+def test_a_structure_whose_members_name_profiles_screens_them_and_records_each_source():
+    """The trail read only the top-level section; a structure's members named theirs one level
+    down, screened fine, and left the bundle silent about where two sections came from."""
+    from anvilate.evidence import provenance_for
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    spec = load_spec_yaml(_STRUCTURE_SPEC)
+    names = {entry.name for entry in screen_spec(spec).entries}
+    assert any(name.endswith("girder bending") for name in names), names
+    assert any(name.endswith("joist bending") for name in names), names
+    sections = {record.ref for record in provenance_for(spec) if record.kind == "section"}
+    assert sections == {"HEA 200", "IPE 160"}

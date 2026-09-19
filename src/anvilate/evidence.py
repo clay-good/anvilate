@@ -16,7 +16,8 @@ as those layers are built out.
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from pydantic import ConfigDict
 
@@ -150,6 +151,23 @@ def _component_source(
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+def _named_sections(params: Mapping[str, Any]) -> list[str]:
+    """Every section named by a profile designation, in declaration order, each once.
+
+    The element's own ``section``, then each structure member's. A structure cannot be a
+    member of a structure, so one level down is the whole of it.
+    """
+    found: list[str] = []
+    candidates = [params.get("section")]
+    for member in params.get("members") or ():
+        if isinstance(member, Mapping):
+            candidates.append((member.get("element_params") or {}).get("section"))
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate not in found:
+            found.append(candidate)
+    return found
+
+
 def collect_provenance(
     spec: DesignSpec,
     *,
@@ -190,9 +208,9 @@ def collect_provenance(
         if isinstance(interface, StandardComponentInterface):
             records.append(_component_source(interface.ref, providers, components))
     # A member section named by its profile designation resolved from the bundled EN 10365
-    # table, so its dimensions came from there and the trail says so.
-    named_section = (spec.element_params or {}).get("section")
-    if isinstance(named_section, str):
+    # table, so its dimensions came from there and the trail says so — for the element, and
+    # for each member of a structure, which names its section one level down.
+    for named_section in _named_sections(spec.element_params or {}):
         profile = default_profile_table().get(named_section)
         records.append(
             SourceRecord(
