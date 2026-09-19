@@ -101,6 +101,8 @@ def euler_buckling_load(
     """
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(second_moment, "[length]**4", "second_moment")
+    if second_moment.magnitude <= 0:
+        raise ValueError(f"second_moment must be positive; got {second_moment}")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
         raise ValueError(f"length must be positive; got {length}")
@@ -553,6 +555,8 @@ def aisc_slender_flange_moment(
     """
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
+    if elastic_section_modulus.magnitude <= 0:
+        raise ValueError(f"elastic_section_modulus must be positive; got {elastic_section_modulus}")
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
         raise ValueError("elastic_modulus must be positive")

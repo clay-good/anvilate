@@ -51,6 +51,11 @@ def breathing_zone_outdoor_airflow(
     _check(people_outdoor_rate, "[length]**3/[time]", "people_outdoor_rate")
     _check(area_outdoor_rate, "[length]/[time]", "area_outdoor_rate")
     _check(floor_area, "[length]**2", "floor_area")
+    # Zero is a real declaration here — a zone with no floor area and no occupancy requires
+    # no outdoor air, which the screen reports as not evaluated rather than as a pass. A
+    # negative area is not a smaller room.
+    if floor_area.magnitude < 0:
+        raise ValueError(f"floor_area must be zero or positive; got {floor_area}")
     if occupancy < 0:
         raise ValueError("occupancy must be non-negative")
     if not 0.0 < zone_air_distribution_effectiveness <= 1.0:

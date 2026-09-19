@@ -1,5 +1,6 @@
-# Length parameters that accept a negative value, and why — the exclusion list for the
-# gate in tests/test_fraction_guards.py.
+# Size parameters that accept a negative value, and why — the exclusion list for the gate
+# in tests/test_fraction_guards.py. A size here is a length, an area, a volume, a section
+# property or a density.
 #
 # A size is positive. A negative one is not a smaller part: the terms it enters are often
 # even powers, so the answer comes back as if the size were positive — a column of length

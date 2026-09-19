@@ -57,6 +57,8 @@ def cyclone_cut_diameter(
     _check(inlet_velocity, "[length]/[time]", "inlet_velocity")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(gas_density, "[mass]/[length]**3", "gas_density")
+    if gas_density.magnitude <= 0:
+        raise ValueError(f"gas_density must be positive; got {gas_density}")
     mu = gas_viscosity.to("Pa*s").magnitude
     b = inlet_width.to("m").magnitude
     v_i = inlet_velocity.to("m/s").magnitude

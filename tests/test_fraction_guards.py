@@ -1919,8 +1919,22 @@ def _signed_length_exclusions() -> dict[str, str]:
     return excused
 
 
+#: The dimensions whose values are sizes: a length, an area, a volume, a second moment, a
+#: density. Both spellings of each, because a module writes the dimension its own way.
+_SIZE_DIMENSIONS = frozenset(
+    {
+        "[length]",
+        "[length]**2",
+        "[length]**3",
+        "[length]**4",
+        "[mass]/[length]**3",
+        "[mass] / [length]**3",
+    }
+)
+
+
 def _accepts_a_negative_length() -> tuple[list[str], int]:
-    """Every length parameter that takes a negative and still returns, and the population.
+    """Every size parameter that takes a negative and still returns, and the population.
 
     Poisoned one parameter at a time, in the dimension the function itself asks for, through
     the binder this file already has — a length bound to a pressure parameter is refused for
@@ -1932,7 +1946,7 @@ def _accepts_a_negative_length() -> tuple[list[str], int]:
     for label, function, arguments in _uniformly_callable():
         dimensions = _declared_dimensions().get(label.split(".")[0], {})
         for name, value in arguments.items():
-            if not isinstance(value, Quantity) or dimensions.get(name) != "[length]":
+            if not isinstance(value, Quantity) or dimensions.get(name) not in _SIZE_DIMENSIONS:
                 continue
             probed += 1
             poisoned = dict(arguments)
@@ -1950,13 +1964,14 @@ def test_a_length_that_is_a_size_refuses_a_negative_one() -> None:
 
     `euler_buckling_load` returned the same load for a column of length −L as for +L, and
     `CrossSection.rectangular` returned a negative second moment, which divides into a
-    deflection that clears every limit. Twenty-five sites took one and answered.
+    deflection that clears every limit. Forty-two sites took one and answered — lengths
+    first, then the areas, section properties and densities this sweep reaches with them.
 
     A length that measures a position or a displacement is signed and is listed with the
     case it describes, so the gate cannot be satisfied by excusing a size.
     """
     accepted, probed = _accepts_a_negative_length()
-    assert probed >= 400, f"only {probed} length parameters were poisoned"
+    assert probed >= 500, f"only {probed} size parameters were poisoned"
     excused = _signed_length_exclusions()
     assert all(cause for cause in excused.values()), "every exclusion states its cause"
     unguarded = sorted(set(accepted) - set(excused))

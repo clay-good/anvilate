@@ -193,6 +193,8 @@ def stokes_settling_velocity(
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    if fluid_density.magnitude <= 0:
+        raise ValueError(f"fluid_density must be positive; got {fluid_density}")
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     d = particle_diameter.to("m").magnitude
     rho_p = particle_density.to("kg/m**3").magnitude
@@ -270,6 +272,8 @@ def archimedes_number(
     """
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
+    if particle_density.magnitude <= 0:
+        raise ValueError(f"particle_density must be positive; got {particle_density}")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     d = particle_diameter.to("m").magnitude

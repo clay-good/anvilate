@@ -634,6 +634,8 @@ def max_transverse_shear_stress(
     """
     _require(shear_force, "[force]", "shear_force")
     _require(area, "[length]**2", "area")
+    if area.magnitude <= 0:
+        raise ValueError(f"area must be positive; got {area}")
     if form_factor <= 0:
         raise ValueError(f"form_factor must be positive; got {form_factor}")
     stress = form_factor * shear_force.pint / area.pint

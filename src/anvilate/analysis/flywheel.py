@@ -204,6 +204,8 @@ def rotating_rim_hoop_stress(
     material's allowable tensile stress. Returns the hoop stress in MPa.
     """
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(mean_radius, "[length]", "mean_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     rho = density.to("kg/m**3").magnitude
@@ -263,6 +265,8 @@ def rotating_rim_radial_growth(
     speed. Returns the radial growth in millimetres.
     """
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(mean_radius, "[length]", "mean_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
@@ -301,6 +305,8 @@ def rotating_solid_disc_max_stress(
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(outer_radius, "[length]", "outer_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if not 0 <= poisson < 0.5:
@@ -325,6 +331,8 @@ def _rotating_disc_inputs(
 ) -> tuple[float, float, float, float]:
     """Validate a rotating solid disc and return (rho, R, r, omega) in SI."""
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(outer_radius, "[length]", "outer_radius")
     _require(radius, "[length]", "radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
@@ -423,6 +431,8 @@ def rotating_annular_disc_bore_stress(
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(outer_radius, "[length]", "outer_radius")
     _require(inner_radius, "[length]", "inner_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
@@ -452,6 +462,8 @@ def _annular_disc_inputs(
 ) -> tuple[float, float, float, float, float]:
     """Validate a rotating annular disc and return (rho, ro, ri, r, omega) in SI."""
     _require(density, "[mass] / [length]**3", "density")
+    if density.magnitude <= 0:
+        raise ValueError(f"density must be positive; got {density}")
     _require(outer_radius, "[length]", "outer_radius")
     _require(inner_radius, "[length]", "inner_radius")
     _require(radius, "[length]", "radius")

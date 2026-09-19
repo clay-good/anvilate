@@ -126,6 +126,8 @@ def minimum_fluidization_velocity(
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    if fluid_density.magnitude <= 0:
+        raise ValueError(f"fluid_density must be positive; got {fluid_density}")
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     if not 0.0 < void_fraction < 1.0:
         raise ValueError(f"void_fraction must be in (0, 1); got {void_fraction}")

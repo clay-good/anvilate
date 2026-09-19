@@ -69,6 +69,8 @@ def axial_stress(*, force: Quantity, area: Quantity) -> Quantity:
     """
     _require(force, "[force]", "force")
     _require(area, "[length]**2", "area")
+    if area.magnitude <= 0:
+        raise ValueError(f"area must be positive; got {area}")
     stress = force.pint / area.pint
     return _as_quantity(stress, "MPa")
 
