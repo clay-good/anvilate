@@ -56,6 +56,7 @@ def _atomic_path(path: Path) -> Iterator[Path]:
 
 if TYPE_CHECKING:
     from ..geometry import BuiltGeometry
+    from ..keepouts import KeepoutBody
 
 __all__ = [
     "Hole",
@@ -87,6 +88,9 @@ _REFERENCE_LAYER = "REFERENCE"
 # A feature control frame is annotation, not geometry: it goes on its own layer so a
 # fabricator's tool path never picks it up, and so a drawing can turn the GD&T off.
 _GDT_LAYER = "GDT"
+# A keepout is a protected volume, not part geometry: its own layer, named so no reader
+# takes it for a cut, and one a controller's layer filter can drop before it plans a path.
+_KEEPOUT_LAYER = "KEEPOUT_NON_MANUFACTURING"
 
 # A DXF polyline bulge is tan(theta/4) of the arc it spans; every rounded plate
 # corner is a quarter circle.
@@ -151,13 +155,22 @@ def _document_bytes(doc, *, authorization: ExportAuthorization) -> bytes:
     return stream.getvalue().encode(doc.output_encoding)
 
 
-def render_geometry_dxf(*, geometry: BuiltGeometry, authorization: ExportAuthorization) -> bytes:
+def render_geometry_dxf(
+    *,
+    geometry: BuiltGeometry,
+    authorization: ExportAuthorization,
+    keepouts: tuple[KeepoutBody, ...] = (),
+) -> bytes:
     """Render the top profile of one audited plate solid as deterministic DXF bytes.
 
     The dimensions come from :class:`~anvilate.geometry.BuiltGeometry`, after the kernel
     has built and validated the solid. Rectangular base and cover plates become centered
     closed polylines; circular covers become centered circles, with an annular cover's bore
     on the ``HOLES`` layer. The layers are semantic cut intent, not merely colors.
+
+    Each of ``keepouts`` is drawn as the rectangle bounding its footprint in plan, on the
+    ``KEEPOUT_NON_MANUFACTURING`` layer, labelled with its tag and reason: shown to the
+    machinist and never on a cut layer.
 
     ``authorization`` is mandatory and its watermark is embedded in the DXF header. The
     result is returned rather than written so the CLI and MCP surfaces can expose the exact
@@ -209,6 +222,24 @@ def render_geometry_dxf(*, geometry: BuiltGeometry, authorization: ExportAuthori
             msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
     else:
         raise ValueError(f"DXF export does not support geometry pattern {geometry.pattern!r}")
+
+    if keepouts:
+        from ..keepouts import keepout_label
+
+        doc.layers.add(_KEEPOUT_LAYER, color=6)
+        for body in keepouts:
+            bounds = body.core.bounding_box()
+            low, high = (bounds.min.X, bounds.min.Y), (bounds.max.X, bounds.max.Y)
+            msp.add_lwpolyline(
+                [low, (high[0], low[1]), high, (low[0], high[1])],
+                close=True,
+                dxfattribs={"layer": _KEEPOUT_LAYER},
+            )
+            msp.add_text(
+                keepout_label(body.keepout),
+                height=2.5,
+                dxfattribs={"layer": _KEEPOUT_LAYER, "insert": (low[0], high[1] + 1.0)},
+            )
 
     return _document_bytes(doc, authorization=authorization)
 

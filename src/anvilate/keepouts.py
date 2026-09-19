@@ -24,10 +24,14 @@ nothing was screened.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from .derivation import DerivationAbsence, Underived
+from .export.dxf import _atomic_path
+from .export.gate import ExportAuthorization
 from .geometry import BuiltGeometry, GeometryUnavailable
 from .scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
 from .spec import (
@@ -39,7 +43,7 @@ from .spec import (
     SweptProfileKeepout,
 )
 
-__all__ = ["KeepoutBody", "build_keepout", "screen_keepouts"]
+__all__ = ["KeepoutBody", "build_keepout", "screen_keepouts", "keepout_label", "write_keepout_step"]
 
 # Below this the kernel's common volume is round-off, not material (mm³).
 _VOLUME_EPSILON = 1e-6
@@ -268,3 +272,70 @@ def screen_keepouts(
             ),
         )
     return (summary, *entries), tuple(bodies)
+
+
+def keepout_label(keepout: Keepout) -> str:
+    """The name a keepout body carries in every export: its tag, that it is not to be made,
+    and why it is protected."""
+    return f"KEEPOUT {keepout.tag} (non-manufacturing): {keepout.reason}"
+
+
+def write_keepout_step(
+    bodies: tuple[KeepoutBody, ...], path: Path, *, authorization: ExportAuthorization
+) -> Path:
+    """Write the keepout bodies to their own STEP file, each named as non-manufacturing.
+
+    A separate file rather than extra bodies in the part's: the machinable solid's STEP is
+    unchanged by any keepout, so a CAM tool reading it cannot machine a protected volume,
+    and a reader of this file sees each body's tag and reason as its product name. The
+    header carries the export authorization and a fixed date, as the part's STEP does, so
+    the same bodies write the same bytes.
+    """
+    if not bodies:
+        raise ValueError("there are no keepout bodies to write; screen_keepouts built none")
+    b = _kernel()
+    from .geometry import _GVP_RECOMMENDED_PRACTICE, _step_string
+
+    solids = []
+    for body in bodies:
+        solid = body.core
+        solid.label = keepout_label(body.keepout)
+        solids.append(solid)
+    compound = b.Compound(children=solids)
+    compound.label = "keepouts (non-manufacturing)"
+    with _atomic_path(path) as partial:
+        b.export_step(compound, str(partial))
+        try:
+            text = partial.read_text(encoding="utf-8")
+        except UnicodeDecodeError as failure:
+            raise ValueError("the STEP writer produced a file that is not UTF-8") from failure
+        descriptions = [
+            "keepout bodies: protected volumes, not part geometry",
+            _GVP_RECOMMENDED_PRACTICE,
+            *(f"{key}={value}" for key, value in authorization.metadata()),
+        ]
+        header = (
+            "FILE_DESCRIPTION(("
+            + ",".join(f"'{_step_string(value)}'" for value in descriptions)
+            + "),'2;1');"
+        )
+        text, described = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
+        text, named = re.subn(
+            r"FILE_NAME\('[^']*','[^']*',",
+            lambda _match: "FILE_NAME('keepouts','2000-01-01T00:00:00',",
+            text,
+            count=1,
+        )
+        if described != 1 or named != 1:
+            raise ValueError("the STEP writer produced an unrecognized header")
+        # The writer numbers assembly usages from a counter that lives for the process, so
+        # a second export of the same bodies came out with different ids. Renumbered in
+        # file order, the same bodies write the same bytes.
+        occurrences = iter(range(1, 1_000_000))
+        text = re.sub(
+            r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\('\d+'",
+            lambda _match: f"NEXT_ASSEMBLY_USAGE_OCCURRENCE('{next(occurrences)}'",
+            text,
+        )
+        partial.write_text(text, encoding="utf-8")
+    return path

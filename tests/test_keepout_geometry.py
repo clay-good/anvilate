@@ -153,3 +153,51 @@ def test_every_rule_generates_a_body_of_its_own_volume() -> None:
     volumes = {body.keepout.tag: float(body.core.volume) for body in bodies}
     assert volumes["bore"] == pytest.approx(pi * 10**2 * 10, rel=1e-6)
     assert volumes["cone"] == pytest.approx(pi * 10**2 * 30 / 3, rel=1e-6)
+
+
+def test_keepouts_export_labelled_and_apart_from_the_machinable_solid(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """5.3: the keepout body is present and labelled, and absent from the part's STEP."""
+    import re
+
+    from build123d import import_step
+
+    from anvilate.export.gate import authorize_export
+    from anvilate.geometry import write_step
+    from anvilate.keepouts import write_keepout_step
+
+    authorization = authorize_export(None, override=True)
+    _, bodies, built = _check("25 mm")
+    first = write_keepout_step(bodies, tmp_path / "keepouts.step", authorization=authorization)
+    # ISO 10303-21 ignores line breaks, and the writer wraps a long name across them.
+    text = "".join(first.read_text().splitlines())
+    assert re.findall(r"PRODUCT\(\s*'((?:[^']|'')*)'", text)[1:] == [
+        "KEEPOUT beam_path (non-manufacturing): the sensor''s beam passes 27 mm above the "
+        "mounting face"
+    ]
+    again = write_keepout_step(bodies, tmp_path / "again.step", authorization=authorization)
+    assert again.read_bytes() == first.read_bytes()
+    part = write_step(built, tmp_path / "part.step", authorization=authorization)
+    machinable = import_step(str(part))
+    assert len(machinable.solids()) == 1
+    assert float(machinable.volume) == pytest.approx(300 * 240 * 25)
+    assert "KEEPOUT" not in part.read_text()
+
+
+def test_the_drawing_carries_each_keepout_on_its_own_non_manufacturing_layer() -> None:
+    ezdxf = pytest.importorskip("ezdxf")
+    import io
+
+    from anvilate.export.dxf import render_geometry_dxf
+    from anvilate.export.gate import authorize_export
+
+    _, bodies, built = _check("25 mm")
+    data = render_geometry_dxf(
+        geometry=built, authorization=authorize_export(None, override=True), keepouts=bodies
+    )
+    drawing = ezdxf.read(io.StringIO(data.decode()))
+    on_layer = drawing.modelspace().query('*[layer=="KEEPOUT_NON_MANUFACTURING"]')
+    assert len(on_layer) == 2  # the footprint and its label
+    (label,) = [entity for entity in on_layer if entity.dxftype() == "TEXT"]
+    assert label.dxf.text.startswith("KEEPOUT beam_path (non-manufacturing)")
+    outline = drawing.modelspace().query('*[layer=="OUTLINE"]')
+    assert len(outline) == 1

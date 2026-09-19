@@ -345,6 +345,8 @@ environment_profiles.ENVIRONMENT_DECLARATIONS
 keepouts.KeepoutBody
 keepouts.build_keepout
 keepouts.screen_keepouts
+keepouts.keepout_label
+keepouts.write_keepout_step
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem

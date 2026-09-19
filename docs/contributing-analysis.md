@@ -274,7 +274,7 @@ job backs — which would excuse a skip forever — fails the build instead.
 
 ## Finding the guards nothing has ever run
 
-A line-trace of the suite says **around 52% of the roughly 5,000 `raise` sites in the imported modules
+A line-trace of the suite says **around 52% of the roughly 5,250 `raise` sites in the imported modules
 never execute**. Most are dimension and positivity checks whose absence a reader would
 notice. The subset worth hunting is the one whose *condition carries a domain constant* —
 a Poisson's ratio that cannot reach 0.5, an angle range a formula's geometry requires, a

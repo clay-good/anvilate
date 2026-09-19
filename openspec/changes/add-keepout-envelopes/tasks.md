@@ -30,7 +30,8 @@
 
 ## 4. Export
 
-- [ ] 4.1 Dedicated layer/body on STEP and DXF, labeled non-manufacturing
+- [x] 4.1 Dedicated layer/body on STEP and DXF, labeled non-manufacturing — a keepout STEP of
+      its own, byte-identical per input, and a `KEEPOUT_NON_MANUFACTURING` DXF layer
 - [x] 4.2 Keepout identity and reason recorded in the evidence bundle — the exported bundle
       carries each in its spec and its not-evaluated card entry
 
@@ -39,7 +40,7 @@
 - [x] 5.1 A rib added to fix deflection intrudes on a keepout and the card fails — a plate
       thickened to fix deflection reaches into a beam path (the patterns carry no ribs)
 - [x] 5.2 A keepout declared and never generated reports not-evaluated, never a pass
-- [ ] 5.3 Exported keepout body is present, labeled, and absent from the machinable solid
+- [x] 5.3 Exported keepout body is present, labeled, and absent from the machinable solid
 - [x] 5.4 Zero-volume and inverted keepouts are refused rather than passing vacuously
 
 ## 6. Docs & examples
