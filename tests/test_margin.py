@@ -16,6 +16,8 @@ from anvilate.margin import (
     MarginKind,
     MarginLedger,
     MarginStack,
+    ledger_for,
+    physics_limited,
 )
 from anvilate.spec import load_spec_yaml, parse_spec
 
@@ -480,3 +482,180 @@ def test_a_check_is_re_judged_at_its_code_required_factors_alone() -> None:
     assert weld.code_required == pytest.approx(1.67)
     assert weld.passes_at_code  # fails with every margin, passes at the code minimum
     assert "at code minimum: 1.8 against x1.67, passes; judged at x2.5" in str(weld)
+
+
+# --- factors applied inside a capacity (margin-ledger 4.1, 4.2, 6.4) -----------------------
+
+_UNITY_EXCLUSIONS = "docs/api/unity-checks-without-inside-factors.txt"
+
+
+def _unity_checks() -> list[tuple[str, str, bool]]:
+    """Every check judged at a literal required factor of 1.0, by `(module, function)`.
+
+    Structural, not by name: a `from_safety_factor` or `strength_scorecard` call whose
+    `required` is the constant 1.0 has put any margin it applies inside its capacity. Whether
+    the enclosing function records it is read the same way — an `applied_factors` key or
+    keyword anywhere in that function.
+    """
+    import ast
+
+    from conftest import library_sources
+
+    source = Path(__file__).parents[1] / "src" / "anvilate"
+    found = []
+    for path, tree in library_sources():
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            unity = records = False
+            for node in ast.walk(function):
+                if isinstance(node, ast.Call):
+                    callee = getattr(node.func, "attr", getattr(node.func, "id", None))
+                    keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+                    required = keywords.get("required")
+                    if (
+                        callee in ("from_safety_factor", "strength_scorecard")
+                        and isinstance(required, ast.Constant)
+                        and required.value == 1.0
+                    ):
+                        unity = True
+                    if "applied_factors" in keywords:
+                        records = True
+                if isinstance(node, ast.Constant) and node.value == "applied_factors":
+                    records = True
+            if unity:
+                found.append((str(path.relative_to(source)), function.name, records))
+    return found
+
+
+def _unity_exclusions() -> dict[tuple[str, str], str]:
+    text = (Path(__file__).parents[1] / _UNITY_EXCLUSIONS).read_text()
+    excused = {}
+    for line in text.splitlines():
+        if line.strip() and not line.startswith("#"):
+            module, function, cause = (part.strip() for part in line.split("|", 2))
+            excused[(module, function)] = cause
+    return excused
+
+
+def test_a_check_judged_at_one_records_the_factor_inside_it_or_says_why_there_is_none():
+    """A 1.0 verdict hides its margin in the capacity; the ledger can only see a recorded one."""
+    checks = _unity_checks()
+    # The floor: a detector that stopped matching would otherwise report a clean library.
+    assert len(checks) >= 12, f"the sweep found only {len(checks)} checks judged at 1.0"
+    recording = [(module, function) for module, function, records in checks if records]
+    assert len(recording) >= 4, recording
+    excused = _unity_exclusions()
+    assert all(cause for cause in excused.values()), "every exclusion states its cause"
+    silent = sorted(
+        (module, function)
+        for module, function, records in checks
+        if not records and (module, function) not in excused
+    )
+    assert not silent, (
+        f"these checks are judged at 1.0 and record no factor applied inside their capacity: "
+        f"{silent}. Record it in `applied_factors`, or list the site in {_UNITY_EXCLUSIONS} "
+        "with the reason there is none"
+    )
+    sites = {(module, function) for module, function, _ in checks}
+    stale = sorted(set(excused) - sites)
+    assert not stale, f"these lines in {_UNITY_EXCLUSIONS} match no check any more: {stale}"
+    both = sorted(set(excused) & set(recording))
+    assert not both, f"these record a factor and are also excused as having none: {both}"
+
+
+def _pile(**overrides):
+    from anvilate.packs.geotechnical import DrivenPile
+    from anvilate.units import Quantity
+
+    fields = {
+        "diameter": Quantity(magnitude=0.4, unit="m"),
+        "length": Quantity(magnitude=15.0, unit="m"),
+        "undrained_shear_strength": Quantity(magnitude=60.0, unit="kPa"),
+        "adhesion_factor": 0.8,
+        "applied_load": Quantity(magnitude=300.0, unit="kN"),
+    }
+    return DrivenPile(**{**fields, **overrides})
+
+
+def test_the_ledger_itemizes_the_factor_a_pile_applies_inside_its_capacity():
+    from anvilate.analysis.geotechnical import (
+        pile_end_bearing_capacity,
+        pile_skin_friction_capacity,
+    )
+    from anvilate.packs.geotechnical import screen_driven_pile
+
+    pile = _pile(factor_of_safety=3.0)
+    card = screen_driven_pile(pile)
+    (entry,) = card.entries
+    ledger = ledger_for(card, None)
+    (factor,) = [item for item in ledger if "factor of safety" in item.label]
+    assert factor.value == 3.0
+    assert factor.kind is MarginKind.USER_ELECTED
+    assert factor.origin == "element: factor_of_safety (declared)"
+    # 6.4: the recorded factor is the one the capacity used. Put back on the raw basis, the
+    # delivered margin is exactly the ultimate capacity over the load, computed here from the
+    # analysis functions — so a factor removed from (or changed in) the capacity arithmetic
+    # and left in the record, or the reverse, fails this line.
+    ultimate = (
+        pile_skin_friction_capacity(
+            adhesion_factor=pile.adhesion_factor,
+            undrained_shear_strength=pile.undrained_shear_strength,
+            diameter=pile.diameter,
+            length=pile.length,
+        )
+        .to("kN")
+        .magnitude
+        + pile_end_bearing_capacity(
+            undrained_shear_strength=pile.undrained_shear_strength, diameter=pile.diameter
+        )
+        .to("kN")
+        .magnitude
+    )
+    (limited,) = physics_limited(card, ledger)
+    assert limited.delivered == pytest.approx(ultimate / 300.0, rel=1e-9)
+    assert limited.required == pytest.approx(3.0)
+    assert entry.safety_factor == pytest.approx(ultimate / 300.0 / 3.0, rel=1e-9)
+
+
+def test_the_ledger_follows_the_factor_and_a_default_says_it_is_one():
+    from anvilate.packs.geotechnical import screen_driven_pile
+
+    card = screen_driven_pile(_pile())
+    (factor,) = [item for item in ledger_for(card, None) if "factor of safety" in item.label]
+    assert factor.value == 2.5
+    assert factor.origin == "element: factor_of_safety (the screen's default)"
+    assert "uncited" in factor.authority
+    # A factor that moves nothing is not a margin, and nothing is recorded for it.
+    bare = screen_driven_pile(_pile(factor_of_safety=1.0))
+    assert not [item for item in ledger_for(bare, None) if "factor of safety" in item.label]
+
+
+def test_a_code_design_factor_inside_an_allowable_is_itemized_as_code_required():
+    from anvilate.analysis.lifting_device import DesignCategory, bth1_member_scorecard
+    from anvilate.scorecard import Scorecard
+    from anvilate.units import Quantity
+
+    entry = bth1_member_scorecard(
+        "hook block",
+        stress=Quantity(magnitude=80.0, unit="MPa"),
+        allowable=Quantity(magnitude=120.0, unit="MPa"),
+        category=DesignCategory.B,
+    )
+    (factor,) = ledger_for(Scorecard(entries=(entry,)), None)
+    assert factor.kind is MarginKind.CODE_REQUIRED
+    assert factor.value == DesignCategory.B.design_factor
+    assert "BTH-1 §3-1.3" in factor.authority
+
+
+def test_an_applied_factor_renders_its_value_its_authority_and_its_origin():
+    from anvilate.scorecard import AppliedFactor
+
+    cited = AppliedFactor(
+        label="design factor N_d", value=2.0, origin="design category A", authority="BTH-1 §3-1.3"
+    )
+    uncited = cited.model_copy(update={"authority": None})
+    assert str(cited) == "design factor N_d 2 (BTH-1 §3-1.3; from design category A)"
+    assert str(uncited) == "design factor N_d 2 (uncited; from design category A)"
+    with pytest.raises(ValidationError, match="at least 1"):
+        AppliedFactor(label="relief", value=0.8, origin="element: x")

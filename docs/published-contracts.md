@@ -114,6 +114,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Scorecard 1.11.0: factors applied inside a capacity
+
+A check entry gains `applied_factors`. These are the conservatisms a check applied inside
+the capacity it judged, which a verdict of "1.0 required" cannot show: a pile's factor of
+safety, BTH-1's design factor N_d, a bearing's required static factor, a gear's minimum
+contact ratio. Each carries a label, a value of at least 1, where it came from and, when a
+clause obliges it, that clause. The [margin ledger](margin-ledger.md) itemizes them. Evidence
+Bundle 1.20.0, STEP interface candidates 1.13.0 and CLI output 1.48.0 carry the same entry.
+
 ### CLI output 1.47.0: a cancelled run
 
 A run the user stops is its own outcome. `outcome: "cancelled"` with `exit_code: 130` states

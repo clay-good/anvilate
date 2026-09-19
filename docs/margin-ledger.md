@@ -128,5 +128,23 @@ factor is missing from its ledger. `physics_limited(card, ledger)` re-judges eac
 safety factor against the code-required entries on its quantity alone, and `anvilate check`
 prints the line under the ledger: a weld at 1.8 fails the 2.5 it was judged against with
 every margin and passes the 1.67 a code obliges. It informs; the delivered verdict stands.
-Not built yet: detecting, over the source rather than the screened results, every place a
-factor is applied, with its exclusions stated (4.1, 4.2).
+
+A check judged at a required factor of 1.0 has put its margin inside the capacity, where
+the verdict cannot show it. Such a check records the factor on its entry
+(`ScorecardEntry.applied_factors`), and the ledger itemizes it:
+
+| Check | Factor inside the capacity | Kind |
+| --- | --- | --- |
+| driven pile | factor of safety on the ultimate capacity | user-elected, or the screen's default |
+| BTH-1 member | design factor N_d | code-required (BTH-1 §3-1.3) |
+| rolling bearing, static | required static factor s₀ | user-elected |
+| gear mesh, contact ratio | minimum contact ratio above 1 | user-elected, or the screen's default |
+
+`physics_limited` puts both sides back on the raw basis, so a pile at FS 3 shows the
+ultimate capacity over the load against 3. A gate in `tests/test_margin.py` reads the
+source (4.1, 4.2): every check whose `required` is the constant 1.0 either records its
+factor or appears in `docs/api/unity-checks-without-inside-factors.txt` with the reason it
+has none. The usual reason is that its limit is a criterion or a budget, not a strength.
+The gate has a floor on the sites it finds and refuses a stale line. A factor dropped from
+the pile's capacity arithmetic, with the record left behind, fails a test that recomputes
+the ultimate capacity independently (6.4).

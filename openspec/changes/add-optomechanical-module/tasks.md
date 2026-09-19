@@ -2,14 +2,18 @@
 
 ## 0. Prerequisites
 
-- [ ] 0.1 `add-physical-domain-modules` landed — manifest and composition rules exist
+- [x] 0.1 `add-physical-domain-modules` landed — manifest and composition rules exist: the
+      manifest contract (1.1–1.3) and limit-state composition (2.3, `anvilate.limit_states`).
+      Its open items — a check namespace and out-of-tree loading — are nothing this module uses
 - [x] 0.2 `add-performance-budgets` landed — budgets exist
-- [ ] 0.3 `add-keepout-envelopes` landed — the beam envelope has a home
+- [x] 0.3 `add-keepout-envelopes` landed — the beam envelope has a home: every task done,
+      and the declared beam envelope is emitted as a keepout (4.1)
 - [x] 0.4 `add-check-dependency-graph` landed — self-heating can reach the focus screen
 - [x] 0.5 `add-constraint-topology` landed — mount tallies qualify alignment results
 - [x] 0.6 `add-failure-mode-coverage` landed — the module has a catalog to contribute to
 - [x] 0.7 `add-declaration-completeness` landed — profiles and screening depth exist
-- [ ] 0.8 `add-assembly-feasibility` landed — post-closure access can be screened
+- [x] 0.8 `add-assembly-feasibility` landed — post-closure access can be screened: every
+      task done, and `assembly.screen_adjustment_access` screens an adjustment sealed away
 
 ## 1. Units and data
 

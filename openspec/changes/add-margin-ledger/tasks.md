@@ -30,12 +30,14 @@
 
 ## 4. Gates
 
-- [ ] 4.1 CI gate: every code path that multiplies or divides a demand or capacity by a
+- [x] 4.1 CI gate: every code path that multiplies or divides a demand or capacity by a
       factor records a ledger entry — detected structurally over the source, not by name —
-      measured today over the screened results of every shipped spec, with a floor; the
-      source-level detection is still to build
-- [ ] 4.2 The gate carries a population floor and an enumerated exclusion list with a
-      stated cause per exclusion, so it cannot pass by finding nothing
+      a check whose `required` is the constant 1.0 has its margin inside the capacity, and
+      records it in `ScorecardEntry.applied_factors` (tests/test_margin.py); a factor above
+      1 on the requirement side is read off every screened result, as before
+- [x] 4.2 The gate carries a population floor and an enumerated exclusion list with a
+      stated cause per exclusion, so it cannot pass by finding nothing —
+      docs/api/unity-checks-without-inside-factors.txt, stale lines refused
 
 ## 5. Rendering
 
@@ -49,7 +51,8 @@
       and the number is the product — the defect class this capability exists to expose
 - [x] 6.2 An unattributed factor is refused
 - [x] 6.3 A code-required factor and an elected one never render identically
-- [ ] 6.4 Removing a factor from the code changes the ledger, not only the verdict
+- [x] 6.4 Removing a factor from the code changes the ledger, not only the verdict — the pile's
+      recorded factor is held to its capacity arithmetic by an independent recomputation
 
 ## 7. Docs & examples
 

@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .._models import Named, RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import AppliedFactor, CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -331,6 +331,16 @@ def bth1_member_scorecard(
             "detail": detail,
             "reference": _CLAUSE_ALLOWABLES,
             "derivation": derivation,
+            # N_d divided every allowable before this check saw it, and the verdict is
+            # judged at 1.0, so the code's factor is recorded for the ledger here.
+            "applied_factors": (
+                AppliedFactor(
+                    label=f"design factor N_d (Category {category.value})",
+                    value=category.design_factor,
+                    origin=f"design category {category.value}",
+                    authority=_CLAUSE_CATEGORY,
+                ),
+            ),
         }
     )
 

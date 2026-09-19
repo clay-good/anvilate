@@ -55,7 +55,14 @@ from ..analysis import (
     wahl_factor,
 )
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    AppliedFactor,
+    CheckStatus,
+    Direction,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -679,7 +686,29 @@ def _contact_ratio_entry(mesh: SpurGearMesh) -> ScorecardEntry:
     )
     entry = ScorecardEntry.from_safety_factor(
         "contact ratio", computed=ratio / mesh.minimum_contact_ratio, required=1.0
-    ).model_copy(update={"reference": _CONTACT_RATIO_REFERENCE, "derivation": derivation})
+    ).model_copy(
+        update={
+            "reference": _CONTACT_RATIO_REFERENCE,
+            "derivation": derivation,
+            # Continuous action needs a contact ratio of 1; the declared minimum above that
+            # is a margin inside the 1.0 verdict, so it is recorded for the ledger.
+            "applied_factors": (
+                (
+                    AppliedFactor(
+                        label="minimum contact ratio",
+                        value=mesh.minimum_contact_ratio,
+                        origin=(
+                            "element: minimum_contact_ratio (declared)"
+                            if "minimum_contact_ratio" in mesh.model_fields_set
+                            else "element: minimum_contact_ratio (the screen's default)"
+                        ),
+                    ),
+                )
+                if mesh.minimum_contact_ratio > 1.0
+                else ()
+            ),
+        }
+    )
     if entry.status is CheckStatus.FAIL:
         # The module is NOT the lever here and this is the interesting part of the check:
         # the contact ratio is scale-invariant — every length in it is a multiple of m — so
@@ -1099,7 +1128,25 @@ def _bearing_static_entry(unit: RollingBearing) -> ScorecardEntry:
         "bearing static capacity",
         computed=factor / unit.required_static_factor,
         required=1.0,
-    ).model_copy(update={"reference": _BEARING_STATIC_REFERENCE, "derivation": derivation})
+    ).model_copy(
+        update={
+            "reference": _BEARING_STATIC_REFERENCE,
+            "derivation": derivation,
+            # s₀ divided the delivered factor before the 1.0 verdict, so it is recorded for
+            # the ledger. The bearing declares it: an election, not a clause.
+            "applied_factors": (
+                (
+                    AppliedFactor(
+                        label="required static factor s₀",
+                        value=unit.required_static_factor,
+                        origin="element: required_static_factor",
+                    ),
+                )
+                if unit.required_static_factor > 1.0
+                else ()
+            ),
+        }
+    )
     if entry.status is CheckStatus.FAIL:
         entry = entry.model_copy(
             update={

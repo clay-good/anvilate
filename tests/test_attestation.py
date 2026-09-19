@@ -270,7 +270,10 @@ def test_a_changed_spec_changes_the_digest():
 # And again, from dcfdb257..., when `ScorecardEntry.addresses` shipped — the failure modes a
 # check says it addresses, which failure-mode coverage reads off the card. Which modes a
 # check answered for is part of what the document says.
-_GOLDEN_DIGEST = "e44d2b829974233ff708b61d41c975d6387533a1158c64cce5cce4c9962db590"
+# And again, from e44d2b82..., when `ScorecardEntry.applied_factors` shipped — the factors a
+# check applied inside its capacity, which the margin ledger itemizes. The conservatism a
+# verdict relies on is part of what the document says.
+_GOLDEN_DIGEST = "c0c4f1fd70dc10c994aa379b2452b592d1de476e799306e1c142dceadeb7c3a5"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

@@ -1,0 +1,19 @@
+# Checks judged at a required safety factor of 1.0 that record no factor inside their
+# capacity, and why — the exclusion list for the margin-ledger gate in tests/test_margin.py.
+#
+# A check judged at 1.0 has either put its whole margin inside the capacity, where the
+# verdict cannot show it, or has no margin at all because its limit is a criterion rather
+# than a strength. The first kind records the factor (`ScorecardEntry.applied_factors`) so
+# the ledger itemizes it. The second kind is listed here with its cause. The gate refuses
+# a 1.0 check that does neither, and a line here that no longer matches a site.
+#
+# One line per site, `module | function | cause`.
+analysis/dynamics.py | isolation_scorecard | a criterion: the transmissibility the caller allows, with no factor applied to it here
+analysis/dynamics.py | isolator_selection_scorecard | a criterion: the selected static deflection against the deflection the target transmissibility needs, with no factor applied
+analysis/dynamics.py | half_sine_shock_scorecard | a criterion: the allowable acceleration the caller supplies, with no factor applied to it here
+analysis/embodied_carbon.py | embodied_carbon_scorecard | a budget, not a strength: the declared kgCO2e allowance is compared as stated
+analysis/lifting_device.py | bth1_fatigue_scorecard | the allowable stress range is BTH-1's tabulated value, whose margin is built into the table and is not a separable factor
+analysis/pressure_vessel.py | asme_b313_pressure_scorecard | the factor lives in the tabulated allowable S the caller supplies (B31.3 Table A-1), which this library does not bundle and so cannot itemize
+packs/hydraulics.py | screen_pipe_run | a budget, not a strength: the head the supply provides against the head the run loses
+packs/machinery.py | _undercut_entry | a geometric criterion: the tooth count against the undercut limit, with no factor applied
+packs/machinery.py | _spring_buckling_entry | a stability criterion: the free-length ratio against the buckling boundary for the end condition, with no factor applied

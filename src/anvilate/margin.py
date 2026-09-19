@@ -374,6 +374,21 @@ def ledger_for(card: Any, spec: Any) -> MarginLedger:
     stated_value = None if stated is None else stated.value
     applied = []
     for entry in getattr(card, "entries", ()):
+        # A factor applied inside the capacity: the verdict cannot show it, so the check
+        # recorded it (`ScorecardEntry.applied_factors`) and it is itemized here.
+        for factor in getattr(entry, "applied_factors", ()):
+            cited_by = None if factor.authority is None else str(factor.authority).strip()
+            applied.append(
+                MarginEntry(
+                    label=f"{factor.label} inside {entry.name}",
+                    kind=MarginKind.CODE_REQUIRED if cited_by else MarginKind.USER_ELECTED,
+                    value=factor.value,
+                    quantity=entry.name,
+                    action=MarginAction.LOWERS_CAPACITY,
+                    origin=factor.origin,
+                    authority=cited_by or f"an uncited {factor.label} of the check {entry.name}",
+                )
+            )
         required = entry.required_safety_factor
         if required is None or not isfinite(required) or required <= 1.0:
             continue
@@ -440,11 +455,15 @@ def physics_limited(card: Any, ledger: MarginLedger) -> tuple[PhysicsLimited, ..
             continue
         if not (isfinite(delivered) and isfinite(required)):
             continue
+        # A factor applied inside the capacity was divided out of `delivered` before the check
+        # judged it; both sides go back on the raw basis, so the code minimum is compared with
+        # the margin the physics actually delivered.
+        inside = prod(factor.value for factor in getattr(entry, "applied_factors", ()))
         results.append(
             PhysicsLimited(
                 check=entry.name,
-                delivered=delivered,
-                required=required,
+                delivered=delivered * inside,
+                required=required * inside,
                 code_required=ledger.stack(entry.name).physics_limited,
             )
         )

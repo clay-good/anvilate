@@ -380,6 +380,7 @@ scorecard.RepairHint
 scorecard.GoverningChange
 scorecard.ValueSource
 scorecard.Need
+scorecard.AppliedFactor
 scorecard.ScorecardEntry
 scorecard.Scorecard
 screening.DEPTH_ORDER

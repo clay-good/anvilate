@@ -33,6 +33,7 @@ __all__ = [
     "GoverningChange",
     "ValueSource",
     "Need",
+    "AppliedFactor",
     "ScorecardEntry",
     "Scorecard",
 ]
@@ -375,6 +376,40 @@ class Need(StatableModel):
         return f"{self.declaration}: {self.takes}{units} (from {where})"
 
 
+class AppliedFactor(StatableModel):
+    """A factor a check applied inside its capacity, where its verdict cannot show it.
+
+    A check judged at a required safety factor of 1.0 has put its whole margin inside the
+    capacity: a pile's allowable load is its ultimate capacity over a factor of safety, and a
+    BTH-1 allowable is a strength over the design factor N_d. The verdict then reads "1.0
+    required", and the conservatism the reader is relying on is nowhere on the card. The
+    check records it here, so the margin ledger can itemize it like any other.
+
+    ``authority`` is the clause that obliges the factor. ``None`` means an election or a
+    default nobody cited, and the ledger files it as such rather than as a code's.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    label: Named
+    value: float
+    origin: Named
+    authority: Provenance | None = None
+
+    @model_validator(mode="after")
+    def _a_factor(self) -> AppliedFactor:
+        if isnan(self.value) or self.value in (float("inf"), float("-inf")) or self.value < 1.0:
+            raise ValueError(
+                f"applied factor '{self.label}' is {self.value}; a factor applied inside a "
+                "capacity is a finite conservatism of at least 1"
+            )
+        return self
+
+    def __str__(self) -> str:
+        source = self.authority if self.authority is not None else "uncited"
+        return f"{self.label} {self.value:g} ({source}; from {self.origin})"
+
+
 class ScorecardEntry(StatableModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
@@ -420,6 +455,9 @@ class ScorecardEntry(StatableModel):
     # report in `anvilate.needs` is built from these: a screen states its own gap, so the
     # report is never a parse of the detail line's prose.
     needs: tuple[Need, ...] = ()
+    # Factors applied inside the capacity this check judged — see `AppliedFactor`. The margin
+    # ledger reads them, so a check at "1.0 required" still shows the margin it relies on.
+    applied_factors: tuple[AppliedFactor, ...] = ()
     # The failure modes this check addresses, by catalogue id. The check states them, so
     # which mode a card covers is data the screen wrote down — never inferred from a check
     # name that carries a member's name in it. `anvilate.failure_modes.coverage` reads this,

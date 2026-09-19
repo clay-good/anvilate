@@ -31,7 +31,14 @@ from ..analysis import (
     terzaghi_bearing_capacity,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    AppliedFactor,
+    CheckStatus,
+    Direction,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -584,7 +591,29 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
             "the pile's applied_load is zero, so there is no demand to screen; declare the axial "
             "load it carries as `applied_load`"
         ),
-    ).model_copy(update={"reference": _PILE_REFERENCE, "derivation": derivation})
+    ).model_copy(
+        update={
+            "reference": _PILE_REFERENCE,
+            "derivation": derivation,
+            # The whole margin sits inside Q_a, so the verdict reads "1.0 required"; the
+            # factor is recorded for the ledger. A value of 1 or below moves nothing.
+            "applied_factors": (
+                (
+                    AppliedFactor(
+                        label="factor of safety",
+                        value=pile.factor_of_safety,
+                        origin=(
+                            "element: factor_of_safety (declared)"
+                            if "factor_of_safety" in pile.model_fields_set
+                            else "element: factor_of_safety (the screen's default)"
+                        ),
+                    ),
+                )
+                if pile.factor_of_safety > 1.0
+                else ()
+            ),
+        }
+    )
     # Shaft friction is linear in the embedded length and end bearing does not depend on it,
     # so the length that reaches a demand ratio of 1.0 is exact: the shaft has to supply
     # (FS·load − tip), and it does so in proportion to L. Driving deeper is also the repair
