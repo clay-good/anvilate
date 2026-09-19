@@ -124,6 +124,9 @@ check applied to the ones the document declares: a check judged against a requir
 factor above 1 is entered as the user's election when that factor is the document's own
 `min_safety_factor`, as code-required when the check cites the clause, and as an uncited
 election otherwise. A test screens every shipped example spec and fails if any applied
-factor is missing from its ledger. Not built yet: detecting, over the source rather than the
-screened results, every place a factor is applied, with its exclusions stated (4.1, 4.2),
-and re-evaluating a check at code-required factors only (3.2).
+factor is missing from its ledger. `physics_limited(card, ledger)` re-judges each check with a
+safety factor against the code-required entries on its quantity alone, and `anvilate check`
+prints the line under the ledger: a weld at 1.8 fails the 2.5 it was judged against with
+every margin and passes the 1.67 a code obliges. It informs; the delivered verdict stands.
+Not built yet: detecting, over the source rather than the screened results, every place a
+factor is applied, with its exclusions stated (4.1, 4.2).

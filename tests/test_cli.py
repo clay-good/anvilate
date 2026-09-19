@@ -4362,6 +4362,7 @@ def test_check_prints_the_declared_margin_ledger_beside_the_card(tmp_path):
     assert "2 x 1.15 x 1.1 = 2.53" in out
     assert "code-required x2, elected x1.265" in out
     assert "possible double count on padeye tension" in out
+    assert "padeye net tension at code minimum: 6.67 against x1, passes" in out
     # The ledger informs and never decides: the same card, with or without it.
     plain = tmp_path / "plain.yaml"
     plain.write_text(_LUG_SPEC)

@@ -299,6 +299,8 @@ margin.DoubleCount
 margin.MarginStack
 margin.MarginLedger
 margin.ledger_for
+margin.PhysicsLimited
+margin.physics_limited
 mcp.Cost
 mcp.Dispatch
 mcp.Gate

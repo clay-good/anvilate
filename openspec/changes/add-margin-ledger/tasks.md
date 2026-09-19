@@ -23,7 +23,8 @@
 ## 3. Analysis
 
 - [x] 3.1 Cumulative factor per checked quantity, with the multiplication shown
-- [ ] 3.2 Physics-limited result: re-evaluate with code-required entries only
+- [x] 3.2 Physics-limited result: re-evaluate with code-required entries only —
+      `physics_limited`, printed under the ledger on `anvilate check`
 - [x] 3.3 Duplicate detection across origins for the same kind and quantity
 - [x] 3.4 Dominant-entry identification with ties reported rather than broken arbitrarily
 

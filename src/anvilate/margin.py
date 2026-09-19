@@ -38,6 +38,8 @@ __all__ = [
     "MarginStack",
     "MarginLedger",
     "ledger_for",
+    "PhysicsLimited",
+    "physics_limited",
 ]
 
 
@@ -397,3 +399,53 @@ def ledger_for(card: Any, spec: Any) -> MarginLedger:
             )
         )
     return MarginLedger(entries=(*declared, *applied))
+
+
+class PhysicsLimited(StatableModel):
+    """One check re-judged with its code-required factors alone.
+
+    ``delivered`` is the safety factor the check computed; ``required`` the factor it was
+    judged against with every margin in place; ``code_required`` the product of the
+    code-required entries on its quantity, 1.0 where none applies. ``passes_at_code`` is
+    the verdict at that code minimum. It informs and never decides: the delivered verdict
+    stands.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    check: Named
+    delivered: float
+    required: float
+    code_required: float
+
+    @property
+    def passes_at_code(self) -> bool:
+        return self.delivered >= self.code_required
+
+    def __str__(self) -> str:
+        verdict = "passes" if self.passes_at_code else "fails"
+        return (
+            f"{self.check} at code minimum: {self.delivered:.3g} against "
+            f"x{self.code_required:.4g}, {verdict}; judged at x{self.required:.4g} with every "
+            "margin"
+        )
+
+
+def physics_limited(card: Any, ledger: MarginLedger) -> tuple[PhysicsLimited, ...]:
+    """Each check with a safety factor, re-judged at the code-required factors alone."""
+    results = []
+    for entry in getattr(card, "entries", ()):
+        delivered, required = entry.safety_factor, entry.required_safety_factor
+        if delivered is None or required is None:
+            continue
+        if not (isfinite(delivered) and isfinite(required)):
+            continue
+        results.append(
+            PhysicsLimited(
+                check=entry.name,
+                delivered=delivered,
+                required=required,
+                code_required=ledger.stack(entry.name).physics_limited,
+            )
+        )
+    return tuple(results)

@@ -435,3 +435,48 @@ def test_across_the_shipped_specs_no_applied_factor_escapes_the_ledger() -> None
                 applied += 1
                 assert entry.name in recorded, f"{path.name}: {entry.name} applied a factor"
     assert applied >= 5, f"the shipped specs applied only {applied} factors"
+
+
+def test_a_check_is_re_judged_at_its_code_required_factors_alone() -> None:
+    """Margin ledger 3.2: the verdict with only what a code obliges, beside the delivered one."""
+    from anvilate.margin import MarginAction, MarginEntry, MarginKind, MarginLedger, physics_limited
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="weld throat",
+                status=CheckStatus.FAIL,
+                detail="as screened",
+                safety_factor=1.8,
+                required_safety_factor=2.5,
+            ),
+            ScorecardEntry(name="bearing", status=CheckStatus.PASS, detail="no factor"),
+        )
+    )
+    ledger = MarginLedger(
+        entries=(
+            MarginEntry(
+                label="AISC weld factor",
+                kind=MarginKind.CODE_REQUIRED,
+                value=1.67,
+                quantity="weld throat",
+                action=MarginAction.LOWERS_CAPACITY,
+                origin="check: weld throat",
+                authority="AISC 360-22 J2.4",
+            ),
+            MarginEntry(
+                label="company practice",
+                kind=MarginKind.USER_ELECTED,
+                value=1.5,
+                quantity="weld throat",
+                action=MarginAction.LOWERS_CAPACITY,
+                origin="spec: constraints",
+                authority="company practice DP-104",
+            ),
+        )
+    )
+    (weld,) = physics_limited(card, ledger)
+    assert weld.code_required == pytest.approx(1.67)
+    assert weld.passes_at_code  # fails with every margin, passes at the code minimum
+    assert "at code minimum: 1.8 against x1.67, passes; judged at x2.5" in str(weld)
