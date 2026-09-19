@@ -52,6 +52,21 @@ clear one. An adjustment in a state the build never defines is refused by name.
 
 [`examples/sealed_housing_adjustment.py`](../examples/sealed_housing_adjustment.py) is the whole case: a lens focused after its housing is sealed, through the opening the cover closes, and the revision that routes it through a sealed side port instead.
 
+A service action is the same question as an adjustment: a feature, the state it is done
+in, and the route a hand or tool takes to it. Replacing a desiccant cartridge after the
+cover is on fails through the top opening the cover closes and passes through a declared
+service port, from the same `screen_adjustment_access`.
+
+## A tolerance nobody can measure
+
+`screen_inspectability` takes an `Inspection` per toleranced dimension: the method, and the
+features the instrument passes through. A dimension is measurable in a state when nothing
+installed by then occupies that route. One measurable in no state fails, naming every state
+examined, because a tolerance nobody can verify on the built article is a drawing note
+rather than a control. One with no route is not evaluated. A summary states how many
+dimensions and states were examined and how many are measurable in none, so a clean result
+is distinguishable from one that never ran.
+
 ## Whether the tool reaches
 
 A fastener that fits may still be one no tool can turn. A `ToolEnvelope` is the space a tool
@@ -86,4 +101,4 @@ sampled, and the entry says so.
 
 This is part insertion, order feasibility, assembly states, adjustment reachability, tool
 envelopes and tool-access sweeps checked as keepouts (`openspec/changes/add-assembly-feasibility`,
-1.1–1.4, 2.1–2.4, 3.1, 4.1–4.5, 5.1). Not built yet: serviceability and inspectability, repair hints on the access findings, and the rest of the failure-mode entries.
+1.1–1.4, 2.1–2.6, 3.1, 4.1–4.5, 5.1). Not built yet: repair hints on the access findings, and the rest of the failure-mode entries.

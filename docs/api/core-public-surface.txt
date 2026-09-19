@@ -37,6 +37,8 @@ assembly.AccessRequirement
 assembly.screen_tool_access
 assembly.SwingRequirement
 assembly.screen_swing_arc
+assembly.Inspection
+assembly.screen_inspectability
 attestation.STATEMENT_TYPE
 attestation.PREDICATE_TYPE
 attestation.DSSE_PAYLOAD_TYPE

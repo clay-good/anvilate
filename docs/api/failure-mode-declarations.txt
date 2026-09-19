@@ -37,6 +37,7 @@ optomechanics.adjustment_scorecard -> an adjustment that does not reach or does 
 optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
 assembly.screen_adjustment_access
+assembly.screen_inspectability
 beam.deflection_scorecard
 callouts.callout_scorecard
 cold_formed_steel.dsm_scorecard

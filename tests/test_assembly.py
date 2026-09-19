@@ -155,3 +155,67 @@ def test_a_state_list_that_contradicts_itself_is_refused() -> None:
         str(Adjustment(feature="screw", performed_in="a"))
         == "adjust screw in a with no access route"
     )
+
+
+_HOUSING_PARTS = (
+    Part(name="housing", insertion=InsertionDirection.MINUS_Z, occupies=("housing bore",)),
+    Part(name="lens cell", insertion=InsertionDirection.MINUS_Z, occupies=("cell seat",)),
+    Part(name="cover", insertion=InsertionDirection.MINUS_Z, occupies=("top opening",)),
+)
+
+
+def _housing_states():  # type: ignore[no-untyped-def]
+    from anvilate.assembly import AssemblyState
+
+    return (
+        AssemblyState(name="open", installs=("housing", "lens cell")),
+        AssemblyState(name="closed", installs=("cover",)),
+    )
+
+
+def test_a_tolerance_measurable_in_no_state_is_reported_with_the_states_examined() -> None:
+    """Assembly 2.6: a control nobody can verify on the built article is a drawing note."""
+    from anvilate.assembly import Inspection, screen_inspectability
+
+    entries = screen_inspectability(
+        _housing_states(),
+        _HOUSING_PARTS,
+        [
+            Inspection(
+                dimension="cell seat height", method="height gauge", access=("top opening",)
+            ),
+            Inspection(dimension="bore roundness", method="bore gauge", access=("housing bore",)),
+            Inspection(dimension="flange flatness", method="surface plate"),
+        ],
+    )
+    summary, seat, bore, flange = entries
+    assert (
+        summary.detail == "3 toleranced dimensions examined across 2 states; 1 measurable in none"
+    )
+    assert summary.status is CheckStatus.FAIL
+    assert seat.status is CheckStatus.PASS and "measurable by height gauge in open" in seat.detail
+    assert bore.status is CheckStatus.FAIL
+    assert "any of the 2 states examined (open, closed)" in bore.detail
+    assert flange.status is CheckStatus.NOT_EVALUATED
+
+
+def test_a_service_action_is_screened_as_an_adjustment_in_its_state() -> None:
+    """Assembly 2.5: servicing a part after closure is the adjustment case, and says so."""
+    from anvilate.assembly import Adjustment, screen_adjustment_access
+
+    (through_top,) = screen_adjustment_access(
+        _housing_states(),
+        _HOUSING_PARTS,
+        [Adjustment(feature="desiccant cartridge", performed_in="closed", access=("top opening",))],
+    )
+    assert through_top.status is CheckStatus.FAIL and "cover" in through_top.detail
+    (through_port,) = screen_adjustment_access(
+        _housing_states(),
+        _HOUSING_PARTS,
+        [
+            Adjustment(
+                feature="desiccant cartridge", performed_in="closed", access=("service port",)
+            )
+        ],
+    )
+    assert through_port.status is CheckStatus.PASS

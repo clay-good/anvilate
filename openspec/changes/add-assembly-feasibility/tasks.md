@@ -19,8 +19,10 @@
 - [x] 2.3 Access evaluated per declared assembly state, not on the bare part —
       `screen_tool_access`
 - [x] 2.4 Order feasibility: report a valid order or the blocking parts
-- [ ] 2.5 Serviceability and post-closure adjustment reachability
-- [ ] 2.6 Inspectability of toleranced dimensions across achievable states
+- [x] 2.5 Serviceability and post-closure adjustment reachability — a service action is an
+      `Adjustment`, screened in its state
+- [x] 2.6 Inspectability of toleranced dimensions across achievable states —
+      `screen_inspectability`
 
 ## 3. Reporting
 

@@ -25,7 +25,7 @@ from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, ScorecardEntry
+from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec
 from .units import Quantity
 
@@ -46,6 +46,8 @@ __all__ = [
     "screen_tool_access",
     "SwingRequirement",
     "screen_swing_arc",
+    "Inspection",
+    "screen_inspectability",
 ]
 
 
@@ -710,3 +712,119 @@ def screen_swing_arc(
         ),
         addresses=("a fastener no tool reaches in the state it is driven",),
     )
+
+
+class Inspection(StatableModel):
+    """How a toleranced dimension is to be measured: the method, and the route to it.
+
+    ``dimension`` is the tag of a toleranced dimension, ``method`` the declared inspection
+    method (a height gauge, a CMM probe, a bore gauge), and ``access`` the features the
+    instrument passes through to reach the dimension.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    dimension: Named
+    method: Named
+    access: tuple[Named, ...] = ()
+
+
+# Why an inspectability finding carries no worked calculation, stated once.
+_ROUTE_CHECKED = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the route checked against the parts each state has installed",
+)
+
+
+def screen_inspectability(
+    states: Sequence[AssemblyState],
+    parts: Sequence[Part],
+    inspections: Sequence[Inspection],
+) -> tuple[ScorecardEntry, ...]:
+    """Whether each toleranced dimension can be measured in some state the build passes through.
+
+    A dimension is measurable in a state when no part installed by then occupies a feature
+    its instrument's route passes through. One measurable in no state fails, naming the
+    dimension and every state examined: a tolerance nobody can verify on the built article is
+    a drawing note, not a control, whatever the dimensional screens say about it. One with
+    no route declared is not evaluated. A summary states how many dimensions and states were
+    examined, so a clean result is distinguishable from an unrun one.
+    """
+    states = each_one(states, AssemblyState, named="states")
+    parts = each_one(parts, Part, named="parts")
+    inspections = each_one(inspections, Inspection, named="inspections")
+    by_name = {part.name: part for part in parts}
+    order = [state.name for state in states]
+    entries = []
+    unmeasurable = 0
+    for inspection in inspections:
+        name = f"inspectability: {inspection.dimension}"
+        if not inspection.access:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"{inspection.dimension} by {inspection.method} declares no route for "
+                        "the instrument, and an undeclared route is not a clear one"
+                    ),
+                )
+            )
+            continue
+        measurable, installed = [], []
+        for state in states:
+            installed.extend(state.installs)
+            blocked = [
+                part
+                for part in installed
+                if part in by_name
+                and any(feature in by_name[part].occupies for feature in inspection.access)
+            ]
+            if not blocked:
+                measurable.append(state.name)
+        if measurable:
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.PASS,
+                    detail=(
+                        f"{inspection.dimension} is measurable by {inspection.method} in "
+                        f"{', '.join(measurable)}, of {len(order)} states examined"
+                    ),
+                    underived=_ROUTE_CHECKED,
+                )
+            )
+        else:
+            unmeasurable += 1
+            entries.append(
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.FAIL,
+                    detail=(
+                        f"{inspection.dimension} cannot be measured by {inspection.method} in "
+                        f"any of the {len(order)} states examined ({', '.join(order)}): its "
+                        "route is occupied in every one, so the tolerance is a drawing note "
+                        "rather than a control"
+                    ),
+                    underived=_ROUTE_CHECKED,
+                )
+            )
+    entries.insert(
+        0,
+        ScorecardEntry(
+            name="inspectability",
+            status=Scorecard(entries=tuple(entries)).status
+            if entries
+            else CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"{len(inspections)} toleranced dimension{'s' if len(inspections) != 1 else ''} "
+                f"examined across {len(order)} state{'s' if len(order) != 1 else ''}; "
+                f"{unmeasurable} measurable in none"
+            ),
+            underived=Underived(
+                kind=DerivationAbsence.LOOKUP,
+                reason="the governing value of the per-dimension findings below",
+            ),
+        ),
+    )
+    return tuple(entries)

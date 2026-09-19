@@ -100,4 +100,4 @@ in `docs/api/failure-mode-declarations.txt`, either with the catalogued mode it 
 declaring none yet. A test holds the file to the screen inventory both ways. It checks that
 each recorded declaration is really in the screen's own body, and that no screen recorded as
 declaring none declares one. It also caps the declares-none list, which may only shrink: 24
-screens declare a mode today, and 58 declare none.
+screens declare a mode today, and 59 declare none.
