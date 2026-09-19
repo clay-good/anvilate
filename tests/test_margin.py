@@ -338,3 +338,35 @@ def test_rounding_is_not_divided_out_of_a_utilization_computed_at_the_delivered_
     multipliers = 1.2 * 1.15 * 1.1
     assert stack.physics_limited_utilization(0.9) == pytest.approx(0.9 / multipliers, rel=1e-12)
     assert stack.elected == pytest.approx(multipliers * (9.525 / 9.1), rel=1e-12)
+
+
+def test_a_statistical_basis_below_the_typical_value_is_recorded_as_elected_conservatism() -> None:
+    """Margin ledger 2.2: designing to a floor under the scatter is a factor, and says so."""
+    from anvilate.margin import MarginEntry, MarginKind, MarginLedger
+
+    entry = MarginEntry.statistical_basis(
+        label="6061-T6 yield",
+        typical=276.0,
+        allowable=240.0,
+        basis="specification minimum",
+        quantity="bracket bending",
+        origin="material record",
+        authority="the producer's guaranteed minimum",
+    )
+    assert entry.kind is MarginKind.STATISTICAL_BASIS
+    assert entry.value == pytest.approx(276 / 240)
+    assert not entry.code_required
+    stack = MarginLedger(entries=(entry,)).stack("bracket bending")
+    assert stack.cumulative == pytest.approx(1.15)
+    assert stack.physics_limited == pytest.approx(1.0)
+    assert "specification minimum: 276 typical, 240 allowable" in str(entry)
+    with pytest.raises(ValueError, match="not a margin"):
+        MarginEntry.statistical_basis(
+            label="x",
+            typical=240.0,
+            allowable=276.0,
+            basis="B-basis",
+            quantity="q",
+            origin="o",
+            authority="a",
+        )

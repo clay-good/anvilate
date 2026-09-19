@@ -12,9 +12,11 @@
 
 - [ ] 2.1 Thread the ledger through check evaluation so a factor cannot be applied
       without being recorded
-- [ ] 2.2 Capture statistical-basis conservatism where a material allowable declares one
-- [ ] 2.3 Capture rounding conservatism where a value is snapped to a stock size or a
-      standard increment
+- [x] 2.2 Capture statistical-basis conservatism where a material allowable declares one —
+      `MarginEntry.statistical_basis`, typical over allowable; the library applies none itself
+- [x] 2.3 Capture rounding conservatism where a value is snapped to a stock size or a
+      standard increment — `MarginEntry.rounding`; no screen snaps a size, so the capture
+      point is the document or the caller that chose the stock size
 - [x] 2.4 Capture contingency and growth allowances from budgets
 
 ## 3. Analysis

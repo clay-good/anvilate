@@ -52,6 +52,16 @@ ledger.stack("anchor bolt tension")     # "anchor bolt tension: no conservatism 
 Rounding is recorded as the ratio of delivered to nominal on the dimension itself. How
 strongly that ratio moves a stress (as t² or t³) is the check's business, not the ledger's.
 
+A statistical basis is recorded the same way, by `MarginEntry.statistical_basis`: the ratio of
+the typical value to the allowable a capacity is designed to, so 6061-T6 taken at its
+240 MPa specification minimum against its 276 MPa typical carries a factor of 1.15. It is
+elected conservatism, never code-required, and an allowable above the typical value is
+refused, because a floor above the middle of the scatter is not a margin. The library
+applies neither of these factors itself: no screen snaps a size to stock or knocks a typical
+value down, and the packs refuse a typical value where a code wants a minimum rather than
+correcting it. So both are recorded where they happen, in the document or by the caller
+that chose the stock size or the basis.
+
 ## Why it reports conservatism and never removes it
 
 Stacked conservatism is real and it costs mass, money and stiffness. A part carrying a code

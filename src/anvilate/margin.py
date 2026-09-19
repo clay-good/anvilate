@@ -156,6 +156,47 @@ class MarginEntry(StatableModel):
             authority=authority,
         )
 
+    @classmethod
+    def statistical_basis(
+        cls,
+        *,
+        label: str,
+        typical: float,
+        allowable: float,
+        basis: str,
+        quantity: str,
+        origin: str,
+        authority: str,
+    ) -> MarginEntry:
+        """A strength taken at a statistical basis below the typical value, as typical/allowable.
+
+        A handbook typical is the middle of the scatter; a specification minimum, B-basis or
+        A-basis value is a floor under it, and designing to the floor is conservatism the
+        capacity carries whether or not anyone names it. 6061-T6 is sold at a 240 MPa
+        minimum against a 276 MPa typical, a factor of 1.15. ``basis`` names which floor. An
+        allowable above the typical value is refused: that is not a margin, and recording it
+        as one would hide the unsafe direction.
+        """
+        if not (isfinite(typical) and isfinite(allowable) and allowable > 0 and typical > 0):
+            raise ValueError(
+                f"statistical basis '{label}' needs positive finite typical and allowable "
+                f"values; got typical {typical}, allowable {allowable}"
+            )
+        if allowable > typical:
+            raise ValueError(
+                f"statistical basis '{label}' puts the {basis} allowable {allowable:g} above the "
+                f"typical {typical:g}; a floor above the middle of the scatter is not a margin"
+            )
+        return cls(
+            label=f"{label} ({basis}: {typical:g} typical, {allowable:g} allowable)",
+            kind=MarginKind.STATISTICAL_BASIS,
+            value=typical / allowable,
+            quantity=quantity,
+            action=MarginAction.LOWERS_CAPACITY,
+            origin=origin,
+            authority=authority,
+        )
+
     @property
     def code_required(self) -> bool:
         return _KINDS[self.kind][1]
