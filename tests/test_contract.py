@@ -3515,17 +3515,29 @@ def test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install():
     )
     assert allowed, "the conftest gate no longer declares an allow-list"
 
+    import tomllib
+
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    dev = {
+        re.split(r"[<>=!~\[; ]", entry, maxsplit=1)[0]
+        for entry in pyproject["project"]["optional-dependencies"]["dev"]
+    }
+    assert "pytest" in dev, dev
+
     # Every extra package a scheduled job installs, from its own install step.
     scheduled = set()
     for job in re.split(r"\n  (?=\w[\w-]*:)", workflow)[1:]:
         if "github.event_name == 'schedule'" not in job:
             continue
-        for install in re.findall(r'pip install -e "\.\[dev\]"([^\n]*)', job):
+        # `.[dev]` or bare `.`: the adapters job cannot take the dev extra (build123d needs
+        # the NumPy 2 that pyCUFSM cannot run on), so it names its test runner itself.
+        for install in re.findall(r'run: pip install -e (?:"\.\[dev\]"|\.)([^\n]*)', job):
             for token in install.split():
                 requirement = token.strip('"')
                 # A version pin ("numpy<2") constrains a package something else already
-                # pulls in; it adds no import a test could skip on.
-                if not any(char in requirement for char in "<>=!~"):
+                # pulls in; it adds no import a test could skip on. The dev extra's own
+                # packages are what every job has, so naming one adds nothing scheduled-only.
+                if not any(char in requirement for char in "<>=!~") and requirement not in dev:
                     scheduled.add(requirement)
     assert scheduled, "no scheduled job installs an extra package any more"
 
@@ -3802,6 +3814,64 @@ def test_every_pytest_step_in_ci_counts_the_tests_it_actually_names():
         f"only {len(checked)} CI step(s) count their passes; this gate covers the steps "
         "that prove a scheduled job did not skip, and there are more than one"
     )
+
+
+def test_every_counted_ci_step_greps_a_line_its_own_pytest_prints(tmp_path):
+    """The count above was right and the grep could never match it.
+
+    `^4 passed` needs the summary at the start of a line, which is `pytest -q`'s spelling;
+    without `-q` pytest prints `===== 4 passed in 1.39s =====`. The four counted steps ran
+    without it, so the schema job failed on its first step every week from the day the
+    count was added — its tests all passing — and the validation step behind it never ran.
+    The previous gate checked the number and never asked whether the line exists.
+
+    So each step's own pytest flags are run over that many trivial tests, and its own
+    pattern must match the output — and must not match when one of them is skipped, which
+    is the outcome the count exists to refuse.
+    """
+    import subprocess
+    import sys
+
+    workflow = (_REPO / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    steps = re.findall(
+        r"(?s)\n      - name: ([^\n]+)\n(.*?)(?=\n      - name: |\n\n  |\Z)", workflow
+    )
+    counted = []
+    for name, body in steps:
+        grep = re.search(r'grep -qE "(\^(\d+) passed)"', body)
+        if grep is None:
+            continue
+        flags = re.search(r"\n\s*pytest((?: -[\w-]+)*)", body)
+        assert flags is not None, f"the {name!r} step counts passes but runs no pytest"
+        counted.append((name, grep.group(1), int(grep.group(2)), flags.group(1).split()))
+    assert len(counted) >= 4, f"only {len(counted)} counted CI steps found: {counted}"
+
+    def run(flags: list[str], passing: int, skipped: int) -> str:
+        suite = tmp_path / f"p{passing}s{skipped}_{'_'.join(f.strip('-') for f in flags)}"
+        suite.mkdir(exist_ok=True)  # two steps may share flags and a count
+        tests = [f"def test_pass_{index}():\n    pass\n" for index in range(passing)]
+        tests += [
+            f"import pytest\ndef test_skip_{index}():\n    pytest.skip('absent')\n"
+            for index in range(skipped)
+        ]
+        (suite / "test_counted.py").write_text("\n".join(tests), encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", *flags, "-p", "no:cacheprovider", str(suite)],
+            cwd=suite,
+            capture_output=True,
+            text=True,
+        ).stdout
+
+    for name, pattern, count, flags in counted:
+        clean = run(flags, count, 0)
+        assert re.search(pattern, clean, re.MULTILINE), (
+            f"the {name!r} step greps {pattern!r}, and `pytest {' '.join(flags)}` prints "
+            f"no such line when all {count} pass:\n{clean[-400:]}"
+        )
+        partial = run(flags, count - 1, 1)
+        assert not re.search(pattern, partial, re.MULTILINE), (
+            f"the {name!r} step's {pattern!r} matches a run with a skip in it"
+        )
 
 
 # --- the code a reader copies off a page ---------------------------------------------------

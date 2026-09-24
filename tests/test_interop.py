@@ -565,6 +565,12 @@ def test_the_two_shear_constants_the_adapter_docstring_names_are_the_real_ones()
     assert timoshenko_inverse / SHEAR_FORM_RECTANGULAR == pytest.approx(0.80)
 
 
+# pyCUFSM 0.2.0's Cython solver converts a one-element array to a scalar, which NumPy 1.25+
+# deprecates; under `filterwarnings = error` that warning, raised inside the package and not
+# by anything here, failed this test on every scheduled run. Only that message is ignored.
+@pytest.mark.filterwarnings(
+    "ignore:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning"
+)
 def test_the_adapter_reads_a_real_pycufsm_signature_curve():
     """The pyCUFSM half of the interop layer, against the package itself.
 

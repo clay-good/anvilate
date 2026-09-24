@@ -86,7 +86,7 @@ jobs:
           ANVILATE_ALLOW_NETWORK: "1"
         run: |
           set -o pipefail
-          pytest -rs \
+          pytest -q -rs \
             "tests/test_fetch.py::test_the_default_transport_fetches_and_verifies_a_real_document" \
             "tests/test_specbench.py::test_the_real_index_is_the_106_cases_the_review_counted" \
             "tests/test_specbench.py::test_the_parser_reads_the_suites_own_prose_not_only_this_files" \
@@ -105,7 +105,7 @@ jobs:
           set -o pipefail
           # Named exactly, not selected by keyword: a `-k` expression that stops matching
           # after a rename would run zero tests and report success.
-          pytest -rs \
+          pytest -q -rs \
             "tests/test_qif.py::test_the_document_validates_against_the_published_schemas" \
             "tests/test_qif.py::test_every_qif_name_this_module_emits_exists_in_the_published_schema" \
             "tests/test_dcc.py::test_the_fixture_validates_against_the_published_dcc_schema" \
@@ -175,13 +175,16 @@ jobs:
         # pyCUFSM 0.2.0's Cython solver passes arrays where NumPy 2 wants scalars, and
         # its own bundled example raises on the way through; pinning below 2 is what
         # makes the package runnable at all. When it ships a NumPy 2 build, drop the pin.
-        run: pip install -e ".[dev]" sectionproperties pycufsm "numpy<2"
+        # Not the dev extra: build123d 0.11 requires NumPy 2, so `.[dev]` beside this pin is
+        # unresolvable, and the job failed at install every week without running either test.
+        # Both tests import only the core package.
+        run: pip install -e . pytest sectionproperties pycufsm "numpy<2"
       - name: Read a real meshed section through the adapter
         run: |
           set -o pipefail
           # Named exactly, not by keyword: a `-k` that stops matching after a rename runs
           # zero tests and reports success.
-          pytest -rs \
+          pytest -q -rs \
             "tests/test_interop.py::test_the_adapter_reads_a_real_sectionproperties_section" \
             | tee result.txt
           grep -qE "^1 passed" result.txt
@@ -192,7 +195,7 @@ jobs:
       - name: Read a real pyCUFSM signature curve through the adapter
         run: |
           set -o pipefail
-          pytest -rs \
+          pytest -q -rs \
             "tests/test_interop.py::test_the_adapter_reads_a_real_pycufsm_signature_curve" \
             | tee cufsm.txt
           grep -qE "^1 passed" cufsm.txt
