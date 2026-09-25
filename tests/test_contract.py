@@ -4908,6 +4908,10 @@ def test_no_yaml_document_can_construct_a_python_object():
             where = f"{path.relative_to(_REPO)}:{node.lineno} calls {name}"
             if name in ("yaml.safe_load", "yaml.safe_load_all"):
                 safe += 1
+            elif name == "parse_yaml":
+                # The shared reader that bounds nesting. It counts as a safe read only because
+                # its own body is `yaml.safe_load`, which is asserted below rather than assumed.
+                safe += 1
             elif name in ("yaml.load", "yaml.load_all", "yaml.unsafe_load", "yaml.full_load"):
                 loader = next(
                     (kw.value for kw in node.keywords if kw.arg == "Loader"),
@@ -4928,6 +4932,14 @@ def test_no_yaml_document_can_construct_a_python_object():
                 checked_loaders.append(f"{path.relative_to(_REPO)} with Loader={named}")
 
     assert safe >= 15, f"the sweep found only {safe} safe_load calls, so it is looking wrong"
+    import inspect
+
+    from anvilate._models import parse_yaml
+
+    reader = ast.parse(inspect.getsource(parse_yaml))
+    assert [ast.unparse(n.func) for n in ast.walk(reader) if isinstance(n, ast.Call)].count(
+        "yaml.safe_load"
+    ) == 1, "parse_yaml is counted as a safe read, and it no longer calls yaml.safe_load"
     assert not unsafe, (
         "these load YAML with a constructing loader, so a document can build arbitrary "
         f"Python objects on the way in: {unsafe}"
@@ -6160,4 +6172,47 @@ def test_every_public_sequence_of_models_refuses_a_single_one_of_them():
     assert not unguarded, (
         "these take a sequence of models or strings and neither guard it nor are recorded as "
         f"refusing it another way, so a single one of them is read as its parts: {unguarded}"
+    )
+
+
+def test_every_json_and_yaml_read_goes_through_a_reader_that_bounds_nesting():
+    """`json.loads` on a document nested a hundred thousand deep raises RecursionError, which
+    no handler written for bad JSON catches. `_models.parse_json` turns it into the ValueError
+    a malformed document is, and this holds every read in the package to it. The floor keeps
+    it from passing by finding nothing, and the planted call proves the detector reads calls."""
+    import ast
+
+    from conftest import library_sources
+
+    direct, routed = [], 0
+    for path, tree in library_sources():
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = getattr(func, "attr", None) or getattr(func, "id", None)
+            if name == "parse_json":
+                routed += 1
+            if name == "parse_yaml":
+                routed += 1
+            is_direct = isinstance(func, ast.Attribute) and (
+                (func.attr in ("loads", "load") and getattr(func.value, "id", None) == "json")
+                or (
+                    func.attr in ("safe_load", "load") and getattr(func.value, "id", None) == "yaml"
+                )
+            )
+            # The spec loader runs its own strict YAML loader and catches every exception from
+            # it, nesting included (tests/test_spec.py holds that door separately).
+            if (
+                is_direct
+                and path.name != "_models.py"
+                and path.parts[-2:] != ("spec", "validate.py")
+            ):
+                direct.append(f"{path.name}:{node.lineno}")
+    assert routed >= 30, f"only {routed} calls go through parse_json or parse_yaml"
+    assert not direct, f"these read JSON without the nesting bound: {direct}"
+    planted = ast.parse("import json\njson.loads(text)\n")
+    assert any(
+        isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
+        for n in ast.walk(planted)
     )

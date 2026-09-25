@@ -49,7 +49,7 @@ from typing import Any, TextIO
 from pydantic import ConfigDict, Field, model_validator
 
 from ._mcp_tasks import TASKS_EXTENSION
-from ._models import Named, RevalidatedModel, _refusal_line
+from ._models import Named, RevalidatedModel, _refusal_line, parse_json
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
@@ -1680,8 +1680,8 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
         if not line:
             continue
         try:
-            request = json.loads(line)
-        except json.JSONDecodeError as bad:
+            request = parse_json(line)
+        except ValueError as bad:  # malformed, or nested past what the reader follows
             response: dict[str, Any] | None = _error(None, PARSE_ERROR, f"invalid JSON: {bad}")
         else:
             # No non-object check here any more: `handle_request` holds it, so every

@@ -2573,3 +2573,12 @@ def test_a_design_basis_reference_list_given_as_one_string_is_refused():
 
     with pytest.raises(ValueError, match="is a sequence of str"):
         design_basis_scorecard("design basis", basis=basis, references=[1, 2])
+
+
+def test_an_extension_nested_past_the_reader_is_a_value_error():
+    """A materials extension is the user's own YAML, and one nested a hundred thousand deep
+    raised RecursionError out of the loader rather than the refusal a bad extension gets."""
+    from anvilate.standards import default_materials_db
+
+    with pytest.raises(ValueError, match="nests deeper"):
+        default_materials_db().extended("a: " + "[" * 100_000)

@@ -13,10 +13,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import Provenance, RevalidatedModel
+from .._models import Provenance, RevalidatedModel, parse_yaml
 from ..units import Quantity
 from .general import ToleranceRangeError
 
@@ -74,7 +73,7 @@ def _table() -> dict:
         text = (files("anvilate.tolerance") / "data" / "iso286_grades.yaml").read_text(
             encoding="utf-8"
         )
-        _TABLE = yaml.safe_load(text)
+        _TABLE = parse_yaml(text)
     return _TABLE
 
 
@@ -196,7 +195,7 @@ def _deviation_table() -> dict:
         text = (files("anvilate.tolerance") / "data" / "iso286_deviations.yaml").read_text(
             encoding="utf-8"
         )
-        _DEVIATIONS = yaml.safe_load(text)
+        _DEVIATIONS = parse_yaml(text)
     return _DEVIATIONS
 
 

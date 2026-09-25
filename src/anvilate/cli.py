@@ -73,7 +73,7 @@ from pathlib import Path
 from typing import Any, Literal, TextIO
 
 from ._cli_output import cancelled_document, error_document, machine_document, refusal_document
-from ._models import _refusal_line
+from ._models import _refusal_line, parse_json, parse_yaml
 from .evidence import provenance_for
 from .failure_modes import CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS, facts_from_spec
 from .failure_modes import coverage as mode_coverage
@@ -1800,7 +1800,7 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     from .attestation import Attestation, LocalHmacSigner, verify_attestation
 
     try:
-        envelope = json.loads(args.envelope.read_text(encoding="utf-8"))
+        envelope = parse_json(args.envelope.read_text(encoding="utf-8"))
     except IsADirectoryError:
         print(f"anvilate verify: {_is_a_directory(args.envelope, command='verify')}", file=err)
         return EXIT_BAD_REQUEST
@@ -1813,7 +1813,7 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
         # else, so this is the input most likely to be the wrong file entirely.
         print(f"anvilate verify: {_not_utf8(args.envelope, failure)}", file=err)
         return EXIT_BAD_REQUEST
-    except json.JSONDecodeError as failure:
+    except ValueError as failure:
         print(f"anvilate verify: {args.envelope}: not JSON: {failure}", file=err)
         return EXIT_BAD_REQUEST
     try:
@@ -2821,7 +2821,7 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                         return EXIT_BAD_REQUEST
                     text = ""
                 try:
-                    document = yaml.safe_load(text)
+                    document = parse_yaml(text)
                 except yaml.YAMLError:
                     # A file that will not parse cannot be told apart from "some other YAML
                     # file" by its keys, because parsing is what reveals them — but its raw

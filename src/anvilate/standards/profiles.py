@@ -19,10 +19,9 @@ import re
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import Named, RevalidatedModel
+from .._models import Named, RevalidatedModel, parse_yaml
 from ..analysis.section import CrossSection
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
@@ -151,7 +150,7 @@ class ProfileTable:
 
 
 def _load_profiles(text: str) -> dict[str, RolledProfile]:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc["dataset"]
 
     def _prop(value_mm: float, designation: str, what: str) -> dict:

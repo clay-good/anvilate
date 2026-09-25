@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel, cited, each_one
+from .._models import RevalidatedModel, cited, each_one, parse_json
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity
@@ -510,7 +510,7 @@ def carbon_factor_from_openepd(
     if as_of is not None and (not isinstance(as_of, str) or not _ISO_DATE.match(as_of)):
         raise ValueError(f"as_of must be an ISO date such as 2026-09-24; got {as_of!r}")
     try:
-        epd = json.loads(document)
+        epd = parse_json(document)
     except json.JSONDecodeError as error:
         raise ValueError(
             f"the document is not JSON ({error}); pass the openEPD file's text"

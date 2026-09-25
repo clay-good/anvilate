@@ -2061,3 +2061,22 @@ def test_a_result_that_is_not_an_object_is_a_complaint_and_not_a_traceback():
     # The control: a real object is still held to its schema rather than waved through.
     assert result_issues(tool, {}) == [f"{tool.name} requires 'errors'"] or result_issues(tool, {})
     assert result_issues(tool, {"errors": [], "spec": {}, "subject": "sha256:" + "a" * 64}) == []
+
+
+def test_a_line_nested_past_the_parser_is_a_parse_error_and_the_loop_goes_on():
+    """One line of `[[[[...` a hundred thousand deep raised RecursionError out of the parse,
+    ahead of any handler, so the guard around `handle_request` never saw it: the server died
+    and the request queued behind it got nothing."""
+    import json as _json
+
+    stream = io.StringIO(
+        "[" * 100_000
+        + "\n"
+        + _json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        + "\n"
+    )
+    sink = io.StringIO()
+    serve_stdio(stream, sink)
+    first, second = (_json.loads(line) for line in sink.getvalue().strip().splitlines())
+    assert first["error"]["code"] == -32700 and "nests deeper" in first["error"]["message"]
+    assert second["id"] == 2 and "tools" in second["result"]

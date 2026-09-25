@@ -14,10 +14,9 @@ import difflib
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import Named, RevalidatedModel
+from .._models import Named, RevalidatedModel, parse_yaml
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
 
@@ -190,7 +189,7 @@ def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     them, so a data file states shared provenance once. ``bundled`` tags the
     records' origin (a bundled dataset vs a user/team extension).
     """
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc.get("dataset", {})
     fallback = {
         "license": dataset.get("license"),

@@ -20,12 +20,14 @@ to every model in the library.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Iterator, Mapping
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Self, TypeVar
 
+import yaml
 from pydantic import AfterValidator, BaseModel, PlainSerializer, model_validator
 
 __all__ = [
@@ -616,3 +618,47 @@ class StatableModel(RevalidatedModel):
             if problem is not None:
                 raise ValueError(problem)
         return self
+
+
+def parse_json(text: str | bytes) -> Any:
+    """``json.loads``, with runaway nesting refused as the ``ValueError`` a malformed document is.
+
+    The standard reader recurses once per level, so ``[[[[...`` a hundred thousand deep
+    raises ``RecursionError``. That error is not a ``ValueError``, so it went past every
+    handler written for bad JSON. One line of it on stdin ended the MCP server and lost the
+    requests queued behind it. Every reader of text this library did not write goes through
+    here, and a gate holds the source to it.
+    """
+    try:
+        return json.loads(text)
+    except RecursionError:
+        raise NestingError(
+            "the JSON nests deeper than this reader follows; a document that deep is not one "
+            "this library writes or reads"
+        ) from None
+
+
+class NestingError(ValueError, yaml.YAMLError):
+    """A document nested deeper than the reader follows: malformed, whichever parser read it.
+
+    Both a ``ValueError`` and a ``yaml.YAMLError``, so a handler written for either kind of
+    bad document catches it. That is the point: ``RecursionError`` was neither, and went
+    past all of them.
+    """
+
+
+def parse_yaml(text: str) -> Any:
+    """``yaml.safe_load``, with runaway nesting refused like any other malformed document.
+
+    A flow sequence ``[[[[...`` a hundred thousand deep raised ``RecursionError`` out of the
+    loader. Extending the materials database with such a file, or reading such a
+    refractiveindex.info page, ended in that error rather than in the refusal the reader
+    documents.
+    """
+    try:
+        return yaml.safe_load(text)
+    except RecursionError:
+        raise NestingError(
+            "the YAML nests deeper than this reader follows; a document that deep is not one "
+            "this library writes or reads"
+        ) from None

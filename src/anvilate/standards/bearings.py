@@ -14,10 +14,9 @@ import difflib
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, parse_yaml
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -123,7 +122,7 @@ def _load_bearings(text: str, *, bundled: bool = True) -> dict[str, Bearing]:
     """Parse a bearing YAML document. ``bundled`` tags the records' origin (a
     bundled dataset vs a user/team extension), so reports can distinguish
     company-local records."""
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc.get("dataset", {})
 
     def _prop(value_mm: float, kind: str) -> dict:

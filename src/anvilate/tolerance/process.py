@@ -10,10 +10,9 @@ can reasonably hold, so the check fails only clearly-unachievable tolerances.
 
 from __future__ import annotations
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import Provenance, RevalidatedModel
+from .._models import Provenance, RevalidatedModel, parse_yaml
 from ..units import Quantity, spoken
 from .general import ToleranceRangeError
 
@@ -87,7 +86,7 @@ def _table() -> dict:
         text = (files("anvilate.tolerance") / "data" / "process_capability.yaml").read_text(
             encoding="utf-8"
         )
-        _TABLE = yaml.safe_load(text)
+        _TABLE = parse_yaml(text)
     return _TABLE
 
 

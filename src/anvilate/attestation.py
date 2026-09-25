@@ -60,7 +60,7 @@ from pydantic import (
     model_validator,
 )
 
-from ._models import RevalidatedModel, _refusal_line
+from ._models import RevalidatedModel, _refusal_line, parse_json
 from .evidence import SourceRecord
 from .review import DecisionOrigin
 from .scorecard import CheckStatus, Scorecard
@@ -559,7 +559,7 @@ class AnvilatePredicate(RevalidatedModel):
     def _sections_are_readable(self) -> AnvilatePredicate:
         if self.sections_json is not None:
             try:
-                parsed = json.loads(self.sections_json)
+                parsed = parse_json(self.sections_json)
             except ValueError as exc:
                 raise ValueError(f"sections_json is not readable JSON: {exc}") from exc
             if not isinstance(parsed, dict):
@@ -598,7 +598,7 @@ class AnvilatePredicate(RevalidatedModel):
         ``"sections": {"status": "fail"}`` underneath. Standard tooling reads the top.
         """
         if self.sections_json is not None:
-            rolled = json.loads(self.sections_json).get("status")
+            rolled = parse_json(self.sections_json).get("status")
             if rolled is not None:
                 return CheckStatus(rolled)
         return self.scorecard.status
@@ -614,7 +614,7 @@ class AnvilatePredicate(RevalidatedModel):
             "aiDisclosure": _disclosure_body(self.ai_disclosure),
         }
         if self.sections_json is not None:
-            body["sections"] = json.loads(self.sections_json)
+            body["sections"] = parse_json(self.sections_json)
         return body
 
 
@@ -833,7 +833,7 @@ class Attestation(RevalidatedModel):
 
     def statement(self) -> dict[str, object]:
         """The carried statement, parsed."""
-        return json.loads(self.payload_bytes().decode("utf-8"))
+        return parse_json(self.payload_bytes().decode("utf-8"))
 
     @property
     def bundle_digest(self) -> str:
@@ -1150,7 +1150,7 @@ def verify_attestation(
         )
     digest = sha256_hex(payload)
     try:
-        statement = json.loads(payload.decode("utf-8"))
+        statement = parse_json(payload.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as exc:
         return VerificationReport(
             bundle_digest=digest,

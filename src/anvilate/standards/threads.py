@@ -15,10 +15,9 @@ from enum import StrEnum
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, parse_yaml
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
@@ -87,7 +86,7 @@ class ClearanceHoleTable:
 
 
 def _load_table(text: str) -> dict[str, dict[Fit, QuantityProperty]]:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc.get("dataset", {})
     rows: dict[str, dict[Fit, QuantityProperty]] = {}
     for size, fits in doc["sizes"].items():
@@ -163,7 +162,7 @@ class MetricThreadTable:
 
 
 def _load_threads(text: str) -> dict[str, MetricThread]:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc.get("dataset", {})
 
     def _prop(value_mm: float, kind: str, series: str) -> dict:

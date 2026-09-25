@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ._models import parse_json
 from .fetch import cache_root
 
 # Private implementation module. MCP is the supported surface; none of the storage and
@@ -197,7 +198,7 @@ class TaskStore:
     def read(self, task_id: str) -> dict[str, Any]:
         path = self._path(task_id)
         try:
-            record = json.loads(path.read_text(encoding="utf-8"))
+            record = parse_json(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, ValueError) as unreadable:
             raise UnknownTask(f"{task_id!r} is not a readable task in {self.root}") from unreadable
         if not isinstance(record, dict) or record.get("taskId") != task_id:

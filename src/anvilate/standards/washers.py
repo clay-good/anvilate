@@ -13,10 +13,9 @@ import difflib
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, parse_yaml
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
@@ -106,7 +105,7 @@ class WasherTable:
 
 
 def _load_washers(text: str) -> dict[str, PlainWasher]:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc.get("dataset", {})
 
     def _prop(value_mm: float, kind: str) -> dict:

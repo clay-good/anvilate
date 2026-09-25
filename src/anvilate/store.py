@@ -52,13 +52,13 @@ published, not the handle.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import tempfile
 from pathlib import Path
 from typing import Any
 
+from ._models import parse_json
 from .attestation import canonical_json, sha256_hex
 from .fetch import cache_root
 
@@ -193,7 +193,7 @@ class SubjectStore:
                 f"delete {path} and publish the document again"
             )
         try:
-            record = json.loads(text)
+            record = parse_json(text)
         except ValueError as unreadable:
             # An entry that is present and unreadable is a different fact from one that is
             # absent, and both are "this handle gives you no document" to a caller — so it is

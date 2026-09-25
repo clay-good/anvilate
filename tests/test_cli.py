@@ -1182,6 +1182,9 @@ def test_verify_refuses_what_is_not_an_envelope(tmp_path):
     for content, expected in (
         ("not json at all", "not JSON"),
         ('{"payload": "!!!"}', "not a DSSE envelope"),
+        # Nested past the reader's recursion limit: RecursionError, not a JSON error, and it
+        # left this command as an internal error until the parse was routed through one reader.
+        ("[" * 100_000, "nests deeper"),
     ):
         path = tmp_path / "bad.json"
         path.write_text(content, encoding="utf-8")

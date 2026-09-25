@@ -11,10 +11,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import Provenance, RevalidatedModel
+from .._models import Provenance, RevalidatedModel, parse_yaml
 from ..units import Quantity
 
 __all__ = [
@@ -118,7 +117,7 @@ class _Table:
 
 
 def _load_table(text: str) -> _Table:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     return _Table(
         min_nominal_mm=float(doc["min_nominal_mm"]),
         ranges=doc["ranges"],
@@ -244,7 +243,7 @@ def _angular_table() -> dict:
         text = (files("anvilate.tolerance") / "data" / "iso2768_angular.yaml").read_text(
             encoding="utf-8"
         )
-        _ANGULAR_TABLE = yaml.safe_load(text)
+        _ANGULAR_TABLE = parse_yaml(text)
     return _ANGULAR_TABLE
 
 

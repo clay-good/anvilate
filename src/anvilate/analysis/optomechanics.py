@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 import yaml
 from pydantic import ConfigDict, model_validator
 
-from .._models import Named, Provenance, StatableModel, cited
+from .._models import Named, Provenance, StatableModel, cited, parse_yaml
 from ..budget import CombinationRule
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..scorecard import CheckStatus, Comparison, LimitSense, Need, ScorecardEntry, ValueSource
@@ -3017,7 +3017,7 @@ def optical_material_from_refractiveindex(text: str, *, name: str, source: str) 
     if not isinstance(source, str) or not source.strip():
         raise ValueError("source must say where the page came from")
     try:
-        page = yaml.safe_load(text)
+        page = parse_yaml(text)
     except yaml.YAMLError as broken:
         raise ValueError(f"'{name}': the page is not readable YAML: {broken}") from broken
     if not isinstance(page, dict):

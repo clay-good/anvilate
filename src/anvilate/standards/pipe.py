@@ -24,10 +24,9 @@ import difflib
 from functools import cache
 from typing import Annotated
 
-import yaml
 from pydantic import ConfigDict
 
-from .._models import RevalidatedModel
+from .._models import RevalidatedModel, parse_yaml
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
 
@@ -207,7 +206,7 @@ def _key(nominal_size: str, schedule: str) -> str:
 
 
 def _load_pipes(text: str) -> dict[str, PipeDimensions]:
-    doc = yaml.safe_load(text)
+    doc = parse_yaml(text)
     dataset = doc["dataset"]
     diameters = doc["outside_diameter"]
 
