@@ -190,6 +190,12 @@ compile the same way goes looking for a bug in its client, and the fix is in the
 wrote. `isError` and the `errors` list always agree, so a client reading only the protocol
 flag reaches the same verdict as one reading the structured content.
 
+The fix also comes back on its own. A refusal that knows what to write instead carries it in
+`remedies`: a missing field's line, an unknown field's nearest real name, `60 kN` written as
+`{magnitude: 60, unit: kN}`, and a bare `min_safety_factor: 1.5` written as
+`{value: 1.5, origin: user_stated}`. It is the same list the CLI's JSON refusal reads as
+`remedy`, so an agent can apply it without parsing the error line.
+
 ## Step two: validate, and read the card out of the reply
 
 ```python

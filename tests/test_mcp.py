@@ -505,6 +505,45 @@ def test_an_overflowing_number_is_a_bad_document_and_not_an_internal_error():
     assert any("element_params.width is inf" in problem for problem in errors), errors
 
 
+def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
+    """Surface parity for interaction-quality 2.1: the CLI's JSON refusal carries a
+    structured `remedy`, and compile_spec now carries the same list as `remedies`, so an
+    agent does not have to parse a fix back out of an error line."""
+    import json
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate.cli import run
+
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "examples" / "base_plate.spec.yaml").read_text()
+    text += "constraints: {min_safety_factor: 1.5}\n"
+    answer = _call("compile_spec", {"document": yaml.safe_load(text)})
+    content = answer["result"]["structuredContent"]
+    assert answer["result"]["isError"] is True
+    assert content["remedies"] == [
+        "write `constraints.min_safety_factor` as `{value: 1.5, origin: user_stated}` if you "
+        "chose it, or give the origin it came from"
+    ]
+    spec = tmp_path / "part.yaml"
+    spec.write_text(text)
+    out = io.StringIO()
+    run(["check", str(spec), "--format", "json"], stdout=out, stderr=io.StringIO())
+    cli_remedy = json.loads(out.getvalue())["remedy"]
+    assert cli_remedy == " ".join(r[:1].upper() + r[1:] + "." for r in content["remedies"])
+    # A document that compiles carries no remedies key at all rather than an empty promise.
+    fixed = text.replace(
+        "{min_safety_factor: 1.5}", "{min_safety_factor: {value: 1.5, origin: user_stated}}"
+    )
+    assert (
+        "remedies"
+        not in _call("compile_spec", {"document": yaml.safe_load(fixed)})["result"][
+            "structuredContent"
+        ]
+    )
+
+
 def test_a_boolean_is_not_a_number():
     """`isinstance(True, int)` is True in Python and a boolean is not a number in JSON, so
     a bare isinstance check would accept `width_px: true` as a pixel count."""

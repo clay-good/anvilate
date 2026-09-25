@@ -361,6 +361,15 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {
                     "spec": {"$ref": _SPEC_REF},
                     "errors": {"type": "array", "items": {"type": "string"}},
+                    "remedies": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "What to write instead, one per refusal that knows its fix: a "
+                            "missing field's line, an unknown field's nearest real name, a "
+                            "quantity or provenanced value in the form the schema takes"
+                        ),
+                    },
                     "subject": _SUBJECT_SCHEMA,
                 },
                 required=["errors"],
@@ -1277,7 +1286,12 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
     try:
         spec = parse_spec(dict(document))
     except SpecValidationError as failure:
-        return {"errors": [_refusal_line(e["loc"], e["msg"]) for e in failure.errors]}
+        # The remedies also ride inside each error line; here they are the same list the
+        # CLI's JSON refusal reads, so an agent does not have to parse them back out.
+        return {
+            "errors": [_refusal_line(e["loc"], e["msg"]) for e in failure.errors],
+            "remedies": list(failure.remedies),
+        }
     except (ValueError, TypeError, KeyError) as failure:
         # parse_spec raises SpecValidationError for a schema failure; anything else is a
         # document it could not even attempt, and it still belongs in `errors` rather than
