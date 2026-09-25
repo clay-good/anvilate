@@ -2770,6 +2770,16 @@ def _padeye_with(old: str, new: str) -> str:
             "write `load` as `{magnitude: 60, unit: kN}` rather than the string '60 kN'",
         ),
         ("unit: mm}\n  hole", "unit: milimeter}\n  hole", "(did you mean 'millimeter'?)"),
+        (
+            "  load: {magnitude: 60.0, unit: kN}",
+            "  load: 60",
+            "write `load` as `{magnitude: 60, unit: ...}` with the unit the 60 is in",
+        ),
+        (
+            "  material: ASTM-A36",
+            "  material: A36",
+            "unknown material 'A36'; did you mean ASTM-A36?",
+        ),
     ],
 )
 def test_element_params_that_do_not_build_say_what_to_write(old, new, expected):
@@ -2805,3 +2815,27 @@ def test_element_params_that_do_not_build_state_what_the_build_needs(old, new, d
     assert [need.declaration for need in t1.needs] == declarations
     reported = [item.need.declaration for item in needs_report(card).items]
     assert set(declarations) <= set(reported)
+
+
+@pytest.mark.parametrize(
+    ("written", "meant"),
+    [
+        ("A36", ["ASTM-A36"]),
+        ("a992", ["ASTM-A992"]),
+        ("4140", ["AISI-4140"]),
+        ("304", ["SS-304"]),
+        ("6061-T6", ["AA-6061-T6"]),
+        ("7075-T6", ["AA-7075-T6", "MIL5J-7075-T6-SHEET-A", "MIL5J-7075-T6-SHEET-B"]),
+    ],
+)
+def test_a_material_written_without_its_prefix_is_told_the_identifier(written, meant):
+    """`A36` for `ASTM-A36` is the shorthand a person writes, and no edit distance bridges a
+    dropped `ASTM-`: the material entry said nothing among 25 identifiers was close."""
+    from anvilate._models import _near_identifiers as near_identifiers
+    from anvilate.standards import default_materials_db
+
+    known = default_materials_db().known_materials()
+    assert near_identifiers(written, known)[: len(meant)] == meant
+    # A misspelling still reaches difflib, and nothing is invented for a stranger.
+    assert near_identifiers("ASTM-A63", known)[0] == "ASTM-A36"
+    assert near_identifiers("PLA", known) == []

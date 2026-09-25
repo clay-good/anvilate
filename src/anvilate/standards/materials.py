@@ -10,13 +10,12 @@ record lacks is *absent*, never substituted — a check that needs it reports
 
 from __future__ import annotations
 
-import difflib
 from functools import cache
 from typing import Annotated
 
 from pydantic import ConfigDict
 
-from .._models import Named, RevalidatedModel, parse_yaml
+from .._models import Named, RevalidatedModel, _near_identifiers, parse_yaml
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
 
@@ -161,7 +160,7 @@ class MaterialsDatabase:
         except KeyError:
             raise UnknownMaterialError(
                 material_id,
-                difflib.get_close_matches(material_id, self._materials, n=3),
+                _near_identifiers(material_id, self._materials),
             ) from None
 
     def extension_ids(self) -> list[str]:

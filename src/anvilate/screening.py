@@ -65,6 +65,7 @@ from ._models import (
     FrozenMap,
     ItemCollection,
     RevalidatedModel,
+    _near_identifiers,
     _reason,
     _refusal_line,
     rebuilt_quantities,
@@ -1516,7 +1517,7 @@ def _near_misses(ref: str, known: list[str]) -> str:
     A refusal that only says "unknown" invites the reader to supply a remembered number
     instead, which is the one thing this library is built to stop.
     """
-    close = difflib.get_close_matches(ref, known, n=3)
+    close = _near_identifiers(ref, known)
     if close:
         return f"did you mean {', '.join(close)}?"
     return f"nothing among the {len(known)} known identifiers is close to it."

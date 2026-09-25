@@ -20,7 +20,9 @@ to every model in the library.
 
 from __future__ import annotations
 
+import difflib
 import json
+import re
 from collections.abc import Iterable, Iterator, Mapping
 from enum import Enum
 from math import isfinite
@@ -687,3 +689,31 @@ def parse_yaml(text: str) -> Any:
             "the YAML nests deeper than this reader follows; a document that deep is not one "
             "this library writes or reads"
         ) from None
+
+
+def _identifier_segments(text: str) -> list[str]:
+    return [part for part in re.split(r"[^0-9a-z]+", text.lower()) if part]
+
+
+def _near_identifiers(written: str, known: Iterable[str], n: int = 3) -> list[str]:
+    """Up to ``n`` of ``known`` that ``written`` nearly names, the likeliest first.
+
+    A spelling typo is what `difflib` finds. The shorthand a person actually writes is a
+    known identifier with its prefix left off: `A36` for `ASTM-A36`, `6061-T6` for
+    `AA-6061-T6`, `304` for `SS-304`. No edit distance bridges a dropped `ASTM-`, so an
+    identifier whose hyphen-separated segments contain ``written``'s segments as one run
+    comes first, shortest first.
+    """
+    known = list(known)
+    wanted = _identifier_segments(written)
+    runs = []
+    if wanted:
+        for candidate in known:
+            parts = _identifier_segments(candidate)
+            if any(
+                parts[i : i + len(wanted)] == wanted for i in range(len(parts) - len(wanted) + 1)
+            ):
+                runs.append(candidate)
+    runs.sort(key=lambda candidate: (len(candidate), candidate))
+    close = [c for c in difflib.get_close_matches(written, known, n=n) if c not in runs]
+    return (runs + close)[:n]

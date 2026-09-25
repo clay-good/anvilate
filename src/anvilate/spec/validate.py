@@ -171,6 +171,17 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
         if len(required) == 1:
             return f"write `{path}` as `{{{required[0]}: {written}}}`"
         return None
+    if (
+        kind in ("model_type", "dict_type")
+        and isinstance(written, int | float)
+        and not isinstance(written, bool)
+        and location
+        and (error.get("ctx") or {}).get("class_name") == "Quantity"
+    ):
+        return (
+            f"write `{path}` as `{{magnitude: {written:g}, unit: ...}}` with the unit the "
+            f"{written:g} is in, since a bare number states none"
+        )
     if kind == "list_type" and isinstance(written, str | int | float) and location:
         return f"write `{path}` as a list, `[{written}]`"
     if kind in ("enum", "literal_error") and isinstance(written, str) and location:
