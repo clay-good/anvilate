@@ -36,7 +36,13 @@
 
 - [x] 5.1 Print stylesheet: no derivation split across a page break, repeating table
       headers, no colour dependence — the report's print rules repeat each column-header row (every one now a `<thead>`), keep a derivation, a row and a check section whole, and print status in black because the word carries it
-- [ ] 5.2 Byte-identical PDF for identical input, asserted
+- [ ] 5.2 Byte-identical PDF for identical input, asserted — no PDF renderer exists yet, and
+      a census (2026-09-25) settles why it needs a decision first: the package's strings use
+      149 distinct non-ASCII characters, and 51 of them fall outside both standard PDF fonts
+      (Helvetica's WinAnsi and Symbol) and the super/subscripts a text rise can draw. Among
+      them are the minus sign U+2212 (1,769 uses), the GD&T symbols (⌖ ⌭ ◎ ⌰ ⌯) and dot-accent
+      letters (ṁ). A faithful PDF therefore needs an embedded Unicode font file in the
+      repository, which is a licensing and size decision rather than code
 
 ## 6. Voice
 
