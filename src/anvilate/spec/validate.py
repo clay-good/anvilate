@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Mapping
 from math import isfinite
 from typing import Any, get_args
 
@@ -60,10 +61,10 @@ def _model_in(annotation: Any) -> type[BaseModel] | None:
     return found.pop() if len(found) == 1 else None
 
 
-def _siblings(location: tuple[Any, ...]) -> list[str]:
+def _siblings(location: tuple[Any, ...], root: type[BaseModel]) -> list[str]:
     """The field names beside the last part of ``location``, or none when the path leaves
     the models (a mapping of element parameters, say)."""
-    model: type[BaseModel] | None = DesignSpec
+    model: type[BaseModel] | None = root
     for part in location[:-1]:
         if isinstance(part, int):
             continue
@@ -74,23 +75,50 @@ def _siblings(location: tuple[Any, ...]) -> list[str]:
     return list(model.model_fields) if model is not None else []
 
 
-def _remedy(kind: str, location: tuple[Any, ...]) -> str | None:
-    """What to do about one validation failure, when its kind says: add it, or remove it."""
+def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str | None:
+    """What to do about one pydantic validation failure against ``root``, when its kind says.
+
+    A missing field says to add it, with a line that validates for a required top-level
+    Design Spec field. An unknown field says to remove it and names the nearest real one. A
+    quantity written as a string, such as `load: 60 kN`, is shown in the form the document
+    needs. It is the likeliest mistake a person makes in one, and pydantic answers it with
+    "Input should be a valid dictionary or instance of Quantity". None of these remedies
+    holds a semicolon, because MCP joins a refusal's issues with "; ".
+    """
+    kind = error.get("type")
+    location = tuple(error.get("loc", ()))
     path = ".".join(str(part) for part in location)
     if kind == "missing":
+        if root is not DesignSpec:
+            return f"add `{path}`, which a {root.__name__} requires"
         example = _REQUIRED_FIELD_EXAMPLES.get(path)
         if example is not None:
             return f"add `{path}` to the document, for example `{example}`"
         return f"add `{path}` to the document"
     if kind == "extra_forbidden" and location:
         owner = ".".join(str(part) for part in location[:-1])
-        owner = f"`{owner}`" if owner else "a Design Spec"
-        if len(location) == 1 and location[0] in _VERSION_SPELLINGS:
+        if owner:
+            owner = f"`{owner}`"
+        else:
+            owner = "a Design Spec" if root is DesignSpec else f"a {root.__name__}"
+        if root is DesignSpec and len(location) == 1 and location[0] in _VERSION_SPELLINGS:
             hint = f' (a document states its schema version as `anvilate_spec: "{SCHEMA_VERSION}"`)'
         else:
-            near = difflib.get_close_matches(str(location[-1]), _siblings(location), n=1)
+            near = difflib.get_close_matches(str(location[-1]), _siblings(location, root), n=1)
             hint = f" (did you mean `{near[0]}`?)" if near else ""
         return f"remove `{path}`, which {owner} does not have{hint}"
+    written = error.get("input")
+    if kind in ("model_type", "dict_type") and isinstance(written, str) and location:
+        from ..units import Quantity
+
+        try:
+            quantity = Quantity.parse(written)
+        except (ValueError, TypeError):
+            return None
+        return (
+            f"write `{path}` as `{{magnitude: {quantity.magnitude:g}, unit: {quantity.unit}}}` "
+            f"rather than the string {written!r}"
+        )
     return None
 
 
@@ -117,7 +145,7 @@ class SpecValidationError(ValueError):
         errors = []
         for e in exc.errors():
             location = tuple(e["loc"])
-            remedy = _remedy(e["type"], location)
+            remedy = _remedy(e)
             error: dict[str, Any] = {"loc": ".".join(str(p) for p in location), "msg": e["msg"]}
             if remedy is not None:
                 # An em dash, not a semicolon: MCP joins a refusal's issues with "; ", and a
@@ -251,7 +279,23 @@ def parse_spec(data: dict) -> DesignSpec:
     caller had gone this way.
     """
     if not isinstance(data, dict):
-        raise SpecValidationError([{"loc": "<root>", "msg": "spec must be a mapping"}])
+        # The whole document is the subject, so there is no field to name: an empty
+        # location, which `_refusal_line` prints without the `<root>: ` it used to carry.
+        found = {type(None): "empty", list: "a list", str: "a bare string"}.get(
+            type(data), f"a {type(data).__name__}"
+        )
+        remedy = "write a mapping of fields, starting with the required ones: " + ", ".join(
+            f"`{name}`" for name in _REQUIRED_FIELD_EXAMPLES
+        )
+        raise SpecValidationError(
+            [
+                {
+                    "loc": "",
+                    "msg": f"spec must be a mapping, and this document is {found} — {remedy}",
+                    "remedy": remedy,
+                }
+            ]
+        )
     migrated = migrate_to_current(data)
     try:
         return DesignSpec.model_validate(migrated)

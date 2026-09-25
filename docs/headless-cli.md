@@ -473,6 +473,11 @@ unknown field gets the nearest real field name.
 "remedy": "Add `manufacturing` to the document, for example `manufacturing: {process: cnc_milling}`. Remove `material.rf`, which `material` does not have (did you mean `ref`?)."
 ```
 
+The same remedies reach an element's parameters, on the card line that says they do not
+build: `hole_dia` is told it nearly names `hole_diameter`; `load: 60 kN` is shown as
+`{magnitude: 60, unit: kN}`; and `milimeter` is asked whether it meant `millimeter`. An
+empty file is told it is empty, along with the six fields to start from.
+
 A refusal that states no remedy of its own, such as a file that does not exist, gets a
 generic one naming the command. An unexpected defect uses the sibling `outcome: "error"` variant and exit code
 5, so a broken tool cannot be mistaken for a rejected input or a failing part.

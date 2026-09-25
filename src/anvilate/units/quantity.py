@@ -9,6 +9,7 @@ and again wherever a field pins an expected dimension.
 
 from __future__ import annotations
 
+import difflib
 import re
 from functools import lru_cache
 from math import isfinite
@@ -279,6 +280,28 @@ _CASE_TRAPS_REMEDY = {
 }
 
 
+@lru_cache(maxsize=1)
+def _unit_names() -> tuple[str, ...]:
+    """Every unit name the registry defines, for a near-miss suggestion."""
+    return tuple(sorted(str(name) for name in getattr(UREG, "_units", {})))
+
+
+def _nearest_unit(expression: str) -> str:
+    """` (did you mean 'millimeter'?)` for the first word of ``expression`` that is no unit.
+
+    A misspelled unit is an ordinary mistake, `milimeter` for `millimeter`, and "unknown
+    unit" alone leaves the reader to find the spelling. The suggestion holds no semicolon,
+    because MCP joins a refusal's issues with "; ".
+    """
+    for word in re.findall(r"[A-Za-z_]+", expression):
+        try:
+            _unit_object(word)
+        except Exception:  # the same several pint errors as above
+            near = difflib.get_close_matches(word, _unit_names(), n=1, cutoff=0.8)
+            return f" (did you mean {near[0]!r}?)" if near else ""
+    return ""
+
+
 class Quantity(RevalidatedModel):
     """A physical value: a magnitude and the unit it was expressed in.
 
@@ -297,7 +320,7 @@ class Quantity(RevalidatedModel):
         try:
             _unit_object(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
-            raise UnitError(f"unknown unit {self.unit!r}") from exc
+            raise UnitError(f"unknown unit {self.unit!r}{_nearest_unit(self.unit)}") from exc
         for token in re.findall(r"[A-Za-z]+", self.unit):
             if token in _CASE_TRAPS:
                 raise UnitError(

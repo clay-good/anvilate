@@ -2040,3 +2040,14 @@ def _required_lines() -> list[str]:
     from anvilate.spec.validate import _REQUIRED_FIELD_EXAMPLES
 
     return [line for key, line in _REQUIRED_FIELD_EXAMPLES.items() if key != "name"]
+
+
+@pytest.mark.parametrize(("document", "found"), [("", "empty"), ("- a\n- b\n", "a list")])
+def test_a_document_that_is_not_a_mapping_says_what_it_is_and_what_to_write(document, found):
+    failure = _refusal(document)
+    assert f"spec must be a mapping, and this document is {found}" in str(failure)
+    assert "<root>" not in str(failure)
+    assert failure.remedies == (
+        "write a mapping of fields, starting with the required ones: `name`, `description`, "
+        "`units`, `material`, `manufacturing`, `acceptance`",
+    )

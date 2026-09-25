@@ -2739,3 +2739,41 @@ def test_a_screen_s_refusal_reads_as_its_own_sentence_not_a_python_repr():
         "the lifting_lug screen refused the element it was given: unknown material "
         "'ASTM-A63'; did you mean ASTM-A36, ASTM-A992?"
     )
+
+
+def _padeye_with(old: str, new: str) -> str:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "examples" / "padeye.spec.yaml").read_text()
+    assert old in text
+    t1 = next(
+        e
+        for e in screen_spec(load_spec_yaml(text.replace(old, new))).entries
+        if e.name == "T1 analytical"
+    )
+    return t1.detail
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected"),
+    [
+        (
+            "  hole_diameter:",
+            "  hole_dia:",
+            "remove `hole_dia`, which a LiftingLug does not have (did you mean `hole_diameter`?)",
+        ),
+        ("  hole_diameter:", "  hole_dia:", "add `hole_diameter`, which a LiftingLug requires"),
+        (
+            "  load: {magnitude: 60.0, unit: kN}",
+            "  load: 60 kN",
+            "write `load` as `{magnitude: 60, unit: kN}` rather than the string '60 kN'",
+        ),
+        ("unit: mm}\n  hole", "unit: milimeter}\n  hole", "(did you mean 'millimeter'?)"),
+    ],
+)
+def test_element_params_that_do_not_build_say_what_to_write(old, new, expected):
+    """The ordinary mistakes in an element's parameters, each told its fix, not only its
+    fault: a near-miss field name, a quantity typed as a string, a misspelled unit."""
+    detail = _padeye_with(old, new)
+    assert expected in detail, detail
