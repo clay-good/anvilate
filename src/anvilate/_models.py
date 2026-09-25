@@ -72,6 +72,24 @@ _LONGEST_CITED = 1_024
 _PYDANTIC_PREFIXES = ("Value error, ", "Assertion failed, ")
 
 
+def _reason(failure: BaseException) -> str:
+    """The sentence a refusal carries, as a reader should see it.
+
+    ``str()`` of a ``KeyError`` is the *repr* of its argument, so a KeyError raised with a
+    sentence printed that sentence inside quotes: `"unknown material 'ASTM-A63'; did you
+    mean ASTM-A36?"`. A sentence is unwrapped here. A bare missing key such as
+    `'scorecard'` keeps its quotes, because they are what mark it as a key.
+    """
+    if (
+        isinstance(failure, KeyError)
+        and len(failure.args) == 1
+        and isinstance(failure.args[0], str)
+        and " " in failure.args[0]
+    ):
+        return failure.args[0]
+    return str(failure)
+
+
 def _refusal_line(location: str, message: str) -> str:
     """One validation failure as a reader should see it: the path, then the sentence.
 

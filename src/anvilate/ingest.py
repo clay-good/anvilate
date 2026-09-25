@@ -59,7 +59,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel, cited
+from ._models import RevalidatedModel, _reason, cited
 from .spec.ir import Environment
 from .units import Quantity, UnitError, render, spoken
 
@@ -1309,7 +1309,7 @@ def extract_requirements_from_pdf(
         # and, deeper in, through whatever built-in its parser trips on, an AssertionError
         # included: 2,000 random corruptions of a valid sheet raised six types. To a caller
         # they are one fact, the refusal a malformed document gets everywhere else.
-        raise ValueError(f"{document!r} is not a readable PDF: {broken}") from broken
+        raise ValueError(f"{document!r} is not a readable PDF: {_reason(broken)}") from broken
     return DraftSpec(
         values=tuple(value for draft in drafts for value in draft.values),
         unparsed=tuple(line for draft in drafts for line in draft.unparsed) + tuple(unparsed),

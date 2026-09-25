@@ -74,7 +74,7 @@ from pathlib import Path
 from typing import Any, Literal, TextIO
 
 from ._cli_output import cancelled_document, error_document, machine_document, refusal_document
-from ._models import _refusal_line, parse_json, parse_yaml
+from ._models import _reason, _refusal_line, parse_json, parse_yaml
 from .evidence import provenance_for
 from .failure_modes import CATALOG_IS_A_FLOOR, UNDECLARABLE_FACTS, facts_from_spec
 from .failure_modes import coverage as mode_coverage
@@ -2494,7 +2494,7 @@ def _load(path: Path, *, err, command: str):
         _state_remedies(failure.remedies)
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:
-        print(f"anvilate {command}: {failure}", file=err)
+        print(f"anvilate {command}: {_reason(failure)}", file=err)
         return EXIT_BAD_REQUEST
 
 

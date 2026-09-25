@@ -65,6 +65,7 @@ from ._models import (
     FrozenMap,
     ItemCollection,
     RevalidatedModel,
+    _reason,
     _refusal_line,
     rebuilt_quantities,
 )
@@ -382,13 +383,8 @@ def _screen_element(
         # tri-state result.
         # The refusal's own sentence. It was printed as `UnknownMaterialError: "unknown
         # material 'ASTM-A63'; did you mean ASTM-A36?"`: a class name the reader did not ask
-        # for, and a KeyError's repr quotes around a sentence that has its own. A KeyError
-        # carries its message as its argument, and `str()` of one is that argument's repr.
-        reason = (
-            refused.args[0]
-            if isinstance(refused, KeyError) and refused.args and isinstance(refused.args[0], str)
-            else str(refused)
-        )
+        # for, and a KeyError's repr quotes around a sentence that has its own.
+        reason = _reason(refused)
         return [
             ScorecardEntry(
                 name="T1 analytical",
@@ -710,7 +706,9 @@ def _chain_entries(spec: DesignSpec) -> list[ScorecardEntry]:
             ScorecardEntry(
                 name="stack-up chains",
                 status=CheckStatus.NOT_EVALUATED,
-                detail=f"a declared chain references an undeclared dimension tag: {unknown}",
+                detail=(
+                    f"a declared chain references an undeclared dimension tag: {_reason(unknown)}"
+                ),
                 needs=(_NEEDS_THE_CHAINS_DIMENSION,),
             )
         ]

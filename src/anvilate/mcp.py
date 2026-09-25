@@ -49,7 +49,7 @@ from typing import Any, TextIO
 from pydantic import ConfigDict, Field, model_validator
 
 from ._mcp_tasks import TASKS_EXTENSION
-from ._models import Named, RevalidatedModel, _refusal_line, parse_json
+from ._models import Named, RevalidatedModel, _reason, _refusal_line, parse_json
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
@@ -1282,7 +1282,7 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         # parse_spec raises SpecValidationError for a schema failure; anything else is a
         # document it could not even attempt, and it still belongs in `errors` rather than
         # crashing the loop that called it.
-        return {"errors": [str(failure)]}
+        return {"errors": [_reason(failure)]}
     # Published, so the next call has something to name. A compiled document is the subject
     # `run_validation` and the geometry tools act on, and a handle is what keeps the payload
     # off the wire without giving the server a memory between calls.
@@ -1303,7 +1303,7 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {failure}"]) from failure
+        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
     try:
         built = build_spec(spec)
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
@@ -1423,7 +1423,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {failure}"]) from failure
+        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
     card = screen_spec(spec).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
@@ -1605,7 +1605,7 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {failure}"]) from failure
+        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
     card = screen_spec(spec)
     entries = tuple(
         entry.model_copy(

@@ -6234,3 +6234,16 @@ def test_every_json_and_yaml_read_goes_through_a_reader_that_bounds_nesting():
         isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
         for n in ast.walk(planted)
     )
+
+
+def test_a_key_error_carrying_a_sentence_is_read_without_its_repr_quotes():
+    """`str()` of a KeyError is the repr of its argument. `_reason` unwraps a sentence and
+    keeps a bare key's quotes, which are what mark it as a key."""
+    from anvilate._models import _reason
+
+    assert _reason(KeyError("unknown material 'X'; did you mean Y?")) == (
+        "unknown material 'X'; did you mean Y?"
+    )
+    assert _reason(KeyError("scorecard")) == "'scorecard'"
+    assert _reason(ValueError("plain")) == "plain"
+    assert _reason(KeyError(1, 2)) == "(1, 2)"
