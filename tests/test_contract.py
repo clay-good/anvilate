@@ -4932,11 +4932,11 @@ def test_no_yaml_document_can_construct_a_python_object():
                 checked_loaders.append(f"{path.relative_to(_REPO)} with Loader={named}")
 
     assert safe >= 15, f"the sweep found only {safe} safe_load calls, so it is looking wrong"
-    import inspect
-
-    from anvilate._models import parse_yaml
-
-    reader = ast.parse(inspect.getsource(parse_yaml))
+    (reader,) = (
+        node
+        for node in parsed_source(src / "_models.py").body
+        if isinstance(node, ast.FunctionDef) and node.name == "parse_yaml"
+    )
     assert [ast.unparse(n.func) for n in ast.walk(reader) if isinstance(n, ast.Call)].count(
         "yaml.safe_load"
     ) == 1, "parse_yaml is counted as a safe read, and it no longer calls yaml.safe_load"
