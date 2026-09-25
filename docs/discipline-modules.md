@@ -149,6 +149,7 @@ and three gates key on it:
 This is the manifest contract, the ten shipped manifests, the completeness gate and the
 exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
 3.3), the loader (2.2), declared coverage (1.2), the authoring page (5.1) and
-duplicate-limit-state detection by registry id (2.3): 56 limit states across the 59 checks
-the shipped modules emit, one of them shared by two screens through AISC §E3's
-`aisc_flexural_buckling_stress`. Out-of-tree modules are what remain.
+duplicate-limit-state detection by registry id (2.3): 57 limit states across the 61 checks
+the shipped modules emit, two of them shared by two screens: column buckling through AISC
+§E3's `aisc_flexural_buckling_stress`, and gross yielding in tension through `axial_stress`.
+Out-of-tree modules are what remain.

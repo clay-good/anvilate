@@ -2240,10 +2240,11 @@ def screen_tension_member(
     )
 
     force = member.load.to("N").magnitude
-    gross = member.gross_area.to("mm**2").magnitude
     effective_net = member.shear_lag_factor * member.net_area.to("mm**2").magnitude
 
-    gross_stress = Quantity(magnitude=force / gross, unit="MPa")
+    # Through `axial_stress`, which the beam-column's tensile yielding also calls: the
+    # limit-state registry names it as the one implementation of gross yielding.
+    gross_stress = axial_stress(force=member.load, area=member.gross_area)
     net_stress = Quantity(magnitude=force / effective_net, unit="MPa")
     load_symbol = SymbolValue(symbol="P", description="axial tension", value=member.load)
     return disclosed(
@@ -2510,8 +2511,10 @@ def screen_beam_column(
         else:
             tension_interaction = tension_ratio / 2.0 + mr_mc
             symbolic = "IR = P_r/(2 · P_c) + M_r/M_c"
+        # Its own name, not "interaction": the limit-state registry attributes a check by
+        # its name, and §H1.1's buckling interaction and §H1.2's are different limit states.
         entry = ScorecardEntry.from_safety_factor(
-            f"{member.name} interaction",
+            f"{member.name} tension interaction",
             computed=1.0 / tension_interaction,
             required=required_safety_factor,
         )
@@ -2577,12 +2580,17 @@ def screen_beam_column(
     if pr < 0:
         # The same premise in tension: H1-1b halves the axial term because §D2 caps P_r at
         # P_c on its own, so the card carries that cap as its own entry.
-        tension_safety = tensile_capacity / -pr
-        axial_entry = ScorecardEntry.from_safety_factor(
-            f"{member.name} axial capacity",
-            computed=tension_safety,
+        tension_stress = axial_stress(
+            force=Quantity(magnitude=-pr, unit="N"), area=member.section.area
+        )
+        axial_entry = strength_scorecard(
+            f"{member.name} tensile yielding",
+            stress=tension_stress,
+            allowable=yield_strength,
             required=required_safety_factor,
-        ).model_copy(
+        )
+        tension_safety = yield_strength.to("MPa").magnitude / tension_stress.to("MPa").magnitude
+        axial_entry = axial_entry.model_copy(
             update={
                 "reference": _CLAUSE_TENSION,
                 "derivation": Derivation(

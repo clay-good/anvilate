@@ -364,6 +364,11 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("structural.screen_beam_column", "interaction"),
         ),
         _state(
+            "steel.beam_column_tension_interaction",
+            "a member failing under net tension and bending together (AISC §H1.2)",
+            ("structural.screen_beam_column", "tension interaction"),
+        ),
+        _state(
             "steel.beam_bending",
             "a beam yielding in bending",
             (_BEAM, "bending"),
@@ -442,6 +447,8 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             "steel.tension_gross_yielding",
             "a tension member yielding along its gross section",
             ("structural.screen_tension_member", "gross yielding"),
+            ("structural.screen_beam_column", "tensile yielding"),
+            implementation="analysis.axial_stress",
         ),
         _state(
             "steel.tension_net_rupture",

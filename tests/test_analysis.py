@@ -41936,11 +41936,26 @@ def test_a_net_tension_with_flexure_is_screened_by_h12(axial, moment, interactio
         material="ASTM-A36",
     )
     entries = {e.name: e for e in screen_beam_column(member, required_safety_factor=2.0).entries}
-    assert entries["bc interaction"].safety_factor == pytest.approx(interaction_sf, rel=1e-3)
-    assert entries["bc interaction"].reference == "AISC 360-16 §H1.2"
-    assert "net-section rupture" in entries["bc interaction"].detail
-    assert entries["bc axial capacity"].safety_factor == pytest.approx(axial_sf, rel=1e-9)
-    assert entries["bc axial capacity"].reference == "AISC 360-16 §D2"
+    # Named for what they are, so the limit-state registry attributes them to §D2 and §H1.2
+    # rather than to column buckling and the §H1.1 interaction.
+    assert set(entries) == {"bc tensile yielding", "bc tension interaction"}
+    from anvilate.limit_states import DEFAULT_LIMIT_STATES
+
+    attributed = {
+        check.check: state.id
+        for state in DEFAULT_LIMIT_STATES.limit_states
+        for check in state.evaluated_by
+        if check.screen == "structural.screen_beam_column"
+    }
+    assert attributed["tensile yielding"] == "steel.tension_gross_yielding"
+    assert attributed["tension interaction"] == "steel.beam_column_tension_interaction"
+    assert entries["bc tension interaction"].safety_factor == pytest.approx(
+        interaction_sf, rel=1e-3
+    )
+    assert entries["bc tension interaction"].reference == "AISC 360-16 §H1.2"
+    assert "net-section rupture" in entries["bc tension interaction"].detail
+    assert entries["bc tensile yielding"].safety_factor == pytest.approx(axial_sf, rel=1e-9)
+    assert entries["bc tensile yielding"].reference == "AISC 360-16 §D2"
 
 
 def test_the_pack_guard_reaches_into_a_nested_section():
