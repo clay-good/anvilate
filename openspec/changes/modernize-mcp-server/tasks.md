@@ -104,7 +104,11 @@
       line desynchronizes a client reading one-for-one while a dropped error for a message
       nobody awaited costs nothing. A message that is not an object has no `id` member to
       be missing, and that case is now answered (it used to either vanish or raise
-      `TypeError`, depending on which non-object it was)
+      `TypeError`, depending on which non-object it was). **Blocked upstream (checked
+      2026-09-25):** the official suite (`npx @modelcontextprotocol/conformance server --url`)
+      drives a server over HTTP, and stdio support is open as
+      modelcontextprotocol/conformance#258. This server speaks stdio only, so the run waits on
+      that issue rather than on work here
 
 ## 4. Docs
 
