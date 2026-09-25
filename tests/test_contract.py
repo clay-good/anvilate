@@ -3677,13 +3677,29 @@ def test_every_public_analysis_function_refuses_a_wrapped_number_by_naming_the_m
 # --- The installed metadata is a snapshot, and the BOM is derived from it ---------------
 
 
+def _normalized_requirement(requirement: str) -> str:
+    """A requirement with its distribution name normalized as PEP 503 does, specifier intact.
+
+    The build backend writes ``pdfminer.six`` into METADATA as ``pdfminer-six``: the same
+    distribution, spelled the normalized way. Comparing names literally reported that as a
+    dependency both missing and invented, on a fresh install where nothing had drifted.
+    """
+    name = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
+    if name is None:
+        return requirement.strip()
+    normal = re.sub(r"[-_.]+", "-", name.group(1)).lower()
+    return normal + requirement[name.end() :].strip()
+
+
 def _requirements_by_extra(requirements):
     """``{extra or None: {requirement without its marker}}``, normalised for comparison."""
     grouped: dict[str | None, set[str]] = {}
     for requirement in requirements:
         head, _, marker = requirement.partition(";")
         extra = re.search(r"""extra\s*==\s*['"]([^'"]+)['"]""", marker)
-        grouped.setdefault(extra.group(1) if extra else None, set()).add(head.strip())
+        grouped.setdefault(extra.group(1) if extra else None, set()).add(
+            _normalized_requirement(head)
+        )
     return grouped
 
 
@@ -3704,8 +3720,10 @@ def test_the_installed_metadata_still_says_what_pyproject_declares():
     accusation against the BOM code and sends you into `attestation.py` rather than to
     `pip install`.
 
-    Names *and* specifiers are compared, per extra, because setuptools copies each
-    requirement through verbatim and only appends the marker. What this does **not** hold
+    Names *and* specifiers are compared, per extra. setuptools copies each requirement's
+    specifier through verbatim and appends the marker, but writes the *name* in its PEP 503
+    normalized form (``pdfminer.six`` becomes ``pdfminer-six``), so names are normalized on
+    both sides before they are compared. What this does **not** hold
     is the environment itself: a declared dependency can still be absent or at a version
     outside its own bound, and the BOM leaves an uninstalled one out by design.
     """
@@ -3714,9 +3732,9 @@ def test_the_installed_metadata_still_says_what_pyproject_declares():
 
     with (_REPO / "pyproject.toml").open("rb") as handle:
         project = tomllib.load(handle)["project"]
-    declared = {None: {r.strip() for r in project["dependencies"]}}
+    declared = {None: {_normalized_requirement(r) for r in project["dependencies"]}}
     for extra, entries in (project.get("optional-dependencies") or {}).items():
-        declared[extra] = {r.strip() for r in entries}
+        declared[extra] = {_normalized_requirement(r) for r in entries}
 
     try:
         installed = _requirements_by_extra(requires("anvilate") or ())
