@@ -157,6 +157,42 @@ jobs:
             exit 1
           fi
 
+  # The STEP writer is OCCT's, and so is every check the build runs on its own output. A
+  # reader that shares the writer's kernel agrees with it by construction, so this job reads
+  # every audited pattern with STEPcode (the former NIST STEP Class Library), whose AP242
+  # reader is generated from the schema's EXPRESS long form and shares no code with OCCT.
+  # Pinned to a commit so a change upstream is a deliberate bump, not a surprise. Scheduled,
+  # because the C++ build takes minutes (target-ap242-e4-exports 2.1).
+  step-referee:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Build STEPcode's AP242 reader
+        run: |
+          git clone --quiet https://github.com/stepcode/stepcode.git stepcode
+          git -C stepcode checkout --quiet ed686ee1d9cb8bf763ab8d61ef6d417c3b45c146
+          cmake -S stepcode -B stepcode/build -DSC_BUILD_SCHEMAS=ap242 \
+            -DSC_ENABLE_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build stepcode/build --target p21read_sdai_ap242 -j 4
+      - name: Every audited pattern's STEP reads with no errors and no warnings
+        run: |
+          set -euo pipefail
+          for pattern in base_plate cover_plate transmission_shaft; do
+            # A plate's own card does not pass, so it is written watermarked; the shaft's
+            # does, and --unvalidated is refused for a card that passes.
+            anvilate build "examples/$pattern.spec.yaml" --output "$pattern.step" \
+              || anvilate build "examples/$pattern.spec.yaml" --output "$pattern.step" --unvalidated
+            ./stepcode/build/bin/p21read_sdai_ap242 "$pattern.step" | tee "$pattern.txt"
+            # Both passes, the instance read and the reference check, must say it.
+            test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$pattern.txt")" -eq 2
+          done
+
   # The sectionproperties adapter is tested twice: against a stub, which proves the mapping
   # decisions, and against the real package, which proves the mapping is of the real API. A
   # stub written by the same hand as the code it exercises agrees with that code and says

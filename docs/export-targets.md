@@ -73,6 +73,18 @@ release on PyPI **and** build123d relaxing its `<8.0` cap. Both, then migrate.
 Also re-verified against PyPI the same day: CadQuery 2.8.0, Gmsh 4.15.2, ezdxf 1.4.4 — all
 matching the ranges already pinned.
 
+## An independent reader
+
+The STEP files are written by OCCT, and every check `anvilate build` runs on its own output
+reads them back through OCCT, which agrees with itself by construction. So a scheduled CI job,
+`step-referee`, reads every audited pattern with STEPcode (the former NIST STEP Class
+Library). Its AP242 reader is generated from the schema's EXPRESS long form and shares no code
+with the kernel. It is pinned to a commit, and a file passes only when both of its passes
+report 0 errors and 0 warnings. What it checks is the Part 21 structure and each instance
+against the schema's entity definitions: it does not check CAx-IF Recommended Practice
+conformance, which is what NIST's STEP File Analyzer adds and why that remains the named
+referee for semantic PMI.
+
 ## What the conformance gate will and will not guarantee
 
 When the AP242 semantic PMI writer lands, CI will run every exported file through an

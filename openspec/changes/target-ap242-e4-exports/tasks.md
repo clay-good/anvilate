@@ -23,9 +23,13 @@
 
 ## 2. Conformance harness (lands with STEP export)
 
-- [ ] 2.1 Independent-analyzer CI job over exported files — the referee is confirmed to
-      exist and be free (NIST STEP File Analyzer and Viewer, usnistgov/SFA); the job needs
-      an exporter to run over
+- [x] 2.1 Independent-analyzer CI job over exported files — the scheduled `step-referee`
+      job builds STEPcode (the former NIST STEP Class Library) at a pinned commit and reads
+      every audited pattern's STEP with its AP242 reader, generated from the schema's EXPRESS
+      long form and sharing no code with OCCT; both passes must report 0 errors and 0
+      warnings. NIST's STEP File Analyzer, the referee first named here, is Windows-only;
+      STEPcode runs on the Linux runners. Checked locally: the three patterns read clean
+      (368, 136 and more instances), and an unknown entity or a short ADVANCED_FACE fails
 - [ ] 2.2 CAx-IF/NIST PMI test-model regression fixtures for the reader/writer — confirmed
       freely downloadable (mbx-if.org hosts the FTC/STC/CTC models with AP242 STEP files and
       recommends exactly this loop); blocked on the same exporter
