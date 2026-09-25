@@ -2555,7 +2555,15 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
             finally:
                 staging.unlink(missing_ok=True)
         else:
-            write_step(built, args.output, authorization=authorization, schema=step_schema)
+            # The document's own tolerances, as AP242 semantic PMI: the model the drawing
+            # frame and the QIF characteristic render from, so all three carry one value.
+            write_step(
+                built,
+                args.output,
+                authorization=authorization,
+                schema=step_schema,
+                tolerances=tuple(spec.geometric_tolerances),
+            )
         digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     except ValueError as failure:  # a GeometryError, or a mesh the 3MF writer refused
         print(f"anvilate build: {failure}", file=err)
@@ -2590,6 +2598,11 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         else:
             print(f"  STEP          {args.output}", file=out)
             print(f"  schema        {step_schema.upper()}", file=out)
+            if spec.geometric_tolerances:
+                print(
+                    f"  semantic PMI  {len(spec.geometric_tolerances)} geometric tolerance(s)",
+                    file=out,
+                )
         print(f"  pattern       {built.pattern}", file=out)
         print(f"  volume        {built.volume_mm3:g} mm³", file=out)
         print(f"  semantic faces {', '.join(sorted(built.faces))}", file=out)

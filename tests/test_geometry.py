@@ -1197,3 +1197,149 @@ def test_every_nist_ap242_pmi_model_reads_as_it_did():
             assert warned[0].startswith(f"{loose} face(s)"), (stem, warned)
     with pytest.raises(GeometryError, match="valid positive-volume solids"):
         detect_step_interfaces(folder / "nist_ftc_08_asme1_ap242-e1-tg.stp")
+
+
+def _read_semantic_pmi(path):  # type: ignore[no-untyped-def]
+    """(characteristic, value in mm, zone is a diameter, datum letters) per tolerance, as
+    OCCT's GD&T reader recovers them from the written file."""
+    from OCP.STEPCAFControl import STEPCAFControl_Reader
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDF import TDF_LabelSequence
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.XCAFApp import XCAFApp_Application
+    from OCP.XCAFDimTolObjects import XCAFDimTolObjects_GeomToleranceTypeValue
+    from OCP.XCAFDoc import (
+        XCAFDoc_Datum,
+        XCAFDoc_DimTolTool,
+        XCAFDoc_DocumentTool,
+        XCAFDoc_GeomTolerance,
+    )
+
+    document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+    XCAFApp_Application.GetApplication_s().NewDocument(
+        TCollection_ExtendedString("MDTV-XCAF"), document
+    )
+    reader = STEPCAFControl_Reader()
+    reader.SetGDTMode(True)
+    reader.ReadFile(str(path))
+    reader.Transfer(document)
+    tool = XCAFDoc_DocumentTool.DimTolTool_s(document.Main())
+    labels = TDF_LabelSequence()
+    tool.GetGeomToleranceLabels(labels)
+    diameter = (
+        XCAFDimTolObjects_GeomToleranceTypeValue.XCAFDimTolObjects_GeomToleranceTypeValue_Diameter
+    )
+    found = []
+    for index in range(1, labels.Length() + 1):
+        label = labels.Value(index)
+        definition = XCAFDoc_GeomTolerance.Set_s(label).GetObject()
+        datums = TDF_LabelSequence()
+        XCAFDoc_DimTolTool.GetDatumOfTolerLabels_s(label, datums)
+        found.append(
+            (
+                definition.GetType().name.rsplit("_", 1)[-1],
+                round(definition.GetValue(), 9),
+                definition.GetTypeOfValue() == diameter,
+                sorted(
+                    XCAFDoc_Datum.Set_s(datums.Value(j)).GetObject().GetName().ToCString()
+                    for j in range(1, datums.Length() + 1)
+                ),
+            )
+        )
+    return sorted(found)
+
+
+def _tolerances():  # type: ignore[no-untyped-def]
+    from anvilate.spec.ir import GeometricTolerance
+
+    return [
+        GeometricTolerance(characteristic="flatness", tolerance=_q("0.05 mm"), feature="top"),
+        GeometricTolerance(
+            characteristic="perpendicularity",
+            tolerance=_q("0.1 mm"),
+            feature="north",
+            datums=["bottom"],
+        ),
+        GeometricTolerance(
+            characteristic="parallelism",
+            tolerance=_q("0.02 mm"),
+            feature="top",
+            datums=["bottom", "west"],
+        ),
+    ]
+
+
+def _q(text: str) -> Quantity:
+    return Quantity.parse(text)
+
+
+def test_a_documents_tolerances_travel_in_the_step_as_semantic_pmi(tmp_path):
+    """semantic-gdt-layer 2.2: the spec's tolerances written as AP242 semantic PMI on the
+    faces their tags name, datums lettered in first-seen order, and recovered by OCCT's own
+    GD&T reader with the values the document states."""
+    path = tmp_path / "plate.step"
+    write_step(build_base_plate(_plate()), path, authorization=_STEP_AUTH, tolerances=_tolerances())
+    assert _read_semantic_pmi(path) == [
+        ("Flatness", 0.05, False, []),
+        ("Parallelism", 0.02, False, ["A", "B"]),
+        ("Perpendicularity", 0.1, False, ["A"]),
+    ]
+
+
+def test_a_tolerance_is_written_in_the_unit_its_value_is_in(tmp_path):
+    """OCCT states every tolerance measure in metres and does not convert what it is given,
+    so a 0.05 mm flatness passed through unconverted was written as 0.05 m, a zone a thousand
+    times too wide, that a reader recovering "50 mm" would take at face value. Read the
+    measure and its unit out of the file itself."""
+    import re
+
+    path = tmp_path / "plate.step"
+    write_step(
+        build_base_plate(_plate()), path, authorization=_STEP_AUTH, tolerances=_tolerances()[:1]
+    )
+    text = path.read_text(encoding="utf-8")
+    flatness = re.search(r"FLATNESS_TOLERANCE\('[^']*','[^']*',#(\d+)", text)
+    assert flatness is not None
+    measure = re.search(
+        rf"#{flatness.group(1)} = LENGTH_MEASURE_WITH_UNIT\(LENGTH_MEASURE\(([^)]*)\),#(\d+)\)",
+        text,
+    )
+    unit = re.search(
+        rf"#{measure.group(2)} = \( LENGTH_UNIT\(\) NAMED_UNIT\(\*\) SI_UNIT\(([^)]*)\)", text
+    )
+    magnitude = float(measure.group(1))
+    scale = {"$,.METRE.": 1.0, ".MILLI.,.METRE.": 1e-3}[unit.group(1)]
+    assert magnitude * scale == pytest.approx(0.05e-3, rel=1e-12)
+
+
+def test_semantic_pmi_is_refused_where_it_cannot_be_written(tmp_path):
+    from anvilate.spec.ir import GeometricTolerance
+
+    with pytest.raises(GeometryError, match="AP242 construct"):
+        write_step(
+            build_base_plate(_plate()),
+            tmp_path / "a.step",
+            authorization=_STEP_AUTH,
+            schema="ap214",
+            tolerances=_tolerances(),
+        )
+    stray = GeometricTolerance(characteristic="flatness", tolerance=_q("0.05 mm"), feature="bore")
+    with pytest.raises(GeometryError, match="'bore', which the base_plate/1 solid does not tag"):
+        write_step(
+            build_base_plate(_plate()),
+            tmp_path / "b.step",
+            authorization=_STEP_AUTH,
+            tolerances=[stray],
+        )
+    assert not (tmp_path / "b.step").exists(), "a refused write left a file behind"
+
+
+def test_the_same_tolerances_give_the_same_bytes(tmp_path):
+    first, second = tmp_path / "1.step", tmp_path / "2.step"
+    write_step(
+        build_base_plate(_plate()), first, authorization=_STEP_AUTH, tolerances=_tolerances()
+    )
+    write_step(
+        build_base_plate(_plate()), second, authorization=_STEP_AUTH, tolerances=_tolerances()
+    )
+    assert first.read_bytes() == second.read_bytes()

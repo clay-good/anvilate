@@ -13,8 +13,12 @@
 - [x] 2.1 Drawing feature-control-frame rendering from the model — `frame_drawing`
       in `anvilate.export.fcf`, written to DXF by
       `anvilate.export.dxf.export_feature_control_frame_dxf`
-- [ ] 2.2 AP242 semantic PMI population path (spec-level contract; implementation lands
-      with STEP export)
+- [x] 2.2 AP242 semantic PMI population path — `geometry.write_step(..., tolerances=...)`
+      and `anvilate build` write a document's geometric tolerances as AP242 semantic PMI on the
+      tagged faces, datums lettered in first-seen order, read back through OCCT's GD&T reader
+      in the tests. The tolerance value is converted to metres because OCCT stamps every
+      measure as metres unconverted (a 0.05 mm zone was written as 0.05 m until the test read
+      the unit out of the file). Presentation PMI is not written (docs/semantic-gdt.md)
 - [x] 2.3 QIF characteristic definition mapping — `qif_characteristic_mapping` in
       `anvilate.export.qif`, the layer that owns the QIF vocabulary
 
@@ -26,7 +30,7 @@
 
 ## Scope as shipped
 
-Everything but 2.2, which waits on a STEP writer that does not exist. First the model and
+First the model and
 its legality rules (1.1-1.3), the legality test matrix (3.1) and the documentation (3.3) —
 `src/anvilate/gdt.py`, `examples/feature_control_frame_legality.py`, `docs/semantic-gdt.md`.
 

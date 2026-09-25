@@ -4818,3 +4818,35 @@ def test_build_refuses_a_step_schema_for_a_3mf_output_and_an_unknown_suffix(tmp_
     assert code == EXIT_BAD_REQUEST and "--ap214 chooses a STEP schema" in err
     code, _out, err = _run("build", str(spec), "--output", str(tmp_path / "p.stl"))
     assert code == EXIT_BAD_REQUEST and ".step, .stp or .3mf" in err
+
+
+def test_build_carries_the_documents_tolerances_and_a_tightened_one_moves_the_file(tmp_path):
+    """semantic-gdt-layer 2.2 at the front door: the document's geometric_tolerances are
+    written as AP242 semantic PMI, and tightening one in the document changes the value an
+    independent read of the built file recovers."""
+    pytest.importorskip("build123d")
+    from test_geometry import _read_semantic_pmi
+
+    tolerances = """
+geometric_tolerances:
+  - {characteristic: flatness, tolerance: {magnitude: FLAT, unit: mm}, feature: top}
+  - {characteristic: perpendicularity, tolerance: {magnitude: 0.1, unit: mm}, feature: north,
+     datums: [bottom]}
+"""
+    recovered = []
+    for flatness in ("0.05", "0.02"):
+        spec = tmp_path / f"plate-{flatness}.yaml"
+        output = tmp_path / f"plate-{flatness}.step"
+        spec.write_text(_BASE_PLATE_SPEC + tolerances.replace("FLAT", flatness), encoding="utf-8")
+        code, text, err = _run("build", str(spec), "--output", str(output), "--unvalidated")
+        assert code == EXIT_OK, err
+        assert "  semantic PMI  2 geometric tolerance(s)" in text
+        recovered.append(_read_semantic_pmi(output))
+    assert recovered[0] == [("Flatness", 0.05, False, []), ("Perpendicularity", 0.1, False, ["A"])]
+    assert recovered[1][0] == ("Flatness", 0.02, False, [])
+
+    spec = tmp_path / "plate-0.05.yaml"
+    code, _text, err = _run(
+        "build", str(spec), "--output", str(tmp_path / "legacy.step"), "--unvalidated", "--ap214"
+    )
+    assert code == EXIT_BAD_REQUEST and "AP242 construct" in err

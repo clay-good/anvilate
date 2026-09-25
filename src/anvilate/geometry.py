@@ -14,7 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from html import escape
@@ -2341,11 +2341,92 @@ def _step_string(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _semantic_pmi(
+    document: Any, shape_tool: Any, label: Any, built: BuiltGeometry, tolerances
+) -> None:
+    """Attach each declared geometric tolerance to the faces its tag names, as AP242 PMI.
+
+    Datums are lettered A, B, C in the order their tags first appear. OCCT's STEP writer
+    states every tolerance measure in metres and does not convert the value it is given, so
+    a 0.05 mm flatness passed as 0.05 was written as 0.05 m, a zone a thousand times too
+    wide. The value is converted here, and the test reads the unit back out of the file.
+    """
+    from OCP.TCollection import TCollection_HAsciiString  # type: ignore[import-untyped]
+    from OCP.TDF import TDF_LabelSequence  # type: ignore[import-untyped]
+    from OCP.XCAFDimTolObjects import (  # type: ignore[import-untyped]
+        XCAFDimTolObjects_DatumObject,
+        XCAFDimTolObjects_GeomToleranceObject,
+        XCAFDimTolObjects_GeomToleranceType,
+        XCAFDimTolObjects_GeomToleranceTypeValue,
+    )
+    from OCP.XCAFDoc import (  # type: ignore[import-untyped]
+        XCAFDoc_Datum,
+        XCAFDoc_DocumentTool,
+        XCAFDoc_GeomTolerance,
+    )
+
+    kinds = {
+        "flatness": "Flatness",
+        "straightness": "Straightness",
+        "circularity": "CircularityOrRoundness",
+        "cylindricity": "Cylindricity",
+        "perpendicularity": "Perpendicularity",
+        "parallelism": "Parallelism",
+        "angularity": "Angularity",
+        "position": "Position",
+        "circular_runout": "CircularRunout",
+        "total_runout": "TotalRunout",
+    }
+    dim_tol = XCAFDoc_DocumentTool.DimTolTool_s(document.Main())
+
+    def faces(tag: str) -> Any:
+        if tag not in built.faces:
+            raise GeometryError(
+                f"a geometric tolerance names '{tag}', which the {built.pattern} solid does not "
+                f"tag; it tags {sorted(built.faces)}"
+            )
+        sequence = TDF_LabelSequence()
+        for face in built.faces[tag]:
+            sequence.Append(shape_tool.AddSubShape(label, face.wrapped))
+        return sequence
+
+    letters: dict[str, str] = {}
+    for tolerance in tolerances:
+        for tag in tolerance.datums:
+            letters.setdefault(tag, "ABCDEFGHJKLMNPRSTUVWXYZ"[len(letters)])
+    for tolerance in tolerances:
+        characteristic = str(getattr(tolerance.characteristic, "value", tolerance.characteristic))
+        tolerance_label = dim_tol.AddGeomTolerance()
+        definition = XCAFDimTolObjects_GeomToleranceObject()
+        definition.SetType(
+            getattr(
+                XCAFDimTolObjects_GeomToleranceType,
+                f"XCAFDimTolObjects_GeomToleranceType_{kinds[characteristic]}",
+            )
+        )
+        definition.SetValue(tolerance.tolerance.to("m").magnitude)  # see the docstring
+        if tolerance.diametral:
+            definition.SetTypeOfValue(
+                XCAFDimTolObjects_GeomToleranceTypeValue.XCAFDimTolObjects_GeomToleranceTypeValue_Diameter
+            )
+        XCAFDoc_GeomTolerance.Set_s(tolerance_label).SetObject(definition)
+        dim_tol.SetGeomTolerance(faces(tolerance.feature), tolerance_label)
+        for position, tag in enumerate(tolerance.datums, start=1):
+            datum_label = dim_tol.AddDatum()
+            datum = XCAFDimTolObjects_DatumObject()
+            datum.SetName(TCollection_HAsciiString(letters[tag]))
+            datum.SetPosition(position)
+            XCAFDoc_Datum.Set_s(datum_label).SetObject(datum)
+            dim_tol.SetDatum(faces(tag), datum_label)
+            dim_tol.SetDatumToGeomTol(datum_label, tolerance_label)
+
+
 def _write_step_shape(
     built: BuiltGeometry,
     path: Path,
     *,
     schema: Literal["ap242", "ap214"],
+    tolerances: Sequence[Any] = (),
 ) -> None:
     """Write STEP with CAx-IF part-level properties and contain global settings."""
     try:
@@ -2392,6 +2473,8 @@ def _write_step_shape(
         XCAFDoc_Volume.Set_s(label, built.volume_mm3)
         XCAFDoc_Area.Set_s(label, float(built.shape.area))
         XCAFDoc_Centroid.Set_s(label, gp_Pnt(*coordinates))
+        if tolerances:
+            _semantic_pmi(document, shape_tool, label, built, tolerances)
 
         STEPCAFControl_Controller.Init_s()
         STEPControl_Controller.Init_s()
@@ -2406,6 +2489,7 @@ def _write_step_shape(
             writer = STEPCAFControl_Writer(XSControl_WorkSession(), False)
             writer.SetNameMode(True)
             writer.SetPropsMode(True)
+            writer.SetDimTolMode(bool(tolerances))
             if not writer.Transfer(document, STEPControl_StepModelType.STEPControl_AsIs):
                 raise GeometryError("STEP writer could not transfer the built solid")
             if writer.Write(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
@@ -2534,13 +2618,25 @@ def write_step(
     *,
     authorization: ExportAuthorization,
     schema: Literal["ap242", "ap214"] = "ap242",
+    tolerances: Sequence[Any] = (),
 ) -> Path:
-    """Write one authorized solid as deterministic, watermarked STEP and return its path."""
+    """Write one authorized solid as deterministic, watermarked STEP and return its path.
+
+    ``tolerances`` are a Design Spec's ``geometric_tolerances``, written as AP242 semantic
+    PMI on the faces their tags name: the same model the drawing frame and the QIF
+    characteristic render from, so a tightened tolerance reaches all three. AP214 has no
+    semantic PMI, so tolerances with ``schema="ap214"`` are refused rather than dropped.
+    """
     if not built.is_valid:
         raise GeometryError("refusing to write invalid geometry")
+    if tolerances and schema != "ap242":
+        raise GeometryError(
+            "semantic PMI is an AP242 construct and AP214 cannot carry it; write AP242, or "
+            "write AP214 without the tolerances"
+        )
     if schema not in {"ap242", "ap214"}:
         raise GeometryError(f"unsupported STEP schema {schema!r}; choose ap242 or ap214")
-    _write_step_shape(built, path, schema=schema)
+    _write_step_shape(built, path, schema=schema, tolerances=tuple(tolerances))
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as failure:

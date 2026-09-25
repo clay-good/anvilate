@@ -132,5 +132,21 @@ See [`examples/feature_control_frame_drawing.py`](../examples/feature_control_fr
 This models and validates the callout. It does **not** verify that a part meets it, resolve
 a datum reference frame into a coordinate system, or compute a virtual condition boundary.
 The drawing consumer renders the frame itself, not the leader, the datum feature symbol, or
-its placement on a part — those belong with the drawing-generation layer. AP242 semantic PMI
-population waits on the STEP export it belongs to.
+its placement on a part — those belong with the drawing-generation layer.
+
+## Semantic PMI in the STEP file
+
+`anvilate build` writes a document's `geometric_tolerances` into its AP242 STEP as semantic
+PMI (`geometry.write_step(..., tolerances=...)`). Each tolerance is attached to the faces its
+`feature` tag names, and its datum references to the faces theirs name. Datums are lettered A,
+B, C in the order their tags first appear, and a diametral zone is written as a diameter. A tag
+the built solid does not have is refused naming the tags it does, and so is a request to put
+PMI in AP214, which has no construct for it.
+
+One kernel detail is load-bearing: OCCT writes every tolerance measure in metres and does not
+convert the value it is handed. A 0.05 mm flatness passed straight through is written as
+0.05 m, a zone a thousand times too wide. The value is converted before it reaches the kernel,
+and a test reads the measure and its unit back out of the file rather than trusting the
+round trip. The written PMI is checked by reading it back through OCCT's GD&T reader, and the
+scheduled STEPcode referee reads such files with 0 errors. What is not written yet is the
+presentation (graphical) PMI, a leader and frame drawn in the 3D view.
