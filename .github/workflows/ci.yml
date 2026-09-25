@@ -192,6 +192,22 @@ jobs:
             # Both passes, the instance read and the reference check, must say it.
             test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$pattern.txt")" -eq 2
           done
+      - name: A STEP file carrying semantic PMI reads with no errors and no warnings
+        run: |
+          set -euo pipefail
+          # The base plate with two declared tolerances, one of them against a datum, so the
+          # referee reads the GD&T entities the writer adds as well as the geometry.
+          {
+            cat examples/base_plate.spec.yaml
+            echo "geometric_tolerances:"
+            echo "  - {characteristic: flatness, tolerance: {magnitude: 0.05, unit: mm}, feature: top}"
+            echo "  - {characteristic: perpendicularity, tolerance: {magnitude: 0.1, unit: mm},"
+            echo "     feature: north, datums: [bottom]}"
+          } > pmi.spec.yaml
+          anvilate build pmi.spec.yaml --output pmi.step --unvalidated
+          grep -q "PERPENDICULARITY_TOLERANCE" pmi.step
+          ./stepcode/build/bin/p21read_sdai_ap242 pmi.step | tee pmi.txt
+          test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' pmi.txt)" -eq 2
       - name: Fetch NIST's AP242 PMI test models
         run: |
           # US government work, usable "without any restrictions"; verified, not committed.
