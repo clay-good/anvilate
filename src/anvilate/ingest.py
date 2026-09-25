@@ -1101,8 +1101,10 @@ def _combined_bound(field: str, from_label: Bound, from_qualifier: Bound) -> Bou
 
 
 # The words that separate environments in one value: "marine, vibration", "marine and
-# vibration", "marine; vibration", "marine / vibration".
-_ENVIRONMENT_SEPARATORS = re.compile(r"\s*(?:,|;|/|\band\b)\s*", re.IGNORECASE)
+# vibration", "marine; vibration", "marine / vibration". No `\s*` either side: an optional
+# run before an alternation that then fails is retried from every position in a long run of
+# spaces, which made a 20,000-space line take two seconds. The parts are stripped instead.
+_ENVIRONMENT_SEPARATORS = re.compile(r",|;|/|\band\b", re.IGNORECASE)
 
 
 def _environments(stated: str) -> tuple[tuple[Environment, ...], str | None]:
@@ -1113,7 +1115,7 @@ def _environments(stated: str) -> tuple[tuple[Environment, ...], str | None]:
     rather than dropping it and keeping the rest: "marine, salt spray" read as just marine
     would quietly lose the half somebody wrote for a reason.
     """
-    words = [part for part in _ENVIRONMENT_SEPARATORS.split(stated.strip()) if part]
+    words = [part.strip() for part in _ENVIRONMENT_SEPARATORS.split(stated) if part.strip()]
     members = {member.value: member for member in Environment}
     named: list[Environment] = []
     for word in words:

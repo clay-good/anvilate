@@ -1187,3 +1187,29 @@ def test_an_environment_decision_names_a_person():
             source=marine.source,
             state=ConfirmationState.CONFIRMED,
         )
+
+
+def test_the_environment_separator_repeats_nothing():
+    """`\\s*` either side of the alternation made a 20,000-space line take two seconds: the
+    optional run was retried from every position in it. The separators are now bare and the
+    parts stripped. Held on the parsed pattern rather than on a timing ratio, which measures
+    the machine as much as the pattern."""
+    import re._parser as parser
+
+    from anvilate.ingest import _ENVIRONMENT_SEPARATORS
+
+    def repeats(sequence) -> list[str]:
+        found = []
+        for op, av in sequence:
+            if str(op) in ("MAX_REPEAT", "MIN_REPEAT"):
+                found.append(str(op))
+            elif str(op) == "SUBPATTERN":
+                found += repeats(av[3])
+            elif str(op) == "BRANCH":
+                for branch in av[1]:
+                    found += repeats(branch)
+        return found
+
+    assert repeats(parser.parse(_ENVIRONMENT_SEPARATORS.pattern)) == []
+    words = extract_requirements("Environment: marine" + " " * 20_000 + ",vibration", document="d")
+    assert [e.environment.value for e in words.environments] == ["marine", "vibration"]
