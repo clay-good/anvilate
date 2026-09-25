@@ -74,6 +74,11 @@ class _TextBlock(NamedTuple):
 # reviewer cannot tell a section that was left empty on purpose from one nobody wrote.
 _NONE_DECLARED = "none declared"
 
+# What the margin summary says when the document holds no checks. A column header over no
+# rows is a table somebody forgot to fill, and the overall NOT EVALUATED below it would have
+# no visible reason.
+_NO_CHECKS = "no checks were screened in this document, so nothing has a margin to summarize"
+
 # How an assumption's origin reads to a reviewer. Spelled out rather than shown as the enum
 # value, because `database_resolved` is a field name and this is a document someone signs.
 _ORIGIN_LABEL = {
@@ -594,6 +599,8 @@ class CalculationReport(StatableModel):
         "— vs — required", which compared one absence with another.
         """
         rows = self._summary_rows()
+        if not rows:
+            return [f"  {_NO_CHECKS}"]
         leads = [_leading_figure(required) for _name, _factor, required, _verdict in rows]
         lead_width = max((len(lead) for lead, _rest in leads), default=0)
         required_cells = [lead.rjust(lead_width) + rest for lead, rest in leads]
@@ -721,11 +728,15 @@ class CalculationReport(StatableModel):
         return out
 
     def _html_summary(self) -> list[str]:
-        out = ["<h2>Margin summary</h2>", '<table class="summary">']
-        out.append(
-            "<thead><tr><th>Check</th><th>Safety factor</th><th>Required</th>"
-            "<th>Result</th></tr></thead>"
-        )
+        out = ["<h2>Margin summary</h2>"]
+        if not self.sections:
+            out.append(f'<p class="none">{_NO_CHECKS}</p>')
+        else:
+            out.append('<table class="summary">')
+            out.append(
+                "<thead><tr><th>Check</th><th>Safety factor</th><th>Required</th>"
+                "<th>Result</th></tr></thead>"
+            )
         governing = self.governing()
         governing_index = self._governing_index()
         for index, (name, factor, required, verdict) in enumerate(self._summary_rows()):
@@ -734,7 +745,8 @@ class CalculationReport(StatableModel):
                 f'<tr{row_class}><td>{escape(name)}</td><td class="num">{escape(factor)}</td>'
                 f'<td class="num">{escape(required)}</td><td>{escape(verdict)}</td></tr>'
             )
-        out.append("</table>")
+        if self.sections:
+            out.append("</table>")
         if governing is not None:
             out.append(f"<p>Governing check: <strong>{escape(governing.name)}</strong></p>")
         not_evaluated, out_of_depth = self.scorecard().completeness()

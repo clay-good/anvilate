@@ -17,7 +17,11 @@
 
 - [ ] 2.1 Reserved space for streaming results; no reflow as checks resolve
 - [ ] 2.2 Layout-stability check in CI over a reference corpus
-- [ ] 2.3 Designed empty, waiting, and failed states for every pane
+- [ ] 2.3 Designed empty, waiting, and failed states for every pane — the report's empty state
+      is designed: every block states `none declared`, and since 2026-09-25 a report with no
+      checks says so in its margin summary rather than drawing a header over no rows. Its
+      corpus case is in tests/test_renderings.py. The waiting and failed states belong to the
+      workbench's panes, which are unbuilt
 
 ## 3. Vocabulary and colour
 
@@ -59,7 +63,7 @@
 ## 7. Measurement
 
 - [x] 7.1 Visual-regression corpus spanning every pane state and both themes — for the
-      surfaces that exist, as 4.2 is: `tests/test_renderings.py` renders eight reports as
+      surfaces that exist, as 4.2 is: `tests/test_renderings.py` renders nine reports, an empty one among them, as
       text, HTML and PDF. Between them they reach every status, the fallback inputs table, a
       repair line, an uncertainty annotation, a margin ledger, a budget, failure-mode
       coverage and both unit systems,

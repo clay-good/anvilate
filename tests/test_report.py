@@ -2433,3 +2433,16 @@ def test_the_printed_margin_summary_aligns_its_figures_on_the_decimal():
     required_points = {row.index(".", row.index(_figures(row)[1])) for row in rows}
     assert len(factor_points) == 1, rows
     assert len(required_points) == 1, rows
+
+
+def test_an_empty_report_says_it_holds_no_checks_rather_than_drawing_an_empty_table():
+    """presentation-craft: a designed empty state. The grid's header over no rows, beside an
+    overall NOT EVALUATED, left the reader to guess why."""
+    report = CalculationReport(title="Nothing screened")
+    text = report.to_text()
+    summary = text[text.index("Margin summary") : text.index("Performance budgets")]
+    assert "no checks were screened in this document" in summary
+    assert "Safety factor" not in summary
+    html = report.to_html()
+    assert '<table class="summary">' not in html
+    assert '<p class="none">no checks were screened in this document' in html

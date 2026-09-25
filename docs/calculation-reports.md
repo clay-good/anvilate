@@ -346,7 +346,7 @@ that will be reissued and compared. Use the browser when the math has to look ty
 
 ## A rendering change is a reviewed change
 
-Eight reference reports are rendered as text, HTML and PDF, and each rendering is compared
+Nine reference reports are rendered as text, HTML and PDF, and each rendering is compared
 with a copy committed under `tests/renderings/`. Between them they reach every status and
 every optional block. A change to anything a reviewer would see fails the suite with the
 difference shown. That includes a reworded label, a changed glyph and a new page break. If

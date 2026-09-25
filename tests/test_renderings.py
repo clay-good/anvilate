@@ -100,6 +100,7 @@ def _from_test_report(name: str) -> Callable[[], CalculationReport]:
 CASES: dict[str, Callable[[], CalculationReport]] = {
     "lifting_lug_si": _lifting_lug,
     "lifting_lug_us": lambda: _lifting_lug(UnitSystem.US),
+    "empty": lambda: CalculationReport(title="Nothing screened", date="2026-09-25"),
     "every_status": _every_status,
     "failure_modes": _failure_modes,
     "fallback_inputs": _from_test_report("_report"),

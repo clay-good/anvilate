@@ -1,0 +1,29 @@
+Nothing screened
+================
+Date: 2026-09-25
+
+Standards relied upon:
+  - none declared
+
+Assumptions:
+  - none declared
+
+Margin summary
+--------------
+  no checks were screened in this document, so nothing has a margin to summarize
+  not evaluated: 0, out of declared depth: 0
+  overall: NOT EVALUATED
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  no coverage report was supplied with this document
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.
