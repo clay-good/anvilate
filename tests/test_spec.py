@@ -2051,3 +2051,42 @@ def test_a_document_that_is_not_a_mapping_says_what_it_is_and_what_to_write(docu
         "write a mapping of fields, starting with the required ones: `name`, `description`, "
         "`units`, `material`, `manufacturing`, `acceptance`",
     )
+
+
+@pytest.mark.parametrize(
+    ("line", "written", "remedy"),
+    [
+        ("material: ASTM-A36", "ASTM-A36", "write `material` as `{ref: ASTM-A36}`"),
+        (
+            "acceptance: {tiers: T1_analytical}",
+            "T1_analytical",
+            "write `acceptance.tiers` as a list, `[T1_analytical]`",
+        ),
+        (
+            "units: {value: si, origin: user_stated}",
+            "si",
+            "write `units.value` as `SI` rather than 'si'",
+        ),
+        (
+            "manufacturing: {process: CNC milling}",
+            "CNC milling",
+            "write `manufacturing.process` as `cnc_milling` rather than 'CNC milling'",
+        ),
+        (
+            "acceptance: {tiers: [T1]}",
+            "T1",
+            "write `acceptance.tiers.0` as `T1_analytical` rather than 'T1'",
+        ),
+    ],
+)
+def test_an_ordinary_mistake_is_told_a_value_that_validates(line, written, remedy):
+    """Five first attempts at a document, each of which got the generic "correct the input"
+    sentence, and one of which was told about `MaterialRef`, a Python class. Each remedy's
+    value, pasted back where the mistake was, validates."""
+    key = line.split(":", 1)[0]
+    others = [kept for kept in _required_lines() if not kept.startswith(f"{key}:")]
+    failure = _refusal("\n".join([*others, "name: bracket-01", line]))
+    assert failure.remedies == (remedy,)
+    value = re.search(r" as (?:a list, )?`([^`]*)`", remedy).group(1)
+    head, tail = line.rsplit(written, 1)
+    load_spec_yaml("\n".join([*others, "name: bracket-01", head + value + tail]))

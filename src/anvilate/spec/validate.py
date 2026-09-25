@@ -76,6 +76,40 @@ def _siblings(location: tuple[Any, ...], root: type[BaseModel]) -> list[str]:
     return list(model.model_fields) if model is not None else []
 
 
+def _model_at(location: tuple[Any, ...], root: type[BaseModel]) -> type[BaseModel] | None:
+    """The pydantic model the field at ``location`` holds, or ``None`` off the models."""
+    model: type[BaseModel] | None = root
+    for part in location:
+        if isinstance(part, int):
+            continue
+        field = model.model_fields.get(part) if model is not None else None
+        model = _model_in(field.annotation) if field is not None else None
+        if model is None:
+            return None
+    return model
+
+
+def _normalised(text: str) -> str:
+    return re.sub(r"[^0-9a-z]+", "_", text.lower()).strip("_")
+
+
+def _nearest_option(written: str, expected: str) -> str | None:
+    """The allowed value ``written`` was reaching for: `si` for `SI`, `CNC milling` for
+    `cnc_milling`, `T1` for `T1_analytical`. ``expected`` is pydantic's list of them."""
+    options = re.findall(r"'([^']*)'", expected)
+    wanted = _normalised(written)
+    if not wanted:
+        return None
+    same = [option for option in options if _normalised(option) == wanted]
+    if same:
+        return same[0]
+    starts = [option for option in options if _normalised(option).startswith(wanted)]
+    if len(starts) == 1:
+        return starts[0]
+    near = difflib.get_close_matches(wanted, [_normalised(o) for o in options], n=1)
+    return next((o for o in options if near and _normalised(o) == near[0]), None)
+
+
 def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str | None:
     """What to do about one pydantic validation failure against ``root``, when its kind says.
 
@@ -84,7 +118,9 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
     quantity written as a string, such as `load: 60 kN`, is shown in the form the document
     needs. It is the likeliest mistake a person makes in one, and pydantic answers it with
     "Input should be a valid dictionary or instance of Quantity". A provenanced value written
-    bare, such as `min_safety_factor: 1.5`, is shown with its origin. None of these remedies
+    bare, such as `min_safety_factor: 1.5`, is shown with its origin, a bare value where a
+    one-field mapping or a list belongs is shown wrapped, and a near-miss of an allowed value
+    (`si`, `CNC milling`, `T1`) is told the value it nearly named. None of these remedies
     holds a semicolon, because MCP joins a refusal's issues with "; ".
     """
     kind = error.get("type")
@@ -122,11 +158,25 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
         try:
             quantity = Quantity.parse(written)
         except (ValueError, TypeError):
-            return None
-        return (
-            f"write `{path}` as `{{magnitude: {quantity.magnitude:g}, unit: {quantity.unit}}}` "
-            f"rather than the string {written!r}"
-        )
+            quantity = None
+        if quantity is not None:
+            return (
+                f"write `{path}` as `{{magnitude: {quantity.magnitude:g}, unit: "
+                f"{quantity.unit}}}` rather than the string {written!r}"
+            )
+        # `material: ASTM-A36` for `material: {ref: ASTM-A36}`: a value written bare where a
+        # mapping of one required field belongs. pydantic's answer named the Python class.
+        model = _model_at(location, root)
+        required = [n for n, f in model.model_fields.items() if f.is_required()] if model else []
+        if len(required) == 1:
+            return f"write `{path}` as `{{{required[0]}: {written}}}`"
+        return None
+    if kind == "list_type" and isinstance(written, str | int | float) and location:
+        return f"write `{path}` as a list, `[{written}]`"
+    if kind in ("enum", "literal_error") and isinstance(written, str) and location:
+        option = _nearest_option(written, str((error.get("ctx") or {}).get("expected", "")))
+        if option is not None:
+            return f"write `{path}` as `{option}` rather than {written!r}"
     return None
 
 

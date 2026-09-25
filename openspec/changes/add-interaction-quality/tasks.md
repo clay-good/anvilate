@@ -38,7 +38,9 @@
       required field gets a line of YAML that validates, and a test builds a Design Spec
       from those lines. An unknown field gets the nearest real field name, and a provenanced
       value written bare (`min_safety_factor: 1.5`) gets the `{value, origin}` line, which a
-      test pastes back in and validates. The CLI's JSON
+      test pastes back in and validates. So do a bare one-field mapping (`material: ASTM-A36`),
+      a scalar where a list belongs, and a near-miss of an allowed value (`si`, `CNC milling`,
+      `T1`), in documents and element parameters alike. The CLI's JSON
       refusal carries those remedies in `remedy` instead of its generic sentence
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
