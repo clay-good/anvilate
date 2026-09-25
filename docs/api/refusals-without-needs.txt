@@ -51,3 +51,4 @@ loads.py:combination_scorecard | name | an answer at one site: every classified 
 mcp.py:_cancelled_fea_result | T3 FEA | an outcome, not a gap: the task was cancelled, and running it again is the remedy rather than declaring anything
 scorecard.py:from_safety_factor | name | three corrections: a NaN requirement, band or factor is an input to fix, not a value nobody supplied; the fourth site passes its caller's `needs=` through
 standards/effectivity.py:design_basis_scorecard | name | a correction at one site: a pinned standard that no citation names is a pin to remove or a citation to add, and the refusal names which; the other two sites state their needs
+packs/structural.py:_shear_entry | {member.name} shear | a capability gap: the peak shear of a couple on a propped (fixed-pinned) member, which is indeterminate and has no load to bound it by

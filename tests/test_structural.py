@@ -871,24 +871,53 @@ def test_shear_screen_not_evaluated_for_a_hand_built_section():
     assert shear.status is CheckStatus.NOT_EVALUATED
 
 
-def test_shear_screen_skips_untabled_cases():
-    # Off-default positions and couples are not tabled: no shear entry rather
-    # than a wrong one.
-    offset = BeamMember(
-        name="beam",
-        section=_section(),
-        length=_q("500 mm"),
-        support=Support.SIMPLY_SUPPORTED,
-        load=_q("100 N"),
-        load_type=LoadType.POINT,
-        material="ASTM-A36",
-        load_position=_q("125 mm"),
-    )
-    card = screen_beam_member(offset, required_safety_factor=1.5)
-    assert not any("shear" in e.name for e in card.entries)
-    couple = _member(Support.CANTILEVER, LoadType.MOMENT, "50 N*m")
-    card = screen_beam_member(couple, required_safety_factor=1.5)
-    assert not any("shear" in e.name for e in card.entries)
+def test_an_off_default_beam_gets_a_shear_entry_from_statics_or_a_stated_bound():
+    """Off-default positions, pairs and couples used to get no shear entry at all, which a
+    card reads as a member nobody needed to check in shear. Statics settles the simple span
+    and the cantilever; an indeterminate member is screened on a bound, and says so."""
+
+    def shear(support: Support, load: str, load_type: LoadType, **extra):  # type: ignore[no-untyped-def]
+        member = BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=support,
+            load=_q(load),
+            load_type=load_type,
+            material="ASTM-A36",
+            **extra,
+        )
+        card = screen_beam_member(member, required_safety_factor=1.5)
+        return next((e for e in card.entries if e.name == "beam shear"), None)
+
+    def peak(entry) -> float:  # type: ignore[no-untyped-def]
+        v = next(i for i in entry.derivation.inputs if i.symbol == "V")
+        return v.value.to("N").magnitude
+
+    # 100 N at 125 mm of a 500 mm simple span: the near reaction is 100 x 375/500 = 75 N.
+    offset = shear(Support.SIMPLY_SUPPORTED, "100 N", LoadType.POINT, load_position=_q("125 mm"))
+    assert peak(offset) == pytest.approx(75.0)
+    assert "bound" not in offset.detail
+    # A pair of 100 N loads: each reaction carries one of them.
+    pair = shear(Support.SIMPLY_SUPPORTED, "100 N", LoadType.POINT, pair_offset=_q("100 mm"))
+    assert peak(pair) == pytest.approx(100.0)
+    # A 50 N·m couple on a 500 mm simple span: reactions ±M/L = 100 N.
+    couple = shear(Support.SIMPLY_SUPPORTED, "50 N*m", LoadType.MOMENT)
+    assert peak(couple) == pytest.approx(100.0)
+    # A couple on a cantilever puts no shear in it, so there is no check to report.
+    assert shear(Support.CANTILEVER, "50 N*m", LoadType.MOMENT) is None
+    # Indeterminate: the whole load bounds the shear, and the entry says it is a bound.
+    fixed = shear(Support.FIXED_FIXED, "100 N", LoadType.POINT, load_position=_q("125 mm"))
+    assert peak(fixed) == pytest.approx(100.0)
+    assert "bound" in fixed.detail
+    # A couple on a propped member has no such bound: said, not dropped.
+    propped = shear(Support.FIXED_PINNED, "50 N*m", LoadType.MOMENT)
+    assert propped.status is CheckStatus.NOT_EVALUATED
+    assert "not computed" in propped.detail
+    # An out-of-range pair is refused by its own name, not the analysis function's
+    # `load_offset`, which the document does not have.
+    with pytest.raises(ValidationError, match=r"pair_offset must lie within the half-span"):
+        shear(Support.SIMPLY_SUPPORTED, "100 N", LoadType.POINT, pair_offset=_q("300 mm"))
 
 
 def test_moment_load_dispatches_on_the_cantilever_member():

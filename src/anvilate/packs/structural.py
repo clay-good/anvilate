@@ -331,8 +331,8 @@ _OFFSET_MOMENT_CHECKS = {
 }
 # Peak transverse shear V as a multiple of the load (F for a point load, w*L
 # for a distributed/triangular one), from the support reactions of the simple
-# full-span cases. Off-default positions, patches, pairs, and couples are not
-# tabled — those members get no shear entry rather than a wrong one.
+# full-span cases. Off-default positions, patches and pairs are computed from statics
+# where it settles them (`_off_default_peak_shear`); the rest say they were not.
 _PEAK_SHEAR_FACTORS = {
     (Support.CANTILEVER, LoadType.POINT): 1.0,
     (Support.SIMPLY_SUPPORTED, LoadType.POINT): 0.5,
@@ -486,6 +486,12 @@ class BeamMember(GuardedInputs):
                     "pair_offset and load_position are mutually exclusive — a pair "
                     "sits at pair_offset from each support"
                 )
+            half = self.length.to("mm").magnitude / 2
+            if not 0 < self.pair_offset.to("mm").magnitude <= half:
+                raise ValueError(
+                    f"pair_offset must lie within the half-span (0, {half:g} mm], since each "
+                    f"load sits that far from its own support; got {self.pair_offset}"
+                )
         if self.loaded_length is not None:
             if not self.loaded_length.has_dimension("[length]"):
                 raise ValueError(
@@ -573,10 +579,10 @@ def screen_beam_member(
     or the member's own ``deflection_limit`` when the argument is omitted. A
     member declaring a ``mass_per_length`` also gets its distributed-mass
     fundamental frequency screened against its ``min_frequency`` floor.
-    Simple full-span members whose section records a shear form factor also
-    get a transverse-shear entry (τ = k·V/A vs 0.577·Fy); a hand-built
-    section surfaces NOT_EVALUATED there, and off-default positions, patches,
-    pairs, and couples get no shear entry rather than a wrong one.
+    Members whose section records a shear form factor also get a transverse-shear
+    entry (τ = k·V/A vs 0.577·Fy) wherever statics gives the peak shear alone; a
+    hand-built section, a couple, or an indeterminate member with an off-default load
+    gets a NOT_EVALUATED shear entry saying so, rather than none.
     ``materials`` defaults to the bundled database; an unknown material id raises
     its lookup error.
     """
@@ -727,15 +733,71 @@ def screen_beam_member(
     )
 
 
+def _off_default_peak_shear(member) -> tuple[float, bool] | None:
+    """The peak transverse shear, in N, of an off-default arrangement, and whether it is a
+    bound rather than the value.
+
+    Where statics settles the reactions alone it is the larger one, since shear is constant
+    or falls away from the supports: a point load at a from one end of a simple span,
+    P·max(a, L − a)/L; a pair at the same offset from each end, P; a point load short of a
+    cantilever's tip, P; a patch of length c against one end of a simple span,
+    w·c·(2L − c)/(2L), and centred, w·c/2; a patch on a cantilever, w·c; a triangle peaking
+    at a cantilever's tip, w·L/2; a couple M anywhere on a simple span, M/L.
+
+    A fixed-fixed or fixed-pinned member is indeterminate. Under a load of one sign, neither
+    of its supports reacts more than the whole load W, so |V| ≤ W bounds the shear
+    everywhere, and the entry says it is a bound. A couple on one has no such bound, and
+    returns None.
+    """
+    length = member.length.to("mm").magnitude
+    indeterminate = member.support in (Support.FIXED_FIXED, Support.FIXED_PINNED)
+    if member.load_type is LoadType.MOMENT:
+        if member.support is Support.SIMPLY_SUPPORTED:
+            return abs(member.load.to("N*mm").magnitude) / length, False
+        return None
+    if member.load_type is LoadType.POINT:
+        force = abs(member.load.to("N").magnitude)
+        if indeterminate:
+            return force, True
+        if member.support is Support.SIMPLY_SUPPORTED:
+            if member.pair_offset is not None:
+                return force, False
+            if member.load_position is not None:
+                a = member.load_position.to("mm").magnitude
+                return force * max(a, length - a) / length, False
+        if member.support is Support.CANTILEVER and member.load_position is not None:
+            return force, False
+        return None
+    w = abs(member.load.to("N/mm").magnitude)
+    if member.load_type is LoadType.DISTRIBUTED and member.loaded_length is not None:
+        c = member.loaded_length.to("mm").magnitude
+        if indeterminate:
+            return w * c, True
+        if member.support is Support.CANTILEVER:
+            return w * c, False
+        if member.support is Support.SIMPLY_SUPPORTED:
+            if member.patch_centered:
+                return w * c / 2, False
+            return w * c * (2 * length - c) / (2 * length), False
+        return None
+    if member.load_type is LoadType.TRIANGULAR and member.triangle_mirrored:
+        if indeterminate:
+            return w * length / 2, True
+        if member.support is Support.CANTILEVER:
+            return w * length / 2, False
+    return None
+
+
 def _shear_entry(
     member, yield_allowable: DesignAllowable, required_safety_factor: float
 ) -> ScorecardEntry | None:
-    """The transverse-shear entry for a simple full-span member, or None.
+    """The transverse-shear entry for every beam member.
 
-    Only the tabled (support, load_type) cases at their default positions get
-    a shear entry — an off-default member gets none rather than a wrong one.
-    A tabled member whose section records no shear form factor (hand-built)
-    surfaces NOT_EVALUATED, never a silent pass.
+    The tabled (support, load_type) cases at their default positions and the off-default
+    arrangements statics settles alone (:func:`_off_default_peak_shear`) are screened. Any
+    other member gets an entry saying its shear was not computed, rather than no entry,
+    and a section with no shear form factor (hand-built) is NOT_EVALUATED naming it. A
+    couple on a cantilever gets none, because it puts no shear in the member.
     """
     off_default = (
         member.load_position is not None
@@ -760,8 +822,28 @@ def _shear_entry(
     else:
         factor = _PEAK_SHEAR_FACTORS.get((member.support, member.load_type))
         shear_length = member.length
-    if off_default or factor is None:
-        return None
+    if member.load_type is LoadType.MOMENT:
+        if member.support is Support.CANTILEVER:
+            # A couple on a cantilever bends it uniformly and puts no transverse shear in it
+            # anywhere, so there is no shear check to report, not one that could not run.
+            return None
+        off_default = True
+    off_default_shear = _off_default_peak_shear(member) if off_default else None
+    if (off_default and off_default_shear is None) or (not off_default and factor is None):
+        # Named, not dropped: a card with no shear entry reads as a member nobody needed to
+        # check in shear, and one with a pair of loads near a support is exactly one that
+        # does.
+        return ScorecardEntry(
+            name=f"{member.name} shear",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the peak shear of a "
+                f"{spoken(member.support.value, joined_by='-')} member under this "
+                f"{member.load_type.value} load arrangement is not computed here; its "
+                "bending and deflection entries are"
+            ),
+            reference=_CLAUSE_BEAM_SHEAR,
+        )
     if member.section.shear_form_factor is None:
         return ScorecardEntry(
             name=f"{member.name} shear",
@@ -770,7 +852,9 @@ def _shear_entry(
             reference=_CLAUSE_BEAM_SHEAR,
             needs=(_NEEDS_A_SHEAR_FORM_FACTOR,),
         )
-    if member.load_type is LoadType.POINT:
+    if off_default_shear is not None:
+        peak_shear = Quantity(magnitude=off_default_shear[0], unit="N")
+    elif member.load_type is LoadType.POINT:
         peak_shear = Quantity(magnitude=factor * member.load.to("N").magnitude, unit="N")
     else:
         peak_shear = Quantity(
@@ -809,7 +893,12 @@ def _shear_entry(
             ),
             SymbolValue(
                 symbol="V",
-                description="peak transverse shear force in the span",
+                description=(
+                    "an upper bound on the peak transverse shear: the whole load, which "
+                    "neither support of an indeterminate member can exceed"
+                    if off_default_shear is not None and off_default_shear[1]
+                    else "peak transverse shear force in the span"
+                ),
                 value=peak_shear,
                 unit="kN",
             ),
@@ -818,12 +907,22 @@ def _shear_entry(
         result=SymbolValue(symbol="τ", description="peak transverse shear stress", value=shear),
         citation=_CLAUSE_BEAM_SHEAR,
     )
-    return strength_scorecard(
+    entry = strength_scorecard(
         f"{member.name} shear",
         stress=shear,
         allowable=shear_yield,
         required=required_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_BEAM_SHEAR, "derivation": derivation})
+    if off_default_shear is not None and off_default_shear[1]:
+        entry = entry.model_copy(
+            update={
+                "detail": (
+                    f"{entry.detail} (on the whole load as the shear: the member is "
+                    "indeterminate and its reactions are not computed, so this is a bound)"
+                )
+            }
+        )
+    return entry
 
 
 class ColumnMember(GuardedInputs):

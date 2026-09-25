@@ -9,7 +9,8 @@ patch's R₁²/2w = 6.75 kN·m) and FAILS the beam at SF 1.30. Spreading the pat
 way: it reports SF 2.61 where the true patch gives 2.32 — an 11% margin that
 isn't there, because half the span carries the full intensity. Declaring the
 actual ``loaded_length`` on the member gets the AISC Table 3-23 case 24 answer:
-the beam PASSES at SF 2.32, with no borrowed margin.
+the beam PASSES at SF 2.32, with no borrowed margin. Its shear is screened on the
+near reaction w·c·(2L − c)/(2L) = 9.0 kN and passes at SF 19.23.
 
 Run it directly (``python examples/pallet_bay_floor_beam.py``);
 :func:`screen_pallet_bay` is also exercised in the test suite.
