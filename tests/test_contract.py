@@ -5577,12 +5577,9 @@ def test_every_enum_that_writes_its_own_rendering_says_something_and_says_it_onc
 # in or be named below with the reason it is not what it looks like.
 
 
-_NOT_A_COLLECTION_OF_ITS_OWN = {
-    "anvilate.packs._guarded.GuardedInputs": (
-        "a base class for pack inputs, and `signed_fields` is a declaration ABOUT the "
-        "subclass's other fields — the object is never the tuple"
-    ),
-}
+# `GuardedInputs` was the one entry: its only field was `signed_fields`. That is a class
+# attribute now, so the base class has no field and the census no longer names it.
+_NOT_A_COLLECTION_OF_ITS_OWN: dict[str, str] = {}
 
 
 def _single_collection_models() -> dict[str, type]:

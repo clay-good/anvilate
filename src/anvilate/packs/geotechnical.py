@@ -85,7 +85,7 @@ class ShallowFooting(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    signed_fields: tuple[str, ...] = ("applied_load",)
+    signed_fields = ("applied_load",)
 
     width: Quantity
     length: Quantity
@@ -245,7 +245,7 @@ class RetainingWall(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    signed_fields: tuple[str, ...] = ("vertical_load",)
+    signed_fields = ("vertical_load",)
 
     retained_height: Quantity
     backfill_unit_weight: Quantity
@@ -531,7 +531,7 @@ class DrivenPile(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    signed_fields: tuple[str, ...] = ("applied_load",)
+    signed_fields = ("applied_load",)
 
     diameter: Quantity
     length: Quantity

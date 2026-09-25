@@ -463,30 +463,41 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # 1.2.0 for the three members that take a section: `section` also accepts the designation
     # of a rolled profile the library carries ("IPE 200"). Element schemas are now published
     # as what a document may write; for every other element that is the same schema.
-    "base_plate": "1.1.0",
-    "beam_column_member": "1.2.0",
-    "beam_member": "1.2.0",
-    "bolted_connection": "1.1.0",
-    "column_member": "1.2.0",
-    "concrete_bearing": "1.1.0",
-    "cover_plate": "1.1.0",
-    "driven_pile": "1.1.0",
-    "feeder": "1.1.0",
-    "gusset_plate": "1.1.0",
-    "infinite_slope": "1.1.0",
-    "lifting_lug": "1.1.0",
-    "lighting_installation": "1.1.0",
-    "masonry_wall": "1.1.0",
-    "pipe_run": "1.1.0",
-    "pump_duty": "1.1.0",
-    "retaining_wall": "1.1.0",
-    "shallow_footing": "1.1.0",
-    "shear_plate": "1.1.0",
+    #
+    # And every guarded element moved one minor version on 2026-09-25, for the reason 1.1.0
+    # did: a property left the contract, so the schema is stricter. `signed_fields` was a
+    # model field, published in each schema as something a document could write, and a
+    # document that wrote it was accepted and then ignored — the guard read the class's
+    # own value. It is a class attribute now, and a document naming it is refused.
+    "base_plate": "1.2.0",
+    "beam_column_member": "1.3.0",
+    "beam_member": "1.3.0",
+    "bolted_connection": "1.2.0",
+    "column_member": "1.3.0",
+    "concrete_bearing": "1.2.0",
+    "cover_plate": "1.2.0",
+    "driven_pile": "1.2.0",
+    "feeder": "1.2.0",
+    "gusset_plate": "1.2.0",
+    "helical_compression_spring": "1.1.0",
+    "infinite_slope": "1.2.0",
+    "lifting_lug": "1.2.0",
+    "lighting_installation": "1.2.0",
+    "masonry_wall": "1.2.0",
+    "pipe_run": "1.2.0",
+    "pump_duty": "1.2.0",
+    "retaining_wall": "1.2.0",
+    "rolling_bearing": "1.1.0",
+    "shaft_key": "1.1.0",
+    "shallow_footing": "1.2.0",
+    "shear_plate": "1.2.0",
+    "spur_gear_mesh": "1.1.0",
     "structure": "1.1.0",
-    "tension_member": "1.1.0",
-    "ventilation_zone": "1.1.0",
-    "welded_connection": "1.1.0",
-    "worker_noise_exposure": "1.1.0",
+    "tension_member": "1.2.0",
+    "transmission_shaft": "1.1.0",
+    "ventilation_zone": "1.2.0",
+    "welded_connection": "1.2.0",
+    "worker_noise_exposure": "1.2.0",
 }
 
 

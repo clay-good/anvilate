@@ -101,3 +101,20 @@ def test_the_sweep_finds_the_crash_a_missing_declaration_lets_through(monkeypatc
         crash.startswith("lifting_lug.thickness.magnitude = 0 -> ZeroDivisionError")
         for crash in crashes
     ), crashes
+
+
+def test_a_document_cannot_declare_its_own_signed_fields():
+    """`signed_fields` was a model field: a document could write `signed_fields: [width]`,
+    have it accepted and echoed in every dump, while the guard ignored it. It is a class
+    attribute now, so a document naming it is refused and no element schema publishes it."""
+    import pytest
+
+    from anvilate.contracts import element_json_schemas
+    from anvilate.packs.structural import LiftingLug
+
+    document = {**_documents()["lifting_lug"], "signed_fields": ["width"]}
+    with pytest.raises(ValidationError, match="signed_fields"):
+        LiftingLug.model_validate(document)
+    assert LiftingLug.signed_fields == ("load",)
+    schemas = element_json_schemas()
+    assert not [tag for tag, schema in schemas.items() if "signed_fields" in str(schema)]

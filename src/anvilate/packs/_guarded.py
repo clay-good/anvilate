@@ -82,8 +82,12 @@ class GuardedInputs(RevalidatedModel):
     """
 
     #: Fields whose sign carries meaning (a hogging moment, a position measured either
-    #: way from a datum). Checked for finiteness, not for sign.
-    signed_fields: tuple[str, ...] = ()
+    #: way from a datum). Checked for finiteness, not for sign. A class attribute: it was a
+    #: model field, so a document could write `signed_fields: [width]` and have it accepted,
+    #: stored and echoed back in every dump, while the guard read the class's own value and
+    #: refused the negative width anyway. That is a declaration nothing answers, and it was
+    #: published as a property in every element's schema.
+    signed_fields: ClassVar[tuple[str, ...]] = ()
 
     #: Fields that must be greater than zero, not merely not negative: a dimension or an
     #: allowable the screen divides by. Zero passes the sign check, and a zero plate
@@ -96,10 +100,8 @@ class GuardedInputs(RevalidatedModel):
 
     @model_validator(mode="after")
     def _quantity_magnitudes_are_sane(self) -> GuardedInputs:
-        signed = set(type(self).model_fields["signed_fields"].default or ())
+        signed = set(type(self).signed_fields)
         for name in type(self).model_fields:
-            if name == "signed_fields":
-                continue
             value = getattr(self, name, None)
             if (
                 name in type(self).positive_fields
