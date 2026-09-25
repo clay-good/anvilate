@@ -23,7 +23,7 @@ from math import erf, exp, log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
-from ..scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, Need, RepairHint, ScorecardEntry, ValueSource
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.temperature import temperature_difference_kelvin
 from ._flags import require_flag
@@ -1193,6 +1193,23 @@ def fin_thermal_resistance(
     return Quantity(magnitude=1.0 / (fin_efficiency * h * a_f), unit="K/W")
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_POWER = Need(
+    declaration="power",
+    takes="the power the device dissipates",
+    dimension="[power]",
+    units=("W",),
+    sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT, ValueSource.USER),
+)
+_NEEDS_A_THERMAL_PATH = Need(
+    declaration="thermal_resistance",
+    takes="the junction-to-ambient thermal resistance of the heat path",
+    dimension="[temperature] / [power]",
+    units=("K/W",),
+    sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT),
+)
+
+
 def junction_temperature_scorecard(
     name: str,
     *,
@@ -1233,6 +1250,7 @@ def junction_temperature_scorecard(
             "there is no thermal demand to screen; pass the dissipated `power` and the path's "
             "`thermal_resistance`"
         ),
+        needs=(_NEEDS_A_POWER, _NEEDS_A_THERMAL_PATH),
     )
     # One fixed place is a wide band to hide a shortfall in: an 85.04 K rise against an
     # 85 K allowable printed "junction rise 85.0 K vs 85.0 K allowable" on a FAIL.

@@ -50,5 +50,5 @@ keepouts.py:screen_keepouts | keepout intrusion | a summary: none of the declare
 loads.py:combination_scorecard | name | an answer at one site: every classified case sums to zero demand under every combination, so there is nothing to screen; the other site states its need
 mcp.py:_cancelled_fea_result | T3 FEA | an outcome, not a gap: the task was cancelled, and running it again is the remedy rather than declaring anything
 packs/structural.py:screen_beam_column | {member.name} interaction | a capability gap: a net tension with flexure takes AISC 360 section H1.2, which this screen does not compute
-scorecard.py:from_safety_factor | name | delegated at one site and a correction at three: a missing factor's reason is the caller's `unavailable=` text, which a conftest gate holds every caller to, and a NaN requirement, band or factor is an input to fix rather than a value nobody supplied
+scorecard.py:from_safety_factor | name | three corrections: a NaN requirement, band or factor is an input to fix, not a value nobody supplied; the fourth site passes its caller's `needs=` through
 standards/effectivity.py:design_basis_scorecard | name | a correction at one site: a pinned standard that no citation names is a pin to remove or a citation to add, and the refusal names which; the other two sites state their needs

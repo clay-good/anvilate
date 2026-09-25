@@ -1034,6 +1034,30 @@ class BoltedConnection(GuardedInputs):
         return self
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_LOAD = Need(
+    declaration="element_params.load",
+    takes="the load the connection or plate transfers",
+    dimension="[force]",
+    units=("kN", "kip"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_AN_AXIAL_LOAD = Need(
+    declaration="element_params.axial_load",
+    takes="the axial load the member carries",
+    dimension="[force]",
+    units=("kN", "kip"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_MOMENT = Need(
+    declaration="element_params.moment",
+    takes="the bending moment the member carries",
+    dimension="[force] * [length]",
+    units=("kN*m", "kip*ft"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
 def screen_bolted_connection(
     connection: BoltedConnection,
     *,
@@ -1210,6 +1234,7 @@ def screen_bolted_connection(
                     "the connection's load is zero, so there is no demand to screen; declare the "
                     "`load` the joint transfers"
                 ),
+                needs=(_NEEDS_A_LOAD,),
             ).model_copy(update={"reference": _CLAUSE_BEARING, "derivation": tearout_derivation})
         )
     if connection.tension is not None:
@@ -1948,6 +1973,7 @@ def screen_gusset_plate(
             "the gusset's load is zero, so there is no tear-out demand to screen; declare the "
             "`load` it transfers"
         ),
+        needs=(_NEEDS_A_LOAD,),
     ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # Block shear adds two areas, so neither is "the" lever on its own — the hint
@@ -2313,6 +2339,7 @@ def screen_beam_column(
                 "the member carries no axial_load and no moment, so the §H1.1 ratio has nothing in"
                 " it; declare the `axial_load` and `moment` it carries"
             ),
+            needs=(_NEEDS_AN_AXIAL_LOAD, _NEEDS_A_MOMENT),
         ).model_copy(
             update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation}
         )
@@ -2339,6 +2366,7 @@ def screen_beam_column(
                 "in tension with `screen_tension_member`"
             )
         ),
+        needs=(_NEEDS_AN_AXIAL_LOAD,) if pr == 0 else (),
     ).model_copy(
         update={
             "reference": _CLAUSE_COMPRESSION,
@@ -2475,6 +2503,7 @@ def screen_concrete_bearing(
             "the bearing load is zero, so there is no pressure to screen; declare the `load` the "
             "plate delivers"
         ),
+        needs=(_NEEDS_A_LOAD,),
     ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI, "derivation": derivation})
     if entry.status is CheckStatus.FAIL and bearing_hint is not None:
         entry = entry.model_copy(update={"repair_hint": bearing_hint})
@@ -2576,6 +2605,7 @@ def screen_shear_plate(
                             "the shear plate's load is zero, so there is no shear to screen; "
                             "declare the `load` it transfers"
                         ),
+                        needs=(_NEEDS_A_LOAD,),
                     ).model_copy(
                         update={
                             "reference": _CLAUSE_SHEAR,
@@ -2612,6 +2642,7 @@ def screen_shear_plate(
                             "the shear plate's load is zero, so there is no shear to screen; "
                             "declare the `load` it transfers"
                         ),
+                        needs=(_NEEDS_A_LOAD,),
                     ).model_copy(
                         update={
                             "reference": _CLAUSE_SHEAR,

@@ -185,7 +185,7 @@ _SHAFT_NEEDS = {
 
 
 def _not_evaluated(
-    name: str, detail: str, reference: str, *, missing: tuple[str, ...]
+    name: str, detail: str, reference: str, *, needs: tuple[Need, ...]
 ) -> ScorecardEntry:
     """One check the caller did not supply the inputs for, said out loud."""
     return ScorecardEntry(
@@ -193,8 +193,25 @@ def _not_evaluated(
         status=CheckStatus.NOT_EVALUATED,
         detail=detail,
         reference=reference,
-        needs=tuple(_SHAFT_NEEDS[field] for field in missing),
+        needs=needs,
     )
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_BENDING_MOMENT = Need(
+    declaration="element_params.bending_moment",
+    takes="the bending moment the shaft carries",
+    dimension="[force] * [length]",
+    units=("N*m", "lbf*ft"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_TORQUE = Need(
+    declaration="element_params.torque",
+    takes="the torque the shaft transmits",
+    dimension="[force] * [length]",
+    units=("N*m", "lbf*ft"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
 
 
 def _static_entry(shaft: TransmissionShaft, required_safety_factor: float) -> ScorecardEntry:
@@ -240,6 +257,7 @@ def _static_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sc
             "the shaft declares no bending_moment and no torque, so there is no stress to screen; "
             "declare the `bending_moment` and `torque` it carries"
         ),
+        needs=(_NEEDS_A_BENDING_MOMENT, _NEEDS_A_TORQUE),
     ).model_copy(update={"reference": _STATIC_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # The library's own inverse of the formula above, at the required margin — not a
@@ -283,7 +301,7 @@ def _twist_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sco
             f"not evaluated — θ = T·L/(G·J) needs {', '.join(missing)}, which this shaft "
             f"does not declare",
             _TWIST_REFERENCE,
-            missing=tuple(missing),
+            needs=tuple(_SHAFT_NEEDS[field] for field in missing),
         )
     twist = shaft_twist_angle(
         torque=shaft.torque,
@@ -327,6 +345,7 @@ def _twist_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sco
         unavailable=(
             "the shaft's torque is zero, so it does not twist; declare the `torque` it transmits"
         ),
+        needs=(_NEEDS_A_TORQUE,),
     ).model_copy(update={"reference": _TWIST_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # θ goes as 1/d⁴ with everything else held, so the diameter that lands the required
@@ -366,7 +385,7 @@ def _fatigue_entry(shaft: TransmissionShaft, required_safety_factor: float) -> S
             f"not evaluated — the DE-Goodman criterion needs {', '.join(missing)}, which "
             f"this shaft does not declare; a static verdict is not a fatigue verdict",
             _FATIGUE_REFERENCE,
-            missing=tuple(missing),
+            needs=tuple(_SHAFT_NEEDS[field] for field in missing),
         )
     moment = shaft.bending_moment.to("N*mm").magnitude
     torque = shaft.torque.to("N*mm").magnitude
@@ -376,7 +395,8 @@ def _fatigue_entry(shaft: TransmissionShaft, required_safety_factor: float) -> S
             "not evaluated — the shaft carries neither a bending moment nor a torque, so "
             "the Goodman criterion has nothing to evaluate",
             _FATIGUE_REFERENCE,
-            missing=(),  # an answer about the load, not a value to declare
+            # The static check asks for the same two when the shaft carries nothing.
+            needs=(_NEEDS_A_BENDING_MOMENT, _NEEDS_A_TORQUE),
         )
     # The whole DE-Goodman bracket scales as 1/d³, so the design factor at the declared
     # diameter is exactly (d/d₁)³ against the diameter the criterion demands at n = 1. That

@@ -540,6 +540,7 @@ class ScorecardEntry(StatableModel):
         upper: float | None = None,
         repair_hint: RepairHint | None = None,
         unavailable: str | None = None,
+        needs: tuple[Need, ...] = (),
     ) -> ScorecardEntry:
         """Build an entry from a computed safety factor against a required minimum.
 
@@ -561,6 +562,11 @@ class ScorecardEntry(StatableModel):
         ``applied_load``". Without it the entry reads "safety factor unavailable", which is
         true and gives the reader nothing to do; every call site in this library states
         one, held by a gate over what the suite builds.
+
+        ``needs`` is the same statement for the needs report: the declaration that would let
+        the check run. It is attached only when ``computed`` is ``None``, since a check that
+        ran had what it needed, so a caller may pass it unconditionally beside
+        ``unavailable``.
         """
         # A required factor of zero (or below) makes `computed < required` False for every
         # finite result, so EVERY check on a screen built with one comes back PASS -- a
@@ -586,6 +592,7 @@ class ScorecardEntry(StatableModel):
                 detail=f"not evaluated — {unavailable or 'safety factor unavailable'}",
                 required_safety_factor=required,
                 upper_safety_factor=upper,
+                needs=needs,
             )
         # NaN compares False against every operand, so it used to fall past both the FAIL and
         # the OVER_MARGIN branch and land on the PASS else -- a silent green for a check that

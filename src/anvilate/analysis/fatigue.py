@@ -434,6 +434,19 @@ _NO_ENDURANCE_LIMIT = (
 )
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_ENDURANCE_LIMIT = Need(
+    declaration="endurance_limit",
+    takes=(
+        "the fatigue strength the stress is judged against, from a test, a cited S-N "
+        "curve or the material record"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.MEASUREMENT, ValueSource.DATABASE, ValueSource.STANDARD),
+)
+
+
 def goodman_scorecard(
     name: str,
     *,
@@ -464,6 +477,7 @@ def goodman_scorecard(
         computed=computed,
         required=required,
         unavailable=_NO_ENDURANCE_LIMIT,
+        needs=(_NEEDS_AN_ENDURANCE_LIMIT,),
     )
 
 
@@ -528,6 +542,7 @@ def soderberg_scorecard(
         computed=computed,
         required=required,
         unavailable=_NO_ENDURANCE_LIMIT,
+        needs=(_NEEDS_AN_ENDURANCE_LIMIT,),
     )
 
 
@@ -612,6 +627,7 @@ def gerber_scorecard(
         computed=computed,
         required=required,
         unavailable=_NO_ENDURANCE_LIMIT,
+        needs=(_NEEDS_AN_ENDURANCE_LIMIT,),
     )
 
 

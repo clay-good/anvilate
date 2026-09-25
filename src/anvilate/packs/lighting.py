@@ -19,7 +19,15 @@ from pydantic import ConfigDict
 
 from ..analysis import lighting_power_density, lumen_method_illuminance
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -52,6 +60,21 @@ class LightingInstallation(GuardedInputs):
     floor_area: Quantity
     required_illuminance: Quantity
     allowable_power_density: Quantity
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_ILLUMINANCE = Need(
+    declaration="element_params.required_illuminance",
+    takes="the illuminance the task needs, from IES or the owner's criteria",
+    dimension="[luminosity] / [length] ** 2",
+    units=("lx",),
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_LUMINAIRES = Need(
+    declaration="element_params.luminaire_count",
+    takes="how many luminaires are installed, with input_watts_per_luminaire",
+    sources=(ValueSource.USER,),
+)
 
 
 def screen_lighting(
@@ -120,6 +143,7 @@ def screen_lighting(
             "required_illuminance is zero, so the task asks for no light to check against; declare"
             " `required_illuminance` for the task, from IES or the owner's criteria"
         ),
+        needs=(_NEEDS_AN_ILLUMINANCE,),
     ).model_copy(update={"reference": _ILLUMINANCE_REFERENCE, "derivation": illuminance_derivation})
 
     lpd = lighting_power_density(
@@ -164,6 +188,7 @@ def screen_lighting(
             "the installed power density is zero, so there is no load against the allowance; "
             "declare `luminaire_count` and `input_watts_per_luminaire`"
         ),
+        needs=(_NEEDS_LUMINAIRES,),
     ).model_copy(update={"reference": _LPD_REFERENCE, "derivation": lpd_derivation})
     # The two checks pull in OPPOSITE DIRECTIONS on the same knob: illuminance rises with
     # the luminaire count and the power density rises with it too. A card that answered

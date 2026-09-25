@@ -711,3 +711,20 @@ def test_a_shaft_check_with_nothing_to_run_on_names_the_fields_it_lacks():
     fatigue = [need.declaration for need in found["rotating-shaft fatigue"].needs]
     assert twist == ["element_params.length", "element_params.allowable_twist"]
     assert fatigue == ["element_params.endurance_limit"]
+
+
+def test_a_shaft_carrying_nothing_asks_every_check_for_the_same_loads():
+    # Static, twist and fatigue each stop for a missing load, and the needs report should hear
+    # one gap from all three rather than three different ones, or none from the fatigue check.
+    from anvilate.needs import needs_report
+
+    card = screen_shaft(_shaft(bending_moment=_q("0 N*m"), torque=_q("0 N*m")))
+    unblocks = {item.need.declaration: set(item.unblocks) for item in needs_report(card).items}
+    assert unblocks == {
+        "element_params.bending_moment": {"combined bending and torsion", "rotating-shaft fatigue"},
+        "element_params.torque": {
+            "combined bending and torsion",
+            "torsional twist",
+            "rotating-shaft fatigue",
+        },
+    }

@@ -258,6 +258,37 @@ _NEEDS_COMPRESSION = Need(
 )
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_BENDING_STRESS = Need(
+    declaration="bending_stress",
+    takes="the bending stress the load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_SHEAR_STRESS = Need(
+    declaration="shear_stress",
+    takes="the shear stress the load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_BEARING_STRESS = Need(
+    declaration="bearing_stress",
+    takes="the bearing stress the load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_COMPRESSION_STRESS = Need(
+    declaration="compression_stress",
+    takes="the compression stress the load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
 def nds_bending_scorecard(
     name: str,
     *,
@@ -300,6 +331,7 @@ def nds_bending_scorecard(
             "the bending_stress is zero, so there is no demand to screen; pass the "
             "`bending_stress` the load produces"
         ),
+        needs=(_NEEDS_A_BENDING_STRESS,),
     ).model_copy(
         update={
             "reference": "NDS",
@@ -388,6 +420,7 @@ def nds_shear_scorecard(
             "the shear_stress is zero, so there is no demand to screen; pass the `shear_stress` "
             "the load produces"
         ),
+        needs=(_NEEDS_A_SHEAR_STRESS,),
     ).model_copy(
         update={
             "reference": "NDS",
@@ -530,6 +563,7 @@ def nds_bearing_scorecard(
             "the bearing_stress is zero, so there is no demand to screen; pass the "
             "`bearing_stress` the load produces"
         ),
+        needs=(_NEEDS_A_BEARING_STRESS,),
     ).model_copy(
         update={
             "reference": "NDS",
@@ -774,6 +808,7 @@ def nds_compression_scorecard(
             "the compression_stress is zero, so there is no demand to screen; pass the "
             "`compression_stress` the load produces"
         ),
+        needs=(_NEEDS_A_COMPRESSION_STRESS,),
     ).model_copy(
         update={
             "reference": "NDS",

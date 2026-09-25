@@ -315,6 +315,14 @@ _NEEDS_A_CARBON_BUDGET = Need(
 )
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_CONTRIBUTIONS = Need(
+    declaration="contributions",
+    takes="each material's mass and carbon factor",
+    sources=(ValueSource.USER, ValueSource.DATABASE),
+)
+
+
 def embodied_carbon_scorecard(
     name: str,
     *,
@@ -390,6 +398,7 @@ def embodied_carbon_scorecard(
             "the contributions sum to zero kgCO2e, so there is nothing to judge against the "
             "budget; declare each contribution's mass and carbon factor"
         ),
+        needs=(_NEEDS_CONTRIBUTIONS,),
     )
     # The sum written out line by line rather than as a Σ, because embodied carbon is
     # almost always concentrated in one material and a Σ hides which. Each term is one

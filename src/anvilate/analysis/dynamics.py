@@ -990,6 +990,16 @@ def half_sine_shock_amplification(
     return max(primary, residual)
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_PEAK_ACCELERATION = Need(
+    declaration="peak_acceleration",
+    takes="the shock pulse's peak acceleration",
+    dimension="[acceleration]",
+    units=("m/s**2", "ft/s**2"),
+    sources=(ValueSource.STANDARD, ValueSource.MEASUREMENT, ValueSource.USER),
+)
+
+
 def half_sine_shock_scorecard(
     name: str,
     *,
@@ -1040,6 +1050,7 @@ def half_sine_shock_scorecard(
             "the peak_acceleration is zero, so there is no shock to screen; pass the pulse's "
             "`peak_acceleration`"
         ),
+        needs=(_NEEDS_A_PEAK_ACCELERATION,),
     )
     ratio = _shock_pulse_ratio(pulse_duration, natural_frequency)
     # A compound adjective in front of a noun: a *quasi-static* response.

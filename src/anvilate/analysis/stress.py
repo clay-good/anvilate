@@ -21,7 +21,7 @@ from math import acos, atan2, cos, degrees, pi, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
-from ..scorecard import ScorecardEntry
+from ..scorecard import Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -445,6 +445,23 @@ def yield_safety_factor(equivalent_stress: Quantity, yield_strength: Quantity) -
     return sy / sigma
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_ALLOWABLE = Need(
+    declaration="allowable",
+    takes="the allowable strength, from the material record or a cited table",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.DATABASE, ValueSource.STANDARD, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_STRESS = Need(
+    declaration="stress",
+    takes="the stress the load produces",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
 def strength_scorecard(
     name: str,
     *,
@@ -497,7 +514,12 @@ def strength_scorecard(
             "that stresses it"
         )
     entry = ScorecardEntry.from_safety_factor(
-        name, computed=computed, required=required, upper=upper, unavailable=reason
+        name,
+        computed=computed,
+        required=required,
+        upper=upper,
+        unavailable=reason,
+        needs=(_NEEDS_AN_ALLOWABLE,) if allowable is None else (_NEEDS_A_STRESS,),
     )
     # The caller's own reason is about the allowable, so it replaces only that one: a zero
     # stress beside a known allowable is a missing demand, whatever the allowable's story.

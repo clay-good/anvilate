@@ -25,7 +25,15 @@ from ..analysis import (
     reynolds_number,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -64,6 +72,30 @@ class PumpDuty(GuardedInputs):
     motor_rating: Quantity
     npsh_available: Quantity
     npsh_required: Quantity
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_FLOW_RATE = Need(
+    declaration="element_params.flow_rate",
+    takes="the duty point's flow rate",
+    dimension="[length] ** 3 / [time]",
+    units=("L/s", "gallon/minute"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_TOTAL_HEAD = Need(
+    declaration="element_params.total_head",
+    takes="the duty point's total head",
+    dimension="[length]",
+    units=("m", "ft"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_NPSH_REQUIRED = Need(
+    declaration="element_params.npsh_required",
+    takes="the pump's required NPSH at the duty flow, from its curve",
+    dimension="[length]",
+    units=("m", "ft"),
+    sources=(ValueSource.DATABASE,),
+)
 
 
 def screen_pump_duty(
@@ -121,6 +153,7 @@ def screen_pump_duty(
             "the shaft power is zero because the duty's flow_rate or total_head is zero, so there "
             "is no demand on the motor; declare the duty point as `flow_rate` and `total_head`"
         ),
+        needs=(_NEEDS_A_FLOW_RATE, _NEEDS_A_TOTAL_HEAD),
     ).model_copy(update={"reference": _MOTOR_REFERENCE, "derivation": motor_derivation})
 
     npsh_a = duty.npsh_available.to("m").magnitude
@@ -161,6 +194,7 @@ def screen_pump_duty(
             "npsh_required is zero, so the suction side has nothing to clear; take `npsh_required`"
             " from the pump curve at the duty flow"
         ),
+        needs=(_NEEDS_NPSH_REQUIRED,),
     ).model_copy(update={"reference": _NPSH_REFERENCE, "derivation": npsh_derivation})
     if motor_entry.status is CheckStatus.FAIL:
         # The shaft power is the duty's, not the motor's, so the rating is what moves and

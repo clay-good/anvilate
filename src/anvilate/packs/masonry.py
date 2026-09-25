@@ -20,7 +20,15 @@ from ..analysis import (
     masonry_combined_stress_ratio,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -48,6 +56,23 @@ class MasonryWall(GuardedInputs):
     slenderness_ratio: float
     axial_stress: Quantity
     flexural_stress: Quantity
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_AXIAL_STRESS = Need(
+    declaration="element_params.axial_stress",
+    takes="the axial stress the wall's load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_FLEXURAL_STRESS = Need(
+    declaration="element_params.flexural_stress",
+    takes="the flexural stress the wall's lateral load produces",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
 
 
 def screen_masonry_wall(
@@ -113,6 +138,7 @@ def screen_masonry_wall(
             "the wall's axial_stress is zero, so there is no axial demand to screen; declare the "
             "`axial_stress` the wall's load produces"
         ),
+        needs=(_NEEDS_AN_AXIAL_STRESS,),
     ).model_copy(update={"reference": _AXIAL_REFERENCE, "derivation": axial_derivation})
 
     unity = masonry_combined_stress_ratio(
@@ -165,6 +191,7 @@ def screen_masonry_wall(
             "the wall declares no axial_stress and no flexural_stress, so there is nothing to "
             "combine; declare the `axial_stress` and `flexural_stress` it carries"
         ),
+        needs=(_NEEDS_AN_AXIAL_STRESS, _NEEDS_A_FLEXURAL_STRESS),
     ).model_copy(update={"reference": _COMBINED_REFERENCE, "derivation": combined_derivation})
     if axial_entry.status is CheckStatus.FAIL:
         # The allowable is fixed by the masonry and the slenderness, so the demand is what

@@ -35,9 +35,11 @@ from ..scorecard import (
     AppliedFactor,
     CheckStatus,
     Direction,
+    Need,
     RepairHint,
     Scorecard,
     ScorecardEntry,
+    ValueSource,
 )
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -102,6 +104,16 @@ class ShallowFooting(GuardedInputs):
         if b > lo:
             raise ValueError("width must be the shorter side (B <= L)")
         return self
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_APPLIED_LOAD = Need(
+    declaration="element_params.applied_load",
+    takes="the axial load the foundation carries",
+    dimension="[force]",
+    units=("kN", "kip"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
 
 
 def screen_shallow_footing(
@@ -202,6 +214,7 @@ def screen_shallow_footing(
             "the footing's applied_load is zero, so there is no bearing pressure to screen; "
             "declare the column load it carries as `applied_load`"
         ),
+        needs=(_NEEDS_AN_APPLIED_LOAD,),
     )
     entry = entry.model_copy(update={"reference": _BEARING_REFERENCE, "derivation": derivation})
     # Monotonicity declaration, not an inverse: widening the footing drops the contact
@@ -591,6 +604,7 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
             "the pile's applied_load is zero, so there is no demand to screen; declare the axial "
             "load it carries as `applied_load`"
         ),
+        needs=(_NEEDS_AN_APPLIED_LOAD,),
     ).model_copy(
         update={
             "reference": _PILE_REFERENCE,

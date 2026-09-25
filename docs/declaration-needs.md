@@ -190,7 +190,7 @@ by emptying it. A second assertion is a one-way ratchet on how many refusals sta
 needs.
 
 The same gate reads every other module that builds a refusal. Outside screening, the library
-has 78 more, and 51 state a need today: every screen that stops for a value names it, with the
+has 78 more, and 52 state a need today: every screen that stops for a value names it, with the
 dimension and units to write it in where it is a quantity. The optomechanics screens name the
 gap a shock is judged against or the pressure differentials a window sees (which an
 environment profile's ambient pressure bounds). The timber screens name the adjusted NDS
@@ -199,9 +199,13 @@ material property its design allowable could not be read for. The screens that t
 computed accounting (a DSM strength, a UG-37 area balance, a FAD point) name the function
 that makes it. The three assembly screens a document's `assembly` block reaches name the path
 it writes: `assembly.parts[].insertion`, `assembly.adjustments[].access` and
-`assembly.inspections[].access`.
+`assembly.inspections[].access`. A check built from a safety factor that could not be
+computed carries its caller's need too: every one of the library's calls that says why a factor
+is missing (`from_safety_factor(unavailable=...)`) also says what to declare, and a test holds
+the next one to it. A pack screen with no load names `element_params.load`; a strength screen
+with no allowable names `allowable`.
 
-The other 27 are excused by name in the same file, each with its cause. Most are not gaps: a
+The other 26 are excused by name in the same file, each with its cause. Most are not gaps: a
 budget or a dependency chain waiting on a check whose own entry states the need, a correction
 of a value the caller did supply, an answer (zero demand, a wall the allowances consume), or a
 capability this library has not built. The backlog is empty, and a per-module ceiling in

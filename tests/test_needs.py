@@ -433,6 +433,36 @@ def test_every_refusal_in_the_library_states_its_need_or_is_on_the_backlog() -> 
     assert not stale, f"{_EXCLUSIONS} excuses refusals that no longer exist: {stale}"
 
 
+def test_every_reason_a_safety_factor_is_missing_comes_with_its_need() -> None:
+    """`from_safety_factor(unavailable=...)` says in a sentence why the factor is missing;
+    `needs=` says it to the report that ranks what to declare next. The sentence alone was
+    what 34 callers gave, so a screen refusing for a missing allowable, load or duty point
+    showed in the prose and never in the needs report. Every call that states a reason must
+    state the need beside it."""
+    import ast
+    from pathlib import Path
+
+    from conftest import parsed_source
+
+    root = Path(__file__).parents[1]
+    reasoned, silent = 0, []
+    for path in sorted((root / "src" / "anvilate").rglob("*.py")):
+        for node in ast.walk(parsed_source(path)):
+            if not (
+                isinstance(node, ast.Call)
+                and getattr(node.func, "attr", None) == "from_safety_factor"
+            ):
+                continue
+            keywords = {keyword.arg for keyword in node.keywords}
+            if "unavailable" not in keywords:
+                continue
+            reasoned += 1
+            if "needs" not in keywords:
+                silent.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert reasoned >= 30, f"only {reasoned} reasoned from_safety_factor calls found"
+    assert not silent, f"these state why a factor is missing and not what to declare: {silent}"
+
+
 def test_every_need_a_module_declares_names_units_of_its_dimension() -> None:
     """A need's units are what the report tells a reader to write, so each must parse, and
     to the dimension the need states — `K/W` for a thermal resistance, not `W/K`."""

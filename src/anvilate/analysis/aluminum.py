@@ -1085,6 +1085,16 @@ _NEEDS_AN_ADM_STRENGTH = Need(
 )
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_DEMAND_STRESS = Need(
+    declaration="demand_stress",
+    takes="the compressive stress the load produces in the member",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
 def aluminum_compression_scorecard(
     name: str,
     *,
@@ -1138,6 +1148,7 @@ def aluminum_compression_scorecard(
             "the demand_stress is zero, so there is no compression to screen; pass the "
             "`demand_stress` the load produces"
         ),
+        needs=(_NEEDS_A_DEMAND_STRESS,),
     )
     detail = (
         f"{strength.governing.value} governs: {nominal:.4g} MPa allowed against a "

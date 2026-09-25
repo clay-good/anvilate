@@ -22,7 +22,15 @@ from ..analysis import (
     sound_level_sum,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -46,6 +54,16 @@ class WorkerNoiseExposure(GuardedInputs):
 
     machine_levels: tuple[float, ...]
     exposure_duration: Quantity
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_AN_EXPOSURE_DURATION = Need(
+    declaration="element_params.exposure_duration",
+    takes="how long the shift is exposed",
+    dimension="[time]",
+    units=("h",),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
 
 
 def screen_noise_exposure(
@@ -121,6 +139,7 @@ def screen_noise_exposure(
             "the exposure_duration is zero, so there is no dose to screen; declare the "
             "`exposure_duration` of the shift"
         ),
+        needs=(_NEEDS_AN_EXPOSURE_DURATION,),
     ).model_copy(update={"reference": reference, "derivation": dose_derivation})
     if entry.status is CheckStatus.FAIL:
         # The level is the machines'; the time is the shift. Shortening the exposure — job

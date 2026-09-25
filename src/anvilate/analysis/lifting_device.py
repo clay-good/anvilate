@@ -243,6 +243,16 @@ def bth1_allowable_stresses(
     )
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_MEMBER_STRESS = Need(
+    declaration="stress",
+    takes="the member stress the lift produces",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
 def bth1_member_scorecard(
     name: str,
     *,
@@ -280,6 +290,7 @@ def bth1_member_scorecard(
             "the applied stress is zero, so there is no demand to screen; pass the member `stress`"
             " the lift produces"
         ),
+        needs=(_NEEDS_A_MEMBER_STRESS,),
     )
     detail = (
         f"{applied:.4g} MPa against a Category {category.value} allowable of "

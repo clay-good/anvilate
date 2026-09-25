@@ -21,7 +21,15 @@ from ..analysis import (
     breathing_zone_outdoor_airflow,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -54,6 +62,19 @@ class VentilationZone(GuardedInputs):
     provided_outdoor_airflow: Quantity
     room_volume: Quantity
     required_air_changes: float
+
+
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_OUTDOOR_AIR = Need(
+    declaration="element_params.occupancy",
+    takes=("the zone's occupancy and floor area, with the ASHRAE 62.1 Table 6-1 rates for each"),
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_AIR_CHANGES = Need(
+    declaration="element_params.required_air_changes",
+    takes="the air changes per hour the space requires",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
 
 
 def screen_ventilation(
@@ -135,6 +156,7 @@ def screen_ventilation(
             "declare `occupancy`, `people_outdoor_rate`, `floor_area` and `area_outdoor_rate` from"
             " ASHRAE 62.1 Table 6-1"
         ),
+        needs=(_NEEDS_OUTDOOR_AIR,),
     ).model_copy(update={"reference": _OUTDOOR_AIR_REFERENCE, "derivation": oa_derivation})
     if oa_entry.status is CheckStatus.FAIL:
         # Both checks in this card are levered by the same knob — the air actually
@@ -197,6 +219,7 @@ def screen_ventilation(
             "required_air_changes is zero, so there is no rate to judge against; declare "
             "`required_air_changes` for the space"
         ),
+        needs=(_NEEDS_AIR_CHANGES,),
     ).model_copy(update={"reference": _AIR_CHANGE_REFERENCE, "derivation": ach_derivation})
     if ach_entry.status is CheckStatus.FAIL:
         ach_entry = ach_entry.model_copy(

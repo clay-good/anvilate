@@ -1775,6 +1775,16 @@ class AllowableStress(RevalidatedModel):
         return f"{self.value.to('MPa')} for {self.material} at {self.temperature} [{self.source}]"
 
 
+# What a check here could not run without, for the report in `anvilate.needs`.
+_NEEDS_A_DESIGN_PRESSURE = Need(
+    declaration="design_pressure",
+    takes="the internal design pressure the line contains",
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+
+
 def asme_b313_pressure_scorecard(
     name: str,
     *,
@@ -1926,6 +1936,7 @@ def asme_b313_pressure_scorecard(
             "the design_pressure is not positive, so the wall has no internal pressure to contain;"
             " pass the `design_pressure`, and screen an external pressure as a collapse case"
         ),
+        needs=(_NEEDS_A_DESIGN_PRESSURE,),
     ).model_copy(
         update={
             "reference": _CLAUSE_B313_PRESSURE_DESIGN,
