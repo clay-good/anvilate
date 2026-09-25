@@ -1524,6 +1524,18 @@ class BasePlate(GuardedInputs):
         ):
             if value is not None and not value.has_dimension("[length]"):
                 raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if self.cantilever is not None:
+            # AISC Design Guide 1 measures the cantilevers from the column to the plate edge,
+            # (N − 0.95·d)/2 and (B − 0.8·b_f)/2, so one at or past half the larger plan
+            # dimension describes a column of no size. It used to screen as a plate-bending
+            # FAIL with a repair hint to thicken a plate that cannot exist.
+            half = max(self.width.to("mm").magnitude, self.depth.to("mm").magnitude) / 2
+            if not self.cantilever.to("mm").magnitude < half:
+                raise ValueError(
+                    f"cantilever ({self.cantilever}) must be less than half the plate's larger "
+                    f"plan dimension ({half:g} mm), since it runs from the column face to the "
+                    "plate edge"
+                )
         return self
 
 

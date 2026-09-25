@@ -1486,6 +1486,31 @@ def test_base_plate_bending_rejects_partial_plate_details():
         )
 
 
+@pytest.mark.parametrize(("width", "depth"), [("300 mm", "240 mm"), ("240 mm", "300 mm")])
+def test_a_base_plate_cantilever_runs_from_a_column_that_has_a_size(width, depth):
+    """Design Guide 1's cantilevers run from the column face to the plate edge, so one at
+    half the larger plan dimension describes a column of no size. A 500 mm cantilever on a
+    300 x 240 mm plate screened as a bending FAIL with a hint to thicken the plate."""
+
+    def plate(cantilever: str) -> BasePlate:
+        return BasePlate(
+            name="b",
+            width=_q(width),
+            depth=_q(depth),
+            axial_load=_q("200 kN"),
+            concrete_strength=_q("25 MPa"),
+            plate_thickness=_q("25 mm"),
+            cantilever=_q(cantilever),
+            plate_material="ASTM-A36",
+        )
+
+    with pytest.raises(ValidationError, match=r"cantilever \(150 mm\) must be less than half"):
+        plate("150 mm")
+    with pytest.raises(ValidationError, match=r"larger plan dimension \(150 mm\)"):
+        plate("500 mm")
+    assert plate("149.9 mm").cantilever == _q("149.9 mm")
+
+
 def test_overloaded_base_plate_fails():
     card = screen_base_plate(_base_plate(load="2500 kN"), required_safety_factor=2.0)
     assert card.status is CheckStatus.FAIL
