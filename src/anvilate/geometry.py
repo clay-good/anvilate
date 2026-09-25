@@ -903,8 +903,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         or not solids
         or any(not solid.is_valid or solid.volume <= 0 for solid in solids)
     ):
+        unusable = sum(1 for solid in solids if not solid.is_valid or solid.volume <= 0)
         raise GeometryError(
-            f"STEP interface detection needs valid positive-volume solids; found {len(solids)}"
+            "STEP interface detection needs valid positive-volume solids; the file has "
+            f"{len(solids)} solid(s), {unusable} of them invalid or empty"
+            + ("" if shape.is_valid else ", and its shape as a whole is not valid")
+            + ". A file carrying only tessellated or surface geometry has no solid to read"
         )
     records = []
     for solid in solids:
