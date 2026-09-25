@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, Provenance, RevalidatedModel
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -678,6 +678,17 @@ def dsm_flexural_strength(
     )
 
 
+# What the DSM screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_A_DSM_STRENGTH = Need(
+    declaration="strength",
+    takes=(
+        "the DSM strength from dsm_compression_strength or dsm_flexural_strength, fed a "
+        "finite-strip elastic buckling analysis (from_pycufsm reads one)"
+    ),
+    sources=(ValueSource.USER,),
+)
+
+
 def dsm_scorecard(
     name: str,
     *,
@@ -714,6 +725,7 @@ def dsm_scorecard(
                 "section's local, distortional and global elastic buckling values, which "
                 "come from a finite-strip analysis, not from this library."
             ),
+            needs=(_NEEDS_A_DSM_STRENGTH,),
             reference=_CLAUSE_DSM,
         )
     demand_value = abs(demand.to(strength.nominal.unit).magnitude)

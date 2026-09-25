@@ -40,7 +40,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, RevalidatedModel, cited
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -1074,6 +1074,17 @@ def aluminum_compression_strength(
     )
 
 
+# What the ADM screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_AN_ADM_STRENGTH = Need(
+    declaration="strength",
+    takes=(
+        "the ADM member strength from aluminum_compression_strength, which needs the temper's "
+        "Table B.4.2 values and any weld-affected ones"
+    ),
+    sources=(ValueSource.USER,),
+)
+
+
 def aluminum_compression_scorecard(
     name: str,
     *,
@@ -1109,6 +1120,7 @@ def aluminum_compression_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_ADM,
+            needs=(_NEEDS_AN_ADM_STRENGTH,),
         )
     if not isinstance(demand_stress, Quantity):
         raise ValueError(f"demand_stress must be a [pressure] quantity; got {demand_stress!r}")

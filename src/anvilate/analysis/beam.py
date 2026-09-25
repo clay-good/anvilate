@@ -19,7 +19,7 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
+from ..scorecard import CheckStatus, Comparison, LimitSense, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ._flags import require_flag
 
@@ -1498,6 +1498,19 @@ def fastener_spacing_for_shear_flow(
     return _as_quantity(spacing, "mm")
 
 
+# What the deflection screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_A_DEFLECTION_LIMIT = Need(
+    declaration="limit",
+    takes=(
+        "the largest deflection the member may take, often a span ratio such as L/360 from the "
+        "governing code"
+    ),
+    dimension="[length]",
+    units=("mm", "in"),
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+
+
 def deflection_scorecard(
     name: str,
     *,
@@ -1519,6 +1532,7 @@ def deflection_scorecard(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — deflection limit unavailable",
+            needs=(_NEEDS_A_DEFLECTION_LIMIT,),
         )
     _require(limit, "[length]", "limit")
     # The two quantities travel, and the sentence is written from them. A screen does not

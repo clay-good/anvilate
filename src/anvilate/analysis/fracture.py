@@ -45,7 +45,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import DerivationAbsence, Underived
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
 
@@ -898,6 +898,24 @@ def fad_assessment(
     )
 
 
+# What the FAD screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_AN_ASSESSMENT = Need(
+    declaration="assessment",
+    takes="the flaw's assessment point, from fad_assessment",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_A_MEASURED_TOUGHNESS = Need(
+    declaration="fracture_toughness",
+    takes=(
+        "a measured fracture toughness in place of the Charpy correlation, with "
+        "toughness_is_estimate false"
+    ),
+    dimension="[pressure] * [length] ** 0.5",
+    units=("MPa*m**0.5",),
+    sources=(ValueSource.MEASUREMENT,),
+)
+
+
 def fad_scorecard(
     name: str,
     *,
@@ -932,6 +950,7 @@ def fad_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_FAD,
+            needs=(_NEEDS_AN_ASSESSMENT,),
         )
     if assessment.load_line_margin is None:
         return ScorecardEntry(
@@ -972,6 +991,7 @@ def fad_scorecard(
                     "detail": detail,
                     "reference": _CLAUSE_CHARPY,
                     "safety_factor": None,
+                    "needs": (_NEEDS_A_MEASURED_TOUGHNESS,),
                 }
             )
     return entry.model_copy(

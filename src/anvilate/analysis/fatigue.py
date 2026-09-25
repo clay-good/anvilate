@@ -29,7 +29,7 @@ from math import inf, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
 
@@ -1103,6 +1103,24 @@ def weld_nominal_stress_range_limit(*, yield_strength: Quantity, shear: bool = F
 _WELD_FATIGUE_MODES = ("weld toe fatigue",)
 
 
+# What the weld fatigue screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_A_DETAIL_CATEGORY = Need(
+    declaration="detail_category",
+    takes=(
+        "the EN 1993-1-9 detail category: the reference stress range at two million cycles, "
+        "from Tables 8.1 to 8.10"
+    ),
+    dimension="[pressure]",
+    units=("MPa",),
+    sources=(ValueSource.STANDARD,),
+)
+_NEEDS_A_SPECTRUM = Need(
+    declaration="applied_cycles",
+    takes="how many cycles each stress range in the spectrum is applied over the design life",
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT, ValueSource.STANDARD),
+)
+
+
 def weld_fatigue_scorecard(
     name: str,
     *,
@@ -1154,6 +1172,7 @@ def weld_fatigue_scorecard(
             detail="not evaluated — no EN 1993-1-9 detail category chosen",
             reference="EN 1993-1-9:2005",
             addresses=_WELD_FATIGUE_MODES,
+            needs=(_NEEDS_A_DETAIL_CATEGORY,),
         )
     if yield_strength is not None:
         limit = weld_nominal_stress_range_limit(yield_strength=yield_strength)
@@ -1195,6 +1214,7 @@ def weld_fatigue_scorecard(
             detail="not evaluated — the spectrum applies no cycles",
             reference="EN 1993-1-9:2005",
             addresses=_WELD_FATIGUE_MODES,
+            needs=(_NEEDS_A_SPECTRUM,),
         )
     damage = miner_cumulative_damage(applied_cycles=applied_cycles, cycles_to_failure=lives)
     computed = inf if damage == 0 else 1.0 / damage

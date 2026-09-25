@@ -21,7 +21,7 @@ from enum import StrEnum
 from math import isfinite, prod, sqrt
 
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
 
@@ -214,6 +214,50 @@ def _nds_margin_derivation(
     )
 
 
+# What each NDS screen here was waiting on, for the report in `anvilate.needs`: the adjusted
+# design value, from the NDS Supplement's tabulated reference value times its factors.
+_NEEDS_BENDING = Need(
+    declaration="adjusted_bending_value",
+    takes=(
+        "the adjusted bending design value F'_b: the NDS Supplement reference value times its "
+        "adjustment factors"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.STANDARD, ValueSource.DATABASE),
+)
+_NEEDS_SHEAR = Need(
+    declaration="adjusted_shear_value",
+    takes=(
+        "the adjusted shear design value F'_v: the NDS Supplement reference value times its "
+        "adjustment factors"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.STANDARD, ValueSource.DATABASE),
+)
+_NEEDS_BEARING = Need(
+    declaration="adjusted_bearing_value",
+    takes=(
+        "the adjusted bearing design value F'_c⊥: the NDS Supplement reference value times its "
+        "adjustment factors"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.STANDARD, ValueSource.DATABASE),
+)
+_NEEDS_COMPRESSION = Need(
+    declaration="adjusted_compression_value",
+    takes=(
+        "the adjusted compression design value F'_c: the NDS Supplement reference value times "
+        "its adjustment factors"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "psi"),
+    sources=(ValueSource.STANDARD, ValueSource.DATABASE),
+)
+
+
 def nds_bending_scorecard(
     name: str,
     *,
@@ -236,6 +280,7 @@ def nds_bending_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no NDS reference design value supplied",
             reference="NDS",
+            needs=(_NEEDS_BENDING,),
         )
     if not isinstance(bending_stress, Quantity):
         raise ValueError(f"bending_stress must be a [pressure] quantity; got {bending_stress!r}")
@@ -323,6 +368,7 @@ def nds_shear_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no NDS reference shear value supplied",
             reference="NDS",
+            needs=(_NEEDS_SHEAR,),
         )
     if not isinstance(shear_stress, Quantity):
         raise ValueError(f"shear_stress must be a [pressure] quantity; got {shear_stress!r}")
@@ -464,6 +510,7 @@ def nds_bearing_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no NDS reference bearing value supplied",
             reference="NDS",
+            needs=(_NEEDS_BEARING,),
         )
     if not isinstance(bearing_stress, Quantity):
         raise ValueError(f"bearing_stress must be a [pressure] quantity; got {bearing_stress!r}")
@@ -704,6 +751,7 @@ def nds_compression_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no NDS reference compression value supplied",
             reference="NDS",
+            needs=(_NEEDS_COMPRESSION,),
         )
     if not isinstance(compression_stress, Quantity):
         raise ValueError(

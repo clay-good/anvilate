@@ -362,15 +362,6 @@ def test_every_refusal_states_its_need_or_says_why_it_cannot() -> None:
 # excuse it by name in the exclusions file. Wiring one lowers the count and this test says to
 # lower the ceiling with it, so the number cannot drift back up unobserved.
 _UNWIRED_CEILING = {
-    "src/anvilate/analysis/aluminum.py": 1,
-    "src/anvilate/analysis/beam.py": 1,
-    "src/anvilate/analysis/cold_formed_steel.py": 2,
-    "src/anvilate/analysis/dynamics.py": 3,
-    "src/anvilate/analysis/embodied_carbon.py": 2,
-    "src/anvilate/analysis/fatigue.py": 3,
-    "src/anvilate/analysis/fracture.py": 3,
-    "src/anvilate/analysis/lifting_device.py": 1,
-    "src/anvilate/analysis/nds_timber.py": 4,
     "src/anvilate/budget.py": 1,
     "src/anvilate/dependency.py": 1,
     "src/anvilate/export/qif.py": 1,
@@ -644,3 +635,80 @@ def test_a_deferred_screen_and_a_reasoned_gap_render_as_themselves() -> None:
     assert str(applies.screens[0]) == "dfm: deferred by the declared screening depth"
     assert str(applies.screens[1]) == "t0: needs no solid built"
     assert str(ApplicableScreen(name="x", state=ScreenState.RUNS_NOW)) == "x: runs now"
+
+
+def _analysis_refusals():  # type: ignore[no-untyped-def]
+    from anvilate import analysis as a
+    from anvilate.units import Quantity
+
+    q = Quantity.parse
+    return [
+        (
+            a.nds_bending_scorecard(
+                "joist", bending_stress=q("8 MPa"), adjusted_bending_value=None
+            ),
+            ["adjusted_bending_value"],
+        ),
+        (
+            a.frequency_scorecard("mode", frequency=q("40 Hz"), min_frequency=None),
+            ["min_frequency"],
+        ),
+        (a.deflection_scorecard("sag", deflection=q("3 mm"), limit=None), ["limit"]),
+        (
+            a.weld_fatigue_scorecard(
+                "toe", applied_cycles=[1e6], stress_ranges=[q("60 MPa")], detail_category=None
+            ),
+            ["detail_category"],
+        ),
+        (
+            a.weld_fatigue_scorecard(
+                "toe", applied_cycles=[0], stress_ranges=[q("60 MPa")], detail_category=q("71 MPa")
+            ),
+            ["applied_cycles"],
+        ),
+        (a.embodied_carbon_scorecard("carbon", estimate=None), ["estimate"]),
+        (a.dsm_scorecard("stud", demand=q("10 kN"), strength=None), ["strength"]),
+        (
+            a.aluminum_compression_scorecard("strut", demand_stress=q("50 MPa"), strength=None),
+            ["strength"],
+        ),
+        (a.fad_scorecard("flaw", assessment=None), ["assessment"]),
+        (
+            a.isolator_selection_scorecard(
+                "mount",
+                forcing_frequency=q("25 Hz"),
+                target_transmissibility=0.1,
+                selected_static_deflection=None,
+            ),
+            ["selected_static_deflection"],
+        ),
+        (
+            a.half_sine_shock_scorecard(
+                "drop",
+                peak_acceleration=q("300 m/s**2"),
+                pulse_duration=q("11 ms"),
+                natural_frequency=q("60 Hz"),
+                allowable_acceleration=None,
+            ),
+            ["allowable_acceleration"],
+        ),
+        (
+            a.bth1_fatigue_scorecard(
+                "hook", service_class=a.ServiceClass.CLASS_2, allowable_stress_range=q("100 MPa")
+            ),
+            ["stress_range"],
+        ),
+    ]
+
+
+def test_an_analysis_screen_that_stops_names_the_argument_it_stopped_for() -> None:
+    """The AST gate proves each refusal carries `needs=`; this proves what it carries. Each
+    screen is called with exactly one input missing and must name that input and no other —
+    the BTH-1 case supplies one of its two ranges and must ask only for the other."""
+    from anvilate.scorecard import CheckStatus
+
+    cases = _analysis_refusals()
+    assert len(cases) >= 12
+    for entry, declarations in cases:
+        assert entry.status is CheckStatus.NOT_EVALUATED, entry
+        assert [need.declaration for need in entry.needs] == declarations, entry.name

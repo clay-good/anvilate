@@ -34,8 +34,10 @@ from ..scorecard import (
     Comparison,
     Direction,
     LimitSense,
+    Need,
     RepairHint,
     ScorecardEntry,
+    ValueSource,
 )
 from ..units import Quantity, decimals_distinguishing, require_finite, spoken
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
@@ -785,6 +787,30 @@ def isolator_static_deflection_for_transmissibility(
     return Quantity(magnitude=deflection_m, unit="m").to("mm")
 
 
+# What each dynamics screen here was waiting on, for the report in `anvilate.needs`.
+_NEEDS_AN_ISOLATOR = Need(
+    declaration="selected_static_deflection",
+    takes="the static deflection of the isolator selected, under the machine's weight",
+    dimension="[length]",
+    units=("mm", "in"),
+    sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT, ValueSource.USER),
+)
+_NEEDS_A_SHOCK_RATING = Need(
+    declaration="allowable_acceleration",
+    takes="the peak acceleration the item is rated to survive, from its data sheet or a test",
+    dimension="[acceleration]",
+    units=("m/s**2", "ft/s**2"),
+    sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT, ValueSource.STANDARD),
+)
+_NEEDS_AN_EXCITATION = Need(
+    declaration="min_frequency",
+    takes="the highest operating excitation the fundamental mode must stay above",
+    dimension="[frequency]",
+    units=("Hz",),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT, ValueSource.STANDARD),
+)
+
+
 def isolator_selection_scorecard(
     name: str,
     *,
@@ -815,6 +841,7 @@ def isolator_selection_scorecard(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no isolator selected",
+            needs=(_NEEDS_AN_ISOLATOR,),
         )
     _require(selected_static_deflection, "[length]", "selected_static_deflection")
     delta = selected_static_deflection.to("mm").magnitude
@@ -988,6 +1015,7 @@ def half_sine_shock_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no allowable shock acceleration supplied",
             reference="half-sine shock response spectrum",
+            needs=(_NEEDS_A_SHOCK_RATING,),
         )
     _require(peak_acceleration, "[acceleration]", "peak_acceleration")
     _require(allowable_acceleration, "[acceleration]", "allowable_acceleration")
@@ -2261,6 +2289,7 @@ def frequency_scorecard(
                 "to keep the mode clear of; pass `min_frequency`, the highest operating "
                 "excitation"
             ),
+            needs=(_NEEDS_AN_EXCITATION,),
         )
     _require(min_frequency, "[frequency]", "min_frequency")
     # Through `count_rate_per_second` on both, because a frequency and an angular speed are

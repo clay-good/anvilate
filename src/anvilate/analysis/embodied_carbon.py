@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel, cited, each_one
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity
 
 __all__ = [
@@ -297,6 +297,24 @@ def embodied_carbon_estimate(
     )
 
 
+# What the carbon screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_AN_ESTIMATE = Need(
+    declaration="estimate",
+    takes=(
+        "the design's carbon estimate from embodied_carbon_estimate, with a factor for every "
+        "material"
+    ),
+    sources=(ValueSource.DATABASE, ValueSource.USER),
+)
+_NEEDS_A_CARBON_BUDGET = Need(
+    declaration="budget",
+    takes="the carbon the design may embody, in kg CO2e over the declared scope",
+    dimension="[mass]",
+    units=("kg", "t"),
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+
+
 def embodied_carbon_scorecard(
     name: str,
     *,
@@ -338,6 +356,7 @@ def embodied_carbon_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_EN15978,
+            needs=(_NEEDS_AN_ESTIMATE,),
         )
     total = estimate.total.to("kg").magnitude
     dominant = estimate.dominant
@@ -353,6 +372,7 @@ def embodied_carbon_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=f"no carbon budget supplied, so there is no verdict to give. {detail}",
             reference=_CLAUSE_EN15978,
+            needs=(_NEEDS_A_CARBON_BUDGET,),
         )
     if not isinstance(budget, Quantity):
         raise ValueError(f"budget must be a [mass] quantity; got {budget!r}")

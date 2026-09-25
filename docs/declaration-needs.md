@@ -190,18 +190,18 @@ by emptying it. A second assertion is a one-way ratchet on how many refusals sta
 needs.
 
 The same gate reads every other module that builds a refusal. Outside screening, the library
-has 78 more, and 27 state a need today. Every optomechanics screen that stops for a missing
-value names it, among them the gap a shock is judged against, an enclosure's heat path, the
-pressure differentials a window sees (which an environment profile's ambient pressure bounds)
-and a coating's rated extremes. So does every assembly screen, and the three a document's
-`assembly` block reaches name the path it writes: `assembly.parts[].insertion`,
-`assembly.adjustments[].access` and `assembly.inspections[].access`. The B31.3 and Section VIII
-screens name the allowable or the accounting function they were not given, and a drawing
-callout names the ultimate strength or base material it needed. Eleven more are excused by
-name. The other 40 are a backlog, held as
-a per-module ceiling in `tests/test_needs.py` that may only come down: a new refusal that
-states nothing fails the build in any module, and wiring one fails it until the ceiling is
-lowered to match. The sweep sees a refusal however it is spelled, whether as a status keyword,
+has 78 more, and 44 state a need today: every analysis screen that stops for a value names it,
+with the dimension and units to write it in where it is a quantity. The optomechanics screens
+name the gap a shock is judged against or the pressure differentials a window sees (which an
+environment profile's ambient pressure bounds). The timber screens name the adjusted NDS
+design value, and the B31.3 screen the Table A-1 allowable. The screens that take a computed
+accounting (a DSM strength, a UG-37 area balance, a FAD point) name the function that makes
+it. The three assembly screens a document's `assembly` block reaches name the path it
+writes: `assembly.parts[].insertion`, `assembly.adjustments[].access` and
+`assembly.inspections[].access`. Fourteen more are excused by name. The other 20 are a
+backlog, held as a per-module ceiling in `tests/test_needs.py` that may only come down: a
+new refusal that states nothing fails the build in any module, and wiring one fails it until
+the ceiling is lowered to match. The sweep sees a refusal however it is spelled, whether as a status keyword,
 a status chosen in a branch and held in a local, or an `update` dict on a copy. Every unit a
 declared need offers is also parsed and checked against the dimension it states.
 
@@ -209,8 +209,8 @@ declared need offers is also parsed and checked against the dimension it states.
 
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
-with the nine screening refusals that state a need today, thirteen in optomechanics,
-eight in assembly, four in pressure design and two in callouts. A profile's record, binding,
+with the nine screening refusals that state a need today, and the library's others counted
+above. A profile's record, binding,
 applicability check and overrides ship too (group 2), and so does applying a binding to a
 document with every profile-sourced value marked through the spec, the card, the calculation
 report and the bundle (2.3, 4.3). The declared screening depth and the depth-raise report

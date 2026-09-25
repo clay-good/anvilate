@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .._models import Named, RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import AppliedFactor, CheckStatus, ScorecardEntry
+from ..scorecard import AppliedFactor, CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -345,6 +345,26 @@ def bth1_member_scorecard(
     )
 
 
+# What the BTH-1 fatigue screen was waiting on, for the report in `anvilate.needs`.
+_NEEDS_A_STRESS_RANGE = Need(
+    declaration="stress_range",
+    takes="the stress range at the governing detail under the lifted load",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_AN_ALLOWABLE_RANGE = Need(
+    declaration="allowable_stress_range",
+    takes=(
+        "the allowable stress range for the detail's category and the service class, from BTH-1 "
+        "Table 3-3"
+    ),
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.STANDARD,),
+)
+
+
 def bth1_fatigue_scorecard(
     name: str,
     *,
@@ -399,6 +419,14 @@ def bth1_fatigue_scorecard(
                 f"not evaluated — Service Class {service_class.value} ({band} load "
                 f"cycles) requires a fatigue analysis and no {missing} was supplied. "
                 f"Only Class 0 is exempt."
+            ),
+            needs=tuple(
+                need
+                for need, value in (
+                    (_NEEDS_A_STRESS_RANGE, stress_range),
+                    (_NEEDS_AN_ALLOWABLE_RANGE, allowable_stress_range),
+                )
+                if value is None
             ),
             reference=_CLAUSE_SERVICE,
         )
