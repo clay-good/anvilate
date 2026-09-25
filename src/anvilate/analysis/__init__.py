@@ -2555,6 +2555,8 @@ from .optomechanics import (
     tilted_plate_focus_shift,
     tilted_plate_image_shift,
     wavefront_budget_scorecard,
+    window_pressure_budget_contributors,
+    window_pressure_focus_shift,
     window_pressure_opd,
 )
 from .orbital_mechanics import (
@@ -4730,6 +4732,8 @@ __all__ = [
     "BreathingMitigation",
     "seal_breathing_scorecard",
     "window_pressure_opd",
+    "window_pressure_focus_shift",
+    "window_pressure_budget_contributors",
     "pressure_window_scorecard",
     "HarnessCrossing",
     "harness_load_scorecard",

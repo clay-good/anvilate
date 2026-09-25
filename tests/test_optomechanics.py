@@ -1007,6 +1007,96 @@ def test_the_window_wavefront_error_is_sparks_and_cottis() -> None:
         )
 
 
+_BOWED = {
+    "diameter": q("50 mm"),
+    "thickness": q("5 mm"),
+    "elastic_modulus": q("82 GPa"),
+    "poisson_ratio": 0.206,
+    "refractive_index": 1.5168,
+}
+
+
+def test_a_bowed_window_moves_focus_as_a_concentric_meniscus() -> None:
+    from anvilate.analysis.optomechanics import window_pressure_focus_shift
+
+    def shift(differential: str, distance: str = "100 mm", **changes: object) -> float:
+        window = {**_BOWED, **changes}
+        return _um(
+            window_pressure_focus_shift(
+                differential=q(differential),
+                image_distance=q(distance),
+                **window,  # type: ignore[arg-type]
+            )
+        )
+
+    # Written independently of the stress: κ = q·R²·(3 + ν)/(16·D·(1 + ν)) at the centre of
+    # the Timoshenko plate, D = E·t³/(12·(1 − ν²)), and φ = −(n − 1)·t·κ²/n.
+    p, r, e, t, nu, n = 100e3, 0.025, 82e9, 0.005, 0.206, 1.5168
+    rigidity = e * t**3 / (12 * (1 - nu**2))
+    curvature = p * r**2 * (3 + nu) / (16 * rigidity * (1 + nu))
+    expected = (n - 1) * t * curvature**2 / n * 0.1**2 * 1e6
+    assert shift("100 kPa") == pytest.approx(expected, rel=1e-9)
+    assert expected == pytest.approx(0.0023087, rel=1e-4)
+    # Away from the window in both directions, second order in the differential, and the
+    # square of the distance to the image.
+    assert shift("-100 kPa") == pytest.approx(expected, rel=1e-9)
+    assert shift("200 kPa") == pytest.approx(4 * expected, rel=1e-9)
+    assert shift("100 kPa", "200 mm") == pytest.approx(4 * expected, rel=1e-9)
+    # A thin, wide window is where it matters: R⁴/t⁵ makes it about 1,560 times larger.
+    thin = shift("100 kPa", diameter=q("100 mm"), thickness=q("2 mm"))
+    assert thin == pytest.approx(expected * 2**4 * 2.5**5, rel=1e-9)
+    with pytest.raises(ValueError, match="more than half its thickness"):
+        shift("1 MPa", diameter=q("100 mm"), thickness=q("2 mm"))
+    with pytest.raises(ValueError, match="image_distance must be positive"):
+        shift("100 kPa", "0 mm")
+    with pytest.raises(ValueError, match="refractive_index must exceed 1"):
+        shift("100 kPa", refractive_index=1.0)
+
+
+def test_the_governing_differential_enters_both_budgets_by_its_condition() -> None:
+    from anvilate.analysis.optomechanics import (
+        wavefront_budget_scorecard,
+        window_pressure_budget_contributors,
+        window_pressure_focus_shift,
+        window_pressure_opd,
+    )
+
+    wavefront, focus = window_pressure_budget_contributors(
+        "dome", image_distance=q("100 mm"), outward=q("60 kPa"), inward=q("100 kPa"), **_BOWED
+    )
+    label = "dome (inward 100.0 kPa)"
+    assert list(wavefront) == [label] and list(focus) == [label]
+    opd = window_pressure_opd(
+        differential=q("100 kPa"),
+        **{k: v for k, v in _BOWED.items() if k != "poisson_ratio"},  # type: ignore[arg-type]
+    )
+    # Half the stated error bounds its RMS whatever the aperture's shape.
+    assert wavefront[label].to("pm").magnitude == pytest.approx(opd.to("pm").magnitude / 2)
+    direct = window_pressure_focus_shift(
+        differential=q("100 kPa"), image_distance=q("100 mm"), **_BOWED
+    )
+    assert _um(focus[label]) == pytest.approx(_um(direct), rel=1e-12)
+    # The outward condition governs when it is the larger one.
+    wavefront, _ = window_pressure_budget_contributors(
+        "dome", image_distance=q("100 mm"), outward=q("120 kPa"), inward=q("100 kPa"), **_BOWED
+    )
+    assert list(wavefront) == ["dome (outward 120.0 kPa)"]
+    entry = wavefront_budget_scorecard(
+        "wavefront",
+        contributors={**wavefront, "figure": q("20 nm")},
+        wavelength=q("633 nm"),
+        strehl_threshold=0.8,
+    )
+    assert entry.derivation is not None
+    assert "dome (outward 120.0 kPa), RMS" in [s.description for s in entry.derivation.inputs]
+    with pytest.raises(ValueError, match="declare outward"):
+        window_pressure_budget_contributors("dome", image_distance=q("100 mm"), **_BOWED)
+    with pytest.raises(ValueError, match="cannot be negative"):
+        window_pressure_budget_contributors(
+            "dome", image_distance=q("100 mm"), inward=q("-1 kPa"), **_BOWED
+        )
+
+
 def _harnesses(*crossings: object, allowed: str = "100 µrad"):  # type: ignore[no-untyped-def]
     from anvilate.analysis.optomechanics import harness_load_scorecard
 

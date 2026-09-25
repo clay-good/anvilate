@@ -77,6 +77,8 @@ __all__ = [
     "BreathingMitigation",
     "seal_breathing_scorecard",
     "window_pressure_opd",
+    "window_pressure_focus_shift",
+    "window_pressure_budget_contributors",
     "pressure_window_scorecard",
     "HarnessCrossing",
     "harness_load_scorecard",
@@ -2076,8 +2078,8 @@ def window_pressure_opd(
     together the first-order change cancels. What remains is the second-order term
     OPD = 0.00889·(n − 1)·ΔP²·D⁶/(E²·t⁵) of Sparks and Cottis (1973), J. Appl. Phys. 44(2), for
     the window's unsupported ``diameter`` D. It goes as ΔP², so it has the same sign in both
-    directions. The value is the error the source states, not an RMS, so a budget of RMS
-    contributors needs it converted for the declared aperture's shape.
+    directions. The value is the error the source states, not an RMS;
+    :func:`window_pressure_budget_contributors` bounds the RMS a budget adds from it.
     """
     _check(differential, "[pressure]", "differential")
     _check(diameter, "[length]", "diameter")
@@ -2098,6 +2100,128 @@ def window_pressure_opd(
     dp = differential.to("Pa").magnitude
     opd = 0.00889 * (refractive_index - 1.0) * dp**2 * d**6 / (e**2 * t**5)
     return Quantity(magnitude=opd * 1e9, unit="nm")
+
+
+def window_pressure_focus_shift(
+    *,
+    differential: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+    refractive_index: float,
+    image_distance: Quantity,
+) -> Quantity:
+    """How far a pressure differential moves focus by bowing a window, in µm.
+
+    A rim-mounted window bows with both faces curving together about one centre, which makes
+    it a concentric meniscus: power φ = −(n − 1)·t/(n·R₁·R₂) (Smith, Modern Optical
+    Engineering), taken paraxially at the centre, where the Timoshenko simply supported plate
+    has curvature κ = 2·(1 − ν)·σ/(E·t) from its centre stress σ. So φ ≈ −(n − 1)·t·κ²/n,
+    negative in both directions and second order in the differential, like
+    :func:`window_pressure_opd`. A weak lens of power φ at ``image_distance`` L before the
+    image it forms moves that image by −L²·φ, away from the window. For a window in
+    collimated light ahead of the objective, L is the objective's focal length.
+
+    Thin-plate theory holds while the bow is under half the thickness, and a bow beyond it
+    is refused rather than extrapolated.
+    """
+    _check(image_distance, "[length]", "image_distance")
+    distance = image_distance.to("m").magnitude
+    if not distance > 0:
+        raise ValueError(f"image_distance must be positive; got {image_distance}")
+    if not (isfinite(refractive_index) and refractive_index > 1.0):
+        raise ValueError(f"refractive_index must exceed 1; got {refractive_index}")
+    _check(differential, "[pressure]", "differential")
+    plate = simply_supported_circular_plate_uniform_load(
+        pressure=Quantity(magnitude=abs(differential.to("Pa").magnitude), unit="Pa"),
+        diameter=diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+        poisson_ratio=poisson_ratio,
+    )
+    if plate.small_deflection_ratio > 0.5:
+        raise ValueError(
+            f"the window bows {plate.max_deflection.to('mm').magnitude:.3g} mm, more than "
+            f"half its thickness {thickness}, where thin-plate theory no longer holds; "
+            "declare a thicker window or screen the bow with a large-deflection analysis"
+        )
+    t = thickness.to("m").magnitude
+    sigma = plate.max_bending_stress.to("Pa").magnitude
+    curvature = 2.0 * (1.0 - poisson_ratio) * sigma / (elastic_modulus.to("Pa").magnitude * t)
+    n = refractive_index
+    power = -(n - 1.0) * t * curvature**2 / n
+    return Quantity(magnitude=-(distance**2) * power * 1e6, unit="µm")
+
+
+def window_pressure_budget_contributors(
+    name: str,
+    *,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+    refractive_index: float,
+    image_distance: Quantity,
+    outward: Quantity | None = None,
+    inward: Quantity | None = None,
+) -> tuple[dict[str, Quantity], dict[str, Quantity]]:
+    """A pressure-bowed window as a wavefront contributor and a focus contributor.
+
+    Returns ``(wavefront, focus)``, each one contributor named ``name`` after the window, with
+    the condition that bows it, ready for :func:`wavefront_budget_scorecard` and a focus budget.
+    Both effects go as ΔP², so the larger of the ``outward`` and ``inward`` magnitudes
+    governs. The two are not combined, because a sealed volume sees one at a time.
+
+    The wavefront term is :func:`window_pressure_opd` halved. Sparks and Cottis state a total
+    error and not an RMS, and no error spanning a range can have an RMS above half of it
+    (Popoviciu's inequality on variances), so half is a bound whatever the aperture's shape.
+    The focus term is :func:`window_pressure_focus_shift`. A window with neither differential
+    declared is refused by name, because a contributor left out of a budget is one the
+    budget calls zero.
+    """
+    for label, value, dimension in (
+        ("diameter", diameter, "[length]"),
+        ("thickness", thickness, "[length]"),
+        ("elastic_modulus", elastic_modulus, "[pressure]"),
+        ("image_distance", image_distance, "[length]"),
+    ):
+        _check(value, dimension, label)
+    declared = {
+        label: value
+        for label, value in (("outward", outward), ("inward", inward))
+        if value is not None
+    }
+    if not declared:
+        raise ValueError(
+            f"'{name}' enters the budgets through the differential that bows it; declare "
+            "outward (altitude, warm) or inward (immersion, cold)"
+        )
+    for label, value in declared.items():
+        _check(value, "[pressure]", label)
+        if value.to("Pa").magnitude < 0:
+            raise ValueError(f"{label} is a magnitude and cannot be negative; got {value}")
+    governing = max(declared, key=lambda label: declared[label].to("Pa").magnitude)
+    differential = declared[governing]
+    condition = f"{name} ({governing} {differential.to('kPa').magnitude:.1f} kPa)"
+    opd = window_pressure_opd(
+        differential=differential,
+        diameter=diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+        refractive_index=refractive_index,
+    )
+    focus = window_pressure_focus_shift(
+        differential=differential,
+        diameter=diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+        poisson_ratio=poisson_ratio,
+        refractive_index=refractive_index,
+        image_distance=image_distance,
+    )
+    wavefront = Quantity(magnitude=opd.to("nm").magnitude / 2.0, unit="nm")
+    return {condition: wavefront}, {condition: focus}
 
 
 def pressure_window_scorecard(
