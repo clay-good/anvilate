@@ -330,6 +330,8 @@ def test_a_finish_with_no_strength_to_derive_from_is_not_evaluated():
     (entry,) = card.entries
     assert entry.status is CheckStatus.NOT_EVALUATED
     assert "no ultimate strength" in entry.detail
+    assert [need.declaration for need in entry.needs] == ["ultimate_strength"]
+    assert entry.needs[0].dimension == "[pressure]"
 
 
 def test_a_roughness_the_process_cannot_attain_is_a_contradiction_not_an_average():
@@ -378,6 +380,7 @@ def test_a_heat_treatment_with_no_base_material_is_not_evaluated():
     (entry,) = callout_scorecard(CalloutSet(callouts=(treatment,))).entries
     assert entry.status is CheckStatus.NOT_EVALUATED
     assert "no base material" in entry.detail
+    assert [need.declaration for need in entry.needs] == ["base_material"]
 
 
 def test_a_typed_note_no_check_consumes_says_so_rather_than_passing():

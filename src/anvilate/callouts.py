@@ -49,7 +49,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .units import Quantity, require_finite, spoken
 
 __all__ = [
@@ -753,6 +753,22 @@ def heat_treated_material_id(
     return None
 
 
+# What a callout entry was waiting on, for the report in `anvilate.needs`. Both are arguments
+# of `callout_scorecard`, and fields of the evidence bundle that calls it, by the same names.
+_NEEDS_AN_ULTIMATE_STRENGTH = Need(
+    declaration="ultimate_strength",
+    takes="the base material's ultimate tensile strength, which the Marin surface factor reads",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.DATABASE, ValueSource.STANDARD, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_BASE_MATERIAL = Need(
+    declaration="base_material",
+    takes="the material the heat treatment is applied to, by its materials-database identifier",
+    sources=(ValueSource.DATABASE, ValueSource.USER),
+)
+
+
 def callout_scorecard(
     callouts: CalloutSet,
     *,
@@ -849,6 +865,7 @@ def callout_scorecard(
                             "supplied to derive the surface factor from"
                         ),
                         reference=MARIN_SURFACE_CITATION,
+                        needs=(_NEEDS_AN_ULTIMATE_STRENGTH,),
                     )
                 )
             else:
@@ -897,6 +914,7 @@ def callout_scorecard(
                             f"{marker} {callout} declared, but no base material was "
                             "supplied to resolve the condition against"
                         ),
+                        needs=(_NEEDS_A_BASE_MATERIAL,),
                     )
                 )
                 continue

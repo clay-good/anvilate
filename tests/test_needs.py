@@ -372,7 +372,6 @@ _UNWIRED_CEILING = {
     "src/anvilate/analysis/lifting_device.py": 1,
     "src/anvilate/analysis/nds_timber.py": 4,
     "src/anvilate/budget.py": 1,
-    "src/anvilate/callouts.py": 6,
     "src/anvilate/dependency.py": 1,
     "src/anvilate/export/qif.py": 1,
     "src/anvilate/keepouts.py": 2,
@@ -543,7 +542,21 @@ def test_the_library_counts_on_the_page_are_the_sweeps_own() -> None:
     assert total == wired + excused + backlog, (total, wired, excused, backlog)
     assert f"the library has {total} more, and {wired} state a need today" in page
     assert f"The other {backlog} are a backlog" in page
-    words = {3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+    words = {
+        3: "Three",
+        4: "Four",
+        5: "Five",
+        6: "Six",
+        7: "Seven",
+        8: "Eight",
+        9: "Nine",
+        10: "Ten",
+        11: "Eleven",
+        12: "Twelve",
+        13: "Thirteen",
+        14: "Fourteen",
+        15: "Fifteen",
+    }
     assert f"{words[excused]} more are excused by name" in page
 
 
