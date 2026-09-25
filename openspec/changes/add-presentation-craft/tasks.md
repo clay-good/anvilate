@@ -5,7 +5,10 @@
 - [x] 1.1 Tabular/lining figures everywhere a value appears; fixed advance width — the calculation report sets every value cell, derivation and status in tabular lining figures
 - [x] 1.2 Decimal alignment in every column of values; units in a consistent position — every
       value column in the calculation report is right-aligned in tabular figures, so decimals
-      and units line up at the column's end
+      and units line up at the column's end. The text form, and so the PDF, matched this
+      only from 2026-09-25. Its margin summary had been a sentence per check with the figure
+      after the name, so no two decimals shared a column. It is now a grid whose figures
+      align on the decimal point, held by a test
 - [x] 1.3 A value that updates keeps its width and does not move its neighbours — the CLI's progress count is padded to the width of its total (`[ 9/12]`, `[10/12]`), so the activity beside it stays in one column (tests/test_cli.py)
 - [x] 1.4 Significant figures stable across renders of identical input — the calculation
       report renders byte-identical from two interpreters with different hash seeds

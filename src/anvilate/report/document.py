@@ -21,6 +21,7 @@ diff between two reports is an engineering change, never rendering noise.
 
 from __future__ import annotations
 
+import re
 from html import escape
 from math import isfinite
 from typing import NamedTuple
@@ -443,24 +444,14 @@ class CalculationReport(StatableModel):
             if section.citation:
                 out.append(f"  source: {section.citation}")
             blocks.append(_TextBlock(tuple(out), heading=2))
-        out = ["Margin summary", "--------------"]
-        for name, factor, required, verdict in self._summary_rows():
-            # A row with neither figure is most of this table on an ordinary document: a
-            # resolution check, a classification, a tier that did not run. The grid form
-            # below reads an em dash in a column headed "Safety factor" correctly; the text
-            # form put the same cell into a sentence, and nine rows of "— vs — required"
-            # under a heading that says Margin summary is a table with no margins in it.
-            if factor == _NO_FIGURE and required == _NO_FIGURE:
-                out.append(f"  {verdict:<14} {name}: no safety factor to compare")
-            else:
-                out.append(f"  {verdict:<14} {name}: {factor} vs {required} required")
+        out = ["Margin summary", "--------------", *self._summary_grid()]
         governing = self.governing()
         if governing is not None:
             out.append(f"  governing check: {governing.name}")
         not_evaluated, out_of_depth = self.scorecard().completeness()
         out.append(f"  not evaluated: {not_evaluated}, out of declared depth: {out_of_depth}")
         out.append(f"  overall: {_STATUS_LABEL[self.status]}")
-        blocks.append(_TextBlock(tuple(out), heading=2))
+        blocks.append(_TextBlock(tuple(out), heading=3))
         out = ["Performance budgets", "-------------------"]
         if not self.budgets:
             out.append(f"  {_NONE_DECLARED}")
@@ -589,6 +580,37 @@ class CalculationReport(StatableModel):
                 required = f"{required} (× {inside} inside)"
             rows.append((entry.name, factor, required, _STATUS_LABEL[entry.status]))
         return tuple(rows)
+
+    def _summary_grid(self) -> list[str]:
+        """The margin summary as a grid: a header row, then one row per check.
+
+        The figures are right-aligned so they line up on the decimal point, which is what
+        a reviewer scanning a printed column needs. This was a sentence per check,
+        `net tension: 6.67 vs 2.00 required`, so each figure sat after a name of any
+        length and no two lined up on paper. The Required column right-aligns its leading
+        figure and lets a band or an inside factor run on after it. A check with neither
+        figure shows an em dash under both numeric headings, as the HTML grid does. That
+        reads correctly in a grid. The objection to it was only ever the sentence form,
+        "— vs — required", which compared one absence with another.
+        """
+        rows = self._summary_rows()
+        leads = [_leading_figure(required) for _name, _factor, required, _verdict in rows]
+        lead_width = max((len(lead) for lead, _rest in leads), default=0)
+        required_cells = [lead.rjust(lead_width) + rest for lead, rest in leads]
+        factor_width = max([len("Safety factor"), *(len(factor) for _n, factor, _r, _v in rows)])
+        required_width = max([len("Required"), *(len(cell) for cell in required_cells)])
+        verdict_width = max(len(label) for label in _STATUS_LABEL.values())
+
+        def line(verdict: str, factor: str, required: str, name: str) -> str:
+            return (
+                f"  {verdict:<{verdict_width}}  {factor:>{factor_width}}  "
+                f"{required:<{required_width}}  {name}"
+            ).rstrip()
+
+        grid = [line("Result", "Safety factor", "Required", "Check")]
+        for (name, factor, _required, verdict), cell in zip(rows, required_cells, strict=True):
+            grid.append(line(verdict, factor, cell, name))
+        return grid
 
     def _assumption_lines(self) -> tuple[str, ...]:
         """Each assumption with its origin tag, or ``none declared``.
@@ -840,6 +862,18 @@ class CalculationReport(StatableModel):
         out.append("</table>")
         out.extend(f"<p>{escape(line)}</p>" for line in self._ledger_lines())
         return out
+
+
+def _leading_figure(cell: str) -> tuple[str, str]:
+    """``cell`` split into its leading figure and whatever follows, for decimal alignment.
+
+    `2.00–4.00` is `2.00` and `–4.00`; `2.00 (× 1.5 inside)` is `2.00` and the rest; an em
+    dash is its own figure, so it right-aligns under the numbers as the HTML's does.
+    """
+    match = re.match(r"-?(?:\d+(?:\.\d+)?|inf|—)", cell)
+    if match is None:
+        return "", cell
+    return match.group(), cell[match.end() :]
 
 
 def report_from_record(record: dict) -> CalculationReport:

@@ -31,8 +31,9 @@ FAIL  tip deflection
 
 Margin summary
 --------------
-  PASS           bending yield: 1.85 vs 1.50 required
-  FAIL           tip deflection: 1.05 vs 1.50 required
+  Result         Safety factor  Required  Check
+  PASS                    1.85  1.50      bending yield
+  FAIL                    1.05  1.50      tip deflection
   governing check: tip deflection
   not evaluated: 0, out of declared depth: 0
   overall: FAIL

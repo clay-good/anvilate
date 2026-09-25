@@ -76,7 +76,7 @@ reads the ledger. With no entries the heading stays and says `none declared`. Th
 record carries the entries from schema 1.2.
 
 **A two-sided check shows its band in the Required column**, not just the floor:
-`OVER MARGIN  net tension: 6.67 vs 2.00–4.00 required`. The column used to show the
+`OVER MARGIN  6.67  2.00–4.00  net tension`. The column used to show the
 minimum only, so an over-margin row read `6.67 vs 2.00 required` — the limit it satisfied,
 while the 4.00 it exceeded appeared nowhere in the condensed table a reviewer actually
 scans, and the row's verdict contradicted its own numbers. The band is shown whenever an
@@ -124,16 +124,30 @@ alongside the clause that consumed it.
 ## A margin summary with no margins in it
 
 The condensed table at the foot of a report has a Safety factor column and a Required
-column, and most checks on an ordinary document have neither: a material resolution, an
-interface resolution, a classification, a tier that did not run. In the HTML grid an em dash
-under a numeric heading reads correctly. The text form put the same two cells into prose —
-`material resolution: — vs — required` — and on a bracket that is *every* row, nine lines of
-it under a heading that says Margin summary.
+column. Most checks on an ordinary document have neither: a material resolution, an
+interface resolution, a classification, a tier that did not run. The rows stay, because a
+check missing from the summary reads as one whose margin was not worth showing. This tool
+reports what did not run rather than leaving it out.
 
-The rows stay, because a check missing from the summary reads as one whose margin was not
-worth showing, and this tool reports what did not run rather than leaving it out. A row with
-neither figure now says `no safety factor to compare` instead of comparing one absence with
-another.
+The text form is a grid, as the HTML is, so an absent figure is an em dash under its
+heading:
+
+```text
+Margin summary
+--------------
+  Result         Safety factor  Required     Check
+  FAIL                    1.50   2.00        pin bearing
+  PASS                  123.25   2.00        a much longer check name
+  FAIL                    6.70  12.00–40.00  net tension
+  WARNING                    —      —        material resolution
+```
+
+It used to be one sentence per check, `pin bearing: 1.50 vs 2.00 required`. That had two
+faults. A row with no figures read `— vs — required`, comparing one absence with another.
+And each figure followed a name of any length, so no two figures lined up on paper. In the
+grid the figures align on the decimal point, which is what the calculation-report spec asks
+of a printed summary. A test holds that alignment across figures of one to three digits and
+a band.
 
 ## Checks that have no derivation
 

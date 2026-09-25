@@ -16,7 +16,8 @@ PASS  tension
 
 Margin summary
 --------------
-  PASS           tension: 2.40 vs 2.00 required
+  Result         Safety factor  Required  Check
+  PASS                    2.40  2.00      tension
   governing check: tension
   not evaluated: 0, out of declared depth: 0
   overall: PASS

@@ -408,17 +408,16 @@ def test_margin_summary_states_the_computed_factor_before_the_required_minimum()
     report = _report()
     text = report.to_text()
     # Bending runs 1.85 against a required 1.50; deflection 1.05 against 1.50.
-    assert "PASS           bending yield: 1.85 vs 1.50 required" in text
-    assert "FAIL           tip deflection: 1.05 vs 1.50 required" in text
+    assert "  Result         Safety factor  Required  Check" in text
+    assert "  PASS                    1.85  1.50      bending yield" in text
+    assert "  FAIL                    1.05  1.50      tip deflection" in text
     # The two checks share a requirement but not a factor: an order swap cannot survive
     # both rows, and the row's verdict must agree with its own numbers.
     for line, verdict in (("bending yield", "PASS"), ("tip deflection", "FAIL")):
-        row = next(r for r in text.splitlines() if line in r and "required" in r)
-        factor, required = row.split(":")[1].split(" vs ")
-        computed = float(factor.strip())
-        minimum = float(required.replace("required", "").strip())
-        assert row.strip().startswith(verdict)
-        assert (computed >= minimum) is (verdict == "PASS")
+        row = next(r for r in text.splitlines() if r.endswith(line) and r.startswith("  "))
+        status, computed, minimum = row.split()[:3]
+        assert status == verdict
+        assert (float(computed) >= float(minimum)) is (verdict == "PASS")
 
     # The HTML summary table is fed by the same rows and must carry the same order.
     html = report.to_html()
@@ -458,9 +457,9 @@ def test_the_margin_summary_states_the_band_a_two_sided_check_was_held_to():
         ("pin bearing", "2.40", "2.00", "PASS"),
     )
     text = report.to_text()
-    assert "OVER MARGIN    net tension: 6.67 vs 2.00–4.00 required" in text
+    assert "  OVER MARGIN             6.67  2.00–4.00  net tension" in text
     # The row's numbers agree with its verdict: 6.67 is outside 2.00-4.00, 3.10 is not.
-    assert "PASS           web crippling: 3.10 vs 2.00–4.00 required" in text
+    assert "  PASS                    3.10  2.00–4.00  web crippling" in text
     # And the same rows feed the HTML table.
     assert "2.00–4.00" in report.to_html()
 
@@ -1764,6 +1763,17 @@ def test_the_sources_a_signed_predicate_states_are_bounded():
         source_record(("A" * (_MAX_STRING_LENGTH + 1),))
 
 
+def _figures(row: str) -> list[str]:
+    """A summary row's two numeric cells, read after its result label."""
+    from anvilate.report.document import _STATUS_LABEL
+
+    body = row.strip()
+    label = next(
+        lab for lab in sorted(_STATUS_LABEL.values(), key=len, reverse=True) if body.startswith(lab)
+    )
+    return body[len(label) :].split()[:2]
+
+
 def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence():
     """A grid cell and a sentence are not the same rendering of the same absence.
 
@@ -1796,20 +1806,15 @@ def test_the_text_margin_summary_never_puts_two_absent_figures_into_a_sentence()
         assert not any("— vs —" in line for line in summary), (
             f"a margin summary line compares one absent figure with another: {summary}"
         )
-        # Every check is still in the table, and the ones that DO carry margins still read
-        # as a comparison.
-        # The summary's trailing lines — the governing check, the completeness counts and
-        # the overall verdict — are not rows about a check, and the filter says so by name
-        # rather than by position, which is what broke when a count was added.
-        trailing = ("  governing check:", "  not evaluated:", "  overall:")
-        rows = [
-            line
-            for line in summary
-            if line.startswith("  ") and ": " in line and not line.startswith(trailing)
-        ]
-        assert len(rows) >= len(card.entries), "the summary dropped a check rather than showing it"
-        assert sum(1 for line in rows if " vs " in line and "required" in line) == expected
-        assert all("no safety factor to compare" in line or " vs " in line for line in rows)
+        # Every check is still in the table, as a grid row under the header: its result, a
+        # figure or a dash under each numeric heading, and its name.
+        header = next(i for i, line in enumerate(summary) if line.startswith("  Result  "))
+        rows = summary[header + 1 : header + 1 + len(card.entries)]
+        assert [row.rsplit("  ", 1)[-1] for row in rows] == [e.name for e in card.entries], (
+            "the summary dropped a check rather than showing it"
+        )
+        figures = [_figures(row) for row in rows]
+        assert sum(1 for factor, _required in figures if factor != "—") == expected
 
     # The grid form keeps the dash, which is what a numeric column under a header wants.
     html = CalculationReport(
@@ -2402,3 +2407,29 @@ def test_nothing_in_the_report_moves_so_reduced_motion_has_nothing_to_remove():
         assert _MOTION.search(_report().to_html()), "the search cannot see a planted transition"
     finally:
         document._STYLESHEET = original
+
+
+def test_the_printed_margin_summary_aligns_its_figures_on_the_decimal():
+    """calculation-report: "The margin summary scans on paper". The PDF typesets this grid.
+
+    Each figure used to follow its check's name in a sentence, so no two decimal points
+    shared a column. Held over a card whose factors run from one digit to three, with a band.
+    """
+    entries = (
+        ScorecardEntry.from_safety_factor("a", computed=1.5, required=2.0),
+        ScorecardEntry.from_safety_factor(
+            "a much longer check name", computed=123.25, required=2.0
+        ),
+        ScorecardEntry.from_safety_factor("band", computed=6.7, required=12.0, upper=40.0),
+        ScorecardEntry.from_safety_factor("missing", computed=None, required=2.0, unavailable="no"),
+    )
+    text = CalculationReport(
+        title="t", sections=tuple(ReportSection(entry=entry) for entry in entries)
+    ).to_text()
+    summary = text[text.index("Margin summary") :].splitlines()
+    header = next(i for i, line in enumerate(summary) if line.startswith("  Result  "))
+    rows = summary[header + 1 : header + 1 + len(entries)]
+    factor_points = {row.index(".", 16) for row in rows if _figures(row)[0] != "—"}
+    required_points = {row.index(".", row.index(_figures(row)[1])) for row in rows}
+    assert len(factor_points) == 1, rows
+    assert len(required_points) == 1, rows

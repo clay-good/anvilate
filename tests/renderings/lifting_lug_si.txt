@@ -59,9 +59,10 @@ PASS  padeye_weld weld shear
 
 Margin summary
 --------------
-  PASS           padeye net tension: 3.30 vs 2.00 required
-  FAIL           padeye pin bearing: 1.50 vs 2.00 required
-  PASS           padeye_weld weld shear: 5.25 vs 2.00 required
+  Result         Safety factor  Required  Check
+  PASS                    3.30  2.00      padeye net tension
+  FAIL                    1.50  2.00      padeye pin bearing
+  PASS                    5.25  2.00      padeye_weld weld shear
   governing check: padeye pin bearing
   not evaluated: 0, out of declared depth: 0
   overall: FAIL
