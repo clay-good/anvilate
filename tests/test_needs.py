@@ -372,7 +372,6 @@ _UNWIRED_CEILING = {
     "src/anvilate/analysis/lifting_device.py": 1,
     "src/anvilate/analysis/nds_timber.py": 4,
     "src/anvilate/analysis/pressure_vessel.py": 7,
-    "src/anvilate/assembly.py": 9,
     "src/anvilate/budget.py": 1,
     "src/anvilate/callouts.py": 6,
     "src/anvilate/dependency.py": 1,

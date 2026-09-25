@@ -35,8 +35,50 @@ from ._assembly_declarations import (
 )
 from ._models import Named, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from .scorecard import (
+    CheckStatus,
+    Direction,
+    Need,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from .spec import DesignSpec
+
+# What each refusal here was waiting on, for the report in `anvilate.needs`. The first three
+# are what a Design Spec's `assembly` block writes, spelled as its path; the rest are
+# arguments of the geometric screens, which a document does not reach.
+_NEEDS_AN_INSERTION = Need(
+    declaration="assembly.parts[].insertion",
+    takes="the direction each part goes in from: one of the six axis directions",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_AN_ACCESS_ROUTE = Need(
+    declaration="assembly.adjustments[].access",
+    takes="the features an adjustment's tool passes through: a port, a window or a path",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_AN_INSTRUMENT_ROUTE = Need(
+    declaration="assembly.inspections[].access",
+    takes="the features an inspection's instrument passes through to reach the dimension",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_AN_INSPECTION = Need(
+    declaration="assembly.inspections",
+    takes="each toleranced dimension to be measured, with its method and route",
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+_NEEDS_A_STATE = Need(
+    declaration="performed_in",
+    takes="the assembly state the tool is used in, one of the build's declared states",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_THE_GEOMETRY = Need(
+    declaration="bodies",
+    takes="a solid for every part installed by the state the access is judged in",
+    sources=(ValueSource.USER,),
+)
 
 if TYPE_CHECKING:
     pass
@@ -112,6 +154,7 @@ class AssemblyOrder(StatableModel):
                     f"not evaluated — {', '.join(self.undirected)} {verb} no insertion "
                     "direction, and a part is never treated as insertable from anywhere"
                 ),
+                needs=(_NEEDS_AN_INSERTION,),
             )
         findings = []
         for first, second, feature in self.interferences:
@@ -289,6 +332,7 @@ def screen_adjustment_access(
                         f"{adjustment.performed_in} declares no access route: no port, window "
                         "or tool path, and an undeclared route is not a clear one"
                     ),
+                    needs=(_NEEDS_AN_ACCESS_ROUTE,),
                 )
             )
             continue
@@ -378,6 +422,7 @@ def screen_tool_access(
                         f"{requirement.tool.tool} reaching {requirement.feature} states no "
                         "assembly state it is used in, so which parts are in the way is unknown"
                     ),
+                    needs=(_NEEDS_A_STATE,),
                 )
             )
             continue
@@ -404,6 +449,7 @@ def screen_tool_access(
                         "given, and access is not measured against an assembly with a part "
                         "missing"
                     ),
+                    needs=(_NEEDS_THE_GEOMETRY,),
                 )
             )
             continue
@@ -478,6 +524,7 @@ def screen_swing_arc(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
             detail=f"the wrench on {requirement.feature} states no assembly state it is used in",
+            needs=(_NEEDS_A_STATE,),
         )
     if requirement.performed_in not in order:
         raise ValueError(
@@ -498,6 +545,7 @@ def screen_swing_arc(
                 f"in {requirement.performed_in}, {', '.join(missing)} installed with no geometry "
                 "given, and a swing is not measured against an assembly with a part missing"
             ),
+            needs=(_NEEDS_THE_GEOMETRY,),
         )
     faces = part.faces.get(str(requirement.face))
     if not faces:
@@ -611,6 +659,7 @@ def screen_inspectability(
                         f"{inspection.dimension} by {inspection.method} declares no route for "
                         "the instrument, and an undeclared route is not a clear one"
                     ),
+                    needs=(_NEEDS_AN_INSTRUMENT_ROUTE,),
                 )
             )
             continue
@@ -670,6 +719,8 @@ def screen_inspectability(
                 kind=DerivationAbsence.LOOKUP,
                 reason="the governing value of the per-dimension findings below",
             ),
+            # With findings, anything missing is stated on the finding that missed it.
+            needs=() if entries else (_NEEDS_AN_INSPECTION,),
         ),
     )
     return tuple(entries)

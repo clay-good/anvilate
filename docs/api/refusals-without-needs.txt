@@ -33,3 +33,4 @@ _keepout_entries | keepout {keepout.tag} | a capability gap: intrusion is measur
 analysis/optomechanics.py:qualify | entry.name | a capability gap: the screen assumes a uniform soak and the declared condition is a gradient, which no soak screen describes whatever else is declared
 analysis/optomechanics.py:athermal_focus | name | a data-coverage limit, not a missing value: the material record states expansion over ranges that do not cover the swing, and the fix is a different record rather than a declaration
 analysis/optomechanics.py:cycling_retention_scorecard | name | verification-only by construction: no screen here models drift over repeated cycles, so the entry names its test method and stays open until that test is run
+assembly.py:screen_swing_arc | name | a correction: the requirement names a face the build does not tag, and the refusal lists the faces it does, so the fix is the name already written

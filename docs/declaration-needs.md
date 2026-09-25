@@ -190,10 +190,13 @@ by emptying it. A second assertion is a one-way ratchet on how many refusals sta
 needs.
 
 The same gate reads every other module that builds a refusal. Outside screening, the library
-has 78 more, and 13 state a need today: every optomechanics screen that stops for a missing
-value, among them the gap a shock is judged against, an enclosure's heat path, the pressure
-differentials a window sees (which an environment profile's ambient pressure bounds) and a
-coating's rated extremes. Three more are excused by name. The other 62 are a backlog, held as
+has 78 more, and 21 state a need today. Every optomechanics screen that stops for a missing
+value names it, among them the gap a shock is judged against, an enclosure's heat path, the
+pressure differentials a window sees (which an environment profile's ambient pressure bounds)
+and a coating's rated extremes. So does every assembly screen, and the three a document's
+`assembly` block reaches name the path it writes: `assembly.parts[].insertion`,
+`assembly.adjustments[].access` and `assembly.inspections[].access`. Four more are excused by
+name. The other 53 are a backlog, held as
 a per-module ceiling in `tests/test_needs.py` that may only come down: a new refusal that
 states nothing fails the build in any module, and wiring one fails it until the ceiling is
 lowered to match. The sweep sees a refusal however it is spelled, whether as a status keyword,
@@ -204,8 +207,8 @@ declared need offers is also parsed and checked against the dimension it states.
 
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
-with the nine screening refusals that state a need today, and thirteen in optomechanics. A
-profile's record, binding,
+with the nine screening refusals that state a need today, thirteen in optomechanics and
+eight in assembly. A profile's record, binding,
 applicability check and overrides ship too (group 2), and so does applying a binding to a
 document with every profile-sourced value marked through the spec, the card, the calculation
 report and the bundle (2.3, 4.3). The declared screening depth and the depth-raise report

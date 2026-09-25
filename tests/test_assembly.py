@@ -219,3 +219,13 @@ def test_a_service_action_is_screened_as_an_adjustment_in_its_state() -> None:
         ],
     )
     assert through_port.status is CheckStatus.PASS
+
+
+def test_an_inspectability_summary_with_nothing_to_examine_asks_for_inspections() -> None:
+    # With findings, a gap is stated on the finding that has it; with none, the summary is the
+    # only entry, and what it lacks is anything to examine.
+    from anvilate.assembly import screen_inspectability
+
+    (summary,) = screen_inspectability([], [], [])
+    assert summary.status is CheckStatus.NOT_EVALUATED
+    assert [need.declaration for need in summary.needs] == ["assembly.inspections"]

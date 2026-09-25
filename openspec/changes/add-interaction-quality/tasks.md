@@ -26,9 +26,9 @@
       `ScorecardEntry.from_safety_factor` states its reason and the field to declare
       (`unavailable=`, 34 call sites, held by a gate in tests/conftest.py). Raised
       refusals carry their remedy in the message text (2.2), with no structured field yet. The
-      structured field is `ScorecardEntry.needs` (add-declaration-completeness): 22 of the
+      structured field is `ScorecardEntry.needs` (add-declaration-completeness): 30 of the
       library's 111 not-evaluated entries carry it (nine in screening, every optomechanics
-      screen that stops for a value), and tests/test_needs.py now sweeps every module, not
+      and assembly screen that stops for a value), and tests/test_needs.py now sweeps every module, not
       only screening — the rest are excused by cause or held in a per-module backlog ceiling
       that only comes down
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an

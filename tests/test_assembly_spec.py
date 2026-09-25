@@ -108,3 +108,25 @@ def test_a_declared_assembly_reaches_the_assembly_modes_and_its_screens_address_
     assert by_mode["a tolerance nobody can measure on the built article"].addressed
     bare = _HOUSING.split("assembly:")[0]
     assert "assembly" not in facts_from_spec(load_spec_yaml(bare))
+
+
+def test_an_unstated_assembly_fact_reaches_the_needs_report_by_its_path() -> None:
+    """A document's gap is named the way the document writes it.
+
+    Leaving out a part's insertion direction, an adjustment's route and an inspection's route
+    turns three screens to not evaluated, and the needs report names each as a path under
+    `assembly` — the line to add, not a parameter of a function the reader never calls.
+    """
+    from anvilate.needs import needs_report
+
+    undeclared = (
+        _HOUSING.replace('{name: cover, insertion: "-z", ', "{name: cover, ", 1)
+        .replace(", performed_in: closed, access: [top opening]}", ", performed_in: closed}", 1)
+        .replace(", method: height gauge, access: [top opening]}", ", method: height gauge}", 1)
+    )
+    assert undeclared.count("access:") == 0 and undeclared.count("insertion:") == 2
+    report = needs_report(screen_spec(load_spec_yaml(undeclared)))
+    unblocks = {item.need.declaration: item.unblocks for item in report.items}
+    assert unblocks["assembly.parts[].insertion"] == ("assembly order",)
+    assert unblocks["assembly.adjustments[].access"] == ("access: focus screw in closed",)
+    assert unblocks["assembly.inspections[].access"] == ("inspectability: cell seat height",)
