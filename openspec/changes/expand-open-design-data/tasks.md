@@ -14,7 +14,17 @@
 - [ ] 2.1 MIL-HDBK-5J-seeded allowables pack (curated slice; table citations;
       superseded note)
 - [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step
-- [ ] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records
+- [ ] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records —
+      candidate found and half-anchored 2026-09-24: the FABEST database (42CrMo4+QT, CC BY
+      4.0, DOI 10.5281/zenodo.20967342, md5 9e116aa634fe72c166e6790469788d37) carries a
+      Basquin fit per campaign, N = C·S^-w on stress amplitude. Refitting FAB001 (axial,
+      R = -1, turned unnotched bar, 9 broken specimens, 3,169-514,828 cycles) by least squares
+      of log N on log S reproduces w = 12.305237 and C = 8.641290e38 exactly, and the
+      workbook's own 572.660 MPa at 1e5 cycles. **Blocked on the specimen, not the curve:**
+      neither the workbook, the Zenodo records nor the HCF participant package states a test
+      temperature or environment, and `SpecimenMetadata` requires both. The cited paper
+      (Int. J. Fatigue 2023, 107743) is behind a paywall. Ship it when a source states them,
+      not by writing "room temperature" in
 - [ ] 2.4 AISC shapes fetch-on-first-use importer (checksum, provenance, never bundled)
 - [x] 2.5 Bundled EN-profile open data with citations — `standards/data/en_profiles.yaml`:
       the 42 EN 10365 IPE and HEA profiles as dimensions, CC0, each cited; properties computed
