@@ -107,6 +107,27 @@ Three things about the shape:
 has looked at this yet", and collapsing them loses the audit trail on exactly the values
 somebody argued about.
 
+## Environments
+
+A line whose label names an environment (`Operating environment: marine`) and whose value
+is not a number with a unit is read onto the Design Spec's closed vocabulary: indoor dry,
+outdoor sheltered, marine, thermal cycling, vibration, submerged. Each word has to name a
+member exactly, in any case and with spaces, hyphens or underscores. Nothing is inferred
+from wording. A line naming anything else is declined whole, with the vocabulary in the
+reason, because which failure modes a part is screened for turns on this value:
+
+```text
+NOT EXTRACTED
+  ?   rfq.txt:2 — 'Service environment: salt spray' — 'salt spray' is not an environment this library screens for; the vocabulary is indoor dry, outdoor sheltered, marine, thermal cycling, vibration, submerged, and reading a phrase onto it is a decision for a person
+```
+
+Each environment a line names is its own value, keyed by label and member
+(`operating_environment.marine`), so "marine and thermal-cycling" is two decisions rather
+than one. An environment is load-bearing: `release()` refuses while one is a draft. A
+Design Spec states one environment, so two different confirmed ones are reported under
+CONFLICTS and refused by `draft.environment()` until a person rejects one. With exactly one
+confirmed, `draft.environment()` returns it. With none stated, it returns `None`.
+
 ## What it declines, and why declining is the point
 
 A value the pass declines costs somebody a minute. A value it gets **wrong** is a load. So

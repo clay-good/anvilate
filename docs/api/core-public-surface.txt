@@ -266,6 +266,7 @@ ingest.SignatureStatus
 ingest.CertificateProvenance
 ingest.SourceLocation
 ingest.ExtractedValue
+ingest.ExtractedEnvironment
 ingest.UnparsedLine
 ingest.FieldConflict
 ingest.DraftSpec

@@ -60,7 +60,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import RevalidatedModel, cited
-from .units import Quantity, UnitError, render
+from .spec.ir import Environment
+from .units import Quantity, UnitError, render, spoken
 
 __all__ = [
     "Bound",
@@ -69,6 +70,7 @@ __all__ = [
     "CertificateProvenance",
     "SourceLocation",
     "ExtractedValue",
+    "ExtractedEnvironment",
     "UnparsedLine",
     "FieldConflict",
     "DraftSpec",
@@ -337,6 +339,15 @@ def _value_line(value: ExtractedValue) -> str:
     return f"{value.field} = {render(value.quantity)}{limit}    {value.source}"
 
 
+def _said(environment: Environment) -> str:
+    """An environment as a sentence says it: a noun phrase, so ``thermal cycling``."""
+    return spoken(environment, joined_by=" ")
+
+
+def _environment_line(environment: ExtractedEnvironment) -> str:
+    return f"{environment.field} = {_said(environment.environment)}    {environment.source}"
+
+
 class ExtractedValue(RevalidatedModel):
     """One candidate spec value, its source, and where it stands with a human.
 
@@ -434,6 +445,58 @@ class UnparsedLine(BaseModel):
         return f"not extracted ({self.reason}): {self.source}"
 
 
+class ExtractedEnvironment(RevalidatedModel):
+    """An environment a document states, read onto the Design Spec's closed vocabulary.
+
+    ``field`` is the label and the member together, ``operating_environment.marine``, so a
+    line naming two environments yields two values a person decides on separately.
+
+    Only a line whose label says it is an environment, and whose value names members of
+    :class:`~anvilate.spec.Environment` exactly, becomes one of these: "Operating environment:
+    marine". Nothing is inferred from wording — "salt spray" is not read as marine — because
+    which failure modes a part is screened for turns on this value, and mapping a phrase onto
+    it is the decision this module hands to a person. It is a draft like any extracted value,
+    and it blocks :meth:`DraftSpec.release` until somebody confirms or rejects it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    environment: Environment
+    source: SourceLocation
+    state: ConfirmationState = ConfirmationState.DRAFT
+    confirmed_by: str | None = None
+
+    @model_validator(mode="after")
+    def _state_and_signer_agree(self) -> ExtractedEnvironment:
+        if not self.field.strip():
+            raise ValueError("an extracted environment must name the field it fills")
+        signed = bool(self.confirmed_by and self.confirmed_by.strip())
+        if (self.state is ConfirmationState.DRAFT) == signed:
+            raise ValueError(
+                f"{self.field!r} ({self.environment.value}) is {self.state.value} and "
+                f"{'names' if signed else 'names nobody as'} its signer; a confirmation is a "
+                "state change that names a person"
+            )
+        return self
+
+    def _decided(self, state: ConfirmationState, by: str) -> ExtractedEnvironment:
+        if not by.strip():
+            raise ValueError(
+                f"marking {self.field!r} ({self.environment.value}) {state.value} names the "
+                "person making the decision"
+            )
+        return self.model_copy(update={"state": state, "confirmed_by": by.strip()})
+
+    def __str__(self) -> str:
+        mark = (
+            "draft"
+            if self.state is ConfirmationState.DRAFT
+            else f"{self.state.value} by {self.confirmed_by}"
+        )
+        return f"{self.field} = {_said(self.environment)} [load-bearing, {mark}] {self.source}"
+
+
 class FieldConflict(RevalidatedModel):
     """Two or more extractions for one field that do not agree.
 
@@ -468,6 +531,32 @@ class DraftSpec(BaseModel):
     values: tuple[ExtractedValue, ...] = ()
     unparsed: tuple[UnparsedLine, ...] = ()
     documents: tuple[str, ...] = ()
+    environments: tuple[ExtractedEnvironment, ...] = ()
+
+    def environment(self) -> Environment | None:
+        """The one confirmed environment, ``None`` if the documents state none, or a refusal.
+
+        A Design Spec carries one environment. So a draft with one still unconfirmed, or
+        with two different ones confirmed, is refused with them named, never resolved: a
+        sheet that says "marine" and "vibration" has stated two things, and which one the
+        part is screened for is somebody's decision.
+        """
+        undecided = [e for e in self.environments if e.state is ConfirmationState.DRAFT]
+        if undecided:
+            raise ValueError(
+                f"{len(undecided)} extracted environment(s) are still drafts: "
+                f"{', '.join(_said(e.environment) for e in undecided)}. Confirm or reject each"
+            )
+        chosen = sorted(
+            {e.environment for e in self.environments if e.state is ConfirmationState.CONFIRMED}
+        )
+        if len(chosen) > 1:
+            raise ValueError(
+                f"{len(chosen)} environments are confirmed "
+                f"({', '.join(_said(e) for e in chosen)}) and a Design Spec states one; "
+                "reject the ones the part is not screened for"
+            )
+        return chosen[0] if chosen else None
 
     def conflicts(self) -> tuple[FieldConflict, ...]:
         """Fields with two or more extractions that do not agree, in field order.
@@ -549,14 +638,14 @@ class DraftSpec(BaseModel):
         """
         if not by.strip():
             raise ValueError("a confirmation names the person making it")
-        if field not in {v.field for v in self.values}:
+        carried = {v.field for v in self.values} | {e.field for e in self.environments}
+        if field not in carried:
             raise ValueError(
-                f"no extracted value for {field!r}; the draft carries "
-                f"{sorted({v.field for v in self.values})}"
+                f"no extracted value for {field!r}; the draft carries {sorted(carried)}"
             )
         already = [
             v
-            for v in self.values
+            for v in (*self.values, *self.environments)
             if v.field == field and v.state is not ConfirmationState.DRAFT and v.state is not state
         ]
         if already and not reconsider:
@@ -579,7 +668,15 @@ class DraftSpec(BaseModel):
                 return value.confirmed(by)
             return value.rejected(by)
 
-        return self.model_copy(update={"values": tuple(_moved(v) for v in self.values)})
+        def _moved_environment(value: ExtractedEnvironment) -> ExtractedEnvironment:
+            return value if value.field != field else value._decided(state, by)
+
+        return self.model_copy(
+            update={
+                "values": tuple(_moved(v) for v in self.values),
+                "environments": tuple(_moved_environment(e) for e in self.environments),
+            }
+        )
 
     def release(self) -> Mapping[str, Quantity]:
         """The confirmed values as a field mapping — or refuse, naming what is unconfirmed.
@@ -604,6 +701,9 @@ class DraftSpec(BaseModel):
                 f"{len(conflicts)} field(s) carry disagreeing values and no one has resolved "
                 f"them: {'; '.join(str(c) for c in conflicts)}"
             )
+        # An environment is load-bearing — the failure modes a part is screened for turn on
+        # it — so an undecided or doubled one blocks the quantities too, with its own reason.
+        self.environment()
         split = self.split_bounds()
         if split:
             # Not a conflict — the sheet is consistent and both readings are true — and
@@ -666,7 +766,12 @@ class DraftSpec(BaseModel):
         lines.extend(
             _checklist_section(
                 "TO CONFIRM — load-bearing, blocking release",
-                [f"[ ] {_value_line(value)}" for value in outstanding],
+                [f"[ ] {_value_line(value)}" for value in outstanding]
+                + [
+                    f"[ ] {_environment_line(e)}"
+                    for e in self.environments
+                    if e.state is ConfirmationState.DRAFT
+                ],
             )
         )
         lines.extend(
@@ -681,6 +786,11 @@ class DraftSpec(BaseModel):
                 [
                     f"[x] {_value_line(value)} — confirmed by {value.confirmed_by}"
                     for value in self.confirmed()
+                ]
+                + [
+                    f"[x] {_environment_line(e)} — confirmed by {e.confirmed_by}"
+                    for e in self.environments
+                    if e.state is ConfirmationState.CONFIRMED
                 ],
             )
         )
@@ -691,6 +801,10 @@ class DraftSpec(BaseModel):
         for conflict in self.conflicts():
             conflicts.append(f"!   {conflict.field} disagrees:")
             conflicts.extend(f"      {_value_line(value)}" for value in conflict.values)
+        stated = [e for e in self.environments if e.state is not ConfirmationState.REJECTED]
+        if len({e.environment for e in stated}) > 1:
+            conflicts.append("!   environment: a Design Spec states one, and these state more:")
+            conflicts.extend(f"      {_environment_line(e)}" for e in stated)
         lines.extend(_checklist_section("CONFLICTS", conflicts))
         lines.extend(
             _checklist_section(
@@ -708,6 +822,14 @@ class DraftSpec(BaseModel):
         # "releasable" over a draft `release` refuses is a worse answer than either the
         # summary or the refusal alone, because the reader believes the cheap one.
         split = len(self.split_bounds())
+        # An environment blocks the same way a value does, so the summary counts it the same
+        # way: `summary` saying "releasable" over a draft `release` refuses is the failure the
+        # split count above was added for.
+        outstanding += sum(e.state is ConfirmationState.DRAFT for e in self.environments)
+        stated = {
+            e.environment for e in self.environments if e.state is not ConfirmationState.REJECTED
+        }
+        conflicts += len(stated) > 1
         gate = (
             "releasable"
             if not outstanding and not conflicts and not split
@@ -716,8 +838,9 @@ class DraftSpec(BaseModel):
                 f"{split} split across two bounds"
             )
         )
+        environments = f", {len(self.environments)} environment(s)" if self.environments else ""
         return (
-            f"{len(self.values)} values from {len(self.documents)} document(s), "
+            f"{len(self.values)} values{environments} from {len(self.documents)} document(s), "
             f"{len(self.confirmed())} confirmed, {len(self.unparsed)} lines not extracted — {gate}"
         )
 
@@ -977,6 +1100,37 @@ def _combined_bound(field: str, from_label: Bound, from_qualifier: Bound) -> Bou
     )
 
 
+# The words that separate environments in one value: "marine, vibration", "marine and
+# vibration", "marine; vibration", "marine / vibration".
+_ENVIRONMENT_SEPARATORS = re.compile(r"\s*(?:,|;|/|\band\b)\s*", re.IGNORECASE)
+
+
+def _environments(stated: str) -> tuple[tuple[Environment, ...], str | None]:
+    """The environments ``stated`` names exactly, or the reason it names something else.
+
+    Each word or phrase must be a member of the closed vocabulary, in any case and with
+    spaces, hyphens or underscores between its words. One that is not refuses the whole line
+    rather than dropping it and keeping the rest: "marine, salt spray" read as just marine
+    would quietly lose the half somebody wrote for a reason.
+    """
+    words = [part for part in _ENVIRONMENT_SEPARATORS.split(stated.strip()) if part]
+    members = {member.value: member for member in Environment}
+    named: list[Environment] = []
+    for word in words:
+        key = re.sub(r"[\s-]+", "_", word.strip().lower())
+        if key not in members:
+            vocabulary = ", ".join(_said(member) for member in Environment)
+            return (), (
+                f"{word!r} is not an environment this library screens for; the vocabulary is "
+                f"{vocabulary}, and reading a phrase onto it is a decision for a person"
+            )
+        if members[key] not in named:
+            named.append(members[key])
+    if not named:
+        return (), "the environment line names nothing"
+    return tuple(named), None
+
+
 def extract_requirements(
     text: str,
     *,
@@ -1006,6 +1160,7 @@ def extract_requirements(
     informational = {_normalize(name) for name in informational_fields}
     values: list[ExtractedValue] = []
     unparsed: list[UnparsedLine] = []
+    environments: list[ExtractedEnvironment] = []
     for number, raw in enumerate(text.splitlines(), start=1):
         if not raw.strip() or raw.strip().startswith("#"):
             continue
@@ -1025,6 +1180,21 @@ def extract_requirements(
         stated = match.group("value").strip()
         value_match = _VALUE.match(stated)
         if value_match is None or _is_a_bare_number(value_match):
+            if "environment" in field.split("_"):
+                named, reason = _environments(stated)
+                if reason is None:
+                    # Keyed by label AND member, so each one a line names is confirmed or
+                    # rejected on its own: "marine, vibration" is two decisions, and one
+                    # field for both would let a person take only both or neither.
+                    environments.extend(
+                        ExtractedEnvironment(
+                            field=f"{field}.{member.value}", environment=member, source=location
+                        )
+                        for member in named
+                    )
+                else:
+                    unparsed.append(UnparsedLine(source=location, reason=reason))
+                continue
             unparsed.append(
                 UnparsedLine(source=location, reason="the value is not a number with a unit")
             )
@@ -1049,4 +1219,9 @@ def extract_requirements(
                 bound=bound,
             )
         )
-    return DraftSpec(values=tuple(values), unparsed=tuple(unparsed), documents=(document.strip(),))
+    return DraftSpec(
+        values=tuple(values),
+        unparsed=tuple(unparsed),
+        documents=(document.strip(),),
+        environments=tuple(environments),
+    )

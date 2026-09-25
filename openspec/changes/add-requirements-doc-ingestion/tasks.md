@@ -9,8 +9,11 @@
       trailing qualifier (`50 kN max` — a line the pass used to decline *whole*, because
       `max` is a qualifier and refusing the qualifier refused the quantity with it). The
       requirement already names "constraints" among what is extracted, so this discharges
-      published language rather than adding any. What is still open is the PDF stack and
-      environment statements
+      published language rather than adding any. Environment statements are done too:
+      a line labelled as an environment is read onto the Design Spec's closed `Environment`
+      vocabulary, one value per member, declined whole when it names anything else, and
+      held to the same draft/confirm gate (docs/requirements-ingestion.md). What is still
+      open is the PDF stack
 - [x] 1.2 Draft-spec assembly with per-value source locations and document provenance
 
 ## 2. Confirmation flow

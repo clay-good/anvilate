@@ -1100,3 +1100,90 @@ def test_trailing_whitespace_does_not_change_what_a_line_says():
         value = padded_match.group("value")
         assert value == value.rstrip(), f"{line!r} captured {value!r}"
         assert value == _split(line).group("value"), line
+
+
+# --- environment statements -----------------------------------------------------------------
+
+_ENVIRONMENT_SHEET = """\
+Design load: 50 kN max
+Operating environment: Marine and thermal-cycling
+Environment temperature: 40 degC
+"""
+
+
+def test_an_environment_line_is_read_onto_the_closed_vocabulary_one_value_per_member():
+    from anvilate.spec import Environment
+
+    draft = extract_requirements(_ENVIRONMENT_SHEET, document="rfq.txt")
+    assert [(e.field, e.environment) for e in draft.environments] == [
+        ("operating_environment.marine", Environment.MARINE),
+        ("operating_environment.thermal_cycling", Environment.THERMAL_CYCLING),
+    ]
+    assert all(e.source.line_number == 2 for e in draft.environments)
+    assert str(draft.environments[1]).startswith(
+        "operating_environment.thermal_cycling = thermal cycling [load-bearing, draft] rfq.txt:2"
+    )
+    # A labelled temperature is a quantity whatever its label says: the environment path is
+    # only for a value that is not a number with a unit.
+    assert "environment_temperature" in {v.field for v in draft.values}
+
+
+def test_a_phrase_that_is_not_in_the_vocabulary_is_refused_whole_and_names_it():
+    draft = extract_requirements("Service environment: marine, salt spray\n", document="rfq.txt")
+    assert draft.environments == ()
+    (line,) = draft.unparsed
+    assert "'salt spray' is not an environment" in line.reason
+    assert "marine, thermal cycling, vibration" in line.reason  # the vocabulary, spoken
+
+
+def test_an_undecided_environment_blocks_the_release_and_the_summary_says_so():
+    draft = extract_requirements(_ENVIRONMENT_SHEET, document="rfq.txt")
+    draft = draft.with_confirmation("design_load", by="A. Engineer").with_confirmation(
+        "environment_temperature", by="A. Engineer"
+    )
+    assert "blocked: 2 unconfirmed, 1 conflicting" in draft.summary()
+    with pytest.raises(ValueError, match="2 extracted environment"):
+        draft.release()
+
+
+def test_a_design_spec_states_one_environment_and_the_person_picks_it():
+    from anvilate.spec import Environment
+
+    draft = extract_requirements(_ENVIRONMENT_SHEET, document="rfq.txt")
+    for field in ("design_load", "environment_temperature", "operating_environment.marine"):
+        draft = draft.with_confirmation(field, by="A. Engineer")
+    both = draft.with_confirmation("operating_environment.thermal_cycling", by="A. Engineer")
+    with pytest.raises(
+        ValueError, match=r"2 environments are confirmed \(marine, thermal cycling\)"
+    ):
+        both.environment()
+    assert "a Design Spec states one" in both.checklist()
+    chosen = draft.with_confirmation(
+        "operating_environment.thermal_cycling",
+        by="A. Engineer",
+        state=ConfirmationState.REJECTED,
+    )
+    assert chosen.environment() is Environment.MARINE
+    assert chosen.summary().endswith("releasable")
+    assert set(chosen.release()) == {"design_load", "environment_temperature"}
+
+
+def test_a_draft_that_states_no_environment_releases_none():
+    draft = extract_requirements("Design load: 50 kN\n", document="rfq.txt")
+    assert draft.with_confirmation("design_load", by="A. Engineer").environment() is None
+
+
+def test_an_environment_decision_names_a_person():
+    from anvilate.ingest import ExtractedEnvironment
+
+    draft = extract_requirements(_ENVIRONMENT_SHEET, document="rfq.txt")
+    marine = draft.environments[0]
+    with pytest.raises(ValueError, match="names the person"):
+        draft.with_confirmation("operating_environment.marine", by="   ")
+    with pytest.raises(ValueError, match="names nobody"):
+        ExtractedEnvironment(
+            field=marine.field,
+            environment=marine.environment,
+            source=marine.source,
+            state=ConfirmationState.CONFIRMED,
+        )
