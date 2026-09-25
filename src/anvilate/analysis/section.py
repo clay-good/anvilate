@@ -197,6 +197,11 @@ class CrossSection(RevalidatedModel):
                     raise ValueError(f"{name} must be greater than zero; got {value}")
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
             raise ValueError(f"shear_form_factor must be finite; got {self.shear_form_factor}")
+        if self.shear_form_factor is not None and not self.shear_form_factor > 0:
+            raise ValueError(
+                f"shear_form_factor must be positive; got {self.shear_form_factor}. It is the "
+                "peak transverse shear over the average, which a section cannot make zero"
+            )
         return self
 
     @property

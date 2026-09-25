@@ -110,8 +110,8 @@ class GuardedInputs(RevalidatedModel):
                 and not value > 0
             ):
                 raise ValueError(
-                    f"{name} must be greater than zero; got {value}. The screen divides by "
-                    f"it, so a zero or negative {name.replace('_', ' ')} has no answer to give"
+                    f"{name} must be greater than zero; got {value}. The screen has no answer "
+                    f"to give for a zero or negative {name.replace('_', ' ')}"
                 )
             # Quantity is ITSELF a pydantic model, so the nested-model branch has to come
             # second or it swallows every quantity field and the guard checks nothing.
@@ -138,8 +138,8 @@ class GuardedInputs(RevalidatedModel):
                 )
             if name in type(self).positive_fields and value.magnitude == 0:
                 raise ValueError(
-                    f"{name} must be greater than zero; got {value}. The screen divides by "
-                    f"it, so a zero {name.replace('_', ' ')} has no answer to give"
+                    f"{name} must be greater than zero; got {value}. The screen has no answer "
+                    f"to give for a zero {name.replace('_', ' ')}"
                 )
         return self
 

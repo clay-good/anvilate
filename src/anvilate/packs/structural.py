@@ -998,6 +998,7 @@ class BoltedConnection(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    positive_fields = ("bolt_diameter", "plate_thickness")
     signed_fields = (
         "load",
         "tension",
@@ -1382,6 +1383,7 @@ class WeldedConnection(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields = ("load",)
+    positive_fields = ("weld_length", "electrode_strength")
 
     name: Named
     leg_size: Quantity
@@ -1683,7 +1685,7 @@ class LiftingLug(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields = ("load",)
-    positive_fields = ("thickness",)
+    positive_fields = ("thickness", "hole_diameter")
 
     name: Named
     width: Quantity

@@ -45,7 +45,8 @@ class Feeder(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    signed_fields = ("load_power", "reactance")
+    signed_fields = ("reactance",)
+    positive_fields = ("load_power", "conductor_area", "one_way_length")
 
     load_power: Quantity
     power_factor: float

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from math import pi
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_validator
 
 from ..analysis import (
     darcy_friction_factor,
@@ -64,6 +64,7 @@ class PumpDuty(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = ("fluid_density", "total_head")
 
     flow_rate: Quantity
     total_head: Quantity
@@ -237,7 +238,7 @@ class PipeRun(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    positive_fields = ("diameter",)
+    positive_fields = ("diameter", "flow_rate")
 
     flow_rate: Quantity
     diameter: Quantity
@@ -246,6 +247,16 @@ class PipeRun(GuardedInputs):
     fitting_loss_coefficient: float
     kinematic_viscosity: Quantity
     available_head: Quantity
+
+    @model_validator(mode="after")
+    def _a_loss_coefficient(self) -> PipeRun:
+        if not self.fitting_loss_coefficient >= 0:
+            raise ValueError(
+                "fitting_loss_coefficient must not be negative; got "
+                f"{self.fitting_loss_coefficient}. It sums the fittings' K values, and no "
+                "fitting recovers head"
+            )
+        return self
 
 
 def screen_pipe_run(pipe: PipeRun) -> Scorecard:

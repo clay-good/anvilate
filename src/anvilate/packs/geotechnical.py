@@ -250,6 +250,7 @@ class RetainingWall(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
     signed_fields = ("vertical_load",)
+    positive_fields = ("retained_height", "backfill_unit_weight")
 
     retained_height: Quantity
     backfill_unit_weight: Quantity
@@ -257,6 +258,15 @@ class RetainingWall(GuardedInputs):
     vertical_load: Quantity
     load_arm: Quantity
     base_friction_coefficient: float
+
+    @model_validator(mode="after")
+    def _a_friction_angle(self) -> RetainingWall:
+        if not 0 <= self.backfill_friction_angle < 90:
+            raise ValueError(
+                "backfill_friction_angle must lie in [0, 90) degrees; got "
+                f"{self.backfill_friction_angle}"
+            )
+        return self
 
 
 def screen_retaining_wall(

@@ -553,6 +553,11 @@ class SpurGearMesh(GuardedInputs):
         "allowable_bending_stress",
         "allowable_contact_stress",
         "minimum_contact_ratio",
+        "bending_geometry_factor",
+        "contact_geometry_factor",
+        "pinion_modulus",
+        "gear_modulus",
+        "pinion_teeth",
     )
 
     pinion_teeth: int
@@ -1108,7 +1113,7 @@ class RollingBearing(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    positive_fields = ("required_static_factor",)
+    positive_fields = ("required_static_factor", "required_life_hours")
 
     dynamic_load_rating: Quantity
     static_load_rating: Quantity

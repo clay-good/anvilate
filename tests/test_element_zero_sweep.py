@@ -67,6 +67,14 @@ def _crashes() -> tuple[list[str], int]:
                 continue
             try:
                 screen(element, **keywords)
+            except ValidationError as failure:
+                # A pydantic error from inside a screen is the screen building one of its
+                # own models wrongly: a zero required life put `None` into a derivation's
+                # SymbolValue and reached the card as "Input should be a valid dictionary
+                # or instance of Quantity". It is a ValueError, so it used to pass as a
+                # refusal here.
+                where = ".".join(str(part) for part in path)
+                crashes.append(f"{tag}.{where} = 0 -> {type(failure).__name__}: {failure}")
             except (ValueError, LookupError):
                 continue
             except Exception as failure:  # noqa: BLE001 - reporting what escaped is the point
@@ -118,3 +126,61 @@ def test_a_document_cannot_declare_its_own_signed_fields():
     assert LiftingLug.signed_fields == ("load",)
     schemas = element_json_schemas()
     assert not [tag for tag, schema in schemas.items() if "signed_fields" in str(schema)]
+
+
+# The one refusal that does not name the field it refuses, and why that is right.
+_UNNAMED = {
+    "spur_gear_mesh.pinion_torque.magnitude=0": (
+        "a zero torque is no demand, and the gear screen says 'torque is zero' and that there "
+        "is nothing to evaluate"
+    ),
+}
+
+
+def _refusals_not_naming_the_field() -> tuple[list[str], int]:
+    registry = element_registry()
+    documents = _documents()
+    unnamed, probes = [], 0
+    for tag, (model, screen) in sorted(registry.items()):
+        parameters = inspect.signature(screen).parameters
+        keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
+        for path in _numbers(documents[tag]):
+            value = documents[tag]
+            for part in path:
+                value = value[part]
+            for changed in (0, -abs(value) if value else -1):
+                probes += 1
+                message = None
+                try:
+                    element = model.model_validate(_with(documents[tag], path, changed))
+                except ValidationError as refusal:
+                    message = "; ".join(error["msg"] for error in refusal.errors())
+                except (ValueError, LookupError) as refusal:
+                    message = str(refusal)
+                if message is None:
+                    try:
+                        screen(element, **keywords)
+                    except (ValueError, LookupError) as refusal:
+                        message = str(refusal)
+                names = [part for part in path if isinstance(part, str) and part != "magnitude"]
+                if message is None or not names:
+                    continue
+                field = names[-1]
+                if field not in message and field.replace("_", " ") not in message:
+                    where = ".".join(str(part) for part in path)
+                    unnamed.append(f"{tag}.{where}={changed}")
+    return unnamed, probes
+
+
+def test_a_refusal_names_the_field_the_document_wrote():
+    """interaction-quality 7.3 at the element front door. A refused number used to be named
+    by the analysis function's parameter, not by the document's field: a zero or negative
+    `load_power` was refused as "real_power and line_voltage must be positive", and a zero
+    `electrode_strength` as "allowable_shear must be positive". A person holding the YAML
+    has no `real_power` to fix. Each number is set to zero and to its negative in turn."""
+    unnamed, probes = _refusals_not_naming_the_field()
+    assert probes >= 380, f"only {probes} numbers were changed"
+    assert sorted(unnamed) == sorted(_UNNAMED), (
+        f"refused without naming the field: {sorted(set(unnamed) - set(_UNNAMED))}; listed "
+        f"as unnamed but now named: {sorted(set(_UNNAMED) - set(unnamed))}"
+    )

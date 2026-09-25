@@ -51,6 +51,7 @@ class LightingInstallation(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = ("floor_area",)
 
     luminaire_count: int
     lumens_per_luminaire: Quantity

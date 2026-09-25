@@ -75,7 +75,7 @@ def _flips() -> list[tuple[str, object, object]]:
 def test_a_signed_field_changes_the_card_or_is_declared_direction_free():
     flips = _flips()
     # The floor goes first: a corpus that lost its signed fields would find nothing.
-    assert len(flips) >= 17, f"only {len(flips)} signed fields were negated"
+    assert len(flips) >= 16, f"only {len(flips)} signed fields were negated"
     discarded = [label for label, original, flipped in flips if original == flipped]
     assert sorted(discarded) == sorted(_DIRECTION_FREE), (
         "these signed fields are screened by magnitude, so their sign is thrown away: "
