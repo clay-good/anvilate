@@ -1059,6 +1059,63 @@ def test_the_bundle_headline_is_the_entrys_own_line():
 # --- every key the document can carry -------------------------------------------------
 
 
+_SYNTHETIC_EPD = (
+    '{"doctype": "openEPD", "id": "ec3synthetic", "product_name": "Example 6061 extrusion", '
+    '"declared_unit": {"qty": 1, "unit": "t"}, "impacts": {"TRACI 2.1": {"gwp": '
+    '{"A1A2A3": {"mean": 8400.0, "unit": "kgCO2e", "rsd": 0.1}}}}}'
+)
+
+
+def _carbon_estimate():  # type: ignore[no-untyped-def]
+    """Two lines: one on a product's declaration bound over a generic factor, one generic."""
+    from anvilate.analysis import (
+        CarbonFactor,
+        ModuleScope,
+        carbon_contribution,
+        carbon_factor_from_openepd,
+        embodied_carbon_estimate,
+        with_declared_factors,
+    )
+
+    generic = {
+        material: CarbonFactor(
+            material=material,
+            value=value,
+            scope=ModuleScope.A1_A3,
+            source="a generic table the caller cites",
+            band_low=0.8,
+            band_high=1.4,
+        )
+        for material, value in (("AA-6061-T6", 12.0), ("ASTM-A36", 1.9))
+    }
+    declared = carbon_factor_from_openepd(_SYNTHETIC_EPD, material="AA-6061-T6")
+    factors = with_declared_factors(generic, [declared])
+    return embodied_carbon_estimate(
+        [
+            carbon_contribution(label="frame", mass=_q(12.0, "kg"), factor=factors["AA-6061-T6"]),
+            carbon_contribution(label="base", mass=_q(20.0, "kg"), factor=factors["ASTM-A36"]),
+        ]
+    )
+
+
+def test_the_bundle_records_which_carbon_factor_came_from_which_declaration():
+    """embodied-carbon 4.2: the document names the EPD behind each line, and the roll-up and
+    the attested predicate do not move because an estimate rides along."""
+    carbon = _carbon_estimate()
+    with_carbon = _sections(carbon=carbon)
+    document = with_carbon.to_document_dict()
+    sources = [line["factor"]["source"] for line in document["carbon"]["contributions"]]
+    assert sources[0].startswith("openEPD ec3synthetic: Example 6061 extrusion")
+    assert sources[1] == "a generic table the caller cites"
+    assert document["carbon"]["contributions"][0]["factor"]["dataset_id"] == "ec3synthetic"
+    rendered = with_carbon.render_document()
+    assert "embodied carbon: 138.8 kgCO2e" in rendered
+    assert "  frame: 100.8 kgCO2e from 12 kg at 8.4 kgCO2e/kg (openEPD ec3synthetic" in rendered
+    assert with_carbon.to_json_dict() == _sections().to_json_dict()
+    assert "carbon" not in _sections().to_document_dict()
+    assert "embodied carbon" not in _sections().render_document()
+
+
 def _every_section() -> BundleSections:
     """A bundle carrying every optional section at once.
 
@@ -1125,6 +1182,7 @@ def _every_section() -> BundleSections:
         exports=(ExportRecord(artifact="part.dxf", authorization=authorize_export(_card())),),
         assumptions=("linear elastic, small deflection",),
         evaluation_order=("net tension", "pin bearing"),
+        carbon=_carbon_estimate(),
         citations=(
             SourceRecord(
                 ref="AA-6061-T6",

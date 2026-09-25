@@ -1863,6 +1863,7 @@ from .embodied_carbon import (
     embodied_carbon_estimate,
     embodied_carbon_scorecard,
     material_loss_mass,
+    with_declared_factors,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -3869,6 +3870,7 @@ __all__ = [
     "embodied_carbon_estimate",
     "embodied_carbon_scorecard",
     "carbon_factor_from_openepd",
+    "with_declared_factors",
     "electric_field_energy_density",
     "coaxial_capacitance",
     "coaxial_characteristic_impedance",

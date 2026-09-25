@@ -114,6 +114,16 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Evidence Bundle 1.22.0: an embodied-carbon estimate, and which EPD each factor is
+
+The bundle document gains an optional `carbon` key: the part's screening-grade estimate,
+absent when none was made. Each contribution carries its factor, and a factor read from a
+product's openEPD declaration (`carbon_factor_from_openepd`, bound over the generic table by
+`with_declared_factors`) names that declaration in its `source` and `dataset_id`. So the
+bundle records which factor came from which declaration. The estimate stays out of the
+roll-up and out of the attested predicate, like `spec`, so no signed digest moves. CLI
+output 1.50.0 carries the same bundle.
+
 ### Evidence Bundle 1.21.0: a named section's source
 
 A provenance record's `kind` gains `section`. A member that names a rolled profile

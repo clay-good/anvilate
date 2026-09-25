@@ -26,7 +26,11 @@
 ## 4. Tests
 
 - [x] 4.1 Missing factor → "not evaluated," never zero
-- [ ] 4.2 EPD binding overrides generic factor and is recorded in the bundle — follows 3.2
+- [x] 4.2 EPD binding overrides generic factor and is recorded in the bundle —
+      `with_declared_factors` binds each declaration over the generic factor for its material
+      (refusing two for one material), and `BundleSections(carbon=...)` carries the estimate in
+      the exported document (evidence bundle 1.22.0), each contribution naming its factor's
+      declaration, out of the roll-up and the attested predicate (tests/test_bundle.py)
 - [x] 4.3 Air-gapped run produces estimates with zero network calls
 
 ## 5. Docs & examples
@@ -42,7 +46,7 @@
   refused. The datasets that are not redistribution-clean are therefore not a licensing
   question, because none of them are copied in.
 - The **openEPD importer (3.2) is built**; it takes the declaration's text from the caller
-  and performs no I/O itself, so 4.3 still holds. **4.2 is open:** carbon has no place in
-  the Design Spec or the evidence bundle yet, so a binding has nowhere to be recorded.
+  and performs no I/O itself, so 4.3 still holds. 4.2 records the binding in the evidence
+  bundle; a Design Spec cannot yet declare one, which is a separate change.
 - **Air-gapped by construction (4.3):** the module performs no I/O of any kind, so there
   is no network call to assert the absence of.

@@ -173,7 +173,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.11.0.json"
 # carries the same optional interface-frame fields.
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.21.0.json"
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.22.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"

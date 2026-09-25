@@ -56,6 +56,7 @@ __all__ = [
     "embodied_carbon_estimate",
     "embodied_carbon_scorecard",
     "carbon_factor_from_openepd",
+    "with_declared_factors",
 ]
 
 _CLAUSE_EN15978 = "EN 15978:2011 life-cycle modules; ISO 14040:2006 cradle-to-gate boundary"
@@ -615,3 +616,39 @@ def carbon_factor_from_openepd(
         if isinstance(geography, list)
         else "",
     )
+
+
+def with_declared_factors(
+    generic: dict[str, CarbonFactor], declared: Sequence[CarbonFactor]
+) -> dict[str, CarbonFactor]:
+    """``generic`` with each product declaration bound over the factor for its material.
+
+    Both are EN 15978 module A1-A3 factors, the scope every factor here carries, so the
+    exchange changes the source of a number and never what it measures.
+
+    A declaration is the product's own figure and a generic factor is a population's, so the
+    declaration wins for its material, and a material with no generic factor gains one. The
+    binding is not silent. Each declared factor keeps its declaration's identity in its
+    ``source``, so every estimate and bundle built on the result names which factor came from
+    which declaration. Two declarations for one material are refused rather than one being
+    picked, because which supplier's product the part is made from is the user's statement.
+    """
+    if not isinstance(generic, dict) or not all(
+        isinstance(factor, CarbonFactor) for factor in generic.values()
+    ):
+        raise ValueError(f"generic must map a material to its CarbonFactor; got {generic!r}")
+    declared = each_one(declared, CarbonFactor, named="declared")
+    materials = [factor.material for factor in declared]
+    doubled = sorted({material for material in materials if materials.count(material) > 1})
+    if doubled:
+        raise ValueError(
+            f"two declarations are bound to {', '.join(doubled)}; bind the one for the product "
+            "the part is made from"
+        )
+    for factor in declared:
+        if not factor.dataset_id and not factor.source.startswith("openEPD"):
+            raise ValueError(
+                f"the factor for {factor.material} names no declaration (no dataset_id); "
+                "bind a factor read from its EPD, so the binding can say which one"
+            )
+    return {**generic, **{factor.material: factor for factor in declared}}

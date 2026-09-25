@@ -147,3 +147,46 @@ def test_a_non_finite_number_inside_the_declaration_is_refused(poison):
     mass = json.dumps(_EPD).replace('{"qty": 1, "unit": "t"}', f'{{"qty": {poison}, "unit": "t"}}')
     with pytest.raises(ValueError, match="declared unit must be a finite quantity"):
         carbon_factor_from_openepd(mass, material="x")
+
+
+def _generic(material: str, value: float):  # type: ignore[no-untyped-def]
+    from anvilate.analysis import CarbonFactor
+
+    return CarbonFactor(
+        material=material,
+        value=value,
+        scope=ModuleScope.A1_A3,
+        source="a generic table the caller cites",
+        band_low=0.8,
+        band_high=1.4,
+    )
+
+
+def test_a_declaration_is_bound_over_the_generic_factor_for_its_material():
+    from anvilate.analysis import with_declared_factors
+
+    generic = {"AA-6061-T6": _generic("AA-6061-T6", 12.0), "ASTM-A36": _generic("ASTM-A36", 1.9)}
+    declared = carbon_factor_from_openepd(json.dumps(_EPD), material="AA-6061-T6")
+    concrete = carbon_factor_from_openepd(
+        _with(
+            declared_unit={"qty": 1, "unit": "m**3"},
+            kg_per_declared_unit={"qty": 2400, "unit": "kg"},
+        ),
+        material="C30 concrete",
+    )
+    bound = with_declared_factors(generic, [declared, concrete])
+    assert bound["AA-6061-T6"] is declared  # the product's own figure wins
+    assert bound["ASTM-A36"] is generic["ASTM-A36"]  # untouched where nothing is declared
+    assert bound["C30 concrete"] is concrete  # and a material with no generic factor gains one
+    assert generic["AA-6061-T6"].value == 12.0 and "C30 concrete" not in generic
+
+
+def test_two_declarations_for_one_material_are_the_users_choice_not_ours():
+    from anvilate.analysis import with_declared_factors
+
+    one = carbon_factor_from_openepd(json.dumps(_EPD), material="AA-6061-T6")
+    other = carbon_factor_from_openepd(_with(id="ec3other"), material="AA-6061-T6")
+    with pytest.raises(ValueError, match="two declarations are bound to AA-6061-T6"):
+        with_declared_factors({}, [one, other])
+    with pytest.raises(ValueError, match="names no declaration"):
+        with_declared_factors({}, [_generic("AA-6061-T6", 12.0)])

@@ -55,6 +55,7 @@ from collections.abc import Iterable, Mapping
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from ._models import Named, RevalidatedModel
+from .analysis.embodied_carbon import EmbodiedCarbonEstimate
 from .attestation import (
     AIDisclosure,
     AnvilatePredicate,
@@ -229,6 +230,9 @@ class BundleDocument(BaseModel):
     evaluation_order: tuple[str, ...] | None = Field(
         default=None, serialization_alias="evaluationOrder", alias="evaluationOrder"
     )
+    # Absent unless the part carries an embodied-carbon estimate. Each contribution names its
+    # factor's source, so a factor read from a product's EPD says which declaration it is.
+    carbon: EmbodiedCarbonEstimate | None = None
 
 
 def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
@@ -340,6 +344,11 @@ class BundleSections(RevalidatedModel):
     # which is not evidence of the order they did. Out of the roll-up on the same terms as
     # `spec`: a signed digest must not move because a bundle says more about how it ran.
     evaluation_order: tuple[Named, ...] = ()
+    # The part's screening-grade embodied-carbon estimate, when one was made. Out of the
+    # roll-up on the same terms as `spec`: an estimate with no budget has no verdict, and a
+    # signed digest must not move because a bundle carries one. Its contributions keep each
+    # factor's source, which is how the bundle records which factor came from which EPD.
+    carbon: EmbodiedCarbonEstimate | None = None
 
     @model_validator(mode="after")
     def _an_order_of_checks_the_card_carries(self) -> BundleSections:
@@ -671,9 +680,27 @@ class BundleSections(RevalidatedModel):
                 *self.evaluation_order_block(),
                 *self.callout_checks_block(),
                 *self.citations_block(),
+                *self.carbon_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
+        )
+
+    def carbon_block(self) -> tuple[str, ...]:
+        """The embodied-carbon estimate, each line with the factor it used; nothing otherwise.
+
+        Every line names its factor's source, so a reviewer holding only the document can see
+        which contributions rest on a product's own declaration and which on a generic table.
+        """
+        if self.carbon is None:
+            return ()
+        return (
+            f"embodied carbon: {self.carbon}",
+            *(
+                f"  {line.label}: {line.emissions.to('kg').magnitude:.4g} kgCO2e from "
+                f"{line.mass} at {line.factor.value:.4g} kgCO2e/kg ({line.factor.source})"
+                for line in self.carbon.contributions
+            ),
         )
 
     def evaluation_order_block(self) -> tuple[str, ...]:
@@ -813,6 +840,8 @@ class BundleSections(RevalidatedModel):
             document["citations"] = [record.model_dump(mode="json") for record in self.citations]
         if self.evaluation_order:
             document["evaluationOrder"] = list(self.evaluation_order)
+        if self.carbon is not None:
+            document["carbon"] = self.carbon.model_dump(mode="json")
         return document
 
     def to_json_dict(self) -> dict[str, object]:

@@ -105,13 +105,21 @@ named:
 Declarations belong to their manufacturers and program operators, so none ships with this
 library, and the function reads text the caller supplies rather than calling any service.
 
+`with_declared_factors(generic, [declared])` binds declarations over a generic table. The
+declaration wins for its material, a material with no generic factor gains one, and two
+declarations for one material are refused rather than one being picked. An evidence bundle
+built with `BundleSections(carbon=estimate)` carries the estimate under `carbon` (evidence
+bundle 1.22.0) and prints one line per contribution with its factor's source. That is how
+the bundle records which factor came from which declaration. The estimate stays out of the
+roll-up and the signed predicate, because a figure with no budget has no verdict.
+
 ## What is deliberately not here
 
 - **No bundled factor data.** See above; it is a licensing constraint and a correctness
   one.
-- **No binding in the Design Spec or the evidence bundle yet.** A factor read from a
-  declaration (below) names it in every estimate built on it. What does not exist yet is a
-  place in the document to bind one to a material, or a bundle section that records it.
+- **No carbon declaration in the Design Spec.** A binding is made in code, with
+  `with_declared_factors`, and recorded in the evidence bundle. A document cannot yet say
+  "this part's aluminum is the supplier's EPD" by itself.
 - **No product passport export.** The EU Digital Product Passport registry is live, but
   no product-specific delegated act is in force. Building an export against a
   specification that does not exist yet would be inventing it.
