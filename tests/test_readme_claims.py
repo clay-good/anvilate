@@ -94,18 +94,13 @@ def test_the_public_symbol_count_is_the_manifests_own():
     ]
     assert len(manifest) > 1000, "the manifest came back implausibly small"
 
-    # EVERY occurrence, not the first. The README states this count twice — "1,819 public
-    # symbols" in the analysis-library paragraph and "the 1,819 public analysis symbols" in
-    # the citations row — and `_claimed` reads whichever the pattern happens to reach. The
+    # EVERY occurrence, not the first. The README once stated this count twice, and the
     # anchored pattern matched only the first, so the second copy could drift a whole release
-    # behind the surface and behind its own twin, which is the failure mode a gate on a
-    # duplicated number exists to prevent.
+    # behind the surface and behind its own twin. It states it once now; reading all of them
+    # keeps a second copy from coming back ungated.
     page = (_REPO / "README.md").read_text(encoding="utf-8")
     stated = re.findall(r"([\d,]+) public (?:analysis )?symbols", page)
-    assert len(stated) >= 2, (
-        f"the README states the public-symbol count {len(stated)} time(s); this gate reads "
-        "every occurrence and needs to know when there is only one left"
-    )
+    assert stated, "the README no longer states the public-symbol count; this gate reads it"
     wrong = [count for count in stated if int(count.replace(",", "")) != len(manifest)]
     assert not wrong, (
         f"the README states {stated} public analysis symbols; the manifest holds "
@@ -157,7 +152,6 @@ _WORDS = {
 @pytest.mark.parametrize(
     "page,tail",
     [
-        ("README.md", r"the other (\w+) report `not_evaluated`"),
         ("docs/citations.md", r"The other (\w+) —"),
     ],
 )
@@ -331,10 +325,10 @@ _PAGES_THE_README_DOES_NOT_INDEX = frozenset(
 def test_every_docs_page_is_reachable_from_the_readme():
     """A page nobody links is a page nobody reads.
 
-    Thirty-eight pages under `docs/` carry the arguments the README summarises, and the
-    only route to them is a link. This is the ratchet: a new page that nothing points at
-    fails here, as does a link to a page that has been renamed or removed — which is the
-    other way the set drifts, and the one a reader meets as a 404.
+    The README is kept short and links the docs index, which links everything else, so a
+    page is reachable when either of the two names it. This is the ratchet: a new page that
+    nothing points at fails here, as does a README link to a page that has been renamed or
+    removed — which is the other way the set drifts, and the one a reader meets as a 404.
     """
     import re
 
@@ -352,11 +346,13 @@ def test_every_docs_page_is_reachable_from_the_readme():
     for name in _PAGES_THE_README_DOES_NOT_INDEX:
         assert (root / "docs" / name).exists(), f"the allow-list names {name}, which is gone"
 
+    assert "docs/README.md" in readme, "the README no longer links the docs index"
     linked = set(re.findall(r"docs/([a-z0-9-]+\.md)", readme))
-    unreachable = sorted(pages - linked)
+    indexed = set(re.findall(r"\]\(([a-z0-9-]+\.md)\)", (root / "docs" / "README.md").read_text()))
+    unreachable = sorted(pages - linked - indexed)
     assert not unreachable, (
-        f"these pages are linked from nowhere in the README: {unreachable}. A reader "
-        "meets the README first; a page it does not point at is not in the documentation."
+        f"these pages are linked from neither the README nor the docs index: {unreachable}. "
+        "A page neither points at is not in the documentation."
     )
     dangling = sorted(linked - pages)
     assert not dangling, f"the README links pages that do not exist: {dangling}"
@@ -397,6 +393,7 @@ def test_every_docs_page_is_in_the_docs_index():
         "Fifty-five": 55,
         "Fifty-six": 56,
         "Fifty-seven": 57,
+        "Fifty-eight": 58,
         "Fifty-two": 52,
     }
     claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)
@@ -605,10 +602,12 @@ def test_every_file_and_symbol_the_readme_names_still_exists():
 
     text = (_REPO / "README.md").read_text(encoding="utf-8")
 
-    examples = sorted(set(re.findall(r"`([a-z0-9_]+\.py)`", text)))
+    # The example table lives on the highlights page now; the README names examples too.
+    highlights = (_REPO / "docs" / "example-highlights.md").read_text(encoding="utf-8")
+    examples = sorted(set(re.findall(r"`([a-z0-9_]+\.py)`", text + highlights)))
     assert len(examples) >= 40, f"only {len(examples)} example filenames found; the regex moved"
     absent = [name for name in examples if not (_REPO / "examples" / name).exists()]
-    assert not absent, f"the README names examples that are not in examples/: {absent}"
+    assert not absent, f"these pages name examples that are not in examples/: {absent}"
 
     fields = sorted(set(re.findall(r"`constraints\.([a-z_]+)`", text)))
     assert fields, "the README no longer names a constraints field"
@@ -786,10 +785,16 @@ _DERIVED_IN_A_README_ROW: dict[tuple[str, str], str] = {
 }
 
 
+_HIGHLIGHTS = "docs/example-highlights.md"
+
+
 def _readme_example_rows() -> list[tuple[str, str]]:
-    """Each README table row that names an example, as (example filename, description)."""
+    """Each highlights-table row that names an example, as (example filename, description).
+
+    The table moved off the README onto `docs/example-highlights.md`; the gate moved with it.
+    """
     rows = []
-    for line in (_REPO / "README.md").read_text(encoding="utf-8").splitlines():
+    for line in (_REPO / _HIGHLIGHTS).read_text(encoding="utf-8").splitlines():
         if not line.startswith("| `") or ".py`" not in line:
             continue
         match = re.search(r"`([\w./]+\.py)`", line)
@@ -827,7 +832,7 @@ def test_every_number_the_readme_quotes_from_an_example_is_one_the_example_produ
     checked: set[tuple[str, str]] = set()
     for name, description in rows:
         path = examples / name
-        assert path.exists(), f"the README names {name}, which is not in examples/"
+        assert path.exists(), f"the highlights page names {name}, which is not in examples/"
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
             namespace = runpy.run_path(str(path))
@@ -849,11 +854,11 @@ def test_every_number_the_readme_quotes_from_an_example_is_one_the_example_produ
             if (name, figure) in _DERIVED_IN_A_README_ROW:
                 continue
             unbacked.append(
-                f"{name}: the README quotes {figure} and the run produces no such value"
+                f"{name}: the highlights page quotes {figure} and the run produces no such value"
             )
 
     assert not unbacked, (
-        "these front-page figures are not what the examples produce. Correct the README, or "
+        "these highlights figures are not what the examples produce. Correct the page, or "
         "— if the figure is an input or a one-step consequence — record its derivation in "
         "_DERIVED_IN_A_README_ROW:\n  " + "\n  ".join(unbacked)
     )
@@ -867,7 +872,7 @@ def test_every_number_the_readme_quotes_from_an_example_is_one_the_example_produ
         ("measured_shaft_from_certificate.py", "74.8"),
     }
     assert canaries <= checked, (
-        f"these README figures stopped being read: {sorted(canaries - checked)}. The rows "
+        f"these highlights figures stopped being read: {sorted(canaries - checked)}. The rows "
         "were reworded, or the pattern stopped matching them, and the gate is now checking "
         f"less than it did ({len(checked)} figures over {len(rows)} rows)"
     )
@@ -883,10 +888,10 @@ def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
     for (name, figure), derivation in _DERIVED_IN_A_README_ROW.items():
         assert derivation.strip(), f"{name}'s {figure} is listed with no derivation"
         assert name in rows, (
-            f"_DERIVED_IN_A_README_ROW names {name}, which the README no longer describes"
+            f"_DERIVED_IN_A_README_ROW names {name}, which the highlights page no longer describes"
         )
         assert figure in rows[name], (
-            f"the README row for {name} no longer quotes {figure}; strike it from "
+            f"the highlights row for {name} no longer quotes {figure}; strike it from "
             "_DERIVED_IN_A_README_ROW so the list stays honest"
         )
 
