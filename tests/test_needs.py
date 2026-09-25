@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 from pydantic import ValidationError
 
@@ -220,47 +222,99 @@ _SCREENING = "src/anvilate/screening.py"
 _EXCLUSIONS = "docs/api/refusals-without-needs.txt"
 
 
-def _refusal_sites() -> list[tuple[str, str, int, bool]]:
-    """Every NOT_EVALUATED `ScorecardEntry(...)` in the screening module.
+def _refusal_sites(module: str = _SCREENING) -> list[tuple[str, str, int, bool]]:
+    """Every NOT_EVALUATED scorecard entry built in ``module``.
 
     `(function, entry name as written, line, whether it carries needs=)`. Read off the AST
     rather than by grepping: a refusal is a call with a status keyword, and a text search
     for the status would match the enum's every other mention.
+
+    Three spellings of "this entry is not evaluated", because the premise is the entry and
+    not one way of writing it: the status as a keyword (`status=CheckStatus.NOT_EVALUATED`,
+    or a conditional containing it), a status held in a local the function assigns it to
+    (`status = CheckStatus.NOT_EVALUATED` above a single `ScorecardEntry(status=status)`),
+    and an update dict (`entry.model_copy(update={"status": ...})`). The first detector saw
+    only the keyword, and three optomechanics screens that choose their status in a branch
+    were invisible to it.
     """
     import ast
     from pathlib import Path
 
-    source = (Path(__file__).parents[1] / _SCREENING).read_text()
-    tree = ast.parse(source)
+    from conftest import parsed_source
+
+    # Shared with the suite's other sweeps and only read here.
+    tree = parsed_source(Path(__file__).parents[1] / module)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
 
-    def enclosing(node: ast.AST) -> str:
-        current: ast.AST | None = node
+    def enclosing(node: ast.AST) -> ast.AST | None:
+        current = parents.get(node)
         while current is not None:
             if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef):
-                return current.name
+                return current
             current = parents.get(current)
-        return "<module>"
+        return None
 
-    sites = []
+    def names_refusal(expr: ast.AST) -> bool:
+        return any(
+            isinstance(node, ast.Attribute) and node.attr == "NOT_EVALUATED"
+            for node in ast.walk(expr)
+        )
+
+    held: dict[ast.AST | None, set[str]] = {}
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "ScorecardEntry"):
-            continue
-        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
-        status = keywords.get("status")
-        if not (isinstance(status, ast.Attribute) and status.attr == "NOT_EVALUATED"):
-            continue
-        name = keywords.get("name")
+        if isinstance(node, ast.Assign) and names_refusal(node.value):
+            targets = {
+                name.id
+                for target in node.targets
+                for name in ast.walk(target)
+                if isinstance(name, ast.Name)
+            }
+            held.setdefault(enclosing(node), set()).update(targets)
+
+    def label_of(name: ast.AST | None) -> str:
         if isinstance(name, ast.Constant):
-            label = str(name.value)
-        elif isinstance(name, ast.JoinedStr):
-            label = "".join(
+            return str(name.value)
+        if isinstance(name, ast.JoinedStr):
+            return "".join(
                 part.value if isinstance(part, ast.Constant) else f"{{{ast.unparse(part.value)}}}"
                 for part in name.values
             )
-        else:
-            label = ast.unparse(name) if name is not None else "?"
-        sites.append((enclosing(node), label, node.lineno, "needs" in keywords))
+        return ast.unparse(name) if name is not None else "?"
+
+    def place(node: ast.AST) -> tuple[str, set[str]]:
+        function = enclosing(node)
+        return (function.name if function is not None else "<module>"), held.get(function, set())
+
+    sites = []
+    for node in ast.walk(tree):
+        # `cls(...)` is how ScorecardEntry's own constructors build an entry.
+        builders = (
+            {"ScorecardEntry", "cls"} if module.endswith("scorecard.py") else {"ScorecardEntry"}
+        )
+        if isinstance(node, ast.Call) and builders & {
+            getattr(node.func, "id", None),
+            getattr(node.func, "attr", None),
+        }:
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            status = keywords.get("status")
+            if status is None:
+                continue
+            where, locals_ = place(node)
+            refused = names_refusal(status) or any(
+                isinstance(name, ast.Name) and name.id in locals_ for name in ast.walk(status)
+            )
+            if refused:
+                sites.append(
+                    (where, label_of(keywords.get("name")), node.lineno, "needs" in keywords)
+                )
+        elif isinstance(node, ast.Dict):
+            entries = {
+                key.value: value
+                for key, value in zip(node.keys, node.values, strict=True)
+                if isinstance(key, ast.Constant)
+            }
+            if "status" in entries and names_refusal(entries["status"]):
+                sites.append((place(node)[0], "{update}", node.lineno, "needs" in entries))
     return sites
 
 
@@ -297,10 +351,143 @@ def test_every_refusal_states_its_need_or_says_why_it_cannot() -> None:
         "declaration would resolve it."
     )
     stated = {(function, name) for function, name, _line, _has in sites}
-    stale = sorted(set(excused) - stated)
+    stale = sorted({site for site in excused if ":" not in site[0]} - stated)
     assert not stale, f"{_EXCLUSIONS} excuses refusals that no longer exist: {stale}"
     for site, cause in excused.items():
         assert len(cause.split()) >= 8, f"{site} is excused without a stated cause"
+
+
+# Refusals outside the screening module that state no need yet, per module: the backlog, as
+# a ceiling that only comes down. A module absent here must state a need at every refusal or
+# excuse it by name in the exclusions file. Wiring one lowers the count and this test says to
+# lower the ceiling with it, so the number cannot drift back up unobserved.
+_UNWIRED_CEILING = {
+    "src/anvilate/analysis/aluminum.py": 1,
+    "src/anvilate/analysis/beam.py": 1,
+    "src/anvilate/analysis/cold_formed_steel.py": 2,
+    "src/anvilate/analysis/dynamics.py": 3,
+    "src/anvilate/analysis/embodied_carbon.py": 2,
+    "src/anvilate/analysis/fatigue.py": 3,
+    "src/anvilate/analysis/fracture.py": 3,
+    "src/anvilate/analysis/lifting_device.py": 1,
+    "src/anvilate/analysis/nds_timber.py": 4,
+    "src/anvilate/analysis/pressure_vessel.py": 7,
+    "src/anvilate/assembly.py": 9,
+    "src/anvilate/budget.py": 1,
+    "src/anvilate/callouts.py": 6,
+    "src/anvilate/dependency.py": 1,
+    "src/anvilate/export/qif.py": 1,
+    "src/anvilate/keepouts.py": 2,
+    "src/anvilate/loads.py": 2,
+    "src/anvilate/mcp.py": 1,
+    "src/anvilate/packs/machinery.py": 1,
+    "src/anvilate/packs/structural.py": 3,
+    "src/anvilate/scorecard.py": 4,
+    "src/anvilate/standards/effectivity.py": 3,
+    "src/anvilate/topology.py": 1,
+}
+
+
+@functools.cache
+def _library_refusals() -> dict[str, list[tuple[str, str, int, bool]]]:
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    return {
+        module: sites
+        for path in sorted((root / "src" / "anvilate").rglob("*.py"))
+        if (module := path.relative_to(root).as_posix()) != _SCREENING
+        and (sites := _refusal_sites(module))
+    }
+
+
+def test_every_refusal_in_the_library_states_its_need_or_is_on_the_backlog() -> None:
+    """The screening module's gate, for every other module that builds a refusal.
+
+    The screening gate read one file, so a screen anywhere else could refuse with a sentence
+    and nothing for the needs report to rank — 74 of them did, including every optomechanics
+    screen an environment profile feeds. Each refusal here either states its need, is excused
+    by name with a cause (the same exclusions file, keyed `path:function`), or is counted in
+    its module's backlog ceiling, which may only come down.
+    """
+    refusals = _library_refusals()
+    total = sum(len(sites) for sites in refusals.values())
+    assert total >= 70, f"the library sweep found only {total} refusals outside screening"
+    assert len(refusals) >= 20, f"refusals found in only {len(refusals)} modules"
+    excused = _excused()
+    counts = {}
+    for module, sites in refusals.items():
+        prefix = module.removeprefix("src/anvilate/")
+        unwired = [
+            (function, name)
+            for function, name, _line, has_needs in sites
+            if not has_needs and (f"{prefix}:{function}", name) not in excused
+        ]
+        counts[module] = len(unwired)
+    over = {
+        module: (count, _UNWIRED_CEILING.get(module, 0))
+        for module, count in counts.items()
+        if count > _UNWIRED_CEILING.get(module, 0)
+    }
+    assert not over, (
+        f"refusals that name no declaration, over each module's backlog ceiling "
+        f"(found, allowed): {over}. Attach `needs=` naming what the check was waiting on, or "
+        f"excuse the site in {_EXCLUSIONS} with its cause."
+    )
+    under = {
+        module: (counts.get(module, 0), ceiling)
+        for module, ceiling in _UNWIRED_CEILING.items()
+        if counts.get(module, 0) < ceiling
+    }
+    assert not under, (
+        f"these modules state more needs than their ceiling allows for (found, ceiling): "
+        f"{under}. Lower `_UNWIRED_CEILING` to the found count, so the backlog cannot regrow."
+    )
+    qualified = {
+        (f"src/anvilate/{key.partition(':')[0]}", key.partition(":")[2], name)
+        for key, name in excused
+        if ":" in key
+    }
+    present = {
+        (module, function, name)
+        for module, sites in refusals.items()
+        for function, name, _line, _has in sites
+    }
+    stale = sorted(qualified - present)
+    assert not stale, f"{_EXCLUSIONS} excuses refusals that no longer exist: {stale}"
+
+
+def test_every_need_a_module_declares_names_units_of_its_dimension() -> None:
+    """A need's units are what the report tells a reader to write, so each must parse, and
+    to the dimension the need states — `K/W` for a thermal resistance, not `W/K`."""
+    import importlib
+    import pkgutil
+
+    import anvilate
+    from anvilate.scorecard import Need
+    from anvilate.units import Quantity
+
+    needs: list[Need] = []
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError:  # an optional runtime this environment lacks
+            continue
+        for value in vars(module).values():
+            candidates = (
+                value.values()
+                if isinstance(value, dict)
+                else (value if isinstance(value, tuple) else (value,))
+            )
+            needs.extend(item for item in candidates if isinstance(item, Need))
+    with_units = {need.declaration: need for need in needs if need.units}
+    assert len(with_units) >= 12, f"only {len(with_units)} declared needs carry units"
+    for need in with_units.values():
+        for unit in need.units:
+            parsed = Quantity(magnitude=1.0, unit=unit)
+            assert parsed.has_dimension(need.dimension), (
+                f"the need for '{need.declaration}' is {need.dimension} and offers {unit!r}"
+            )
 
 
 def test_the_ratchet_only_turns_one_way() -> None:
@@ -334,6 +521,24 @@ def test_the_page_counts_are_the_sweeps_own() -> None:
     tens = {30: "thirty", 32: "thirty-two", 33: "thirty-three", 35: "thirty-five", 40: "forty"}
     assert f"{words[wired]} of the screening module's {tens[len(sites)]} refusals" in page
     assert f"the {words[wired].lower()} screening refusals that state a need today" in page
+
+
+def test_the_library_counts_on_the_page_are_the_sweeps_own() -> None:
+    from pathlib import Path
+
+    page = " ".join(
+        (Path(__file__).parents[1] / "docs" / "declaration-needs.md").read_text().split()
+    )
+    refusals = _library_refusals()
+    total = sum(len(sites) for sites in refusals.values())
+    wired = sum(has_needs for sites in refusals.values() for *_rest, has_needs in sites)
+    excused = sum(1 for function, _name in _excused() if ":" in function)
+    backlog = sum(_UNWIRED_CEILING.values())
+    assert total == wired + excused + backlog, (total, wired, excused, backlog)
+    assert f"the library has {total} more, and {wired} state a need today" in page
+    assert f"The other {backlog} are a backlog" in page
+    words = {3: "Three", 4: "Four", 5: "Five"}
+    assert f"{words[excused]} more are excused by name" in page
 
 
 def test_supplying_the_top_item_unblocks_the_checks_it_promised() -> None:

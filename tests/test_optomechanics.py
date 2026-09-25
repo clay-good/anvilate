@@ -1573,3 +1573,78 @@ def test_the_beam_is_emitted_as_a_keepout_the_right_way_round() -> None:
     diverging = _beam(half_angle=q("5 deg")).keepout(anchor="top", clearance_margin=q("0 mm"))
     assert diverging.rule.base_diameter.magnitude == 20
     assert diverging.rule.top_diameter.magnitude > 20
+
+
+def test_an_optomechanics_refusal_states_what_it_was_waiting_for() -> None:
+    """Each screen that stops for a missing value hands the needs report that value by name.
+
+    A detail sentence says "no internal gap is declared" to a reader; `needs` says it to the
+    report that ranks what to declare next, with the dimension and units to write it in and
+    where a value can come from. Only what is actually missing is named: an adjustment with
+    its travel stated does not ask for its travel.
+    """
+    from anvilate.analysis.optomechanics import (
+        AdjustmentMechanism,
+        ApertureStation,
+        boresight_scorecard,
+        dynamic_clearance_scorecard,
+        enclosure_rise_scorecard,
+        obscuration_scorecard,
+        pressure_window_scorecard,
+    )
+    from anvilate.budget import CombinationRule
+    from anvilate.needs import needs_report
+    from anvilate.scorecard import Scorecard, ValueSource
+
+    entries = (
+        dynamic_clearance_scorecard(
+            "lens shock",
+            natural_frequency=q("400 Hz"),
+            peak_acceleration=40.0,
+            pulse_duration=q("11 ms"),
+        ),
+        enclosure_rise_scorecard(
+            "self-heating", dissipations={"detector": q("2 W")}, allowed_rise=q("5 K")
+        ),
+        obscuration_scorecard(
+            "obscuration",
+            beam=None,
+            stations=(
+                ApertureStation(station="baffle", distance=q("40 mm"), clear_aperture=q("16 mm")),
+            ),
+        ),
+        boresight_scorecard(
+            "boresight",
+            first_path={"mount": q("10 µrad")},
+            second_path=None,
+            allowance=q("50 µrad"),
+            rule=CombinationRule.RSS,
+        ),
+        pressure_window_scorecard(
+            "window",
+            diameter=q("30 mm"),
+            thickness=q("3 mm"),
+            elastic_modulus=q("82 GPa"),
+            poisson_ratio=0.2,
+            allowable_tensile_stress=q("7 MPa"),
+        ),
+        _adjust(AdjustmentMechanism(mechanism="shim", travel=q("200 µm"))),
+    )
+    assert all(entry.status is CheckStatus.NOT_EVALUATED for entry in entries)
+    report = needs_report(Scorecard(entries=entries))
+    stated = {item.need.declaration: item for item in report.items}
+    assert set(stated) == {
+        "gap",
+        "thermal_resistance",
+        "beam",
+        "second_path",
+        "outward",
+        "inward",
+        "mechanism.resolution",
+        "mechanism.locked",
+    }
+    assert stated["gap"].need.dimension == "[length]"
+    assert stated["thermal_resistance"].need.units == ("K/W",)
+    # The pressure differentials are what an environment profile's ambient pressure bounds.
+    assert ValueSource.STANDARD in stated["outward"].need.sources
+    assert stated["outward"].unblocks == ("window",)

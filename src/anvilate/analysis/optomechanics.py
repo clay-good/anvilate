@@ -29,7 +29,7 @@ from pydantic import ConfigDict, model_validator
 from .._models import Named, Provenance, StatableModel, cited
 from ..budget import CombinationRule
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
-from ..scorecard import CheckStatus, Comparison, LimitSense, ScorecardEntry
+from ..scorecard import CheckStatus, Comparison, LimitSense, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
 from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_stretch_fraction
@@ -103,6 +103,183 @@ _ALDUCHOV = (
     "Journal of Applied Meteorology 35 (1996)"
 )
 _JAMIESON = "Jamieson, Thermal effects in optical systems, Optical Engineering 20(2) (1981)"
+
+# What each refusal below was waiting on, for the consolidated report in `anvilate.needs`.
+# A declaration here is the parameter or record field the caller passes, spelled the way the
+# call spells it; `[]` marks a field of every record in a sequence. Sources say where an
+# acceptable value comes from: the environment profiles (`anvilate.environment_profiles`) are
+# the STANDARD source, and none of them supplies anything about the design itself.
+_OUR = (ValueSource.USER,)
+_MEASURED = (ValueSource.MEASUREMENT, ValueSource.USER)
+_DATASHEET = (ValueSource.DATABASE, ValueSource.MEASUREMENT, ValueSource.USER)
+_NEEDS = {
+    "internal_dew_point": Need(
+        declaration="internal_dew_point",
+        takes=(
+            "the sealed volume's internal dew point, or the fill temperature and relative "
+            "humidity it follows from"
+        ),
+        dimension="[temperature]",
+        units=("degC", "K"),
+        sources=_MEASURED,
+    ),
+    "gap": Need(
+        declaration="gap",
+        takes="the internal gap the element would strike across under the shock",
+        dimension="[length]",
+        units=("µm", "mm", "in"),
+        sources=_MEASURED,
+    ),
+    "first_path": Need(
+        declaration="first_path",
+        takes="the first optical path's drift contributors, each an angle by name",
+        sources=_OUR,
+    ),
+    "second_path": Need(
+        declaration="second_path",
+        takes="the second optical path's drift contributors, each an angle by name",
+        sources=_OUR,
+    ),
+    "thermal_resistance": Need(
+        declaration="thermal_resistance",
+        takes="the enclosure's heat path to ambient, as a resistance",
+        dimension="[temperature] / [power]",
+        units=("K/W",),
+        sources=_DATASHEET,
+    ),
+    "effective_focal_length": Need(
+        declaration="effective_focal_length",
+        takes="the prescription's effective focal length, from the optical design",
+        dimension="[length]",
+        units=("mm", "in"),
+        sources=_OUR,
+    ),
+    "f_number": Need(
+        declaration="f_number",
+        takes="the prescription's working f-number, from the optical design",
+        dimension="dimensionless",
+        sources=_OUR,
+    ),
+    "wavelength": Need(
+        declaration="wavelength",
+        takes="the design wavelength the prescription is evaluated at",
+        dimension="[length]",
+        units=("nm", "µm"),
+        sources=_OUR,
+    ),
+    "deformations": Need(
+        declaration="deformations",
+        takes="each surface's exported deformation, from an optical-design or FEA tool",
+        sources=_OUR,
+    ),
+    "allowable_tensile_stress": Need(
+        declaration="allowable_tensile_stress",
+        takes=(
+            "the glass's allowable tensile stress for its surface finish and the fracture "
+            "probability the design accepts; no environment profile supplies it"
+        ),
+        dimension="[pressure]",
+        units=("MPa", "psi"),
+        sources=_DATASHEET,
+    ),
+    "outward": Need(
+        declaration="outward",
+        takes=(
+            "the outward pressure differential on the window — altitude, or a warm fill — "
+            "which a low-pressure environment profile's ambient pressure bounds"
+        ),
+        dimension="[pressure]",
+        units=("kPa", "psi"),
+        sources=(ValueSource.STANDARD, ValueSource.USER),
+    ),
+    "inward": Need(
+        declaration="inward",
+        takes="the inward pressure differential on the window — immersion, or a cold fill",
+        dimension="[pressure]",
+        units=("kPa", "psi"),
+        sources=(ValueSource.STANDARD, ValueSource.USER),
+    ),
+    "stiffness": Need(
+        declaration="crossings[].stiffness",
+        takes="each harness's force per unit offset across the mount interface",
+        dimension="[force] / [length]",
+        units=("N/mm", "lbf/in"),
+        sources=_MEASURED,
+    ),
+    "routing offset": Need(
+        declaration="crossings[].routing_offset",
+        takes="how far each harness's routing holds it from its free shape at assembly",
+        dimension="[length]",
+        units=("mm", "in"),
+        sources=_MEASURED,
+    ),
+    "assembly_iso_class": Need(
+        declaration="assembly_iso_class",
+        takes="the ISO 14644-1 class of the room the assembly is built in",
+        dimension="dimensionless",
+        sources=(ValueSource.MEASUREMENT, ValueSource.STANDARD, ValueSource.USER),
+    ),
+    "beam": Need(
+        declaration="beam",
+        takes="the beam envelope (entrance diameter, half angle, length) from the optical design",
+        sources=_OUR,
+    ),
+    "coldest rating": Need(
+        declaration="surfaces[].coldest",
+        takes="the lowest temperature each coating or cement is rated for, from its maker",
+        dimension="[temperature]",
+        units=("degC", "K"),
+        sources=_DATASHEET,
+    ),
+    "hottest rating": Need(
+        declaration="surfaces[].hottest",
+        takes="the highest temperature each coating or cement is rated for, from its maker",
+        dimension="[temperature]",
+        units=("degC", "K"),
+        sources=_DATASHEET,
+    ),
+    "humidity rating": Need(
+        declaration="surfaces[].relative_humidity",
+        takes="the highest relative humidity each surface is rated for, as a fraction",
+        dimension="dimensionless",
+        sources=_DATASHEET,
+    ),
+    "irradiance rating": Need(
+        declaration="surfaces[].irradiance",
+        takes="the highest irradiance each surface is rated for",
+        dimension="[power] / [area]",
+        units=("W/m**2",),
+        sources=_DATASHEET,
+    ),
+    "outgassing": Need(
+        declaration="materials[].total_mass_loss and materials[].condensable",
+        takes="each material's ASTM E595 TML and CVCM, as fractions, with their source",
+        dimension="dimensionless",
+        sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT),
+    ),
+    "resolution": Need(
+        declaration="mechanism.resolution",
+        takes="the smallest step the adjustment can make, in the correction's unit",
+        sources=_DATASHEET,
+    ),
+    "travel": Need(
+        declaration="mechanism.travel",
+        takes="the adjustment's full range, in the correction's unit",
+        sources=_DATASHEET,
+    ),
+    "holding": Need(
+        declaration="mechanism.locked",
+        takes=(
+            "a lock, or the screw mean diameter, lead and friction coefficient that show "
+            "whether the thread holds by friction"
+        ),
+        sources=_DATASHEET,
+    ),
+}
+
+
+def _needs(*keys: str) -> tuple[Need, ...]:
+    return tuple(_NEEDS[key] for key in dict.fromkeys(keys))
 
 
 def depth_of_focus(*, wavelength: Quantity, f_number: float) -> Quantity:
@@ -499,6 +676,7 @@ def internal_condensation_scorecard(
                 "not evaluated — the sealed volume declares neither an internal dew point nor "
                 "a fill temperature and relative humidity; an unstated purge is not a dry one"
             ),
+            needs=_needs("internal_dew_point"),
         )
     comparison = Comparison(
         measured=Quantity(magnitude=surface - 273.15, unit="°C"),
@@ -761,6 +939,7 @@ def dynamic_clearance_scorecard(
                 "not evaluated — no internal gap is declared for the shock displacement to be "
                 "judged against; an undeclared gap is not a generous one"
             ),
+            needs=_needs("gap"),
         )
     _check(gap, "[length]", "gap")
     if gap.to("m").magnitude <= 0:
@@ -1162,6 +1341,7 @@ def boresight_scorecard(
                 f"not evaluated — the {' and '.join(missing)} path is not declared, and the "
                 "drift of one path is not a boresight error"
             ),
+            needs=_needs(*(f"{label}_path" for label in missing)),
         )
     assert first_path is not None and second_path is not None
     if rule is CombinationRule.HYBRID:
@@ -1273,6 +1453,7 @@ def enclosure_rise_scorecard(
                 f"not evaluated — {sources} {verb} inside the enclosure and no heat path "
                 "to ambient is declared; a sealed volume does not shed heat by assumption"
             ),
+            needs=_needs("thermal_resistance"),
         )
     rise = temperature_rise(
         power=Quantity(magnitude=watts, unit="W"), thermal_resistance=thermal_resistance
@@ -1479,9 +1660,10 @@ class Prescription(StatableModel):
     deformations: tuple[SurfaceDeformation, ...] = ()
 
     def _refused(self, name: str, needed: dict[str, object]) -> ScorecardEntry | None:
-        missing = [field.replace("_", " ") for field, value in needed.items() if value is None]
-        if not missing:
+        absent = [field for field, value in needed.items() if value is None]
+        if not absent:
             return None
+        missing = [field.replace("_", " ") for field in absent]
         return ScorecardEntry(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
@@ -1489,6 +1671,7 @@ class Prescription(StatableModel):
                 f"not evaluated — the {self.tool} {self.tool_version} prescription does not "
                 f"carry {', '.join(missing)}, and a prescription input is never estimated"
             ),
+            needs=_needs(*(field.removeprefix("surface ") for field in absent)),
         )
 
     def _traced(self, entry: ScorecardEntry) -> ScorecardEntry:
@@ -1718,6 +1901,7 @@ def glass_contact_stress_scorecard(
             ),
             reference=_JOHNSON,
             addresses=("glass fracture at a mount contact",),
+            needs=_needs("allowable_tensile_stress"),
         )
     comparison = Comparison(
         measured=Quantity(magnitude=tensile / 1e6, unit="MPa"),
@@ -1968,6 +2152,7 @@ def pressure_window_scorecard(
                 "fill is not assumed"
             ),
             reference=_TIMOSHENKO,
+            needs=_needs("outward", "inward"),
         )
     faces = {"outward": "outer", "inward": "inner"}
     results = {}
@@ -2118,6 +2303,7 @@ def harness_load_scorecard(
                 "screened as free, which it is not; state them for " + ", ".join(unstated)
             ),
             reference=_YODER,
+            needs=_needs(*(label for crossing in crossings for label in crossing.missing())),
         )
     pulls = []
     for crossing in crossings:
@@ -2289,6 +2475,7 @@ def surface_limits_scorecard(
     surfaces = _records(surfaces, SurfaceLimits, "surfaces")
     exceeded: list[str] = []
     unrated: list[str] = []
+    unrated_kinds: list[str] = []
     for limits in surfaces:
         label = f"{limits.surface} ({limits.treatment.value})"
         missing = []
@@ -2317,6 +2504,7 @@ def surface_limits_scorecard(
                 )
         if missing:
             unrated.append(f"{label}: no {' or '.join(missing)}")
+            unrated_kinds.extend(missing)
     population = f"{len(surfaces)} surface{'s' if len(surfaces) != 1 else ''} examined"
     if exceeded:
         status = CheckStatus.FAIL
@@ -2352,6 +2540,7 @@ def surface_limits_scorecard(
             ),
         ),
         addresses=("a cement or coating failing at an environment extreme",),
+        needs=_needs(*unrated_kinds) if status is CheckStatus.NOT_EVALUATED else (),
     )
 
 
@@ -2468,6 +2657,7 @@ def outgassing_census_scorecard(
         status=status,
         detail=" — ".join(parts),
         reference=_ASTM_E595,
+        needs=_needs("outgassing") if status is CheckStatus.NOT_EVALUATED else (),
         underived=Underived(
             kind=DerivationAbsence.LOOKUP,
             reason=(
@@ -2565,6 +2755,7 @@ def cleanliness_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=f"{stated}; no assembly environment is declared to build it in",
             reference=_ISO_14644,
+            needs=_needs("assembly_iso_class"),
         )
     require_finite(assembly_iso_class, name="assembly_iso_class")
     if not 1 <= assembly_iso_class <= 9:
@@ -2702,8 +2893,10 @@ def adjustment_scorecard(
         for label, value in (("resolution", mechanism.resolution), ("travel", mechanism.travel))
         if value is None
     ]
+    wanted = list(missing)
     if mechanism.missing_for_holding() and not vibration:
         missing.append("a lock, or its " + " and ".join(mechanism.missing_for_holding()))
+        wanted.append("holding")
     stated = []
     if mechanism.resolution is not None:
         stated.append(f"resolution {mechanism.resolution}")
@@ -2751,6 +2944,7 @@ def adjustment_scorecard(
         detail=f"{summary} — {verdict}; an adjustment that can be set can also move, so it "
         "is an alignment-budget contributor",
         reference=_SHIGLEY_SCREW,
+        needs=_needs(*wanted) if status is CheckStatus.NOT_EVALUATED else (),
         underived=Underived(
             kind=DerivationAbsence.LOOKUP,
             reason=(
@@ -3040,6 +3234,7 @@ def obscuration_scorecard(
                 "come from the optical design, and the footprint is not assumed"
             ),
             reference=_YODER,
+            needs=_needs("beam"),
         )
     if not isinstance(beam, BeamEnvelope):
         raise ValueError(f"beam must be a BeamEnvelope or None; got {beam!r}")
