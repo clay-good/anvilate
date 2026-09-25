@@ -23,11 +23,35 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, Need, RepairHint, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
 from ._flags import require_flag
 from .stress import von_mises_principal
+
+# What a refusal here was waiting on, for the report in `anvilate.needs`. Three of the screens
+# take a computed accounting rather than raw dimensions, so the need names the function that
+# produces it; the allowable is read from the code's own table at the design temperature.
+_NEEDS_AN_ALLOWABLE = Need(
+    declaration="allowable",
+    takes="the B31.3 Table A-1 basic allowable stress, read at the design temperature",
+    sources=(ValueSource.STANDARD, ValueSource.DATABASE),
+)
+_NEEDS_BRANCH_ACCOUNTING = Need(
+    declaration="reinforcement",
+    takes="the §304.3.3 area accounting from asme_b313_branch_reinforcement",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_NOZZLE_ACCOUNTING = Need(
+    declaration="reinforcement",
+    takes="the UG-37 area accounting from asme_ug37_nozzle_reinforcement",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_FLANGE_STRESS = Need(
+    declaration="stress",
+    takes="the Appendix 2 flange stresses from asme_appendix_2_ring_flange_stress",
+    sources=(ValueSource.USER,),
+)
 
 __all__ = [
     "ThinWallStress",
@@ -1044,6 +1068,7 @@ def asme_b313_branch_reinforcement_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_B313_BRANCH,
+            needs=(_NEEDS_BRANCH_ACCOUNTING,),
         )
     have = reinforcement.available.to("mm**2").magnitude
     need = reinforcement.required.to("mm**2").magnitude
@@ -1791,6 +1816,7 @@ def asme_b313_pressure_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — no B31.3 allowable stress supplied",
             reference=_CLAUSE_B313_PRESSURE_DESIGN,
+            needs=(_NEEDS_AN_ALLOWABLE,),
         )
     if not allowable.is_valid_at(design_temperature):
         return ScorecardEntry(
@@ -2272,6 +2298,7 @@ def asme_ug37_reinforcement_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_UG37,
+            needs=(_NEEDS_NOZZLE_ACCOUNTING,),
         )
     have = reinforcement.available.to("mm**2").magnitude
     need = reinforcement.required.to("mm**2").magnitude
@@ -2852,6 +2879,7 @@ def asme_appendix_2_flange_stress_scorecard(
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
             reference=_CLAUSE_APPENDIX_2,
+            needs=(_NEEDS_FLANGE_STRESS,),
         )
     entry = ScorecardEntry.from_safety_factor(
         name, computed=stress.safety_factor, required=required

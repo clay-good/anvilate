@@ -371,7 +371,6 @@ _UNWIRED_CEILING = {
     "src/anvilate/analysis/fracture.py": 3,
     "src/anvilate/analysis/lifting_device.py": 1,
     "src/anvilate/analysis/nds_timber.py": 4,
-    "src/anvilate/analysis/pressure_vessel.py": 7,
     "src/anvilate/budget.py": 1,
     "src/anvilate/callouts.py": 6,
     "src/anvilate/dependency.py": 1,
@@ -531,12 +530,20 @@ def test_the_library_counts_on_the_page_are_the_sweeps_own() -> None:
     refusals = _library_refusals()
     total = sum(len(sites) for sites in refusals.values())
     wired = sum(has_needs for sites in refusals.values() for *_rest, has_needs in sites)
-    excused = sum(1 for function, _name in _excused() if ":" in function)
+    # Sites, not lines: one line can excuse several refusals in one function.
+    excusals = _excused()
+    excused = sum(
+        1
+        for module, sites in refusals.items()
+        for function, name, _line, has_needs in sites
+        if not has_needs
+        and (f"{module.removeprefix('src/anvilate/')}:{function}", name) in excusals
+    )
     backlog = sum(_UNWIRED_CEILING.values())
     assert total == wired + excused + backlog, (total, wired, excused, backlog)
     assert f"the library has {total} more, and {wired} state a need today" in page
     assert f"The other {backlog} are a backlog" in page
-    words = {3: "Three", 4: "Four", 5: "Five"}
+    words = {3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
     assert f"{words[excused]} more are excused by name" in page
 
 

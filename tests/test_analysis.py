@@ -39424,11 +39424,11 @@ def test_b313_pressure_scorecard_will_not_rate_a_line_it_cannot_evaluate():
     assert ok.safety_factor == pytest.approx(9.34 / 5.0, abs=0.02)
     assert "ASTM A106-B" in ok.detail and "3.77 mm" in ok.detail
 
-    # No allowable supplied: the B31.3 tables are the caller's to provide.
-    assert (
-        asme_b313_pressure_scorecard("line", allowable=None, **common).status
-        is CheckStatus.NOT_EVALUATED
-    )
+    # No allowable supplied: the B31.3 tables are the caller's to provide, and the entry
+    # says so to the needs report as well as to the reader.
+    missing = asme_b313_pressure_scorecard("line", allowable=None, **common)
+    assert missing.status is CheckStatus.NOT_EVALUATED
+    assert [need.declaration for need in missing.needs] == ["allowable"]
 
     # An allowable read at the WRONG temperature is the silent green this type exists to
     # stop: 138 MPa is the 200 °C row, and a 400 °C line rated on it is a quarter high.
@@ -39437,6 +39437,7 @@ def test_b313_pressure_scorecard_will_not_rate_a_line_it_cannot_evaluate():
     )
     assert hot.status is CheckStatus.NOT_EVALUATED
     assert "read at" in hot.detail
+    assert hot.needs == (), "a value supplied and wrong is a correction, not a gap"
 
     # A wall wholly eaten by its allowances has none left to rate — not a rating of zero.
     consumed = asme_b313_pressure_scorecard(
@@ -39444,6 +39445,7 @@ def test_b313_pressure_scorecard_will_not_rate_a_line_it_cannot_evaluate():
     )
     assert consumed.status is CheckStatus.NOT_EVALUATED
     assert "whole nominal wall" in consumed.detail
+    assert consumed.needs == (), "no declaration gives back a wall the allowances took"
 
     # A thinner schedule on the same service fails rather than quietly passing.
     thin = asme_b313_pressure_scorecard(
