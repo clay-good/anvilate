@@ -57,6 +57,9 @@ dev = [
     "ruff>=0.6",
     "ezdxf>=1.1",
     "pdfminer.six>=20231228",
+    # The 3MF Consortium's reference implementation (BSD-2-Clause), used only by the tests to
+    # read back every 3MF file the exporter writes. The package never imports it.
+    "lib3mf>=2.4",
     "jsonschema>=4.21",
     "mypy>=1.11",
     "build123d<0.12,>=0.11.1",

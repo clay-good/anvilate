@@ -260,6 +260,7 @@ geometry.render_viewport
 geometry.read_step_validation_properties
 geometry.verify_step_integrity
 geometry.write_step
+geometry.render_3mf
 ingest.Bound
 ingest.ConfirmationState
 ingest.SignatureStatus

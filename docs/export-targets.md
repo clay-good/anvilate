@@ -11,7 +11,17 @@ valid solid geometry with a deterministic validation watermark and declares OCCT
 model-based 3D engineering schema. It also writes CAx-IF v4.6 part-level volume, total
 surface area, and centroid properties, then verifies them against a fresh import before
 releasing the file. It does
-**not** populate or claim semantic PMI. AP242 semantic PMI and 3MF remain roadmap targets.
+**not** populate or claim semantic PMI, which remains a roadmap target.
+
+3MF is shipped as a library function for the same three patterns: `geometry.render_3mf(built,
+authorization=...)` tessellates the solid, welds the vertices each face repeats, and writes
+the ISO/IEC 25422 core through `export.threemf.render_mesh_3mf`. The file's metadata names
+the standard, the writer and its version, and carries the export watermark. A mesh that is
+not closed and consistently oriented, or that encloses a volume more than 1% from the
+solid's own, is refused rather than written. The writer is this repository's, and its tests
+read every file back with lib3mf, the 3MF Consortium's reference implementation, in strict
+mode: no warnings, a manifold and oriented mesh, and the same metadata. There is no
+`anvilate build --3mf` yet, and no Beam Lattice content.
 The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 AP242 is the default; local `anvilate build --ap214` is the explicit legacy fallback and

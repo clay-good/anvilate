@@ -440,7 +440,7 @@ def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization(
         for name, fn in entry_points.items()
         if name.rsplit(".", 1)[-1] not in _NOT_AN_ARTIFACT_WRITER and _writes_a_file_or_document(fn)
     }
-    assert len(emitters) == 5, f"expected the five artifact writers, found {sorted(emitters)}"
+    assert len(emitters) == 6, f"expected the six artifact writers, found {sorted(emitters)}"
     for name, function in sorted(emitters.items()):
         parameters = inspect.signature(function).parameters
         assert "authorization" in parameters, (
@@ -458,6 +458,14 @@ def test_geometry_step_writer_cannot_bypass_the_export_gate():
     from anvilate.geometry import write_step
 
     parameter = inspect.signature(write_step).parameters["authorization"]
+    assert parameter.default is inspect.Parameter.empty
+
+
+def test_geometry_3mf_writer_cannot_bypass_the_export_gate():
+    """3MF from a built solid lives beside STEP, outside the export-package census."""
+    from anvilate.geometry import render_3mf
+
+    parameter = inspect.signature(render_3mf).parameters["authorization"]
     assert parameter.default is inspect.Parameter.empty
 
 

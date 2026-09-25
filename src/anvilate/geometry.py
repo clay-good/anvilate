@@ -86,6 +86,7 @@ __all__ = [
     "read_step_validation_properties",
     "verify_step_integrity",
     "write_step",
+    "render_3mf",
 ]
 
 BASE_PLATE_PATTERN = "base_plate/1"
@@ -2528,3 +2529,49 @@ def write_step(
         path.unlink(missing_ok=True)
         raise
     return path
+
+
+def render_3mf(
+    built: BuiltGeometry, *, authorization: ExportAuthorization, tolerance_mm: float = 0.01
+) -> bytes:
+    """One authorized solid as the bytes of a 3MF file, tessellated to ``tolerance_mm``.
+
+    The kernel meshes each face on its own, so a vertex on an edge two faces share arrives
+    once per face. Vertices with identical coordinates are welded into one before the mesh is
+    handed to :func:`~anvilate.export.threemf.render_mesh_3mf`, whose closed-and-oriented
+    check then holds the kernel's triangulation to what a printer needs. The mesh is also
+    held to the solid: its signed volume must be positive, which is outward-facing triangles,
+    and within 1% of the solid's own volume. A tessellation that loses a feature is refused
+    rather than written.
+    """
+    from .export.threemf import render_mesh_3mf
+
+    if not built.is_valid:
+        raise GeometryError("refusing to write invalid geometry")
+    if isinstance(tolerance_mm, bool) or not isinstance(tolerance_mm, int | float):
+        raise GeometryError(f"tolerance_mm must be a number of millimetres; got {tolerance_mm!r}")
+    if not 0 < tolerance_mm <= 1.0:
+        raise GeometryError(f"tolerance_mm must lie in (0, 1] mm; got {tolerance_mm!r}")
+    raw_vertices, raw_triangles = built.shape.tessellate(tolerance_mm, 0.1)
+    welded: dict[tuple[float, float, float], int] = {}
+    remap: list[int] = []
+    for vertex in raw_vertices:
+        key = (float(vertex.X), float(vertex.Y), float(vertex.Z))
+        remap.append(welded.setdefault(key, len(welded)))
+    vertices = list(welded)
+    triangles = [(remap[a], remap[b], remap[c]) for a, b, c in raw_triangles]
+    signed = 0.0
+    for a, b, c in triangles:
+        (ax, ay, az), (bx, by, bz), (cx, cy, cz) = vertices[a], vertices[b], vertices[c]
+        signed += (
+            ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)
+        ) / 6
+    solid = built.volume_mm3
+    if signed <= 0 or abs(signed - solid) > 0.01 * solid:
+        raise GeometryError(
+            f"the tessellation encloses {signed:.6g} mm^3 and the solid {solid:.6g} mm^3; a "
+            "mesh that does not hold the solid's volume, facing outward, is not the part"
+        )
+    return render_mesh_3mf(
+        vertices=vertices, triangles=triangles, name=built.name, authorization=authorization
+    )

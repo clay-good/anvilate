@@ -47,6 +47,8 @@ export.qif.SAFETY_FACTOR_UNIT
 export.qif.export_qif_results
 export.qif.qif_characteristic_mapping
 export.qif.qif_schema_issues
+export.threemf.THREEMF_STANDARD
+export.threemf.render_mesh_3mf
 packs._guarded.DESIGN_BASIS
 packs._guarded.DesignAllowable
 packs._guarded.GuardedInputs

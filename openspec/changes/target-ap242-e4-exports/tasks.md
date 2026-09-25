@@ -29,8 +29,13 @@
 - [ ] 2.2 CAx-IF/NIST PMI test-model regression fixtures for the reader/writer — confirmed
       freely downloadable (mbx-if.org hosts the FTC/STC/CTC models with AP242 STEP files and
       recommends exactly this loop); blocked on the same exporter
-- [ ] 2.3 3MF writer via reference implementation with ISO citation in metadata — the ISO
-      number is confirmed (ISO/IEC 25422:2025, per 3mf.io); the writer is unbuilt
+- [x] 2.3 3MF writer via reference implementation with ISO citation in metadata —
+      `export.threemf.render_mesh_3mf` writes the ISO/IEC 25422:2025 core (millimetres,
+      deterministic bytes, the standard and writer in metadata beside the export watermark),
+      refusing an open or inconsistently oriented mesh; `geometry.render_3mf` tessellates the
+      three audited patterns, welds shared vertices, and holds the mesh to the solid's volume.
+      Validated as an equivalent writer: lib3mf (the reference implementation, BSD-2, a dev
+      dependency) reads every file in strict mode with no warnings (tests/test_threemf.py)
 
 ## 3. Docs
 
@@ -42,5 +47,5 @@
 
 ## Note
 
-This change ships no code — STEP and 3MF export are unbuilt, which is what made re-aiming
-cheap. Its value turned out to be the two premises that did not survive checking.
+This change first shipped no code, which is what made re-aiming cheap; the 3MF writer
+(2.3) landed later. Its value turned out to be the two premises that did not survive checking.
