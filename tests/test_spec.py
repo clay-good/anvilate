@@ -1984,3 +1984,59 @@ def test_the_dict_entry_point_refuses_a_document_that_is_not_a_mapping():
     for text in ("- a\n- b\n", "just a string\n", "null\n"):
         with pytest.raises(SpecValidationError, match="spec must be a mapping"):
             load_spec_yaml(text)
+
+
+# --- a validation failure says what to do about itself (interaction-quality 2.1) ----------
+
+
+def test_the_example_lines_for_required_fields_are_a_valid_document_and_every_required_field():
+    """The advice a missing field gets is a line of YAML. Joined, those lines must load."""
+    from anvilate.spec import DesignSpec
+    from anvilate.spec.validate import _REQUIRED_FIELD_EXAMPLES
+
+    required = {name for name, field in DesignSpec.model_fields.items() if field.is_required()}
+    assert set(_REQUIRED_FIELD_EXAMPLES) == required
+    spec = load_spec_yaml("\n".join(_REQUIRED_FIELD_EXAMPLES.values()))
+    assert spec.name == "bracket-01"
+
+
+def _refusal(document: str):  # type: ignore[no-untyped-def]
+    from anvilate.spec import SpecValidationError
+
+    with pytest.raises(SpecValidationError) as caught:
+        load_spec_yaml(document)
+    return caught.value
+
+
+def test_a_missing_field_is_told_how_to_add_it_and_an_unknown_one_its_nearest_name():
+    from anvilate.spec.validate import _REQUIRED_FIELD_EXAMPLES
+
+    lines = dict(_REQUIRED_FIELD_EXAMPLES)
+    del lines["manufacturing"]
+    lines["material"] = "material: {rf: AA-6061-T6}"
+    lines["version"] = 'version: "1.18.0"'
+    failure = _refusal("\n".join(lines.values()))
+    remedies = " | ".join(failure.remedies)
+    assert "add `manufacturing` to the document, for example " in remedies
+    assert "`manufacturing: {process: cnc_milling}`" in remedies
+    assert "remove `material.rf`, which `material` does not have (did you mean `ref`?)" in remedies
+    assert "add `material.ref` to the document" in remedies
+    assert "a document states its schema version as `anvilate_spec: " in remedies
+    # The message carries the remedy too, so the library and MCP readers get it as well.
+    assert "did you mean `ref`?" in str(failure)
+    # MCP joins a refusal's issues with "; ", so a remedy must not carry one.
+    assert not [remedy for remedy in failure.remedies if ";" in remedy]
+
+
+def test_a_failure_with_no_remedy_to_state_states_none():
+    failure = _refusal("\n".join([*_required_lines(), "name: [1, 2]"]))
+    at_name = [error for error in failure.errors if error["loc"] == "name"]
+    assert at_name, failure.errors
+    assert all(error.get("remedy") is None for error in at_name)
+    assert failure.remedies == ()
+
+
+def _required_lines() -> list[str]:
+    from anvilate.spec.validate import _REQUIRED_FIELD_EXAMPLES
+
+    return [line for key, line in _REQUIRED_FIELD_EXAMPLES.items() if key != "name"]

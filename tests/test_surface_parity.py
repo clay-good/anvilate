@@ -118,7 +118,9 @@ def test_a_document_that_is_not_a_spec_is_refused_with_the_same_paths(tmp_path):
     assert over_the_wire and at_the_shell
     assert over_the_wire == at_the_shell, (over_the_wire, at_the_shell)
     # And the reasons travel with the paths, not just the field names.
-    assert set(over_the_wire.values()) == {"Field required"}
+    assert {reason.split(" — ")[0] for reason in over_the_wire.values()} == {"Field required"}
+    # With what to do about each: the remedy crosses the wire as it reaches the shell.
+    assert all(" — add `" in reason for reason in over_the_wire.values())
     assert "description" in over_the_wire
 
 

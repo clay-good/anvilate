@@ -69,6 +69,7 @@ import sys
 import textwrap
 import time
 from collections import Counter
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Literal, TextIO
 
@@ -609,6 +610,7 @@ def run(
     err = sys.stderr if stderr is None else stderr
     arguments = list(sys.argv[1:] if argv is None else argv)
     json_requested = _wants_json(arguments)
+    _STATED_REMEDIES.set(())
     parser = _build_parser()
     if json_requested:
         parse_diagnostics = io.StringIO()
@@ -706,16 +708,37 @@ def _requested_command(arguments: list[str]) -> str:
     return next((argument for argument in arguments if argument in commands), "anvilate")
 
 
+# The remedies a refusal stated for itself during this invocation. A spec that fails
+# validation knows what to do about each problem, such as "add `manufacturing` to the
+# document, for example ...", and the JSON refusal used to replace all of that with one
+# generic sentence. A script reading `remedy` now gets the refusal's own.
+_STATED_REMEDIES: ContextVar[tuple[str, ...]] = ContextVar("_STATED_REMEDIES", default=())
+
+
+def _as_sentence(remedy: str) -> str:
+    """``remedy`` capitalised and ended, so several read as sentences side by side."""
+    return remedy[:1].upper() + remedy[1:] + ("" if remedy.endswith(("?", ".")) else ".")
+
+
+def _state_remedies(remedies: tuple[str, ...]) -> None:
+    _STATED_REMEDIES.set(_STATED_REMEDIES.get() + remedies)
+
+
 def _print_refusal(*, command: str, code: int, diagnostic: str, out) -> None:
     """Write the JSON refusal corresponding to diagnostics already sent to stderr."""
     lines = tuple(line for line in diagnostic.splitlines() if line)
+    stated = _STATED_REMEDIES.get()
     remedy = (
-        f"Correct the {command} arguments or input document named in diagnostics, then retry."
-        if code == EXIT_BAD_REQUEST
+        " ".join(_as_sentence(each) for each in stated)
+        if stated
         else (
-            f"Use a backed command, or implement the capability named by anvilate {command}."
-            if code == EXIT_UNBUILT
-            else f"Resolve the {command} condition named in diagnostics, then retry."
+            f"Correct the {command} arguments or input document named in diagnostics, then retry."
+            if code == EXIT_BAD_REQUEST
+            else (
+                f"Use a backed command, or implement the capability named by anvilate {command}."
+                if code == EXIT_UNBUILT
+                else f"Resolve the {command} condition named in diagnostics, then retry."
+            )
         )
     )
     print(
@@ -2468,6 +2491,7 @@ def _load(path: Path, *, err, command: str):
         # the experience this avoids, and the paths are what the loader already produced.
         for problem in failure.errors:
             print(f"anvilate {command}: {_refusal_line(problem['loc'], problem['msg'])}", file=err)
+        _state_remedies(failure.remedies)
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:
         print(f"anvilate {command}: {failure}", file=err)

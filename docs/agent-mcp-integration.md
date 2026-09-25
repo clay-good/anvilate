@@ -180,7 +180,7 @@ print("transport error?", "error" in bad)
 isError: False
 errors: []
 isError: True
-first error: description: Field required
+first error: description: Field required — add `description` to the document, for example `description: "A motor mount bracket for a NEMA 23 stepper."`
 transport error? False
 ```
 

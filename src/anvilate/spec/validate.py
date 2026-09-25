@@ -12,13 +12,13 @@ from __future__ import annotations
 import difflib
 import re
 from math import isfinite
-from typing import Any
+from typing import Any, get_args
 
 import yaml
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .._models import _refusal_line
-from .ir import DesignSpec
+from .ir import SCHEMA_VERSION, DesignSpec
 from .references import ReferenceResolver, UnknownReferenceError, default_resolver
 from .version import migrate_to_current
 
@@ -33,19 +33,98 @@ __all__ = [
 ]
 
 
+# How each required top-level field is spelled, in a line that validates. A document missing
+# one is told this line rather than pydantic's "Field required", which names the field and
+# says nothing about what goes in it. tests/test_spec.py builds a Design Spec from these
+# lines alone, so the advice cannot drift from what the loader accepts.
+_REQUIRED_FIELD_EXAMPLES: dict[str, str] = {
+    "name": "name: bracket-01",
+    "description": 'description: "A motor mount bracket for a NEMA 23 stepper."',
+    "units": "units: {value: SI, origin: user_stated}",
+    "material": "material: {ref: AA-6061-T6}",
+    "manufacturing": "manufacturing: {process: cnc_milling}",
+    "acceptance": "acceptance: {tiers: [T1_analytical]}",
+}
+
+
+# The keys a document reaches for when it means `anvilate_spec`, none of them close enough in
+# spelling for a near-miss match to find it.
+_VERSION_SPELLINGS = frozenset({"version", "schema_version", "spec_version", "schema"})
+
+
+def _model_in(annotation: Any) -> type[BaseModel] | None:
+    """The one pydantic model an annotation holds, through Optional, tuples and Annotated."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    found = {model for arg in get_args(annotation) if (model := _model_in(arg)) is not None}
+    return found.pop() if len(found) == 1 else None
+
+
+def _siblings(location: tuple[Any, ...]) -> list[str]:
+    """The field names beside the last part of ``location``, or none when the path leaves
+    the models (a mapping of element parameters, say)."""
+    model: type[BaseModel] | None = DesignSpec
+    for part in location[:-1]:
+        if isinstance(part, int):
+            continue
+        field = model.model_fields.get(part) if model is not None else None
+        model = _model_in(field.annotation) if field is not None else None
+        if model is None:
+            return []
+    return list(model.model_fields) if model is not None else []
+
+
+def _remedy(kind: str, location: tuple[Any, ...]) -> str | None:
+    """What to do about one validation failure, when its kind says: add it, or remove it."""
+    path = ".".join(str(part) for part in location)
+    if kind == "missing":
+        example = _REQUIRED_FIELD_EXAMPLES.get(path)
+        if example is not None:
+            return f"add `{path}` to the document, for example `{example}`"
+        return f"add `{path}` to the document"
+    if kind == "extra_forbidden" and location:
+        owner = ".".join(str(part) for part in location[:-1])
+        owner = f"`{owner}`" if owner else "a Design Spec"
+        if len(location) == 1 and location[0] in _VERSION_SPELLINGS:
+            hint = f' (a document states its schema version as `anvilate_spec: "{SCHEMA_VERSION}"`)'
+        else:
+            near = difflib.get_close_matches(str(location[-1]), _siblings(location), n=1)
+            hint = f" (did you mean `{near[0]}`?)" if near else ""
+        return f"remove `{path}`, which {owner} does not have{hint}"
+    return None
+
+
 class SpecValidationError(ValueError):
-    """A spec failed schema validation. Carries the offending field paths."""
+    """A spec failed schema validation. Carries the offending field paths.
+
+    Each error is a ``{"loc", "msg"}`` mapping, and carries a ``"remedy"`` when its kind has
+    one: a missing field says to add it (with a line that validates, for a required
+    top-level field), and an unknown one says to remove it and names the nearest real field.
+    """
 
     def __init__(self, errors: list[dict[str, Any]]) -> None:
         self.errors = errors
         lines = [f"  {_refusal_line(e['loc'], e['msg'])}" for e in errors]
         super().__init__("spec failed validation:\n" + "\n".join(lines))
 
+    @property
+    def remedies(self) -> tuple[str, ...]:
+        """Each distinct remedy the errors carry, in order."""
+        return tuple(dict.fromkeys(e["remedy"] for e in self.errors if e.get("remedy")))
+
     @classmethod
     def _from_pydantic(cls, exc: ValidationError) -> SpecValidationError:
-        errors = [
-            {"loc": ".".join(str(p) for p in e["loc"]), "msg": e["msg"]} for e in exc.errors()
-        ]
+        errors = []
+        for e in exc.errors():
+            location = tuple(e["loc"])
+            remedy = _remedy(e["type"], location)
+            error: dict[str, Any] = {"loc": ".".join(str(p) for p in location), "msg": e["msg"]}
+            if remedy is not None:
+                # An em dash, not a semicolon: MCP joins a refusal's issues with "; ", and a
+                # remedy carrying one would split into a field path that does not exist.
+                error["msg"] = f"{e['msg']} — {remedy}"
+                error["remedy"] = remedy
+            errors.append(error)
         return cls(errors)
 
 

@@ -32,7 +32,12 @@
       state an `unavailable=` reason. tests/test_needs.py sweeps every module; the other 50
       are excused by cause in docs/api/refusals-without-needs.txt, and the backlog is empty.
       Left open because the task says "every refusal": a *raised* refusal (a ValueError)
-      still carries its remedy in its message only
+      still carries its remedy in its message only. The exception, since 2026-09-25, is
+      the refusal met most often. A spec that fails validation carries a structured
+      remedy per error: `SpecValidationError.errors[].remedy` and `.remedies`. A missing
+      required field gets a line of YAML that validates, and a test builds a Design Spec
+      from those lines. An unknown field gets the nearest real field name. The CLI's JSON
+      refusal carries those remedies in `remedy` instead of its generic sentence
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed

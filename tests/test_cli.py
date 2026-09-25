@@ -4850,3 +4850,21 @@ geometric_tolerances:
         "build", str(spec), "--output", str(tmp_path / "legacy.step"), "--unvalidated", "--ap214"
     )
     assert code == EXIT_BAD_REQUEST and "AP242 construct" in err
+
+
+def test_a_json_refusal_carries_the_spec_s_own_remedies_not_a_generic_sentence(tmp_path):
+    """interaction-quality 2.1: the structured `remedy` a script reads is the refusal's own."""
+    import json
+
+    spec = tmp_path / "part.yaml"
+    spec.write_text("name: x\nunits: {value: SI, origin: user_stated}\nmaterial: {rf: A}\n")
+    code, out, _err = _run("check", str(spec), "--format", "json")
+    assert code == 3
+    remedy = json.loads(out)["remedy"]
+    assert remedy.startswith("Add `description` to the document, for example ")
+    assert "Remove `material.rf`, which `material` does not have (did you mean `ref`?)." in remedy
+    assert "Correct the check arguments" not in remedy
+    # A refusal that states no remedy of its own still gets the generic one, and the stated
+    # remedies of one invocation do not leak into the next.
+    code, out, _err = _run("check", str(tmp_path / "missing.yaml"), "--format", "json")
+    assert json.loads(out)["remedy"].startswith("Correct the check arguments")

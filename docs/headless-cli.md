@@ -463,7 +463,18 @@ covers parser errors and unsupported build patterns, even though those paths sto
 normal result exists. A completed build has its own result variant carrying the pattern,
 dimensions, semantic face tags, kernel-computed volume, output path, and digest.
 Scripts therefore never have to switch back to scraping prose precisely when an invocation
-goes wrong. An unexpected defect uses the sibling `outcome: "error"` variant and exit code
+goes wrong.
+
+The remedy is the refusal's own when it has one. A spec that fails validation says what to
+do about each problem: a missing required field gets a line of YAML that validates, and an
+unknown field gets the nearest real field name.
+
+```json
+"remedy": "Add `manufacturing` to the document, for example `manufacturing: {process: cnc_milling}`. Remove `material.rf`, which `material` does not have (did you mean `ref`?)."
+```
+
+A refusal that states no remedy of its own, such as a file that does not exist, gets a
+generic one naming the command. An unexpected defect uses the sibling `outcome: "error"` variant and exit code
 5, so a broken tool cannot be mistaken for a rejected input or a failing part.
 
 ### A missing geometry pattern is refused by name
