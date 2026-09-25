@@ -11,7 +11,8 @@ change:
 
 The corpus is chosen to reach every status and every optional block the report renders:
 worked derivations and the fallback inputs table, a repair line, an uncertainty
-annotation, a margin ledger, a performance budget, and both unit systems. The HTML carries
+annotation, a margin ledger, a performance budget, failure-mode coverage, and both unit
+systems. The HTML carries
 its light and dark schemes in the one file, so one copy covers both themes. The PDF is
 held by digest, and its text layer by the text form it is typeset from.
 """
@@ -77,6 +78,16 @@ def _every_status() -> CalculationReport:
     )
 
 
+def _failure_modes() -> CalculationReport:
+    """A bolted joint's report with the coverage of its failure modes beside the checks."""
+    import test_report
+    from anvilate.failure_modes import coverage
+
+    report = test_report._report()
+    modes = coverage(report.scorecard(), {"element": "bolted_connection"})
+    return report.model_copy(update={"failure_modes": modes, "revision": "B"})
+
+
 def _from_test_report(name: str) -> Callable[[], CalculationReport]:
     def build() -> CalculationReport:
         import test_report
@@ -90,6 +101,7 @@ CASES: dict[str, Callable[[], CalculationReport]] = {
     "lifting_lug_si": _lifting_lug,
     "lifting_lug_us": lambda: _lifting_lug(UnitSystem.US),
     "every_status": _every_status,
+    "failure_modes": _failure_modes,
     "fallback_inputs": _from_test_report("_report"),
     "uncertainty": _from_test_report("_annotated_report"),
     "margin_ledger": _from_test_report("_ledgered_report"),
@@ -172,6 +184,7 @@ def test_the_corpus_reaches_every_status_and_every_optional_block():
         assert block in text, block
     assert any(report.margins for report in reports)
     assert any(report.budgets for report in reports)
+    assert any(report.failure_modes and report.failure_modes.entries for report in reports)
     assert {report.unit_system for report in reports} >= {UnitSystem.SI, UnitSystem.US}
 
 
@@ -185,3 +198,14 @@ def test_a_changed_rendering_fails_with_the_difference_shown():
     assert "+  safety factor 2.60 vs required 2.00" in message
     assert "ANVILATE_ACCEPT_RENDERINGS=1" in message
     assert _difference("every_status", ".txt", before, before) is None
+
+
+def test_the_page_counts_the_corpus_it_describes():
+    """docs/calculation-reports.md states how many reports the corpus holds."""
+    import re
+
+    words = {"Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Eleven": 11, "Twelve": 12}
+    page = (_REPO / "docs" / "calculation-reports.md").read_text(encoding="utf-8")
+    claimed = re.search(r"(\w+) reference reports are rendered", page)
+    assert claimed is not None, "the rendering-corpus sentence has moved"
+    assert words[claimed.group(1)] == len(CASES)

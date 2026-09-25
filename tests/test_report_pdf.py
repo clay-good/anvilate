@@ -143,11 +143,18 @@ def test_nothing_on_the_page_depends_on_colour():
 
 
 def _package_characters() -> set[str]:
+    """Every non-ASCII character the package can put in a report: its string constants,
+    and its shipped data, whose material names and citations reach the page too."""
     found: set[str] = set()
-    for path in (_REPO / "src" / "anvilate").rglob("*.py"):
+    root = _REPO / "src" / "anvilate"
+    for path in root.rglob("*.py"):
         for node in ast.walk(parsed_source(path)):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 found.update(char for char in node.value if ord(char) > 127)
+    data = [path for path in root.rglob("*") if path.suffix in (".yaml", ".md")]
+    assert len(data) >= 15, "the shipped data files were not found"
+    for path in data:
+        found.update(char for char in path.read_text(encoding="utf-8") if ord(char) > 127)
     return found
 
 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conveyor bracket screening</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --ground: #fff; --ink: #111; --ink-muted: #444; --ink-faint: #666;
+  --rule: #bbb; --band: #f4f4f4;
+  --status-fail: #8e1b0e; --status-pass: #0b5394; --status-over_margin: #a86800;
+  --status-warning: #9000f8;
+  --accent: #00a878;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #16181d; --ink: #e6e6e3; --ink-muted: #b8b8b4; --ink-faint: #9a9a96;
+    --rule: #4a4d55; --band: #22252c;
+    --status-fail: #f07818; --status-pass: #6078f0; --status-over_margin: #c07848;
+    --status-warning: #d890d8;
+    --accent: #48f090;
+  }
+}
+html { background: var(--ground); }
+body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: var(--ink);
+       background: var(--ground); }
+h1 { border-bottom: 2px solid var(--ink); padding-bottom: 0.2em; }
+h2 { margin-top: 1.6em; font-size: 1.1em; }
+table { border-collapse: collapse; margin: 0.6em 0; }
+th, td { border: 1px solid var(--rule); padding: 0.25em 0.6em; text-align: left; }
+table.header th { background: var(--band); }
+section.check { page-break-inside: avoid; }
+.derivation { font-family: "DejaVu Sans Mono", monospace; margin: 0.6em 0 0.6em 1.5em; }
+.derivation p { margin: 0.2em 0; }
+.status { font-size: 0.8em; letter-spacing: 0.08em; }
+.fail .status { color: var(--status-fail); }
+.pass .status { color: var(--status-pass); }
+.over_margin .status { color: var(--status-over_margin); }
+.warning .status { color: var(--status-warning); }
+.repair { font-size: 0.9em; font-style: italic; }
+.uncertainty { font-size: 0.9em; color: var(--ink-muted); }
+.uncertainty-method { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
+.uncertainty.fragile { color: var(--ink); font-weight: bold; }
+.fallback { font-style: italic; color: var(--ink-faint); }
+.source { font-size: 0.9em; color: var(--ink-muted); }
+tr.governing td { font-weight: bold; }
+.disclaimer { margin-top: 2em; font-size: 0.9em; color: var(--ink-muted);
+  border-top: 1px solid var(--rule); padding-top: 0.8em; }
+td, .derivation, .status { font-variant-numeric: tabular-nums lining-nums; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media print {
+  thead { display: table-header-group; }
+  tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+  body, .status, .repair, .uncertainty.fragile { color: #000; }
+}
+</style>
+</head>
+<body>
+<h1>Conveyor bracket screening</h1>
+<table class="header">
+<tr><th>Project</th><td>Line 4 conveyor</td></tr>
+<tr><th>Date</th><td>2026-07-27</td></tr>
+<tr><th>Revision</th><td>B</td></tr>
+<tr><th>Units</th><td>SI</td></tr>
+</table>
+<h2>Standards relied upon</h2>
+<ul>
+<li>AISC 360-22</li>
+</ul>
+<h2>Assumptions</h2>
+<ul>
+<li>Static load; no impact factor applied. [engineer stated]</li>
+</ul>
+<section class="check pass">
+<h2>bending yield <span class="status">PASS</span></h2>
+<div class="derivation">
+<p class="math"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block" alttext="σ sub b = M · c / I"><msub><mi>σ</mi><mi>b</mi></msub><mo>=</mo><mfrac><mrow><mi>M</mi><mo>·</mo><mi>c</mi></mrow><mrow><mi>I</mi></mrow></mfrac></math></p>
+<p class="math"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block" alttext="σ sub b = 1500000.00 N·mm · 50.00 mm / 2100000.00 mm⁴"><msub><mi>σ</mi><mi>b</mi></msub><mo>=</mo><mfrac><mrow><mn>1500000.00</mn><mspace width='0.17em'/><mi>N</mi><mo>·</mo><mi>mm</mi><mo>·</mo><mn>50.00</mn><mspace width='0.17em'/><mi>mm</mi></mrow><mrow><mn>2100000.00</mn><mspace width='0.17em'/><msup><mrow><mi>mm</mi></mrow><mrow><mn>4</mn></mrow></msup></mrow></mfrac></math></p>
+<p class="math"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block" alttext="σ sub b = 35.7 MPa"><msub><mi>σ</mi><mi>b</mi></msub><mo>=</mo><mn>35.7</mn><mspace width='0.17em'/><mi>MPa</mi></math></p>
+</div>
+<table class="glossary">
+<thead><tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr></thead>
+<tr><td><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" alttext="M"><mi>M</mi></math></td><td>bending moment at the section</td><td class="num">1500000.00 N·mm</td></tr>
+<tr><td><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" alttext="c"><mi>c</mi></math></td><td>distance to the extreme fibre</td><td class="num">50.00 mm</td></tr>
+<tr><td><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" alttext="I"><mi>I</mi></math></td><td>second moment of area</td><td class="num">2100000.00 mm⁴</td></tr>
+<tr><td><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline" alttext="σ sub b"><msub><mi>σ</mi><mi>b</mi></msub></math></td><td>bending stress</td><td class="num">35.7 MPa</td></tr>
+</table>
+<p class="detail">safety factor 1.85 vs required minimum 1.50</p>
+<p class="source">Source: Shigley, Mechanical Engineering Design, 10th ed., Eq. 3-24</p>
+</section>
+<section class="check fail">
+<h2>tip deflection <span class="status">FAIL</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<table class="glossary">
+<thead><tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr></thead>
+<tr><td>δ</td><td>tip deflection</td><td class="num">3.20 mm</td></tr>
+</table>
+<p class="detail">safety factor 1.05 vs required minimum 1.50</p>
+</section>
+<h2>Margin summary</h2>
+<table class="summary">
+<thead><tr><th>Check</th><th>Safety factor</th><th>Required</th><th>Result</th></tr></thead>
+<tr><td>bending yield</td><td class="num">1.85</td><td class="num">1.50</td><td>PASS</td></tr>
+<tr class="governing"><td>tip deflection</td><td class="num">1.05</td><td class="num">1.50</td><td>FAIL</td></tr>
+</table>
+<p>Governing check: <strong>tip deflection</strong></p>
+<p>Not evaluated: 0. Out of declared depth: 0.</p>
+<p>Overall: <strong>FAIL</strong></p>
+<h2>Performance budgets</h2>
+<p class="none">none declared</p>
+<h2>Failure modes</h2>
+<p>failure modes: 0 of 1 applicable addressed by a check that ran, 1 left to a physical test, 0 unaddressed, from a catalogue of 29</p>
+<p>this catalogue is a floor and never an exhaustive list: it says what this library knows to ask about, not that nothing else can go wrong</p>
+<p>a mode applies only on a fact the document states: an element, an interface kind, an environment, a material pair the two references make dissimilar, or a declared assembly. A key the document leaves out is never read as benign — the mode simply cannot apply, and the design may still be exposed to it</p>
+<p>bolt self-loosening: no check; left to transverse vibration (Junker) test</p>
+<p>not yet checked, normally found at qualification: bolt self-loosening</p>
+<h2>Margin ledger</h2>
+<p class="none">none declared</p>
+<p class="disclaimer">These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.</p>
+</body>
+</html>

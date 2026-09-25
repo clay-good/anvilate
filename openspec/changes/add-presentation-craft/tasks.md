@@ -59,9 +59,10 @@
 ## 7. Measurement
 
 - [x] 7.1 Visual-regression corpus spanning every pane state and both themes — for the
-      surfaces that exist, as 4.2 is: `tests/test_renderings.py` renders seven reports as
+      surfaces that exist, as 4.2 is: `tests/test_renderings.py` renders eight reports as
       text, HTML and PDF. Between them they reach every status, the fallback inputs table, a
-      repair line, an uncertainty annotation, a margin ledger, a budget and both unit systems,
+      repair line, an uncertainty annotation, a margin ledger, a budget, failure-mode
+      coverage and both unit systems,
       and a test holds that coverage. The HTML holds both themes in one file. The workbench's
       panes are unbuilt, so their states join the corpus when they exist
 - [x] 7.2 A rendering change fails until acknowledged, with the diff shown — each rendering

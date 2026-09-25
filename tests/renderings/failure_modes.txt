@@ -1,0 +1,58 @@
+Conveyor bracket screening
+==========================
+Project: Line 4 conveyor
+Date: 2026-07-27
+Revision: B
+Units: SI
+
+Standards relied upon:
+  - AISC 360-22
+
+Assumptions:
+  - Static load; no impact factor applied. [engineer stated]
+
+PASS  bending yield
+-------------------
+    σ_b = M · c / I
+    σ_b = 1500000.00 N·mm · 50.00 mm / 2100000.00 mm⁴
+    σ_b = 35.7 MPa
+  where:
+    M = 1500000.00 N·mm  (bending moment at the section)
+    c = 50.00 mm  (distance to the extreme fibre)
+    I = 2100000.00 mm⁴  (second moment of area)
+    σ_b = 35.7 MPa  (bending stress)
+  safety factor 1.85 vs required minimum 1.50
+  source: Shigley, Mechanical Engineering Design, 10th ed., Eq. 3-24
+
+FAIL  tip deflection
+--------------------
+  [derivation not rendered]
+    δ = 3.20 mm  (tip deflection)
+  safety factor 1.05 vs required minimum 1.50
+
+Margin summary
+--------------
+  Result         Safety factor  Required  Check
+  PASS                    1.85  1.50      bending yield
+  FAIL                    1.05  1.50      tip deflection
+  governing check: tip deflection
+  not evaluated: 0, out of declared depth: 0
+  overall: FAIL
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  failure modes: 0 of 1 applicable addressed by a check that ran, 1 left to a physical test, 0 unaddressed, from a catalogue of 29
+    this catalogue is a floor and never an exhaustive list: it says what this library knows to ask about, not that nothing else can go wrong
+    a mode applies only on a fact the document states: an element, an interface kind, an environment, a material pair the two references make dissimilar, or a declared assembly. A key the document leaves out is never read as benign — the mode simply cannot apply, and the design may still be exposed to it
+    bolt self-loosening: no check; left to transverse vibration (Junker) test
+    not yet checked, normally found at qualification: bolt self-loosening
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.
