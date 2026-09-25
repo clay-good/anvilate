@@ -18,6 +18,16 @@ from .._models import StatableModel
 
 __all__ = ["Origin", "Provenanced"]
 
+
+class _BareValue(ValueError):
+    """A provenanced field written as a bare value. It keeps the value, so the refusal's
+    structured remedy can show the line to write instead (spec.validate._remedy)."""
+
+    def __init__(self, message: str, value: Any) -> None:
+        super().__init__(message)
+        self.value = value
+
+
 T = TypeVar("T")
 
 
@@ -58,13 +68,14 @@ class Provenanced(StatableModel, Generic[T]):
         """
         if isinstance(data, (Mapping, Provenanced)):
             return data
-        raise ValueError(
+        raise _BareValue(
             f"a provenanced value is written as "
             f"{{value: {data!r}, origin: user_stated}}, not as a bare {data!r}. "
             f"Origin is one of {', '.join(sorted(o.value for o in Origin))}, and "
             f"{Origin.DEFAULT.value!r} and {Origin.PROFILE_SUPPLIED.value!r} also need a "
             "rationale. It is not filled in for you: "
-            "where a value came from is what this records"
+            "where a value came from is what this records",
+            data,
         )
 
     @model_validator(mode="after")

@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 
 from .._models import _refusal_line
 from .ir import SCHEMA_VERSION, DesignSpec
+from .provenance import _BareValue
 from .references import ReferenceResolver, UnknownReferenceError, default_resolver
 from .version import migrate_to_current
 
@@ -82,7 +83,8 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
     Design Spec field. An unknown field says to remove it and names the nearest real one. A
     quantity written as a string, such as `load: 60 kN`, is shown in the form the document
     needs. It is the likeliest mistake a person makes in one, and pydantic answers it with
-    "Input should be a valid dictionary or instance of Quantity". None of these remedies
+    "Input should be a valid dictionary or instance of Quantity". A provenanced value written
+    bare, such as `min_safety_factor: 1.5`, is shown with its origin. None of these remedies
     holds a semicolon, because MCP joins a refusal's issues with "; ".
     """
     kind = error.get("type")
@@ -107,6 +109,12 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
             near = difflib.get_close_matches(str(location[-1]), _siblings(location, root), n=1)
             hint = f" (did you mean `{near[0]}`?)" if near else ""
         return f"remove `{path}`, which {owner} does not have{hint}"
+    cause = (error.get("ctx") or {}).get("error")
+    if isinstance(cause, _BareValue) and location:
+        return (
+            f"write `{path}` as `{{value: {cause.value!r}, origin: user_stated}}` if you chose "
+            "it, or give the origin it came from"
+        )
     written = error.get("input")
     if kind in ("model_type", "dict_type") and isinstance(written, str) and location:
         from ..units import Quantity

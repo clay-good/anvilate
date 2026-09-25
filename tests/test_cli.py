@@ -4868,3 +4868,32 @@ def test_a_json_refusal_carries_the_spec_s_own_remedies_not_a_generic_sentence(t
     # remedies of one invocation do not leak into the next.
     code, out, _err = _run("check", str(tmp_path / "missing.yaml"), "--format", "json")
     assert json.loads(out)["remedy"].startswith("Correct the check arguments")
+
+
+def test_a_bare_provenanced_value_is_told_the_line_to_write(tmp_path):
+    """`min_safety_factor: 1.5` is the first thing a person writes, and its JSON refusal
+    carried the generic sentence although the diagnostic knew the fix. The remedy's line,
+    pasted back in, validates."""
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    base = (root / "examples" / "base_plate.spec.yaml").read_text()
+    spec = tmp_path / "part.yaml"
+    spec.write_text(base + "constraints: {min_safety_factor: 1.5}\n")
+    code, out, _err = _run("check", str(spec), "--format", "json")
+    assert code == 3
+    remedy = json.loads(out)["remedy"]
+    assert remedy == (
+        "Write `constraints.min_safety_factor` as `{value: 1.5, origin: user_stated}` if you "
+        "chose it, or give the origin it came from."
+    )
+    line = re.search(r"as `(\{.*?\})`", remedy).group(1)
+    spec.write_text(base + f"constraints: {{min_safety_factor: {line}}}\n")
+    code, out, _err = _run("check", str(spec), "--format", "json")
+    assert code != 3, out
+    # A string value is quoted, so the line is YAML that reads back as the same string.
+    spec.write_text(base.replace("units: {value: SI, origin: user_stated}", "units: SI"))
+    code, out, _err = _run("check", str(spec), "--format", "json")
+    assert "Write `units` as `{value: 'SI', origin: user_stated}`" in json.loads(out)["remedy"]
