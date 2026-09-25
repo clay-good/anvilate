@@ -138,6 +138,11 @@ of its scatter. A caller who deliberately wants to screen against typical values
 """
 
 
+# The bases that are statistical tolerance bounds, each read off a specific handbook table,
+# spelled the way the handbooks spell them.
+_STATISTICAL = {AllowableBasis.A_BASIS: "A-basis", AllowableBasis.B_BASIS: "B-basis"}
+
+
 class DesignAllowable(GuardedInputs):
     """A material strength offered to a code-cited check, or the reason it was refused.
 
@@ -184,15 +189,24 @@ def design_allowable(
         quantity = require_basis(prop, basis, material_id=material_id, name=property_name)
     except InsufficientBasis as refusal:
         return DesignAllowable(note=f"not evaluated — {refusal}")
-    if basis is DESIGN_BASIS:
-        return DesignAllowable(quantity=quantity)
-    return DesignAllowable(
-        quantity=quantity,
-        disclosure=(
+    statements = []
+    if basis is not DESIGN_BASIS:
+        statements.append(
             f"screened against a {basis.value.replace('_', ' ')} strength for "
             f"{material_id}, which the caller declared"
-        ),
-    )
+        )
+    # A statistical allowable is stated where the verdict is, with its table: an A-basis
+    # and a B-basis value are both "the yield strength", and which one a margin was taken
+    # on is the whole difference between primary and redundant structure.
+    citation = prop.citation
+    if citation.basis in _STATISTICAL:
+        statements.append(
+            f"{material_id} {property_name.replace('_', ' ')} is "
+            f"{_STATISTICAL[citation.basis]}, {citation.source} ({citation.condition})"
+        )
+    if citation.superseded is not None:
+        statements.append(citation.superseded)
+    return DesignAllowable(quantity=quantity, disclosure="; ".join(statements) or None)
 
 
 def disclosed(card: Scorecard, *allowables: DesignAllowable) -> Scorecard:

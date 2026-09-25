@@ -115,7 +115,12 @@ def test_the_public_symbol_count_is_the_manifests_own():
 
 
 def _basis_split() -> tuple[int, int, int]:
-    """(materials, specification-minimum count, typical count), from the database itself."""
+    """(materials, count that screens unchanged, typical count), from the database itself.
+
+    "Screens unchanged" is ``meets_basis(SPECIFICATION_MINIMUM)``, the question the default
+    gate asks: an A- or B-basis allowable passes it as a specification minimum does, and
+    counting only the literal minimum would have called the MIL-HDBK-5J pack typical.
+    """
     db = default_materials_db()
     materials = [db.get(ref) for ref in db.known_materials()]
     bases = []
@@ -124,10 +129,10 @@ def _basis_split() -> tuple[int, int, int]:
         for name in ("yield_strength", "ultimate_strength"):
             citation = citations.get(name)
             if citation is not None:
-                bases.append(citation.basis)
+                bases.append(citation.meets_basis(AllowableBasis.SPECIFICATION_MINIMUM))
                 break
     assert len(bases) == len(materials), "a material with no strength citation to classify"
-    minimum = sum(1 for b in bases if b is AllowableBasis.SPECIFICATION_MINIMUM)
+    minimum = sum(bases)
     return len(materials), minimum, len(materials) - minimum
 
 
@@ -142,6 +147,10 @@ _WORDS = {
     "ten": 10,
     "Eleven": 11,
     "eleven": 11,
+    "Sixteen": 16,
+    "sixteen": 16,
+    "seventeen": 17,
+    "twenty-five": 25,
 }
 
 
@@ -168,13 +177,9 @@ def test_the_materials_basis_split_is_not_backwards(page, tail):
     materials, minimum, typical = _basis_split()
     assert minimum and typical, "one side of the split is empty, so the claim is vacuous"
 
-    total = int(
-        _claimed(r"of the (seventeen|\d+) bundled materials", page=page).replace("seventeen", "17")
-    )
+    total = _WORDS[_claimed(r"of the ([\w-]+) bundled materials", page=page)]
     assert total == materials
-    claimed_minimum = _WORDS[
-        _claimed(r"(\w+) of the (?:seventeen|\d+) bundled materials", page=page)
-    ]
+    claimed_minimum = _WORDS[_claimed(r"(\w+) of the [\w-]+ bundled materials", page=page)]
     claimed_typical = _WORDS[_claimed(tail, page=page)]
     assert claimed_minimum == minimum, (
         f"{page} says {claimed_minimum} materials carry a specification minimum; {minimum} do"
@@ -186,9 +191,15 @@ def test_the_citations_page_does_not_state_the_split_twice_with_two_answers():
     """It did: the summary line and the prose sentence disagreed by a swap."""
     _, minimum, typical = _basis_split()
     page = (_REPO / "docs" / "citations.md").read_text()
-    summary = re.search(r"(\d+) carry specification minima and (\d+)\s+carry typical values", page)
+    summary = re.search(
+        r"(\d+) carry specification minima, (\d+) carry\s+A- or\s+B-basis allowables[^,]*, and "
+        r"(\d+)\s+carry typical values",
+        page,
+    )
     assert summary is not None, "the summary line in docs/citations.md has moved or gone"
-    assert (int(summary.group(1)), int(summary.group(2))) == (minimum, typical)
+    literal, statistical, stated_typical = (int(group) for group in summary.groups())
+    assert statistical, "the A/B split is empty, so the summary counts nothing"
+    assert (literal + statistical, stated_typical) == (minimum, typical)
 
 
 def test_the_tool_surface_count_is_the_catalogs_own():
@@ -552,23 +563,26 @@ def test_the_pages_that_count_something_count_the_real_thing():
         "Eight": 8,
         "Nine": 9,
         "sixteen": 16,
+        "Sixteen": 16,
         "seventeen": 17,
         "eighteen": 18,
+        "twenty-five": 25,
     }
 
     tools = _claimed(r"says what the (\w+) tools \*are\*", page="docs/agent-mcp-integration.md")
     assert words[tools] == len(tool_catalog())
 
     page = (_REPO / "docs" / "citations.md").read_text(encoding="utf-8")
-    claimed = re.search(r"(\w+) of the (\w+) bundled materials carry a specification", page)
+    claimed = re.search(r"(\w+) of the ([\w-]+) bundled materials carry a specification", page)
     assert claimed is not None, "the allowable-basis sentence on citations.md has moved"
     database = default_materials_db()
     materials = database.known_materials()
     minima = sum(
         1
         for identifier in materials
-        if database.get(identifier).yield_strength.citation.basis
-        is AllowableBasis.SPECIFICATION_MINIMUM
+        if database.get(identifier).yield_strength.citation.meets_basis(
+            AllowableBasis.SPECIFICATION_MINIMUM
+        )
     )
     assert words[claimed.group(2)] == len(materials)
     assert words[claimed.group(1)] == minima

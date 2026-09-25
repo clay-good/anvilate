@@ -1,0 +1,182 @@
+# Anvilate design-allowables pack, seeded from MIL-HDBK-5J (schema: standards-data).
+#
+# A curated slice of MIL-HDBK-5J, "Metallic Materials and Elements for Aerospace Vehicle
+# Structures" (31 January 2003): two aluminum alloys, each as sheet and as plate, each at
+# A-basis and at B-basis. The handbook is a US Government work carrying Distribution
+# Statement A (approved for public release; distribution unlimited). Only the values are
+# here, transcribed from the tables each citation names.
+#
+# Every strength is the longitudinal (L) grain direction, room temperature, for the one
+# thickness range the record's condition states. A-basis: 99% of the population exceeds
+# the value, B-basis: 90%, each at 95% confidence (MIL-HDBK-5J section 1.4.1.1). The same
+# section says the moduli and the density are typical values, so they carry no basis here.
+#
+# MIL-HDBK-5J is the LAST edition. It was superseded by MMPDS (Metallic Materials
+# Properties Development and Standardization), published by Battelle, which is not free.
+# The `superseded` note below is filled into every citation, so it reaches every report
+# and provenance record that uses one of these values.
+#
+# Transcription was checked column by column: Table 3.2.3.0(b1) has 20 value columns
+# (T3 sheet S, A/B x2; T351 plate A/B x6; T361 S x3) and Table 3.7.6.0(b1) has 21
+# (T6 sheet S, A/B x3; T651 plate A/B x7). The source PDF read was
+# archive.org/download/milhdbk-5-j/MILHDBK5J.pdf, md5 45a5f2020bed739d6ceeb24833523a76.
+dataset:
+  name: anvilate-mil-hdbk-5j-allowables
+  version: "0.1.0"
+  source: "MIL-HDBK-5J (31 January 2003), Tables 3.2.3.0(b1) and 3.7.6.0(b1), L direction"
+  license: "CC0-1.0 (values from MIL-HDBK-5J, a US Government work approved for public release, Distribution Statement A)"
+  retrieved: "2026-09-25"
+  superseded: "MIL-HDBK-5J is superseded by MMPDS (Battelle); certification-grade work should take values from the current MMPDS edition"
+
+materials:
+  MIL5J-2024-T3-SHEET-A:
+    name: "Aluminum 2024-T3 sheet, 0.010-0.128 in., A-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.5e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, room temperature"}
+    density:
+      quantity: {magnitude: 0.100, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "2024 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 47.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, 0.010-0.128 in., Fty L direction, room temperature", basis: a_basis}
+    ultimate_strength:
+      quantity: {magnitude: 64.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, 0.010-0.128 in., Ftu L direction, room temperature", basis: a_basis}
+
+  MIL5J-2024-T3-SHEET-B:
+    name: "Aluminum 2024-T3 sheet, 0.010-0.128 in., B-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.5e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, room temperature"}
+    density:
+      quantity: {magnitude: 0.100, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "2024 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 48.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, 0.010-0.128 in., Fty L direction, room temperature", basis: b_basis}
+    ultimate_strength:
+      quantity: {magnitude: 65.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T3 sheet, 0.010-0.128 in., Ftu L direction, room temperature", basis: b_basis}
+
+  MIL5J-2024-T351-PLATE-A:
+    name: "Aluminum 2024-T351 plate, 0.500-1.000 in., A-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.7e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, room temperature"}
+    density:
+      quantity: {magnitude: 0.100, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "2024 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 48.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, 0.500-1.000 in., Fty L direction, room temperature", basis: a_basis}
+    ultimate_strength:
+      quantity: {magnitude: 63.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, 0.500-1.000 in., Ftu L direction, room temperature", basis: a_basis}
+
+  MIL5J-2024-T351-PLATE-B:
+    name: "Aluminum 2024-T351 plate, 0.500-1.000 in., B-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.7e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, room temperature"}
+    density:
+      quantity: {magnitude: 0.100, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "2024 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 50.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, 0.500-1.000 in., Fty L direction, room temperature", basis: b_basis}
+    ultimate_strength:
+      quantity: {magnitude: 65.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.2.3.0(b1)", condition: "T351 plate, 0.500-1.000 in., Ftu L direction, room temperature", basis: b_basis}
+
+  MIL5J-7075-T6-SHEET-A:
+    name: "Aluminum 7075-T6 sheet, 0.040-0.125 in., A-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.3e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, room temperature"}
+    density:
+      quantity: {magnitude: 0.101, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "7075 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 70.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, 0.040-0.125 in., Fty L direction, room temperature", basis: a_basis}
+    ultimate_strength:
+      quantity: {magnitude: 78.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, 0.040-0.125 in., Ftu L direction, room temperature", basis: a_basis}
+
+  MIL5J-7075-T6-SHEET-B:
+    name: "Aluminum 7075-T6 sheet, 0.040-0.125 in., B-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.3e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, room temperature"}
+    density:
+      quantity: {magnitude: 0.101, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "7075 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 72.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, 0.040-0.125 in., Fty L direction, room temperature", basis: b_basis}
+    ultimate_strength:
+      quantity: {magnitude: 80.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T6 sheet, 0.040-0.125 in., Ftu L direction, room temperature", basis: b_basis}
+
+  MIL5J-7075-T651-PLATE-A:
+    name: "Aluminum 7075-T651 plate, 0.500-1.000 in., A-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.3e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, room temperature"}
+    density:
+      quantity: {magnitude: 0.101, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "7075 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 70.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, 0.500-1.000 in., Fty L direction, room temperature", basis: a_basis}
+    ultimate_strength:
+      quantity: {magnitude: 77.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, 0.500-1.000 in., Ftu L direction, room temperature", basis: a_basis}
+
+  MIL5J-7075-T651-PLATE-B:
+    name: "Aluminum 7075-T651 plate, 0.500-1.000 in., B-basis (MIL-HDBK-5J)"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 10.3e3, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, room temperature"}
+    density:
+      quantity: {magnitude: 0.101, unit: lb/inch**3}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "7075 sheet and plate"}
+    yield_strength:
+      quantity: {magnitude: 72.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, 0.500-1.000 in., Fty L direction, room temperature", basis: b_basis}
+    ultimate_strength:
+      quantity: {magnitude: 79.0, unit: ksi}
+      citation: {source: "MIL-HDBK-5J Table 3.7.6.0(b1)", condition: "T651 plate, 0.500-1.000 in., Ftu L direction, room temperature", basis: b_basis}

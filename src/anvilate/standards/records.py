@@ -77,6 +77,11 @@ class PropertyCitation(_Base):
     which is deliberately not the same as ``TYPICAL``: an unclassified value cannot
     satisfy any basis requirement, so a record nobody has looked at fails a check that
     demands a minimum rather than passing as though somebody had.
+
+    ``superseded`` says the value comes from an edition that a newer one replaced, and where
+    certification-grade work should source it instead. MIL-HDBK-5J is public and final; the
+    MMPDS that replaced it is not free. A value from the old edition is still a sound
+    screening number, but a reader has to be told it is not the current one.
     """
 
     source: Provenance
@@ -86,6 +91,7 @@ class PropertyCitation(_Base):
     estimated: bool = False
     method: str | None = None
     basis: AllowableBasis | None = None
+    superseded: Provenance | None = None
 
     def meets_basis(self, required: AllowableBasis) -> bool:
         """Whether this value's basis is at least ``required``. Unclassified never is."""

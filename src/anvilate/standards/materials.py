@@ -185,8 +185,8 @@ class MaterialsDatabase:
 def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     """Parse a materials YAML document into :class:`Material` records.
 
-    Dataset-level ``license`` and ``retrieved`` fill any citation that omits
-    them, so a data file states shared provenance once. ``bundled`` tags the
+    Dataset-level ``license``, ``retrieved`` and ``superseded`` fill any citation that
+    omits them, so a data file states shared provenance once. ``bundled`` tags the
     records' origin (a bundled dataset vs a user/team extension).
     """
     doc = parse_yaml(text)
@@ -194,13 +194,15 @@ def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     fallback = {
         "license": dataset.get("license"),
         "retrieved": dataset.get("retrieved"),
+        "superseded": dataset.get("superseded"),
     }
 
     def _fill_citations(node: object) -> None:
         if isinstance(node, dict):
             if "citation" in node and isinstance(node["citation"], dict):
                 for key, value in fallback.items():
-                    node["citation"].setdefault(key, value)
+                    if value is not None:
+                        node["citation"].setdefault(key, value)
             for child in node.values():
                 _fill_citations(child)
 
@@ -213,10 +215,24 @@ def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     return materials
 
 
+# The bundled datasets the default database is built from. `materials.yaml` is the seed set
+# of handbook and specification values; `mil_hdbk_5j.yaml` is the design-allowables pack,
+# A- and B-basis values from the last public edition of MIL-HDBK-5. Its IDs are prefixed
+# `MIL5J-`, so no record in one file can shadow a record in the other.
+_BUNDLED_FILES = ("materials.yaml", "mil_hdbk_5j.yaml")
+
+
 @cache
 def default_materials_db() -> MaterialsDatabase:
-    """The bundled seed materials database."""
+    """The bundled materials database: the seed set plus the MIL-HDBK-5J allowables pack."""
     from importlib.resources import files
 
-    text = (files("anvilate.standards") / "data" / "materials.yaml").read_text(encoding="utf-8")
-    return MaterialsDatabase(_load_records(text, bundled=True))
+    materials: dict[str, Material] = {}
+    for name in _BUNDLED_FILES:
+        text = (files("anvilate.standards") / "data" / name).read_text(encoding="utf-8")
+        records = _load_records(text, bundled=True)
+        clash = sorted(set(records) & set(materials))
+        if clash:  # pragma: no cover - a data defect, caught by the test that loads both
+            raise ValueError(f"{name} redefines bundled material(s) {clash}")
+        materials.update(records)
+    return MaterialsDatabase(materials)

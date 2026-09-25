@@ -89,10 +89,14 @@ def _distinct_sources(citations: dict[str, PropertyCitation]) -> tuple[str, ...]
     """
     labelled = set()
     for cite in citations.values():
-        if cite.basis is None:
-            labelled.add(cite.source)
-        else:
-            labelled.add(f"{cite.source} ({cite.basis.value.replace('_', ' ')})")
+        label = cite.source
+        if cite.basis is not None:
+            label += f" ({cite.basis.value.replace('_', ' ')})"
+        # A value from a replaced edition says so wherever its source is named, so the
+        # provenance record cannot be read as a current-edition citation.
+        if cite.superseded is not None:
+            label += f" [superseded: {cite.superseded}]"
+        labelled.add(label)
     return tuple(sorted(labelled))
 
 

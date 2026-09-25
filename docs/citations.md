@@ -134,12 +134,45 @@ Every bundled strength is classified from **its own cited source**, not in bulk,
 gate in the suite fails if a new record ships without one. Two records citing the same
 book get different answers: Shigley's Table A-20 is titled "Deterministic ASTM *Minimum*
 Tensile and Yield Strengths" and Table A-21 is "*Mean* Mechanical Properties of Some
-Heat-Treated Steels". Of the 17 bundled materials, 8 carry specification minima and 9
-carry typical values.
+Heat-Treated Steels". Of the 25 bundled materials, 8 carry specification minima, 8 carry
+A- or B-basis allowables from the MIL-HDBK-5J pack below, and 9 carry typical values.
 
 **Unclassified is not typical.** A record nobody has looked at fails a basis requirement
 rather than passing as though somebody had — otherwise the requirement means nothing the
 first time a record is added carelessly.
+
+### The MIL-HDBK-5J allowables pack
+
+Eight records are A- and B-basis design allowables from MIL-HDBK-5J, the last edition of the
+handbook, which is a US Government work approved for public release. It is a curated slice:
+2024-T3 sheet and 2024-T351 plate, 7075-T6 sheet and 7075-T651 plate, each at A-basis and
+B-basis, each for one stated thickness range, longitudinal grain direction, room
+temperature.
+
+| Record | Thickness | Fty / Ftu (ksi) | Table |
+| --- | --- | --- | --- |
+| `MIL5J-2024-T3-SHEET-A` / `-B` | 0.010-0.128 in. | 47 / 64, 48 / 65 | 3.2.3.0(b1) |
+| `MIL5J-2024-T351-PLATE-A` / `-B` | 0.500-1.000 in. | 48 / 63, 50 / 65 | 3.2.3.0(b1) |
+| `MIL5J-7075-T6-SHEET-A` / `-B` | 0.040-0.125 in. | 70 / 78, 72 / 80 | 3.7.6.0(b1) |
+| `MIL5J-7075-T651-PLATE-A` / `-B` | 0.500-1.000 in. | 70 / 77, 72 / 79 | 3.7.6.0(b1) |
+
+A screen that uses one of these records says so on every entry it produces, whether the
+entry passes or fails: which basis, which table, which condition, and that the handbook has
+been superseded.
+
+```text
+[PASS] padeye net tension: safety factor ... [MIL5J-2024-T351-PLATE-B yield strength is
+  B-basis, MIL-HDBK-5J Table 3.2.3.0(b1) (T351 plate, 0.500-1.000 in., Fty L direction, room
+  temperature); MIL-HDBK-5J is superseded by MMPDS (Battelle); certification-grade work
+  should take values from the current MMPDS edition]
+```
+
+The provenance trail in an evidence bundle carries the same note beside each source. MMPDS,
+the handbook that replaced MIL-HDBK-5, is not free, so its values are not here. A value from
+the old edition is a sound screening number, but it is not a certification value, and the
+note is there so nobody has to remember that. The values are pinned against the handbook
+columns in `tests/test_mil_hdbk_5j.py`, not against the data file, so a transcription typo
+fails the suite.
 
 ## A fatigue curve says the same thing, and one more
 
@@ -181,11 +214,12 @@ because a fatigue curve nobody can retrieve is a number somebody typed.
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
-redistributor inherits. Each of the eighteen bundled datasets — the dimension tables, the
-materials seed, the ISO 286 and ISO 2768 tolerance tables, the process-capability
+redistributor inherits. Each of the nineteen bundled datasets — the dimension tables, the
+materials seed, the MIL-HDBK-5J allowables pack, the ISO 286 and ISO 2768 tolerance tables, the process-capability
 estimates — declares a name, a version, the source it was read from, an SPDX licence
-identifier, and the date it was retrieved. All eighteen are CC0-1.0 today: the *values*
-are facts, and no source standard is redistributed.
+identifier, and the date it was retrieved. All nineteen are CC0-1.0 today: the *values*
+are facts, and no source standard is redistributed. MIL-HDBK-5J is itself a US Government
+work approved for public release.
 
 A gate in the suite reads every one of them and fails the build on a licence that is not
 redistributable inside an MIT package, a retrieval date that is not a date, or a missing
@@ -219,6 +253,7 @@ build rather than going stale in a document.
 | `standards/data/hex_bolts.yaml` | ISO 4014 / ISO 4017 hexagon-head bolt and screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/hex_nuts.yaml` | ISO 4032 style-1 hexagon nut dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/materials.yaml` | per-record citations — every property cites its own publication | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/mil_hdbk_5j.yaml` | MIL-HDBK-5J (31 January 2003), Tables 3.2.3.0(b1) and 3.7.6.0(b1), L direction | 0.1.0 | CC0-1.0 | 2026-09-25 |
 | `standards/data/metric_clearance.yaml` | ISO 273 metric clearance holes | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/metric_thread.yaml` | ISO 261 / ISO 724 metric threads | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/nema_frames.yaml` | NEMA ICS 16 stepper frame mounting dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
@@ -320,9 +355,10 @@ Every check the screen would have produced is still named. A consumer looking fo
 yielding" has to find it saying it could not run, rather than find nothing — which would be
 its own kind of silence.
 
-Eight of the seventeen bundled materials carry a specification minimum and screen exactly as
-before. The other nine — five of the six aluminium alloys, both heat-treated steels, the
-bearing bronze and the titanium, whose handbook tables are means — refuse until either the
+Sixteen of the twenty-five bundled materials carry a specification minimum or an A- or B-basis
+allowable and screen unchanged. The other nine — five of the six seed aluminium alloys, both
+heat-treated steels, the bearing bronze and the titanium, whose handbook tables are means —
+refuse until either the
 database gains a value on the right basis, or the caller declares that this screen accepts a
 typical one:
 

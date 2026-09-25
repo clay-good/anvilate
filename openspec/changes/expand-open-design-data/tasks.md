@@ -11,8 +11,11 @@
 
 ## 2. Data packs & importers
 
-- [ ] 2.1 MIL-HDBK-5J-seeded allowables pack (curated slice; table citations;
-      superseded note)
+- [x] 2.1 MIL-HDBK-5J-seeded allowables pack (curated slice; table citations;
+      superseded note) — `standards/data/mil_hdbk_5j.yaml`, eight records in the default
+      database: 2024-T3 sheet, 2024-T351 plate, 7075-T6 sheet and 7075-T651 plate, each at
+      A- and B-basis, from Tables 3.2.3.0(b1) and 3.7.6.0(b1). A screen on one states the basis,
+      table and superseded note on every entry; the provenance trail carries the note too
 - [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step
 - [ ] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records —
       candidate found and half-anchored 2026-09-24: the FABEST database (42CrMo4+QT, CC BY
@@ -88,6 +91,26 @@ as though somebody had classified it.
 
 2.1-2.5 need external datasets (MIL-HDBK-5J, NIMS, the AISC xlsx) with fetch recipes and
 license review, and 3.x needs a separate published repo.
+
+## Shipped 2026-09-25 — task 2.1
+
+**The source is the last public edition, and it says so.** MIL-HDBK-5J (31 January 2003) is
+a US Government work under Distribution Statement A. MMPDS replaced it and is not free.
+`PropertyCitation.superseded` carries that fact. It is filled from the dataset block into
+every citation, so a screen's entries and the evidence bundle's provenance both say it. The
+field is optional and no other dataset sets it, so every other rendering is unchanged.
+
+**Transcription was checked against the table layout, not by eye.** Table 3.2.3.0(b1) has
+20 value columns and Table 3.7.6.0(b1) has 21. Each L-direction row was counted to that
+width before a value was taken from its column. The test pins the values the handbook
+prints, not the file's own.
+
+**Passing entries now state a statistical basis.** `design_allowable` used to disclose only
+a relaxed basis. An A- or B-basis value now names its basis, table and condition on every
+entry. A specification minimum still adds nothing, so the existing cards read as before.
+The README's basis-split gate now counts `meets_basis(SPECIFICATION_MINIMUM)`, the question
+the default gate actually asks; counting only the literal minimum would have reported the
+pack as typical.
 
 ## Shipped 2026-08-25 — task 1.2
 
