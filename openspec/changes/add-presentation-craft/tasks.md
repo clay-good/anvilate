@@ -24,8 +24,13 @@
 
 ## 4. Motion
 
-- [ ] 4.1 Transitions only where one change caused another; bounded duration
-- [ ] 4.2 Reduced-motion honoured; nothing animates on a timer
+- [ ] 4.1 Transitions only where one change caused another; bounded duration — nothing
+      rendered today transitions at all (see 4.2); this is the design rule for the workbench,
+      which is unbuilt
+- [x] 4.2 Reduced-motion honoured; nothing animates on a timer — for the surfaces that exist:
+      the HTML report carries no script, transition, animation or timer, held over every report
+      shape with a planted transition as the gate's own adversary (tests/test_report.py), and the
+      CLI prints one line per update with no spinner or cursor control
 
 ## 5. Print
 

@@ -2367,3 +2367,38 @@ def test_status_colours_carry_status_and_the_accent_marks_focus_only():
             assert max(channels) - min(channels) <= 0x10, (
                 f"{theme}: --{name} {colour} is not neutral"
             )
+
+
+# Motion and animation, in every spelling a stylesheet or a page could carry one.
+_MOTION = re.compile(
+    r"<script|\btransition\b|\banimation\b|@keyframes|setInterval|setTimeout|"
+    r"requestAnimationFrame|<marquee|\bblink\b",
+    re.IGNORECASE,
+)
+
+
+def test_nothing_in_the_report_moves_so_reduced_motion_has_nothing_to_remove():
+    """presentation-craft 4.1/4.2 for the one rendered surface that exists.
+
+    The spec allows motion only to show that one change caused another, bounded, and never on
+    a timer, and requires a reduced-motion preference to remove all of it. A static document
+    satisfies both by carrying none, and this makes that a checked fact rather than an
+    accident of nobody having added a transition yet: every report shape here is rendered
+    and searched, and a planted transition is caught.
+    """
+    import anvilate.report.document as document
+
+    reports = [_report(), _annotated_report(), _ledgered_report(), _budgeted_report()]
+    for report in reports:
+        html = report.to_html()
+        assert html.count("<style>") == 1, "the stylesheet the search covers is not the whole page"
+        found = _MOTION.findall(html)
+        assert not found, f"the report carries motion: {found}"
+
+    planted = document._STYLESHEET + "\ntd { transition: color 0.2s; }"
+    original = document._STYLESHEET
+    try:
+        document._STYLESHEET = planted
+        assert _MOTION.search(_report().to_html()), "the search cannot see a planted transition"
+    finally:
+        document._STYLESHEET = original
