@@ -190,3 +190,11 @@ def test_two_declarations_for_one_material_are_the_users_choice_not_ours():
         with_declared_factors({}, [one, other])
     with pytest.raises(ValueError, match="names no declaration"):
         with_declared_factors({}, [_generic("AA-6061-T6", 12.0)])
+
+
+def test_a_declaration_saved_with_a_byte_order_mark_reads_the_same():
+    # What a Windows editor writes. RFC 8259 lets a parser ignore it, and refusing it called
+    # a well-formed declaration "not JSON" over a character nobody can see.
+    plain = carbon_factor_from_openepd(json.dumps(_EPD), material="AA-6061-T6")
+    marked = carbon_factor_from_openepd("\ufeff" + json.dumps(_EPD), material="AA-6061-T6")
+    assert marked == plain

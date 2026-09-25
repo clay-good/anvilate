@@ -629,6 +629,13 @@ def parse_json(text: str | bytes) -> Any:
     requests queued behind it. Every reader of text this library did not write goes through
     here, and a gate holds the source to it.
     """
+    # A leading byte-order mark is what a Windows editor saves JSON with, and RFC 8259 §8.1
+    # lets a parser ignore it. Refusing it called a well-formed declaration "not JSON" over a
+    # character nobody can see.
+    if isinstance(text, str):
+        text = text.removeprefix("\ufeff")
+    elif isinstance(text, bytes | bytearray):
+        text = bytes(text).removeprefix(b"\xef\xbb\xbf")
     try:
         return json.loads(text)
     except RecursionError:
