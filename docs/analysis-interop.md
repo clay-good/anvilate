@@ -20,9 +20,10 @@ import.
 **The sign convention.** `axial_compression_positive` has no default. Most frame solvers
 report compression as negative; Anvilate's beam-column screen takes it as positive. Import
 a −180 kN column axial unflipped and the screen reads a 180 kN *tension*, routes to AISC
-§H1.2 instead of §H1.1, and never checks the column for buckling at all. It does not fail
-silently — the screen reports NOT_EVALUATED naming the reason — but the door exists so the
-question gets asked before it arises.
+§H1.2 instead of §H1.1, and never checks the column for buckling at all. Since the screen
+computes §H1.2, that is a real verdict on the wrong member: a slender column that would
+buckle can pass as a tie. Nothing downstream can tell the two apart, which is why the
+declaration has no default and has to be made before any force is bound.
 
 **Every exported component.** An export carrying P, M3, M2, V2 and T bound to a mapping
 that names four of them silently drops the fifth, and the check comes back green having

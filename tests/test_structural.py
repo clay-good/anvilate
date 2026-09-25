@@ -2521,14 +2521,18 @@ def test_beam_column_with_no_demand_is_not_evaluated_rather_than_an_infinite_pas
     loaded = screen_beam_column(_beam_column(), required_safety_factor=1.5)
     assert all(e.safety_factor is not None for e in loaded.entries)
 
-    for axial, moment in (("0 kN", "0 kN*m"), ("-200 kN", "0 kN*m")):
-        card = screen_beam_column(
-            _beam_column(axial=axial, moment=moment), required_safety_factor=1.5
-        )
-        for entry in card.entries:
-            assert entry.status is CheckStatus.NOT_EVALUATED
-            assert entry.safety_factor is None
-        assert not card.passed
+    card = screen_beam_column(
+        _beam_column(axial="0 kN", moment="0 kN*m"), required_safety_factor=1.5
+    )
+    for entry in card.entries:
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        assert entry.safety_factor is None
+    assert not card.passed
+    # A net tension is a demand, not the absence of one: §D2 and §H1.2 screen it.
+    tension = screen_beam_column(
+        _beam_column(axial="-200 kN", moment="0 kN*m"), required_safety_factor=1.5
+    )
+    assert all(e.safety_factor is not None for e in tension.entries)
 
     # A member with only a moment, or only an axial load, still has a demand to evaluate.
     assert (

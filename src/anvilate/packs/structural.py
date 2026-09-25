@@ -239,6 +239,7 @@ _CLAUSE_SHEAR = "AISC 360-16 §J4.2"
 _SHEAR_STRENGTH_FRACTION = 0.60  # 0.60·Fy (yield) / 0.60·Fu (rupture) on the shear area
 _CLAUSE_TENSION = "AISC 360-16 §D2"
 _CLAUSE_INTERACTION = "AISC 360-16 §H1.1"
+_CLAUSE_TENSION_FLEXURE = "AISC 360-16 §H1.2"
 _CLAUSE_CONCRETE_BEARING_ACI = "ACI 318-19 §22.8.3"
 _ACI_BEARING_FRACTION = 0.85  # bearing strength coefficient 0.85·f'c
 _ACI_CONFINEMENT_CAP = 2.0  # sqrt(A2/A1) is capped at 2 (ACI §22.8.3.2)
@@ -2269,6 +2270,12 @@ def screen_beam_column(
     Mr/Mc — is unity at capacity, so its reciprocal is the safety factor screened
     against ``required_safety_factor``. ``materials`` defaults to the bundled
     database.
+
+    A net tension (a negative ``axial_load``) takes §H1.2 instead: the same two
+    equations, with Pc the available tensile strength of §D2. That is gross-section
+    yielding Fy·A_g here, which governs a member without holes, since Fu > Fy; a member
+    with bolt holes also needs net-section rupture, and the entry says so. The
+    permitted §H1.2 increase of C_b is not taken, which is conservative.
     """
     materials = materials or default_materials_db()
     record = materials.get(member.material)
@@ -2328,6 +2335,9 @@ def screen_beam_column(
     # 19 sibling screens and the doctrine loads.combination_scorecard spells out.
     safety = 1.0 / interaction if interaction > 0 else None
     tension_governed = axial_n < 0
+    tensile_capacity = (
+        yield_strength.to("MPa").magnitude * member.section.area.to("mm**2").magnitude
+    )
     capacity_symbols = (
         SymbolValue(symbol="P_r", description="required axial strength", value=member.axial_load),
         SymbolValue(
@@ -2374,20 +2384,53 @@ def screen_beam_column(
         )
     )
     if tension_governed:
-        # A net tension plus flexure is §H1.2, not §H1.1: the axial term is checked
-        # against the tensile capacity, which is not the buckling capacity this screen
-        # computed. Screening it as compression would be conservative and silent; saying
-        # which clause it needs is neither.
-        entry = ScorecardEntry(
-            name=f"{member.name} interaction",
-            status=CheckStatus.NOT_EVALUATED,
-            detail=(
-                f"not evaluated — the axial load is a net TENSION ({member.axial_load}), "
-                f"which takes AISC 360 §H1.2 (combined tension and flexure) against the "
-                f"tensile capacity, not the §H1.1 form this screen computes against the "
-                f"buckling capacity"
-            ),
-            reference="AISC 360-16 §H1.2",
+        # A net tension plus flexure is §H1.2: equations H1-1a and H1-1b again, with the
+        # axial term against the §D2 tensile strength rather than the buckling capacity.
+        # Gross yielding F_y·A_g is the §D2 strength of a member without holes, because
+        # rupture on A_e = A_g is F_u·A_g and F_u exceeds F_y.
+        tension_ratio = -axial_n / tensile_capacity
+        if tension_ratio >= 0.2:
+            tension_interaction = tension_ratio + (8.0 / 9.0) * mr_mc
+            symbolic = "IR = P_r/P_c + 8/9 · M_r/M_c"
+        else:
+            tension_interaction = tension_ratio / 2.0 + mr_mc
+            symbolic = "IR = P_r/(2 · P_c) + M_r/M_c"
+        entry = ScorecardEntry.from_safety_factor(
+            f"{member.name} interaction",
+            computed=1.0 / tension_interaction,
+            required=required_safety_factor,
+        )
+        entry = entry.model_copy(
+            update={
+                "detail": (
+                    f"{entry.detail} (§H1.2, net tension {-axial_n / 1e3:.4g} kN against "
+                    "gross-section yielding; a member with bolt holes also needs "
+                    "net-section rupture, which screen_tension_member computes)"
+                ),
+                "reference": _CLAUSE_TENSION_FLEXURE,
+                "derivation": Derivation(
+                    symbolic=symbolic,
+                    inputs=(
+                        SymbolValue(
+                            symbol="P_r",
+                            description="required axial strength, a net tension (magnitude)",
+                            value=Quantity(magnitude=-axial_n, unit="N"),
+                        ),
+                        SymbolValue(
+                            symbol="P_c",
+                            description="available tensile strength, gross yielding F_y·A_g",
+                            value=Quantity(magnitude=tensile_capacity, unit="N"),
+                        ),
+                        *capacity_symbols[2:],
+                    ),
+                    result=SymbolValue(
+                        symbol="IR",
+                        description="interaction ratio; the member is at capacity at 1.0",
+                        value=tension_interaction,
+                    ),
+                    citation=_CLAUSE_TENSION_FLEXURE,
+                ),
+            }
         )
     else:
         entry = ScorecardEntry.from_safety_factor(
@@ -2409,23 +2452,59 @@ def screen_beam_column(
     # at 10.41. The axial check is not optional context for the interaction; it is the
     # premise the interaction's own form rests on, so the card carries both.
     pr = member.axial_load.to("N").magnitude
+    if pr < 0:
+        # The same premise in tension: H1-1b halves the axial term because §D2 caps P_r at
+        # P_c on its own, so the card carries that cap as its own entry.
+        tension_safety = tensile_capacity / -pr
+        axial_entry = ScorecardEntry.from_safety_factor(
+            f"{member.name} axial capacity",
+            computed=tension_safety,
+            required=required_safety_factor,
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_TENSION,
+                "derivation": Derivation(
+                    symbolic="n = F_y · A_g / P_r",
+                    inputs=(
+                        SymbolValue(
+                            symbol="F_y",
+                            description="material yield strength",
+                            value=yield_strength,
+                        ),
+                        SymbolValue(
+                            symbol="A_g",
+                            description="gross cross-sectional area",
+                            value=member.section.area,
+                        ),
+                        SymbolValue(
+                            symbol="P_r",
+                            description="required axial strength, a net tension (magnitude)",
+                            value=Quantity(magnitude=-pr, unit="N"),
+                        ),
+                    ),
+                    result=SymbolValue(
+                        symbol="n",
+                        description="axial safety factor against gross-section yielding (§D2)",
+                        value=tension_safety,
+                    ),
+                    citation=_CLAUSE_TENSION,
+                ),
+            }
+        )
+        return disclosed(
+            Scorecard(entries=(axial_entry, entry)),
+            beam_column_allowable,
+        )
     axial_safety = axial_capacity / pr if pr > 0 else None
     axial_entry = ScorecardEntry.from_safety_factor(
         f"{member.name} axial capacity",
         computed=axial_safety,
         required=required_safety_factor,
         unavailable=(
-            (
-                "the axial_load is zero, so there is no compression for the §E3 curve to "
-                "judge; declare the `axial_load` the member carries"
-            )
-            if pr == 0
-            else (
-                "the axial_load is a net tension, which does not buckle; screen the member "
-                "in tension with `screen_tension_member`"
-            )
+            "the axial_load is zero, so there is no compression for the §E3 curve to "
+            "judge; declare the `axial_load` the member carries"
         ),
-        needs=(_NEEDS_AN_AXIAL_LOAD,) if pr == 0 else (),
+        needs=(_NEEDS_AN_AXIAL_LOAD,),
     ).model_copy(
         update={
             "reference": _CLAUSE_COMPRESSION,

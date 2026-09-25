@@ -41899,9 +41899,48 @@ def test_a_hogging_moment_no_longer_subtracts_from_the_h11_interaction():
     assert hogging.safety_factor == pytest.approx(sagging.safety_factor, rel=1e-12)
 
     tension = interaction("-200 kN", "20 kN*m")
-    assert tension.status is CheckStatus.NOT_EVALUATED
+    assert tension.status is CheckStatus.FAIL
     assert "§H1.2" in tension.detail
     assert tension.reference == "AISC 360-16 §H1.2"
+
+
+@pytest.mark.parametrize(
+    ("axial", "moment", "interaction_sf", "axial_sf"),
+    [
+        # A36 50 x 50 mm: F_y = 250 MPa, A_g = 2,500 mm², S = 20,833 mm³, so
+        # P_c = 625 kN and M_c = 5.208 kN·m.
+        # 200 kN: P_r/P_c = 0.32 ≥ 0.2, H1-1a: 0.32 + 8/9 · 0.192 = 0.4907 -> 2.038.
+        ("-200 kN", "1 kN*m", 1 / (0.32 + 8 / 9 * 0.192), 3.125),
+        # 50 kN: 0.08 < 0.2, H1-1b: 0.04 + 0.192 = 0.232 -> 4.310.
+        ("-50 kN", "1 kN*m", 1 / (0.04 + 0.192), 12.5),
+    ],
+)
+def test_a_net_tension_with_flexure_is_screened_by_h12(axial, moment, interaction_sf, axial_sf):
+    """§H1.2 was a named capability gap: the beam-column reported a net tension as not
+    evaluated. It takes H1-1a/b with P_c the §D2 tensile strength, and the §D2 cap on P_r
+    is its own entry, as the Chapter E cap is in compression, because H1-1b halves the
+    axial term only on that premise."""
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamColumnMember, screen_beam_column
+    from anvilate.standards import default_materials_db
+
+    assert default_materials_db().get("ASTM-A36").yield_strength.quantity.to(
+        "MPa"
+    ).magnitude == pytest.approx(250.0)
+    member = BeamColumnMember(
+        name="bc",
+        section=CrossSection.rectangular(width=_q("50 mm"), height=_q("50 mm")),
+        length=_q("3 m"),
+        axial_load=_q(axial),
+        moment=_q(moment),
+        material="ASTM-A36",
+    )
+    entries = {e.name: e for e in screen_beam_column(member, required_safety_factor=2.0).entries}
+    assert entries["bc interaction"].safety_factor == pytest.approx(interaction_sf, rel=1e-3)
+    assert entries["bc interaction"].reference == "AISC 360-16 §H1.2"
+    assert "net-section rupture" in entries["bc interaction"].detail
+    assert entries["bc axial capacity"].safety_factor == pytest.approx(axial_sf, rel=1e-9)
+    assert entries["bc axial capacity"].reference == "AISC 360-16 §D2"
 
 
 def test_the_pack_guard_reaches_into_a_nested_section():
