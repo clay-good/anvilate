@@ -1701,13 +1701,21 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # reading the signature rather than by counting. `unpersuaded` is the bucket the
     # rotational-speed hole lived in: a call the binder CAN build and a guard it could not
     # talk its way past. That one is capped, and the cap only ever ratchets down.
-    unbuildable, unpersuaded = [], []
+    # `text_readers` take nothing but text: a declaration's JSON, a web page's dispersion
+    # formula. Their numbers arrive inside that text, where no poison value the probes bind
+    # can reach, so each one's own tests have to put NaN and infinity inside the text.
+    unbuildable, unpersuaded, text_readers = [], [], []
     for label in sorted(set(surface) - reached):
         module_name, function_name = label.split(".", 1)
         module = importlib.import_module(f"anvilate.analysis.{module_name}")
         parameters = list(inspect.signature(getattr(module, function_name)).parameters.values())
         if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
             unbuildable.append(label)
+            continue
+        if all(
+            str(p.annotation).replace(" | None", "") in ("str", "<class 'str'>") for p in parameters
+        ):
+            text_readers.append(label)
             continue
         exotic = [
             p
@@ -1728,7 +1736,12 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
         "build and still refuse it — the bucket the rotational-speed hole was in. Teach "
         f"the binder to read the new refusal rather than raising this cap: {unpersuaded[:10]}"
     )
-    assert len(unbuildable) <= 80, (
+    assert len(text_readers) <= 2, (
+        f"{len(text_readers)} functions read everything from text ({text_readers}); a new one "
+        "has to show in its own tests that a NaN or an infinity inside the text is refused, "
+        "and then raise this with that test named"
+    )
+    assert len(unbuildable) <= 79, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

@@ -32,6 +32,8 @@ cradle-to-gate boundary and the requirement that a scope be declared with any re
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Sequence
 from enum import StrEnum
 from math import isfinite
@@ -53,6 +55,7 @@ __all__ = [
     "carbon_contribution",
     "embodied_carbon_estimate",
     "embodied_carbon_scorecard",
+    "carbon_factor_from_openepd",
 ]
 
 _CLAUSE_EN15978 = "EN 15978:2011 life-cycle modules; ISO 14040:2006 cradle-to-gate boundary"
@@ -440,4 +443,175 @@ def embodied_carbon_scorecard(
             "reference": _CLAUSE_EN15978,
             "derivation": derivation,
         }
+    )
+
+
+# openEPD (Building Transparency / C Change Labs, Apache-2.0) states each impact as
+# ``impacts[<LCIA method>][<indicator>][<module scope>] = {mean, unit, rsd}``, with global
+# warming potential under ``gwp`` in kgCO2e and cradle to gate under ``A1A2A3``. The reference
+# implementation's `ScopeSetGwp` allows exactly that unit, so nothing else is converted here.
+_OPENEPD_GWP_UNIT = "kgCO2e"
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
+def _openepd_mass_in_kg(amount: object, where: str) -> float | None:
+    """``{qty, unit}`` as kilograms, or ``None`` when it is not a mass at all."""
+    if not isinstance(amount, dict):
+        return None
+    qty, unit = amount.get("qty"), amount.get("unit")
+    if isinstance(qty, bool) or not isinstance(qty, int | float) or not isinstance(unit, str):
+        return None
+    if not isfinite(qty):
+        raise ValueError(f"the declaration's {where} must be a finite quantity; got {amount}")
+    try:
+        quantity = Quantity(magnitude=float(qty), unit=unit)
+    except (ValueError, TypeError):
+        return None
+    if not quantity.has_dimension("[mass]"):
+        return None
+    kilograms = quantity.to("kg").magnitude
+    if not isfinite(kilograms) or kilograms <= 0:
+        raise ValueError(f"the declaration's {where} must be a positive mass; got {amount}")
+    return kilograms
+
+
+def carbon_factor_from_openepd(
+    document: str,
+    *,
+    material: str,
+    method: str | None = None,
+    as_of: str | None = None,
+) -> CarbonFactor:
+    """A cradle-to-gate :class:`CarbonFactor` read from one openEPD declaration.
+
+    ``document`` is the declaration's JSON text, as the user downloaded it. Declarations are
+    the publisher's and the manufacturer's, so this library ships none, and it reads a file
+    rather than calling any service. The factor is the declared A1-A3 global warming
+    potential over the mass of one declared unit. It carries the declaration's identity as
+    its ``source`` and ``dataset_id``, so a result built on it names the declaration and not
+    a generic table.
+
+    The band is the declaration's own: one stated relative standard deviation either side
+    (``rsd``), or no band at all when it states none. The generic factor's band does not
+    carry over to a product-specific value.
+
+    Everything the conversion would otherwise have to guess is refused, naming the fix. That
+    covers a document of another type, several impact methods when ``method`` does not
+    choose one, no A1A2A3 GWP, a unit other than kgCO2e, and a declared unit that is not a
+    mass with no ``kg_per_declared_unit`` beside it. With ``as_of`` (an ISO date the caller
+    states, since nothing here reads the clock), a declaration past its ``valid_until`` is
+    refused too.
+    """
+    if not isinstance(document, str):
+        raise ValueError(f"document must be the declaration's JSON text; got {document!r}")
+    if not isinstance(material, str) or not material.strip():
+        raise ValueError(f"material must name the material the factor is for; got {material!r}")
+    if as_of is not None and (not isinstance(as_of, str) or not _ISO_DATE.match(as_of)):
+        raise ValueError(f"as_of must be an ISO date such as 2026-09-24; got {as_of!r}")
+    try:
+        epd = json.loads(document)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"the document is not JSON ({error}); pass the openEPD file's text"
+        ) from error
+    if not isinstance(epd, dict):
+        raise ValueError("an openEPD document is a JSON object; this one is not")
+    doctype = epd.get("doctype")
+    if not isinstance(doctype, str) or doctype.lower() != "openepd":
+        raise ValueError(
+            f"the document's doctype is {doctype!r}, not 'openEPD'; an industry-wide or "
+            "generic estimate is not a product declaration, so pass the product's own EPD"
+        )
+    identity = epd.get("id") if isinstance(epd.get("id"), str) else ""
+    name = next((epd[key] for key in ("product_name", "name") if isinstance(epd.get(key), str)), "")
+    if not identity.strip() and not name.strip():
+        raise ValueError(
+            "the declaration names neither an id nor a product, so a factor read from it could "
+            "not say where it came from; use the document as its program operator publishes it"
+        )
+
+    impacts = epd.get("impacts")
+    if not isinstance(impacts, dict) or not impacts:
+        raise ValueError("the declaration states no impacts, so there is no GWP to read")
+    with_gwp = sorted(
+        key for key, value in impacts.items() if isinstance(value, dict) and "gwp" in value
+    )
+    if method is None:
+        if len(with_gwp) != 1:
+            raise ValueError(
+                f"the declaration states GWP under {len(with_gwp)} impact methods "
+                f"({', '.join(with_gwp) or 'none'}); pass `method` naming the one to read, "
+                "since they are different characterizations of the same product"
+            )
+        method = with_gwp[0]
+    if method not in with_gwp:
+        raise ValueError(
+            f"the declaration states no GWP under {method!r}; it states it under "
+            f"{', '.join(with_gwp) or 'no method'}"
+        )
+    a1_a3 = (
+        impacts[method]["gwp"].get("A1A2A3") if isinstance(impacts[method]["gwp"], dict) else None
+    )
+    if not isinstance(a1_a3, dict):
+        raise ValueError(
+            f"the declaration states no A1A2A3 (cradle-to-gate) GWP under {method}; a factor "
+            "for other modules is not an A1-A3 factor, and summing modules is the declaration's "
+            "own job"
+        )
+    mean, unit, rsd = a1_a3.get("mean"), a1_a3.get("unit"), a1_a3.get("rsd")
+    if unit != _OPENEPD_GWP_UNIT:
+        raise ValueError(
+            f"the A1A2A3 GWP is stated in {unit!r}; openEPD states GWP in {_OPENEPD_GWP_UNIT}"
+        )
+    if (
+        isinstance(mean, bool)
+        or not isinstance(mean, int | float)
+        or not isfinite(mean)
+        or mean <= 0
+    ):
+        raise ValueError(f"the A1A2A3 GWP mean must be a positive number; got {mean!r}")
+    if rsd is not None and (
+        isinstance(rsd, bool) or not isinstance(rsd, int | float) or not 0 < rsd < 1
+    ):
+        raise ValueError(f"the A1A2A3 GWP rsd must lie in (0, 1); got {rsd!r}")
+
+    per_unit = _openepd_mass_in_kg(epd.get("declared_unit"), "declared unit")
+    if per_unit is None:
+        per_unit = _openepd_mass_in_kg(epd.get("kg_per_declared_unit"), "kg_per_declared_unit")
+    if per_unit is None:
+        raise ValueError(
+            f"the declared unit is {epd.get('declared_unit')!r}, which is not a mass, and the "
+            "declaration states no kg_per_declared_unit; a kgCO2e/kg factor needs the mass of "
+            "one declared unit"
+        )
+
+    valid_until = epd.get("valid_until")
+    if as_of is not None and isinstance(valid_until, str) and _ISO_DATE.match(valid_until):
+        if valid_until[:10] < as_of[:10]:
+            raise ValueError(
+                f"the declaration was valid until {valid_until[:10]}, before {as_of[:10]}; "
+                "use the program operator's current version"
+            )
+
+    manufacturer = epd.get("manufacturer")
+    maker = manufacturer.get("name") if isinstance(manufacturer, dict) else None
+    band = f"band ±1 declared rsd ({rsd:g})" if rsd is not None else "no uncertainty declared"
+    source = (
+        f"openEPD {identity or name}: {name or 'unnamed product'}"
+        + (f" by {maker}" if isinstance(maker, str) and maker.strip() else "")
+        + f", {method} GWP A1A2A3; {band}"
+    )
+    geography = epd.get("geography")
+    return CarbonFactor(
+        material=material.strip(),
+        value=float(mean) / per_unit,
+        scope=ModuleScope.A1_A3,
+        source=source,
+        band_low=1.0 - rsd if rsd is not None else 1.0,
+        band_high=1.0 + rsd if rsd is not None else 1.0,
+        dataset_id=identity,
+        version=str(epd.get("version", "")) if epd.get("version") is not None else "",
+        geography=", ".join(g for g in geography if isinstance(g, str))
+        if isinstance(geography, list)
+        else "",
     )

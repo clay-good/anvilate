@@ -14,9 +14,13 @@
 ## 3. Implementation
 
 - [x] 3.1 Estimator composing mass properties, material, process, material loss
-- [ ] 3.2 openEPD importer + material binding with provenance — DEFERRED: a CarbonFactor
-      built by hand from an EPD already records everything the estimate needs, and the
-      importer is schema plumbing rather than analysis
+- [x] 3.2 openEPD importer + material binding with provenance — `carbon_factor_from_openepd`
+      reads a declaration's A1A2A3 GWP over the mass of one declared unit into a
+      `CarbonFactor` whose source, dataset id and version name the declaration, with the
+      declaration's own rsd as its band. Every guess is refused (several impact methods, no
+      A1A2A3, a non-kgCO2e unit, a non-mass declared unit with no kg_per_declared_unit, and
+      an expired declaration against a stated date). Shape from the Apache-2.0 reference
+      models (cchangelabs/openepd); no declaration is committed (tests/test_openepd.py)
 - [x] 3.3 Rendering with screening/partial-scope labels; Pareto objective participation
 
 ## 4. Tests
@@ -37,8 +41,8 @@
   carries its own source, dataset id, version and geography, and a blank source is
   refused. The datasets that are not redistribution-clean are therefore not a licensing
   question, because none of them are copied in.
-- The **openEPD importer (3.2, and 4.2 which follows it) is deferred.** It is schema
-  plumbing, not analysis, and a factor built by hand from an EPD already carries
-  everything the estimate consumes.
+- The **openEPD importer (3.2) is built**; it takes the declaration's text from the caller
+  and performs no I/O itself, so 4.3 still holds. **4.2 is open:** carbon has no place in
+  the Design Spec or the evidence bundle yet, so a binding has nowhere to be recorded.
 - **Air-gapped by construction (4.3):** the module performs no I/O of any kind, so there
   is no network call to assert the absence of.

@@ -75,13 +75,43 @@ A missing *budget* is also `NOT_EVALUATED` — but a reporting one. The estimate
 and shown; only the verdict is withheld, because there is nothing to judge it against.
 That is the honest state for a first pass and it still puts the number in front of you.
 
+## A product's own declaration
+
+`carbon_factor_from_openepd` reads one openEPD declaration, the JSON a program operator
+publishes, into a `CarbonFactor`. The factor is the declared A1A2A3 global warming potential
+over the mass of one declared unit. Its source names the declaration, its product and
+maker, and the impact method, so an estimate built on it says which EPD it rests on:
+
+```python
+from pathlib import Path
+
+from anvilate.analysis import carbon_factor_from_openepd
+
+text = Path("supplier-6061.openepd.json").read_text()
+factor = carbon_factor_from_openepd(text, material="AA-6061-T6", as_of="2026-09-24")
+```
+
+The band is the declaration's own: one declared relative standard deviation either side, or
+none when it states none. A generic table's band describes a population of products, not
+this one. Everything the conversion would otherwise have to guess is refused with the fix
+named:
+
+- a document that is not a product EPD (`doctype` other than `openEPD`);
+- GWP under several impact methods, until `method` picks one;
+- no A1A2A3 GWP (modules are not summed here), or a unit other than kgCO2e;
+- a declared unit that is not a mass, with no `kg_per_declared_unit` beside it;
+- with `as_of` stated, a declaration past its `valid_until`.
+
+Declarations belong to their manufacturers and program operators, so none ships with this
+library, and the function reads text the caller supplies rather than calling any service.
+
 ## What is deliberately not here
 
 - **No bundled factor data.** See above; it is a licensing constraint and a correctness
   one.
-- **No openEPD import yet.** The openEPD schema is Apache-2.0 and binding a product EPD
-  over a generic factor is the natural next step, but a `CarbonFactor` built by hand from
-  an EPD already records everything the estimate needs.
+- **No binding in the Design Spec or the evidence bundle yet.** A factor read from a
+  declaration (below) names it in every estimate built on it. What does not exist yet is a
+  place in the document to bind one to a material, or a bundle section that records it.
 - **No product passport export.** The EU Digital Product Passport registry is live, but
   no product-specific delegated act is in force. Building an export against a
   specification that does not exist yet would be inventing it.
