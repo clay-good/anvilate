@@ -920,7 +920,7 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
 
     cards, names = [], []
     for path in (args.before, args.after):
-        spec = _load(path, err=err, command="diff")
+        spec = _load(path, err=err, command="diff", named=True)
         if isinstance(spec, int):
             return spec
         cards.append(screen_spec(spec))
@@ -2465,11 +2465,14 @@ def _not_utf8(path: Path, failure: UnicodeDecodeError) -> str:
     )
 
 
-def _load(path: Path, *, err, command: str):
+def _load(path: Path, *, err, command: str, named: bool = False):
     """The spec at ``path``, or the exit code that says why not.
 
     Shared by every command that takes a spec file, so a second one cannot report a missing
-    file differently from the first.
+    file differently from the first. ``named`` puts the path on each refusal and remedy,
+    for a command that reads more than one file: `anvilate check specs/` refused a document
+    with "constraints.min_safety_factor.origin: ..." and a remedy to write `user_stated`,
+    and nothing said which of the directory's specs it meant.
     """
     from .spec import SpecValidationError, load_spec_yaml
 
@@ -2484,17 +2487,23 @@ def _load(path: Path, *, err, command: str):
     except UnicodeDecodeError as failure:
         print(f"anvilate {command}: {_not_utf8(path, failure)}", file=err)
         return EXIT_BAD_REQUEST
+    where = f"{path}: " if named else ""
     try:
         return load_spec_yaml(document)
     except SpecValidationError as failure:
         # Every path, not the first one: a script author fixing a spec one error per run is
         # the experience this avoids, and the paths are what the loader already produced.
         for problem in failure.errors:
-            print(f"anvilate {command}: {_refusal_line(problem['loc'], problem['msg'])}", file=err)
-        _state_remedies(failure.remedies)
+            line = _refusal_line(problem["loc"], problem["msg"])
+            print(f"anvilate {command}: {where}{line}", file=err)
+        _state_remedies(
+            tuple(f"in {path}, {remedy}" for remedy in failure.remedies)
+            if named
+            else failure.remedies
+        )
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:
-        print(f"anvilate {command}: {_reason(failure)}", file=err)
+        print(f"anvilate {command}: {where}{_reason(failure)}", file=err)
         return EXIT_BAD_REQUEST
 
 
@@ -2745,7 +2754,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 total=len(paths),
             )
         try:
-            spec = _load(path, err=err, command="check")
+            spec = _load(path, err=err, command="check", named=len(paths) > 1)
             if isinstance(spec, int):
                 return spec
             results.append((path, spec, screen_spec(spec)))

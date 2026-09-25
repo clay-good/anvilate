@@ -4897,3 +4897,31 @@ def test_a_bare_provenanced_value_is_told_the_line_to_write(tmp_path):
     spec.write_text(base.replace("units: {value: SI, origin: user_stated}", "units: SI"))
     code, out, _err = _run("check", str(spec), "--format", "json")
     assert "Write `units` as `{value: 'SI', origin: user_stated}`" in json.loads(out)["remedy"]
+
+
+def test_a_refusal_in_a_multi_file_run_names_its_file(tmp_path):
+    """`anvilate check specs/` refused one of two documents with a remedy to write
+    `user_stated`, and nothing said which spec it meant; `diff` did the same for its
+    `after`. With more than one file in play, each refusal and remedy names its path."""
+    import json
+    from pathlib import Path
+
+    base = (
+        Path(__file__).resolve().parent.parent / "examples" / "base_plate.spec.yaml"
+    ).read_text()
+    good = tmp_path / "good.yaml"
+    good.write_text(base)
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(base + "constraints: {min_safety_factor: {value: 1.5, origin: user}}\n")
+    code, out, _err = _run("check", str(tmp_path), "--format", "json")
+    assert code == 3
+    refusal = json.loads(out)
+    assert any(
+        line.startswith(f"anvilate check: {bad}: constraints.") for line in refusal["diagnostics"]
+    )
+    assert refusal["remedy"].startswith(f"In {bad}, write `constraints.min_safety_factor.origin`")
+    code, out, _err = _run("diff", str(good), str(bad), "--format", "json")
+    assert json.loads(out)["remedy"].startswith(f"In {bad}, write ")
+    # One file needs no path: the remedy stays the sentence it was.
+    code, out, _err = _run("check", str(bad), "--format", "json")
+    assert json.loads(out)["remedy"].startswith("Write `constraints.min_safety_factor.origin`")
