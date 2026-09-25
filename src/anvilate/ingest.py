@@ -75,6 +75,7 @@ __all__ = [
     "FieldConflict",
     "DraftSpec",
     "extract_requirements",
+    "extract_requirements_from_pdf",
 ]
 
 # A requirement line is "<label><separator><value>". The separators are tried in order and
@@ -1226,4 +1227,92 @@ def extract_requirements(
         unparsed=tuple(unparsed),
         documents=(document.strip(),),
         environments=tuple(environments),
+    )
+
+
+def extract_requirements_from_pdf(
+    data: bytes,
+    *,
+    document: str,
+    informational_fields: Iterable[str] = (),
+) -> DraftSpec:
+    """Read a PDF requirement sheet page by page into one draft spec.
+
+    Each page's text goes through :func:`extract_requirements` with its page number, so every
+    extracted value and every declined line says which page it came from. The draft is the
+    same draft a plain-text sheet gives: nothing is confirmed, and the checklist is what a
+    person works from. Text is read with pdfminer.six (MIT, the optional ``pdf`` extra), from
+    the bytes the caller passes; nothing is fetched and nothing is written.
+
+    Only text the PDF carries as text is read. A scanned page has none, and it is reported as
+    a page with no text rather than skipped, because a sheet whose loads are on a scanned page
+    and one with no loads read the same otherwise.
+    """
+    if not isinstance(document, str) or not document.strip():
+        raise ValueError("extraction must name the document it read")
+    if not isinstance(data, bytes | bytearray):
+        raise ValueError(f"data must be the PDF's bytes; got {type(data).__name__}")
+    if not bytes(data[:1024]).lstrip().startswith(b"%PDF-"):
+        raise ValueError(
+            f"{document!r} does not start with a PDF header; pass the file's bytes as read"
+        )
+    try:
+        import io
+
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LTTextContainer
+        from pdfminer.psexceptions import PSException
+    except ImportError as missing:  # pragma: no cover - exercised only without the extra
+        raise ImportError(
+            "reading a PDF requirement sheet needs pdfminer.six; install the pdf extra: "
+            "pip install 'anvilate[pdf]'"
+        ) from missing
+    drafts: list[DraftSpec] = []
+    unparsed: list[UnparsedLine] = []
+    try:
+        for number, page in enumerate(extract_pages(io.BytesIO(bytes(data))), start=1):
+            text = "".join(
+                element.get_text() for element in page if isinstance(element, LTTextContainer)
+            )
+            if not text.strip():
+                unparsed.append(
+                    UnparsedLine(
+                        source=SourceLocation(
+                            document=document, line_number=1, excerpt="(no text)", page=number
+                        ),
+                        reason=(
+                            "the page carries no text, which is what a scanned page looks like; "
+                            "its values are not read, so check it by eye"
+                        ),
+                    )
+                )
+                continue
+            drafts.append(
+                extract_requirements(
+                    text,
+                    document=document,
+                    page=number,
+                    informational_fields=informational_fields,
+                )
+            )
+    except (
+        PSException,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        IndexError,
+        EOFError,
+        AssertionError,
+    ) as broken:
+        # pdfminer reports a damaged file through its own hierarchy (PSException and below)
+        # and, deeper in, through whatever built-in its parser trips on, an AssertionError
+        # included: 2,000 random corruptions of a valid sheet raised six types. To a caller
+        # they are one fact, the refusal a malformed document gets everywhere else.
+        raise ValueError(f"{document!r} is not a readable PDF: {broken}") from broken
+    return DraftSpec(
+        values=tuple(value for draft in drafts for value in draft.values),
+        unparsed=tuple(line for draft in drafts for line in draft.unparsed) + tuple(unparsed),
+        documents=(document.strip(),),
+        environments=tuple(e for draft in drafts for e in draft.environments),
     )

@@ -1213,3 +1213,118 @@ def test_the_environment_separator_repeats_nothing():
     assert repeats(parser.parse(_ENVIRONMENT_SEPARATORS.pattern)) == []
     words = extract_requirements("Environment: marine" + " " * 20_000 + ",vibration", document="d")
     assert [e.environment.value for e in words.environments] == ["marine", "vibration"]
+
+
+# --- PDF requirement sheets -----------------------------------------------------------------
+
+
+def _pdf(pages: list[list[str]]) -> bytes:
+    """A minimal valid PDF, one Helvetica line per string and one page per list.
+
+    Written here rather than committed as a binary: every byte of the fixture is visible, and
+    a page with no lines is exactly what a scanned page looks like to a text reader.
+    """
+    objects: list[bytes] = [b"<< /Type /Catalog /Pages 2 0 R >>"]
+    kids = " ".join(f"{3 + 2 * index} 0 R" for index in range(len(pages)))
+    objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode())
+    font = 3 + 2 * len(pages)
+    for index, lines in enumerate(pages):
+        shown = " ".join(
+            "(" + line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") + ") Tj T*"
+            for line in lines
+        )
+        stream = f"BT /F1 11 Tf 14 TL 72 740 Td {shown} ET".encode("latin-1")
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font "
+            f"<< /F1 {font} 0 R >> >> /Contents {4 + 2 * index} 0 R >>".encode()
+        )
+        objects.append(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return bytes(out)
+
+
+def test_a_pdf_sheet_is_read_page_by_page_and_every_value_says_its_page():
+    from anvilate.ingest import extract_requirements_from_pdf
+    from anvilate.spec import Environment
+
+    data = _pdf(
+        [
+            ["RFQ 2026-114", "Design load: 50 kN max", "Operating environment: marine"],
+            ["Plate thickness: 12 mm", "Quantity: 4"],
+        ]
+    )
+    draft = extract_requirements_from_pdf(data, document="rfq.pdf")
+    placed = {value.field: (value.source.page, value.source.line_number) for value in draft.values}
+    assert placed == {"design_load": (1, 2), "plate_thickness": (2, 1)}
+    assert draft.values[0].bound is Bound.MAXIMUM
+    assert [(e.environment, e.source.page) for e in draft.environments] == [(Environment.MARINE, 1)]
+    (count,) = draft.unparsed  # a bare number is declined here exactly as in plain text
+    assert count.source.page == 2 and "not a number with a unit" in count.reason
+    assert "rfq.pdf:2 (p. 1) — 'Design load: 50 kN max'" in draft.checklist()
+    with pytest.raises(ValueError, match="still drafts"):
+        draft.release()
+
+
+def test_a_page_with_no_text_is_reported_not_skipped():
+    from anvilate.ingest import extract_requirements_from_pdf
+
+    draft = extract_requirements_from_pdf(_pdf([["Design load: 50 kN"], []]), document="scan.pdf")
+    scanned = [line for line in draft.unparsed if line.source.page == 2]
+    assert len(scanned) == 1 and "scanned page" in scanned[0].reason
+    assert "1 lines not extracted" in draft.summary()
+
+
+@pytest.mark.parametrize(
+    ("data", "match"),
+    [
+        (b"Design load: 50 kN", "PDF header"),
+        (_pdf([["Design load: 50 kN"]])[:120], "not a readable PDF"),
+        ("%PDF-1.4 text", "PDF's bytes"),
+    ],
+)
+def test_what_is_not_a_readable_pdf_is_refused(data, match):
+    from anvilate.ingest import extract_requirements_from_pdf
+
+    with pytest.raises(ValueError, match=match):
+        extract_requirements_from_pdf(data, document="sheet.pdf")
+
+
+def test_a_damaged_pdf_is_a_value_error_whatever_the_parser_trips_on():
+    """pdfminer reports damage through its own hierarchy and through built-ins deep in its
+    parser, an AssertionError among them. Six types leaked from 2,000 random corruptions of a
+    valid sheet before they were caught as one refusal; this replays a fixed sample."""
+    import random
+
+    from anvilate.ingest import extract_requirements_from_pdf
+
+    base = _pdf([["Design load: 50 kN max", "Operating environment: marine"], ["Plate: 12 mm"]])
+    rng = random.Random(7)
+    refused = 0
+    for _trial in range(300):
+        data = bytearray(base)
+        for _edit in range(rng.randint(1, 6)):
+            at = rng.randrange(len(data))
+            roll = rng.random()
+            if roll < 0.5:
+                data[at] = rng.randrange(256)
+            elif roll < 0.8:
+                del data[at : at + rng.randint(1, 30)]
+            else:
+                data[at:at] = bytes(rng.randrange(256) for _ in range(rng.randint(1, 10)))
+        try:
+            extract_requirements_from_pdf(bytes(data), document="damaged.pdf")
+        except ValueError:
+            refused += 1
+    assert refused >= 50, f"only {refused} of 300 corruptions were refused; the sample is too kind"

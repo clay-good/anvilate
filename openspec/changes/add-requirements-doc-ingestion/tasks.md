@@ -2,7 +2,7 @@
 
 ## 1. Extraction
 
-- [ ] 1.1 Requirements-oriented extraction pass over the local PDF stack (quantities with
+- [x] 1.1 Requirements-oriented extraction pass over the local PDF stack (quantities with
       units, constraint phrases, environment statements) — the **constraint-phrase half is
       done** and needed no document stack: `Bound` records which end of a range a line
       states, from the label (`maximum operating pressure`, `not to exceed`) or from the
@@ -12,8 +12,11 @@
       published language rather than adding any. Environment statements are done too:
       a line labelled as an environment is read onto the Design Spec's closed `Environment`
       vocabulary, one value per member, declined whole when it names anything else, and
-      held to the same draft/confirm gate (docs/requirements-ingestion.md). What is still
-      open is the PDF stack
+      held to the same draft/confirm gate (docs/requirements-ingestion.md). The PDF half is
+      done too: `extract_requirements_from_pdf` reads each page's text (pdfminer.six, the
+      optional `pdf` extra) into the same pass with its page number, reports a page with no
+      text as one to check by eye, and refuses a damaged file as a ValueError (held by a
+      replayed fuzz sample). Table *column* recognition is not built; tables read as lines
 - [x] 1.2 Draft-spec assembly with per-value source locations and document provenance
 
 ## 2. Confirmation flow
@@ -36,9 +39,9 @@
 `src/anvilate/ingest.py`, `tests/test_ingest.py`,
 `examples/rfq_sheet_to_confirmed_inputs.py`, `docs/requirements-ingestion.md`.
 
-**1.1 is the only task still open, and it is open for a dependency, not a decision.** The
-extraction pass ships over plain text; the PDF half needs the local document stack
-(Docling/pdfplumber) that the project does not yet carry. The state machine is the part
+**1.1 was the last task open, for a dependency rather than a decision, and it is done.** The
+extraction pass ships over plain text and over a PDF's text (pdfminer.six, the optional
+`pdf` extra, which is the engine pdfplumber is built on). The state machine is the part
 that matters and it does not change when that lands — `SourceLocation` already carries a
 page number, and `extract_requirements` takes one.
 

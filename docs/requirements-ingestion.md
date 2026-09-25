@@ -225,8 +225,13 @@ The pass is label-driven, over plain text, and knows nothing about engineering v
 That is deliberate: a pass that guessed which line was "really" the design load would be
 making the decision this module exists to hand to a person.
 
-PDF and table extraction belong with the document stack and land with it. The state
-machine does not change when they do — a `SourceLocation` already carries a page number.
+A PDF sheet is read by `extract_requirements_from_pdf(data, document=...)` (the optional
+`pdf` extra, pdfminer.six). Each page's text goes through the same pass with its page
+number, so every value and every declined line says which page it came from, and the draft
+is the same draft a text sheet gives. Only text the PDF carries as text is read. A page with
+none, which is what a scanned page looks like, is listed under NOT EXTRACTED as a page to
+check by eye rather than skipped. A damaged file is a `ValueError`, whatever pdfminer tripped
+on. Tables are read as their text lines. Recognizing a table's columns is not built.
 
 ## Worked example
 

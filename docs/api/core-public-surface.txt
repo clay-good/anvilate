@@ -271,6 +271,7 @@ ingest.UnparsedLine
 ingest.FieldConflict
 ingest.DraftSpec
 ingest.extract_requirements
+ingest.extract_requirements_from_pdf
 interop.ForceComponent
 interop.AxisMapping
 interop.ForceStation

@@ -51,6 +51,7 @@ _REPO = pathlib.Path(__file__).resolve().parents[1]
 _IMPORT_NAME = {
     "cadquery-ocp-novtk": "OCP",
     "pyyaml": "yaml",
+    "pdfminer.six": "pdfminer",
 }
 
 

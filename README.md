@@ -16,7 +16,7 @@ Python 3.11+.
 git clone https://github.com/clay-good/anvilate.git
 cd anvilate
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[geometry,export]"  # geometry adds B-Rep/STEP; export adds DXF
+pip install -e ".[geometry,export,pdf]"  # geometry adds B-Rep/STEP; export adds DXF; pdf reads requirement sheets
 ```
 
 Run any of the worked examples — every one is self-contained, needs no network, and prints its result: a scorecard for the screening examples, the computed values for the analysis ones.
@@ -316,7 +316,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (237 closed-form modules and 1,881 public symbols, each dimension-checked and
-hand-verified, 6,387 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 6,393 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs
