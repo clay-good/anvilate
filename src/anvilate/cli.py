@@ -1826,6 +1826,8 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     if args.envelope.suffix.lower() in {".step", ".stp"}:
         return _verify_step(args, out=out, err=err)
 
+    from pydantic import ValidationError
+
     from .attestation import Attestation, LocalHmacSigner, verify_attestation
 
     try:
@@ -1847,6 +1849,15 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
         return EXIT_BAD_REQUEST
     try:
         attestation = Attestation.model_validate(envelope)
+    except ValidationError as failure:
+        # Each problem as `field: reason`, as a spec's are. pydantic's own text named the
+        # Python class, split across lines, and ended each with a documentation URL.
+        problems = "; ".join(
+            _refusal_line(".".join(str(part) for part in error["loc"]), error["msg"])
+            for error in failure.errors()
+        )
+        print(f"anvilate verify: {args.envelope}: not a DSSE envelope: {problems}", file=err)
+        return EXIT_BAD_REQUEST
     except ValueError as failure:
         print(f"anvilate verify: {args.envelope}: not a DSSE envelope: {failure}", file=err)
         return EXIT_BAD_REQUEST

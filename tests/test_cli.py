@@ -1192,6 +1192,13 @@ def test_verify_refuses_what_is_not_an_envelope(tmp_path):
         assert (code, out) == (EXIT_BAD_REQUEST, "")
         assert expected in err
 
+    # Each missing member by name on one line, not pydantic's text: that named the Python
+    # class, split over six lines and ended each problem with a documentation URL.
+    path.write_text('{"a": 1}', encoding="utf-8")
+    _code, _out, err = _run("verify", str(path))
+    assert "not a DSSE envelope: payloadType: Field required; payload: Field required" in err
+    assert "Attestation" not in err and "errors.pydantic.dev" not in err
+
     code, _out, err = _run("verify", str(tmp_path / "absent.json"))
     assert code == EXIT_BAD_REQUEST and "No such file" in err
 
