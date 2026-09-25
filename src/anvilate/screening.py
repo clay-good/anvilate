@@ -68,6 +68,7 @@ from ._models import (
     _refusal_line,
     rebuilt_quantities,
 )
+from .analysis.embodied_carbon import EmbodiedCarbonEstimate
 from .derivation import DerivationAbsence, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
@@ -88,6 +89,7 @@ __all__ = [
     "DEPTH_ORDER",
     "Structure",
     "StructureMember",
+    "carbon_estimate_for",
     "element_registry",
     "screen_spec",
     "screen_structure_element",
@@ -151,6 +153,13 @@ _NEEDS_A_DECLARED_WALL = Need(
     dimension="[length]",
     units=("mm", "in"),
     sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_CARBON_BUDGET = Need(
+    declaration="carbon.budget",
+    takes="the embodied carbon the part may carry, in kg CO2e over the estimate's scope",
+    dimension="[mass]",
+    units=("kg", "t"),
+    sources=(ValueSource.USER, ValueSource.STANDARD),
 )
 _NEEDS_A_LOAD_NATURE = Need(
     declaration="load_cases[].nature",
@@ -490,6 +499,41 @@ def _assembly_entries(spec: DesignSpec) -> list[ScorecardEntry]:
     if declared.inspections:
         entries.extend(screen_inspectability(declared.states, declared.parts, declared.inspections))
     return entries
+
+
+def carbon_estimate_for(spec: DesignSpec) -> EmbodiedCarbonEstimate | None:
+    """The EN 15978 cradle-to-gate estimate over the document's carbon lines, or ``None``.
+
+    Public because the evidence bundle carries the same estimate the card judged: one
+    function, so the two cannot be computed from the document two ways.
+    """
+    from .analysis.embodied_carbon import carbon_contribution, embodied_carbon_estimate
+
+    if spec.carbon is None:
+        return None
+    return embodied_carbon_estimate(
+        [
+            carbon_contribution(label=line.label, mass=line.mass, factor=line.factor)
+            for line in spec.carbon.lines
+        ]
+    )
+
+
+def _carbon_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """One entry for the document's embodied carbon, judged against its budget if declared."""
+    from .analysis.embodied_carbon import embodied_carbon_scorecard
+
+    estimate = carbon_estimate_for(spec)
+    if estimate is None:
+        return []
+    assert spec.carbon is not None
+    entry = embodied_carbon_scorecard(
+        "embodied carbon", estimate=estimate, budget=spec.carbon.budget
+    )
+    if entry.needs:
+        # The library names its argument; a document writes the budget under `carbon`.
+        entry = entry.model_copy(update={"needs": (_NEEDS_A_CARBON_BUDGET,)})
+    return [entry]
 
 
 def _keepout_entries(spec: DesignSpec) -> list[ScorecardEntry]:
@@ -1752,6 +1796,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
         entries.append(_topology(spec).entry())
     entries.extend(_keepout_entries(spec))
     entries.extend(_assembly_entries(spec))
+    entries.extend(_carbon_entries(spec))
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:

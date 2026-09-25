@@ -23,6 +23,7 @@ from pydantic import (
 
 from .._assembly_declarations import Adjustment, AssemblyState, Inspection, Part
 from .._models import FrozenMap, Named, Provenance, StatableModel, rebuilt_quantities
+from ..analysis.embodied_carbon import CarbonFactor
 from ..budget import Budget
 from ..loads import (
     CombinationEvidence,
@@ -472,6 +473,52 @@ class Keepout(_Base):
                 f"keepout '{self.tag}': clearance_margin cannot be negative; got "
                 f"{self.clearance_margin}"
             )
+        return self
+
+
+# --- Embodied carbon ---
+
+
+class CarbonLine(_Base):
+    """One material in the part's embodied-carbon estimate: how much, and at what factor.
+
+    ``factor`` is a whole :class:`~anvilate.analysis.CarbonFactor`, source and band
+    included, so a factor read from a product's EPD (``carbon_factor_from_openepd``) and
+    written into the document keeps the declaration's identity. That is how a document binds
+    a declaration to a material.
+    """
+
+    label: Named
+    mass: Mass
+    factor: CarbonFactor
+
+    @model_validator(mode="after")
+    def _a_mass(self) -> CarbonLine:
+        if not self.mass.magnitude > 0:
+            raise ValueError(f"carbon line '{self.label}': mass must be positive; got {self.mass}")
+        return self
+
+
+class CarbonDeclaration(_Base):
+    """The part's embodied-carbon inputs, and the budget its estimate is judged against.
+
+    Screened as one entry: the EN 15978 cradle-to-gate estimate over the lines, against
+    ``budget`` when one is declared. Without a budget the estimate is stated and the entry is
+    not evaluated, because a figure with nothing to compare it to is not a verdict.
+    """
+
+    lines: tuple[CarbonLine, ...] = Field(min_length=1)
+    budget: Mass | None = None
+
+    @model_validator(mode="after")
+    def _a_budget(self) -> CarbonDeclaration:
+        labels = [line.label for line in self.lines]
+        doubled = sorted({label for label in labels if labels.count(label) > 1})
+        if doubled:
+            raise ValueError(f"the carbon lines name {', '.join(doubled)} more than once")
+        if self.budget is not None:
+            if not self.budget.magnitude > 0:
+                raise ValueError(f"the carbon budget must be positive; got {self.budget}")
         return self
 
 
@@ -950,12 +997,13 @@ class AcceptanceCriteria(_Base):
 # the environment a part lives in with an interface's kind and mating material, and 1.13.0
 # the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
 # how the part is located, 1.15.0 keepouts, the volumes it must leave empty, 1.16.0 a
-# keepout's offset from its anchor face, and 1.17.0 assembly, how the build goes together.
+# keepout's offset from its anchor face, 1.17.0 assembly, how the build goes together, and
+# 1.18.0 carbon, the embodied-carbon inputs and their budget.
 # All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.17.0"
+SCHEMA_VERSION = "1.18.0"
 
 
 class DesignSpec(_Base):
@@ -1018,6 +1066,10 @@ class DesignSpec(_Base):
     # How the build goes together, screened for its order, the reach of each adjustment in
     # its state, and whether each toleranced dimension can be measured in any state.
     assembly: AssemblyDeclaration | None = None
+    # The part's embodied-carbon inputs, each material with its mass and its factor, and the
+    # budget the estimate is judged against. A factor carries its source, so one copied from
+    # a product's EPD keeps naming that declaration on the card and in the bundle.
+    carbon: CarbonDeclaration | None = None
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
 

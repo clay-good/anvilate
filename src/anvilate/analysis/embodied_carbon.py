@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import RevalidatedModel, cited, each_one, parse_json
+from .._models import StatableModel, cited, each_one, parse_json
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity
@@ -92,7 +92,7 @@ else:
     )
 
 
-class CarbonFactor(RevalidatedModel):
+class CarbonFactor(StatableModel):
     """An EN 15978 mass-specific carbon factor, and what is needed to know what it means.
 
     ``value`` is kgCO2e per kg of material — dimensionless, because CO2-equivalent is

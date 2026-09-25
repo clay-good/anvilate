@@ -116,7 +116,7 @@ SCORECARD_SCHEMA_VERSION = "1.11.0"
 # `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
 # schema said nothing about. Same rule as the two above — bump on a change to the generated
 # document, and the gate refuses a changed schema under an unchanged version.
-BUNDLE_SCHEMA_VERSION = "1.22.0"
+BUNDLE_SCHEMA_VERSION = "1.23.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
 GEOMETRY_SCHEMA_VERSION = "1.2.0"

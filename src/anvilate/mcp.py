@@ -131,7 +131,7 @@ REQUIRED_OPERATIONS = frozenset(
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.17.0.json"
+_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.18.0.json"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -173,7 +173,7 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.11.0.json"
 # carries the same optional interface-frame fields.
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.22.0.json"
+_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.23.0.json"
 _GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
 _VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
 _MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"
@@ -1499,6 +1499,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     # read one table, and it now says a true thing about each.
     from .cli import _UNSERVED_OVER_MCP as _UNBUILT_ARTIFACTS
     from .scorecard import Scorecard
+    from .screening import carbon_estimate_for
     from .spec import parse_spec
 
     artifact = arguments["format"]
@@ -1531,6 +1532,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             # put in it.
             citations=provenance_for(spec),
             combinations=combinations_for(spec),
+            carbon=carbon_estimate_for(spec),
         ).to_document_dict()
     except (ValueError, TypeError, KeyError) as unreadable:
         # A handle that resolves to a record this build cannot read is the same fact as one

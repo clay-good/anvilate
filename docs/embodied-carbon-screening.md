@@ -113,13 +113,32 @@ bundle 1.22.0) and prints one line per contribution with its factor's source. Th
 the bundle records which factor came from which declaration. The estimate stays out of the
 roll-up and the signed predicate, because a figure with no budget has no verdict.
 
+## Declared in the document
+
+Since Design Spec 1.18.0 a document can carry its carbon inputs:
+
+```yaml
+carbon:
+  lines:
+    - label: frame
+      mass: {magnitude: 12.0, unit: kg}
+      factor: {material: AA-6061-T6, value: 8.4, scope: A1-A3 (cradle to gate),
+               source: "openEPD ec3synthetic: Example 6061 extrusion, TRACI 2.1 GWP A1A2A3",
+               band_low: 0.9, band_high: 1.1, dataset_id: ec3synthetic}
+  budget: {magnitude: 150, unit: kg}
+```
+
+`anvilate check` then reports one `embodied carbon` entry, judged against `budget`. Without
+a budget it states the estimate and is not evaluated, and the needs report names
+`carbon.budget`. The exported evidence bundle carries the same estimate.
+
 ## What is deliberately not here
 
 - **No bundled factor data.** See above; it is a licensing constraint and a correctness
   one.
-- **No carbon declaration in the Design Spec.** A binding is made in code, with
-  `with_declared_factors`, and recorded in the evidence bundle. A document cannot yet say
-  "this part's aluminum is the supplier's EPD" by itself.
+- **No reading of EPD files from a Design Spec.** A document declares carbon inline (below):
+  each line's factor is the whole record, so one read from an EPD and written in keeps the
+  declaration's identity, but the CLI does not open EPD files a spec names.
 - **No product passport export.** The EU Digital Product Passport registry is live, but
   no product-specific delegated act is in force. Building an export against a
   specification that does not exist yet would be inventing it.

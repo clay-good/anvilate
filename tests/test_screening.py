@@ -27,6 +27,7 @@ from anvilate.spec import (
     StandardComponentInterface,
     ToleranceDimension,
     ValidationTier,
+    load_spec_yaml,
 )
 from anvilate.tolerance import SymmetricTolerance
 from anvilate.units import Quantity, UnitSystem
@@ -1681,6 +1682,7 @@ _ANSWERED_BY_A_CHECK = {
     "constraint_topology": "constraint topology, and the qualifier on every element check",
     "keepouts": "one keepout entry each, not evaluated until intrusion is measured on geometry",
     "assembly": "the build order, each adjustment's reach in its state, and inspectability",
+    "carbon": "one embodied carbon entry, judged against the declared budget",
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
     "anvilate_spec": "the schema version the document was written against",
@@ -2359,6 +2361,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "constraint_topology",
         "keepouts",
         "assembly",
+        "carbon",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
     assert not missing, (
@@ -2654,3 +2657,68 @@ def test_every_check_that_reaches_a_verdict_says_where_its_answer_came_from():
         "these reach a verdict and neither show their work nor say why there is none, which "
         f"is the silence `Underived` was written to replace: {sorted(silent)}"
     )
+
+
+_CARBON = """
+carbon:
+  lines:
+    - label: plate
+      mass: {magnitude: 12.0, unit: kg}
+      factor:
+        material: ASTM-A36
+        value: 1.9
+        scope: A1-A3 (cradle to gate)
+        source: "openEPD ec3synthetic: example plate, TRACI 2.1 GWP A1A2A3"
+        band_low: 0.9
+        band_high: 1.1
+        dataset_id: ec3synthetic
+"""
+
+
+def test_a_declared_carbon_block_is_judged_against_its_budget_and_names_its_epd():
+    """Design Spec 1.18.0. The factor is written into the document whole, so the card names the
+    declaration it came from, and a missing budget is a gap the needs report names by the
+    document's own path."""
+    from pathlib import Path
+
+    from anvilate.needs import needs_report
+    from anvilate.screening import carbon_estimate_for
+
+    base = (Path(__file__).parents[1] / "examples" / "base_plate.spec.yaml").read_text()
+    unbudgeted = load_spec_yaml(base + _CARBON)
+    card = screen_spec(unbudgeted)
+    entry = {e.name: e for e in card.entries}["embodied carbon"]
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "22.8 kgCO2e" in entry.detail
+    assert "carbon.budget" in [item.need.declaration for item in needs_report(card).items]
+    estimate = carbon_estimate_for(unbudgeted)
+    assert estimate.dominant.factor.dataset_id == "ec3synthetic"
+
+    for budget, status in (("30", CheckStatus.PASS), ("20", CheckStatus.FAIL)):
+        judged = screen_spec(
+            load_spec_yaml(base + _CARBON + f"  budget: {{magnitude: {budget}, unit: kg}}\n")
+        )
+        assert {e.name: e for e in judged.entries}["embodied carbon"].status is status
+
+    assert carbon_estimate_for(load_spec_yaml(base)) is None
+    assert "embodied carbon" not in {e.name for e in screen_spec(load_spec_yaml(base)).entries}
+
+
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        (("mass: {magnitude: 12.0, unit: kg}", "mass: {magnitude: 12.0, unit: mm}"), "mass"),
+        (("mass: {magnitude: 12.0, unit: kg}", "mass: {magnitude: 0, unit: kg}"), "positive"),
+        (('source: "openEPD', 'source: "   "\n        #'), "source"),
+    ],
+)
+def test_a_carbon_block_that_says_nothing_true_is_refused(change, match):
+    from pathlib import Path
+
+    from anvilate.spec import SpecValidationError
+
+    base = (Path(__file__).parents[1] / "examples" / "base_plate.spec.yaml").read_text()
+    before, after = change
+    assert before in _CARBON
+    with pytest.raises(SpecValidationError, match=match):
+        load_spec_yaml(base + _CARBON.replace(before, after, 1))

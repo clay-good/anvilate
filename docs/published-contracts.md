@@ -114,6 +114,16 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.18.0: embodied carbon, declared in the document
+
+A spec gains an optional `carbon` block: `lines`, each a `label`, a `mass` and a `factor`
+(a whole `CarbonFactor`, source and band included), and an optional `budget` mass. A factor
+read from a product's EPD and written into the document keeps the declaration's identity,
+which is how a document binds a declaration to a material. `screen_spec` adds one
+`embodied carbon` entry, judged against the budget, or not evaluated naming `carbon.budget`
+when there is none. Evidence Bundle 1.23.0 carries the same estimate under `carbon`, and
+CLI output 1.51.0 carries that bundle.
+
 ### Evidence Bundle 1.22.0: an embodied-carbon estimate, and which EPD each factor is
 
 The bundle document gains an optional `carbon` key: the part's screening-grade estimate,

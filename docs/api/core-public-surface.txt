@@ -388,6 +388,7 @@ scorecard.Scorecard
 screening.DEPTH_ORDER
 screening.Structure
 screening.StructureMember
+screening.carbon_estimate_for
 screening.element_registry
 screening.screen_spec
 screening.screen_structure_element
