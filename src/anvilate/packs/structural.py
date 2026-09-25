@@ -857,7 +857,8 @@ def screen_column_member(
     takes the AISC 360 §E3 flexural buckling stress from it: F_cr = 0.658^(F_y/F_e)·F_y
     while F_y/F_e ≤ 2.25, and 0.877·F_e above it. The critical stress is screened against
     the applied axial stress (load/area) at ``required_safety_factor``. ``materials``
-    defaults to the bundled database.
+    defaults to the bundled database. A net tension (a negative ``axial_load``) does not
+    buckle, and the screen says so rather than buckling its magnitude.
 
     This screen used to compute Euler above a transition slenderness and the J. B.
     Johnson parabola below it, while citing §E either way. Those are different curves:
@@ -866,6 +867,14 @@ def screen_column_member(
     names, and its elastic branch carries the 0.877 out-of-straightness knockdown the
     bare Euler stress does not.
     """
+    if member.axial_load.magnitude < 0:
+        return _refused(
+            (f"{member.name} buckling",),
+            f"not evaluated — the axial_load is a net tension ({member.axial_load}), which "
+            "does not buckle; screen the member in tension with `screen_tension_member`",
+            _CLAUSE_COMPRESSION,
+            needs=(),
+        )
     materials = materials or default_materials_db()
     record = materials.get(member.material)
     modulus = record.elastic_modulus.quantity
@@ -1233,8 +1242,12 @@ def screen_bolted_connection(
                 unavailable=(
                     "the connection's load is zero, so there is no demand to screen; declare the "
                     "`load` the joint transfers"
+                    if connection.load.magnitude == 0
+                    else f"the connection's load is negative ({connection.load}), so the bolt "
+                    "bears toward the opposite edge from the one edge_distance measures; "
+                    "declare the load as a magnitude and the edge_distance it tears toward"
                 ),
-                needs=(_NEEDS_A_LOAD,),
+                needs=(_NEEDS_A_LOAD,) if connection.load.magnitude == 0 else (),
             ).model_copy(update={"reference": _CLAUSE_BEARING, "derivation": tearout_derivation})
         )
     if connection.tension is not None:
@@ -1526,7 +1539,23 @@ def screen_base_plate(
     plate's bending stress σ = 3·f_p·l²/t² is also screened against the plate yield
     (AISC Design Guide 1). Both at ``required_safety_factor``; ``materials`` defaults
     to the bundled database.
+
+    A negative ``axial_load`` is a net uplift. It lifts the plate off the concrete, so
+    bearing does not act, and the plate then bends about its anchor rods (AISC Design
+    Guide 1), which this screen does not compute. Both checks say so.
     """
+    if plate.axial_load.magnitude < 0:
+        names = (f"{plate.name} concrete bearing",)
+        if plate.plate_thickness is not None:
+            names += (f"{plate.name} plate bending",)
+        return _refused(
+            names,
+            f"not evaluated — the axial_load is a net uplift ({plate.axial_load}), which "
+            "lifts the plate off the concrete, so bearing does not act; the plate then bends "
+            "about its anchor rods, which this screen does not compute",
+            _CLAUSE_BEARING_CONCRETE,
+            needs=(),
+        )
     area = plate.width.to("mm").magnitude * plate.depth.to("mm").magnitude
     bearing_mpa = plate.axial_load.to("N").magnitude / area
     bearing = Quantity(magnitude=bearing_mpa, unit="MPa")
@@ -1974,8 +2003,11 @@ def screen_gusset_plate(
         unavailable=(
             "the gusset's load is zero, so there is no tear-out demand to screen; declare the "
             "`load` it transfers"
+            if gusset.load.magnitude == 0
+            else f"the gusset's load is a compression ({gusset.load}), which does not tear a "
+            "block out; a gusset in compression buckles, which this screen does not compute"
         ),
-        needs=(_NEEDS_A_LOAD,),
+        needs=(_NEEDS_A_LOAD,) if gusset.load.magnitude == 0 else (),
     ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # Block shear adds two areas, so neither is "the" lever on its own — the hint
@@ -2056,8 +2088,18 @@ def screen_tension_member(
     Gross-section yielding screens P/A_g against the material yield Fy (§D2(a));
     net-section rupture screens P/A_e against the ultimate Fu (§D2(b)) with the
     effective net area A_e = U·A_n. The lesser safety factor governs the member.
-    ``materials`` defaults to the bundled database.
+    ``materials`` defaults to the bundled database. A net compression (a negative
+    ``load``) is not screened here, because a member in compression buckles first.
     """
+    if member.load.magnitude < 0:
+        return _refused(
+            (f"{member.name} gross yielding", f"{member.name} net rupture"),
+            f"not evaluated — the load is a net compression ({member.load}), which these "
+            "tension limit states do not govern; screen the member for buckling with "
+            "`screen_column_member`",
+            _CLAUSE_TENSION,
+            needs=(),
+        )
     materials = materials or default_materials_db()
     record = materials.get(member.material)
     yield_allowable = design_allowable(
@@ -2506,8 +2548,11 @@ def screen_concrete_bearing(
         unavailable=(
             "the bearing load is zero, so there is no pressure to screen; declare the `load` the "
             "plate delivers"
+            if bearing.load.magnitude == 0
+            else f"the bearing load is negative ({bearing.load}), a pull on the concrete rather "
+            "than a push, so bearing does not act; anchorage in tension is not computed here"
         ),
-        needs=(_NEEDS_A_LOAD,),
+        needs=(_NEEDS_A_LOAD,) if bearing.load.magnitude == 0 else (),
     ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI, "derivation": derivation})
     if entry.status is CheckStatus.FAIL and bearing_hint is not None:
         entry = entry.model_copy(update={"repair_hint": bearing_hint})
@@ -2591,7 +2636,9 @@ def screen_shear_plate(
     fu = shear_ultimate.quantity.to("MPa").magnitude
     gross = plate.gross_shear_area.to("mm**2").magnitude
     net = plate.net_shear_area.to("mm**2").magnitude
-    load_n = plate.load.to("N").magnitude
+    # Shear yielding and rupture of a plate do not depend on which way the shear acts, so a
+    # negative load is screened by its magnitude. It used to be read as no load at all.
+    load_n = abs(plate.load.to("N").magnitude)
 
     yield_capacity = _SHEAR_STRENGTH_FRACTION * fy * gross
     rupture_capacity = _SHEAR_STRENGTH_FRACTION * fu * net

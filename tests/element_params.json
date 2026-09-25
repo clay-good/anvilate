@@ -264,7 +264,7 @@
   "reactance": null,
   "resistivity": {
    "magnitude": 1.68e-08,
-   "unit": "m * Ω"
+   "unit": "m * \u03a9"
   }
  },
  "gusset_plate": {
@@ -645,7 +645,7 @@
    "unit": "mm ** 2"
   },
   "load": {
-   "magnitude": -50.0,
+   "magnitude": 50.0,
    "unit": "kN"
   },
   "material": "ASTM-A36",

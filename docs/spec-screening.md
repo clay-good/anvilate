@@ -247,6 +247,18 @@ from this table, which is the same silence one layer out. Every name the table q
 resolved against the model that would have to carry it, so a renamed field cannot go on being
 documented under its old spelling.
 
+**A reversed demand is answered as what it is.** An element field whose sign carries meaning,
+such as an axial load, may be negative, and a screen that only models one direction reports
+the other as not evaluated, saying what it is. A base plate under uplift is lifted off the
+concrete, so bearing does not act; a column in tension does not buckle; a tension member in
+compression buckles first; a footing under uplift, a pile in tension, a gusset in compression
+and a pull on a concrete bearing each name the mechanism the screen does not compute. The base
+plate used to pass concrete bearing under 200 kN of uplift, because the stress was screened by
+its magnitude, and six screens described a negative load as "zero".
+`tests/test_element_sign_sweep.py` negates every signed field of every registered element: the
+card must change, unless the field is one whose direction the checks do not see, such as a
+shear tab's load or a bending moment, and those are listed with their reasons.
+
 **Three of these are worth the story**, because each was a silent green that a green suite
 could not see.
 

@@ -213,8 +213,12 @@ def screen_shallow_footing(
         unavailable=(
             "the footing's applied_load is zero, so there is no bearing pressure to screen; "
             "declare the column load it carries as `applied_load`"
+            if footing.applied_load.magnitude == 0
+            else f"the footing's applied_load is a net uplift ({footing.applied_load}), which "
+            "lifts it off the soil, so bearing does not act; uplift is resisted by the "
+            "footing's weight and the soil above it, which this screen does not compute"
         ),
-        needs=(_NEEDS_AN_APPLIED_LOAD,),
+        needs=(_NEEDS_AN_APPLIED_LOAD,) if footing.applied_load.magnitude == 0 else (),
     )
     entry = entry.model_copy(update={"reference": _BEARING_REFERENCE, "derivation": derivation})
     # Monotonicity declaration, not an inverse: widening the footing drops the contact
@@ -603,8 +607,12 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
         unavailable=(
             "the pile's applied_load is zero, so there is no demand to screen; declare the axial "
             "load it carries as `applied_load`"
+            if pile.applied_load.magnitude == 0
+            else f"the pile's applied_load is a net tension ({pile.applied_load}); an uplift "
+            "pile resists by shaft friction alone, without the end bearing this capacity "
+            "includes, which this screen does not compute"
         ),
-        needs=(_NEEDS_AN_APPLIED_LOAD,),
+        needs=(_NEEDS_AN_APPLIED_LOAD,) if pile.applied_load.magnitude == 0 else (),
     ).model_copy(
         update={
             "reference": _PILE_REFERENCE,
