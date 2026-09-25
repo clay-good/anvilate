@@ -192,6 +192,27 @@ jobs:
             # Both passes, the instance read and the reference check, must say it.
             test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$pattern.txt")" -eq 2
           done
+      - name: Fetch NIST's AP242 PMI test models
+        run: |
+          # US government work, usable "without any restrictions"; verified, not committed.
+          curl -sSfL -A "Mozilla/5.0" -o nist.zip \
+            https://www.nist.gov/system/files/documents/noindex/2024/06/19/NIST-PMI-STEP-Files.zip
+          echo "8fa78429e6d8d9b0d7681d223b6aa9ec98c3772185c55b1a0e3679b21c181911  nist.zip" \
+            | sha256sum -c -
+          unzip -q nist.zip -d nist
+      - name: Every NIST model reads as it did
+        env:
+          ANVILATE_NIST_PMI_STEP: nist/NIST-PMI-STEP-Files
+        run: |
+          set -o pipefail
+          pytest -q -rs \
+            "tests/test_geometry.py::test_every_nist_ap242_pmi_model_reads_as_it_did" \
+            | tee nist.txt
+          grep -qE "^1 passed" nist.txt
+          if grep -q skipped nist.txt; then
+            echo "the NIST models were not read"
+            exit 1
+          fi
 
   # The sectionproperties adapter is tested twice: against a stub, which proves the mapping
   # decisions, and against the real package, which proves the mapping is of the real API. A

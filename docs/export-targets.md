@@ -85,6 +85,17 @@ against the schema's entity definitions: it does not check CAx-IF Recommended Pr
 conformance, which is what NIST's STEP File Analyzer adds and why that remains the named
 referee for semantic PMI.
 
+## NIST's test models, read
+
+The same job fetches NIST's AP242 PMI test models (the CTC, FTC and STC cases the CAx-IF
+uses), checked against a pinned SHA-256, and holds `anvilate interfaces` to what each reads
+as. Its first run found three defects in the reader, all fixed. A segfault inside build123d's
+assembly import took the process down, so files are now read by OCCT's plain reader. Six
+models were refused because supplemental geometry, such as a datum plane, sits outside the
+solid; such faces are now set aside and counted in a warning. And coincident hole records
+raised an internal error. Sixteen of the seventeen models now read; the one carrying only
+tessellated geometry has no solid and is refused as such.
+
 ## What the conformance gate will and will not guarantee
 
 When the AP242 semantic PMI writer lands, CI will run every exported file through an

@@ -30,9 +30,15 @@
       warnings. NIST's STEP File Analyzer, the referee first named here, is Windows-only;
       STEPcode runs on the Linux runners. Checked locally: the three patterns read clean
       (368, 136 and more instances), and an unknown entity or a short ADVANCED_FACE fails
-- [ ] 2.2 CAx-IF/NIST PMI test-model regression fixtures for the reader/writer — confirmed
-      freely downloadable (mbx-if.org hosts the FTC/STC/CTC models with AP242 STEP files and
-      recommends exactly this loop); blocked on the same exporter
+- [x] 2.2 CAx-IF/NIST PMI test-model regression fixtures for the reader/writer — the
+      scheduled `step-referee` job fetches NIST's PMI STEP files (sha256-pinned, unrestricted
+      US government work) and `test_every_nist_ap242_pmi_model_reads_as_it_did` pins what each
+      of the 17 AP242 models reads as. The first run found three reader defects, all fixed:
+      build123d's XCAF import segfaulted on CTC 02 (the reader is now OCCT's plain
+      STEPControl_Reader), six models were refused over supplemental geometry owned by no
+      solid (now set aside and counted in a warning), and STC 08's coincident hole records
+      became an internal error (a pitch circle inside the fit tolerance is no longer a
+      pattern). The tessellated-only FTC 08 variant is refused as having no valid solid
 - [x] 2.3 3MF writer via reference implementation with ISO citation in metadata —
       `export.threemf.render_mesh_3mf` writes the ISO/IEC 25422:2025 core (millimetres,
       deterministic bytes, the standard and writer in metadata beside the export watermark),

@@ -1076,7 +1076,9 @@ def test_step_interface_import_does_not_leak_kernel_diagnostics_to_stdout(tmp_pa
     path = tmp_path / "broken.step"
     path.write_text("ISO-10303-21;\nBROKEN;\nEND-ISO-10303-21;\n", encoding="utf-8")
 
-    with pytest.raises(GeometryError, match="needs valid positive-volume solids"):
+    # Refused by the reader itself since it became OCCT's plain STEPControl_Reader, which is
+    # earlier and more exact than the empty shape the assembly importer used to return.
+    with pytest.raises(GeometryError, match="the reader rejected it"):
         detect_step_interfaces(path)
 
     assert capsys.readouterr().out == ""
@@ -1131,3 +1133,67 @@ def test_annular_cover_plate_step_round_trip_preserves_the_bore(tmp_path):
     assert restored.is_valid
     assert len(restored.solids()) == 1
     assert restored.volume == pytest.approx(built.volume_mm3, rel=1e-8)
+
+
+def test_a_loose_plane_beside_the_part_is_set_aside_not_a_refusal(tmp_path):
+    """Supplemental geometry, such as a datum or section plane, travels in AP242 files as a
+    shell owned by no solid. Every planar face used to come from the whole shape, so one such
+    plane refused the file ("could not be assigned to exactly one imported solid"). That
+    happened to six of NIST's seventeen AP242 PMI test models."""
+    from build123d import Box, Compound, Face, Plane, export_step
+
+    path = tmp_path / "part-with-datum-plane.step"
+    export_step(Compound([Box(20, 20, 10), Face.make_rect(50, 50, Plane.XY.offset(30))]), path)
+    result = detect_step_interfaces(path)
+    assert len(result.planar_faces) == 6  # the box's, and not the loose plane
+    assert any("1 face(s) belong to no solid" in warning for warning in result.warnings)
+
+
+# What each of NIST's AP242 PMI test models reads as. The files are US government work, usable
+# "without any restrictions", and are fetched by the scheduled `step-referee` job rather than
+# committed (14 MB). Pinned from the first clean run on 2026-09-25: one segfaulted the reader,
+# one raised an internal error, and six were refused before the fixes this holds.
+_NIST_AP242 = {
+    "nist_ctc_01_asme1_ap242-e1": (56, 0),
+    "nist_ctc_02_asme1_ap242-e2": (105, 2),
+    "nist_ctc_03_asme1_ap242-e2": (62, 0),
+    "nist_ctc_04_asme1_ap242-e1": (88, 1),
+    "nist_ctc_05_asme1_ap242-e1": (62, 0),
+    "nist_ftc_06_asme1_ap242-e2": (71, 0),
+    "nist_ftc_07_asme1_ap242-e2": (73, 2),
+    "nist_ftc_08_asme1_ap242-e2": (81, 0),
+    "nist_ftc_09_asme1_ap242-e1": (62, 5),
+    "nist_ftc_10_asme1_ap242-e2": (53, 18),
+    "nist_ftc_11_asme1_ap242-e2": (26, 0),
+    "nist_stc_06_asme1_ap242-e3": (71, 0),
+    "nist_stc_07_asme1_ap242-e3": (73, 2),
+    "nist_stc_08_asme1_ap242-e3": (81, 1),
+    "nist_stc_09_asme1_ap242-e3": (62, 0),
+    "nist_stc_10_asme1_ap242-e2": (77, 0),
+}
+
+
+def test_every_nist_ap242_pmi_model_reads_as_it_did():
+    """target-ap242-e4-exports 2.2: the CAx-IF/NIST test models as reader regression fixtures.
+
+    Each model's planar-face count and loose-face count are pinned, and the one file carrying
+    only tessellated geometry is refused as having no valid solid. Skipped unless
+    ``ANVILATE_NIST_PMI_STEP`` names the unpacked download; the scheduled job sets it.
+    """
+    import os
+    from pathlib import Path
+
+    root = os.environ.get("ANVILATE_NIST_PMI_STEP")
+    if not root:
+        pytest.skip("ANVILATE_NIST_PMI_STEP is not set; the scheduled step-referee job sets it")
+    folder = Path(root)
+    found = sorted(path.stem for path in folder.glob("*_ap242-*.stp"))
+    assert set(found) == set(_NIST_AP242) | {"nist_ftc_08_asme1_ap242-e1-tg"}, found
+    for stem, (planar, loose) in _NIST_AP242.items():
+        result = detect_step_interfaces(folder / f"{stem}.stp")
+        warned = [w for w in result.warnings if "belong to no solid" in w]
+        assert (len(result.planar_faces), len(warned)) == (planar, 1 if loose else 0), stem
+        if loose:
+            assert warned[0].startswith(f"{loose} face(s)"), (stem, warned)
+    with pytest.raises(GeometryError, match="valid positive-volume solids"):
+        detect_step_interfaces(folder / "nist_ftc_08_asme1_ap242-e1-tg.stp")

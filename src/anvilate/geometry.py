@@ -823,6 +823,41 @@ def _interference_scorecard(
     return Scorecard(entries=entries)
 
 
+def _read_step_geometry(path: Path) -> Any:
+    """The geometry a STEP file carries, read without its assembly and product structure.
+
+    build123d's ``import_step`` walks the file's XCAF document to name each part, and on
+    NIST's CTC 02 AP242 test model (a valid file the CAx-IF uses) reading a label name
+    segfaulted the process: exit 139, no exception to catch, and whatever called the reader
+    (the CLI, or an MCP server serving other requests) gone with it. Nothing here uses those
+    names, so the file is read by OCCT's plain ``STEPControl_Reader``, which transfers the
+    geometry and never touches the label tree. It also leaves each face with one placement,
+    which is what assigning a face to the solid that owns it needs.
+    """
+    from build123d import Compound
+    from OCP.BRep import BRep_Builder  # type: ignore[import-untyped]
+    from OCP.IFSelect import IFSelect_RetDone  # type: ignore[import-untyped]
+    from OCP.STEPControl import STEPControl_Reader  # type: ignore[import-untyped]
+    from OCP.TopAbs import TopAbs_COMPOUND  # type: ignore[import-untyped]
+    from OCP.TopoDS import TopoDS_Compound  # type: ignore[import-untyped]
+
+    reader = STEPControl_Reader()
+    if reader.ReadFile(str(path)) != IFSelect_RetDone:
+        raise GeometryError(f"could not import STEP file {path}: the reader rejected it")
+    if reader.TransferRoots() < 1:
+        raise GeometryError(f"could not import STEP file {path}: it transfers no shape")
+    shape = reader.OneShape()
+    if shape.ShapeType() == TopAbs_COMPOUND:
+        return Compound(shape)
+    # A file holding one solid transfers as a bare TopoDS_Solid, and build123d's Compound
+    # over one reports a volume of 0. It has to be a real compound around it.
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, shape)
+    return Compound(compound)
+
+
 def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     """Detect planar faces and regular equal-diameter through-hole patterns in STEP.
 
@@ -832,7 +867,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     are ignored.
     """
     try:
-        from build123d import Location, import_step
+        from build123d import Location
         from OCP.Message import Message  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
@@ -854,10 +889,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             for printer in printers:
                 messenger.RemovePrinter(printer)
             try:
-                shape = import_step(path)
+                shape = _read_step_geometry(path)
             finally:
                 for printer in printers:
                     messenger.AddPrinter(printer)
+    except GeometryError:
+        raise  # already says which file and why
     except Exception as failure:
         raise GeometryError(f"could not import STEP file {path}: {failure}") from failure
     solids = list(shape.solids())
@@ -940,7 +977,14 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         tuple(solid_interferences), pair_count=pair_count
     )
 
-    planar = [face for face in shape.faces() if face.geom_type.name == "PLANE"]
+    # Faces of the solids only. An AP242 file with PMI may carry supplemental geometry, such
+    # as a datum or section plane, as a loose shell beside the part. Six of NIST's seventeen
+    # AP242 test models do, and every planar face used to be taken from the whole shape, so
+    # one such plane, owned by no solid, refused the entire file. It is not a surface of the
+    # part, so it is set aside and the result says how many were.
+    part_faces = [face for solid in solids for face in solid.faces()]
+    loose_faces = len(shape.faces()) - len(part_faces)
+    planar = [face for face in part_faces if face.geom_type.name == "PLANE"]
     planes = [
         _DetectedPlane(
             face=face,
@@ -954,7 +998,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     ]
 
     cylindrical_surfaces: list[_CylindricalSurface] = []
-    for cylinder in (face for face in shape.faces() if face.geom_type.name == "CYLINDER"):
+    for cylinder in (face for face in part_faces if face.geom_type.name == "CYLINDER"):
         axis = cylinder.axis_of_rotation
         radius = cylinder.radius
         if axis is None or radius is None:  # pragma: no cover - a cylindrical face has both
@@ -1092,8 +1136,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             ]
             pitch_radius = sum(pitch_radii) / len(pitch_radii)
             fit_tolerance = max(0.01, pitch_radius * 1e-4)
+            # A pitch circle inside the fit tolerance is holes stacked on one centre, not a
+            # pattern. `<= 0` let NIST's STC 08 through with a radius of about 1e-12 mm, which
+            # rounded to a pitch diameter of 0.0 and failed the candidate's `> 0` rule as an
+            # internal error (exit 5) instead of being passed over.
             if (
-                pitch_radius <= 0
+                pitch_radius <= fit_tolerance
                 or max(abs(value - pitch_radius) for value in pitch_radii) > fit_tolerance
             ):
                 continue
@@ -1304,6 +1352,11 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         "interface contract",
         "this detector does not yet classify nested blind steps or nonconcentric locators",
     ]
+    if loose_faces > 0:
+        warnings.append(
+            f"{loose_faces} face(s) belong to no solid (supplemental geometry, such as a datum "
+            "or section plane) and were not considered as interfaces"
+        )
     if len(solids) > 1:
         warnings.append(
             "planar contacts report exact coplanar overlap only; they do not prove intended mating"
@@ -2435,13 +2488,13 @@ def read_step_validation_properties(path: Path) -> StepValidationProperties:
 def verify_step_integrity(path: Path) -> StepValidationProperties:
     """Verify imported geometry against CAx-IF v4.6 industry example thresholds."""
     try:
-        from build123d import CenterOf, import_step
+        from build123d import CenterOf
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
             "STEP validation needs the optional dependency; install anvilate[geometry]"
         ) from failure
     expected = read_step_validation_properties(path)
-    received = import_step(path)
+    received = _read_step_geometry(path)
     if not received.is_valid or len(received.solids()) != 1:
         raise GeometryError("received STEP geometry is not one valid solid")
     volume_deviation = abs(float(received.volume) - expected.volume_mm3) / expected.volume_mm3
