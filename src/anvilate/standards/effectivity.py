@@ -41,7 +41,18 @@ from pydantic import ConfigDict, Field, model_validator
 
 from .._models import EMPTY_MAP, FrozenMap, Provenance, RevalidatedModel, each_one
 from ..derivation import DerivationAbsence, Underived
-from ..scorecard import CheckStatus, ScorecardEntry
+from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+
+_NEEDS_REFERENCES = Need(
+    declaration="references",
+    takes="the citations the design rests on, each naming its standard and edition",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_EDITIONS = Need(
+    declaration="references[].edition",
+    takes="the edition of each cited standard, as its year or revision (ASCE 7-22, not ASCE 7)",
+    sources=(ValueSource.STANDARD,),
+)
 
 __all__ = [
     "STANDARDS_BODIES",
@@ -415,6 +426,7 @@ def design_basis_scorecard(
                 "check against the design basis. An empty citation list is a bundle "
                 "whose citations were not collected, not one that agrees"
             ),
+            needs=(_NEEDS_REFERENCES,),
             reference="standards effectivity",
             underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
         )
@@ -493,6 +505,7 @@ def design_basis_scorecard(
             ),
             reference="standards effectivity",
             underived=_A_CONSISTENCY_VERDICT_OVER_CITATIONS,
+            needs=(_NEEDS_EDITIONS,),
         )
     if unread_pins:
         known = sorted(cited_standards | set(WRITTEN_AGAINST))

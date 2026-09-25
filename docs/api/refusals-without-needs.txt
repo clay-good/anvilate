@@ -42,3 +42,13 @@ callouts.py:callout_scorecard | process note '{callout.category}' at {callout.wh
 analysis/fatigue.py:weld_fatigue_scorecard | name | an answer at one site: a stress range past the EN 1993-1-9 section 8 elastic limit means the detail yields, which the nominal-stress S-N method does not cover and no declaration changes; the other two sites state their needs
 analysis/fracture.py:fad_scorecard | name | an answer at one site: an assessment point with no primary load has no load line and no margin, which is a fact about the load rather than a missing value; the other site states its need
 analysis/cold_formed_steel.py:dsm_scorecard | {update} | a capability limit: a section outside the AISI S100 prequalified geometry is permitted with a more conservative factor this screen does not apply, and no declaration moves the section inside it
+budget.py:to_entry | name | a propagated gap: a budget waits on the checks it sums, whose own entries state what they need, so repeating it here would count one missing value twice
+dependency.py:run_chain | name | a propagated gap: the check takes a value an upstream check did not produce, and the upstream's own entry states what it needs
+export/qif.py:_verification_entries | verification coverage: {check} | a capability gap: no physical test in the plan's catalogue measures this check, which a declaration cannot add
+keepouts.py:_entry | name | a capability gap at one branch (an imported body whose file this build does not read) and a correction at the other (an anchor naming a face the build does not tag, listed in the refusal)
+keepouts.py:screen_keepouts | keepout intrusion | a summary: none of the declared keepouts was generated, and each one's own entry says why
+loads.py:combination_scorecard | name | an answer at one site: every classified case sums to zero demand under every combination, so there is nothing to screen; the other site states its need
+mcp.py:_cancelled_fea_result | T3 FEA | an outcome, not a gap: the task was cancelled, and running it again is the remedy rather than declaring anything
+packs/structural.py:screen_beam_column | {member.name} interaction | a capability gap: a net tension with flexure takes AISC 360 section H1.2, which this screen does not compute
+scorecard.py:from_safety_factor | name | delegated at one site and a correction at three: a missing factor's reason is the caller's `unavailable=` text, which a conftest gate holds every caller to, and a NaN requirement, band or factor is an input to fix rather than a value nobody supplied
+standards/effectivity.py:design_basis_scorecard | name | a correction at one site: a pinned standard that no citation names is a pin to remove or a citation to add, and the refusal names which; the other two sites state their needs

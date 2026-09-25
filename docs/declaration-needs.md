@@ -190,18 +190,24 @@ by emptying it. A second assertion is a one-way ratchet on how many refusals sta
 needs.
 
 The same gate reads every other module that builds a refusal. Outside screening, the library
-has 78 more, and 44 state a need today: every analysis screen that stops for a value names it,
-with the dimension and units to write it in where it is a quantity. The optomechanics screens
-name the gap a shock is judged against or the pressure differentials a window sees (which an
+has 78 more, and 51 state a need today: every screen that stops for a value names it, with the
+dimension and units to write it in where it is a quantity. The optomechanics screens name the
+gap a shock is judged against or the pressure differentials a window sees (which an
 environment profile's ambient pressure bounds). The timber screens name the adjusted NDS
-design value, and the B31.3 screen the Table A-1 allowable. The screens that take a computed
-accounting (a DSM strength, a UG-37 area balance, a FAD point) name the function that makes
-it. The three assembly screens a document's `assembly` block reaches name the path it
-writes: `assembly.parts[].insertion`, `assembly.adjustments[].access` and
-`assembly.inspections[].access`. Fourteen more are excused by name. The other 20 are a
-backlog, held as a per-module ceiling in `tests/test_needs.py` that may only come down: a
-new refusal that states nothing fails the build in any module, and wiring one fails it until
-the ceiling is lowered to match. The sweep sees a refusal however it is spelled, whether as a status keyword,
+design value, the B31.3 screen the Table A-1 allowable, and a structural pack screen the
+material property its design allowable could not be read for. The screens that take a
+computed accounting (a DSM strength, a UG-37 area balance, a FAD point) name the function
+that makes it. The three assembly screens a document's `assembly` block reaches name the path
+it writes: `assembly.parts[].insertion`, `assembly.adjustments[].access` and
+`assembly.inspections[].access`.
+
+The other 27 are excused by name in the same file, each with its cause. Most are not gaps: a
+budget or a dependency chain waiting on a check whose own entry states the need, a correction
+of a value the caller did supply, an answer (zero demand, a wall the allowances consume), or a
+capability this library has not built. The backlog is empty, and a per-module ceiling in
+`tests/test_needs.py` keeps it that way: a new refusal that states nothing, in any module,
+fails the build until it states its need or is excused with a cause.
+The sweep sees a refusal however it is spelled, whether as a status keyword,
 a status chosen in a branch and held in a local, or an `update` dict on a copy. Every unit a
 declared need offers is also parsed and checked against the dimension it states.
 

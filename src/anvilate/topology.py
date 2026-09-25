@@ -40,7 +40,13 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
+
+_NEEDS_CONSTRAINTS = Need(
+    declaration="constraint_topology.constraints",
+    takes="each interface locating the body: the feature it acts at and the freedoms it removes",
+    sources=(ValueSource.USER,),
+)
 
 if TYPE_CHECKING:
     from .dependency import ChainRun
@@ -357,6 +363,7 @@ class ConstraintTally(StatableModel):
                     "geometry; declare each interface, the feature it acts at and the "
                     "freedoms it removes"
                 ),
+                needs=(_NEEDS_CONSTRAINTS,),
             )
         contributions = ", ".join(
             f"{constraint.name} {len(constraint.removes)}" for constraint in self.constraints

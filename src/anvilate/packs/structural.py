@@ -82,9 +82,11 @@ from ..derivation import Derivation, SymbolValue
 from ..scorecard import (
     CheckStatus,
     Direction,
+    Need,
     RepairHint,
     Scorecard,
     ScorecardEntry,
+    ValueSource,
 )
 from ..standards import (
     AllowableBasis,
@@ -102,7 +104,35 @@ from ._guarded import (
 )
 
 
-def _refused(names: tuple[str, ...], note: str, reference: str | None = None) -> Scorecard:
+def _material_need(field: str, prop: str) -> Need:
+    """What a screen refused for: the material record's property at the required basis."""
+    return Need(
+        declaration=f"{field}.{prop}",
+        takes=(
+            f"the {field.replace('_', ' ')} record's {prop.replace('_', ' ')} at the design "
+            "basis the screen requires, or a material whose record states it"
+        ),
+        dimension="[pressure]",
+        units=("MPa", "ksi"),
+        sources=(ValueSource.DATABASE, ValueSource.STANDARD, ValueSource.MEASUREMENT),
+    )
+
+
+_NEEDS_A_SHEAR_FORM_FACTOR = Need(
+    declaration="section.shear_form_factor",
+    takes="the section's peak-to-average shear stress ratio: 1.5 for a solid rectangle",
+    dimension="dimensionless",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+
+
+def _refused(
+    names: tuple[str, ...],
+    note: str,
+    reference: str | None = None,
+    *,
+    needs: tuple[Need, ...],
+) -> Scorecard:
     """A card of NOT_EVALUATED entries, one per check the screen would have produced.
 
     Used where a strength feeds a raw formula rather than `strength_scorecard`, so there is
@@ -117,6 +147,7 @@ def _refused(names: tuple[str, ...], note: str, reference: str | None = None) ->
                 status=CheckStatus.NOT_EVALUATED,
                 detail=note,
                 reference=reference,
+                needs=needs,
             )
             for name in names
         )
@@ -734,6 +765,7 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
             status=CheckStatus.NOT_EVALUATED,
             detail="not evaluated — the section records no shear form factor",
             reference=_CLAUSE_BEAM_SHEAR,
+            needs=(_NEEDS_A_SHEAR_FORM_FACTOR,),
         )
     if member.load_type is LoadType.POINT:
         peak_shear = Quantity(magnitude=factor * member.load.to("N").magnitude, unit="N")
@@ -841,7 +873,11 @@ def screen_column_member(
         record, "yield_strength", material_id=member.material, basis=required_basis
     )
     if column_allowable.quantity is None:
-        return _refused((f"{member.name} buckling",), column_allowable.note)
+        return _refused(
+            (f"{member.name} buckling",),
+            column_allowable.note,
+            needs=(_material_need("material", "yield_strength"),),
+        )
     yield_strength = column_allowable.quantity
 
     effective_length = Quantity(
@@ -1037,6 +1073,14 @@ def screen_bolted_connection(
                 f"{connection.name} edge tear-out",
             ),
             bolt_allowable.note or plate_allowable.note,
+            needs=tuple(
+                _material_need(field, "yield_strength")
+                for field, allowable in (
+                    ("bolt_material", bolt_allowable),
+                    ("plate_material", plate_allowable),
+                )
+                if allowable.quantity is None
+            ),
         )
 
     shear = bolt_shear_stress(
@@ -1506,6 +1550,7 @@ def screen_base_plate(
             return _refused(
                 (f"{plate.name} concrete bearing", f"{plate.name} plate bending"),
                 base_allowable.note,
+                needs=(_material_need("plate_material", "yield_strength"),),
             )
         plate_yield = base_allowable.quantity
         cantilever = plate.cantilever.to("mm").magnitude
@@ -1731,7 +1776,11 @@ def screen_lifting_lug(
         record, "yield_strength", material_id=lug.material, basis=required_basis
     )
     if lug_allowable.quantity is None:
-        return _refused((f"{lug.name} pin bearing", f"{lug.name} net tension"), lug_allowable.note)
+        return _refused(
+            (f"{lug.name} pin bearing", f"{lug.name} net tension"),
+            lug_allowable.note,
+            needs=(_material_need("material", "yield_strength"),),
+        )
     yield_strength = lug_allowable.quantity
 
     width = lug.width.to("mm").magnitude
@@ -1852,7 +1901,11 @@ def screen_gusset_plate(
         basis=required_basis,
     )
     if gusset_allowable.quantity is None:
-        return _refused((f"{gusset.name} block shear",), gusset_allowable.note)
+        return _refused(
+            (f"{gusset.name} block shear",),
+            gusset_allowable.note,
+            needs=(_material_need("material", "ultimate_strength"),),
+        )
     ultimate = gusset_allowable.quantity.to("MPa").magnitude
     shear_area = gusset.net_shear_area.to("mm**2").magnitude
     tension_area = gusset.net_tension_area.to("mm**2").magnitude
@@ -2142,6 +2195,7 @@ def screen_beam_column(
         return _refused(
             (f"{member.name} axial", f"{member.name} interaction"),
             beam_column_allowable.note,
+            needs=(_material_need("material", "yield_strength"),),
         )
     yield_strength = beam_column_allowable.quantity
 
@@ -2491,6 +2545,14 @@ def screen_shear_plate(
         return _refused(
             (f"{plate.name} shear yielding", f"{plate.name} shear rupture"),
             shear_yield.note or shear_ultimate.note,
+            needs=tuple(
+                _material_need("material", prop)
+                for prop, allowable in (
+                    ("yield_strength", shear_yield),
+                    ("ultimate_strength", shear_ultimate),
+                )
+                if allowable.quantity is None
+            ),
         )
     fy = shear_yield.quantity.to("MPa").magnitude
     fu = shear_ultimate.quantity.to("MPa").magnitude

@@ -700,3 +700,14 @@ def test_a_buckling_lever_only_appears_once_the_coil_can_buckle():
         )
     )["lateral buckling"]
     assert shorter.safety_factor > slender.safety_factor
+
+
+def test_a_shaft_check_with_nothing_to_run_on_names_the_fields_it_lacks():
+    # Only what is missing is asked for: a shaft with its modulus stated asks for its length
+    # and twist limit, and the fatigue check asks for its endurance limit alone.
+    card = screen_shaft(_shaft(length=None, allowable_twist=None, endurance_limit=None))
+    found = _named(card)
+    twist = [need.declaration for need in found["torsional twist"].needs]
+    fatigue = [need.declaration for need in found["rotating-shaft fatigue"].needs]
+    assert twist == ["element_params.length", "element_params.allowable_twist"]
+    assert fatigue == ["element_params.endurance_limit"]

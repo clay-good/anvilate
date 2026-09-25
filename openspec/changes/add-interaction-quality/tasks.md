@@ -26,11 +26,12 @@
       `ScorecardEntry.from_safety_factor` states its reason and the field to declare
       (`unavailable=`, 34 call sites, held by a gate in tests/conftest.py). Raised
       refusals carry their remedy in the message text (2.2), with no structured field yet. The
-      structured field is `ScorecardEntry.needs` (add-declaration-completeness): 53 of the
-      library's 111 not-evaluated entries carry it (nine in screening, and every analysis,
-      assembly and callout screen that stops for a value), and tests/test_needs.py now sweeps every module, not
-      only screening — the rest are excused by cause or held in a per-module backlog ceiling
-      that only comes down
+      structured field is `ScorecardEntry.needs` (add-declaration-completeness): 60 of the
+      library's 111 not-evaluated entries carry it (nine in screening, and every screen
+      elsewhere that stops for a value). tests/test_needs.py sweeps every module; the other
+      51 are excused by cause in docs/api/refusals-without-needs.txt, and the backlog is
+      empty. Still open: the 34 `from_safety_factor(unavailable=...)` callers state their
+      field in prose only
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed

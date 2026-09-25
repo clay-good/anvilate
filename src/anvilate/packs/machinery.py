@@ -59,9 +59,11 @@ from ..scorecard import (
     AppliedFactor,
     CheckStatus,
     Direction,
+    Need,
     RepairHint,
     Scorecard,
     ScorecardEntry,
+    ValueSource,
 )
 from ..units import Quantity
 from ._guarded import GuardedInputs
@@ -142,10 +144,56 @@ class TransmissionShaft(GuardedInputs):
     ultimate_strength: Quantity | None = None
 
 
-def _not_evaluated(name: str, detail: str, reference: str) -> ScorecardEntry:
+# What a shaft screen was waiting on, by the element field a document writes.
+_SHAFT_NEEDS = {
+    "length": Need(
+        declaration="element_params.length",
+        takes="the shaft length the torque twists over",
+        dimension="[length]",
+        units=("mm", "in"),
+        sources=(ValueSource.USER,),
+    ),
+    "shear_modulus": Need(
+        declaration="element_params.shear_modulus",
+        takes="the shaft material's shear modulus G",
+        dimension="[pressure]",
+        units=("GPa", "ksi"),
+        sources=(ValueSource.DATABASE, ValueSource.STANDARD),
+    ),
+    "allowable_twist": Need(
+        declaration="element_params.allowable_twist",
+        takes="the largest angle of twist the drive tolerates over the shaft's length",
+        dimension="dimensionless",  # pint carries an angle as dimensionless
+        units=("deg", "rad"),
+        sources=(ValueSource.USER, ValueSource.STANDARD),
+    ),
+    "endurance_limit": Need(
+        declaration="element_params.endurance_limit",
+        takes="the shaft material's corrected endurance limit S_e",
+        dimension="[pressure]",
+        units=("MPa", "ksi"),
+        sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT),
+    ),
+    "ultimate_strength": Need(
+        declaration="element_params.ultimate_strength",
+        takes="the shaft material's ultimate tensile strength S_ut",
+        dimension="[pressure]",
+        units=("MPa", "ksi"),
+        sources=(ValueSource.DATABASE, ValueSource.STANDARD),
+    ),
+}
+
+
+def _not_evaluated(
+    name: str, detail: str, reference: str, *, missing: tuple[str, ...]
+) -> ScorecardEntry:
     """One check the caller did not supply the inputs for, said out loud."""
     return ScorecardEntry(
-        name=name, status=CheckStatus.NOT_EVALUATED, detail=detail, reference=reference
+        name=name,
+        status=CheckStatus.NOT_EVALUATED,
+        detail=detail,
+        reference=reference,
+        needs=tuple(_SHAFT_NEEDS[field] for field in missing),
     )
 
 
@@ -235,6 +283,7 @@ def _twist_entry(shaft: TransmissionShaft, required_safety_factor: float) -> Sco
             f"not evaluated — θ = T·L/(G·J) needs {', '.join(missing)}, which this shaft "
             f"does not declare",
             _TWIST_REFERENCE,
+            missing=tuple(missing),
         )
     twist = shaft_twist_angle(
         torque=shaft.torque,
@@ -317,6 +366,7 @@ def _fatigue_entry(shaft: TransmissionShaft, required_safety_factor: float) -> S
             f"not evaluated — the DE-Goodman criterion needs {', '.join(missing)}, which "
             f"this shaft does not declare; a static verdict is not a fatigue verdict",
             _FATIGUE_REFERENCE,
+            missing=tuple(missing),
         )
     moment = shaft.bending_moment.to("N*mm").magnitude
     torque = shaft.torque.to("N*mm").magnitude
@@ -326,6 +376,7 @@ def _fatigue_entry(shaft: TransmissionShaft, required_safety_factor: float) -> S
             "not evaluated — the shaft carries neither a bending moment nor a torque, so "
             "the Goodman criterion has nothing to evaluate",
             _FATIGUE_REFERENCE,
+            missing=(),  # an answer about the load, not a value to declare
         )
     # The whole DE-Goodman bracket scales as 1/d³, so the design factor at the declared
     # diameter is exactly (d/d₁)³ against the diameter the criterion demands at n = 1. That

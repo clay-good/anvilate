@@ -27,7 +27,15 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 from ._models import Named, Provenance, RevalidatedModel, cited, each_one
 from .derivation import Derivation, SymbolValue
-from .scorecard import CheckStatus, ScorecardEntry
+from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+
+# What the combination screen waits on when a force enters no combination. The same need the
+# screening module states for a document, spelled as the document's path.
+_NEEDS_A_LOAD_NATURE = Need(
+    declaration="load_cases[].nature",
+    takes="what kind of load each force-carrying case is — dead, live, wind, seismic",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
 
 __all__ = [
     "LoadNature",
@@ -318,6 +326,7 @@ def combination_scorecard(
                 f"part of the declared loads is not this part's demand"
             ),
             reference=reference or combinations.basis,
+            needs=(_NEEDS_A_LOAD_NATURE,),
         )
     governing, demand = _governing_for_check(combinations, loads, minimize=minimize)
     magnitude = abs(demand)

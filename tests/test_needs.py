@@ -361,19 +361,7 @@ def test_every_refusal_states_its_need_or_says_why_it_cannot() -> None:
 # a ceiling that only comes down. A module absent here must state a need at every refusal or
 # excuse it by name in the exclusions file. Wiring one lowers the count and this test says to
 # lower the ceiling with it, so the number cannot drift back up unobserved.
-_UNWIRED_CEILING = {
-    "src/anvilate/budget.py": 1,
-    "src/anvilate/dependency.py": 1,
-    "src/anvilate/export/qif.py": 1,
-    "src/anvilate/keepouts.py": 2,
-    "src/anvilate/loads.py": 2,
-    "src/anvilate/mcp.py": 1,
-    "src/anvilate/packs/machinery.py": 1,
-    "src/anvilate/packs/structural.py": 3,
-    "src/anvilate/scorecard.py": 4,
-    "src/anvilate/standards/effectivity.py": 3,
-    "src/anvilate/topology.py": 1,
-}
+_UNWIRED_CEILING: dict[str, int] = {}
 
 
 @functools.cache
@@ -473,7 +461,14 @@ def test_every_need_a_module_declares_names_units_of_its_dimension() -> None:
     for need in with_units.values():
         for unit in need.units:
             parsed = Quantity(magnitude=1.0, unit=unit)
-            assert parsed.has_dimension(need.dimension), (
+            # pint carries an angle as dimensionless, and `has_dimension` cannot parse that
+            # word, so a dimensionless need is compared by the quantity's own dimensionality.
+            matches = (
+                parsed.dimensionality == "dimensionless"
+                if need.dimension == "dimensionless"
+                else parsed.has_dimension(need.dimension)
+            )
+            assert matches, (
                 f"the need for '{need.declaration}' is {need.dimension} and offers {unit!r}"
             )
 
@@ -532,23 +527,8 @@ def test_the_library_counts_on_the_page_are_the_sweeps_own() -> None:
     backlog = sum(_UNWIRED_CEILING.values())
     assert total == wired + excused + backlog, (total, wired, excused, backlog)
     assert f"the library has {total} more, and {wired} state a need today" in page
-    assert f"The other {backlog} are a backlog" in page
-    words = {
-        3: "Three",
-        4: "Four",
-        5: "Five",
-        6: "Six",
-        7: "Seven",
-        8: "Eight",
-        9: "Nine",
-        10: "Ten",
-        11: "Eleven",
-        12: "Twelve",
-        13: "Thirteen",
-        14: "Fourteen",
-        15: "Fifteen",
-    }
-    assert f"{words[excused]} more are excused by name" in page
+    assert backlog == 0 and "The backlog is empty" in page, backlog
+    assert f"The other {excused} are excused by name" in page
 
 
 def test_supplying_the_top_item_unblocks_the_checks_it_promised() -> None:
@@ -712,3 +692,19 @@ def test_an_analysis_screen_that_stops_names_the_argument_it_stopped_for() -> No
     for entry, declarations in cases:
         assert entry.status is CheckStatus.NOT_EVALUATED, entry
         assert [need.declaration for need in entry.needs] == declarations, entry.name
+
+
+def test_a_design_basis_check_names_the_citation_it_could_not_judge() -> None:
+    """The same property as the analysis screens, for a citation list: none at all asks for
+    references, and one naming no edition asks for the edition."""
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards.effectivity import DesignBasis, design_basis_scorecard
+
+    empty = design_basis_scorecard("basis", basis=DesignBasis(), references=[])
+    unversioned = design_basis_scorecard("basis", basis=DesignBasis(), references=["ASCE 7"])
+    for entry, declarations in (
+        (empty, ["references"]),
+        (unversioned, ["references[].edition"]),
+    ):
+        assert entry.status is CheckStatus.NOT_EVALUATED, entry.detail
+        assert [need.declaration for need in entry.needs] == declarations
