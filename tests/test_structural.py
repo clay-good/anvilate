@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from pydantic import ValidationError
 
@@ -2687,6 +2689,60 @@ def test_the_opt_in_screens_a_typical_strength_and_says_so_on_every_entry():
     for entry in card.entries:
         assert "typical strength for AA-6061-T6" in entry.detail
         assert "which the caller declared" in entry.detail
+
+
+def test_a_beam_s_shear_refuses_the_typical_strength_its_bending_refuses():
+    """The shear entry read the record's own yield, so on the nine materials carrying only a
+    typical value the bending entry refused and the shear entry on the same beam passed on
+    the number it refused. Both now read the one gated allowable, and say so."""
+    member = BeamMember(
+        name="rafter",
+        section=_section(),
+        length=_q("1 m"),
+        load=_q("1 kN"),
+        load_type=LoadType.POINT,
+        support=Support.SIMPLY_SUPPORTED,
+        material="AA-6061-T6",
+    )
+    card = screen_beam_member(member, required_safety_factor=2.0)
+    entries = {e.name: e for e in card.entries}
+    assert entries["rafter bending"].status is CheckStatus.NOT_EVALUATED
+    shear = entries["rafter shear"]
+    assert shear.status is CheckStatus.NOT_EVALUATED
+    assert "typical" in shear.detail and "AA-6061-T6" in shear.detail
+    opted = screen_beam_member(
+        member, required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
+    for entry in opted.entries:
+        if entry.name in ("rafter bending", "rafter shear"):
+            assert entry.status is not CheckStatus.NOT_EVALUATED
+            assert "typical strength for AA-6061-T6" in entry.detail
+
+
+_RAW_STRENGTH = re.compile(r"\.\w*_strength\.quantity\b")
+
+
+def _raw_strength_reads(source: str) -> list[str]:
+    return [
+        line.strip() for line in source.splitlines() if _RAW_STRENGTH.search(line.split("#", 1)[0])
+    ]
+
+
+def test_no_pack_reads_a_strength_past_the_design_allowable_gate():
+    """A pack turns a material record into an allowable in one place, `design_allowable`,
+    which refuses a typical value where a specification minimum is demanded. A read of
+    `record.yield_strength.quantity` goes around it, and one did, in the beam's shear
+    entry, added after the gate's own sweep."""
+    from pathlib import Path
+
+    packs = Path(__file__).resolve().parents[1] / "src" / "anvilate" / "packs"
+    sources = sorted(p for p in packs.glob("*.py") if p.name != "_guarded.py")
+    assert len(sources) >= 10, f"only {len(sources)} pack modules were read"
+    found = {p.name: reads for p in sources if (reads := _raw_strength_reads(p.read_text()))}
+    assert found == {}, found
+    # The adversary: the line this gate was written for is caught, and prose is not.
+    assert _raw_strength_reads('    y = record.yield_strength.quantity.to("MPa")')
+    assert not _raw_strength_reads("    # read record.yield_strength.quantity directly")
 
 
 @pytest.mark.parametrize(

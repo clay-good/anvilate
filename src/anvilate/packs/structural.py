@@ -718,7 +718,7 @@ def screen_beam_member(
                 min_frequency=member.min_frequency,
             )
         )
-    shear_entry = _shear_entry(member, record, required_safety_factor)
+    shear_entry = _shear_entry(member, yield_allowable, required_safety_factor)
     if shear_entry is not None:
         entries.append(shear_entry)
     return disclosed(
@@ -727,7 +727,9 @@ def screen_beam_member(
     )
 
 
-def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntry | None:
+def _shear_entry(
+    member, yield_allowable: DesignAllowable, required_safety_factor: float
+) -> ScorecardEntry | None:
     """The transverse-shear entry for a simple full-span member, or None.
 
     Only the tabled (support, load_type) cases at their default positions get
@@ -780,8 +782,19 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
         area=member.section.area,
         form_factor=member.section.shear_form_factor,
     )
+    # The same basis-gated yield the bending entry reads. This used to be the record's own
+    # value, so on the nine materials that carry only a typical yield the bending entry
+    # refused and the shear entry on the same member passed on the number it refused.
+    if yield_allowable.quantity is None:
+        return ScorecardEntry(
+            name=f"{member.name} shear",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=yield_allowable.note,
+            reference=_CLAUSE_BEAM_SHEAR,
+            needs=(_material_need("material", "yield_strength"),),
+        )
     shear_yield = Quantity(
-        magnitude=_SHEAR_YIELD_FRACTION * record.yield_strength.quantity.to("MPa").magnitude,
+        magnitude=_SHEAR_YIELD_FRACTION * yield_allowable.quantity.to("MPa").magnitude,
         unit="MPa",
     )
     derivation = Derivation(
