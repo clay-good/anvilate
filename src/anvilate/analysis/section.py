@@ -190,6 +190,11 @@ class CrossSection(RevalidatedModel):
             value = getattr(self, name)
             if value is not None:
                 require_finite(value, name=name)
+                # The builders refuse `<= 0`, and a section built by hand did not: a zero
+                # area or extreme fibre divided straight into a stress and ended a column
+                # screen with ZeroDivisionError. A section has no zero dimension.
+                if value.magnitude <= 0:
+                    raise ValueError(f"{name} must be greater than zero; got {value}")
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
             raise ValueError(f"shear_form_factor must be finite; got {self.shear_form_factor}")
         return self

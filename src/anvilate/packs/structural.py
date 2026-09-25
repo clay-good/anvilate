@@ -1473,6 +1473,7 @@ class BasePlate(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("axial_load",)
+    positive_fields = ("width", "depth", "plate_thickness")
 
     name: Named
     width: Quantity
@@ -1653,6 +1654,7 @@ class LiftingLug(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
+    positive_fields = ("thickness",)
 
     name: Named
     width: Quantity
@@ -2014,6 +2016,7 @@ class TensionMember(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
+    positive_fields = ("net_area",)
 
     name: Named
     gross_area: Quantity
@@ -2402,6 +2405,7 @@ class ConcreteBearing(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields: tuple[str, ...] = ("load",)
+    positive_fields = ("bearing_area",)
 
     name: Named
     bearing_area: Quantity

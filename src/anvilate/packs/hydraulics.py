@@ -237,6 +237,7 @@ class PipeRun(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = ("diameter",)
 
     flow_rate: Quantity
     diameter: Quantity

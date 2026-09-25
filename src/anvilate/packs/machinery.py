@@ -132,6 +132,7 @@ class TransmissionShaft(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = ("allowable_twist",)
 
     diameter: Quantity
     bending_moment: Quantity
@@ -212,6 +213,47 @@ _NEEDS_A_TORQUE = Need(
     units=("N*m", "lbf*ft"),
     sources=(ValueSource.USER, ValueSource.MEASUREMENT),
 )
+
+
+# A key and a spring with nothing driving them: zero torque, or zero operating force,
+# leaves no stress and no deflection to take a margin on. That is a check with nothing to
+# evaluate, not one that passed, and the entry says which declaration would give it one.
+_NO_KEY_TORQUE = (
+    "the key transmits no torque, so there is no stress to screen; declare the `torque` the "
+    "shaft drives through it"
+)
+_NEEDS_A_KEY_TORQUE = Need(
+    declaration="element_params.torque",
+    takes="the torque the shaft drives through the key",
+    dimension="[force] * [length]",
+    units=("N*m", "lbf*ft"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NO_SPRING_FORCE = (
+    "the operating force is zero, so the spring neither deflects nor carries stress and there "
+    "is nothing to screen; declare the `operating_force` it works at"
+)
+_SPRING_NEEDS = {
+    "operating_force": Need(
+        declaration="element_params.operating_force",
+        takes="the force the spring works at",
+        dimension="[force]",
+        units=("N", "lbf"),
+        sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+    ),
+    "free_length": Need(
+        declaration="element_params.free_length",
+        takes="the spring's unloaded length, longer than its solid length",
+        dimension="[length]",
+        units=("mm", "in"),
+        sources=(ValueSource.USER,),
+    ),
+    "total_coils": Need(
+        declaration="element_params.total_coils",
+        takes="the total number of coils, active and end, which sets the solid length",
+        sources=(ValueSource.USER,),
+    ),
+}
 
 
 def _static_entry(shaft: TransmissionShaft, required_safety_factor: float) -> ScorecardEntry:
@@ -507,6 +549,11 @@ class SpurGearMesh(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = (
+        "allowable_bending_stress",
+        "allowable_contact_stress",
+        "minimum_contact_ratio",
+    )
 
     pinion_teeth: int
     gear_teeth: int
@@ -962,7 +1009,11 @@ def _key_shear_entry(key: ShaftKey, required_safety_factor: float) -> ScorecardE
         citation=_KEY_SHEAR_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "key shear", computed=safety, required=required_safety_factor
+        "key shear",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=_NO_KEY_TORQUE,
+        needs=(_NEEDS_A_KEY_TORQUE,),
     ).model_copy(update={"reference": _KEY_SHEAR_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         entry = entry.model_copy(
@@ -1005,7 +1056,11 @@ def _key_bearing_entry(key: ShaftKey, required_safety_factor: float) -> Scorecar
         citation=_KEY_BEARING_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "key side bearing", computed=safety, required=required_safety_factor
+        "key side bearing",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=_NO_KEY_TORQUE,
+        needs=(_NEEDS_A_KEY_TORQUE,),
     ).model_copy(update={"reference": _KEY_BEARING_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         entry = entry.model_copy(
@@ -1053,6 +1108,7 @@ class RollingBearing(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+    positive_fields = ("required_static_factor",)
 
     dynamic_load_rating: Quantity
     static_load_rating: Quantity
@@ -1343,7 +1399,11 @@ def _spring_shear_entry(
         citation=_SPRING_SHEAR_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "coil shear stress", computed=safety, required=required_safety_factor
+        "coil shear stress",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=_NO_SPRING_FORCE,
+        needs=(_SPRING_NEEDS["operating_force"],),
     ).model_copy(update={"reference": _SPRING_SHEAR_REFERENCE, "derivation": derivation})
     if entry.status is CheckStatus.FAIL:
         # DIRECTIONAL, and the reason is the Wahl factor. τ goes as 1/d³ at a fixed coil
@@ -1404,8 +1464,22 @@ def _spring_clearance_entry(
         ),
         citation=_SPRING_CLEARANCE_REFERENCE,
     )
+    if used > 0:
+        unavailable = (
+            f"the free length ({coil.free_length}) does not exceed the solid length "
+            f"({solid.to('mm').magnitude:.3g} mm), so the coil cannot compress at all; that is "
+            f"a geometry which cannot exist, so check the `free_length`, `total_coils` and "
+            f"`wire_diameter` declared"
+        )
+        needs = tuple(_SPRING_NEEDS[field] for field in ("free_length", "total_coils"))
+    else:
+        unavailable, needs = _NO_SPRING_FORCE, (_SPRING_NEEDS["operating_force"],)
     entry = ScorecardEntry.from_safety_factor(
-        "solid-height clearance", computed=safety, required=required_safety_factor
+        "solid-height clearance",
+        computed=safety,
+        required=required_safety_factor,
+        unavailable=unavailable,
+        needs=needs,
     ).model_copy(
         update={
             "reference": _SPRING_CLEARANCE_REFERENCE,
@@ -1497,7 +1571,11 @@ def _spring_buckling_entry(coil: HelicalCompressionSpring) -> ScorecardEntry:
         citation=_SPRING_BUCKLING_REFERENCE,
     )
     entry = ScorecardEntry.from_safety_factor(
-        "lateral buckling", computed=safety, required=1.0
+        "lateral buckling",
+        computed=safety,
+        required=1.0,
+        unavailable=_NO_SPRING_FORCE,
+        needs=(_SPRING_NEEDS["operating_force"],),
     ).model_copy(
         update={
             "reference": _SPRING_BUCKLING_REFERENCE,

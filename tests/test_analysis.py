@@ -41939,7 +41939,11 @@ def test_the_pack_guard_reaches_into_a_nested_section():
         ("area", _q("-2500 mm**2")),
         ("second_moment", _q("-520833 mm**4")),
     ):
-        with pytest.raises(ValidationError, match=f"section.{field} must not be negative"):
+        # Refused by the section itself now, before the member's guard reaches it: a
+        # section has no zero or negative dimension, and a zero one divided into a stress.
+        with pytest.raises(
+            ValidationError, match=f"{field} must (not be negative|be greater than zero)"
+        ):
             build(good.model_copy(update={field: bad}))
 
     # The flat case still works — this is what the Quantity/BaseModel ordering breaks.

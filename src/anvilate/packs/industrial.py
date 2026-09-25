@@ -100,6 +100,7 @@ class CoverPlate(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    positive_fields = ("deflection_limit",)
 
     name: Named
     pressure: Quantity

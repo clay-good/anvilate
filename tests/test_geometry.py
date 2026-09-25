@@ -328,7 +328,9 @@ def test_step_writer_refuses_an_unknown_schema_without_writing(tmp_path):
     ),
 )
 def test_pattern_bounds_refuse_nonpositive_dimensions(field, value):
-    with pytest.raises(GeometryError, match=rf"{field} must be greater than zero"):
+    # The plate model refuses a zero dimension itself now, since a zero one reached a
+    # division in the screen, so the pattern's own bound is the second line of defence.
+    with pytest.raises(ValueError, match=rf"{field} must be greater than zero"):
         build_base_plate(_plate(**{field: Quantity.parse(value)}))
 
 

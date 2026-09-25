@@ -28,6 +28,7 @@ contract gate in ``tests/test_contract.py`` requires every pack model carrying a
 from __future__ import annotations
 
 from math import isfinite
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -84,6 +85,15 @@ class GuardedInputs(RevalidatedModel):
     #: way from a datum). Checked for finiteness, not for sign.
     signed_fields: tuple[str, ...] = ()
 
+    #: Fields that must be greater than zero, not merely not negative: a dimension or an
+    #: allowable the screen divides by. Zero passes the sign check, and a zero plate
+    #: thickness reached `force / (width · thickness)` and ended `anvilate check` with an
+    #: internal error. A sweep that zeroes every number in every registered element found
+    #: fifteen such fields in twelve elements. Thirteen are declared here, plain numbers as
+    #: well as quantities, and a cross-section refuses its own two. A class attribute
+    #: rather than a field, so it is not something a document can set.
+    positive_fields: ClassVar[tuple[str, ...]] = ()
+
     @model_validator(mode="after")
     def _quantity_magnitudes_are_sane(self) -> GuardedInputs:
         signed = set(type(self).model_fields["signed_fields"].default or ())
@@ -91,6 +101,16 @@ class GuardedInputs(RevalidatedModel):
             if name == "signed_fields":
                 continue
             value = getattr(self, name, None)
+            if (
+                name in type(self).positive_fields
+                and isinstance(value, int | float)
+                and not isinstance(value, bool)
+                and not value > 0
+            ):
+                raise ValueError(
+                    f"{name} must be greater than zero; got {value}. The screen divides by "
+                    f"it, so a zero or negative {name.replace('_', ' ')} has no answer to give"
+                )
             # Quantity is ITSELF a pydantic model, so the nested-model branch has to come
             # second or it swallows every quantity field and the guard checks nothing.
             if not isinstance(value, Quantity):
@@ -113,6 +133,11 @@ class GuardedInputs(RevalidatedModel):
                 raise ValueError(
                     f"{name} must not be negative; got {value}. If the sign is meant to "
                     f"carry information, declare the field in this model's signed_fields."
+                )
+            if name in type(self).positive_fields and value.magnitude == 0:
+                raise ValueError(
+                    f"{name} must be greater than zero; got {value}. The screen divides by "
+                    f"it, so a zero {name.replace('_', ' ')} has no answer to give"
                 )
         return self
 
