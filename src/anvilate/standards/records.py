@@ -79,7 +79,7 @@ class PropertyCitation(_Base):
     demands a minimum rather than passing as though somebody had.
 
     ``superseded`` says the value comes from an edition that a newer one replaced, and where
-    certification-grade work should source it instead. MIL-HDBK-5J is public and final; the
+    work a regulator will review should source it instead. MIL-HDBK-5J is public and final; the
     MMPDS that replaced it is not free. A value from the old edition is still a sound
     screening number, but a reader has to be told it is not the current one.
     """

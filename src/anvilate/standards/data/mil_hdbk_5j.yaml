@@ -26,7 +26,7 @@ dataset:
   source: "MIL-HDBK-5J (31 January 2003), Tables 3.2.3.0(b1) and 3.7.6.0(b1), L direction"
   license: "CC0-1.0 (values from MIL-HDBK-5J, a US Government work approved for public release, Distribution Statement A)"
   retrieved: "2026-09-25"
-  superseded: "MIL-HDBK-5J is superseded by MMPDS (Battelle); certification-grade work should take values from the current MMPDS edition"
+  superseded: "MIL-HDBK-5J is superseded by MMPDS (Battelle); values a regulator will review should come from the current MMPDS edition"
 
 materials:
   MIL5J-2024-T3-SHEET-A:

@@ -163,14 +163,14 @@ been superseded.
 ```text
 [PASS] padeye net tension: safety factor ... [MIL5J-2024-T351-PLATE-B yield strength is
   B-basis, MIL-HDBK-5J Table 3.2.3.0(b1) (T351 plate, 0.500-1.000 in., Fty L direction, room
-  temperature); MIL-HDBK-5J is superseded by MMPDS (Battelle); certification-grade work
-  should take values from the current MMPDS edition]
+  temperature); MIL-HDBK-5J is superseded by MMPDS (Battelle); values a regulator will
+  review should come from the current MMPDS edition]
 ```
 
 The provenance trail in an evidence bundle carries the same note beside each source. MMPDS,
 the handbook that replaced MIL-HDBK-5, is not free, so its values are not here. A value from
-the old edition is a sound screening number, but it is not a certification value, and the
-note is there so nobody has to remember that. The values are pinned against the handbook
+the old edition is a sound screening number, but it is not the value a regulator expects,
+and the note is there so nobody has to remember that. The values are pinned against the handbook
 columns in `tests/test_mil_hdbk_5j.py`, not against the data file, so a transcription typo
 fails the suite.
 

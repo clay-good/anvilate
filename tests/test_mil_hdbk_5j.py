@@ -134,8 +134,27 @@ def test_a_value_from_the_superseded_edition_says_so_in_the_verdict_and_the_prov
     card = screen_spec(spec)
     for entry in (e for e in card.entries if e.name.startswith("padeye ")):
         assert "superseded by MMPDS" in entry.detail
-        assert "certification-grade work" in entry.detail
+        assert "values a regulator will review" in entry.detail
     (material, *_rest) = provenance_for(spec)
     assert material.ref == "MIL5J-7075-T651-PLATE-B"
     assert "MIL-HDBK-5J Table 3.7.6.0(b1) (b basis) [superseded: " in "; ".join(material.sources)
     assert all("superseded by MMPDS" in source for source in material.sources)
+
+
+def test_the_superseded_note_uses_no_assurance_vocabulary():
+    """The note is printed on every entry, so it is held to the words a screen may not use.
+
+    Its first wording said "certification-grade work", which the session-end assurance gate
+    refused on every entry the pack produced.
+    """
+    from anvilate.review import PROHIBITED_ASSURANCE_LANGUAGE
+
+    notes = {
+        citation.superseded
+        for material_id in _pack()
+        for citation in default_materials_db().get(material_id).citations().values()
+    }
+    assert len(notes) == 1
+    (note,) = notes
+    assert note is not None
+    assert not [phrase for phrase in PROHIBITED_ASSURANCE_LANGUAGE if phrase in note.lower()]
