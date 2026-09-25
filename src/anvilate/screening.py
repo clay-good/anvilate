@@ -380,14 +380,20 @@ def _screen_element(
         # `ValueError` and `LookupError` only: a TypeError or an AttributeError out of a
         # screen is this library's bug, not the document's, and must not be reported as a
         # tri-state result.
+        # The refusal's own sentence. It was printed as `UnknownMaterialError: "unknown
+        # material 'ASTM-A63'; did you mean ASTM-A36?"`: a class name the reader did not ask
+        # for, and a KeyError's repr quotes around a sentence that has its own. A KeyError
+        # carries its message as its argument, and `str()` of one is that argument's repr.
+        reason = (
+            refused.args[0]
+            if isinstance(refused, KeyError) and refused.args and isinstance(refused.args[0], str)
+            else str(refused)
+        )
         return [
             ScorecardEntry(
                 name="T1 analytical",
                 status=CheckStatus.NOT_EVALUATED,
-                detail=(
-                    f"the {tag} screen refused the element it was given — "
-                    f"{type(refused).__name__}: {refused}"
-                ),
+                detail=f"the {tag} screen refused the element it was given: {reason}",
             )
         ]
     if not card.entries:  # pragma: no cover - every pack screen returns at least one check

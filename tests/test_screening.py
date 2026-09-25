@@ -2000,7 +2000,9 @@ def test_a_pack_screen_that_refuses_the_document_lands_on_the_card():
     card = screen_spec(spec)
     refused = next(e for e in card.entries if e.name == "T1 analytical")
     assert refused.status is CheckStatus.NOT_EVALUATED
-    assert "UnknownMaterialError" in refused.detail and "NOT-A-REAL-ALLOY" in refused.detail
+    # The refusal's own sentence, not the exception's class name and repr.
+    assert "unknown material 'NOT-A-REAL-ALLOY'" in refused.detail
+    assert "UnknownMaterialError" not in refused.detail
     resolution = next(e for e in card.entries if e.name == "material resolution")
     assert resolution.status is CheckStatus.FAIL
     assert "did you mean" in resolution.detail or "nothing among" in resolution.detail
@@ -2722,3 +2724,18 @@ def test_a_carbon_block_that_says_nothing_true_is_refused(change, match):
     assert before in _CARBON
     with pytest.raises(SpecValidationError, match=match):
         load_spec_yaml(base + _CARBON.replace(before, after, 1))
+
+
+def test_a_screen_s_refusal_reads_as_its_own_sentence_not_a_python_repr():
+    """An unknown alloy in `element_params` used to print as `UnknownMaterialError:
+    "unknown material 'ASTM-A63'; did you mean ASTM-A36, ASTM-A992?"`."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "examples" / "padeye.spec.yaml").read_text().replace("ASTM-A36", "ASTM-A63")
+    card = screen_spec(load_spec_yaml(text))
+    detail = next(e for e in card.entries if e.name == "T1 analytical").detail
+    assert detail == (
+        "the lifting_lug screen refused the element it was given: unknown material "
+        "'ASTM-A63'; did you mean ASTM-A36, ASTM-A992?"
+    )
