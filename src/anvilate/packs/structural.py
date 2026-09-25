@@ -2421,7 +2421,14 @@ def screen_beam_column(
                             description="available tensile strength, gross yielding F_y·A_g",
                             value=Quantity(magnitude=tensile_capacity, unit="N"),
                         ),
-                        *capacity_symbols[2:],
+                        capacity_symbols[2].model_copy(
+                            update={
+                                "description": (
+                                    "required flexural strength (magnitude; §H1.2 judges its size)"
+                                )
+                            }
+                        ),
+                        capacity_symbols[3],
                     ),
                     result=SymbolValue(
                         symbol="IR",
