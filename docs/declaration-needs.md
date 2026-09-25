@@ -175,7 +175,7 @@ as a change of nothing.
 
 ## The refusals that state nothing
 
-Nine of the screening module's thirty-three refusals state a need today. The rest are listed
+Ten of the screening module's thirty-three refusals state a need today. The rest are listed
 in [`docs/api/refusals-without-needs.txt`](api/refusals-without-needs.txt) with a cause per
 site, because not every refusal has a declaration behind it: some report a capability this
 library has not built (T0 geometry, T3 FEA, a published contract that needs built geometry),
@@ -219,7 +219,7 @@ declared need offers is also parsed and checked against the dimension it states.
 
 This is the consolidated report and its CLI rendering
 (`openspec/changes/add-declaration-completeness`, group 1),
-with the nine screening refusals that state a need today, and the library's others counted
+with the ten screening refusals that state a need today, and the library's others counted
 above. A profile's record, binding,
 applicability check and overrides ship too (group 2), and so does applying a binding to a
 document with every profile-sourced value marked through the spec, the card, the calculation

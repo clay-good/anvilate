@@ -121,6 +121,28 @@ _NEEDS_A_SAFETY_FACTOR = Need(
     dimension="dimensionless",
     sources=(ValueSource.STANDARD, ValueSource.USER),
 )
+
+
+def _element_param_needs(refused: ValidationError, model: type[BaseModel]) -> tuple[Need, ...]:
+    """The fields a refused element never received, for the consolidated needs report.
+
+    An element missing a required field stopped the whole tier, and its entry named no need,
+    so `anvilate check`'s report of what to declare next was empty for it. Only a missing
+    field is a need: a quantity typed as a string or a value out of range is a correction of
+    something the document did say, which a need would misdescribe as a value nobody
+    supplied (docs/declaration-needs.md).
+    """
+    return tuple(
+        Need(
+            declaration="element_params." + ".".join(str(part) for part in error["loc"]),
+            takes=f"the {model.__name__}'s required `{error['loc'][-1]}`",
+            sources=(ValueSource.USER,),
+        )
+        for error in refused.errors()
+        if error.get("type") == "missing" and error.get("loc")
+    )
+
+
 _NEEDS_A_TOLERANCED_DIMENSION = Need(
     declaration="dimensions",
     takes="at least one explicitly toleranced dimension, with its nominal and band",
@@ -340,6 +362,7 @@ def _screen_element(
                     f"element_params do not build a {model.__name__} for element_type "
                     f"{tag!r} — {reasons}"
                 ),
+                needs=_element_param_needs(refused, model),
             )
         ]
     # Every pack screen takes the element and, for thirteen of the twenty-four, a required

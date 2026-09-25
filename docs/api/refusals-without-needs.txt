@@ -25,7 +25,7 @@ _envelope_entry | constraint envelope | a capability gap: fitting a part in an e
 _geometric_tolerance_entry | geometric tolerance | a capability gap: the remaining Y14.5 rules turn on the tagged feature's type and the zone is checked against built geometry
 _min_wall_entry | minimum wall | a correction at one site (a wall that is not a length) and an answer at the other (every declared wall clears the minimum); the third site states its need
 _reference_entries | interface resolution: {interface.tag} | a capability gap: the contract is imported from another document, and a screen of one document cannot fetch another
-_screen_element | T1 analytical | three correction sites: an element_type the registry does not carry, element_params its model refuses, and a pack screen's own refusal about the element it was given; the fourth site states its need
+_screen_element | T1 analytical | two correction sites: an element_type the registry does not carry, and a pack screen's own refusal about the element it was given; element_params its model refuses state their missing fields, and the fourth site states its need
 screen_spec | T0 geometry | a capability gap: T0 checks a built solid and no geometry is generated from a spec today
 screen_spec | T3 FEA | a capability gap: T3 is bounded by a convergence criterion rather than by the size of its input
 screen_structure_element | T1 analytical | a correction: a structure cannot be a member of a structure, and the fix is to list its members alongside the others

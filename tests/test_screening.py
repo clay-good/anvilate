@@ -2777,3 +2777,31 @@ def test_element_params_that_do_not_build_say_what_to_write(old, new, expected):
     fault: a near-miss field name, a quantity typed as a string, a misspelled unit."""
     detail = _padeye_with(old, new)
     assert expected in detail, detail
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "declarations"),
+    [
+        ("  hole_diameter:", "  hole_dia:", ["element_params.hole_diameter"]),
+        ("  load: {magnitude: 60.0, unit: kN}", "  load: 60 kN", []),
+        ("unit: mm}\n  hole", "unit: kg}\n  hole", []),
+    ],
+)
+def test_element_params_that_do_not_build_state_what_the_build_needs(old, new, declarations):
+    """interaction-quality 2.1: an element missing a required field stopped its tier with no
+    need named, so the consolidated report of what to declare next was empty for it. The
+    unknown `hole_dia` is not a need, since its fix is removal, and neither is a quantity
+    typed as a string or in the wrong unit: those are corrections of something the document
+    did say, and their remedies are in the entry's detail."""
+    from pathlib import Path
+
+    from anvilate.needs import needs_report
+
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "examples" / "padeye.spec.yaml").read_text()
+    assert old in text
+    card = screen_spec(load_spec_yaml(text.replace(old, new)))
+    t1 = next(e for e in card.entries if e.name == "T1 analytical")
+    assert [need.declaration for need in t1.needs] == declarations
+    reported = [item.need.declaration for item in needs_report(card).items]
+    assert set(declarations) <= set(reported)
