@@ -4746,3 +4746,27 @@ def test_an_estimate_comes_only_from_finished_work_and_says_so():
     assert _estimate([2.0, 4.0], 0) == ""
     assert _estimate([2.0, 4.0], 3) == " (about 9 s left, estimated from 2 finished specs)"
     assert _estimate([0.2], 2) == " (under 1 s left, estimated from 1 finished spec)"
+
+
+def test_a_progress_count_keeps_its_width_as_it_updates():
+    """presentation-craft 1.3: the count is padded to the total's width, so the activity
+    beside it stays in one column when the count gains a digit."""
+    import io
+
+    from anvilate.cli import _progress
+
+    class Terminal(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    err = Terminal()
+    for done in (1, 9, 10, 12):
+        _progress(err, "screening", done=done, total=12)
+    lines = err.getvalue().splitlines()
+    assert lines == [
+        "[ 1/12] screening",
+        "[ 9/12] screening",
+        "[10/12] screening",
+        "[12/12] screening",
+    ]
+    assert len({line.index("screening") for line in lines}) == 1

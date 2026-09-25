@@ -121,10 +121,17 @@ def _estimate(durations: list[float], remaining: int) -> str:
 
 
 def _progress(err, activity: str, *, done: int | None = None, total: int | None = None) -> None:
-    """One progress line on a terminal: the activity, with counts only when they are known."""
+    """One progress line on a terminal: the activity, with counts only when they are known.
+
+    The count is padded to the width of the total, so a value that updates keeps its width:
+    ``[ 9/12]`` then ``[10/12]``, and the activity beside it stays in its column line to line
+    rather than stepping right when the count gains a digit.
+    """
     if not _is_terminal(err):
         return
-    count = f"[{done}/{total}] " if done is not None and total is not None else ""
+    count = (
+        f"[{done:>{len(str(total))}}/{total}] " if done is not None and total is not None else ""
+    )
     print(f"{count}{activity}", file=err, flush=True)
 
 
