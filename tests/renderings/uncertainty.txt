@@ -1,0 +1,36 @@
+Annotated
+=========
+
+Standards relied upon:
+  - none declared
+
+Assumptions:
+  - none declared
+
+PASS  tension
+-------------
+  [derivation not rendered]
+  safety factor 2.40 vs required minimum 2.00
+  uncertainty: P(below 2.00) = 3.1% over 4096 samples by monte_carlo
+    Monte Carlo propagation of input distributions; first-order (Taylor) variance sensitivity. Screening only — not a certified reliability analysis.
+
+Margin summary
+--------------
+  PASS           tension: 2.40 vs 2.00 required
+  governing check: tension
+  not evaluated: 0, out of declared depth: 0
+  overall: PASS
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  no coverage report was supplied with this document
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.

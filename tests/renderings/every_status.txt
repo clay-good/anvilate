@@ -1,0 +1,67 @@
+Every status
+============
+Project: Rendering corpus
+Date: 2026-09-25
+Units: SI
+
+Standards relied upon:
+  - none declared
+
+Assumptions:
+  - none declared
+
+PASS  bearing
+-------------
+  [derivation not rendered]
+  safety factor 2.60 vs required minimum 2.00
+
+FAIL  net tension
+-----------------
+  [derivation not rendered]
+  safety factor 1.40 vs required minimum 2.00
+
+OVER MARGIN  weld shear
+-----------------------
+  [derivation not rendered]
+  safety factor 6.70 exceeds target band 2.00–4.00 by 2.70 — over-engineered
+
+NOT EVALUATED  gross yielding
+-----------------------------
+  [derivation not rendered]
+  not evaluated — the material record carries no yield strength
+
+WARNING  edge distance
+----------------------
+  [derivation not rendered]
+  edge distance 1.4 d is inside the 1.5 d the clause recommends
+
+OUT OF DEPTH  fatigue
+---------------------
+  [derivation not rendered]
+  cyclic loading needs a fatigue assessment this tier does not make
+
+Margin summary
+--------------
+  PASS           bearing: 2.60 vs 2.00 required
+  FAIL           net tension: 1.40 vs 2.00 required
+  OVER MARGIN    weld shear: 6.70 vs 2.00–4.00 required
+  NOT EVALUATED  gross yielding: — vs 2.00 required
+  WARNING        edge distance: no safety factor to compare
+  OUT OF DEPTH   fatigue: no safety factor to compare
+  governing check: net tension
+  not evaluated: 1, out of declared depth: 1
+  overall: FAIL
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  no coverage report was supplied with this document
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.

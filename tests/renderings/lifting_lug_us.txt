@@ -1,0 +1,81 @@
+Lifting padeye — screening calculations
+=======================================
+Project: Shop crane padeye, 50 kN
+Prepared by: Anvilate T1 screening
+Date: 2026-07-27
+Revision: A
+Units: US
+
+Standards relied upon:
+  - ASME BTH-1 — Design of Below-the-Hook Lifting Devices
+  - AISC 360-16 — Specification for Structural Steel Buildings
+  - Material: ASTM A36, yield 250 MPa (bundled standards data)
+
+Assumptions:
+  - Rigging safety factor of 2.0 on the lifted load (design category). [engineer stated]
+  - Static lift; no impact or side-load factor applied. [engineer stated]
+  - Pin fits the hole; bearing taken over the full projected area d·t. [engineer stated]
+
+PASS  padeye net tension
+------------------------
+    σ_t = P / ((W − d) · t)
+    σ_t = 11.24 kip / ((3.150 in − 0.984 in) · 0.472 in)
+    σ_t = 11.0 ksi
+  where:
+    P = 11.24 kip  (lifted load)
+    W = 3.150 in  (lug width across the hole)
+    d = 0.984 in  (pin hole diameter)
+    t = 0.472 in  (lug plate thickness)
+    σ_t = 11.0 ksi  (net-section tensile stress)
+  safety factor 3.30 vs required minimum 2.00
+  source: ASME BTH-1 §3-3
+
+FAIL  padeye pin bearing
+------------------------
+    σ_p = P / (d · t)
+    σ_p = 11.24 kip / (0.984 in · 0.472 in)
+    σ_p = 24.2 ksi
+  where:
+    P = 11.24 kip  (lifted load)
+    d = 0.984 in  (pin hole diameter)
+    t = 0.472 in  (lug plate thickness)
+    σ_p = 24.2 ksi  (pin bearing stress)
+  safety factor 1.50 vs required minimum 2.00
+  repair: increase thickness to 16 mm — from the lug thickness inverse (σ ∝ 1/t, so SF ∝ t)
+  source: ASME BTH-1 §3-3
+
+PASS  padeye_weld weld shear
+----------------------------
+    τ = P / (0.707 · w · L)
+    τ = 11.24 kip / (0.707 · 0.315 in · 6.299 in)
+    τ = 8.01 ksi
+  where:
+    P = 11.24 kip  (load carried by the weld)
+    w = 0.315 in  (fillet leg size)
+    L = 6.299 in  (total weld length)
+    τ = 8.01 ksi  (shear stress on the effective throat)
+  safety factor 5.25 vs required minimum 2.00
+  source: AISC 360-16 §J2.4
+
+Margin summary
+--------------
+  PASS           padeye net tension: 3.30 vs 2.00 required
+  FAIL           padeye pin bearing: 1.50 vs 2.00 required
+  PASS           padeye_weld weld shear: 5.25 vs 2.00 required
+  governing check: padeye pin bearing
+  not evaluated: 0, out of declared depth: 0
+  overall: FAIL
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  no coverage report was supplied with this document
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.

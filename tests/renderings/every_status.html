@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Every status</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --ground: #fff; --ink: #111; --ink-muted: #444; --ink-faint: #666;
+  --rule: #bbb; --band: #f4f4f4;
+  --status-fail: #8e1b0e; --status-pass: #0b5394; --status-over_margin: #a86800;
+  --status-warning: #9000f8;
+  --accent: #00a878;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #16181d; --ink: #e6e6e3; --ink-muted: #b8b8b4; --ink-faint: #9a9a96;
+    --rule: #4a4d55; --band: #22252c;
+    --status-fail: #f07818; --status-pass: #6078f0; --status-over_margin: #c07848;
+    --status-warning: #d890d8;
+    --accent: #48f090;
+  }
+}
+html { background: var(--ground); }
+body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: var(--ink);
+       background: var(--ground); }
+h1 { border-bottom: 2px solid var(--ink); padding-bottom: 0.2em; }
+h2 { margin-top: 1.6em; font-size: 1.1em; }
+table { border-collapse: collapse; margin: 0.6em 0; }
+th, td { border: 1px solid var(--rule); padding: 0.25em 0.6em; text-align: left; }
+table.header th { background: var(--band); }
+section.check { page-break-inside: avoid; }
+.derivation { font-family: "DejaVu Sans Mono", monospace; margin: 0.6em 0 0.6em 1.5em; }
+.derivation p { margin: 0.2em 0; }
+.status { font-size: 0.8em; letter-spacing: 0.08em; }
+.fail .status { color: var(--status-fail); }
+.pass .status { color: var(--status-pass); }
+.over_margin .status { color: var(--status-over_margin); }
+.warning .status { color: var(--status-warning); }
+.repair { font-size: 0.9em; font-style: italic; }
+.uncertainty { font-size: 0.9em; color: var(--ink-muted); }
+.uncertainty-method { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
+.uncertainty.fragile { color: var(--ink); font-weight: bold; }
+.fallback { font-style: italic; color: var(--ink-faint); }
+.source { font-size: 0.9em; color: var(--ink-muted); }
+tr.governing td { font-weight: bold; }
+.disclaimer { margin-top: 2em; font-size: 0.9em; color: var(--ink-muted);
+  border-top: 1px solid var(--rule); padding-top: 0.8em; }
+td, .derivation, .status { font-variant-numeric: tabular-nums lining-nums; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media print {
+  thead { display: table-header-group; }
+  tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+  body, .status, .repair, .uncertainty.fragile { color: #000; }
+}
+</style>
+</head>
+<body>
+<h1>Every status</h1>
+<table class="header">
+<tr><th>Project</th><td>Rendering corpus</td></tr>
+<tr><th>Date</th><td>2026-09-25</td></tr>
+<tr><th>Units</th><td>SI</td></tr>
+</table>
+<h2>Standards relied upon</h2>
+<p class="none">none declared</p>
+<h2>Assumptions</h2>
+<ul>
+<li>none declared</li>
+</ul>
+<section class="check pass">
+<h2>bearing <span class="status">PASS</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">safety factor 2.60 vs required minimum 2.00</p>
+</section>
+<section class="check fail">
+<h2>net tension <span class="status">FAIL</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">safety factor 1.40 vs required minimum 2.00</p>
+</section>
+<section class="check over_margin">
+<h2>weld shear <span class="status">OVER MARGIN</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">safety factor 6.70 exceeds target band 2.00–4.00 by 2.70 — over-engineered</p>
+</section>
+<section class="check not_evaluated">
+<h2>gross yielding <span class="status">NOT EVALUATED</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">not evaluated — the material record carries no yield strength</p>
+</section>
+<section class="check warning">
+<h2>edge distance <span class="status">WARNING</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">edge distance 1.4 d is inside the 1.5 d the clause recommends</p>
+</section>
+<section class="check out_of_depth">
+<h2>fatigue <span class="status">OUT OF DEPTH</span></h2>
+<p class="fallback">[derivation not rendered]</p>
+<p class="detail">cyclic loading needs a fatigue assessment this tier does not make</p>
+</section>
+<h2>Margin summary</h2>
+<table class="summary">
+<thead><tr><th>Check</th><th>Safety factor</th><th>Required</th><th>Result</th></tr></thead>
+<tr><td>bearing</td><td class="num">2.60</td><td class="num">2.00</td><td>PASS</td></tr>
+<tr class="governing"><td>net tension</td><td class="num">1.40</td><td class="num">2.00</td><td>FAIL</td></tr>
+<tr><td>weld shear</td><td class="num">6.70</td><td class="num">2.00–4.00</td><td>OVER MARGIN</td></tr>
+<tr><td>gross yielding</td><td class="num">—</td><td class="num">2.00</td><td>NOT EVALUATED</td></tr>
+<tr><td>edge distance</td><td class="num">—</td><td class="num">—</td><td>WARNING</td></tr>
+<tr><td>fatigue</td><td class="num">—</td><td class="num">—</td><td>OUT OF DEPTH</td></tr>
+</table>
+<p>Governing check: <strong>net tension</strong></p>
+<p>Not evaluated: 1. Out of declared depth: 1.</p>
+<p>Overall: <strong>FAIL</strong></p>
+<h2>Performance budgets</h2>
+<p class="none">none declared</p>
+<h2>Failure modes</h2>
+<p class="none">no coverage report was supplied</p>
+<h2>Margin ledger</h2>
+<p class="none">none declared</p>
+<p class="disclaimer">These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.</p>
+</body>
+</html>

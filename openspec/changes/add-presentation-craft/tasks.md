@@ -55,5 +55,15 @@
 
 ## 7. Measurement
 
-- [ ] 7.1 Visual-regression corpus spanning every pane state and both themes
-- [ ] 7.2 A rendering change fails until acknowledged, with the diff shown
+- [x] 7.1 Visual-regression corpus spanning every pane state and both themes — for the
+      surfaces that exist, as 4.2 is: `tests/test_renderings.py` renders seven reports as
+      text, HTML and PDF. Between them they reach every status, the fallback inputs table, a
+      repair line, an uncertainty annotation, a margin ledger, a budget and both unit systems,
+      and a test holds that coverage. The HTML holds both themes in one file. The workbench's
+      panes are unbuilt, so their states join the corpus when they exist
+- [x] 7.2 A rendering change fails until acknowledged, with the diff shown — each rendering
+      is compared with its committed copy under `tests/renderings/`. A change fails with a
+      unified diff, or with the PDF digest and where to look. It is acknowledged with
+      `ANVILATE_ACCEPT_RENDERINGS=1 pytest tests/test_renderings.py` and reviewed in the
+      commit. The adversary is a one-word change. A label edit and a one-unit glyph width
+      change were both caught in scratch runs

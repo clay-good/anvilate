@@ -330,6 +330,19 @@ browser's print dialog turns that into a PDF with the math set properly. That PD
 byte-identical, because a browser stamps the date into it. Use `to_pdf()` for a submittal
 that will be reissued and compared. Use the browser when the math has to look typeset.
 
+## A rendering change is a reviewed change
+
+Seven reference reports are rendered as text, HTML and PDF, and each rendering is compared
+with a copy committed under `tests/renderings/`. Between them they reach every status and
+every optional block. A change to anything a reviewer would see fails the suite with the
+difference shown. That includes a reworded label, a changed glyph and a new page break. If
+the change is meant, regenerate the copies and commit them, so the change is reviewed in
+the diff:
+
+```bash
+ANVILATE_ACCEPT_RENDERINGS=1 pytest tests/test_renderings.py
+```
+
 ## Current limits
 
 **A declared unit system does not reach every discipline.** The mechanical and structural
