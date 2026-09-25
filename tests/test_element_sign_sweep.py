@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import copy
 import inspect
-import json
 import sys
 from pathlib import Path
 
@@ -52,20 +51,32 @@ def _card(model: type, screen: object, document: dict) -> object:
     )
 
 
-def _flips() -> list[tuple[str, object, object]]:
-    documents = json.loads(_PARAMS.read_text(encoding="utf-8"))
+def _verdicts(card: object) -> object:
+    """What the sign has to change: a detail may name a direction (an overhang's back span
+    bowing up rather than down) without the verdict moving."""
+    if isinstance(card, str):
+        return card
+    return tuple((name, status, factor) for name, status, factor, _detail in card)
+
+
+def _flips() -> list[tuple[str, str, object, object]]:
+    from test_element_zero_sweep import _corpus
+
+    registry = element_registry()
     flips = []
-    for tag, (model, screen) in sorted(element_registry().items()):
+    for label, element_type, document in _corpus():
+        model, screen = registry[element_type]
         for field in getattr(model, "signed_fields", ()):
-            value = documents[tag].get(field)
+            value = document.get(field)
             if not isinstance(value, dict) or "magnitude" not in value:
                 continue
-            flipped = copy.deepcopy(documents[tag])
+            flipped = copy.deepcopy(document)
             flipped[field]["magnitude"] = -value["magnitude"]
             flips.append(
                 (
-                    f"{tag}.{field}",
-                    _card(model, screen, documents[tag]),
+                    f"{label}.{field}",
+                    f"{element_type}.{field}",
+                    _card(model, screen, document),
                     _card(model, screen, flipped),
                 )
             )
@@ -76,18 +87,30 @@ def test_a_signed_field_changes_the_card_or_is_declared_direction_free():
     flips = _flips()
     # The floor goes first: a corpus that lost its signed fields would find nothing.
     assert len(flips) >= 16, f"only {len(flips)} signed fields were negated"
-    discarded = [label for label, original, flipped in flips if original == flipped]
-    assert sorted(discarded) == sorted(_DIRECTION_FREE), (
+    discarded = {
+        field
+        for _label, field, original, flipped in flips
+        if _verdicts(original) == _verdicts(flipped)
+    }
+    read = {
+        field
+        for _label, field, original, flipped in flips
+        if _verdicts(original) != _verdicts(flipped)
+    }
+    assert discarded <= set(_DIRECTION_FREE), (
         "these signed fields are screened by magnitude, so their sign is thrown away: "
-        f"{sorted(set(discarded) - set(_DIRECTION_FREE))}; and these are declared "
-        f"direction-free but now read their sign: {sorted(set(_DIRECTION_FREE) - set(discarded))}"
+        f"{sorted(discarded - set(_DIRECTION_FREE))}"
     )
+    assert not (read & set(_DIRECTION_FREE)), (
+        f"declared direction-free but now read their sign: {sorted(read & set(_DIRECTION_FREE))}"
+    )
+    assert set(_DIRECTION_FREE) <= discarded, sorted(set(_DIRECTION_FREE) - discarded)
 
 
 def test_a_negative_demand_is_never_described_as_zero():
     said_zero = [
         f"{label}: {detail}"
-        for label, _original, flipped in _flips()
+        for label, _field, _original, flipped in _flips()
         if isinstance(flipped, tuple)
         for _name, _status, _factor, detail in flipped
         if " is zero" in detail
@@ -115,5 +138,5 @@ def test_the_sweep_sees_a_screen_that_discards_the_sign(monkeypatch):
     model, _screen = registry["base_plate"]
     monkeypatch.setitem(registry, "base_plate", (model, by_magnitude))
     monkeypatch.setattr(sys.modules[__name__], "element_registry", lambda: registry)
-    discarded = [label for label, a, b in _flips() if a == b]
+    discarded = [field for _label, field, a, b in _flips() if _verdicts(a) == _verdicts(b)]
     assert "base_plate.axial_load" in discarded

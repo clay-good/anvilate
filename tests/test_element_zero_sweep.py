@@ -32,6 +32,24 @@ def _documents() -> dict[str, dict]:
     return json.loads(_PARAMS.read_text(encoding="utf-8"))
 
 
+# The main corpus leaves every optional field at its default, so a sweep over it never
+# reaches one: a zero `hole_diameter` refused as "the hole (0 mm) must be smaller than the
+# plate", and a beam's shear entry vanishing under an off-centre load, were both found by
+# hand. Each variant here fills optional fields of one element.
+_OPTIONAL = Path(__file__).resolve().parent / "element_params_optional.json"
+
+
+def _corpus() -> list[tuple[str, str, dict]]:
+    """Every document the sweeps read, as (label, element_type, element_params)."""
+    corpus = [(tag, tag, document) for tag, document in sorted(_documents().items())]
+    variants = json.loads(_OPTIONAL.read_text(encoding="utf-8"))
+    corpus += [
+        (label, variant["element_type"], variant["element_params"])
+        for label, variant in sorted(variants.items())
+    ]
+    return corpus
+
+
 def _numbers(node: object, path: tuple = ()) -> Iterator[tuple]:
     if isinstance(node, dict):
         for key, value in node.items():
@@ -54,15 +72,15 @@ def _with(document: dict, path: tuple, value: object) -> dict:
 
 def _crashes() -> tuple[list[str], int]:
     registry = element_registry()
-    documents = _documents()
     crashes, probes = [], 0
-    for tag, (model, screen) in sorted(registry.items()):
+    for tag, element_type, document in _corpus():
+        model, screen = registry[element_type]
         parameters = inspect.signature(screen).parameters
         keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
-        for path in _numbers(documents[tag]):
+        for path in _numbers(document):
             probes += 1
             try:
-                element = model.model_validate(_with(documents[tag], path, 0))
+                element = model.model_validate(_with(document, path, 0))
             except (ValidationError, ValueError, LookupError):
                 continue
             try:
@@ -139,20 +157,20 @@ _UNNAMED = {
 
 def _refusals_not_naming_the_field() -> tuple[list[str], int]:
     registry = element_registry()
-    documents = _documents()
     unnamed, probes = [], 0
-    for tag, (model, screen) in sorted(registry.items()):
+    for tag, element_type, document in _corpus():
+        model, screen = registry[element_type]
         parameters = inspect.signature(screen).parameters
         keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
-        for path in _numbers(documents[tag]):
-            value = documents[tag]
+        for path in _numbers(document):
+            value = document
             for part in path:
                 value = value[part]
             for changed in (0, -abs(value) if value else -1):
                 probes += 1
                 message = None
                 try:
-                    element = model.model_validate(_with(documents[tag], path, changed))
+                    element = model.model_validate(_with(document, path, changed))
                 except ValidationError as refusal:
                     message = "; ".join(error["msg"] for error in refusal.errors())
                 except (ValueError, LookupError) as refusal:
@@ -184,3 +202,12 @@ def test_a_refusal_names_the_field_the_document_wrote():
         f"refused without naming the field: {sorted(set(unnamed) - set(_UNNAMED))}; listed "
         f"as unnamed but now named: {sorted(set(_UNNAMED) - set(unnamed))}"
     )
+
+
+def test_every_optional_variant_is_a_valid_document_of_its_element():
+    registry = element_registry()
+    variants = json.loads(_OPTIONAL.read_text(encoding="utf-8"))
+    assert len(variants) >= 11, f"only {len(variants)} optional variants"
+    for label, variant in variants.items():
+        assert label.startswith(variant["element_type"] + "/"), label
+        registry[variant["element_type"]][0].model_validate(variant["element_params"])

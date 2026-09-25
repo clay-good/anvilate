@@ -406,6 +406,9 @@ class BeamMember(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    # A zero floor passes every frequency, so it is not a requirement; and a zero mass or
+    # overhang leaves the case it selects with nothing to compute.
+    positive_fields = ("length", "mass_per_length", "min_frequency", "overhang_length")
     signed_fields = (
         "load",
         "load_position",
@@ -487,7 +490,7 @@ class BeamMember(GuardedInputs):
                     "sits at pair_offset from each support"
                 )
             half = self.length.to("mm").magnitude / 2
-            if not 0 < self.pair_offset.to("mm").magnitude <= half:
+            if half > 0 and not 0 < self.pair_offset.to("mm").magnitude <= half:
                 raise ValueError(
                     f"pair_offset must lie within the half-span (0, {half:g} mm], since each "
                     f"load sits that far from its own support; got {self.pair_offset}"

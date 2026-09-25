@@ -100,7 +100,15 @@ class CoverPlate(GuardedInputs):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    positive_fields = ("deflection_limit", "length", "width")
+    positive_fields = (
+        "deflection_limit",
+        "length",
+        "width",
+        "diameter",
+        "hole_diameter",
+        "patch_length",
+        "patch_width",
+    )
 
     name: Named
     pressure: Quantity
@@ -146,6 +154,15 @@ class CoverPlate(GuardedInputs):
             )
         if self.hole_diameter is not None and self.diameter is None:
             raise ValueError("a hole is only encoded for a circular cover — declare a diameter")
+        if (
+            self.hole_diameter is not None
+            and self.diameter is not None
+            and not self.hole_diameter.to("mm").magnitude < self.diameter.to("mm").magnitude
+        ):
+            raise ValueError(
+                f"hole_diameter ({self.hole_diameter}) must be smaller than the cover's "
+                f"diameter ({self.diameter})"
+            )
         patched = self.patch_length is not None or self.patch_width is not None
         if patched:
             if self.patch_length is None or self.patch_width is None:

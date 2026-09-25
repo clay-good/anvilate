@@ -1,0 +1,496 @@
+{
+ "beam_member/centred_patch": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN / m"
+   },
+   "load_position": null,
+   "load_type": "distributed",
+   "loaded_length": {
+    "magnitude": 2.0,
+    "unit": "m"
+   },
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": null,
+   "patch_centered": true,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "simply_supported",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/end_patch": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN / m"
+   },
+   "load_position": null,
+   "load_type": "distributed",
+   "loaded_length": {
+    "magnitude": 2.0,
+    "unit": "m"
+   },
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": null,
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "simply_supported",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/fixed_offset_point": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN"
+   },
+   "load_position": {
+    "magnitude": 1.0,
+    "unit": "m"
+   },
+   "load_type": "point",
+   "loaded_length": null,
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": null,
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "fixed_fixed",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/offset_point": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN"
+   },
+   "load_position": {
+    "magnitude": 1.0,
+    "unit": "m"
+   },
+   "load_type": "point",
+   "loaded_length": null,
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": null,
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "simply_supported",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/overhang": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN / m"
+   },
+   "load_position": null,
+   "load_type": "distributed",
+   "loaded_length": null,
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": {
+    "magnitude": 1.0,
+    "unit": "m"
+   },
+   "pair_offset": null,
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "overhang",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/point_pair": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN"
+   },
+   "load_position": null,
+   "load_type": "point",
+   "loaded_length": null,
+   "mass_per_length": null,
+   "material": "ASTM-A36",
+   "min_frequency": null,
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": {
+    "magnitude": 1.0,
+    "unit": "m"
+   },
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "simply_supported",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "beam_member/resonance": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 16.0,
+    "unit": "mm"
+   },
+   "length": {
+    "magnitude": 4.0,
+    "unit": "m"
+   },
+   "load": {
+    "magnitude": 5.0,
+    "unit": "kN / m"
+   },
+   "load_position": null,
+   "load_type": "distributed",
+   "loaded_length": null,
+   "mass_per_length": {
+    "magnitude": 10.0,
+    "unit": "kg/m"
+   },
+   "material": "ASTM-A36",
+   "min_frequency": {
+    "magnitude": 10.0,
+    "unit": "Hz"
+   },
+   "name": "rafter",
+   "overhang_length": null,
+   "pair_offset": null,
+   "patch_centered": false,
+   "section": {
+    "area": {
+     "magnitude": 15000.0,
+     "unit": "mm**2"
+    },
+    "extreme_fibre": {
+     "magnitude": 75.0,
+     "unit": "mm"
+    },
+    "second_moment": {
+     "magnitude": 28125000.0,
+     "unit": "mm**4"
+    },
+    "second_moment_transverse": {
+     "magnitude": 12500000.0,
+     "unit": "mm**4"
+    },
+    "shear_form_factor": 1.5
+   },
+   "support": "simply_supported",
+   "triangle_mirrored": false
+  },
+  "element_type": "beam_member"
+ },
+ "cover_plate/annular": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 3.0,
+    "unit": "mm"
+   },
+   "diameter": {
+    "magnitude": 600.0,
+    "unit": "mm"
+   },
+   "edge": "clamped",
+   "hole_diameter": {
+    "magnitude": 100.0,
+    "unit": "mm"
+   },
+   "material": "ASTM-A36",
+   "min_frequency": {
+    "magnitude": 60.0,
+    "unit": "Hz"
+   },
+   "name": "manway",
+   "patch_length": null,
+   "patch_width": null,
+   "pressure": {
+    "magnitude": 0.4,
+    "unit": "MPa"
+   },
+   "thickness": {
+    "magnitude": 12.0,
+    "unit": "mm"
+   }
+  },
+  "element_type": "cover_plate"
+ },
+ "cover_plate/patch": {
+  "element_params": {
+   "deflection_limit": {
+    "magnitude": 3.0,
+    "unit": "mm"
+   },
+   "diameter": null,
+   "edge": "simply_supported",
+   "hole_diameter": null,
+   "length": {
+    "magnitude": 900.0,
+    "unit": "mm"
+   },
+   "material": "ASTM-A36",
+   "min_frequency": {
+    "magnitude": 60.0,
+    "unit": "Hz"
+   },
+   "name": "manway",
+   "patch_length": {
+    "magnitude": 100.0,
+    "unit": "mm"
+   },
+   "patch_width": {
+    "magnitude": 100.0,
+    "unit": "mm"
+   },
+   "pressure": {
+    "magnitude": 0.4,
+    "unit": "MPa"
+   },
+   "thickness": {
+    "magnitude": 12.0,
+    "unit": "mm"
+   },
+   "width": {
+    "magnitude": 620.0,
+    "unit": "mm"
+   }
+  },
+  "element_type": "cover_plate"
+ },
+ "feeder/reactance": {
+  "element_params": {
+   "conductor_ampacity": {
+    "magnitude": 115.0,
+    "unit": "A"
+   },
+   "conductor_area": {
+    "magnitude": 35.0,
+    "unit": "mm ** 2"
+   },
+   "drop_limit_percent": 3.0,
+   "line_voltage": {
+    "magnitude": 480.0,
+    "unit": "V"
+   },
+   "load_power": {
+    "magnitude": 37.0,
+    "unit": "kW"
+   },
+   "one_way_length": {
+    "magnitude": 100.0,
+    "unit": "m"
+   },
+   "power_factor": 0.85,
+   "reactance": {
+    "magnitude": 0.1,
+    "unit": "ohm"
+   },
+   "resistivity": {
+    "magnitude": 1.68e-08,
+    "unit": "m * \u03a9"
+   }
+  },
+  "element_type": "feeder"
+ },
+ "infinite_slope/pore_pressure": {
+  "element_params": {
+   "cohesion": {
+    "magnitude": 20.0,
+    "unit": "kPa"
+   },
+   "depth": {
+    "magnitude": 2.5,
+    "unit": "m"
+   },
+   "friction_angle": 30.0,
+   "pore_pressure": {
+    "magnitude": 20.0,
+    "unit": "kPa"
+   },
+   "slope_angle": 35.0,
+   "unit_weight": {
+    "magnitude": 19.0,
+    "unit": "kN / m ** 3"
+   }
+  },
+  "element_type": "infinite_slope"
+ }
+}
