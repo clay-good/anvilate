@@ -1021,6 +1021,11 @@ for round covers. The text result reports the volume and digest. `--format json`
 adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
 `unvalidated` under the CLI output 1.8.0 contract.
 
+An `--output` ending in `.3mf` writes the same solid as a 3MF mesh instead: tessellated,
+welded, held to the solid's volume, and written as the ISO/IEC 25422 core with the standard,
+the writer and the export watermark in its metadata (see [export targets](export-targets.md)).
+`--ap214` with a `.3mf` output is refused, since it chooses a STEP schema.
+
 The writer emits the AP242 managed model-based 3D engineering schema and part-level volume,
 surface-area, and centroid validation properties. It reads those properties back, imports the
 solid, and checks them at the CAx-IF v4.6 industry example thresholds before releasing the

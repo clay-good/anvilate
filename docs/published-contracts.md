@@ -114,6 +114,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### CLI output 1.52.0: a build can be 3MF
+
+`anvilate build` writes 3MF when `--output` ends in `.3mf`, so a build result's
+`artifact.format` is now `step` or `3mf`. The file is the ISO/IEC 25422 core, written by
+`anvilate.geometry.render_3mf` and read back by lib3mf in the tests.
+
 ### Design Spec 1.18.0: embodied carbon, declared in the document
 
 A spec gains an optional `carbon` block: `lines`, each a `label`, a `mass` and a `factor`

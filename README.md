@@ -128,7 +128,8 @@ The audited `base_plate`, `cover_plate`, and `transmission_shaft` patterns read 
 dimensions declared in the spec. They produce one valid B-Rep solid, tag functional faces
 semantically, and write AP242 STEP. Cover plates may be rectangular, circular, or annular;
 the first shaft pattern is a prismatic solid round turned blank whose length is mandatory.
-Existing output is protected unless `--force` is explicit.
+Existing output is protected unless `--force` is explicit. An `--output` ending in `.3mf`
+writes an ISO/IEC 25422 3MF mesh of the same solid instead, for a slicer.
 
 ```bash
 anvilate build examples/base_plate.spec.yaml --output base_plate.step --unvalidated
@@ -316,7 +317,7 @@ The deterministic core is real, tested, and runnable today: a units layer, the t
 **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA,
 dowels, T-slot, ASME B36.10M pipe schedules), the T1 analytical library above
 (237 closed-form modules and 1,881 public symbols, each dimension-checked and
-hand-verified, 6,411 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
+hand-verified, 6,413 tests), ISO 286 fits, tolerance stack-ups, DFM process-capability
 checks, an auditable evidence/provenance roll-up, and DXF export.
 
 ### Discipline packs

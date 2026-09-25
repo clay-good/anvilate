@@ -556,9 +556,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     build = commands.add_parser(
         "build",
-        help="build an audited Design Spec geometry pattern as STEP",
+        help="build an audited Design Spec geometry pattern as STEP or 3MF",
         description="Build one Design Spec as a valid B-Rep and write a validation-stamped "
-        "STEP. Base plates, cover plates, and transmission shafts are supported; unsupported "
+        "STEP, or a 3MF mesh when --output ends in .3mf. Base plates, cover plates, and "
+        "transmission shafts are supported; unsupported "
         "patterns exit 4 and name "
         "the missing pattern. A nonpassing card writes nothing unless --unvalidated is "
         "explicit. Exit 0 means the STEP was written; a bad spec or output exits 3, and an "
@@ -567,7 +568,12 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=f"Example: {_COMMAND_EXAMPLES['build']}",
     )
     build.add_argument("spec", type=Path, help="the Design Spec document to build")
-    build.add_argument("--output", type=Path, required=True, help="STEP file to write")
+    build.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="STEP (.step, .stp) or 3MF (.3mf) file to write; the suffix picks the format",
+    )
     build.add_argument(
         "--unvalidated",
         action="store_true",
@@ -2477,11 +2483,21 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         GeometryUnavailable,
         UnsupportedGeometry,
         build_spec,
+        render_3mf,
         write_step,
     )
 
-    if args.output.suffix.lower() not in {".step", ".stp"}:
-        print("anvilate build: --output must end in .step or .stp", file=err)
+    suffix = args.output.suffix.lower()
+    if suffix not in {".step", ".stp", ".3mf"}:
+        print("anvilate build: --output must end in .step, .stp or .3mf", file=err)
+        return EXIT_BAD_REQUEST
+    as_3mf = suffix == ".3mf"
+    if as_3mf and args.ap214:
+        print(
+            "anvilate build: --ap214 chooses a STEP schema and the output is 3MF; drop "
+            "--ap214, or write a .step file",
+            file=err,
+        )
         return EXIT_BAD_REQUEST
     if not args.output.parent.is_dir():
         print(f"anvilate build: output directory does not exist: {args.output.parent}", file=err)
@@ -2526,10 +2542,24 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate build: {failure}. Remove --unvalidated.", file=err)
         return EXIT_BAD_REQUEST
 
+    step_schema: Literal["ap242", "ap214"] = "ap214" if args.ap214 else "ap242"
     try:
-        step_schema: Literal["ap242", "ap214"] = "ap214" if args.ap214 else "ap242"
-        write_step(built, args.output, authorization=authorization, schema=step_schema)
+        if as_3mf:
+            data = render_3mf(built, authorization=authorization)
+            # Written beside the target and renamed into place, so an interrupted run leaves
+            # no partial file presented as complete (interaction-quality 7.2).
+            staging = args.output.with_name(f".{args.output.name}.partial")
+            try:
+                staging.write_bytes(data)
+                staging.replace(args.output)
+            finally:
+                staging.unlink(missing_ok=True)
+        else:
+            write_step(built, args.output, authorization=authorization, schema=step_schema)
         digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
+    except ValueError as failure:  # a GeometryError, or a mesh the 3MF writer refused
+        print(f"anvilate build: {failure}", file=err)
+        return EXIT_BAD_REQUEST
     except OSError as failure:
         print(f"anvilate build: {failure}", file=err)
         return EXIT_BAD_REQUEST
@@ -2539,7 +2569,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         "source": str(args.spec),
         "artifact": {
             "path": str(args.output),
-            "format": "step",
+            "format": "3mf" if as_3mf else "step",
             "sha256": digest,
             "pattern": built.pattern,
             "volume_mm3": built.volume_mm3,
@@ -2552,8 +2582,14 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         print(json.dumps(machine_document("build", result), indent=2, sort_keys=True), file=out)
     else:
         print(f"{spec.name}: BUILT", file=out)
-        print(f"  STEP          {args.output}", file=out)
-        print(f"  schema        {step_schema.upper()}", file=out)
+        if as_3mf:
+            from .export.threemf import THREEMF_STANDARD
+
+            print(f"  3MF           {args.output}", file=out)
+            print(f"  standard      {THREEMF_STANDARD}", file=out)
+        else:
+            print(f"  STEP          {args.output}", file=out)
+            print(f"  schema        {step_schema.upper()}", file=out)
         print(f"  pattern       {built.pattern}", file=out)
         print(f"  volume        {built.volume_mm3:g} mm³", file=out)
         print(f"  semantic faces {', '.join(sorted(built.faces))}", file=out)

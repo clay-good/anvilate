@@ -4773,3 +4773,48 @@ def test_a_progress_count_keeps_its_width_as_it_updates():
         "[12/12] screening",
     ]
     assert len({line.index("screening") for line in lines}) == 1
+
+
+def test_build_writes_3mf_when_the_output_says_so(tmp_path):
+    """The suffix picks the format. The file is read back by lib3mf, the reference reader,
+    and the JSON result validates against the published contract with `format: 3mf`."""
+    pytest.importorskip("build123d")
+    lib3mf = pytest.importorskip("lib3mf")
+    from pydantic import TypeAdapter
+
+    from anvilate._cli_output import CliOutput
+
+    spec = tmp_path / "base-plate.yaml"
+    output = tmp_path / "base-plate.3mf"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+
+    code, raw, err = _run(
+        "build", str(spec), "--output", str(output), "--format", "json", "--unvalidated"
+    )
+    assert code == EXIT_OK and err == ""
+    payload = json.loads(raw)
+    TypeAdapter(CliOutput).validate_python(payload)
+    assert payload["artifact"]["format"] == "3mf"
+    assert payload["artifact"]["sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    assert not list(tmp_path.glob(".*.partial")), "a staging file was left beside the output"
+
+    model = lib3mf.get_wrapper().CreateModel()
+    reader = model.QueryReader("3mf")
+    reader.SetStrictModeActive(True)
+    reader.ReadFromBuffer(bytearray(output.read_bytes()))
+    assert reader.GetWarningCount() == 0
+
+    code, text, _err = _run(
+        "build", str(spec), "--output", str(tmp_path / "again.3mf"), "--unvalidated"
+    )
+    assert code == EXIT_OK
+    assert "  3MF           " in text and "ISO/IEC 25422:2025" in text
+
+
+def test_build_refuses_a_step_schema_for_a_3mf_output_and_an_unknown_suffix(tmp_path):
+    spec = tmp_path / "base-plate.yaml"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    code, _out, err = _run("build", str(spec), "--output", str(tmp_path / "p.3mf"), "--ap214")
+    assert code == EXIT_BAD_REQUEST and "--ap214 chooses a STEP schema" in err
+    code, _out, err = _run("build", str(spec), "--output", str(tmp_path / "p.stl"))
+    assert code == EXIT_BAD_REQUEST and ".step, .stp or .3mf" in err

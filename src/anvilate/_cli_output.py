@@ -33,10 +33,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.51.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.52.0"
 CLI_OUTPUT_SCHEMA_ID = f"https://anvilate.dev/schemas/cli-output/{CLI_OUTPUT_SCHEMA_VERSION}.json"
-SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.51.0.json"]
-SchemaVersion = Literal["1.51.0"]
+SchemaId = Literal["https://anvilate.dev/schemas/cli-output/1.52.0.json"]
+SchemaVersion = Literal["1.52.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -130,7 +130,7 @@ class CheckOutput(_WireModel):
 
 class BuildArtifact(_WireModel):
     path: str
-    format: Literal["step"]
+    format: Literal["step", "3mf"]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]
     volume_mm3: Annotated[float, Field(gt=0)]

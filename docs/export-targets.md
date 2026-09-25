@@ -20,8 +20,8 @@ the standard, the writer and its version, and carries the export watermark. A me
 not closed and consistently oriented, or that encloses a volume more than 1% from the
 solid's own, is refused rather than written. The writer is this repository's, and its tests
 read every file back with lib3mf, the 3MF Consortium's reference implementation, in strict
-mode: no warnings, a manifold and oriented mesh, and the same metadata. There is no
-`anvilate build --3mf` yet, and no Beam Lattice content.
+mode: no warnings, a manifold and oriented mesh, and the same metadata. `anvilate build` writes it when
+`--output` ends in `.3mf`. There is no Beam Lattice content.
 The other shipped formats are
 [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 AP242 is the default; local `anvilate build --ap214` is the explicit legacy fallback and
