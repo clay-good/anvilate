@@ -62,7 +62,7 @@ is [`examples/lifting_lug_calc_report.py`](../examples/lifting_lug_calc_report.p
 
 ## What the document contains
 
-In reading order: a header (project, preparer, date, unit system), the standards and
+In reading order: a header (project, preparer, date, revision, unit system), the standards and
 editions relied upon, the assumptions in force, one section per check, a margin
 summary naming the governing check, the margin ledger, and the screening disclaimer.
 
@@ -295,22 +295,40 @@ Windows ships Cambria Math and macOS 13+ ships STIX Two Math; elsewhere the glyp
 plainer. The markup is correct either way, and no font is bundled — a font in the document
 would break the self-contained promise for a cosmetic gain.
 
-## Print the HTML; there is no PDF backend
+## A PDF for the submittal, the HTML for typeset math
 
-**Decided, not deferred.** Every non-TeX PDF route costs either a browser dependency or a
-second math renderer, and the browser you would depend on is already on the reviewer's
-desk. `Ctrl+P` from the HTML produces a PDF with the math typeset, today, with no
-dependency added to this library.
+`report.to_pdf()` returns the report as PDF bytes. It is the text form typeset for paper,
+so a formula reads `σ_p = P / (d · t)` as it does in the terminal, not as typeset math.
 
-What ruled out the obvious alternative: [WeasyPrint does not support
-MathML](https://github.com/Kozea/WeasyPrint/issues/59), and it does not run JavaScript, so
-the formulas would have to be pre-converted to SVG by a separate tool. That is the drawn-SVG
-route rejected above, re-entering through the back door and bringing Pango and cairo with
-it. Headless Chromium renders MathML correctly, but "install a browser" is a heavier ask
-than "open the file and print", and it is the same browser either way.
+```python
+open("padeye.pdf", "wb").write(report.to_pdf())
+```
 
-If a PDF is needed unattended — a CI job attaching one to a release — that is a shell out to
-a browser the caller already chose, not a rendering backend this library owns.
+| Print rule | How the PDF keeps it |
+| --- | --- |
+| Byte-identical on reissue | Nothing reads the clock, objects are numbered in document order, and no stream is compressed, so no compressor version can change the bytes. Only a change to the report changes the file. |
+| A derivation is never split | A check's section is one block. A block that does not fit on the rest of a page moves to the next one whole. |
+| Continued tables repeat their headers | A block longer than a page repeats its heading, marked "(continued)", at the top of each page it runs onto. |
+| Values align on the decimal | The page is set in Courier, one cell per character, so every column the text form lines up is lined up on paper too. |
+| Nothing depends on colour | No content stream sets a colour. The status words carry the verdict. |
+| Page furniture | Every page carries the title, the project and `revision`, the date and "page N of M". |
+
+**No font is embedded, and no character is lost.** Courier and Symbol are two of the
+fourteen fonts every PDF reader carries. Some characters the package writes are in
+neither: the GD&T symbols, ≲ and ≪, subscript letters, circled modifiers, and ṁ. Each of
+these is drawn as a vector glyph in a Type 3 font inside the file. The glyph is composed
+from Courier and Symbol where it can be, and drawn as a path where it cannot. A ToUnicode
+map lets the text layer read back as the characters themselves, so search, copy and a
+screen reader all get `σ`, not a glyph number. A character this package has never
+written is printed as an empty box, and it still reads back as itself.
+`tests/test_report_pdf.py` reads every PDF back with pdfminer, an independent parser. It
+requires every character in the package's own strings to have a real glyph, and it holds
+each print rule above.
+
+**For typeset math, print the HTML.** The HTML report typesets formulas in MathML. A
+browser's print dialog turns that into a PDF with the math set properly. That PDF is not
+byte-identical, because a browser stamps the date into it. Use `to_pdf()` for a submittal
+that will be reissued and compared. Use the browser when the math has to look typeset.
 
 ## Current limits
 
@@ -331,8 +349,8 @@ per-system required unit, which nothing has asked for yet.
 
 
 Five limits that used to be listed here are closed, and the first mattered more than it
-read (the other two are the two sections above: formulas are typeset now, and the PDF
-question is answered rather than open):
+read (the other two are the two sections above: formulas are typeset now, and the report
+prints to PDF):
 
 - **Moments and second moments of area now follow the project's unit system** — N·mm
   and mm⁴ in SI, kip·in and in⁴ in US. N·mm is deliberately chosen over the more

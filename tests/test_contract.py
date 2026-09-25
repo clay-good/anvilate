@@ -6089,7 +6089,7 @@ def test_every_surface_that_shows_a_check_s_work_also_shows_its_stated_absence()
     assert sorted(shows_work) == [
         "bundle.py._check_block",
         "cli.py._render",
-        "report/document.py.to_text",
+        "report/document.py._text_blocks",
     ], f"a surface that renders a check's work appeared or moved: {sorted(shows_work)}"
     silent = sorted(set(shows_work) - set(also_shows_absence))
     assert not silent, (

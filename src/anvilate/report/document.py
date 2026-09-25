@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from html import escape
 from math import isfinite
+from typing import NamedTuple
 
 from pydantic import ConfigDict, computed_field
 
@@ -49,8 +50,9 @@ __all__ = [
 # for a change that older readers cannot ignore. 1.1 added the optional scorecard
 # annotations (repair hint, upper safety-factor band, uncertainty distribution);
 # a 1.0 reader ignores them and still loads the record. 1.2 added the report's margin
-# ledger entries, 1.3 its evaluated performance budgets, and 1.4 its failure-mode coverage.
-CALC_RECORD_SCHEMA_VERSION = "1.4"
+# ledger entries, 1.3 its evaluated performance budgets, 1.4 its failure-mode coverage, and
+# 1.5 the document's revision.
+CALC_RECORD_SCHEMA_VERSION = "1.5"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -58,6 +60,14 @@ SCREENING_DISCLAIMER = (
     "in this document; inputs supplied by the user are marked as such. Engineering "
     "sign-off remains with a qualified engineer."
 )
+
+
+class _TextBlock(NamedTuple):
+    """Lines of the text form that belong together, and how many of them head the rest."""
+
+    lines: tuple[str, ...]
+    heading: int = 0
+
 
 # What an empty standards or assumptions list renders as. Never an omitted heading: a
 # reviewer cannot tell a section that was left empty on purpose from one nobody wrote.
@@ -310,6 +320,10 @@ class CalculationReport(StatableModel):
     project: str | None = None
     prepared_by: str | None = None
     date: str | None = None
+    # The issue of this document, as the firm marks it ("A", "2", "IFC"). Printed in the
+    # header and on every page of the PDF, because a reissued submittal is compared page by
+    # page and a page with no revision on it cannot be put back in its set.
+    revision: str | None = None
     unit_system: UnitSystem | None = None
     standards: tuple[str, ...] = ()
     assumptions: tuple[Provenanced[str], ...] = ()
@@ -350,17 +364,52 @@ class CalculationReport(StatableModel):
 
     def to_text(self) -> str:
         """The report as plain text, for a terminal or a diff."""
-        out: list[str] = [self.title, "=" * len(self.title)]
-        for label, value in self._header_rows():
-            out.append(f"{label}: {value}")
-        out.append("")
-        out.append("Standards relied upon:")
-        out.extend(f"  - {item}" for item in self.standards or (_NONE_DECLARED,))
-        out.append("")
-        out.append("Assumptions:")
-        out.extend(f"  - {line}" for line in self._assumption_lines())
+        return "\n\n".join("\n".join(block.lines) for block in self._text_blocks()) + "\n"
+
+    def to_pdf(self) -> bytes:
+        """The report as a PDF: the text form typeset for paper, byte-identical on rebuild.
+
+        Set in Courier, one of the fonts every PDF reader carries, so nothing is embedded and
+        a column of figures aligns on the decimal as it does in the text form. A check's
+        section is kept on one page; a block longer than a page repeats its heading on the
+        next. Every page carries the title, the project and revision, the date and "page N of M".
+        Characters Courier cannot reach are drawn as vector glyphs, and the file's text layer
+        still reads back as the characters themselves.
+        """
+        from .. import __version__
+        from ._pdf import Block, render
+
+        blocks = [Block(block.lines, heading=block.heading) for block in self._text_blocks()]
+        identity = " · ".join(
+            part for part in (self.project, self.revision and f"rev {self.revision}") if part
+        )
+        return render(
+            blocks,
+            title=self.title,
+            identity=identity or None,
+            dated=self.date,
+            producer=f"anvilate {__version__}",
+        )
+
+    def _text_blocks(self) -> list[_TextBlock]:
+        """The text form as blocks a page break must respect, in reading order.
+
+        :meth:`to_text` joins them with a blank line, and :meth:`to_pdf` paginates them. One
+        source for both is what keeps the paper copy from saying something the terminal
+        does not.
+        """
+        blocks: list[_TextBlock] = []
+        head = [self.title, "=" * len(self.title)]
+        head.extend(f"{label}: {value}" for label, value in self._header_rows())
+        blocks.append(_TextBlock(tuple(head), heading=2))
+        standards = ["Standards relied upon:"]
+        standards.extend(f"  - {item}" for item in self.standards or (_NONE_DECLARED,))
+        blocks.append(_TextBlock(tuple(standards), heading=1))
+        assumptions = ["Assumptions:"]
+        assumptions.extend(f"  - {line}" for line in self._assumption_lines())
+        blocks.append(_TextBlock(tuple(assumptions), heading=1))
         for section in self.sections:
-            out.append("")
+            out: list[str] = []
             heading = f"{_STATUS_LABEL[section.entry.status]}  {section.entry.name}"
             out.append(heading)
             out.append("-" * len(heading))
@@ -393,9 +442,8 @@ class CalculationReport(StatableModel):
                 out.append(f"    {unc.citation}")
             if section.citation:
                 out.append(f"  source: {section.citation}")
-        out.append("")
-        out.append("Margin summary")
-        out.append("--------------")
+            blocks.append(_TextBlock(tuple(out), heading=2))
+        out = ["Margin summary", "--------------"]
         for name, factor, required, verdict in self._summary_rows():
             # A row with neither figure is most of this table on an ordinary document: a
             # resolution check, a classification, a tier that did not run. The grid form
@@ -412,30 +460,27 @@ class CalculationReport(StatableModel):
         not_evaluated, out_of_depth = self.scorecard().completeness()
         out.append(f"  not evaluated: {not_evaluated}, out of declared depth: {out_of_depth}")
         out.append(f"  overall: {_STATUS_LABEL[self.status]}")
-        out.append("")
-        out.append("Performance budgets")
-        out.append("-------------------")
+        blocks.append(_TextBlock(tuple(out), heading=2))
+        out = ["Performance budgets", "-------------------"]
         if not self.budgets:
             out.append(f"  {_NONE_DECLARED}")
         for result in self.budgets:
             out.extend(self._budget_lines(result))
-        out.append("")
-        out.append("Failure modes")
-        out.append("-------------")
+        blocks.append(_TextBlock(tuple(out), heading=2))
+        out = ["Failure modes", "-------------"]
         if self.failure_modes is None:
             out.append("  no coverage report was supplied with this document")
         else:
             out.extend(f"  {line}" for line in str(self.failure_modes).splitlines())
-        out.append("")
-        out.append("Margin ledger")
-        out.append("-------------")
+        blocks.append(_TextBlock(tuple(out), heading=2))
+        out = ["Margin ledger", "-------------"]
         if not self.margins:
             out.append(f"  {_NONE_DECLARED}")
         out.extend(f"  - {entry}" for entry in self.margins)
         out.extend(f"  {line}" for line in self._ledger_lines())
-        out.append("")
-        out.append(SCREENING_DISCLAIMER)
-        return "\n".join(out) + "\n"
+        blocks.append(_TextBlock(tuple(out), heading=2))
+        blocks.append(_TextBlock((SCREENING_DISCLAIMER,)))
+        return blocks
 
     def to_html(self) -> str:
         """The report as a self-contained HTML document (no external assets)."""
@@ -499,6 +544,7 @@ class CalculationReport(StatableModel):
             ("Project", self.project),
             ("Prepared by", self.prepared_by),
             ("Date", self.date),
+            ("Revision", self.revision),
             ("Units", self.unit_system.value if self.unit_system else None),
         )
         return tuple((label, value) for label, value in rows if value)

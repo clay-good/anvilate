@@ -28,7 +28,7 @@ carries a 1.50 factor where the lift demands 2.00 -- so the pin hole, not the lu
 width or the weld, is what has to change.
 
 Run it directly (``python examples/lifting_lug_calc_report.py``) to print the
-report and write an HTML copy to the system temp directory;
+report and write HTML and PDF copies to the system temp directory;
 :func:`build_report` is also exercised in the test suite.
 """
 
@@ -111,9 +111,10 @@ def build_report() -> CalculationReport:
 def main() -> None:
     report = build_report()
     print(report.to_text())
-    destination = Path(tempfile.gettempdir()) / "lifting_lug_report.html"
-    destination.write_text(report.to_html())
-    print(f"wrote {destination}")
+    folder = Path(tempfile.gettempdir())
+    (folder / "lifting_lug_report.html").write_text(report.to_html())
+    (folder / "lifting_lug_report.pdf").write_bytes(report.to_pdf())
+    print(f"wrote {folder / 'lifting_lug_report.html'} and {folder / 'lifting_lug_report.pdf'}")
 
 
 if __name__ == "__main__":

@@ -36,13 +36,17 @@
 
 - [x] 5.1 Print stylesheet: no derivation split across a page break, repeating table
       headers, no colour dependence — the report's print rules repeat each column-header row (every one now a `<thead>`), keep a derivation, a row and a check section whole, and print status in black because the word carries it
-- [ ] 5.2 Byte-identical PDF for identical input, asserted — no PDF renderer exists yet, and
-      a census (2026-09-25) settles why it needs a decision first: the package's strings use
-      149 distinct non-ASCII characters, and 51 of them fall outside both standard PDF fonts
-      (Helvetica's WinAnsi and Symbol) and the super/subscripts a text rise can draw. Among
-      them are the minus sign U+2212 (1,769 uses), the GD&T symbols (⌖ ⌭ ◎ ⌰ ⌯) and dot-accent
-      letters (ṁ). A faithful PDF therefore needs an embedded Unicode font file in the
-      repository, which is a licensing and size decision rather than code
+- [x] 5.2 Byte-identical PDF for identical input, asserted — `CalculationReport.to_pdf()`
+      (2026-09-25). The font decision was settled without a font file. The report is set in
+      Courier, a PDF core font, and the 51 characters no core font reaches are drawn in a
+      Type 3 font inside the file. Each is composed from Courier or Symbol glyphs through its
+      Unicode decomposition, or drawn as a path. A ToUnicode map keeps the text layer exact.
+      Nothing is timestamped and nothing is compressed. tests/test_report_pdf.py reads the
+      file back with pdfminer and holds byte identity, the text layer, sections kept whole,
+      continued headings, the furniture (revision included, a new `revision` field; calc
+      record 1.5), no colour operators, and a real glyph for every character in the
+      package's strings. Formulas print in the text form's linear notation; typeset math
+      stays the HTML's, printed from a browser
 
 ## 6. Voice
 
