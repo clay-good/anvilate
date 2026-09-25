@@ -162,8 +162,19 @@ def _show(encoder: _Encoder, text: str, x: float, y: float) -> str:
     return " ".join(parts)
 
 
+def _utf16be(text: str) -> str:
+    """``text`` as UTF-16BE hex, a lone surrogate read as U+FFFD.
+
+    A lone surrogate is not a character and has no UTF-16 form, but one survives a JSON
+    round trip (``"\\ud800"``), so a report reloaded from a calc record can hold one. It
+    prints as the box and reads back as the replacement character.
+    """
+    cleaned = "".join("\ufffd" if 0xD800 <= ord(char) <= 0xDFFF else char for char in text)
+    return cleaned.encode("utf-16-be").hex().upper()
+
+
 def _utf16(text: str) -> str:
-    return "<FEFF" + text.encode("utf-16-be").hex().upper() + ">"
+    return "<FEFF" + _utf16be(text) + ">"
 
 
 def _fit(text: str, columns: int) -> str:
@@ -232,8 +243,7 @@ def render(
                 advance = _glyphs.width(char)
                 procs.append((index, stream(f"{advance} 0 d0\n{drawn}")))
             mapping = "\n".join(
-                f"<{index:02X}> <{char.encode('utf-16-be').hex().upper()}>"
-                for index, char in enumerate(chars)
+                f"<{index:02X}> <{_utf16be(char)}>" for index, char in enumerate(chars)
             )
             cmap = stream(
                 "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"

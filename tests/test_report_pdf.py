@@ -191,3 +191,23 @@ def test_the_revision_travels_in_the_calc_record():
     record = report.to_record()
     assert record["schema_version"] == "1.5"
     assert report_from_record(record).revision == "C"
+
+
+def test_more_extra_characters_than_one_type3_font_holds_all_read_back():
+    """A Type 3 font has 256 codes. 600 distinct characters take three fonts, and every one
+    still reads back as itself."""
+    from anvilate.report import CalculationReport
+
+    characters = "".join(chr(code) for code in range(0x4E00, 0x4E00 + 600))
+    pdf = CalculationReport(title="T", standards=(characters,)).to_pdf()
+    assert b"/T2 " in pdf
+    extracted = extract_text(io.BytesIO(pdf))
+    assert sum(char in extracted for char in characters) == 600
+
+
+def test_a_lone_surrogate_from_a_reloaded_record_prints_as_the_replacement_character():
+    """JSON can carry `"\\ud800"`, which no UTF-16 encoder accepts. It used to raise."""
+    from anvilate.report import CalculationReport
+
+    pdf = CalculationReport(title="T\ud800", standards=("x\ud800y",)).to_pdf()
+    assert "x�y" in extract_text(io.BytesIO(pdf))
