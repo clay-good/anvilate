@@ -10,6 +10,7 @@ from types import MappingProxyType
 from xml.etree import ElementTree
 
 import pytest
+from pydantic import ValidationError
 
 pytest.importorskip("build123d")
 
@@ -384,15 +385,26 @@ def test_cover_plate_refuses_a_nonpositive_thickness():
 
 
 def test_cover_plate_refuses_a_bore_that_consumes_the_blank():
-    with pytest.raises(GeometryError, match="hole_diameter must be below diameter"):
-        build_cover_plate(
-            _cover(
-                length=None,
-                width=None,
-                diameter=Quantity.parse("80 mm"),
-                hole_diameter=Quantity.parse("80 mm"),
-            )
+    # The element refuses it first, by name, so no screen or build ever sees one.
+    with pytest.raises(ValidationError, match="must be smaller than the cover's diameter"):
+        _cover(
+            length=None,
+            width=None,
+            diameter=Quantity.parse("80 mm"),
+            hole_diameter=Quantity.parse("80 mm"),
         )
+    # The builder keeps its own guard for a plate constructed past validation.
+    valid = _cover(
+        length=None,
+        width=None,
+        diameter=Quantity.parse("80 mm"),
+        hole_diameter=Quantity.parse("40 mm"),
+    )
+    consumed = CoverPlate.model_construct(
+        **{**dict(valid), "hole_diameter": Quantity.parse("80 mm")}
+    )
+    with pytest.raises(GeometryError, match="hole_diameter must be below diameter"):
+        build_cover_plate(consumed)
 
 
 def test_cover_plate_regeneration_is_deterministic():
