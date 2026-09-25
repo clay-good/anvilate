@@ -120,55 +120,63 @@ def session() -> list[dict]:
         env={"PYTHONPATH": _SRC, "PATH": "/usr/bin:/bin", **_STORE_ENV},
     )
     assert server.stdin is not None and server.stdout is not None
+    # Closed however the session ends. A response that is not the shape expected raises
+    # half way through, and without this the two pipes and a live server outlived the call.
+    try:
 
-    def send(request: dict) -> None:
-        server.stdin.write(json.dumps(request) + "\n")
-        server.stdin.flush()
+        def send(request: dict) -> None:
+            server.stdin.write(json.dumps(request) + "\n")
+            server.stdin.flush()
 
-    responses: list[dict] = []
-    for request in _requests():
-        send(request)
-        if "id" in request:  # a notification takes no response line
+        responses: list[dict] = []
+        for request in _requests():
+            send(request)
+            if "id" in request:  # a notification takes no response line
+                responses.append(json.loads(server.stdout.readline()))
+
+        card_handle = next(r for r in responses if r.get("id") == 5)["result"]["structuredContent"][
+            "subject"
+        ]
+        build_handle = next(r for r in responses if r.get("id") == 6)["result"][
+            "structuredContent"
+        ]["subject"]
+        for request in (
+            {
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "tools/call",
+                "params": {
+                    "name": "render_viewport",
+                    "arguments": {"subject": build_handle, "view": "iso", "width_px": 640},
+                },
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "tools/call",
+                "params": {"name": "read_scorecard", "arguments": {"subject": card_handle}},
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {
+                    "name": "measure_geometry",
+                    "arguments": {"subject": build_handle, "query": "area:top"},
+                },
+            },
+        ):
+            send(request)
             responses.append(json.loads(server.stdout.readline()))
 
-    card_handle = next(r for r in responses if r.get("id") == 5)["result"]["structuredContent"][
-        "subject"
-    ]
-    build_handle = next(r for r in responses if r.get("id") == 6)["result"]["structuredContent"][
-        "subject"
-    ]
-    for request in (
-        {
-            "jsonrpc": "2.0",
-            "id": 7,
-            "method": "tools/call",
-            "params": {
-                "name": "render_viewport",
-                "arguments": {"subject": build_handle, "view": "iso", "width_px": 640},
-            },
-        },
-        {
-            "jsonrpc": "2.0",
-            "id": 8,
-            "method": "tools/call",
-            "params": {"name": "read_scorecard", "arguments": {"subject": card_handle}},
-        },
-        {
-            "jsonrpc": "2.0",
-            "id": 9,
-            "method": "tools/call",
-            "params": {
-                "name": "measure_geometry",
-                "arguments": {"subject": build_handle, "query": "area:top"},
-            },
-        },
-    ):
-        send(request)
-        responses.append(json.loads(server.stdout.readline()))
-
-    server.stdin.close()
-    server.stdout.close()
-    server.wait(timeout=30)
+    finally:
+        server.stdin.close()
+        server.stdout.close()
+        try:
+            server.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            server.kill()
+            server.wait()
     return responses
 
 
