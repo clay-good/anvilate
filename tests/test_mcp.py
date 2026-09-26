@@ -544,6 +544,45 @@ def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("change", "error", "remedy"),
+    [
+        (
+            lambda d: d.update(material={"ref": "A36"}),
+            "material.ref: unknown material 'A36' — did you mean ASTM-A36?",
+            "write `material.ref` as `ASTM-A36`",
+        ),
+        (
+            lambda d: d.update(element_type="base-plate"),
+            "element_type: 'base-plate' is not one of the",
+            "write `element_type` as `base_plate`",
+        ),
+        (
+            lambda d: d["element_params"].update(hole_dia=5),
+            "element_params.hole_dia: Extra inputs are not permitted",
+            "remove `element_params.hole_dia`, which a BasePlate does not have",
+        ),
+    ],
+)
+def test_compile_spec_reports_what_the_screen_would_refuse(change, error, remedy):
+    """Its description promises it resolves references and reports every refusal. It
+    compiled an unknown material, an unknown element type and element parameters that do
+    not build with `errors: []`, and published a subject for each."""
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent
+    document = yaml.safe_load((root / "examples" / "base_plate.spec.yaml").read_text())
+    change(document)
+    answer = _call("compile_spec", {"document": document})
+    content = answer["result"]["structuredContent"]
+    assert answer["result"]["isError"] is True
+    assert any(line.startswith(error) for line in content["errors"]), content["errors"]
+    assert remedy in content["remedies"]
+    assert "subject" not in content
+
+
 def test_a_boolean_is_not_a_number():
     """`isinstance(True, int)` is True in Python and a boolean is not a number in JSON, so
     a bare isinstance check would accept `width_px: true` as a pixel count."""

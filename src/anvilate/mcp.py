@@ -1297,6 +1297,11 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         # document it could not even attempt, and it still belongs in `errors` rather than
         # crashing the loop that called it.
         return {"errors": [_reason(failure)]}
+    from .screening import _compile_findings
+
+    problems, remedies = _compile_findings(spec)
+    if problems:
+        return {"errors": problems, "remedies": remedies}
     # Published, so the next call has something to name. A compiled document is the subject
     # `run_validation` and the geometry tools act on, and a handle is what keeps the payload
     # off the wire without giving the server a memory between calls.

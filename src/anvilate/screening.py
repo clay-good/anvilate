@@ -1523,6 +1523,74 @@ def _near_misses(ref: str, known: list[str]) -> str:
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 
+def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
+    """What a screen of ``spec`` would refuse before computing anything, as refusal lines
+    and remedies: an unknown material or standard component, an element type no pack
+    screens, and element parameters the element's own model refuses.
+
+    For MCP's `compile_spec`, whose description promises it resolves references and reports
+    every refusal. It returned no errors for `material: {ref: A36}`, `element_type:
+    base-plate` and a `width: 300` with no unit, and the agent learned otherwise only from
+    a card of NOT_EVALUATED entries a call later. The screen itself still answers each of
+    these as an entry, since a card must say what it could not run.
+    """
+    resolver = _default_resolver()
+    problems: list[str] = []
+    remedies: list[str] = []
+    ref = spec.material.ref
+    if not resolver.has_material(ref):
+        known = resolver.known_materials()
+        problems.append(
+            _refusal_line("material.ref", f"unknown material {ref!r} — {_near_misses(ref, known)}")
+        )
+        if near := _near_identifiers(ref, known):
+            remedies.append(f"write `material.ref` as `{near[0]}`")
+    for index, interface in enumerate(spec.interfaces):
+        if interface.type == "standard_component" and not resolver.has_component(interface.ref):
+            known = resolver.known_components()
+            problems.append(
+                _refusal_line(
+                    f"interfaces.{index}.ref",
+                    f"unknown component {interface.ref!r} — {_near_misses(interface.ref, known)}",
+                )
+            )
+            if near := _near_identifiers(interface.ref, known):
+                remedies.append(f"write `interfaces.{index}.ref` as `{near[0]}`")
+    if spec.element_type is None:
+        return problems, remedies
+    registry = element_registry()
+    if spec.element_type not in registry:
+        near = difflib.get_close_matches(spec.element_type, sorted(registry), n=1)
+        problems.append(
+            _refusal_line(
+                "element_type",
+                f"{spec.element_type!r} is not one of the {len(registry)} elements this library "
+                "screens" + (f"; did you mean {near[0]!r}?" if near else ""),
+            )
+        )
+        if near:
+            remedies.append(f"write `element_type` as `{near[0]}`")
+        return problems, remedies
+    model = registry[spec.element_type][0]
+    try:
+        model.model_validate(dict(spec.element_params))
+    except ValidationError as refused:
+        for error in refused.errors():
+            location = ".".join(str(part) for part in error["loc"])
+            remedy = _remedy(error, model)
+            problems.append(
+                _refusal_line(
+                    f"element_params.{location}" if location else "element_params",
+                    error["msg"] + (f" — {remedy}" if remedy else ""),
+                )
+            )
+            if remedy:
+                # The element's remedy names its field from inside the element; the document
+                # spells it from the top.
+                remedies.append(remedy.replace("`", "`element_params.", 1) if location else remedy)
+    return problems, remedies
+
+
 def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[ScorecardEntry]:
     """One entry for the material, one per declared interface.
 
