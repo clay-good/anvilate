@@ -32,6 +32,11 @@
       family, since timber screens through NDS reference values rather than the database.
       `specbench.suite_accounting` is that census in code, so the count moves on its own
       as materials land rather than going stale in a document.
+      **2026-09-25:** a document can now name timber. The `timber_beam` element takes NDS
+      reference values as records, and its species and grade resolve the document's
+      `material.ref` (`examples/timber_joist.spec.yaml`). That is the prerequisite the
+      timber family named; the six timber cases are furniture parts rather than beams, so
+      none compiles yet and the census is unchanged
 
 ## 2. Agent-driving suite
 

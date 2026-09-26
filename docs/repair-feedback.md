@@ -65,8 +65,8 @@ isolator frequency ratio already did.
 
 ### Every screen records whether it has a lever
 
-`docs/api/repair-levers.txt` holds the decision for all 83 public screens.
-There are 55 levers across 32 of them, and 51 recorded as having none yet — each
+`docs/api/repair-levers.txt` holds the decision for all 84 public screens.
+There are 56 levers across 33 of them, and 51 recorded as having none yet — each
 figure gated against the file it describes. A screen without a lever is a gap someone
 wrote down, not one nobody noticed: the same contract `design-inverses.txt` holds
 over the inverses.

@@ -1523,6 +1523,23 @@ def _near_misses(ref: str, known: list[str]) -> str:
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 
+def _element_material(spec: DesignSpec) -> str | None:
+    """The material an element's own records state, for one that carries them, or None.
+
+    A timber beam's NDS reference values name their species and grade, and no bundled table
+    carries wood, so the document's `material.ref` is resolved against those records.
+    """
+    entry = element_registry().get(spec.element_type or "")
+    if entry is None:
+        return None
+    try:
+        element = entry[0].model_validate(dict(spec.element_params))
+    except ValueError:
+        return None
+    declared = getattr(element, "declared_material", None)
+    return declared if isinstance(declared, str) else None
+
+
 def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
     """What a screen of ``spec`` would refuse before computing anything, as refusal lines
     and remedies: an unknown material or standard component, an element type no pack
@@ -1538,7 +1555,16 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     remedies: list[str] = []
     ref = spec.material.ref
-    if not resolver.has_material(ref):
+    stated = _element_material(spec)
+    if stated is not None and ref != stated:
+        problems.append(
+            _refusal_line(
+                "material.ref",
+                f"{ref!r} is not the material the element's records are for, {stated!r}",
+            )
+        )
+        remedies.append(f"write `material.ref` as `{stated}`")
+    elif stated is None and not resolver.has_material(ref):
         known = resolver.known_materials()
         problems.append(
             _refusal_line("material.ref", f"unknown material {ref!r} — {_near_misses(ref, known)}")
@@ -1638,6 +1664,24 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
             underived=_A_RECORD_IS_FOUND_OR_IT_IS_NOT,
         )
     ]
+    stated = _element_material(spec)
+    if stated is not None:
+        # The element's records are the material, and the database is not consulted: a
+        # document naming ASTM-A36 for a Douglas Fir joist resolved, and its entry passed.
+        entries[0] = ScorecardEntry(
+            name="material resolution",
+            status=CheckStatus.PASS if spec.material.ref == stated else CheckStatus.FAIL,
+            detail=(
+                f"{stated} is the species and grade the {spec.element_type}'s reference "
+                "values are declared for, and every property its screen uses comes from "
+                "those records rather than the materials database"
+                if spec.material.ref == stated
+                else f"the document names {spec.material.ref!r} and the {spec.element_type}'s "
+                f"reference values are for {stated!r}; name the one material the part is "
+                "made of"
+            ),
+            underived=_A_RECORD_IS_FOUND_OR_IT_IS_NOT,
+        )
     for interface in spec.interfaces:
         if interface.type == "imported":
             # An imported interface names another spec's published contract, and resolving

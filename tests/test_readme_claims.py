@@ -520,6 +520,7 @@ def test_the_screen_counts_on_the_screening_page_are_the_registrys_own():
         "twenty-seven": 27,
         "twenty-eight": 28,
         "twenty-nine": 29,
+        "thirty": 30,
     }
     claimed_judged, claimed_total = re.search(
         r"([\w-]+) of the ([\w-]+) screens\s+are judged against one",

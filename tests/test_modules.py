@@ -244,11 +244,12 @@ def test_the_standards_drift_helper_reads_both_directions() -> None:
                 "machinery": {"AGMA"},
                 "masonry": {"TMS"},
                 "structural": {"ACI", "AISC", "ASME"},
+                "timber": {"NDS"},
                 "ventilation": {"ASHRAE"},
             }
         )
         assert conftest._standards_drift() == []
-        assert conftest._observed_standard_citations() == 8
+        assert conftest._observed_standard_citations() == 9
 
         # A body cited and not declared is the other direction, and it is named.
         conftest._screen_standards["hydraulics"] = {"ASME"}
@@ -282,7 +283,7 @@ def test_a_subset_records_what_it_turned_off_and_reaches_only_its_own_screens() 
         manifest_for("industrial").screens
     )
     assert "screen_gear_mesh" not in run.screens()
-    assert "8 disabled" in str(run)
+    assert "9 disabled" in str(run)
 
 
 def test_a_module_nobody_enabled_cannot_be_loaded() -> None:

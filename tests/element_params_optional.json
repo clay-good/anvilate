@@ -492,5 +492,155 @@
    }
   },
   "element_type": "infinite_slope"
+ },
+ "timber_beam/point": {
+  "element_params": {
+   "bending": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "F_b",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 900.0,
+     "unit": "psi"
+    }
+   },
+   "bending_factors": {
+    "C_D": 1.0,
+    "C_F": 1.1
+   },
+   "deflection_limit": {
+    "magnitude": 0.4,
+    "unit": "inch"
+   },
+   "depth": {
+    "magnitude": 9.25,
+    "unit": "inch"
+   },
+   "load": {
+    "magnitude": 500.0,
+    "unit": "lbf"
+   },
+   "load_type": "point",
+   "modulus": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "E",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 1600000.0,
+     "unit": "psi"
+    }
+   },
+   "name": "joist",
+   "shear": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "F_v",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 180.0,
+     "unit": "psi"
+    }
+   },
+   "shear_factors": {
+    "C_D": 1.0
+   },
+   "span": {
+    "magnitude": 12.0,
+    "unit": "ft"
+   },
+   "width": {
+    "magnitude": 1.5,
+    "unit": "inch"
+   }
+  },
+  "element_type": "timber_beam"
+ },
+ "timber_beam/sustained": {
+  "element_params": {
+   "bending": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "F_b",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 900.0,
+     "unit": "psi"
+    }
+   },
+   "bending_factors": {
+    "C_D": 1.0,
+    "C_F": 1.1
+   },
+   "creep_factor": 1.5,
+   "deflection_limit": {
+    "magnitude": 0.4,
+    "unit": "inch"
+   },
+   "depth": {
+    "magnitude": 9.25,
+    "unit": "inch"
+   },
+   "load": {
+    "magnitude": 80.0,
+    "unit": "lbf/ft"
+   },
+   "modulus": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "E",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 1600000.0,
+     "unit": "psi"
+    }
+   },
+   "name": "joist",
+   "shear": {
+    "edition": "2018",
+    "grade": "No. 2",
+    "property": "F_v",
+    "size_classification": "dimension lumber",
+    "species": "Douglas Fir-Larch",
+    "standard": "NDS",
+    "table": "Supplement Table 4A",
+    "value": {
+     "magnitude": 180.0,
+     "unit": "psi"
+    }
+   },
+   "shear_factors": {
+    "C_D": 1.0
+   },
+   "span": {
+    "magnitude": 12.0,
+    "unit": "ft"
+   },
+   "sustained_load": {
+    "magnitude": 40.0,
+    "unit": "lbf/ft"
+   },
+   "width": {
+    "magnitude": 1.5,
+    "unit": "inch"
+   }
+  },
+  "element_type": "timber_beam"
  }
 }

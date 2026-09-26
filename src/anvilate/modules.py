@@ -301,6 +301,14 @@ MODULE_MANIFESTS = ModuleRegistry(
             summary="steel, concrete and pressure members, and the connections between them",
         ),
         _manifest(
+            "timber",
+            covers=("timber_beam",),
+            screens=("screen_timber_beam",),
+            standards=("NDS",),
+            unit_default=UnitSystem.US,
+            summary="sawn-lumber beams: NDS bending, shear and creep deflection",
+        ),
+        _manifest(
             "ventilation",
             covers=("ventilation_zone",),
             screens=("screen_ventilation",),

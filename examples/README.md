@@ -259,6 +259,9 @@ loadable with `anvilate.spec.load_spec_yaml` — the typed, diffable representat
 prompt compiles into. It predates `element_type`, so screening it reports the analytical
 tier as a named gap; that is the document to read for the IR's shape.
 
+`timber_joist.spec.yaml` is a wood joist screened by NDS, with its species and grade as the
+material: see [timber screening](../docs/timber-screening.md).
+
 `padeye.spec.yaml` is the one to *run*. It is the document the README shows, shipped so a
 reader can screen it rather than retype it:
 

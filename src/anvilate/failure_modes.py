@@ -496,6 +496,17 @@ DEFAULT_CATALOG = ModeCatalog(
             tested_by=("transverse-vibration",),
         ),
         FailureMode(
+            id="timber creep under sustained load",
+            description=(
+                "a wood beam carrying a long-term load continuing to sag for years after the "
+                "short-term deflection its screen computed, by a creep factor of 1.5 for "
+                "seasoned lumber and 2.0 for green or wet"
+            ),
+            applicability=Applicability(elements=("timber_beam",)),
+            stage=DiscoveryStage.FIELD,
+            citation="NDS 2018 §3.5.2 long-term loading, creep factor K_cr",
+        ),
+        FailureMode(
             id="galvanic corrosion",
             description=(
                 "the less noble metal of a wetted dissimilar-metal pair corroding at the "

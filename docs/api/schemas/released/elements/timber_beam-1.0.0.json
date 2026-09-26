@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "SizeClassification": {
+      "description": "How the piece was graded, which decides how the size factor behaves.\n\nDimension lumber (nominal 2 to 4 in thick) is graded to one set of rules and takes the\ntabulated C_F; beams and stringers and posts and timbers are 5 in and thicker, graded\nto another, and take C_F = (12/d)^(1/9) once the depth exceeds 12 in. A value read from\nthe dimension-lumber table and adjusted as a timber is two mistakes, not one.",
+      "enum": [
+        "dimension lumber",
+        "beams and stringers",
+        "posts and timbers",
+        "boards"
+      ],
+      "title": "SizeClassification",
+      "type": "string"
+    },
+    "TimberDesignValue": {
+      "description": "One NDS reference design value, with what it is a value *of*.\n\n``value`` is the tabulated reference number — before any adjustment. What it becomes\nis :meth:`adjusted`, and the factors it will accept are the ones NDS Table 4.3.1 lists\nfor its :attr:`property`.",
+      "properties": {
+        "edition": {
+          "title": "Edition",
+          "type": "string"
+        },
+        "grade": {
+          "title": "Grade",
+          "type": "string"
+        },
+        "property": {
+          "$ref": "#/$defs/TimberProperty"
+        },
+        "size_classification": {
+          "$ref": "#/$defs/SizeClassification"
+        },
+        "species": {
+          "title": "Species",
+          "type": "string"
+        },
+        "standard": {
+          "title": "Standard",
+          "type": "string"
+        },
+        "table": {
+          "title": "Table",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "standard",
+        "edition",
+        "table",
+        "species",
+        "grade",
+        "size_classification",
+        "property",
+        "value"
+      ],
+      "title": "TimberDesignValue",
+      "type": "object"
+    },
+    "TimberLoad": {
+      "description": "How the load sits on the span: spread along it, or at midspan.",
+      "enum": [
+        "distributed",
+        "point"
+      ],
+      "title": "TimberLoad",
+      "type": "string"
+    },
+    "TimberProperty": {
+      "description": "Which reference design value a number is.\n\nSeven different numbers for the same piece of wood, and the reason this enum exists\nrather than a string: the factor chain each one takes is different, and the difference\nis not visible in the number.",
+      "enum": [
+        "F_b",
+        "F_t",
+        "F_v",
+        "F_c",
+        "F_c_perp",
+        "E",
+        "E_min"
+      ],
+      "title": "TimberProperty",
+      "type": "string"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/elements/timber_beam/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'timber_beam': the fields a Design Spec puts in `element_params` when it declares `element_type: timber_beam`. Generated from anvilate.packs.timber.TimberBeam.",
+  "properties": {
+    "bending": {
+      "$ref": "#/$defs/TimberDesignValue"
+    },
+    "bending_factors": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Bending Factors",
+      "type": "object"
+    },
+    "creep_factor": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creep Factor"
+    },
+    "deflection_limit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "depth": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "load_type": {
+      "$ref": "#/$defs/TimberLoad",
+      "default": "distributed"
+    },
+    "modulus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TimberDesignValue"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "modulus_factors": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Modulus Factors",
+      "type": "object"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "shear": {
+      "$ref": "#/$defs/TimberDesignValue"
+    },
+    "shear_factors": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Shear Factors",
+      "type": "object"
+    },
+    "span": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "sustained_load": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "width",
+    "depth",
+    "span",
+    "load",
+    "bending",
+    "shear"
+  ],
+  "title": "TimberBeam",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

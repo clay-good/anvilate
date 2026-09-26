@@ -45,7 +45,7 @@ Performance budgets
 
 Failure modes
 -------------
-  failure modes: 0 of 1 applicable addressed by a check that ran, 1 left to a physical test, 0 unaddressed, from a catalogue of 29
+  failure modes: 0 of 1 applicable addressed by a check that ran, 1 left to a physical test, 0 unaddressed, from a catalogue of 30
     this catalogue is a floor and never an exhaustive list: it says what this library knows to ask about, not that nothing else can go wrong
     a mode applies only on a fact the document states: an element, an interface kind, an environment, a material pair the two references make dissimilar, or a declared assembly. A key the document leaves out is never read as benign — the mode simply cannot apply, and the design may still be exposed to it
     bolt self-loosening: no check; left to transverse vibration (Junker) test

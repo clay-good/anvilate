@@ -34,6 +34,7 @@ optomechanics.surface_limits_scorecard -> a cement or coating failing at an envi
 optomechanics.outgassing_census_scorecard -> condensable outgassing on an optical surface
 optomechanics.cleanliness_scorecard -> particulate on an optical surface from the assembly room
 optomechanics.adjustment_scorecard -> an adjustment that does not reach or does not hold
+timber.screen_timber_beam -> timber creep under sustained load
 
 ## declares none yet
 optomechanics.obscuration_scorecard

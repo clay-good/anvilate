@@ -1,0 +1,22 @@
+anvilate_spec: "1.18.0"
+name: joist
+description: A 2x10 floor joist over a 12 ft span.
+units: {value: US, origin: user_stated}
+material: {ref: Douglas Fir-Larch No. 2}
+manufacturing: {process: cnc_milling}
+acceptance: {tiers: [T1_analytical]}
+element_type: timber_beam
+element_params:
+  name: joist
+  width: {magnitude: 1.5, unit: inch}
+  depth: {magnitude: 9.25, unit: inch}
+  span: {magnitude: 12, unit: ft}
+  load: {magnitude: 80, unit: lbf/ft}
+  sustained_load: {magnitude: 40, unit: lbf/ft}
+  creep_factor: 1.5
+  deflection_limit: {magnitude: 0.4, unit: inch}
+  bending: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: F_b, value: {magnitude: 900, unit: psi}}
+  bending_factors: {C_D: 1.0, C_F: 1.1}
+  shear: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: F_v, value: {magnitude: 180, unit: psi}}
+  shear_factors: {C_D: 1.0}
+  modulus: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: E, value: {magnitude: 1600000, unit: psi}}

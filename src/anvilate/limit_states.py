@@ -369,6 +369,21 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("structural.screen_beam_column", "tension interaction"),
         ),
         _state(
+            "timber.beam_bending",
+            "a sawn-lumber beam exceeding its NDS adjusted bending design value",
+            ("timber.screen_timber_beam", "bending"),
+        ),
+        _state(
+            "timber.beam_shear",
+            "a sawn-lumber beam exceeding its NDS adjusted shear design value parallel to grain",
+            ("timber.screen_timber_beam", "shear"),
+        ),
+        _state(
+            "timber.beam_deflection",
+            "a sawn-lumber beam sagging past its limit, with creep on its sustained load",
+            ("timber.screen_timber_beam", "deflection"),
+        ),
+        _state(
             "steel.beam_bending",
             "a beam yielding in bending",
             (_BEAM, "bending"),

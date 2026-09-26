@@ -117,6 +117,7 @@ structural.screen_tension_member -> gross_area (solved)
 structural.screen_tension_member -> net_area (solved)
 structural.screen_welded_connection -> leg_size (solved)
 thermal.junction_temperature_scorecard -> thermal_resistance (solved)
+timber.screen_timber_beam -> depth (solved)
 ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
 ## no lever recorded

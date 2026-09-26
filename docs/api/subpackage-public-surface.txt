@@ -113,6 +113,9 @@ packs.structural.screen_shear_plate
 packs.structural.screen_structure
 packs.structural.screen_tension_member
 packs.structural.screen_welded_connection
+packs.timber.TimberBeam
+packs.timber.TimberLoad
+packs.timber.screen_timber_beam
 packs.ventilation.VentilationZone
 packs.ventilation.screen_ventilation
 report.CALC_RECORD_SCHEMA_VERSION

@@ -15,8 +15,8 @@ combined bending-plus-axial interaction (§3.9.2). Each is a closed-form screen 
 an adjusted design value you supply the reference for.
 
 **What is not.** Connections (bolts, nails, screws, shear plates — NDS Chapters 11-13),
-glulam and cross-laminated timber specifics, fire design, deflection and vibration
-serviceability, the size factor C_F and the glulam volume factor C_V as derivations, and
+glulam and cross-laminated timber specifics, fire design, vibration serviceability,
+the size factor C_F and the glulam volume factor C_V as derivations, and
 any diaphragm or shear-wall system behaviour. Those factors can still enter through the
 caller's chain; Anvilate just does not derive them. **The beam stability factor C_L is
 derived now** (§3.3.3) — see below; the Table 3.3.3 conversion from an unbraced length to
@@ -203,6 +203,31 @@ c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compress
 - **`nds_combined_bending_compression`** is the §3.9.2 beam-column interaction
   (f_c/F'_c)² + f_b/[F'_b(1 − f_c/F_cE)] ≤ 1, with the moment-amplification denominator
   guarded against a member that has already buckled.
+
+## A timber beam in a Design Spec
+
+The `timber_beam` element declares a rectangular sawn-lumber beam on two supports and
+screens it by NDS: bending f_b = M/S against F'_b (§3.3), shear f_v = 1.5·V/(b·d) against
+F'_v (§3.4), and, with a `deflection_limit`, the midspan deflection against it (§3.5). Its
+reference values are `TimberDesignValue` records, each with its own factor chain, and a
+factor Table 4.3.1 does not apply to that property is refused by the field that carries it.
+The document's `material.ref` is the species and grade those records are for: no bundled
+table carries wood, so the records resolve it, and naming any other material fails.
+
+A long-term load creeps. Declare the `sustained_load` part of the load and the
+`creep_factor` K_cr (1.5 seasoned in dry service, 2.0 green or wet), and the deflection is
+Δ_T = K_cr·Δ_LT + Δ_ST (§3.5.2). Without them the entry says it is the short-term
+deflection. A failing bending or shear check names the depth that passes, since the
+stresses go as 1/d² and 1/d.
+
+[`examples/timber_joist.spec.yaml`](../examples/timber_joist.spec.yaml) is a 2x10 Douglas
+Fir-Larch No. 2 joist on a 12 ft span at 80 plf, half of it sustained. Bending passes at a
+safety factor of 1.23 (f_b 808 psi against F'_b = 900 × 1.1 = 990 psi), shear at 3.47, and
+the deflection with creep is 0.295 in against 0.4 in, 1.25 times the short-term 0.236 in.
+
+```bash
+anvilate check examples/timber_joist.spec.yaml
+```
 
 ## Examples
 
