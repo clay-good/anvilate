@@ -379,6 +379,11 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("timber.screen_timber_beam", "shear"),
         ),
         _state(
+            "timber.beam_bearing",
+            "a sawn-lumber beam crushing across the grain at a support",
+            ("timber.screen_timber_beam", "bearing"),
+        ),
+        _state(
             "timber.beam_deflection",
             "a sawn-lumber beam sagging past its limit, with creep on its sustained load",
             ("timber.screen_timber_beam", "deflection"),

@@ -171,3 +171,21 @@ def test_the_records_describe_one_piece_of_wood() -> None:
     other = {**_value("F_v", 180.0), "species": "Southern Pine"}
     with pytest.raises(ValidationError, match="describe one piece of wood"):
         _screen(shear=other)
+
+
+def test_the_support_bearing_derives_its_own_area_factor() -> None:
+    """R = 480 lb over a 1.5 x 1.5 in bearing is 213.3 psi across the grain; C_b =
+    (1.5 + 0.375)/1.5 = 1.25 lifts F_c_perp = 625 psi to 781.25 psi."""
+    bearing = {
+        "bearing_length": {"magnitude": 1.5, "unit": "inch"},
+        "compression_perpendicular": _value("F_c_perp", 625.0),
+    }
+    entry = _screen(**bearing)["joist bearing"]
+    assert entry.safety_factor == pytest.approx(781.25 / (480 / 1.5**2), rel=1e-6)
+    # Three inches from the member end or nearer, the fibre past the bearing is not there.
+    near_end = _screen(**bearing, bearing_end_distance={"magnitude": 2.0, "unit": "inch"})
+    assert near_end["joist bearing"].safety_factor == pytest.approx(625 / (480 / 1.5**2))
+    with pytest.raises(ValidationError, match="C_b is derived"):
+        _screen(**bearing, compression_perpendicular_factors={"C_b": 1.25})
+    with pytest.raises(ValidationError, match="declared together"):
+        _screen(bearing_length={"magnitude": 1.5, "unit": "inch"})

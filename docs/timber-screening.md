@@ -208,7 +208,8 @@ c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compress
 
 The `timber_beam` element declares a rectangular sawn-lumber beam on two supports and
 screens it by NDS: bending f_b = M/S against F'_b (§3.3), shear f_v = 1.5·V/(b·d) against
-F'_v (§3.4), and, with a `deflection_limit`, the midspan deflection against it (§3.5). Its
+F'_v (§3.4), with a `deflection_limit` the midspan deflection against it (§3.5), and with a
+`bearing_length` and an F_c⊥ record the reaction across the grain at each support (§3.10). Its
 reference values are `TimberDesignValue` records, each with its own factor chain, and a
 factor Table 4.3.1 does not apply to that property is refused by the field that carries it.
 The document's `material.ref` is the species and grade those records are for: no bundled
@@ -224,6 +225,9 @@ stresses go as 1/d² and 1/d.
 Fir-Larch No. 2 joist on a 12 ft span at 80 plf, half of it sustained. Bending passes at a
 safety factor of 1.23 (f_b 808 psi against F'_b = 900 × 1.1 = 990 psi), shear at 3.47, and
 the deflection with creep is 0.295 in against 0.4 in, 1.25 times the short-term 0.236 in.
+On a 1.5 in bearing the 480 lb reaction is 213 psi across the grain, against
+F'_c⊥ = 625 × 1.25 = 781 psi with the bearing area factor C_b = (1.5 + 0.375)/1.5 derived
+from the bearing length (§3.10.4): a safety factor of 3.66.
 
 ```bash
 anvilate check examples/timber_joist.spec.yaml

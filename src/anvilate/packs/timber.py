@@ -21,6 +21,9 @@ from pydantic import ConfigDict, Field, model_validator
 from .._models import FrozenMap, Named
 from ..analysis import (
     deflection_scorecard,
+    nds_bearing_area_factor,
+    nds_bearing_scorecard,
+    nds_bearing_stress,
     nds_bending_scorecard,
     nds_shear_scorecard,
     nds_shear_stress,
@@ -50,6 +53,7 @@ __all__ = [
 _NDS_BENDING = "NDS {edition} §3.3 bending"
 _NDS_SHEAR = "NDS {edition} §3.4 shear parallel to grain"
 _NDS_DEFLECTION = "NDS {edition} §3.5 deflection"
+_NDS_BEARING = "NDS {edition} §3.10 bearing perpendicular to grain"
 
 # The catalogue's mode, by id: the deflection check addresses it only when it has been told
 # which part of the load is sustained.
@@ -90,10 +94,22 @@ class TimberBeam(GuardedInputs):
     stored contents, say), and ``creep_factor`` K_cr the NDS §3.5.2 multiplier on its
     deflection: 1.5 for seasoned lumber in dry service, 2.0 for unseasoned or wet. The two are
     declared together, and without them the deflection is the short-term one and says so.
+
+    ``bearing_length`` l_b, the length of each support along the grain, with the F_c⊥
+    record ``compression_perpendicular`` and its ``compression_perpendicular_factors``, adds a
+    bearing check at the supports. The bearing area factor C_b is derived from l_b and the
+    optional ``bearing_end_distance`` (NDS §3.10.4), so the document does not state it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    positive_fields = ("width", "depth", "span", "deflection_limit", "creep_factor")
+    positive_fields = (
+        "width",
+        "depth",
+        "span",
+        "deflection_limit",
+        "creep_factor",
+        "bearing_length",
+    )
 
     name: Named
     width: Quantity
@@ -110,6 +126,10 @@ class TimberBeam(GuardedInputs):
     deflection_limit: Quantity | None = None
     sustained_load: Quantity | None = None
     creep_factor: float | None = None
+    bearing_length: Quantity | None = None
+    bearing_end_distance: Quantity | None = None
+    compression_perpendicular: TimberDesignValue | None = None
+    compression_perpendicular_factors: FrozenMap[str, float] = Field(default_factory=_no_factors)
 
     @model_validator(mode="after")
     def _well_formed(self) -> TimberBeam:
@@ -153,13 +173,38 @@ class TimberBeam(GuardedInputs):
             ("bending", self.bending, TimberProperty.BENDING),
             ("shear", self.shear, TimberProperty.SHEAR),
             ("modulus", self.modulus, TimberProperty.MODULUS),
+            (
+                "compression_perpendicular",
+                self.compression_perpendicular,
+                TimberProperty.COMPRESSION_PERPENDICULAR,
+            ),
         ):
             if record is not None and record.property is not wanted:
                 raise ValueError(
                     f"{field} must be the {wanted.value} reference value; this record is "
                     f"{record.property.value}"
                 )
-        records = [r for r in (self.bending, self.shear, self.modulus) if r is not None]
+        if (self.bearing_length is None) != (self.compression_perpendicular is None):
+            raise ValueError(
+                "bearing_length and compression_perpendicular are declared together: the "
+                "bearing check needs the length of each support and the F_c_perp value"
+            )
+        for value, name in (
+            (self.bearing_length, "bearing_length"),
+            (self.bearing_end_distance, "bearing_end_distance"),
+        ):
+            if value is not None and not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if "C_b" in self.compression_perpendicular_factors:
+            raise ValueError(
+                "compression_perpendicular_factors: C_b is derived from bearing_length and "
+                "bearing_end_distance (NDS §3.10.4), so the document does not state it"
+            )
+        records = [
+            r
+            for r in (self.bending, self.shear, self.modulus, self.compression_perpendicular)
+            if r is not None
+        ]
         woods = {(r.species, r.grade) for r in records}
         if len(woods) > 1:
             raise ValueError(
@@ -172,10 +217,15 @@ class TimberBeam(GuardedInputs):
             ("bending_factors", self.bending, self.bending_factors),
             ("shear_factors", self.shear, self.shear_factors),
             ("modulus_factors", self.modulus, self.modulus_factors),
+            (
+                "compression_perpendicular_factors",
+                self.compression_perpendicular,
+                self.compression_perpendicular_factors,
+            ),
         ):
             if record is None:
                 if factors:
-                    raise ValueError(f"{field} were given with no modulus to apply them to")
+                    raise ValueError(f"{field} were given with no record to apply them to")
                 continue
             try:
                 record.adjusted(factors)
@@ -331,6 +381,25 @@ def screen_timber_beam(beam: TimberBeam) -> Scorecard:
             1.0,
         ),
     ]
+    if beam.bearing_length is not None and beam.compression_perpendicular is not None:
+        area_factor = nds_bearing_area_factor(
+            bearing_length=beam.bearing_length, end_distance=beam.bearing_end_distance
+        )
+        chain = {**beam.compression_perpendicular_factors, "C_b": area_factor}
+        entries.append(
+            _with_source(
+                nds_bearing_scorecard(
+                    f"{beam.name} bearing",
+                    bearing_stress=nds_bearing_stress(
+                        bearing_force=Quantity(magnitude=shear, unit="N"),
+                        width=beam.width,
+                        bearing_length=beam.bearing_length,
+                    ),
+                    adjusted_bearing_value=beam.compression_perpendicular.adjusted(chain),
+                ),
+                beam.compression_perpendicular,
+            ).model_copy(update={"reference": _NDS_BEARING.format(edition=edition)})
+        )
     if beam.deflection_limit is not None:
         if beam.modulus is None:
             entries.append(

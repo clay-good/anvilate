@@ -14,9 +14,11 @@ element_params:
   load: {magnitude: 80, unit: lbf/ft}
   sustained_load: {magnitude: 40, unit: lbf/ft}
   creep_factor: 1.5
+  bearing_length: {magnitude: 1.5, unit: inch}
   deflection_limit: {magnitude: 0.4, unit: inch}
   bending: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: F_b, value: {magnitude: 900, unit: psi}}
   bending_factors: {C_D: 1.0, C_F: 1.1}
   shear: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: F_v, value: {magnitude: 180, unit: psi}}
   shear_factors: {C_D: 1.0}
+  compression_perpendicular: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: F_c_perp, value: {magnitude: 625, unit: psi}}
   modulus: {standard: NDS, edition: "2018", table: Supplement Table 4A, species: Douglas Fir-Larch, grade: No. 2, size_classification: dimension lumber, property: E, value: {magnitude: 1600000, unit: psi}}

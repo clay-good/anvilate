@@ -494,6 +494,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "spur_gear_mesh": "1.1.0",
     "structure": "1.1.0",
     "tension_member": "1.2.0",
+    # 1.1.0 adds the support bearing check's optional fields.
+    "timber_beam": "1.1.0",
     "transmission_shaft": "1.1.0",
     "ventilation_zone": "1.2.0",
     "welded_connection": "1.2.0",
