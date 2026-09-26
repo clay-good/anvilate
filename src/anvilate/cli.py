@@ -768,7 +768,8 @@ def _derived_remedies(lines: tuple[str, ...], command: str) -> tuple[str, ...]:
                 f"pass {found.group(1)} — `anvilate {command} --help` lists what it takes"
             )
         elif found := re.search(r"invalid choice: '([^']*)' \(choose from (.+)\)$", line):
-            choices = re.findall(r"'([^']*)'", found.group(2))
+            # Python 3.12 lists the choices bare and 3.11 and 3.13 quote them.
+            choices = [choice.strip().strip("'") for choice in found.group(2).split(",")]
             near = difflib.get_close_matches(found.group(1), choices, n=1)
             remedies.append(
                 f"use {near[0]!r} rather than {found.group(1)!r}"
