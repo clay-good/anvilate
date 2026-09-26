@@ -383,8 +383,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build or regenerate the part",
             description=(
                 "Build the audited pattern selected by the Design Spec and return its B-Rep "
-                "geometry summary. The current registry supports base_plate, cover_plate, and "
-                "transmission_shaft. "
+                "geometry summary. The current registry supports base_plate, cover_plate, "
+                "transmission_shaft, and timber_beam. "
                 "No caller code "
                 "is executed, so the bounded primitive build replies synchronously."
             ),

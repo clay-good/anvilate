@@ -231,7 +231,12 @@ from the bearing length (§3.10.4): a safety factor of 3.66.
 
 ```bash
 anvilate check examples/timber_joist.spec.yaml
+anvilate build examples/timber_joist.spec.yaml --output joist.step
 ```
+
+The build is the audited `timber_beam/1` pattern: a box of the dressed width and depth over
+the span, depth vertical, with the bearing ends not modelled, since the element states a
+bearing length and not how far the member runs past it.
 
 ## Examples
 

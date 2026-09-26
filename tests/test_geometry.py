@@ -1357,3 +1357,22 @@ def test_the_same_tolerances_give_the_same_bytes(tmp_path):
         build_base_plate(_plate()), second, authorization=_STEP_AUTH, tolerances=_tolerances()
     )
     assert first.read_bytes() == second.read_bytes()
+
+
+def test_a_timber_beam_builds_as_its_dressed_section_over_its_span():
+    """The joist example: 1.5 x 9.25 in over 12 ft is 38.1 x 234.95 x 3,657.6 mm."""
+    from pathlib import Path
+
+    from anvilate.geometry import TIMBER_BEAM_PATTERN, build_spec
+    from anvilate.spec import load_spec_yaml
+
+    root = Path(__file__).resolve().parents[1]
+    built = build_spec(load_spec_yaml((root / "examples" / "timber_joist.spec.yaml").read_text()))
+    assert built.pattern == TIMBER_BEAM_PATTERN
+    assert dict(built.dimensions_mm) == pytest.approx(
+        {"width": 38.1, "span": 3657.6, "depth": 234.95}
+    )
+    bounds = built.shape.bounding_box()
+    assert bounds.max.Z - bounds.min.Z == pytest.approx(234.95)
+    assert built.shape.volume == pytest.approx(38.1 * 234.95 * 3657.6, rel=1e-9)
+    assert set(built.faces) == {"top", "bottom", "north", "south", "east", "west"}

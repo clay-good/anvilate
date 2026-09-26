@@ -6,7 +6,7 @@ export layer is pointed, and, for each claim, whether it was confirmed from a pr
 or is carried as unverified. Dates are named where they affect the conclusion.
 
 A plain validation-gated AP242 STEP B-Rep writer is now shipped through `anvilate build` for
-the audited `base_plate/1`, `cover_plate/1`, and `transmission_shaft/1` patterns. It writes
+the audited `base_plate/1`, `cover_plate/1`, `transmission_shaft/1` and `timber_beam/1` patterns. It writes
 valid solid geometry with a deterministic validation watermark and declares OCCT's managed
 model-based 3D engineering schema. It also writes CAx-IF v4.6 part-level volume, total
 surface area, and centroid properties, then verifies them against a fresh import before

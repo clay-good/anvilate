@@ -3,7 +3,7 @@
 All four commands `headless-automation` names are backed; `verify` from
 `evidence-attestation`, mating-STEP inspection from `input-ingestion`, and the environment
 self-check `doctor` are backed too. Geometry is pattern-limited: `base_plate`,
-`cover_plate`, and `transmission_shaft` build today, and an element whose audited pattern
+`cover_plate`, `transmission_shaft` and `timber_beam` build today, and an element whose audited pattern
 has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |

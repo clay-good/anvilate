@@ -33,6 +33,7 @@ from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
+from .packs.timber import TimberBeam
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import CircularLocator, DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
@@ -41,6 +42,7 @@ __all__ = [
     "BASE_PLATE_PATTERN",
     "COVER_PLATE_PATTERN",
     "TRANSMISSION_SHAFT_PATTERN",
+    "TIMBER_BEAM_PATTERN",
     "BuiltGeometry",
     "GeometryError",
     "GeometrySummary",
@@ -71,6 +73,7 @@ __all__ = [
     "build_base_plate",
     "build_cover_plate",
     "build_transmission_shaft",
+    "build_timber_beam",
     "build_spec",
     "confirm_step_interface",
     "confirm_planar_contact",
@@ -92,6 +95,7 @@ __all__ = [
 BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 TRANSMISSION_SHAFT_PATTERN = "transmission_shaft/1"
+TIMBER_BEAM_PATTERN = "timber_beam/1"
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
 _AP214_SCHEMA = "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }"
@@ -2076,6 +2080,31 @@ def build_transmission_shaft(
     return built
 
 
+def build_timber_beam(beam: TimberBeam) -> BuiltGeometry:
+    """Build an audited timber beam: a box of its dressed width and depth over its span.
+
+    The solid is the member between its supports, ``span`` long, with ``depth`` vertical:
+    the ends that sit on the bearings are not modelled, because the element declares a
+    bearing length and not how far the member runs past it. The faces are named as the
+    base plate's are, so the top face is the one the load bears on.
+    """
+    width = _positive_mm(beam.width, "width", element="timber_beam")
+    depth = _positive_mm(beam.depth, "depth", element="timber_beam")
+    span = _positive_mm(beam.span, "span", element="timber_beam")
+    Align, Box, _Cylinder, _export_step = _kernel()
+    shape = Box(width, span, depth, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    built = BuiltGeometry(
+        name=str(beam.name),
+        pattern=TIMBER_BEAM_PATTERN,
+        shape=shape,
+        faces=_tag_box_faces(shape),
+        dimensions_mm=MappingProxyType({"width": width, "span": span, "depth": depth}),
+    )
+    if not built.is_valid:  # pragma: no cover - guarded Box dimensions are valid
+        raise GeometryError("timber_beam pattern did not produce one valid positive-volume solid")
+    return built
+
+
 def build_spec(spec: DesignSpec) -> BuiltGeometry:
     """Build the audited geometry pattern selected by a Design Spec."""
     try:
@@ -2087,12 +2116,14 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
             return build_transmission_shaft(
                 TransmissionShaft(**dict(spec.element_params)), name=str(spec.name)
             )
+        if spec.element_type == "timber_beam":
+            return build_timber_beam(TimberBeam(**dict(spec.element_params)))
     except ValueError as failure:
         raise GeometryError(f"invalid {spec.element_type} element_params: {failure}") from failure
     tag = spec.element_type or "<undeclared>"
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {tag!r}; "
-        "supported: base_plate, cover_plate, transmission_shaft"
+        "supported: base_plate, cover_plate, transmission_shaft, timber_beam"
     )
 
 
@@ -2202,6 +2233,7 @@ def render_viewport(
         BASE_PLATE_PATTERN,
         COVER_PLATE_PATTERN,
         TRANSMISSION_SHAFT_PATTERN,
+        TIMBER_BEAM_PATTERN,
     }:
         raise UnsupportedGeometry(f"viewport rendering has no projector for {built.pattern!r}")
     if not 64 <= width_px <= 4096:
