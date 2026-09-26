@@ -62,8 +62,10 @@ from __future__ import annotations
 import argparse
 import codecs
 import contextlib
+import difflib
 import io
 import json
+import re
 import shutil
 import sys
 import textwrap
@@ -724,10 +726,66 @@ def _state_remedies(remedies: tuple[str, ...]) -> None:
     _STATED_REMEDIES.set(_STATED_REMEDIES.get() + remedies)
 
 
+def _derived_remedies(lines: tuple[str, ...], command: str) -> tuple[str, ...]:
+    """A remedy for each refusal this CLI emits in a known form, read off its own wording.
+
+    interaction-quality 2.1: the JSON `remedy` a script reads was the generic "correct the
+    arguments or input document named in diagnostics" for a missing file, a UTF-16 file, a
+    YAML syntax error, a missing optional dependency, an export past a failing card and every
+    argparse error, although most of those diagnostics already say what to do. The forms are
+    this tool's own (and argparse's, which it does not reword), so each is matched exactly;
+    anything else keeps the generic sentence.
+    """
+    remedies: list[str] = []
+    for line in lines:
+        if found := re.search(r"No such file or directory: '([^']+)'", line):
+            missing = Path(found.group(1))
+            siblings = [p.name for p in missing.parent.iterdir()] if missing.parent.is_dir() else []
+            near = difflib.get_close_matches(missing.name, siblings, n=1)
+            hint = f", did you mean {missing.parent / near[0]}?" if near else ""
+            remedies.append(f"check the path {missing}: nothing exists there{hint}")
+        elif "no Design Spec found in" in line:
+            remedies.append(
+                f"point anvilate {command} at a Design Spec, a YAML file declaring "
+                "`anvilate_spec`, or at a directory that holds one"
+            )
+        elif found := re.search(r"(Re-save it as UTF-8[^.]*\))\.?$", line):
+            remedies.append(found.group(1))
+        elif found := re.search(r"line (\d+), column (\d+): the document is not valid YAML", line):
+            remedies.append(
+                f"fix the YAML at line {found.group(1)}, column {found.group(2)}: every "
+                "bracket, brace and quote opened before it must close"
+            )
+        elif "install anvilate[geometry]" in line or "anvilate[geometry]" in line:
+            remedies.append("install the geometry runtime with `pip install 'anvilate[geometry]'`")
+        elif "anvilate export has no override" in line:
+            remedies.append(
+                "fix the failing checks the card names, or export `--artifact evidence-bundle`, "
+                "which is served whatever the verdict and carries the failure"
+            )
+        elif found := re.search(r"the following arguments are required: (.+)$", line):
+            remedies.append(
+                f"pass {found.group(1)} — `anvilate {command} --help` lists what it takes"
+            )
+        elif found := re.search(r"invalid choice: '([^']*)' \(choose from (.+)\)$", line):
+            choices = re.findall(r"'([^']*)'", found.group(2))
+            near = difflib.get_close_matches(found.group(1), choices, n=1)
+            remedies.append(
+                f"use {near[0]!r} rather than {found.group(1)!r}"
+                if near
+                else f"use one of {', '.join(choices)}"
+            )
+        elif found := re.search(r"unrecognized arguments: (.+)$", line):
+            remedies.append(
+                f"remove {found.group(1)} — `anvilate {command} --help` lists what it takes"
+            )
+    return tuple(dict.fromkeys(remedies))
+
+
 def _print_refusal(*, command: str, code: int, diagnostic: str, out) -> None:
     """Write the JSON refusal corresponding to diagnostics already sent to stderr."""
     lines = tuple(line for line in diagnostic.splitlines() if line)
-    stated = _STATED_REMEDIES.get()
+    stated = _STATED_REMEDIES.get() or _derived_remedies(lines, command)
     remedy = (
         " ".join(_as_sentence(each) for each in stated)
         if stated

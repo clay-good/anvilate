@@ -796,7 +796,12 @@ def test_a_json_refusal_is_data_and_preserves_the_human_diagnostic(
     assert payload["command"] == expected_command
     assert payload["outcome"] == "refused"
     assert payload["diagnostics"] == [line for line in error.splitlines() if line]
-    assert expected_command in payload["remedy"]
+    # The remedy is about this invocation: it names the command, or the path it was given.
+    assert expected_command in payload["remedy"] or any(
+        argument in payload["remedy"]
+        for argument in arguments
+        if "/" in argument or "." in argument
+    )
 
     schema = json.loads(
         (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
@@ -4871,10 +4876,11 @@ def test_a_json_refusal_carries_the_spec_s_own_remedies_not_a_generic_sentence(t
     assert remedy.startswith("Add `description` to the document, for example ")
     assert "Remove `material.rf`, which `material` does not have (did you mean `ref`?)." in remedy
     assert "Correct the check arguments" not in remedy
-    # A refusal that states no remedy of its own still gets the generic one, and the stated
-    # remedies of one invocation do not leak into the next.
+    # A missing file gets its own remedy, and the stated remedies of one invocation do not
+    # leak into the next.
     code, out, _err = _run("check", str(tmp_path / "missing.yaml"), "--format", "json")
-    assert json.loads(out)["remedy"].startswith("Correct the check arguments")
+    remedy = json.loads(out)["remedy"]
+    assert remedy.startswith("Check the path") and "description" not in remedy
 
 
 def test_a_bare_provenanced_value_is_told_the_line_to_write(tmp_path):
@@ -4932,3 +4938,34 @@ def test_a_refusal_in_a_multi_file_run_names_its_file(tmp_path):
     # One file needs no path: the remedy stays the sentence it was.
     code, out, _err = _run("check", str(bad), "--format", "json")
     assert json.loads(out)["remedy"].startswith("Write `constraints.min_safety_factor.origin`")
+
+
+def test_an_ordinary_mistake_at_the_shell_gets_its_own_remedy(tmp_path):
+    """interaction-quality 2.1 at the CLI: each of these got the generic "correct the
+    arguments or input document named in diagnostics", although most diagnostics already
+    said what to do. The floor is the list; a new ordinary mistake joins it."""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "utf16.yaml").write_bytes(b"\xff\xfen\x00a\x00m\x00e\x00")
+    (tmp_path / "broken.yaml").write_text("x: [\n", encoding="utf-8")
+    spec = str(root / "examples" / "base_plate.spec.yaml")
+    cases = [
+        (("check", str(tmp_path / "missing.yaml")), "Check the path"),
+        (("check", spec.replace(".yaml", ".yml")), "did you mean"),
+        (("check", str(tmp_path / "empty")), "Point anvilate check at a Design Spec"),
+        (("check", str(tmp_path / "utf16.yaml")), "Re-save it as UTF-8"),
+        (("check", str(tmp_path / "broken.yaml")), "Fix the YAML at line 2, column 1"),
+        (("check",), "Pass spec"),
+        (("check", spec, "--units", "parsecs"), "Remove --units parsecs"),
+        (("chek", spec), "Use 'check' rather than 'chek'"),
+        (("export", spec, "--artifact", "qif"), "export `--artifact evidence-bundle`"),
+    ]
+    for arguments, expected in cases:
+        _code, out, _err = _run(*arguments, "--format", "json")
+        remedy = json.loads(out)["remedy"]
+        assert expected in remedy, (arguments, remedy)
+        assert not remedy.startswith(("Correct the", "Resolve the")), (arguments, remedy)
+        assert ";" not in remedy

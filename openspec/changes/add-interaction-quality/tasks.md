@@ -40,7 +40,11 @@
       value written bare (`min_safety_factor: 1.5`) gets the `{value, origin}` line, which a
       test pastes back in and validates. So do a bare one-field mapping (`material: ASTM-A36`),
       a scalar where a list belongs, and a near-miss of an allowed value (`si`, `CNC milling`,
-      `T1`), in documents and element parameters alike. The CLI's JSON
+      `T1`), in documents and element parameters alike. At the shell, every ordinary mistake in
+      a held list (a missing or mistyped path, an empty directory, a UTF-16 file, a YAML
+      syntax error, a missing or unknown argument, a mistyped command, an export past a
+      failing card, a missing optional dependency) gets its own `remedy` rather than the
+      generic sentence, derived from the CLI's own diagnostic forms The CLI's JSON
       refusal carries those remedies in `remedy` instead of its generic sentence
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
