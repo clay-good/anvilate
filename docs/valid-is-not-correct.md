@@ -26,6 +26,13 @@ successful `CompilationResult` keeps the typed `DesignSpec` in `result.spec` and
 reasoning/configuration in `result.provenance`. Screening, geometry, and export accept the
 former, not the reasoning-bearing wrapper.
 
+Compiler refusals are actionable without parsing their messages. A malformed constrained
+response raises `CompilationCandidateError` with a `Remedy` naming that backend response and
+the Design Spec JSON Schema it must follow. Retry exhaustion raises `CompilationFailure` with
+the backend and model as its concrete subject and points to both the schema and
+`provenance.validation_errors`. Both remain `ValueError` subclasses for existing callers;
+their messages are unchanged.
+
 The local adapters are `OllamaBackend` and `LlamaCppBackend`. They accept only explicitly
 configured loopback origins, defaulting to `http://127.0.0.1:11434` and
 `http://127.0.0.1:8080`, and use the standard-library HTTP client rather than an SDK.

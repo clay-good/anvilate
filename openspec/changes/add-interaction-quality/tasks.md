@@ -57,8 +57,10 @@
       JSON-RPC strings, including exact nested Design Spec corrections. The fetch-on-first-use
       boundary now carries typed remedies too: consent refusals identify the dataset and the
       user as authority, while integrity refusals identify the corrupt download or cache and
-      the publisher recipe used to recover it. The remaining ordinary `ValueError` inventory
-      keeps this task open
+      the publisher recipe used to recover it. Intent-compilation candidate and retry-exhaustion
+      refusals name the rejected backend/model output and point to the Design Spec schema and
+      recorded validation errors, while retaining their `ValueError` ancestry. The remaining
+      ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed

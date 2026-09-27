@@ -63,6 +63,7 @@ from ._models import (
     rebuilt_quantities,
 )
 from .contracts import element_json_schemas, spec_json_schema
+from .refusal import RefusalError, Remedy
 from .spec import SCHEMA_VERSION, DesignSpec, SpecValidationError, parse_spec
 from .units import Quantity, UnitError
 
@@ -149,8 +150,20 @@ class CompilationBackend(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
-class CompilationCandidateError(ValueError):
+class CompilationCandidateError(RefusalError, ValueError):
     """A model response that constrained packaging could not turn into a candidate."""
+
+    def __init__(self, message: str, *, backend: str = "the compilation backend") -> None:
+        super().__init__(
+            message,
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject=f"the rejected constrained response from {backend}",
+                    source="the Design Spec JSON Schema supplied to package_spec",
+                ),
+            ),
+        )
 
 
 class OllamaError(RuntimeError):
@@ -276,11 +289,12 @@ def _candidate_from_content(content: str, *, backend: str) -> Mapping[str, Any]:
         candidate = parse_json(content)
     except ValueError as error:
         raise CompilationCandidateError(
-            f"{backend} constrained response was not JSON: {error}"
+            f"{backend} constrained response was not JSON: {error}", backend=backend
         ) from None
     if not isinstance(candidate, Mapping):
         raise CompilationCandidateError(
-            f"{backend} constrained response must be a JSON object; got {type(candidate).__name__}"
+            f"{backend} constrained response must be a JSON object; got {type(candidate).__name__}",
+            backend=backend,
         )
     return dict(candidate)
 
@@ -537,12 +551,28 @@ class CompilationResult(StatableModel):
     provenance: CompilationProvenance
 
 
-class CompilationFailure(ValueError):
+class CompilationFailure(RefusalError, ValueError):
     """Constrained packaging exhausted its retry budget without a valid Design Spec."""
 
     def __init__(self, message: str, *, provenance: CompilationProvenance) -> None:
         self.provenance = provenance
-        super().__init__(message)
+        configuration = provenance.configuration
+        super().__init__(
+            message,
+            remedies=(
+                Remedy(
+                    action="correct and recompile",
+                    subject=(
+                        f"the rejected Spec IR candidate from {configuration.backend} model "
+                        f"{configuration.model}"
+                    ),
+                    source=(
+                        "the Design Spec JSON Schema and the rejections recorded in "
+                        "provenance.validation_errors"
+                    ),
+                ),
+            ),
+        )
 
 
 def compile_intent(

@@ -145,14 +145,26 @@ def test_invalid_packaging_is_retried_with_the_validation_error_and_never_return
 
 
 def test_exhausted_packaging_is_a_failure_with_every_rejected_attempt_recorded():
+    from anvilate.refusal import RefusalError
+
     backend = _Backend([{"name": "still invalid"}] * 3)
     with pytest.raises(CompilationFailure, match="failed after 3 attempts") as failure:
         compile_intent("Make a lifting lug.", backend, retry_budget=2)
 
+    assert isinstance(failure.value, RefusalError)
+    assert isinstance(failure.value, ValueError), "the public exception hierarchy changed"
     provenance = failure.value.provenance
     assert provenance.succeeded is False
     assert provenance.attempts == 3
     assert len(provenance.validation_errors) == 3
+    assert len(failure.value.remedies) == 1
+    remedy = failure.value.remedies[0]
+    assert remedy.action == "correct and recompile"
+    assert remedy.subject == (
+        "the rejected Spec IR candidate from test-backend model small-local-model"
+    )
+    assert "Design Spec JSON Schema" in remedy.source
+    assert "provenance.validation_errors" in remedy.source
 
 
 def test_a_backend_without_two_pass_support_uses_an_explicit_recorded_fallback():
@@ -240,6 +252,8 @@ def test_ollama_refuses_nonlocal_endpoints_and_invalid_service_responses():
 
 
 def test_ollama_construction_is_offline_and_candidate_errors_are_distinct():
+    from anvilate.refusal import RefusalError
+
     calls = 0
 
     def transport(url: str, body: bytes, timeout: float) -> bytes:
@@ -249,10 +263,17 @@ def test_ollama_construction_is_offline_and_candidate_errors_are_distinct():
 
     backend = OllamaBackend(model="local", transport=transport)
     assert calls == 0
-    with pytest.raises(CompilationCandidateError, match="must be a JSON object"):
+    with pytest.raises(CompilationCandidateError, match="must be a JSON object") as refused:
         backend.package_spec(
             "Compile this.", schema={"type": "object"}, reasoning=None, validation_error=None
         )
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    assert len(refused.value.remedies) == 1
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "replace"
+    assert remedy.subject == "the rejected constrained response from Ollama"
+    assert remedy.source == "the Design Spec JSON Schema supplied to package_spec"
     assert calls == 1
 
 
