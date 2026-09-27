@@ -24,8 +24,40 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_SPOT_WELD_SCHEDULE_SOURCE = "the qualified resistance-welding schedule or calibrated controller"
+_SPOT_WELD_GEOMETRY_SOURCE = "the joint drawing or verified weld-nugget geometry"
+_SPOT_WELD_MATERIAL_SOURCE = "the sheet material certificate or verified thermal-property record"
+
+
+class _ResistanceWeldingInputError(RefusalError, ValueError):
+    """A resistance-welding input that cannot be used without correction."""
+
+
+def _resistance_welding_refusal(
+    message: str, *, subject: str, source: str
+) -> _ResistanceWeldingInputError:
+    return _ResistanceWeldingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _resistance_welding_input_source(name: str) -> str:
+    if name == "nugget_volume":
+        return _SPOT_WELD_GEOMETRY_SOURCE
+    if name in {
+        "density",
+        "specific_heat",
+        "temperature_rise",
+        "latent_heat_of_fusion",
+    }:
+        return _SPOT_WELD_MATERIAL_SOURCE
+    return _SPOT_WELD_SCHEDULE_SOURCE
+
 
 __all__ = [
     "spot_weld_current_for_heat",
@@ -53,11 +85,23 @@ def spot_weld_heat_generated(
     r = contact_resistance.to("ohm").magnitude
     t = weld_time.to("s").magnitude
     if i <= 0:
-        raise ValueError("weld_current must be positive")
+        raise _resistance_welding_refusal(
+            "weld_current must be positive",
+            subject="weld_current",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("contact_resistance must be positive")
+        raise _resistance_welding_refusal(
+            "contact_resistance must be positive",
+            subject="contact_resistance",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("weld_time must be positive")
+        raise _resistance_welding_refusal(
+            "weld_time must be positive",
+            subject="weld_time",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     return Quantity(magnitude=i * i * r * t, unit="J")
 
 
@@ -79,11 +123,23 @@ def spot_weld_current_for_heat(
     r = contact_resistance.to("ohm").magnitude
     t = weld_time.to("s").magnitude
     if q <= 0:
-        raise ValueError("target_heat must be positive")
+        raise _resistance_welding_refusal(
+            "target_heat must be positive",
+            subject="target_heat",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("contact_resistance must be positive")
+        raise _resistance_welding_refusal(
+            "contact_resistance must be positive",
+            subject="contact_resistance",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("weld_time must be positive")
+        raise _resistance_welding_refusal(
+            "weld_time must be positive",
+            subject="weld_time",
+            source=_SPOT_WELD_SCHEDULE_SOURCE,
+        )
     i = sqrt(q / (r * t))
     return Quantity(magnitude=i, unit="A").to("kA")
 
@@ -117,24 +173,48 @@ def spot_weld_nugget_melting_energy(
     dt = temperature_difference_kelvin(temperature_rise, name="temperature_rise")
     lf = latent_heat_of_fusion.to("J/kg").magnitude
     if vol <= 0:
-        raise ValueError("nugget_volume must be positive")
+        raise _resistance_welding_refusal(
+            "nugget_volume must be positive",
+            subject="nugget_volume",
+            source=_SPOT_WELD_GEOMETRY_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _resistance_welding_refusal(
+            "density must be positive", subject="density", source=_SPOT_WELD_MATERIAL_SOURCE
+        )
     if c <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _resistance_welding_refusal(
+            "specific_heat must be positive",
+            subject="specific_heat",
+            source=_SPOT_WELD_MATERIAL_SOURCE,
+        )
     if dt <= 0:
-        raise ValueError("temperature_rise must be positive")
+        raise _resistance_welding_refusal(
+            "temperature_rise must be positive",
+            subject="temperature_rise",
+            source=_SPOT_WELD_MATERIAL_SOURCE,
+        )
     if lf < 0:
-        raise ValueError("latent_heat_of_fusion must be non-negative")
+        raise _resistance_welding_refusal(
+            "latent_heat_of_fusion must be non-negative",
+            subject="latent_heat_of_fusion",
+            source=_SPOT_WELD_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=rho * vol * (c * dt + lf), unit="J")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _resistance_welding_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_resistance_welding_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _resistance_welding_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_resistance_welding_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

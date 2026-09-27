@@ -21,7 +21,30 @@ limit allows, and CE_IIW from the alloy composition.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ARC_ELECTRICAL_SOURCE = "the approved welding procedure or calibrated power-source record"
+_ARC_PROCESS_SOURCE = "the qualified welding procedure and heat-input schedule"
+_WELD_COMPOSITION_SOURCE = "the base-metal certificate or verified chemical analysis"
+
+
+class _WeldingHeatInputError(RefusalError, ValueError):
+    """A welding heat-input value that cannot be used without correction."""
+
+
+def _welding_heat_refusal(message: str, *, subject: str, source: str) -> _WeldingHeatInputError:
+    return _WeldingHeatInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _welding_heat_input_source(name: str) -> str:
+    if name in {"arc_voltage", "welding_current"}:
+        return _ARC_ELECTRICAL_SOURCE
+    return _ARC_PROCESS_SOURCE
+
 
 __all__ = [
     "carbon_equivalent_iiw",
@@ -44,7 +67,11 @@ def weld_arc_power(*, arc_voltage: Quantity, welding_current: Quantity) -> Quant
     u = arc_voltage.to("V").magnitude
     i = welding_current.to("A").magnitude
     if u <= 0 or i <= 0:
-        raise ValueError("arc_voltage and welding_current must be positive")
+        raise _welding_heat_refusal(
+            "arc_voltage and welding_current must be positive",
+            subject="arc_voltage and welding_current",
+            source=_ARC_ELECTRICAL_SOURCE,
+        )
     return Quantity(magnitude=u * i, unit="W")
 
 
@@ -69,7 +96,11 @@ def weld_heat_input(
     power = weld_arc_power(arc_voltage=arc_voltage, welding_current=welding_current)
     speed = travel_speed.to("mm/s").magnitude
     if speed <= 0:
-        raise ValueError("travel_speed must be positive")
+        raise _welding_heat_refusal(
+            "travel_speed must be positive",
+            subject="travel_speed",
+            source=_ARC_PROCESS_SOURCE,
+        )
     joules_per_mm = thermal_efficiency * power.to("W").magnitude / speed
     return Quantity(magnitude=joules_per_mm / 1000.0, unit="kJ/mm")
 
@@ -94,7 +125,9 @@ def weld_travel_speed_for_heat_input(
     power = weld_arc_power(arc_voltage=arc_voltage, welding_current=welding_current)
     q_joules_per_mm = heat_input.to("kJ/mm").magnitude * 1000.0
     if q_joules_per_mm <= 0:
-        raise ValueError("heat_input must be positive")
+        raise _welding_heat_refusal(
+            "heat_input must be positive", subject="heat_input", source=_ARC_PROCESS_SOURCE
+        )
     speed = thermal_efficiency * power.to("W").magnitude / q_joules_per_mm
     return Quantity(magnitude=speed, unit="mm/s")
 
@@ -132,9 +165,17 @@ def carbon_equivalent_iiw(
         ("copper", copper),
     ):
         if value < 0:
-            raise ValueError(f"{name} content must be non-negative; got {value}")
+            raise _welding_heat_refusal(
+                f"{name} content must be non-negative; got {value}",
+                subject=f"{name} content",
+                source=_WELD_COMPOSITION_SOURCE,
+            )
     if carbon <= 0:
-        raise ValueError(f"carbon content must be positive; got {carbon}")
+        raise _welding_heat_refusal(
+            f"carbon content must be positive; got {carbon}",
+            subject="carbon content",
+            source=_WELD_COMPOSITION_SOURCE,
+        )
     return (
         carbon
         + manganese / 6.0
@@ -145,15 +186,25 @@ def carbon_equivalent_iiw(
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _welding_heat_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_ARC_PROCESS_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _welding_heat_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_welding_heat_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _welding_heat_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_welding_heat_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

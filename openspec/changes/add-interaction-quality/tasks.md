@@ -167,6 +167,11 @@
       geometry, cutting parameters, finish requirements, workpiece cutting properties, spindle
       settings, and Taylor tool-life data, sourced to drawings, setup schedules, datasheets, or
       qualified trials.
+      The complete weld-design, arc-welding heat-input, and resistance-welding families add 40
+      structured sites for joint and nugget geometry, loads, electrode and base-metal properties,
+      code factors, electrical settings, heat input, chemical composition, and spot-weld schedules,
+      sourced to drawings, governing analyses, certificates, qualified procedures, or calibrated
+      equipment records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

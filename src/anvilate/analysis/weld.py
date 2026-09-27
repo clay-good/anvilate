@@ -15,7 +15,36 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import pi, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_WELD_GEOMETRY_SOURCE = "the welded-joint drawing or verified weld-group geometry"
+_WELD_LOAD_SOURCE = "the governing load case or approved weld-group analysis"
+_WELD_MATERIAL_SOURCE = "the electrode certificate or base-metal material record"
+_WELD_DESIGN_SOURCE = "the governing welding code and approved connection design"
+_WELD_DETAIL_AND_MATERIAL_SOURCE = (
+    "the welded-joint drawing and electrode or base-metal material record"
+)
+
+
+class _WeldInputError(RefusalError, ValueError):
+    """A weld-design input that cannot be used without correction."""
+
+
+def _weld_refusal(message: str, *, subject: str, source: str) -> _WeldInputError:
+    return _WeldInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _weld_input_source(name: str) -> str:
+    if name in {"force", "load"}:
+        return _WELD_LOAD_SOURCE
+    if name in {"allowable_shear", "electrode_strength", "base_ultimate_strength"}:
+        return _WELD_MATERIAL_SOURCE
+    return _WELD_GEOMETRY_SOURCE
+
 
 # The effective throat of a fillet weld is 0.707 (= 1/√2) of its leg size.
 FILLET_THROAT_FACTOR = 0.707
@@ -36,10 +65,16 @@ _WELD_METAL_SHEAR_FRACTION = 0.6
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _weld_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_weld_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _weld_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_weld_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -67,7 +102,11 @@ def fillet_weld_throat_stress(
     w = leg_size.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     if w <= 0 or length_mm <= 0:
-        raise ValueError("leg_size and length must be positive")
+        raise _weld_refusal(
+            "leg_size and length must be positive",
+            subject="leg_size and length",
+            source=_WELD_GEOMETRY_SOURCE,
+        )
     throat_area = FILLET_THROAT_FACTOR * w * length_mm  # mm²
     return Quantity(magnitude=force.to("N").magnitude / throat_area, unit="MPa")
 
@@ -94,19 +133,33 @@ def fillet_weld_leg_for_load(
     _require(length, "[length]", "length")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _weld_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_WELD_DESIGN_SOURCE,
+        )
     length_mm = length.to("mm").magnitude
     tau = allowable_shear.to("MPa").magnitude
     if length_mm <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _weld_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_WELD_GEOMETRY_SOURCE,
+        )
     if tau <= 0:
-        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+        raise _weld_refusal(
+            f"allowable_shear must be positive; got {allowable_shear}",
+            subject="allowable_shear",
+            source=_WELD_MATERIAL_SOURCE,
+        )
     if force.to("N").magnitude <= 0:
-        raise ValueError(
+        raise _weld_refusal(
             f"force must be positive to size a weld; got {force}. A sign-reversed load "
             f"returned a NEGATIVE leg, which fillet_weld_throat_stress — the forward "
             f"check this function inverts — refuses outright, and a zero load sized a "
-            f"weld of no size at all."
+            f"weld of no size at all.",
+            subject="force",
+            source=_WELD_LOAD_SOURCE,
         )
     leg = (
         required_safety_factor * force.to("N").magnitude / (FILLET_THROAT_FACTOR * length_mm * tau)
@@ -137,18 +190,24 @@ def fillet_weld_design_strength(
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
     if not 0 < weld_metal_shear_fraction <= 1:
-        raise ValueError(
+        raise _weld_refusal(
             f"weld_metal_shear_fraction must lie in (0, 1]; got "
             f"{weld_metal_shear_fraction}. It is the ratio of the weld metal's shear "
             f"strength to its tensile strength (0.6 in J2.4), and a ratio above 1 is not "
             f"a material — the likeliest way to reach one is a decimal slip, which "
-            f"multiplies the reported capacity."
+            f"multiplies the reported capacity.",
+            subject="weld_metal_shear_fraction",
+            source=_WELD_DESIGN_SOURCE,
         )
     w = leg_size.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     fexx = electrode_strength.to("MPa").magnitude
     if w <= 0 or length_mm <= 0 or fexx <= 0:
-        raise ValueError("leg_size, length, and electrode_strength must be positive")
+        raise _weld_refusal(
+            "leg_size, length, and electrode_strength must be positive",
+            subject="leg_size, length, and electrode_strength",
+            source=_WELD_DETAIL_AND_MATERIAL_SOURCE,
+        )
     # MPa·mm² = N; convert to kN.
     strength_n = weld_metal_shear_fraction * fexx * FILLET_THROAT_FACTOR * w * length_mm
     return Quantity(magnitude=strength_n / 1000.0, unit="kN")
@@ -179,20 +238,30 @@ def fillet_weld_directional_strength(
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
     if not 0 < weld_metal_shear_fraction <= 1:
-        raise ValueError(
+        raise _weld_refusal(
             f"weld_metal_shear_fraction must lie in (0, 1]; got "
             f"{weld_metal_shear_fraction}. It is the ratio of the weld metal's shear "
             f"strength to its tensile strength (0.6 in J2.4), and a ratio above 1 is not "
             f"a material — the likeliest way to reach one is a decimal slip, which "
-            f"multiplies the reported capacity."
+            f"multiplies the reported capacity.",
+            subject="weld_metal_shear_fraction",
+            source=_WELD_DESIGN_SOURCE,
         )
     if not 0.0 <= load_angle <= pi / 2:
-        raise ValueError(f"load_angle must be between 0 and pi/2 radians; got {load_angle}")
+        raise _weld_refusal(
+            f"load_angle must be between 0 and pi/2 radians; got {load_angle}",
+            subject="load_angle",
+            source=_WELD_LOAD_SOURCE,
+        )
     w = leg_size.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     fexx = electrode_strength.to("MPa").magnitude
     if w <= 0 or length_mm <= 0 or fexx <= 0:
-        raise ValueError("leg_size, length, and electrode_strength must be positive")
+        raise _weld_refusal(
+            "leg_size, length, and electrode_strength must be positive",
+            subject="leg_size, length, and electrode_strength",
+            source=_WELD_DETAIL_AND_MATERIAL_SOURCE,
+        )
     directional = 1.0 + 0.5 * sin(load_angle) ** 1.5
     strength_n = (
         weld_metal_shear_fraction * fexx * directional * FILLET_THROAT_FACTOR * w * length_mm
@@ -223,16 +292,22 @@ def weld_base_metal_shear_strength(
     _require(length, "[length]", "length")
     _require(base_ultimate_strength, "[pressure]", "base_ultimate_strength")
     if not 0 < shear_fraction <= 1:
-        raise ValueError(
+        raise _weld_refusal(
             f"shear_fraction must lie in (0, 1]; got {shear_fraction}. It is the ratio "
             f"of the base metal's shear rupture strength to its tensile strength (0.6 in "
-            f"J4.2), and a ratio above 1 is not a material."
+            f"J4.2), and a ratio above 1 is not a material.",
+            subject="shear_fraction",
+            source=_WELD_DESIGN_SOURCE,
         )
     t = base_thickness.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     fu = base_ultimate_strength.to("MPa").magnitude
     if t <= 0 or length_mm <= 0 or fu <= 0:
-        raise ValueError("base_thickness, length, and base_ultimate_strength must be positive")
+        raise _weld_refusal(
+            "base_thickness, length, and base_ultimate_strength must be positive",
+            subject="base_thickness, length, and base_ultimate_strength",
+            source=_WELD_DETAIL_AND_MATERIAL_SOURCE,
+        )
     strength_n = shear_fraction * fu * t * length_mm
     return Quantity(magnitude=strength_n / 1000.0, unit="kN")
 
@@ -269,22 +344,38 @@ def eccentric_weld_group_peak_stress(
     _require(leg_size, "[length]", "leg_size")
     w = leg_size.to("mm").magnitude
     if w <= 0:
-        raise ValueError(f"leg_size must be positive; got {leg_size}")
+        raise _weld_refusal(
+            f"leg_size must be positive; got {leg_size}",
+            subject="leg_size",
+            source=_WELD_GEOMETRY_SOURCE,
+        )
     if len(segments) < 1:
-        raise ValueError(f"segments must list at least one weld; got {len(segments)}")
+        raise _weld_refusal(
+            f"segments must list at least one weld; got {len(segments)}",
+            subject="segments",
+            source=_WELD_GEOMETRY_SOURCE,
+        )
     lengths: list[float] = []
     centroids: list[tuple[float, float]] = []
     endpoints: list[tuple[float, float]] = []
     for i, seg in enumerate(segments):
         if not isinstance(seg, Sequence) or len(seg) != 2:
-            raise ValueError(f"segments[{i}] must be an ((x1, y1), (x2, y2)) pair; got {seg!r}")
+            raise _weld_refusal(
+                f"segments[{i}] must be an ((x1, y1), (x2, y2)) pair; got {seg!r}",
+                subject=f"segments[{i}]",
+                source=_WELD_GEOMETRY_SOURCE,
+            )
         (p1, p2) = seg
         # The outer pair being right does not make the points right. A one-element endpoint
         # reached the indexing below and raised IndexError, which a caller catching
         # ValueError does not catch — a malformed weld map crashed the run instead of being
         # refused with the segment named.
         if not all(isinstance(p, Sequence) and len(p) == 2 for p in (p1, p2)):
-            raise ValueError(f"segments[{i}] endpoints must each be an (x, y) pair; got {seg!r}")
+            raise _weld_refusal(
+                f"segments[{i}] endpoints must each be an (x, y) pair; got {seg!r}",
+                subject=f"segments[{i}] endpoints",
+                source=_WELD_GEOMETRY_SOURCE,
+            )
         _require(p1[0], "[length]", f"segments[{i}] start x")
         _require(p1[1], "[length]", f"segments[{i}] start y")
         _require(p2[0], "[length]", f"segments[{i}] end x")
@@ -293,7 +384,11 @@ def eccentric_weld_group_peak_stress(
         x2, y2 = p2[0].to("mm").magnitude, p2[1].to("mm").magnitude
         length = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         if length <= 0:
-            raise ValueError(f"segments[{i}] has zero length")
+            raise _weld_refusal(
+                f"segments[{i}] has zero length",
+                subject=f"segments[{i}]",
+                source=_WELD_GEOMETRY_SOURCE,
+            )
         lengths.append(length)
         centroids.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0))
         endpoints.append((x1, y1))

@@ -350,6 +350,11 @@ The complete conventional-machining family follows the contract at all 18 refusa
 tool geometry, cutting parameters, finish requirements, workpiece cutting properties, spindle
 settings, and Taylor tool-life data point to drawings, setup schedules, datasheets, or qualified
 trials.
+The complete weld-design, arc-welding heat-input, and resistance-welding families follow the
+contract at all 40 refusal sites. Joint and nugget geometry, loads, electrode and base-metal
+properties, code factors, electrical settings, heat input, chemical composition, and spot-weld
+schedules point to drawings, governing analyses, certificates, qualified procedures, or calibrated
+equipment records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

@@ -23790,6 +23790,173 @@ def test_spot_weld_heat_current_inverse_and_nugget_energy():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "fillet_weld_throat_stress",
+            {"force": _q("20 kN"), "leg_size": _q("0 mm"), "length": _q("100 mm")},
+            "leg_size and length",
+            "the welded-joint drawing or verified weld-group geometry",
+        ),
+        (
+            "fillet_weld_leg_for_load",
+            {
+                "force": _q("0 kN"),
+                "length": _q("100 mm"),
+                "allowable_shear": _q("290 MPa"),
+            },
+            "force",
+            "the governing load case or approved weld-group analysis",
+        ),
+        (
+            "fillet_weld_leg_for_load",
+            {
+                "force": _q("20 kN"),
+                "length": _q("100 mm"),
+                "allowable_shear": _q("290 MPa"),
+                "required_safety_factor": 0.0,
+            },
+            "required_safety_factor",
+            "the governing welding code and approved connection design",
+        ),
+        (
+            "fillet_weld_leg_for_load",
+            {
+                "force": _q("20 kN"),
+                "length": _q("100 mm"),
+                "allowable_shear": _q("0 MPa"),
+            },
+            "allowable_shear",
+            "the electrode certificate or base-metal material record",
+        ),
+        (
+            "fillet_weld_design_strength",
+            {
+                "leg_size": _q("6 mm"),
+                "length": _q("100 mm"),
+                "electrode_strength": _q("490 MPa"),
+                "weld_metal_shear_fraction": 1.5,
+            },
+            "weld_metal_shear_fraction",
+            "the governing welding code and approved connection design",
+        ),
+        (
+            "eccentric_weld_group_peak_stress",
+            {
+                "segments": [],
+                "load": _q("10 kN"),
+                "eccentricity": _q("100 mm"),
+                "leg_size": _q("6 mm"),
+            },
+            "segments",
+            "the welded-joint drawing or verified weld-group geometry",
+        ),
+        (
+            "weld_arc_power",
+            {"arc_voltage": _q("25 V"), "welding_current": _q("0 A")},
+            "arc_voltage and welding_current",
+            "the approved welding procedure or calibrated power-source record",
+        ),
+        (
+            "weld_heat_input",
+            {
+                "arc_voltage": _q("25 V"),
+                "welding_current": _q("200 A"),
+                "travel_speed": _q("0 mm/s"),
+                "thermal_efficiency": 0.8,
+            },
+            "travel_speed",
+            "the qualified welding procedure and heat-input schedule",
+        ),
+        (
+            "carbon_equivalent_iiw",
+            {"carbon": 0.2, "manganese": -0.1},
+            "manganese content",
+            "the base-metal certificate or verified chemical analysis",
+        ),
+        (
+            "spot_weld_heat_generated",
+            {
+                "weld_current": _q("0 kA"),
+                "contact_resistance": _q("100 uohm"),
+                "weld_time": _q("0.2 s"),
+            },
+            "weld_current",
+            "the qualified resistance-welding schedule or calibrated controller",
+        ),
+        (
+            "spot_weld_nugget_melting_energy",
+            {
+                "nugget_volume": _q("0 mm**3"),
+                "density": _q("7850 kg/m**3"),
+                "specific_heat": _q("500 J/(kg*K)"),
+                "temperature_rise": _q("1480 K"),
+                "latent_heat_of_fusion": _q("270 kJ/kg"),
+            },
+            "nugget_volume",
+            "the joint drawing or verified weld-nugget geometry",
+        ),
+        (
+            "spot_weld_nugget_melting_energy",
+            {
+                "nugget_volume": _q("25 mm**3"),
+                "density": _q("0 kg/m**3"),
+                "specific_heat": _q("500 J/(kg*K)"),
+                "temperature_rise": _q("1480 K"),
+                "latent_heat_of_fusion": _q("270 kJ/kg"),
+            },
+            "density",
+            "the sheet material certificate or verified thermal-property record",
+        ),
+    ),
+)
+def test_welding_family_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("weld", "_weld_refusal", 19),
+        ("welding_heat", "_welding_heat_refusal", 8),
+        ("resistance_welding", "_resistance_welding_refusal", 13),
+    ),
+)
+def test_every_welding_family_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_shear_spinning_sine_law_reduction_and_angle_inverse():
     from math import asin, degrees, radians, sin
 
