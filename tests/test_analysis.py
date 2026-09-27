@@ -21748,6 +21748,77 @@ def test_optics_abbe_number():
         abbe_number(index_d=1.5168, index_F=1.5143, index_C=1.5224)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "thin_lens_image_distance",
+            {"focal_length": _q("0 mm"), "object_distance": _q("100 mm")},
+            "focal_length",
+            "the optical drawing or selected lens catalogue",
+        ),
+        (
+            "diffraction_limited_spot_diameter",
+            {"wavelength": _q("0 nm"), "f_number": 2.8},
+            "wavelength",
+            "the glass certificate or cited spectral property record",
+        ),
+        (
+            "thin_lens_image_distance",
+            {"focal_length": _q("50 mm"), "object_distance": _q("0 mm")},
+            "object_distance",
+            "the calibrated optical setup or focus measurement",
+        ),
+        (
+            "hyperfocal_distance",
+            {
+                "focal_length": _q("50 mm"),
+                "f_number": 0.0,
+                "circle_of_confusion": _q("0.03 mm"),
+            },
+            "f_number",
+            "the governing imaging requirement and optical design basis",
+        ),
+    ),
+)
+def test_optics_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_optics_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/optics.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_optics_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 36
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,

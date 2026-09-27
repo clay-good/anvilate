@@ -284,6 +284,10 @@ The complete combustion-analysis family follows the contract at all 37 refusal s
 composition, air and flue-gas conditions, heating values, thermochemical properties, and loss
 assumptions point to the ultimate analysis, calibrated operating measurements, fuel certificate,
 property record, or governing combustion model that supplies the correction.
+The complete geometric-optics family follows the contract at all 36 refusal sites. Imaging
+distances, apertures, wavelengths, refractive indices, dispersion data, and focus criteria point to
+the optical drawing, calibrated setup, lens catalogue, glass or spectral record, or governing
+optical design basis.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

@@ -101,7 +101,10 @@
       complete combustion-analysis family adds 37 structured sites for fuel composition, air and
       flue-gas conditions, heating values, thermochemical properties, and loss assumptions,
       sourced to ultimate analyses, calibrated measurements, certificates, or the combustion
-      model. The
+      model. The complete geometric-optics family adds 36 structured sites for imaging distances,
+      apertures, wavelengths, refractive indices, dispersion data, and focus criteria, sourced to
+      optical drawings, calibrated setups, catalogues, glass or spectral records, or the governing
+      optical design basis. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

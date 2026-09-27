@@ -23,9 +23,35 @@ from __future__ import annotations
 
 from math import asin, degrees, inf, radians, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 RAYLEIGH_CONSTANT = 1.22
+
+_OPTICAL_GEOMETRY_SOURCE = "the optical drawing or selected lens catalogue"
+_OPTICAL_PROPERTY_SOURCE = "the glass certificate or cited spectral property record"
+_OPTICAL_SETUP_SOURCE = "the calibrated optical setup or focus measurement"
+_OPTICAL_DESIGN_SOURCE = "the governing imaging requirement and optical design basis"
+
+
+class _OpticsInputError(RefusalError, ValueError):
+    """An optical input that cannot be used without correction."""
+
+
+def _optics_refusal(message: str, *, subject: str, source: str) -> _OpticsInputError:
+    return _OpticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _optics_input_source(name: str) -> str:
+    if name == "wavelength" or "index" in name:
+        return _OPTICAL_PROPERTY_SOURCE
+    if name in {"object_distance", "image_distance", "focus_distance", "hyperfocal_distance"}:
+        return _OPTICAL_SETUP_SOURCE
+    return _OPTICAL_GEOMETRY_SOURCE
+
 
 __all__ = [
     "abbe_number",
@@ -61,11 +87,23 @@ def thin_lens_image_distance(*, focal_length: Quantity, object_distance: Quantit
     f = focal_length.to("mm").magnitude
     d_o = object_distance.to("mm").magnitude
     if f <= 0:
-        raise ValueError("focal_length must be positive")
+        raise _optics_refusal(
+            "focal_length must be positive",
+            subject="focal_length",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     if d_o <= 0:
-        raise ValueError("object_distance must be positive")
+        raise _optics_refusal(
+            "object_distance must be positive",
+            subject="object_distance",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     if d_o == f:
-        raise ValueError("object_distance must differ from focal_length (image is at infinity)")
+        raise _optics_refusal(
+            "object_distance must differ from focal_length (image is at infinity)",
+            subject="object_distance and focal_length",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     return Quantity(magnitude=f * d_o / (d_o - f), unit="mm")
 
 
@@ -83,9 +121,17 @@ def lens_transverse_magnification(*, object_distance: Quantity, image_distance: 
     d_o = object_distance.to("mm").magnitude
     d_i = image_distance.to("mm").magnitude
     if d_o <= 0:
-        raise ValueError("object_distance must be positive")
+        raise _optics_refusal(
+            "object_distance must be positive",
+            subject="object_distance",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     if d_i == 0:
-        raise ValueError("image_distance must be non-zero")
+        raise _optics_refusal(
+            "image_distance must be non-zero",
+            subject="image_distance",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     return -d_i / d_o
 
 
@@ -107,9 +153,17 @@ def diffraction_limited_angular_resolution(
     lam = wavelength.to("m").magnitude
     d = aperture_diameter.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _optics_refusal(
+            "wavelength must be positive",
+            subject="wavelength",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("aperture_diameter must be positive")
+        raise _optics_refusal(
+            "aperture_diameter must be positive",
+            subject="aperture_diameter",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=RAYLEIGH_CONSTANT * lam / d, unit="rad")
 
 
@@ -128,9 +182,17 @@ def lens_f_number(*, focal_length: Quantity, aperture_diameter: Quantity) -> flo
     f = focal_length.to("mm").magnitude
     d = aperture_diameter.to("mm").magnitude
     if f <= 0:
-        raise ValueError("focal_length must be positive")
+        raise _optics_refusal(
+            "focal_length must be positive",
+            subject="focal_length",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("aperture_diameter must be positive")
+        raise _optics_refusal(
+            "aperture_diameter must be positive",
+            subject="aperture_diameter",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     return f / d
 
 
@@ -146,9 +208,17 @@ def diffraction_limited_spot_diameter(*, wavelength: Quantity, f_number: float) 
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _optics_refusal(
+            "wavelength must be positive",
+            subject="wavelength",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if f_number <= 0:
-        raise ValueError("f_number must be positive")
+        raise _optics_refusal(
+            "f_number must be positive",
+            subject="f_number",
+            source=_OPTICAL_DESIGN_SOURCE,
+        )
     return Quantity(magnitude=2.44 * lam * f_number, unit="m").to("micrometer")
 
 
@@ -168,11 +238,23 @@ def hyperfocal_distance(
     f = focal_length.to("mm").magnitude
     c = circle_of_confusion.to("mm").magnitude
     if f <= 0:
-        raise ValueError("focal_length must be positive")
+        raise _optics_refusal(
+            "focal_length must be positive",
+            subject="focal_length",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     if f_number <= 0:
-        raise ValueError("f_number must be positive")
+        raise _optics_refusal(
+            "f_number must be positive",
+            subject="f_number",
+            source=_OPTICAL_DESIGN_SOURCE,
+        )
     if c <= 0:
-        raise ValueError("circle_of_confusion must be positive")
+        raise _optics_refusal(
+            "circle_of_confusion must be positive",
+            subject="circle_of_confusion",
+            source=_OPTICAL_DESIGN_SOURCE,
+        )
     return Quantity(magnitude=f * f / (f_number * c), unit="mm").to("m")
 
 
@@ -193,7 +275,11 @@ def depth_of_field_near_limit(
     h = hyperfocal_distance.to("m").magnitude
     s = focus_distance.to("m").magnitude
     if h <= 0 or s <= 0:
-        raise ValueError("hyperfocal_distance and focus_distance must be positive")
+        raise _optics_refusal(
+            "hyperfocal_distance and focus_distance must be positive",
+            subject="hyperfocal_distance and focus_distance",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     return Quantity(magnitude=h * s / (h + s), unit="m")
 
 
@@ -214,7 +300,11 @@ def depth_of_field_far_limit(
     h = hyperfocal_distance.to("m").magnitude
     s = focus_distance.to("m").magnitude
     if h <= 0 or s <= 0:
-        raise ValueError("hyperfocal_distance and focus_distance must be positive")
+        raise _optics_refusal(
+            "hyperfocal_distance and focus_distance must be positive",
+            subject="hyperfocal_distance and focus_distance",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     if s >= h:
         return Quantity(magnitude=inf, unit="m")
     return Quantity(magnitude=h * s / (h - s), unit="m")
@@ -233,14 +323,30 @@ def snell_refraction_angle(
     (:func:`critical_angle`). Returns the refracted angle in degrees.
     """
     if not 0.0 <= incident_angle < 90.0:
-        raise ValueError("incident_angle must be in [0, 90) degrees from the normal")
+        raise _optics_refusal(
+            "incident_angle must be in [0, 90) degrees from the normal",
+            subject="incident_angle",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     if incident_index <= 0:
-        raise ValueError("incident_index must be positive")
+        raise _optics_refusal(
+            "incident_index must be positive",
+            subject="incident_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if refracted_index <= 0:
-        raise ValueError("refracted_index must be positive")
+        raise _optics_refusal(
+            "refracted_index must be positive",
+            subject="refracted_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     sin_theta2 = incident_index * sin(radians(incident_angle)) / refracted_index
     if sin_theta2 > 1.0:
-        raise ValueError("no refraction: total internal reflection (n1*sin(theta1) exceeds n2)")
+        raise _optics_refusal(
+            "no refraction: total internal reflection (n1*sin(theta1) exceeds n2)",
+            subject="incident angle and refractive indices",
+            source=_OPTICAL_SETUP_SOURCE,
+        )
     return degrees(asin(sin_theta2))
 
 
@@ -254,11 +360,23 @@ def critical_angle(*, incident_index: float, transmitted_index: float) -> float:
     Returns the critical angle in degrees.
     """
     if incident_index <= 0:
-        raise ValueError("incident_index must be positive")
+        raise _optics_refusal(
+            "incident_index must be positive",
+            subject="incident_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if transmitted_index <= 0:
-        raise ValueError("transmitted_index must be positive")
+        raise _optics_refusal(
+            "transmitted_index must be positive",
+            subject="transmitted_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if transmitted_index >= incident_index:
-        raise ValueError("incident_index must exceed transmitted_index (need a dense-to-rare step)")
+        raise _optics_refusal(
+            "incident_index must exceed transmitted_index (need a dense-to-rare step)",
+            subject="incident and transmitted refractive indices",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     return degrees(asin(transmitted_index / incident_index))
 
 
@@ -272,11 +390,23 @@ def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> flo
     dispersion, the trade behind multi-mode versus single-mode fibre. Returns the NA (unitless).
     """
     if core_index <= 0:
-        raise ValueError("core_index must be positive")
+        raise _optics_refusal(
+            "core_index must be positive",
+            subject="core_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if cladding_index <= 0:
-        raise ValueError("cladding_index must be positive")
+        raise _optics_refusal(
+            "cladding_index must be positive",
+            subject="cladding_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if cladding_index >= core_index:
-        raise ValueError("core_index must exceed cladding_index (light guides in the denser core)")
+        raise _optics_refusal(
+            "core_index must exceed cladding_index (light guides in the denser core)",
+            subject="core and cladding refractive indices",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     return sqrt(core_index * core_index - cladding_index * cladding_index)
 
 
@@ -291,9 +421,17 @@ def abbe_number(*, index_d: float, index_F: float, index_C: float) -> float:
     Normal dispersion means n_F > n_C. Returns the Abbe number (unitless).
     """
     if index_d <= 1.0:
-        raise ValueError("index_d must exceed 1")
+        raise _optics_refusal(
+            "index_d must exceed 1",
+            subject="index_d",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if index_F <= index_C:
-        raise ValueError("index_F must exceed index_C (normal dispersion: blue bends more)")
+        raise _optics_refusal(
+            "index_F must exceed index_C (normal dispersion: blue bends more)",
+            subject="Fraunhofer F and C refractive indices",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     return (index_d - 1.0) / (index_F - index_C)
 
 
@@ -312,12 +450,24 @@ def lensmaker_focal_length(
     r1 = radius1.to("m").magnitude
     r2 = radius2.to("m").magnitude
     if refractive_index <= 1.0:
-        raise ValueError("refractive_index must exceed 1")
+        raise _optics_refusal(
+            "refractive_index must exceed 1",
+            subject="refractive_index",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     if r1 == 0.0 or r2 == 0.0:
-        raise ValueError("surface radii must be nonzero")
+        raise _optics_refusal(
+            "surface radii must be nonzero",
+            subject="lens surface radii",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     inv_f = (refractive_index - 1.0) * (1.0 / r1 - 1.0 / r2)
     if inv_f == 0.0:
-        raise ValueError("the two surfaces give zero net power (flat or afocal lens)")
+        raise _optics_refusal(
+            "the two surfaces give zero net power (flat or afocal lens)",
+            subject="lens surface radii",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=1.0 / inv_f, unit="m")
 
 
@@ -331,7 +481,11 @@ def lens_power(*, focal_length: Quantity) -> Quantity:
     _check(focal_length, "[length]", "focal_length")
     f = focal_length.to("m").magnitude
     if f == 0.0:
-        raise ValueError("focal_length must be nonzero")
+        raise _optics_refusal(
+            "focal_length must be nonzero",
+            subject="focal_length",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=1.0 / f, unit="1/m")
 
 
@@ -349,19 +503,33 @@ def combined_thin_lens_focal_length(
     f1 = focal_length1.to("m").magnitude
     f2 = focal_length2.to("m").magnitude
     if f1 == 0.0 or f2 == 0.0:
-        raise ValueError("focal lengths must be nonzero")
+        raise _optics_refusal(
+            "focal lengths must be nonzero",
+            subject="lens focal lengths",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     inv_f = 1.0 / f1 + 1.0 / f2
     if inv_f == 0.0:
-        raise ValueError("the two lenses cancel (afocal combination)")
+        raise _optics_refusal(
+            "the two lenses cancel (afocal combination)",
+            subject="lens focal lengths",
+            source=_OPTICAL_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=1.0 / inv_f, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _optics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_optics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _optics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_optics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
