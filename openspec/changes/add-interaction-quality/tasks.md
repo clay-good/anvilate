@@ -191,6 +191,10 @@
       Larson–Miller master-curve data, operating spectra, and rupture-life blocks, sourced to
       metallography, material certificates, creep tests, cited curves, approved service records, or
       integrity assessments.
+      The complete elastic-constant, axial-response, and stress-combination families add 32
+      structured sites for elastic properties, section geometry, design factors, load-case stresses,
+      stress-concentration data, and allowable strengths, sourced to material certificates,
+      drawings, verified load cases, or cited property and concentration references.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

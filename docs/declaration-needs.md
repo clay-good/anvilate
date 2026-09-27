@@ -371,6 +371,10 @@ The complete Hall–Petch and creep families follow the contract at all 20 refus
 friction stress, strengthening coefficients, target yield, service temperature and duration,
 Larson–Miller master-curve data, operating spectra, and rupture-life blocks point to metallography,
 material certificates, creep tests, cited curves, approved service records, or integrity assessments.
+The complete elastic-constant, axial-response, and stress-combination families follow the contract
+at all 32 refusal sites. Elastic properties, section geometry, design factors, load-case stresses,
+stress-concentration data, and allowable strengths point to material certificates, drawings,
+verified load cases, or cited property and concentration references.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

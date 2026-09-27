@@ -21,8 +21,25 @@ from math import acos, atan2, cos, degrees, pi, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..scorecard import Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
+
+_STRESS_STATE_SOURCE = "the verified load-case stress results"
+_STRESS_GEOMETRY_SOURCE = "the component drawing or cited stress-concentration reference"
+_STRESS_STRENGTH_SOURCE = "the material certificate or approved allowable-strength basis"
+
+
+class _StressInputError(RefusalError, ValueError):
+    """Invalid stress-analysis input with a machine-readable repair."""
+
+
+def _stress_refusal(message: str, *, subject: str, source: str) -> _StressInputError:
+    return _StressInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "von_mises_plane_stress",
@@ -47,10 +64,16 @@ __all__ = [
 
 def _require_stress(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+        raise _stress_refusal(
+            f"{name} must be a [pressure] quantity; got {value!r}",
+            subject=name,
+            source=_STRESS_STRENGTH_SOURCE if name == "yield_strength" else _STRESS_STATE_SOURCE,
+        )
     if not value.has_dimension("[pressure]"):
-        raise ValueError(
-            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
+        raise _stress_refusal(
+            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_STRESS_STRENGTH_SOURCE if name == "yield_strength" else _STRESS_STATE_SOURCE,
         )
     # `tresca_principal` takes max() - min() over the three principals, and a NaN in the
     # middle slot was DROPPED by both while a NaN in the first propagated -- the answer
@@ -118,7 +141,11 @@ def concentrated_stress(*, nominal_stress: Quantity, kt: float) -> Quantity:
     """
     sigma = _require_stress(nominal_stress, "nominal_stress")
     if kt < 1:
-        raise ValueError(f"kt must be at least 1 (a stress raiser); got {kt}")
+        raise _stress_refusal(
+            f"kt must be at least 1 (a stress raiser); got {kt}",
+            subject="kt",
+            source=_STRESS_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=kt * sigma, unit="MPa")
 
 
@@ -140,27 +167,43 @@ def elliptical_hole_stress_concentration(
     elongated along it — a hole aligned with the load concentrates less, not more.
     """
     if not isinstance(semi_axis_across_load, Quantity):
-        raise ValueError(
-            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load!r}"
+        raise _stress_refusal(
+            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load!r}",
+            subject="semi_axis_across_load",
+            source=_STRESS_GEOMETRY_SOURCE,
         )
     if not semi_axis_across_load.has_dimension("[length]"):
-        raise ValueError(
-            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load}"
+        raise _stress_refusal(
+            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load}",
+            subject="semi_axis_across_load",
+            source=_STRESS_GEOMETRY_SOURCE,
         )
     if not isinstance(semi_axis_along_load, Quantity):
-        raise ValueError(
-            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load!r}"
+        raise _stress_refusal(
+            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load!r}",
+            subject="semi_axis_along_load",
+            source=_STRESS_GEOMETRY_SOURCE,
         )
     if not semi_axis_along_load.has_dimension("[length]"):
-        raise ValueError(
-            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load}"
+        raise _stress_refusal(
+            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load}",
+            subject="semi_axis_along_load",
+            source=_STRESS_GEOMETRY_SOURCE,
         )
     a = semi_axis_across_load.to("mm").magnitude
     b = semi_axis_along_load.to("mm").magnitude
     if a <= 0:
-        raise ValueError(f"semi_axis_across_load must be positive; got {semi_axis_across_load}")
+        raise _stress_refusal(
+            f"semi_axis_across_load must be positive; got {semi_axis_across_load}",
+            subject="semi_axis_across_load",
+            source=_STRESS_GEOMETRY_SOURCE,
+        )
     if b <= 0:
-        raise ValueError(f"semi_axis_along_load must be positive; got {semi_axis_along_load}")
+        raise _stress_refusal(
+            f"semi_axis_along_load must be positive; got {semi_axis_along_load}",
+            subject="semi_axis_along_load",
+            source=_STRESS_GEOMETRY_SOURCE,
+        )
     return 1.0 + 2.0 * a / b
 
 
@@ -436,11 +479,13 @@ def yield_safety_factor(equivalent_stress: Quantity, yield_strength: Quantity) -
     sigma = _require_stress(equivalent_stress, "equivalent_stress")
     sy = _require_stress(yield_strength, "yield_strength")
     if sigma == 0:
-        raise ValueError(
+        raise _stress_refusal(
             "equivalent_stress is zero: there is no safety factor to report, because "
             "there is nothing to divide. A load case that does not stress the member in "
             "this direction is NOT_EVALUATED, not infinitely safe — strength_scorecard "
-            "in this module returns exactly that."
+            "in this module returns exactly that.",
+            subject="equivalent_stress",
+            source=_STRESS_STATE_SOURCE,
         )
     return sy / sigma
 

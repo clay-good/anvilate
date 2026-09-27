@@ -19,7 +19,24 @@ quantities.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ELASTIC_PROPERTY_SOURCE = "the material certificate or cited elastic-property datasheet"
+
+
+class _ElasticConstantsInputError(RefusalError, ValueError):
+    """Invalid elastic-property input with a machine-readable repair."""
+
+
+def _elastic_constants_refusal(
+    message: str, *, subject: str, source: str
+) -> _ElasticConstantsInputError:
+    return _ElasticConstantsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "bulk_modulus_from_youngs_poisson",
@@ -41,9 +58,17 @@ def bulk_modulus_from_youngs_poisson(
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:
-        raise ValueError("elastic_modulus must be positive")
+        raise _elastic_constants_refusal(
+            "elastic_modulus must be positive",
+            subject="elastic_modulus",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     if not -1.0 < poisson_ratio < 0.5:
-        raise ValueError("poisson_ratio must be in (-1, 0.5)")
+        raise _elastic_constants_refusal(
+            "poisson_ratio must be in (-1, 0.5)",
+            subject="poisson_ratio",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=e / (3.0 * (1.0 - 2.0 * poisson_ratio)), unit="Pa")
 
 
@@ -58,9 +83,17 @@ def lame_first_parameter(*, elastic_modulus: Quantity, poisson_ratio: float) -> 
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:
-        raise ValueError("elastic_modulus must be positive")
+        raise _elastic_constants_refusal(
+            "elastic_modulus must be positive",
+            subject="elastic_modulus",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     if not -1.0 < poisson_ratio < 0.5:
-        raise ValueError("poisson_ratio must be in (-1, 0.5)")
+        raise _elastic_constants_refusal(
+            "poisson_ratio must be in (-1, 0.5)",
+            subject="poisson_ratio",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     return Quantity(
         magnitude=e * poisson_ratio / ((1.0 + poisson_ratio) * (1.0 - 2.0 * poisson_ratio)),
         unit="Pa",
@@ -85,9 +118,17 @@ def shear_modulus_from_youngs_poisson(
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:
-        raise ValueError("elastic_modulus must be positive")
+        raise _elastic_constants_refusal(
+            "elastic_modulus must be positive",
+            subject="elastic_modulus",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     if not -1.0 < poisson_ratio < 0.5:
-        raise ValueError("poisson_ratio must be in (-1, 0.5)")
+        raise _elastic_constants_refusal(
+            "poisson_ratio must be in (-1, 0.5)",
+            subject="poisson_ratio",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=e / (2.0 * (1.0 + poisson_ratio)), unit="Pa")
 
 
@@ -104,18 +145,32 @@ def youngs_modulus_from_bulk_shear(*, bulk_modulus: Quantity, shear_modulus: Qua
     k = bulk_modulus.to("Pa").magnitude
     g = shear_modulus.to("Pa").magnitude
     if k <= 0:
-        raise ValueError("bulk_modulus must be positive")
+        raise _elastic_constants_refusal(
+            "bulk_modulus must be positive",
+            subject="bulk_modulus",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     if g <= 0:
-        raise ValueError("shear_modulus must be positive")
+        raise _elastic_constants_refusal(
+            "shear_modulus must be positive",
+            subject="shear_modulus",
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=9.0 * k * g / (3.0 * k + g), unit="Pa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _elastic_constants_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ELASTIC_PROPERTY_SOURCE,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _elastic_constants_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ELASTIC_PROPERTY_SOURCE,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

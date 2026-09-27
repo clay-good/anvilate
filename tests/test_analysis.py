@@ -15663,6 +15663,114 @@ def test_every_material_strengthening_refusal_site_is_structured(
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "bulk_modulus_from_youngs_poisson",
+            {"elastic_modulus": _q("-1 MPa"), "poisson_ratio": 0.3},
+            "elastic_modulus",
+            "the material certificate or cited elastic-property datasheet",
+        ),
+        (
+            "bulk_modulus_from_youngs_poisson",
+            {"elastic_modulus": _q("200 GPa"), "poisson_ratio": 0.5},
+            "poisson_ratio",
+            "the material certificate or cited elastic-property datasheet",
+        ),
+        (
+            "circular_area",
+            {"diameter": _q("0 mm")},
+            "diameter",
+            "the component drawing or verified section measurement",
+        ),
+        (
+            "required_axial_area",
+            {
+                "axial_load": _q("10 kN"),
+                "allowable_stress": _q("100 MPa"),
+                "required_safety_factor": 0.0,
+            },
+            "required_safety_factor",
+            "the approved axial load case and required design factor",
+        ),
+        (
+            "required_axial_area",
+            {
+                "axial_load": _q("10 kN"),
+                "allowable_stress": _q("0 MPa"),
+            },
+            "allowable_stress",
+            "the material certificate or approved allowable-stress basis",
+        ),
+        (
+            "von_mises_plane_stress",
+            {"sigma_x": _q("1 mm"), "sigma_y": _q("0 MPa"), "tau_xy": _q("0 MPa")},
+            "sigma_x",
+            "the verified load-case stress results",
+        ),
+        (
+            "concentrated_stress",
+            {"nominal_stress": _q("100 MPa"), "kt": 0.9},
+            "kt",
+            "the component drawing or cited stress-concentration reference",
+        ),
+        (
+            "yield_safety_factor",
+            {"equivalent_stress": _q("100 MPa"), "yield_strength": _q("1 mm")},
+            "yield_strength",
+            "the material certificate or approved allowable-strength basis",
+        ),
+    ),
+)
+def test_elastic_response_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("elastic_constants", "_elastic_constants_refusal", 10),
+        ("axial", "_axial_refusal", 12),
+        ("stress", "_stress_refusal", 10),
+    ),
+)
+def test_every_elastic_response_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_agma_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
 

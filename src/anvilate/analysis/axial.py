@@ -14,7 +14,32 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_AXIAL_GEOMETRY_SOURCE = "the component drawing or verified section measurement"
+_AXIAL_MATERIAL_SOURCE = "the material certificate or approved allowable-stress basis"
+_AXIAL_LOAD_SOURCE = "the approved axial load case and required design factor"
+
+
+class _AxialInputError(RefusalError, ValueError):
+    """Invalid axial-analysis input with a machine-readable repair."""
+
+
+def _axial_refusal(message: str, *, subject: str, source: str) -> _AxialInputError:
+    return _AxialInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _axial_input_source(subject: str) -> str:
+    if subject in {"elastic_modulus", "allowable_stress"}:
+        return _AXIAL_MATERIAL_SOURCE
+    if subject == "required_safety_factor":
+        return _AXIAL_LOAD_SOURCE
+    return _AXIAL_GEOMETRY_SOURCE
+
 
 __all__ = [
     "circular_area",
@@ -27,10 +52,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _axial_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_axial_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _axial_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_axial_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -54,7 +85,11 @@ def circular_area(diameter: Quantity) -> Quantity:
     """
     _require(diameter, "[length]", "diameter")
     if diameter.to("mm").magnitude <= 0:
-        raise ValueError(f"diameter must be positive; got {diameter}")
+        raise _axial_refusal(
+            f"diameter must be positive; got {diameter}",
+            subject="diameter",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     return _as_quantity(pi * diameter.pint**2 / 4, "mm**2")
 
 
@@ -70,7 +105,11 @@ def axial_stress(*, force: Quantity, area: Quantity) -> Quantity:
     _require(force, "[force]", "force")
     _require(area, "[length]**2", "area")
     if area.magnitude <= 0:
-        raise ValueError(f"area must be positive; got {area}")
+        raise _axial_refusal(
+            f"area must be positive; got {area}",
+            subject="area",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     stress = force.pint / area.pint
     return _as_quantity(stress, "MPa")
 
@@ -98,9 +137,17 @@ def required_axial_area(
     _require(axial_load, "[force]", "axial_load")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _axial_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_AXIAL_LOAD_SOURCE,
+        )
     if allowable_stress.to("MPa").magnitude <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _axial_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_AXIAL_MATERIAL_SOURCE,
+        )
     area = required_safety_factor * abs(axial_load.pint) / allowable_stress.pint
     return _as_quantity(area, "mm**2")
 
@@ -125,11 +172,23 @@ def axial_elongation(
     _require(area, "[length]**2", "area")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if length.to("mm").magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _axial_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     if area.to("mm**2").magnitude <= 0:
-        raise ValueError(f"area must be positive; got {area}")
+        raise _axial_refusal(
+            f"area must be positive; got {area}",
+            subject="area",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     if elastic_modulus.to("MPa").magnitude <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _axial_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_AXIAL_MATERIAL_SOURCE,
+        )
     delta = force.pint * length.pint / (area.pint * elastic_modulus.pint)
     return _as_quantity(delta, "mm")
 
@@ -150,10 +209,22 @@ def axial_stiffness(*, length: Quantity, area: Quantity, elastic_modulus: Quanti
     _require(area, "[length]**2", "area")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if length.to("mm").magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _axial_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     if area.to("mm**2").magnitude <= 0:
-        raise ValueError(f"area must be positive; got {area}")
+        raise _axial_refusal(
+            f"area must be positive; got {area}",
+            subject="area",
+            source=_AXIAL_GEOMETRY_SOURCE,
+        )
     if elastic_modulus.to("MPa").magnitude <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _axial_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_AXIAL_MATERIAL_SOURCE,
+        )
     stiffness = area.pint * elastic_modulus.pint / length.pint
     return _as_quantity(stiffness, "N/mm")
