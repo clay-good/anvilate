@@ -24,7 +24,32 @@ is about 9.81·HV in MPa.)
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_WEAR_TRIBOLOGY_SOURCE = "the material-pair wear test or cited lubrication-condition data"
+_WEAR_DUTY_SOURCE = "the governing contact-load and sliding-duty record"
+_WEAR_LIMIT_SOURCE = "the component drawing or approved wear-allowance requirement"
+
+
+class _WearInputError(RefusalError, ValueError):
+    """A sliding-wear input that cannot be used without correction."""
+
+
+def _wear_refusal(message: str, *, subject: str, source: str) -> _WearInputError:
+    return _WearInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _wear_input_source(name: str) -> str:
+    if name == "hardness":
+        return _WEAR_TRIBOLOGY_SOURCE
+    if name == "allowable_depth":
+        return _WEAR_LIMIT_SOURCE
+    return _WEAR_DUTY_SOURCE
+
 
 __all__ = [
     "archard_wear_volume",
@@ -36,10 +61,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _wear_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_wear_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _wear_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_wear_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -50,7 +81,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 def _check_coefficient(wear_coefficient: float) -> float:
     if wear_coefficient <= 0:
-        raise ValueError(f"wear_coefficient must be positive; got {wear_coefficient}")
+        raise _wear_refusal(
+            f"wear_coefficient must be positive; got {wear_coefficient}",
+            subject="wear_coefficient",
+            source=_WEAR_TRIBOLOGY_SOURCE,
+        )
     return wear_coefficient
 
 
@@ -58,7 +93,11 @@ def _hardness_pa(hardness: Quantity) -> float:
     _require(hardness, "[pressure]", "hardness")
     h = hardness.to("Pa").magnitude
     if h <= 0:
-        raise ValueError(f"hardness must be positive; got {hardness}")
+        raise _wear_refusal(
+            f"hardness must be positive; got {hardness}",
+            subject="hardness",
+            source=_WEAR_TRIBOLOGY_SOURCE,
+        )
     return h
 
 
@@ -83,7 +122,11 @@ def archard_wear_volume(
     s = sliding_distance.to("m").magnitude
     h = _hardness_pa(hardness)
     if f <= 0 or s <= 0:
-        raise ValueError("load and sliding_distance must be positive")
+        raise _wear_refusal(
+            "load and sliding_distance must be positive",
+            subject="load and sliding_distance",
+            source=_WEAR_DUTY_SOURCE,
+        )
     volume_m3 = k * f * s / h
     return Quantity(magnitude=volume_m3 * 1e9, unit="mm**3")
 
@@ -110,7 +153,11 @@ def archard_wear_depth(
     s = sliding_distance.to("m").magnitude
     h = _hardness_pa(hardness)
     if p <= 0 or s <= 0:
-        raise ValueError("contact_pressure and sliding_distance must be positive")
+        raise _wear_refusal(
+            "contact_pressure and sliding_distance must be positive",
+            subject="contact_pressure and sliding_distance",
+            source=_WEAR_DUTY_SOURCE,
+        )
     depth_m = k * p * s / h
     return Quantity(magnitude=depth_m * 1000.0, unit="mm")
 
@@ -137,7 +184,11 @@ def sliding_distance_for_wear_depth(
     hardness_pa = _hardness_pa(hardness)
     depth_m = allowable_depth.to("m").magnitude
     if p <= 0 or depth_m <= 0:
-        raise ValueError("contact_pressure and allowable_depth must be positive")
+        raise _wear_refusal(
+            "contact_pressure and allowable_depth must be positive",
+            subject="contact_pressure and allowable_depth",
+            source=_WEAR_LIMIT_SOURCE,
+        )
     distance_m = depth_m * hardness_pa / (k * p)
     return Quantity(magnitude=distance_m, unit="m")
 
@@ -156,15 +207,23 @@ def sliding_contact_pv(*, contact_pressure: Quantity, sliding_velocity: Quantity
     """
     _require(contact_pressure, "[pressure]", "contact_pressure")
     if not isinstance(sliding_velocity, Quantity):
-        raise ValueError(
-            f"sliding_velocity must be a [length] / [time] quantity; got {sliding_velocity!r}"
+        raise _wear_refusal(
+            f"sliding_velocity must be a [length] / [time] quantity; got {sliding_velocity!r}",
+            subject="sliding_velocity",
+            source=_WEAR_DUTY_SOURCE,
         )
     if not sliding_velocity.has_dimension("[length] / [time]"):
-        raise ValueError(
-            f"sliding_velocity must be a velocity quantity; got {sliding_velocity.dimensionality}"
+        raise _wear_refusal(
+            f"sliding_velocity must be a velocity quantity; got {sliding_velocity.dimensionality}",
+            subject="sliding_velocity",
+            source=_WEAR_DUTY_SOURCE,
         )
     p = contact_pressure.to("MPa").magnitude
     v = sliding_velocity.to("m/s").magnitude
     if p <= 0 or v <= 0:
-        raise ValueError("contact_pressure and sliding_velocity must be positive")
+        raise _wear_refusal(
+            "contact_pressure and sliding_velocity must be positive",
+            subject="contact_pressure and sliding_velocity",
+            source=_WEAR_DUTY_SOURCE,
+        )
     return Quantity(magnitude=p * v, unit="MPa*m/s")

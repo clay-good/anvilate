@@ -23,7 +23,51 @@ from __future__ import annotations
 
 from math import log10
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CORROSION_COUPON_SOURCE = "the corrosion coupon report or verified exposure record"
+_CORROSION_ELECTROCHEMICAL_SOURCE = (
+    "the calibrated electrochemical test report or polarization record"
+)
+_CORROSION_MATERIAL_SOURCE = "the material certificate or cited corrosion-property record"
+_CORROSION_INTEGRITY_SOURCE = (
+    "the integrity inspection record and approved retirement-thickness assessment"
+)
+_CORROSION_COMPOSITION_SOURCE = "the alloy certificate or verified chemical analysis"
+_CORROSION_PROTECTION_SOURCE = "the approved cathodic-protection design or anode datasheet"
+
+
+class _CorrosionInputError(RefusalError, ValueError):
+    """A corrosion or asset-integrity input that cannot be used without correction."""
+
+
+def _corrosion_refusal(message: str, *, subject: str, source: str) -> _CorrosionInputError:
+    return _CorrosionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _corrosion_input_source(name: str) -> str:
+    if name in {"mass_loss", "exposed_area", "exposure_time"}:
+        return _CORROSION_COUPON_SOURCE
+    if name in {
+        "corrosion_current_density",
+        "current_density",
+        "exchange_current_density",
+        "tafel_slope",
+        "polarization_resistance",
+        "anodic_tafel_slope",
+        "cathodic_tafel_slope",
+    }:
+        return _CORROSION_ELECTROCHEMICAL_SOURCE
+    if name in {"current_thickness", "minimum_thickness", "corrosion_rate"}:
+        return _CORROSION_INTEGRITY_SOURCE
+    if name in {"anode_mass", "anode_capacity", "protection_current"}:
+        return _CORROSION_PROTECTION_SOURCE
+    return _CORROSION_MATERIAL_SOURCE
+
 
 __all__ = [
     "corrosion_penetration_rate",
@@ -55,13 +99,25 @@ def corrosion_penetration_rate(
     _check(exposure_time, "[time]", "exposure_time")
     _check(density, "[mass]/[length]**3", "density")
     if mass_loss.to("kg").magnitude < 0:
-        raise ValueError("mass_loss must be non-negative")
+        raise _corrosion_refusal(
+            "mass_loss must be non-negative", subject="mass_loss", source=_CORROSION_COUPON_SOURCE
+        )
     if exposed_area.to("m**2").magnitude <= 0:
-        raise ValueError("exposed_area must be positive")
+        raise _corrosion_refusal(
+            "exposed_area must be positive",
+            subject="exposed_area",
+            source=_CORROSION_COUPON_SOURCE,
+        )
     if exposure_time.to("s").magnitude <= 0:
-        raise ValueError("exposure_time must be positive")
+        raise _corrosion_refusal(
+            "exposure_time must be positive",
+            subject="exposure_time",
+            source=_CORROSION_COUPON_SOURCE,
+        )
     if density.to("kg/m**3").magnitude <= 0:
-        raise ValueError("density must be positive")
+        raise _corrosion_refusal(
+            "density must be positive", subject="density", source=_CORROSION_MATERIAL_SOURCE
+        )
     rate = mass_loss.pint / (density.pint * exposed_area.pint * exposure_time.pint)
     return Quantity(magnitude=float(rate.to("mm/year").magnitude), unit="mm/year")
 
@@ -85,13 +141,23 @@ def faraday_corrosion_rate(
     _check(corrosion_current_density, "[current]/[length]**2", "corrosion_current_density")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _corrosion_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_CORROSION_MATERIAL_SOURCE,
+        )
     rho = density.to("g/cm**3").magnitude
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _corrosion_refusal(
+            "density must be positive", subject="density", source=_CORROSION_MATERIAL_SOURCE
+        )
     i_corr = corrosion_current_density.to("uA/cm**2").magnitude
     if i_corr < 0:
-        raise ValueError("corrosion_current_density must be non-negative")
+        raise _corrosion_refusal(
+            "corrosion_current_density must be non-negative",
+            subject="corrosion_current_density",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     cr = 3.27e-3 * i_corr * equivalent_weight / rho
     return Quantity(magnitude=cr, unit="mm/year")
 
@@ -112,14 +178,26 @@ def remaining_wall_life(
     _check(current_thickness, "[length]", "current_thickness")
     _check(minimum_thickness, "[length]", "minimum_thickness")
     if minimum_thickness.magnitude < 0:
-        raise ValueError(f"minimum_thickness must be zero or positive; got {minimum_thickness}")
+        raise _corrosion_refusal(
+            f"minimum_thickness must be zero or positive; got {minimum_thickness}",
+            subject="minimum_thickness",
+            source=_CORROSION_INTEGRITY_SOURCE,
+        )
     _check(corrosion_rate, "[length]/[time]", "corrosion_rate")
     remaining = current_thickness.to("mm").magnitude - minimum_thickness.to("mm").magnitude
     if remaining <= 0:
-        raise ValueError("current_thickness must exceed minimum_thickness (wall already retired)")
+        raise _corrosion_refusal(
+            "current_thickness must exceed minimum_thickness (wall already retired)",
+            subject="current_thickness and minimum_thickness",
+            source=_CORROSION_INTEGRITY_SOURCE,
+        )
     rate = corrosion_rate.to("mm/year").magnitude
     if rate <= 0:
-        raise ValueError("corrosion_rate must be positive")
+        raise _corrosion_refusal(
+            "corrosion_rate must be positive",
+            subject="corrosion_rate",
+            source=_CORROSION_INTEGRITY_SOURCE,
+        )
     life = (current_thickness.pint - minimum_thickness.pint) / corrosion_rate.pint
     return Quantity(magnitude=float(life.to("year").magnitude), unit="year")
 
@@ -146,11 +224,23 @@ def tafel_overpotential(
     i0 = exchange_current_density.to("A/m**2").magnitude
     b = tafel_slope.to("V").magnitude
     if i0 <= 0:
-        raise ValueError("exchange_current_density must be positive")
+        raise _corrosion_refusal(
+            "exchange_current_density must be positive",
+            subject="exchange_current_density",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     if i < i0:
-        raise ValueError("current_density must be at least the exchange_current_density")
+        raise _corrosion_refusal(
+            "current_density must be at least the exchange_current_density",
+            subject="current_density and exchange_current_density",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     if b <= 0:
-        raise ValueError("tafel_slope must be positive")
+        raise _corrosion_refusal(
+            "tafel_slope must be positive",
+            subject="tafel_slope",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     return Quantity(magnitude=b * log10(i / i0), unit="V")
 
 
@@ -180,9 +270,17 @@ def stern_geary_corrosion_current(
     b_a = anodic_tafel_slope.to("V").magnitude
     b_c = cathodic_tafel_slope.to("V").magnitude
     if r_p <= 0:
-        raise ValueError("polarization_resistance must be positive")
+        raise _corrosion_refusal(
+            "polarization_resistance must be positive",
+            subject="polarization_resistance",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     if b_a <= 0 or b_c <= 0:
-        raise ValueError("Tafel slopes must be positive")
+        raise _corrosion_refusal(
+            "Tafel slopes must be positive",
+            subject="anodic_tafel_slope and cathodic_tafel_slope",
+            source=_CORROSION_ELECTROCHEMICAL_SOURCE,
+        )
     b_stern_geary = b_a * b_c / (2.303 * (b_a + b_c))
     return Quantity(magnitude=b_stern_geary / r_p, unit="A/m**2")
 
@@ -204,9 +302,17 @@ def pitting_resistance_equivalent(
     Returns the dimensionless PREN.
     """
     if chromium_percent < 0 or molybdenum_percent < 0 or nitrogen_percent < 0:
-        raise ValueError("element percentages must be non-negative")
+        raise _corrosion_refusal(
+            "element percentages must be non-negative",
+            subject="chromium_percent, molybdenum_percent, and nitrogen_percent",
+            source=_CORROSION_COMPOSITION_SOURCE,
+        )
     if chromium_percent <= 0:
-        raise ValueError("chromium_percent must be positive (a stainless steel needs chromium)")
+        raise _corrosion_refusal(
+            "chromium_percent must be positive (a stainless steel needs chromium)",
+            subject="chromium_percent",
+            source=_CORROSION_COMPOSITION_SOURCE,
+        )
     return chromium_percent + 3.3 * molybdenum_percent + 16.0 * nitrogen_percent
 
 
@@ -233,23 +339,45 @@ def sacrificial_anode_life(
     q = anode_capacity.to("A*hour/kg").magnitude
     i = protection_current.to("A").magnitude
     if m <= 0:
-        raise ValueError("anode_mass must be positive")
+        raise _corrosion_refusal(
+            "anode_mass must be positive",
+            subject="anode_mass",
+            source=_CORROSION_PROTECTION_SOURCE,
+        )
     if q <= 0:
-        raise ValueError("anode_capacity must be positive")
+        raise _corrosion_refusal(
+            "anode_capacity must be positive",
+            subject="anode_capacity",
+            source=_CORROSION_PROTECTION_SOURCE,
+        )
     if i <= 0:
-        raise ValueError("protection_current must be positive")
+        raise _corrosion_refusal(
+            "protection_current must be positive",
+            subject="protection_current",
+            source=_CORROSION_PROTECTION_SOURCE,
+        )
     if not 0.0 < utilization_factor <= 1.0:
-        raise ValueError("utilization_factor must be in (0, 1]")
+        raise _corrosion_refusal(
+            "utilization_factor must be in (0, 1]",
+            subject="utilization_factor",
+            source=_CORROSION_PROTECTION_SOURCE,
+        )
     life_hours = m * q * utilization_factor / i
     return Quantity(magnitude=life_hours / 8766.0, unit="year")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _corrosion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_corrosion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _corrosion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_corrosion_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

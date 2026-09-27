@@ -181,6 +181,11 @@
       peening media and impact flow, exposure time, and target coverage, sourced to coating
       specifications, drawings, qualified process records, calibrated equipment, or verified
       coverage tests.
+      The complete wear and corrosion families add 33 structured sites for contact load, sliding
+      duty, wear allowances, tribology data, coupon exposures, electrochemical tests, material and
+      alloy properties, wall inspections and retirement limits, and cathodic-protection inputs,
+      sourced to operating records, drawings, test reports, certificates, integrity assessments, or
+      approved designs.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

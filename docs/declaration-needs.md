@@ -363,6 +363,10 @@ The complete electroplating and shot-peening families follow the contract at all
 Coating thickness and plated area, bath chemistry and coating-metal properties, electrical cycles,
 peening media and impact flow, exposure time, and target coverage point to coating specifications,
 drawings, qualified process records, calibrated equipment, or verified coverage tests.
+The complete wear and corrosion families follow the contract at all 33 refusal sites. Contact load,
+sliding duty, wear allowances, tribology data, coupon exposures, electrochemical tests, material and
+alloy properties, wall inspections and retirement limits, and cathodic-protection inputs point to
+operating records, drawings, test reports, certificates, integrity assessments, or approved designs.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

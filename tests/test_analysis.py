@@ -19393,6 +19393,162 @@ def test_corrosion_pren_and_sacrificial_anode_life():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "archard_wear_volume",
+            {
+                "wear_coefficient": 0.0,
+                "load": _q("1000 N"),
+                "sliding_distance": _q("1000 m"),
+                "hardness": _q("2 GPa"),
+            },
+            "wear_coefficient",
+            "the material-pair wear test or cited lubrication-condition data",
+        ),
+        (
+            "archard_wear_volume",
+            {
+                "wear_coefficient": 1e-5,
+                "load": _q("0 N"),
+                "sliding_distance": _q("1000 m"),
+                "hardness": _q("2 GPa"),
+            },
+            "load and sliding_distance",
+            "the governing contact-load and sliding-duty record",
+        ),
+        (
+            "sliding_distance_for_wear_depth",
+            {
+                "wear_coefficient": 1e-5,
+                "contact_pressure": _q("10 MPa"),
+                "hardness": _q("2 GPa"),
+                "allowable_depth": _q("0 mm"),
+            },
+            "contact_pressure and allowable_depth",
+            "the component drawing or approved wear-allowance requirement",
+        ),
+        (
+            "archard_wear_depth",
+            {
+                "wear_coefficient": 1e-5,
+                "contact_pressure": _q("10 MPa"),
+                "sliding_distance": _q("1000 m"),
+                "hardness": _q("0 GPa"),
+            },
+            "hardness",
+            "the material-pair wear test or cited lubrication-condition data",
+        ),
+        (
+            "corrosion_penetration_rate",
+            {
+                "mass_loss": _q("-1 mg"),
+                "exposed_area": _q("10 cm**2"),
+                "exposure_time": _q("168 hour"),
+                "density": _q("7.87 g/cm**3"),
+            },
+            "mass_loss",
+            "the corrosion coupon report or verified exposure record",
+        ),
+        (
+            "faraday_corrosion_rate",
+            {
+                "corrosion_current_density": _q("1 uA/cm**2"),
+                "equivalent_weight": 0.0,
+                "density": _q("7.87 g/cm**3"),
+            },
+            "equivalent_weight",
+            "the material certificate or cited corrosion-property record",
+        ),
+        (
+            "tafel_overpotential",
+            {
+                "current_density": _q("0.05 A/m**2"),
+                "exchange_current_density": _q("0.1 A/m**2"),
+                "tafel_slope": _q("0.12 V"),
+            },
+            "current_density and exchange_current_density",
+            "the calibrated electrochemical test report or polarization record",
+        ),
+        (
+            "remaining_wall_life",
+            {
+                "current_thickness": _q("5 mm"),
+                "minimum_thickness": _q("6 mm"),
+                "corrosion_rate": _q("0.5 mm/year"),
+            },
+            "current_thickness and minimum_thickness",
+            "the integrity inspection record and approved retirement-thickness assessment",
+        ),
+        (
+            "pitting_resistance_equivalent",
+            {"chromium_percent": 0.0, "molybdenum_percent": 2.0},
+            "chromium_percent",
+            "the alloy certificate or verified chemical analysis",
+        ),
+        (
+            "sacrificial_anode_life",
+            {
+                "anode_mass": _q("10 kg"),
+                "anode_capacity": _q("780 A*hour/kg"),
+                "protection_current": _q("0.5 A"),
+                "utilization_factor": 1.5,
+            },
+            "utilization_factor",
+            "the approved cathodic-protection design or anode datasheet",
+        ),
+    ),
+)
+def test_materials_degradation_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("wear", "_wear_refusal", 10),
+        ("corrosion", "_corrosion_refusal", 23),
+    ),
+)
+def test_every_materials_degradation_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_ventilation_outdoor_air_changes_and_dilution():
     from anvilate.analysis import (
         air_changes_per_hour,
