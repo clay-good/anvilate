@@ -40,9 +40,11 @@ have for compiler configurations to be judged honestly.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from enum import StrEnum
+from functools import cache
 from math import isclose
 from typing import Any, Protocol
 
@@ -56,7 +58,7 @@ from ._models import (
     StatableModel,
     rebuilt_quantities,
 )
-from .contracts import spec_json_schema
+from .contracts import element_json_schemas, spec_json_schema
 from .spec import SCHEMA_VERSION, DesignSpec, SpecValidationError, parse_spec
 from .units import Quantity, UnitError
 
@@ -70,12 +72,16 @@ __all__ = [
     "CompilationReport",
     "CompilationResult",
     "CompilationTask",
+    "CompilationTaskSet",
+    "COMPILATION_TASK_SET_VERSION",
     "DecodingConfiguration",
     "FieldOutcome",
     "compile_intent",
+    "default_compilation_task_set",
     "field_value",
     "score_candidate",
     "score_task_set",
+    "task_set_issues",
 ]
 
 CONSTRAINT_TAX_CITATION = (
@@ -88,6 +94,8 @@ CONSTRAINT_TAX_CITATION = (
 # answer. A compiler is being scored on whether it read "50 kN" out of a sentence, not on
 # float formatting — but the tolerance is tight enough that 50 and 51 are different answers.
 _AGREEMENT = 1e-9
+COMPILATION_TASK_SET_VERSION = "1.0.0"
+_SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
 class CompilationMode(StrEnum):
@@ -396,6 +404,197 @@ class CompilationTask(RevalidatedModel):
                 "score as fully correct — including an empty one"
             )
         return self
+
+
+class CompilationTaskSet(RevalidatedModel):
+    """A versioned corpus of prompts and the fields each prompt actually states."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    tasks: tuple[CompilationTask, ...]
+
+    @model_validator(mode="after")
+    def _is_a_named_nonempty_corpus(self) -> CompilationTaskSet:
+        if _SEMVER.fullmatch(self.version) is None:
+            raise ValueError(f"compilation task-set version must be semantic; got {self.version!r}")
+        if not self.tasks:
+            raise ValueError("a compilation task set with no tasks measures nothing")
+        task_ids = [task.task_id for task in self.tasks]
+        if len(set(task_ids)) != len(task_ids):
+            raise ValueError(f"the compilation task set repeats task ids: {sorted(task_ids)}")
+        return self
+
+
+def _schema_options(schema: Mapping[str, Any], root: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Expand local references and union branches into schemas a path may traverse."""
+    if "$ref" in schema:
+        reference = schema["$ref"]
+        if not isinstance(reference, str) or not reference.startswith("#/"):
+            return []
+        resolved: Any = root
+        for token in reference[2:].split("/"):
+            if not isinstance(resolved, Mapping) or token not in resolved:
+                return []
+            resolved = resolved[token]
+        return _schema_options(resolved, root) if isinstance(resolved, Mapping) else []
+    branches = [
+        branch
+        for keyword in ("anyOf", "oneOf", "allOf")
+        for branch in schema.get(keyword, [])
+        if isinstance(branch, Mapping)
+    ]
+    if branches:
+        expanded = [option for branch in branches for option in _schema_options(branch, root)]
+        own = {
+            key: value for key, value in schema.items() if key not in {"anyOf", "oneOf", "allOf"}
+        }
+        return ([own] if own else []) + expanded
+    return [schema]
+
+
+def _schema_has_path(schema: Mapping[str, Any], path: str) -> bool:
+    options = [schema]
+    for part in path.split("."):
+        next_options: list[Mapping[str, Any]] = []
+        for option in options:
+            for expanded in _schema_options(option, schema):
+                if part.isdigit():
+                    item = expanded.get("items")
+                    if isinstance(item, Mapping):
+                        next_options.append(item)
+                    continue
+                properties = expanded.get("properties")
+                if isinstance(properties, Mapping) and isinstance(properties.get(part), Mapping):
+                    next_options.append(properties[part])
+        if not next_options:
+            return False
+        options = next_options
+    return True
+
+
+def task_set_issues(task_set: CompilationTaskSet) -> tuple[str, ...]:
+    """Return reference paths that no longer exist in the published Design Spec schema."""
+    schema = spec_json_schema()
+    element_schemas = element_json_schemas()
+    issues: list[str] = []
+    for task in task_set.tasks:
+        element_type = task.reference.get("element_type")
+        for path in task.reference:
+            if path.startswith("element_params."):
+                parameter = path.removeprefix("element_params.")
+                element_schema = (
+                    element_schemas.get(element_type) if isinstance(element_type, str) else None
+                )
+                if element_schema is None or not _schema_has_path(element_schema, parameter):
+                    issues.append(
+                        f"task {task.task_id!r} references no {element_type!r} element field "
+                        f"at {path!r}"
+                    )
+            elif not _schema_has_path(schema, path):
+                issues.append(f"task {task.task_id!r} references no Design Spec field at {path!r}")
+    return tuple(issues)
+
+
+@cache
+def default_compilation_task_set() -> CompilationTaskSet:
+    """The small, versioned corpus used to compare intent-compilation configurations."""
+    return CompilationTaskSet(
+        version=COMPILATION_TASK_SET_VERSION,
+        tasks=(
+            CompilationTask(
+                task_id="structural-lifting-lug",
+                prompt=(
+                    "CNC-machine a lifting lug from ASTM A36 steel for a 50 kN static load "
+                    "at the pin bore. Require a minimum safety factor of 2.0."
+                ),
+                reference={
+                    "material.ref": "ASTM-A36",
+                    "manufacturing.process": "cnc_milling",
+                    "load_cases.0.kind": "static",
+                    "load_cases.0.force": Quantity.parse("50 kN"),
+                    "constraints.min_safety_factor.value": 2.0,
+                },
+            ),
+            CompilationTask(
+                task_id="mechanical-stepper-bracket",
+                prompt=(
+                    "Make a 6061-T6 aluminum bracket joining a NEMA 23 motor to an EXT-4040 "
+                    "rail. The cantilevered motor mass is 1.1 kg and the bracket must weigh "
+                    "no more than 150 g. CNC mill it."
+                ),
+                reference={
+                    "material.ref": "AA-6061-T6",
+                    "manufacturing.process": "cnc_milling",
+                    "interfaces.0.ref": "NEMA23",
+                    "interfaces.1.ref": "EXT-4040",
+                    "load_cases.0.kind": "remote_mass",
+                    "load_cases.0.remote_mass": Quantity.parse("1.1 kg"),
+                    "constraints.max_mass.value": Quantity.parse("150 g"),
+                },
+            ),
+            CompilationTask(
+                task_id="structural-bolted-connection",
+                prompt=(
+                    "Check a single-shear 12 mm bolt joining a 10 mm ASTM A36 plate under "
+                    "a 35 kN transverse load. The bolt material is ASTM-A325."
+                ),
+                reference={
+                    "material.ref": "ASTM-A36",
+                    "element_type": "bolted_connection",
+                    "element_params.bolt_diameter": Quantity.parse("12 mm"),
+                    "element_params.plate_thickness": Quantity.parse("10 mm"),
+                    "element_params.load": Quantity.parse("35 kN"),
+                    "element_params.bolt_material": "ASTM-A325",
+                    "element_params.plate_material": "ASTM-A36",
+                    "element_params.shear_planes": 1,
+                },
+            ),
+            CompilationTask(
+                task_id="timber-floor-beam",
+                prompt=(
+                    "Check a Douglas Fir-Larch No. 2 floor beam spanning 12 ft under a "
+                    "uniform 40 lbf/ft live load. Use the timber beam analytical screen."
+                ),
+                reference={
+                    "material.ref": "Douglas Fir-Larch No. 2",
+                    "element_type": "timber_beam",
+                    "element_params.span": Quantity.parse("12 ft"),
+                    "element_params.load": Quantity.parse("40 lbf/ft"),
+                },
+            ),
+            CompilationTask(
+                task_id="hydraulic-supply-line",
+                prompt=(
+                    "Check 25 gal/min of water through 80 ft of 2 in pipe. Use 0.00015 ft "
+                    "roughness, a summed fitting-loss coefficient of 3.5, water kinematic "
+                    "viscosity of 1.1e-5 ft^2/s, and 18 ft of available head."
+                ),
+                reference={
+                    "element_type": "pipe_run",
+                    "element_params.flow_rate": Quantity.parse("25 gal/min"),
+                    "element_params.diameter": Quantity.parse("2 in"),
+                    "element_params.length": Quantity.parse("80 ft"),
+                    "element_params.roughness": Quantity.parse("0.00015 ft"),
+                    "element_params.fitting_loss_coefficient": 3.5,
+                    "element_params.kinematic_viscosity": Quantity.parse("1.1e-5 ft^2/s"),
+                    "element_params.available_head": Quantity.parse("18 ft"),
+                },
+            ),
+            CompilationTask(
+                task_id="metric-shaft-tolerance",
+                prompt=(
+                    "Turn a 25 mm steel shaft with an h6 fit. Manufacture it by turning and "
+                    "validate the declared dimensional tolerance."
+                ),
+                reference={
+                    "manufacturing.process": "turning",
+                    "dimensions.0.nominal": Quantity.parse("25 mm"),
+                    "dimensions.0.tolerance.designation": "h6",
+                },
+            ),
+        ),
+    )
 
 
 def field_value(document: Any, path: str) -> tuple[bool, Any]:

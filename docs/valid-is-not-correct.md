@@ -117,3 +117,15 @@ Only the two-key shape Anvilate's own serializer emits is rebuilt. A `{"magnitud
 pair that does not parse stays a dictionary, and a string is never coerced: a task stating
 `"5 kN"` as a string is asking for a string, and answering it with a quantity would score a
 different question than the task asked.
+
+`default_compilation_task_set()` is the first versioned corpus: six prompts spanning a
+lifting lug, a stepper bracket, a bolted connection, a timber beam, a hydraulic run, and an
+ISO-fit shaft dimension. Each reference contains only fields its prompt actually states,
+not a full “golden” spec filled with defaults the compiler was never asked to choose.
+
+`task_set_issues()` resolves every reference path through the published Design Spec schema
+and, for `element_params`, the published schema selected by that task's `element_type`.
+Renaming `manufacturing.process` or a pack field such as `pipe_run.flow_rate` therefore
+breaks CI at the task that still names it. This is a schema-drift gate, not a model result:
+the separate release gate remains open until the corpus is run through real configured
+models and its correctness effect is recorded.

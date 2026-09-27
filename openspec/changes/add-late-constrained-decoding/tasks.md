@@ -21,9 +21,10 @@
       not a whole reference spec, because two correct compilations can differ in the parts
       nobody stated and scoring against a full document would count a compiler wrong for
       filling a default differently. A task stating no reference fields is refused: every
-      output would score fully correct, including an empty one. The corpus itself is not
-      written — a task set is a claim about what the compiler should have understood, and
-      writing one before the compiler exists would be writing it against nothing
+      output would score fully correct, including an empty one. Now that the compiler
+      boundary exists, `default_compilation_task_set()` supplies version 1.0.0: six tasks
+      across structural, mechanical, timber, hydraulic, and tolerance intent. Every dotted
+      reference is gated against the published Design Spec or selected pack-element schema
 - [x] 2.2 Separate metrics: schema validity, field-level correctness, wrong-but-valid rate —
       and **no fourth number that averages them**. `CompilationReport` has no `score`, no
       `success_rate` and no `passed`; a contract test asserts none can be added. A scalar
@@ -43,7 +44,10 @@
       Also pinned: an omitted field counts against correctness, an unparseable candidate
       scores zero fields rather than no fields, and a task nobody attempted is an error
       rather than an omission
-- [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — follows a task corpus
+- [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — the corpus half is
+      now live: `task_set_issues()` makes a stale Spec IR or pack-element field fail CI and
+      adversary tests prove both directions. This remains open because a real model run and
+      its correctness delta still need an external harness; path validity is not evaluation
 
 ## 4. Docs
 
@@ -54,7 +58,7 @@
 
 ## Note
 
-The orchestration contract is built; model adapters and the compilation task corpus are not.
+The orchestration contract and the first versioned task corpus are built; model adapters are not.
 That boundary is deliberate: Anvilate supplies the schema, validation, retries, provenance,
 and pass isolation without choosing a local server or initiating a cloud call. The
 measurement vocabulary shipped first so a compiler could not look better by hiding the

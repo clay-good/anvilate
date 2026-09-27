@@ -11,16 +11,20 @@ from __future__ import annotations
 import pytest
 
 from anvilate.compilation import (
+    COMPILATION_TASK_SET_VERSION,
     CompilationFailure,
     CompilationMode,
     CompilationOutcome,
     CompilationReport,
     CompilationTask,
+    CompilationTaskSet,
     FieldOutcome,
     compile_intent,
+    default_compilation_task_set,
     field_value,
     score_candidate,
     score_task_set,
+    task_set_issues,
 )
 from anvilate.units import Quantity
 
@@ -139,6 +143,58 @@ def test_the_retry_budget_is_bounded_before_the_backend_runs():
         compile_intent("Make a lifting lug.", backend, retry_budget=6)
     assert backend.reason_calls == []
     assert backend.package_calls == []
+
+
+# --- the versioned task corpus -----------------------------------------------------------
+
+
+def test_the_default_compilation_corpus_is_versioned_and_spans_distinct_tasks():
+    task_set = default_compilation_task_set()
+    assert task_set.version == COMPILATION_TASK_SET_VERSION
+    assert len(task_set.tasks) == 6
+    assert len({task.task_id for task in task_set.tasks}) == len(task_set.tasks)
+    referenced = {path for task in task_set.tasks for path in task.reference}
+    assert {
+        "material.ref",
+        "manufacturing.process",
+        "interfaces.0.ref",
+        "load_cases.0.force",
+        "dimensions.0.tolerance.designation",
+        "element_params.flow_rate",
+    } <= referenced
+
+
+def test_every_default_reference_path_resolves_in_a_published_schema():
+    assert task_set_issues(default_compilation_task_set()) == ()
+
+
+def test_the_task_path_gate_detects_stale_spec_and_element_field_names():
+    source = default_compilation_task_set()
+    spec_typo = CompilationTask(
+        task_id="stale-spec-field",
+        prompt="A task with a stale field.",
+        reference={"manufacturing.proces": "turning"},
+    )
+    element_typo = CompilationTask(
+        task_id="stale-element-field",
+        prompt="A task with a stale pack field.",
+        reference={
+            "element_type": "pipe_run",
+            "element_params.flowrate": Quantity.parse("25 gal/min"),
+        },
+    )
+    broken = source.model_copy(update={"tasks": source.tasks + (spec_typo, element_typo)})
+    issues = task_set_issues(broken)
+    assert any("manufacturing.proces" in issue for issue in issues)
+    assert any("element_params.flowrate" in issue for issue in issues)
+
+
+def test_a_task_set_refuses_an_unversioned_or_duplicate_corpus():
+    task = default_compilation_task_set().tasks[0]
+    with pytest.raises(ValueError, match="version must be semantic"):
+        CompilationTaskSet(version="next", tasks=(task,))
+    with pytest.raises(ValueError, match="repeats task ids"):
+        CompilationTaskSet(version="1.0.0", tasks=(task, task))
 
 
 def _candidate(**overrides) -> dict:

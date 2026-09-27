@@ -101,6 +101,7 @@ cli.EXIT_CODES
 cli.main
 cli.run
 compilation.CONSTRAINT_TAX_CITATION
+compilation.COMPILATION_TASK_SET_VERSION
 compilation.CompilationBackend
 compilation.CompilationFailure
 compilation.CompilationMode
@@ -109,12 +110,15 @@ compilation.CompilationProvenance
 compilation.CompilationReport
 compilation.CompilationResult
 compilation.CompilationTask
+compilation.CompilationTaskSet
 compilation.DecodingConfiguration
 compilation.FieldOutcome
 compilation.compile_intent
+compilation.default_compilation_task_set
 compilation.field_value
 compilation.score_candidate
 compilation.score_task_set
+compilation.task_set_issues
 contracts.JSON_SCHEMA_DIALECT
 contracts.RELEASED_DIRECTORY
 contracts.freeze_release
