@@ -383,6 +383,11 @@ The complete cold-formed-steel family follows the contract at all 21 refusal sit
 material properties, AISI coefficients, gross-section yield values, elastic buckling results, and DSM
 strength objects point to profile drawings, mill certificates, the governing AISI S100 criteria,
 approved yield calculations, or cited finite-strip analyses.
+The complete masonry and prestressed-concrete families follow the contract at all 21 refusal sites.
+Masonry geometry, prism strength, reinforcement, applied and allowable stresses, prestressed-section
+geometry, tendon force and profile, transfer or service actions, and rupture strength point to
+structural drawings, test reports, reinforcement and stressing records, governing analyses, or the
+cited TMS 402 criteria.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

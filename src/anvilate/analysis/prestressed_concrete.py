@@ -26,7 +26,37 @@ cracking moment from the modulus of rupture.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PRESTRESS_GEOMETRY_SOURCE = "the prestressed-concrete section drawing and tendon profile"
+_PRESTRESS_FORCE_SOURCE = "the stressing record and approved effective-prestress loss calculation"
+_PRESTRESS_LOAD_SOURCE = "the governing transfer or service load analysis"
+_PRESTRESS_MATERIAL_SOURCE = "the concrete test report or cited modulus-of-rupture basis"
+
+
+class _PrestressedConcreteInputError(RefusalError, ValueError):
+    """Invalid prestressed-concrete input with a machine-readable repair."""
+
+
+def _prestress_refusal(
+    message: str, *, subject: str, source: str
+) -> _PrestressedConcreteInputError:
+    return _PrestressedConcreteInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _prestress_input_source(subject: str) -> str:
+    if subject == "prestress_force":
+        return _PRESTRESS_FORCE_SOURCE
+    if subject == "applied_moment":
+        return _PRESTRESS_LOAD_SOURCE
+    if subject == "modulus_of_rupture":
+        return _PRESTRESS_MATERIAL_SOURCE
+    return _PRESTRESS_GEOMETRY_SOURCE
+
 
 __all__ = [
     "prestress_balanced_load",
@@ -56,9 +86,17 @@ def prestress_balanced_load(
     e = tendon_drape.to("m").magnitude
     length = span.to("m").magnitude
     if e <= 0:
-        raise ValueError("tendon_drape must be positive")
+        raise _prestress_refusal(
+            "tendon_drape must be positive",
+            subject="tendon_drape",
+            source=_PRESTRESS_GEOMETRY_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("span must be positive")
+        raise _prestress_refusal(
+            "span must be positive",
+            subject="span",
+            source=_PRESTRESS_GEOMETRY_SOURCE,
+        )
     w = 8.0 * prestress_force.to("N").magnitude * e / length**2
     return Quantity(magnitude=w / 1000.0, unit="kN/m")
 
@@ -85,9 +123,15 @@ def prestress_bottom_fiber_stress(
     _check(tendon_eccentricity, "[length]", "tendon_eccentricity")
     _check(section_modulus, "[length]**3", "section_modulus")
     if area.to("m**2").magnitude <= 0:
-        raise ValueError("area must be positive")
+        raise _prestress_refusal(
+            "area must be positive", subject="area", source=_PRESTRESS_GEOMETRY_SOURCE
+        )
     if section_modulus.to("m**3").magnitude <= 0:
-        raise ValueError("section_modulus must be positive")
+        raise _prestress_refusal(
+            "section_modulus must be positive",
+            subject="section_modulus",
+            source=_PRESTRESS_GEOMETRY_SOURCE,
+        )
     m = applied_moment.to("N*m").magnitude
     p = prestress_force.to("N").magnitude
     a = area.to("m**2").magnitude
@@ -125,9 +169,15 @@ def prestress_top_fiber_stress(
     _check(tendon_eccentricity, "[length]", "tendon_eccentricity")
     _check(section_modulus, "[length]**3", "section_modulus")
     if area.to("m**2").magnitude <= 0:
-        raise ValueError("area must be positive")
+        raise _prestress_refusal(
+            "area must be positive", subject="area", source=_PRESTRESS_GEOMETRY_SOURCE
+        )
     if section_modulus.to("m**3").magnitude <= 0:
-        raise ValueError("section_modulus must be positive")
+        raise _prestress_refusal(
+            "section_modulus must be positive",
+            subject="section_modulus",
+            source=_PRESTRESS_GEOMETRY_SOURCE,
+        )
     m = applied_moment.to("N*m").magnitude
     p = prestress_force.to("N").magnitude
     a = area.to("m**2").magnitude
@@ -161,10 +211,16 @@ def prestress_cracking_moment(
     _check(modulus_of_rupture, "[pressure]", "modulus_of_rupture")
     a = area.to("m**2").magnitude
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _prestress_refusal(
+            "area must be positive", subject="area", source=_PRESTRESS_GEOMETRY_SOURCE
+        )
     s = section_modulus.to("m**3").magnitude
     if s <= 0:
-        raise ValueError("section_modulus must be positive")
+        raise _prestress_refusal(
+            "section_modulus must be positive",
+            subject="section_modulus",
+            source=_PRESTRESS_GEOMETRY_SOURCE,
+        )
     p = prestress_force.to("N").magnitude
     e = tendon_eccentricity.to("m").magnitude
     fr = modulus_of_rupture.to("Pa").magnitude
@@ -174,10 +230,16 @@ def prestress_cracking_moment(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _prestress_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_prestress_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _prestress_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_prestress_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

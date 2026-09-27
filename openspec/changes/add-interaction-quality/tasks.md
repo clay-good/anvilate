@@ -203,6 +203,11 @@
       properties, AISI coefficients, gross-section yield values, elastic buckling results, and DSM
       strength objects, sourced to profile drawings, mill certificates, the governing AISI S100
       criteria, approved yield calculations, or cited finite-strip analyses.
+      The complete masonry and prestressed-concrete families add 21 structured sites for masonry
+      geometry, prism strength, reinforcement, applied and allowable stresses, prestressed-section
+      geometry, tendon force and profile, transfer or service actions, and rupture strength, sourced
+      to structural drawings, test reports, reinforcement and stressing records, governing analyses,
+      or the cited TMS 402 criteria.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

@@ -26790,6 +26790,152 @@ def test_polytropic_efficiency_reheat_effect_flips_between_compressor_and_turbin
         turbine_isentropic_from_polytropic(pressure_ratio=7.0, polytropic_efficiency=1.5)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "masonry_allowable_axial_stress",
+            {"masonry_strength": _q("-1 MPa"), "slenderness_ratio": 50.0},
+            "masonry_strength",
+            "the masonry prism report or reinforcing-steel certificate",
+        ),
+        (
+            "masonry_allowable_axial_stress",
+            {"masonry_strength": _q("10 MPa"), "slenderness_ratio": -1.0},
+            "slenderness_ratio",
+            "the structural masonry drawing or verified net-section geometry",
+        ),
+        (
+            "masonry_column_axial_capacity",
+            {
+                "masonry_strength": _q("10 MPa"),
+                "net_area": _q("100000 mm**2"),
+                "slenderness_ratio": 50.0,
+                "steel_area": _q("800 mm**2"),
+            },
+            "steel_area and steel_allowable_stress",
+            "the approved reinforced-masonry schedule and steel allowable",
+        ),
+        (
+            "masonry_column_axial_capacity",
+            {
+                "masonry_strength": _q("10 MPa"),
+                "net_area": _q("100000 mm**2"),
+                "slenderness_ratio": 50.0,
+                "steel_area": _q("800 mm**2"),
+                "steel_allowable_stress": _q("200 MPa"),
+            },
+            "steel_allowable_stress",
+            "the governing TMS 402 edition and approved ASD criteria",
+        ),
+        (
+            "masonry_combined_stress_ratio",
+            {
+                "axial_stress": _q("-1 MPa"),
+                "allowable_axial_stress": _q("2 MPa"),
+                "flexural_stress": _q("1 MPa"),
+                "allowable_flexural_stress": _q("4 MPa"),
+            },
+            "axial_stress and flexural_stress",
+            "the governing masonry load combination and stress analysis",
+        ),
+        (
+            "prestress_balanced_load",
+            {
+                "prestress_force": _q("1 mm"),
+                "tendon_drape": _q("0.3 m"),
+                "span": _q("12 m"),
+            },
+            "prestress_force",
+            "the stressing record and approved effective-prestress loss calculation",
+        ),
+        (
+            "prestress_bottom_fiber_stress",
+            {
+                "applied_moment": _q("1 kN"),
+                "prestress_force": _q("1500 kN"),
+                "area": _q("0.5 m**2"),
+                "tendon_eccentricity": _q("0.3 m"),
+                "section_modulus": _q("0.08 m**3"),
+            },
+            "applied_moment",
+            "the governing transfer or service load analysis",
+        ),
+        (
+            "prestress_cracking_moment",
+            {
+                "prestress_force": _q("1500 kN"),
+                "area": _q("0.5 m**2"),
+                "tendon_eccentricity": _q("0.3 m"),
+                "section_modulus": _q("0.08 m**3"),
+                "modulus_of_rupture": _q("1 mm"),
+            },
+            "modulus_of_rupture",
+            "the concrete test report or cited modulus-of-rupture basis",
+        ),
+        (
+            "prestress_bottom_fiber_stress",
+            {
+                "applied_moment": _q("200 kN*m"),
+                "prestress_force": _q("1500 kN"),
+                "area": _q("0 m**2"),
+                "tendon_eccentricity": _q("0.3 m"),
+                "section_modulus": _q("0.08 m**3"),
+            },
+            "area",
+            "the prestressed-concrete section drawing and tendon profile",
+        ),
+    ),
+)
+def test_masonry_and_prestress_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("masonry", "_masonry_refusal", 11),
+        ("prestressed_concrete", "_prestress_refusal", 10),
+    ),
+)
+def test_every_masonry_and_prestress_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 

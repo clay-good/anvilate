@@ -18,7 +18,37 @@ below the gross. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, decimals_distinguishing, require_finite
+
+_MASONRY_GEOMETRY_SOURCE = "the structural masonry drawing or verified net-section geometry"
+_MASONRY_MATERIAL_SOURCE = "the masonry prism report or reinforcing-steel certificate"
+_MASONRY_LOAD_SOURCE = "the governing masonry load combination and stress analysis"
+_MASONRY_CODE_SOURCE = "the governing TMS 402 edition and approved ASD criteria"
+_MASONRY_REINFORCEMENT_SOURCE = "the approved reinforced-masonry schedule and steel allowable"
+_MASONRY_SECTION_SOURCE = "the structural drawing and cited masonry material record"
+
+
+class _MasonryInputError(RefusalError, ValueError):
+    """Invalid masonry-analysis input with a machine-readable repair."""
+
+
+def _masonry_refusal(message: str, *, subject: str, source: str) -> _MasonryInputError:
+    return _MasonryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _masonry_input_source(subject: str) -> str:
+    if subject == "masonry_strength":
+        return _MASONRY_MATERIAL_SOURCE
+    if subject in {"steel_area", "steel_allowable_stress"}:
+        return _MASONRY_REINFORCEMENT_SOURCE
+    if "stress" in subject:
+        return _MASONRY_LOAD_SOURCE
+    return _MASONRY_GEOMETRY_SOURCE
+
 
 __all__ = [
     "masonry_allowable_axial_stress",
@@ -30,10 +60,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _masonry_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_masonry_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _masonry_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_masonry_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -44,7 +80,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 def _slenderness_factor(slenderness_ratio: float) -> float:
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio h/r must be positive; got {slenderness_ratio}")
+        raise _masonry_refusal(
+            f"slenderness_ratio h/r must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_MASONRY_GEOMETRY_SOURCE,
+        )
     if slenderness_ratio <= 99.0:
         return 1.0 - (slenderness_ratio / 140.0) ** 2
     return (70.0 / slenderness_ratio) ** 2
@@ -69,7 +109,11 @@ def masonry_allowable_axial_stress(
     _require(masonry_strength, "[pressure]", "masonry_strength")
     fm = masonry_strength.to("MPa").magnitude
     if fm <= 0:
-        raise ValueError(f"masonry_strength must be positive; got {masonry_strength}")
+        raise _masonry_refusal(
+            f"masonry_strength must be positive; got {masonry_strength}",
+            subject="masonry_strength",
+            source=_MASONRY_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=0.25 * fm * _slenderness_factor(slenderness_ratio), unit="MPa")
 
 
@@ -103,19 +147,29 @@ def masonry_column_axial_capacity(
     fm = masonry_strength.to("MPa").magnitude
     an = net_area.to("mm**2").magnitude
     if fm <= 0 or an <= 0:
-        raise ValueError("masonry_strength and net_area must be positive")
+        raise _masonry_refusal(
+            "masonry_strength and net_area must be positive",
+            subject="masonry_strength and net_area",
+            source=_MASONRY_SECTION_SOURCE,
+        )
     steel_term = 0.0
     if steel_area is not None or steel_allowable_stress is not None:
         if steel_area is None or steel_allowable_stress is None:
-            raise ValueError(
-                "steel_area and steel_allowable_stress must both be given for a reinforced column"
+            raise _masonry_refusal(
+                "steel_area and steel_allowable_stress must both be given for a reinforced column",
+                subject="steel_area and steel_allowable_stress",
+                source=_MASONRY_REINFORCEMENT_SOURCE,
             )
         _require(steel_area, "[area]", "steel_area")
         _require(steel_allowable_stress, "[pressure]", "steel_allowable_stress")
         ast = steel_area.to("mm**2").magnitude
         fs = steel_allowable_stress.to("MPa").magnitude
         if ast <= 0 or fs <= 0:
-            raise ValueError("steel_area and steel_allowable_stress must be positive")
+            raise _masonry_refusal(
+                "steel_area and steel_allowable_stress must be positive",
+                subject="steel_area and steel_allowable_stress",
+                source=_MASONRY_REINFORCEMENT_SOURCE,
+            )
         # The capacity is linear in F_s through the 0.65*A_st*F_s term, so an uncapped F_s
         # buys unbounded phantom column capacity. The natural mistake is the one that costs
         # the most: 0.6*f_y for Grade 60 steel is 248 MPa, and passing it instead of the
@@ -126,11 +180,13 @@ def masonry_column_axial_capacity(
             # overstate, inside the sentence refusing it.
             overstatement = fs / _STEEL_ALLOWABLE_CAP_MPA
             places = decimals_distinguishing(overstatement, 1.0)
-            raise ValueError(
+            raise _masonry_refusal(
                 f"steel_allowable_stress is {steel_allowable_stress}, above the TMS 402 cap of "
                 f"{_STEEL_ALLOWABLE_CAP_MPA:g} MPa on F_s. The capacity is linear in F_s, so the "
                 f"uncapped value overstates the column by {overstatement:.{places}f}x on "
-                f"its steel term; pass min(0.6*f_y, {_STEEL_ALLOWABLE_CAP_MPA:g} MPa)"
+                f"its steel term; pass min(0.6*f_y, {_STEEL_ALLOWABLE_CAP_MPA:g} MPa)",
+                subject="steel_allowable_stress",
+                source=_MASONRY_CODE_SOURCE,
             )
         steel_term = 0.65 * ast * fs
     capacity = (0.25 * fm * an + steel_term) * _slenderness_factor(slenderness_ratio)
@@ -150,7 +206,11 @@ def masonry_allowable_flexural_stress(*, masonry_strength: Quantity) -> Quantity
     _require(masonry_strength, "[pressure]", "masonry_strength")
     fm = masonry_strength.to("MPa").magnitude
     if fm <= 0:
-        raise ValueError(f"masonry_strength must be positive; got {masonry_strength}")
+        raise _masonry_refusal(
+            f"masonry_strength must be positive; got {masonry_strength}",
+            subject="masonry_strength",
+            source=_MASONRY_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=0.45 * fm, unit="MPa")
 
 
@@ -181,7 +241,15 @@ def masonry_combined_stress_ratio(
     fb = flexural_stress.to("MPa").magnitude
     fb_allow = allowable_flexural_stress.to("MPa").magnitude
     if fa_allow <= 0 or fb_allow <= 0:
-        raise ValueError("allowable stresses must be positive")
+        raise _masonry_refusal(
+            "allowable stresses must be positive",
+            subject="allowable_axial_stress and allowable_flexural_stress",
+            source=_MASONRY_CODE_SOURCE,
+        )
     if fa < 0 or fb < 0:
-        raise ValueError("applied stresses must be non-negative")
+        raise _masonry_refusal(
+            "applied stresses must be non-negative",
+            subject="axial_stress and flexural_stress",
+            source=_MASONRY_LOAD_SOURCE,
+        )
     return fa / fa_allow + fb / fb_allow
