@@ -28,6 +28,23 @@ from __future__ import annotations
 
 from math import asin, atan, cos, degrees, radians, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
+
+_REFRACTIVE_INDEX_SOURCE = "the glass certificate or cited refractive-index record"
+_INCIDENCE_GEOMETRY_SOURCE = "the optical layout or calibrated incidence-angle setup"
+
+
+class _FresnelInputError(RefusalError, ValueError):
+    """A Fresnel-analysis input that cannot be used without correction."""
+
+
+def _fresnel_refusal(message: str, *, subject: str, source: str) -> _FresnelInputError:
+    return _FresnelInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "brewster_angle",
     "fresnel_normal_reflectance",
@@ -40,20 +57,28 @@ __all__ = [
 def _transmitted_cosine(n_1: float, n_2: float, incidence_angle: float) -> tuple[float, float]:
     """Shared Snell step: validate, then return (cos theta_i, cos theta_t)."""
     if n_1 <= 0 or n_2 <= 0:
-        raise ValueError("refractive indices must be positive")
+        raise _fresnel_refusal(
+            "refractive indices must be positive",
+            subject="incident and transmitted refractive indices",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     if not 0.0 <= incidence_angle < 90.0:
-        raise ValueError(
+        raise _fresnel_refusal(
             f"incidence_angle must be in 0..90 degrees (measured from the normal); "
-            f"got {incidence_angle}"
+            f"got {incidence_angle}",
+            subject="incidence_angle",
+            source=_INCIDENCE_GEOMETRY_SOURCE,
         )
     theta_i = radians(incidence_angle)
     sin_t = n_1 * sin(theta_i) / n_2
     if sin_t >= 1.0:
         critical = degrees(asin(n_2 / n_1))
-        raise ValueError(
+        raise _fresnel_refusal(
             f"total internal reflection: {incidence_angle} degrees is at or beyond the critical "
             f"angle {critical:.4f} degrees for n1 = {n_1} into n2 = {n_2}, so no light is "
-            f"transmitted and the Fresnel reflectance is simply 1"
+            f"transmitted and the Fresnel reflectance is simply 1",
+            subject="incidence angle and refractive indices",
+            source=_INCIDENCE_GEOMETRY_SOURCE,
         )
     return cos(theta_i), sqrt(1.0 - sin_t * sin_t)
 
@@ -67,9 +92,17 @@ def fresnel_normal_reflectance(*, incident_index: float, transmitted_index: floa
     the light comes from. Returns the reflectance as a plain float in [0, 1).
     """
     if incident_index <= 0:
-        raise ValueError("incident_index must be positive")
+        raise _fresnel_refusal(
+            "incident_index must be positive",
+            subject="incident_index",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     if transmitted_index <= 0:
-        raise ValueError("transmitted_index must be positive")
+        raise _fresnel_refusal(
+            "transmitted_index must be positive",
+            subject="transmitted_index",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     return ((incident_index - transmitted_index) / (incident_index + transmitted_index)) ** 2
 
 
@@ -94,9 +127,17 @@ def brewster_angle(*, incident_index: float, transmitted_index: float) -> float:
     sunglasses and the Brewster windows of gas lasers. Returns the Brewster angle in degrees.
     """
     if incident_index <= 0:
-        raise ValueError("incident_index must be positive")
+        raise _fresnel_refusal(
+            "incident_index must be positive",
+            subject="incident_index",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     if transmitted_index <= 0:
-        raise ValueError("transmitted_index must be positive")
+        raise _fresnel_refusal(
+            "transmitted_index must be positive",
+            subject="transmitted_index",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     return degrees(atan(transmitted_index / incident_index))
 
 

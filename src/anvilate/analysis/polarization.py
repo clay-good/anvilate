@@ -23,7 +23,26 @@ from __future__ import annotations
 
 from math import acos, cos, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_POLARIZATION_INTENSITY_SOURCE = (
+    "the optical attenuation requirement or calibrated photometer record"
+)
+
+
+class _PolarizationInputError(RefusalError, ValueError):
+    """A polarization input that cannot be used without correction."""
+
+
+def _polarization_refusal(message: str, *, subject: str) -> _PolarizationInputError:
+    return _PolarizationInputError(
+        message,
+        remedies=(
+            Remedy(action="replace", subject=subject, source=_POLARIZATION_INTENSITY_SOURCE),
+        ),
+    )
+
 
 __all__ = [
     "malus_angle_for_intensity",
@@ -42,7 +61,9 @@ def malus_transmitted_intensity(*, incident_intensity: Quantity, angle: float) -
     _check(incident_intensity, "[power]/[area]", "incident_intensity")
     i0 = incident_intensity.to("W/m**2").magnitude
     if i0 < 0:
-        raise ValueError("incident_intensity must be non-negative")
+        raise _polarization_refusal(
+            "incident_intensity must be non-negative", subject="incident_intensity"
+        )
     c = cos(angle)
     return Quantity(magnitude=i0 * c * c, unit="W/m**2")
 
@@ -62,11 +83,18 @@ def malus_angle_for_intensity(
     i0 = incident_intensity.to("W/m**2").magnitude
     i = transmitted_intensity.to("W/m**2").magnitude
     if i0 <= 0:
-        raise ValueError("incident_intensity must be positive")
+        raise _polarization_refusal(
+            "incident_intensity must be positive", subject="incident_intensity"
+        )
     if i < 0:
-        raise ValueError("transmitted_intensity must be non-negative")
+        raise _polarization_refusal(
+            "transmitted_intensity must be non-negative", subject="transmitted_intensity"
+        )
     if i > i0:
-        raise ValueError("transmitted_intensity must not exceed incident_intensity")
+        raise _polarization_refusal(
+            "transmitted_intensity must not exceed incident_intensity",
+            subject="incident_intensity and transmitted_intensity",
+        )
     return acos(sqrt(i / i0))
 
 
@@ -80,16 +108,21 @@ def unpolarized_transmitted_intensity(*, incident_intensity: Quantity) -> Quanti
     _check(incident_intensity, "[power]/[area]", "incident_intensity")
     i0 = incident_intensity.to("W/m**2").magnitude
     if i0 < 0:
-        raise ValueError("incident_intensity must be non-negative")
+        raise _polarization_refusal(
+            "incident_intensity must be non-negative", subject="incident_intensity"
+        )
     return Quantity(magnitude=0.5 * i0, unit="W/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _polarization_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}", subject=name
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _polarization_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

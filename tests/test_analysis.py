@@ -34559,6 +34559,80 @@ def test_malus_law_transmission_inverse_and_unpolarized_half():
         malus_transmitted_intensity(incident_intensity=_q("100 W"), angle=0.0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "malus_angle_for_intensity",
+            {"incident_intensity": _q("100 W/m**2"), "transmitted_intensity": _q("150 W/m**2")},
+            "incident_intensity and transmitted_intensity",
+            "the optical attenuation requirement or calibrated photometer record",
+        ),
+        (
+            "malus_transmitted_intensity",
+            {"incident_intensity": _q("100 W"), "angle": 0.0},
+            "incident_intensity",
+            "the optical attenuation requirement or calibrated photometer record",
+        ),
+        (
+            "fresnel_normal_reflectance",
+            {"incident_index": 0.0, "transmitted_index": 1.5},
+            "incident_index",
+            "the glass certificate or cited refractive-index record",
+        ),
+        (
+            "fresnel_s_reflectance",
+            {"incident_index": 1.5, "transmitted_index": 1.0, "incidence_angle": 60.0},
+            "incidence angle and refractive indices",
+            "the optical layout or calibrated incidence-angle setup",
+        ),
+    ),
+)
+def test_wave_optics_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name"),
+    (
+        ("polarization", "_polarization_refusal"),
+        ("fresnel", "_fresnel_refusal"),
+    ),
+)
+def test_every_wave_optics_refusal_site_is_structured(module_name, helper_name):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 7
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_gibbs_equilibrium_constant_and_vant_hoff_shift():
     from math import exp
 

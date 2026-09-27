@@ -119,6 +119,10 @@
       for wavelengths, energies, optical power, scattering geometry, ion species, and quantum
       levels, sourced to spectral requirements, calibrated sources or setups, and transition
       definitions.
+      The complete polarization and Fresnel families add 14 structured sites for optical
+      intensities, refractive indices, incidence angles, and total-internal-reflection conditions,
+      sourced to attenuation requirements, photometer records, glass certificates, layouts, or
+      calibrated setups.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
