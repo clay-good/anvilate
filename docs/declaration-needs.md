@@ -291,6 +291,9 @@ optical design basis.
 The complete universal-joint family follows the contract at all three refusal sites. Invalid shaft
 misalignment angles point to the driveline drawing or measured operating geometry that supplies
 the correction.
+The complete acid-base and chemical-equilibrium families follow the contract at all 10 refusal
+sites. Buffer concentrations, thermochemical properties, and absolute temperatures point to the
+formulation, calibrated concentration record, cited property record, or reactor operating case.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

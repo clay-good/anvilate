@@ -22,7 +22,22 @@ from __future__ import annotations
 
 from math import log10
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BUFFER_COMPOSITION_SOURCE = "the buffer formulation or calibrated concentration record"
+
+
+class _AcidBaseInputError(RefusalError, ValueError):
+    """An acid-base input that cannot be used without correction."""
+
+
+def _acid_base_refusal(message: str, *, subject: str) -> _AcidBaseInputError:
+    return _AcidBaseInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_BUFFER_COMPOSITION_SOURCE),),
+    )
+
 
 __all__ = [
     "buffer_ratio_for_ph",
@@ -49,9 +64,15 @@ def henderson_hasselbalch_ph(
     base = conjugate_base_concentration.to("mol/L").magnitude
     acid = weak_acid_concentration.to("mol/L").magnitude
     if base <= 0:
-        raise ValueError("conjugate_base_concentration must be positive")
+        raise _acid_base_refusal(
+            "conjugate_base_concentration must be positive",
+            subject="conjugate_base_concentration",
+        )
     if acid <= 0:
-        raise ValueError("weak_acid_concentration must be positive")
+        raise _acid_base_refusal(
+            "weak_acid_concentration must be positive",
+            subject="weak_acid_concentration",
+        )
     return pka + log10(base / acid)
 
 
@@ -71,10 +92,14 @@ def buffer_ratio_for_ph(*, pka: float, ph: float) -> float:
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _acid_base_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _acid_base_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

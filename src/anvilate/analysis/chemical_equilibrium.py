@@ -23,9 +23,32 @@ from __future__ import annotations
 
 from math import exp
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
+_THERMOCHEMICAL_SOURCE = "the cited thermochemical property record"
+_REACTOR_CONDITION_SOURCE = "the reactor operating case or calibrated temperature measurement"
+
+
+class _ChemicalEquilibriumInputError(RefusalError, ValueError):
+    """A chemical-equilibrium input that cannot be used without correction."""
+
+
+def _chemical_equilibrium_refusal(
+    message: str, *, subject: str, source: str
+) -> _ChemicalEquilibriumInputError:
+    return _ChemicalEquilibriumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _equilibrium_input_source(name: str) -> str:
+    if "temperature" in name:
+        return _REACTOR_CONDITION_SOURCE
+    return _THERMOCHEMICAL_SOURCE
+
 
 __all__ = [
     "equilibrium_constant",
@@ -51,7 +74,11 @@ def gibbs_free_energy_change(
     t = temperature.to("K").magnitude
     ds = entropy_change.to("J/(mol*K)").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _chemical_equilibrium_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_REACTOR_CONDITION_SOURCE,
+        )
     return Quantity(magnitude=dh - t * ds, unit="J/mol")
 
 
@@ -68,7 +95,11 @@ def equilibrium_constant(*, gibbs_free_energy_change: Quantity, temperature: Qua
     dg = gibbs_free_energy_change.to("J/mol").magnitude
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _chemical_equilibrium_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_REACTOR_CONDITION_SOURCE,
+        )
     return exp(-dg / (_GAS_CONSTANT * t))
 
 
@@ -90,18 +121,32 @@ def vant_hoff_constant_ratio(
     t1 = temperature_low.to("K").magnitude
     t2 = temperature_high.to("K").magnitude
     if t1 <= 0 or t2 <= 0:
-        raise ValueError("temperatures must be positive (absolute temperature)")
+        raise _chemical_equilibrium_refusal(
+            "temperatures must be positive (absolute temperature)",
+            subject="temperature_low and temperature_high",
+            source=_REACTOR_CONDITION_SOURCE,
+        )
     if t2 <= t1:
-        raise ValueError("temperature_high must exceed temperature_low")
+        raise _chemical_equilibrium_refusal(
+            "temperature_high must exceed temperature_low",
+            subject="temperature_low and temperature_high",
+            source=_REACTOR_CONDITION_SOURCE,
+        )
     return exp(-(dh / _GAS_CONSTANT) * (1.0 / t2 - 1.0 / t1))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _chemical_equilibrium_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_equilibrium_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _chemical_equilibrium_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_equilibrium_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

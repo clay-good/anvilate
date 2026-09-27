@@ -34725,6 +34725,96 @@ def test_acid_base_henderson_hasselbalch_ph_and_buffer_ratio():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "henderson_hasselbalch_ph",
+            {
+                "pka": 4.76,
+                "conjugate_base_concentration": _q("0 mol/L"),
+                "weak_acid_concentration": _q("0.1 mol/L"),
+            },
+            "conjugate_base_concentration",
+            "the buffer formulation or calibrated concentration record",
+        ),
+        (
+            "henderson_hasselbalch_ph",
+            {
+                "pka": 4.76,
+                "conjugate_base_concentration": _q("0.2 mol"),
+                "weak_acid_concentration": _q("0.1 mol/L"),
+            },
+            "conjugate_base_concentration",
+            "the buffer formulation or calibrated concentration record",
+        ),
+        (
+            "gibbs_free_energy_change",
+            {
+                "enthalpy_change": _q("-92000 J"),
+                "temperature": _q("298 K"),
+                "entropy_change": _q("-198 J/(mol*K)"),
+            },
+            "enthalpy_change",
+            "the cited thermochemical property record",
+        ),
+        (
+            "vant_hoff_constant_ratio",
+            {
+                "enthalpy_change": _q("50000 J/mol"),
+                "temperature_low": _q("498 K"),
+                "temperature_high": _q("298 K"),
+            },
+            "temperature_low and temperature_high",
+            "the reactor operating case or calibrated temperature measurement",
+        ),
+    ),
+)
+def test_chemistry_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("acid_base", "_acid_base_refusal", 4),
+        ("chemical_equilibrium", "_chemical_equilibrium_refusal", 6),
+    ),
+)
+def test_every_chemistry_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_hall_petch_yield_strength_and_grain_size_inverse():
     from anvilate.analysis import (
         hall_petch_grain_diameter_for_yield,
