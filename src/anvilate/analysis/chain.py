@@ -30,6 +30,7 @@ from math import acos, cos, pi, sin
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
 from ._counting import whole_count_ceil
+from ._power_transmission import _drive_refusal
 
 __all__ = [
     "chain_length_in_pitches",
@@ -40,13 +41,21 @@ __all__ = [
     "chain_working_tension",
 ]
 
+_CHAIN_INPUT_SOURCE = "the chain-drive drawing, operating duty, or selected chain catalogue"
+
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=f"the {name} value {value!r}",
+            source=_CHAIN_INPUT_SOURCE,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=f"the {name} value {value}",
+            source=_CHAIN_INPUT_SOURCE,
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -62,7 +71,11 @@ def _check_teeth(count: int, name: str) -> int:
     require_finite(count, name=name)
     whole = int(count)
     if whole != count or whole <= 0:
-        raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")
+        raise _drive_refusal(
+            f"{name} must be a positive whole number of teeth; got {count}",
+            subject=f"the {name} count {count}",
+            source="the chain-drive drawing or selected sprocket catalogue",
+        )
     return whole
 
 
@@ -93,9 +106,17 @@ def chain_length_in_pitches(
     c = center_distance.to("mm").magnitude
     p = chain_pitch.to("mm").magnitude
     if p <= 0:
-        raise ValueError(f"chain_pitch must be positive; got {chain_pitch}")
+        raise _drive_refusal(
+            f"chain_pitch must be positive; got {chain_pitch}",
+            subject=f"the chain_pitch value {chain_pitch}",
+            source="the selected roller-chain catalogue",
+        )
     if c <= 0:
-        raise ValueError(f"center_distance must be positive; got {center_distance}")
+        raise _drive_refusal(
+            f"center_distance must be positive; got {center_distance}",
+            subject=f"the center_distance value {center_distance}",
+            source="the chain-drive shaft-center drawing",
+        )
     cp = c / p
     return 2.0 * cp + (n1 + n2) / 2.0 + ((n2 - n1) / (2.0 * pi)) ** 2 / cp
 
@@ -130,7 +151,11 @@ def sprocket_pitch_diameter(*, chain_pitch: Quantity, sprocket_teeth: int) -> Qu
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     p = chain_pitch.to("mm").magnitude
     if p <= 0:
-        raise ValueError("chain_pitch must be positive")
+        raise _drive_refusal(
+            "chain_pitch must be positive",
+            subject=f"the chain_pitch value {chain_pitch}",
+            source="the selected roller-chain catalogue",
+        )
     return Quantity(magnitude=p / sin(pi / n), unit="mm")
 
 
@@ -145,7 +170,11 @@ def minimum_sprocket_teeth_for_chordal_variation(*, max_variation: float) -> int
     tooth count as an int.
     """
     if not 0 < max_variation < 1:
-        raise ValueError(f"max_variation must be in (0, 1); got {max_variation}")
+        raise _drive_refusal(
+            f"max_variation must be in (0, 1); got {max_variation}",
+            subject=f"the max_variation value {max_variation}",
+            source="the chain-drive smoothness requirement",
+        )
     return whole_count_ceil(pi / acos(1.0 - max_variation))
 
 
@@ -165,20 +194,32 @@ def chain_speed(
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     _require(chain_pitch, "[length]", "chain_pitch")
     if not isinstance(rotational_speed, Quantity):
-        raise ValueError(
-            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}"
+        raise _drive_refusal(
+            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}",
+            subject=f"the rotational_speed value {rotational_speed!r}",
+            source="the driving-shaft speed declaration",
         )
     if not rotational_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"rotational_speed must be a rotational-speed ([frequency]) quantity; got "
-            f"{rotational_speed.dimensionality} ({rotational_speed})"
+            f"{rotational_speed.dimensionality} ({rotational_speed})",
+            subject=f"the rotational_speed value {rotational_speed}",
+            source="the driving-shaft speed declaration",
         )
     p = chain_pitch.to("m").magnitude
     if p <= 0:
-        raise ValueError(f"chain_pitch must be positive; got {chain_pitch}")
+        raise _drive_refusal(
+            f"chain_pitch must be positive; got {chain_pitch}",
+            subject=f"the chain_pitch value {chain_pitch}",
+            source="the selected roller-chain catalogue",
+        )
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _drive_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject=f"the rotational_speed value {rotational_speed}",
+            source="the driving-shaft speed declaration",
+        )
     rev_per_second = omega / (2.0 * pi)
     return Quantity(magnitude=n * p * rev_per_second, unit="m/s")
 
@@ -200,7 +241,15 @@ def chain_working_tension(*, power: Quantity, chain_speed: Quantity) -> Quantity
     p = power.to("W").magnitude
     v = chain_speed.to("m/s").magnitude
     if p <= 0:
-        raise ValueError(f"power must be positive; got {power}")
+        raise _drive_refusal(
+            f"power must be positive; got {power}",
+            subject=f"the transmitted power {power}",
+            source="the chain-drive operating duty",
+        )
     if v <= 0:
-        raise ValueError(f"chain_speed must be positive; got {chain_speed}")
+        raise _drive_refusal(
+            f"chain_speed must be positive; got {chain_speed}",
+            subject=f"the chain_speed value {chain_speed}",
+            source="the sprocket geometry and driving-shaft speed",
+        )
     return Quantity(magnitude=p / v, unit="N")

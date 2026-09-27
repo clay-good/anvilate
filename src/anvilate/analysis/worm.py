@@ -30,6 +30,7 @@ from __future__ import annotations
 from math import atan2, cos, degrees, pi, radians, sin, tan
 
 from ..units import Quantity, require_finite
+from ._power_transmission import _drive_refusal
 
 __all__ = [
     "worm_gear_ratio",
@@ -44,10 +45,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=f"the {name} value {value!r}",
+            source="the worm-drive drawing or operating load case",
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=f"the {name} value {value}",
+            source="the worm-drive drawing or operating load case",
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -63,7 +70,11 @@ def _check_starts(worm_starts: int) -> int:
     require_finite(worm_starts, name="worm_starts")
     whole = int(worm_starts)
     if whole != worm_starts or whole <= 0:
-        raise ValueError(f"worm_starts must be a positive whole number; got {worm_starts}")
+        raise _drive_refusal(
+            f"worm_starts must be a positive whole number; got {worm_starts}",
+            subject=f"the worm_starts count {worm_starts}",
+            source="the worm thread specification or gearset drawing",
+        )
     return whole
 
 
@@ -74,20 +85,30 @@ def _check_gear_teeth(gear_teeth: int) -> int:
     require_finite(gear_teeth, name="gear_teeth")
     whole = int(gear_teeth)
     if whole != gear_teeth or whole <= 0:
-        raise ValueError(f"gear_teeth must be a positive whole number; got {gear_teeth}")
+        raise _drive_refusal(
+            f"gear_teeth must be a positive whole number; got {gear_teeth}",
+            subject=f"the gear_teeth count {gear_teeth}",
+            source="the worm-wheel drawing or selected gear catalogue",
+        )
     return whole
 
 
 def _check_lead_angle(lead_angle: float) -> float:
     if not 0 < lead_angle < 90:
-        raise ValueError(f"lead_angle (degrees) must lie in (0, 90); got {lead_angle}")
+        raise _drive_refusal(
+            f"lead_angle (degrees) must lie in (0, 90); got {lead_angle}",
+            subject=f"the lead_angle value {lead_angle}",
+            source="the worm-gear drawing or measured mesh geometry",
+        )
     return radians(lead_angle)
 
 
 def _check_pressure_angle(normal_pressure_angle: float) -> float:
     if not 0 <= normal_pressure_angle < 90:
-        raise ValueError(
-            f"normal_pressure_angle (degrees) must lie in [0, 90); got {normal_pressure_angle}"
+        raise _drive_refusal(
+            f"normal_pressure_angle (degrees) must lie in [0, 90); got {normal_pressure_angle}",
+            subject=f"the normal_pressure_angle value {normal_pressure_angle}",
+            source="the worm tooth-form specification or gear catalogue",
         )
     return radians(normal_pressure_angle)
 
@@ -97,7 +118,11 @@ def _check_friction(friction_coefficient: float) -> float:
     # definite False, which is a statement that the set backdrives.
     require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _drive_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject=f"the friction_coefficient value {friction_coefficient}",
+            source="the worm/wheel material pair and lubrication data",
+        )
     return friction_coefficient
 
 
@@ -135,9 +160,17 @@ def worm_lead_angle(
     px = axial_pitch.to("mm").magnitude
     dw = worm_pitch_diameter.to("mm").magnitude
     if px <= 0:
-        raise ValueError(f"axial_pitch must be positive; got {axial_pitch}")
+        raise _drive_refusal(
+            f"axial_pitch must be positive; got {axial_pitch}",
+            subject=f"the axial_pitch value {axial_pitch}",
+            source="the worm thread specification or gearset drawing",
+        )
     if dw <= 0:
-        raise ValueError(f"worm_pitch_diameter must be positive; got {worm_pitch_diameter}")
+        raise _drive_refusal(
+            f"worm_pitch_diameter must be positive; got {worm_pitch_diameter}",
+            subject=f"the worm_pitch_diameter value {worm_pitch_diameter}",
+            source="the worm-gear drawing or selected gear catalogue",
+        )
     lead = starts * px
     return degrees(atan2(lead, pi * dw))
 
@@ -175,11 +208,13 @@ def worm_gear_efficiency(
     mu = _check_friction(friction_coefficient)
     phi_n = _check_pressure_angle(normal_pressure_angle)
     if mu * tan(lam) >= cos(phi_n):
-        raise ValueError(
+        raise _drive_refusal(
             f"the mesh cannot drive forward: friction_coefficient {friction_coefficient} times "
             f"tan(lead_angle {lead_angle} deg) = {mu * tan(lam)} is not below "
             f"cos(normal_pressure_angle {normal_pressure_angle} deg) = {cos(phi_n)}, so the "
-            "efficiency correlation is outside its range of validity"
+            "efficiency correlation is outside its range of validity",
+            subject="the worm mesh friction coefficient and lead/pressure angles",
+            source="the Shigley worm-drive efficiency correlation and selected gearset data",
         )
     numerator = cos(phi_n) - mu * tan(lam)
     denominator = cos(phi_n) + mu / tan(lam)
@@ -297,9 +332,11 @@ def worm_separating_force(
     mu = _check_friction(friction_coefficient)
     denominator = cos(phi_n) * cos(lam) - mu * sin(lam)
     if denominator <= 0:
-        raise ValueError(
+        raise _drive_refusal(
             "cos(phi_n)*cos(lambda) - mu*sin(lambda) must be positive; the friction and "
-            "lead angle exceed the mesh's driving capacity"
+            "lead angle exceed the mesh's driving capacity",
+            subject="the worm mesh friction coefficient and lead/pressure angles",
+            source="the worm mesh force-resolution equation and selected gearset data",
         )
     magnitude = gear_tangential_load.to("N").magnitude * sin(phi_n) / denominator
     return Quantity(magnitude=magnitude, unit="N")

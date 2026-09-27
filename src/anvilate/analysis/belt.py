@@ -31,6 +31,7 @@ from __future__ import annotations
 from math import asin, exp, pi, radians, sin, sqrt
 
 from ..units import Quantity, require_finite
+from ._power_transmission import _drive_refusal
 
 __all__ = [
     "capstan_tension_ratio",
@@ -49,12 +50,25 @@ __all__ = [
     "belt_mean_tension",
 ]
 
+_BELT_TENSION_SOURCE = "the belt manufacturer's allowable tension or operating load case"
+_BELT_TRACTION_SOURCE = "the belt/pulley material pair or measured traction data"
+_BELT_SPEED_SOURCE = "the pulley pitch diameter and shaft-speed declaration"
+_PULLEY_GEOMETRY_SOURCE = "the pulley and shaft-center drawing"
+
 
 def _require_force(value: Quantity, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [force] quantity; got {value!r}")
+        raise _drive_refusal(
+            f"{name} must be a [force] quantity; got {value!r}",
+            subject=f"the {name} value {value!r}",
+            source=_BELT_TENSION_SOURCE,
+        )
     if not value.has_dimension("[force]"):
-        raise ValueError(f"{name} must be a [force] quantity; got {value.dimensionality} ({value})")
+        raise _drive_refusal(
+            f"{name} must be a [force] quantity; got {value.dimensionality} ({value})",
+            subject=f"the {name} value {value}",
+            source=_BELT_TENSION_SOURCE,
+        )
 
 
 def _ratio(friction_coefficient: float, wrap_angle: float) -> float:
@@ -63,9 +77,17 @@ def _ratio(friction_coefficient: float, wrap_angle: float) -> float:
     require_finite(friction_coefficient, name="friction_coefficient")
     require_finite(wrap_angle, name="wrap_angle")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _drive_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject=f"the friction_coefficient value {friction_coefficient}",
+            source=_BELT_TRACTION_SOURCE,
+        )
     if wrap_angle <= 0:
-        raise ValueError(f"wrap_angle (radians) must be positive; got {wrap_angle}")
+        raise _drive_refusal(
+            f"wrap_angle (radians) must be positive; got {wrap_angle}",
+            subject=f"the wrap_angle value {wrap_angle}",
+            source="the pulley layout and belt-path drawing",
+        )
     return exp(friction_coefficient * wrap_angle)
 
 
@@ -122,37 +144,59 @@ def belt_max_transmissible_force(
     # A negative tight tension scaled straight through to a negative transmissible force,
     # and band_brake_torque delegates here, so it reported a negative braking torque.
     if t1 <= 0:
-        raise ValueError(f"tight_tension must be positive; got {tight_tension}")
+        raise _drive_refusal(
+            f"tight_tension must be positive; got {tight_tension}",
+            subject=f"the tight_tension value {tight_tension}",
+            source=_BELT_TENSION_SOURCE,
+        )
     return Quantity(magnitude=t1 * (1.0 - 1.0 / ratio), unit="N")
 
 
 def _linear_density_kg_per_m(linear_density: Quantity) -> float:
     if not isinstance(linear_density, Quantity):
-        raise ValueError(
-            f"linear_density must be a [mass] / [length] quantity; got {linear_density!r}"
+        raise _drive_refusal(
+            f"linear_density must be a [mass] / [length] quantity; got {linear_density!r}",
+            subject=f"the linear_density value {linear_density!r}",
+            source="the belt manufacturer's mass-per-length data",
         )
     if not linear_density.has_dimension("[mass] / [length]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"linear_density must be a [mass]/[length] quantity; "
-            f"got {linear_density.dimensionality} ({linear_density})"
+            f"got {linear_density.dimensionality} ({linear_density})",
+            subject=f"the linear_density value {linear_density}",
+            source="the belt manufacturer's mass-per-length data",
         )
     m = linear_density.to("kg/m").magnitude
     if m <= 0:
-        raise ValueError(f"linear_density must be positive; got {linear_density}")
+        raise _drive_refusal(
+            f"linear_density must be positive; got {linear_density}",
+            subject=f"the linear_density value {linear_density}",
+            source="the belt manufacturer's mass-per-length data",
+        )
     return m
 
 
 def _speed_m_per_s(belt_speed: Quantity) -> float:
     if not isinstance(belt_speed, Quantity):
-        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
+        raise _drive_refusal(
+            f"belt_speed must be a [velocity] quantity; got {belt_speed!r}",
+            subject=f"the belt_speed value {belt_speed!r}",
+            source=_BELT_SPEED_SOURCE,
+        )
     if not belt_speed.has_dimension("[velocity]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"belt_speed must be a [velocity] quantity; "
-            f"got {belt_speed.dimensionality} ({belt_speed})"
+            f"got {belt_speed.dimensionality} ({belt_speed})",
+            subject=f"the belt_speed value {belt_speed}",
+            source=_BELT_SPEED_SOURCE,
         )
     v = belt_speed.to("m/s").magnitude
     if v < 0:
-        raise ValueError(f"belt_speed must be non-negative; got {belt_speed}")
+        raise _drive_refusal(
+            f"belt_speed must be non-negative; got {belt_speed}",
+            subject=f"the belt_speed value {belt_speed}",
+            source=_BELT_SPEED_SOURCE,
+        )
     return v
 
 
@@ -194,9 +238,11 @@ def belt_max_transmissible_force_at_speed(
     t1 = tight_tension.to("N").magnitude
     tc = belt_centrifugal_tension(linear_density=linear_density, belt_speed=belt_speed).magnitude
     if tc >= t1:
-        raise ValueError(
+        raise _drive_refusal(
             f"centrifugal tension ({tc:.1f} N) consumes the whole tight-side tension "
-            f"({tight_tension}) at this speed; the belt cannot transmit"
+            f"({tight_tension}) at this speed; the belt cannot transmit",
+            subject=f"the belt speed and tight-side tension {tight_tension}",
+            source="the selected belt's speed rating and allowable tension",
         )
     return Quantity(magnitude=(t1 - tc) * (1.0 - 1.0 / ratio), unit="N")
 
@@ -213,7 +259,11 @@ def belt_speed_for_max_power(*, tight_tension: Quantity, linear_density: Quantit
     _require_force(tight_tension, "tight_tension")
     t1 = tight_tension.to("N").magnitude
     if t1 <= 0:
-        raise ValueError(f"tight_tension must be positive; got {tight_tension}")
+        raise _drive_refusal(
+            f"tight_tension must be positive; got {tight_tension}",
+            subject=f"the tight_tension value {tight_tension}",
+            source=_BELT_TENSION_SOURCE,
+        )
     m = _linear_density_kg_per_m(linear_density)
     return Quantity(magnitude=sqrt(t1 / (3.0 * m)), unit="m/s")
 
@@ -230,9 +280,17 @@ def vee_belt_effective_friction(*, friction_coefficient: float, groove_angle: fl
     angle **in degrees** below 180°. Returns the dimensionless effective μ'.
     """
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _drive_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject=f"the friction_coefficient value {friction_coefficient}",
+            source=_BELT_TRACTION_SOURCE,
+        )
     if not 0 < groove_angle < 180:
-        raise ValueError(f"groove_angle (degrees) must lie in (0, 180); got {groove_angle}")
+        raise _drive_refusal(
+            f"groove_angle (degrees) must lie in (0, 180); got {groove_angle}",
+            subject=f"the groove_angle value {groove_angle}",
+            source="the V-pulley groove drawing or catalogue",
+        )
     return friction_coefficient / sin(radians(groove_angle / 2.0))
 
 
@@ -246,24 +304,38 @@ def _pulley_geometry(
         (center_distance, "center_distance"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+            raise _drive_refusal(
+                f"{name} must be a [length] quantity; got {value!r}",
+                subject=f"the {name} value {value!r}",
+                source=_PULLEY_GEOMETRY_SOURCE,
+            )
         if not value.has_dimension("[length]"):
-            raise ValueError(
-                f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+            raise _drive_refusal(
+                f"{name} must be a [length] quantity; got {value.dimensionality} ({value})",
+                subject=f"the {name} value {value}",
+                source=_PULLEY_GEOMETRY_SOURCE,
             )
     big = large_pulley_diameter.to("mm").magnitude
     small = small_pulley_diameter.to("mm").magnitude
     c = center_distance.to("mm").magnitude
     if small <= 0 or c <= 0:
-        raise ValueError("small_pulley_diameter and center_distance must be positive")
+        raise _drive_refusal(
+            "small_pulley_diameter and center_distance must be positive",
+            subject="the small_pulley_diameter and center_distance values",
+            source=_PULLEY_GEOMETRY_SOURCE,
+        )
     if big < small:
-        raise ValueError(
+        raise _drive_refusal(
             f"large_pulley_diameter ({large_pulley_diameter}) must be at least "
-            f"small_pulley_diameter ({small_pulley_diameter})"
+            f"small_pulley_diameter ({small_pulley_diameter})",
+            subject="the large and small pulley diameter assignments",
+            source=_PULLEY_GEOMETRY_SOURCE,
         )
     if c <= (big - small) / 2.0:
-        raise ValueError(
-            f"center_distance ({center_distance}) is too small for the pulleys to clear"
+        raise _drive_refusal(
+            f"center_distance ({center_distance}) is too small for the pulleys to clear",
+            subject=f"the center_distance value {center_distance}",
+            source=_PULLEY_GEOMETRY_SOURCE,
         )
     return big, small, c
 
@@ -313,9 +385,11 @@ def _crossed_geometry(
     """Validate and return (D, d, C) in mm for a crossed two-pulley belt drive."""
     big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
     if c <= (big + small) / 2.0:
-        raise ValueError(
+        raise _drive_refusal(
             f"center_distance ({center_distance}) must exceed (D+d)/2 for a crossed belt "
-            "(the pulleys would touch at the cross)"
+            "(the pulleys would touch at the cross)",
+            subject=f"the crossed-belt center_distance value {center_distance}",
+            source=_PULLEY_GEOMETRY_SOURCE,
         )
     return big, small, c
 
@@ -378,26 +452,42 @@ def belt_transmitted_power(
     _require_force(tight_tension, "tight_tension")
     _require_force(slack_tension, "slack_tension")
     if not isinstance(belt_speed, Quantity):
-        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
+        raise _drive_refusal(
+            f"belt_speed must be a [velocity] quantity; got {belt_speed!r}",
+            subject=f"the belt_speed value {belt_speed!r}",
+            source=_BELT_SPEED_SOURCE,
+        )
     if not belt_speed.has_dimension("[velocity]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"belt_speed must be a [velocity] quantity; got "
-            f"{belt_speed.dimensionality} ({belt_speed})"
+            f"{belt_speed.dimensionality} ({belt_speed})",
+            subject=f"the belt_speed value {belt_speed}",
+            source=_BELT_SPEED_SOURCE,
         )
     t1 = tight_tension.to("N").magnitude
     t2 = slack_tension.to("N").magnitude
     v = belt_speed.to("m/s").magnitude
     if t1 <= t2:
-        raise ValueError(
-            f"tight_tension ({tight_tension}) must exceed slack_tension ({slack_tension})"
+        raise _drive_refusal(
+            f"tight_tension ({tight_tension}) must exceed slack_tension ({slack_tension})",
+            subject="the tight_tension and slack_tension values",
+            source="the belt installation tension and operating load case",
         )
     # The docstring said all three must be positive and only T1 > T2 was checked, so a
     # negative slack tension -- a belt pushing on its own slack side -- widened the
     # difference and reported MORE power than the drive can transmit.
     if t2 < 0:
-        raise ValueError(f"slack_tension must be non-negative; got {slack_tension}")
+        raise _drive_refusal(
+            f"slack_tension must be non-negative; got {slack_tension}",
+            subject=f"the slack_tension value {slack_tension}",
+            source="the belt installation tension and operating load case",
+        )
     if v <= 0:
-        raise ValueError(f"belt_speed must be positive; got {belt_speed}")
+        raise _drive_refusal(
+            f"belt_speed must be positive; got {belt_speed}",
+            subject=f"the belt_speed value {belt_speed}",
+            source=_BELT_SPEED_SOURCE,
+        )
     return Quantity(magnitude=(t1 - t2) * v, unit="W")
 
 
@@ -419,22 +509,44 @@ def belt_tight_tension_for_power(
     must be positive; μ and θ as in :func:`capstan_tension_ratio`. Returns T₁ in N.
     """
     if not isinstance(power, Quantity):
-        raise ValueError(f"power must be a [power] quantity; got {power!r}")
+        raise _drive_refusal(
+            f"power must be a [power] quantity; got {power!r}",
+            subject=f"the power value {power!r}",
+            source="the transmitted-power duty",
+        )
     if not power.has_dimension("[power]"):
-        raise ValueError(f"power must be a [power] quantity; got {power.dimensionality} ({power})")
+        raise _drive_refusal(
+            f"power must be a [power] quantity; got {power.dimensionality} ({power})",
+            subject=f"the power value {power}",
+            source="the transmitted-power duty",
+        )
     if not isinstance(belt_speed, Quantity):
-        raise ValueError(f"belt_speed must be a [velocity] quantity; got {belt_speed!r}")
+        raise _drive_refusal(
+            f"belt_speed must be a [velocity] quantity; got {belt_speed!r}",
+            subject=f"the belt_speed value {belt_speed!r}",
+            source=_BELT_SPEED_SOURCE,
+        )
     if not belt_speed.has_dimension("[velocity]"):
-        raise ValueError(
-            f"belt_speed must be a [velocity] quantity; got {belt_speed.dimensionality}"
+        raise _drive_refusal(
+            f"belt_speed must be a [velocity] quantity; got {belt_speed.dimensionality}",
+            subject=f"the belt_speed value {belt_speed}",
+            source=_BELT_SPEED_SOURCE,
         )
     p = power.to("W").magnitude
     v = belt_speed.to("m/s").magnitude
     if p <= 0 or v <= 0:
-        raise ValueError("power and belt_speed must be positive")
+        raise _drive_refusal(
+            "power and belt_speed must be positive",
+            subject="the power and belt_speed values",
+            source="the transmitted-power duty and pulley speed declaration",
+        )
     ratio = _ratio(friction_coefficient, wrap_angle)
     if ratio <= 1:
-        raise ValueError("the tension ratio must exceed 1 (need positive friction and wrap)")
+        raise _drive_refusal(
+            "the tension ratio must exceed 1 (need positive friction and wrap)",
+            subject="the friction_coefficient and wrap_angle values",
+            source="the belt/pulley material pair and belt-path drawing",
+        )
     tight = (p / v) * ratio / (ratio - 1.0)
     return Quantity(magnitude=tight, unit="N")
 
@@ -452,5 +564,9 @@ def belt_mean_tension(*, tight_tension: Quantity, slack_tension: Quantity) -> Qu
     t1 = tight_tension.to("N").magnitude
     t2 = slack_tension.to("N").magnitude
     if t1 <= 0 or t2 <= 0:
-        raise ValueError("tight_tension and slack_tension must be positive")
+        raise _drive_refusal(
+            "tight_tension and slack_tension must be positive",
+            subject="the tight_tension and slack_tension values",
+            source="the belt installation tension and operating load case",
+        )
     return Quantity(magnitude=(t1 + t2) / 2.0, unit="N")

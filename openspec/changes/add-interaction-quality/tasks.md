@@ -84,7 +84,10 @@
       drum or reeving drawing, manufacturer data, or load case. The shared boolean branch
       selector is migrated across all 25 callers as well: a truthy string or numeric stand-in
       names the exact flag and the boundary condition, load case, drawing, service record,
-      manufacturer configuration, or governing design basis that decides it. The
+      manufacturer configuration, or governing design basis that decides it. The complete
+      belt, roller-chain, and worm-drive family adds 57 structured refusal sites for forces,
+      speeds, geometry, tooth counts, material/traction properties, and operating duties,
+      sourced to drive drawings, catalogues, load cases, or the governing equations. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

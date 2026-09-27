@@ -14400,6 +14400,93 @@ def test_every_shared_branch_flag_caller_names_its_source():
     assert {"action", "subject", "source"} <= {keyword.arg for keyword in raises[0].keywords}
 
 
+@pytest.mark.parametrize(
+    ("invoke", "subject", "source"),
+    (
+        (
+            lambda belt, _chain, _worm: belt.capstan_tension_ratio(
+                friction_coefficient=-0.1,
+                wrap_angle=math.pi,
+            ),
+            "the friction_coefficient value -0.1",
+            "the belt/pulley material pair or measured traction data",
+        ),
+        (
+            lambda _belt, chain, _worm: chain.chain_length_in_pitches(
+                small_sprocket_teeth=0,
+                large_sprocket_teeth=40,
+                center_distance=_q("500 mm"),
+                chain_pitch=_q("12.7 mm"),
+            ),
+            "the small_sprocket_teeth count 0",
+            "the chain-drive drawing or selected sprocket catalogue",
+        ),
+        (
+            lambda _belt, _chain, worm: worm.worm_gear_efficiency(
+                lead_angle=0,
+                friction_coefficient=0.1,
+            ),
+            "the lead_angle value 0",
+            "the worm-gear drawing or measured mesh geometry",
+        ),
+    ),
+)
+def test_power_transmission_refusals_carry_structured_remedies(invoke, subject, source):
+    from anvilate.analysis import belt, chain, worm
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        invoke(belt, chain, worm)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_power_transmission_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    root = pathlib.Path(__file__).parents[1]
+    structured = []
+    unstructured = []
+    for relative in (
+        pathlib.Path("src/anvilate/analysis/belt.py"),
+        pathlib.Path("src/anvilate/analysis/chain.py"),
+        pathlib.Path("src/anvilate/analysis/worm.py"),
+    ):
+        for node in ast.walk(parsed_source(root / relative)):
+            if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+                continue
+            if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_drive_refusal":
+                structured.append((relative, node.exc))
+            if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+                unstructured.append((relative, node.exc))
+
+    assert len(structured) == 57
+    assert unstructured == []
+    for path, call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, (
+            f"{path}:{call.lineno}"
+        )
+
+    helper = parsed_source(root / "src/anvilate/analysis/_power_transmission.py")
+    remedies = [
+        node
+        for node in ast.walk(helper)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "Remedy"
+    ]
+    assert len(remedies) == 1
+    assert {"action", "subject", "source"} <= {keyword.arg for keyword in remedies[0].keywords}
+
+
 def test_gasket_seating_and_operating_bolt_loads():
     from math import pi
 
