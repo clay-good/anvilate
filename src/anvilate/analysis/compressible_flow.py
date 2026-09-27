@@ -23,8 +23,25 @@ from __future__ import annotations
 
 from math import asin, atan, degrees, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_FLOW_CASE_SOURCE = "the compressible-flow operating case or boundary conditions"
+_GAS_PROPERTY_SOURCE = "the gas property record or cited thermodynamic data"
+_NOZZLE_SOURCE = "the nozzle or restriction drawing and flow-test record"
+
+
+class _CompressibleFlowInputError(RefusalError, ValueError):
+    """A compressible-flow input that cannot be used without correction."""
+
+
+def _flow_refusal(message: str, *, subject: str, source: str) -> _CompressibleFlowInputError:
+    return _CompressibleFlowInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "choked_mass_flow_rate",
@@ -66,9 +83,17 @@ def speed_of_sound(
     t = temperature.to("K").magnitude
     r = specific_gas_constant.to("J/(kg*K)").magnitude
     if t <= 0 or r <= 0:
-        raise ValueError("temperature and specific_gas_constant must be positive")
+        raise _flow_refusal(
+            "temperature and specific_gas_constant must be positive",
+            subject="temperature and specific_gas_constant",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=sqrt(heat_capacity_ratio * r * t), unit="m/s")
 
 
@@ -86,9 +111,17 @@ def mach_number(*, velocity: Quantity, speed_of_sound: Quantity) -> float:
     v = velocity.to("m/s").magnitude
     a = speed_of_sound.to("m/s").magnitude
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _flow_refusal(
+            "velocity must be non-negative",
+            subject="velocity",
+            source=_FLOW_CASE_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _flow_refusal(
+            "speed_of_sound must be positive",
+            subject="speed_of_sound",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     return v / a
 
 
@@ -111,11 +144,23 @@ def eckert_number(
     cp = specific_heat.to("J/(kg*K)").magnitude
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _flow_refusal(
+            "velocity must be non-negative",
+            subject="velocity",
+            source=_FLOW_CASE_SOURCE,
+        )
     if cp <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _flow_refusal(
+            "specific_heat must be positive",
+            subject="specific_heat",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     if dt <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _flow_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_FLOW_CASE_SOURCE,
+        )
     return v * v / (cp * dt)
 
 
@@ -130,9 +175,17 @@ def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: flo
     ratio T₀/T (≥ 1).
     """
     if mach_number < 0:
-        raise ValueError(f"mach_number must be non-negative; got {mach_number}")
+        raise _flow_refusal(
+            f"mach_number must be non-negative; got {mach_number}",
+            subject="mach_number",
+            source=_FLOW_CASE_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     return 1.0 + (heat_capacity_ratio - 1.0) / 2.0 * mach_number**2
 
 
@@ -181,9 +234,17 @@ def isentropic_area_ratio(*, mach_number: float, heat_capacity_ratio: float) -> 
     ratio A/A* (≥ 1).
     """
     if mach_number <= 0:
-        raise ValueError(f"mach_number must be positive; got {mach_number}")
+        raise _flow_refusal(
+            f"mach_number must be positive; got {mach_number}",
+            subject="mach_number",
+            source=_FLOW_CASE_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     g = heat_capacity_ratio
     bracket = (2.0 / (g + 1.0)) * (1.0 + (g - 1.0) / 2.0 * mach_number**2)
     exponent = (g + 1.0) / (2.0 * (g - 1.0))
@@ -201,7 +262,11 @@ def critical_pressure_ratio(*, heat_capacity_ratio: float) -> float:
     """
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     g = heat_capacity_ratio
     return (2.0 / (g + 1.0)) ** (g / (g - 1.0))
 
@@ -235,11 +300,23 @@ def choked_mass_flow_rate(
     a = orifice_area.to("m**2").magnitude
     r = specific_gas_constant.to("J/(kg*K)").magnitude
     if p0 <= 0 or t0 <= 0 or a <= 0 or r <= 0:
-        raise ValueError("pressure, temperature, area, and gas constant must be positive")
+        raise _flow_refusal(
+            "pressure, temperature, area, and gas constant must be positive",
+            subject="choked-flow pressure, temperature, area, and gas constant",
+            source=_NOZZLE_SOURCE,
+        )
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+        raise _flow_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_NOZZLE_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     g = heat_capacity_ratio
     flux = p0 * sqrt(g / (r * t0)) * (2.0 / (g + 1.0)) ** ((g + 1.0) / (2.0 * (g - 1.0)))
     return Quantity(magnitude=discharge_coefficient * a * flux, unit="kg/s")
@@ -247,7 +324,11 @@ def choked_mass_flow_rate(
 
 def _require_supersonic(upstream_mach: float) -> None:
     if upstream_mach <= 1.0:
-        raise ValueError(f"upstream_mach must exceed 1 (a shock needs M > 1); got {upstream_mach}")
+        raise _flow_refusal(
+            f"upstream_mach must exceed 1 (a shock needs M > 1); got {upstream_mach}",
+            subject="upstream_mach",
+            source=_FLOW_CASE_SOURCE,
+        )
 
 
 def normal_shock_downstream_mach(*, upstream_mach: float, heat_capacity_ratio: float) -> float:
@@ -260,7 +341,11 @@ def normal_shock_downstream_mach(*, upstream_mach: float, heat_capacity_ratio: f
     number (dimensionless).
     """
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     _require_supersonic(upstream_mach)
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
@@ -278,7 +363,11 @@ def normal_shock_pressure_ratio(*, upstream_mach: float, heat_capacity_ratio: fl
     blast waves develop such steep pressure fronts. Returns the pressure ratio (dimensionless, > 1).
     """
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     _require_supersonic(upstream_mach)
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
@@ -297,7 +386,11 @@ def normal_shock_temperature_ratio(*, upstream_mach: float, heat_capacity_ratio:
     the temperature ratio (dimensionless, > 1).
     """
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     _require_supersonic(upstream_mach)
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
@@ -314,7 +407,11 @@ def normal_shock_density_ratio(*, upstream_mach: float, heat_capacity_ratio: flo
     the velocity drop u₁/u₂ across the shock. Returns the density ratio (dimensionless, > 1).
     """
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     _require_supersonic(upstream_mach)
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
@@ -336,7 +433,11 @@ def normal_shock_stagnation_pressure_ratio(
     require_finite(upstream_mach, name="upstream_mach")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     _require_supersonic(upstream_mach)
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
@@ -355,9 +456,17 @@ def prandtl_meyer_angle(*, mach_number: float, heat_capacity_ratio: float) -> Qu
     Prandtl-Meyer angle in degrees.
     """
     if mach_number < 1.0:
-        raise ValueError(f"mach_number must be at least 1 (supersonic); got {mach_number}")
+        raise _flow_refusal(
+            f"mach_number must be at least 1 (supersonic); got {mach_number}",
+            subject="mach_number",
+            source=_FLOW_CASE_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     g = heat_capacity_ratio
     m2 = mach_number * mach_number - 1.0
     ratio = (g + 1.0) / (g - 1.0)
@@ -373,7 +482,11 @@ def mach_angle(*, mach_number: float) -> Quantity:
     90°; as M rises the cone tightens around the flight path. Returns the Mach angle in degrees.
     """
     if mach_number < 1.0:
-        raise ValueError(f"mach_number must be at least 1 (supersonic); got {mach_number}")
+        raise _flow_refusal(
+            f"mach_number must be at least 1 (supersonic); got {mach_number}",
+            subject="mach_number",
+            source=_FLOW_CASE_SOURCE,
+        )
     return Quantity(magnitude=degrees(asin(1.0 / mach_number)), unit="degree")
 
 
@@ -386,17 +499,27 @@ def maximum_turning_angle(*, heat_capacity_ratio: float) -> Quantity:
     expansion; the flow separates into a vacuum. Returns the maximum turning angle in degrees.
     """
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _flow_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     ratio = (heat_capacity_ratio + 1.0) / (heat_capacity_ratio - 1.0)
     return Quantity(magnitude=90.0 * (sqrt(ratio) - 1.0), unit="degree")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _flow_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_quantity_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _flow_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_quantity_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -404,3 +527,11 @@ def _check(value: Quantity, expected: str, name: str) -> None:
     # has called this since it was written and this one, in a hundred and sixty-four, did
     # not — the same helper in two generations.
     require_finite(value, name=name)
+
+
+def _quantity_source(name: str) -> str:
+    if name in {"temperature", "specific_gas_constant", "specific_heat", "speed_of_sound"}:
+        return _GAS_PROPERTY_SOURCE
+    if name in {"stagnation_pressure", "stagnation_temperature", "orifice_area"}:
+        return _NOZZLE_SOURCE
+    return _FLOW_CASE_SOURCE

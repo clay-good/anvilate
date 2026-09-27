@@ -89,6 +89,9 @@
       forces, speeds, geometry, tooth counts, material/traction properties, rating factors,
       train layouts, and operating duties, sourced to drive or gearset drawings, catalogues,
       load cases, shaft-speed declarations, rating records, or the governing equations. The
+      complete compressible-flow family adds another 27 structured sites for flow states, gas
+      properties, nozzle geometry, discharge coefficients, and shock conditions, sourced to the
+      operating case, cited thermodynamic data, nozzle drawing, or flow-test record. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

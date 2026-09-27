@@ -23288,6 +23288,90 @@ def test_prandtl_meyer_mach_angle_and_maximum_turning_angle():
         maximum_turning_angle(heat_capacity_ratio=1.0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "speed_of_sound",
+            {
+                "temperature": _q("288.15 K"),
+                "heat_capacity_ratio": 1.0,
+                "specific_gas_constant": _q("287 J/(kg*K)"),
+            },
+            "heat_capacity_ratio",
+            "the gas property record or cited thermodynamic data",
+        ),
+        (
+            "eckert_number",
+            {
+                "velocity": _q("-1 m/s"),
+                "specific_heat": _q("1005 J/(kg*K)"),
+                "temperature_difference": _q("50 K"),
+            },
+            "velocity",
+            "the compressible-flow operating case or boundary conditions",
+        ),
+        (
+            "choked_mass_flow_rate",
+            {
+                "stagnation_pressure": _q("500 kPa"),
+                "stagnation_temperature": _q("300 K"),
+                "orifice_area": _q("1e-4 m**2"),
+                "discharge_coefficient": 0.0,
+                "heat_capacity_ratio": 1.4,
+                "specific_gas_constant": _q("287 J/(kg*K)"),
+            },
+            "discharge_coefficient",
+            "the nozzle or restriction drawing and flow-test record",
+        ),
+        (
+            "mach_number",
+            {"velocity": _q("1 kg"), "speed_of_sound": _q("340 m/s")},
+            "velocity",
+            "the compressible-flow operating case or boundary conditions",
+        ),
+    ),
+)
+def test_compressible_flow_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_compressible_flow_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/compressible_flow.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_flow_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 27
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_rocket_exhaust_velocity_thrust_and_specific_impulse():
     from anvilate.analysis import (
         rocket_exhaust_velocity,

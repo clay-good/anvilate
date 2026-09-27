@@ -268,6 +268,10 @@ Their 130 refusal sites identify the rejected force, speed, geometry, tooth coun
 property, rating factor, train layout, or operating duty and point to the drive or gearset
 drawing, manufacturer catalogue, material/traction data, rating basis, shaft-speed declaration,
 operating load case, or governing drive equation that can replace it.
+The complete compressible-flow input family is structured too. Its 27 refusal sites identify
+the rejected flow state, gas property, nozzle geometry, discharge coefficient, or shock condition
+and point to the operating case, cited thermodynamic data, nozzle drawing, or flow-test record
+that can replace it.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
