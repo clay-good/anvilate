@@ -163,6 +163,10 @@
       sites for tool and kerf geometry, workpiece cutting and thermal properties, spindle limits,
       electrical and electrolyte settings, feed schedules, and laser setup, sourced to drawings,
       material records, datasheets, qualified plans, or calibrated trials.
+      The complete conventional-machining family adds 18 structured sites for part and tool
+      geometry, cutting parameters, finish requirements, workpiece cutting properties, spindle
+      settings, and Taylor tool-life data, sourced to drawings, setup schedules, datasheets, or
+      qualified trials.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

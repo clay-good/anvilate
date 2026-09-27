@@ -25,8 +25,37 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_minute
+
+_MACHINING_GEOMETRY_SOURCE = "the part drawing or verified machining geometry record"
+_MACHINING_PROCESS_SOURCE = "the approved machining setup and cutting-parameter schedule"
+_MACHINING_MATERIAL_SOURCE = "the workpiece cutting-data record or qualified machining trial"
+_MACHINING_TOOL_SOURCE = "the tool datasheet or qualified tool-life and geometry record"
+_MACHINING_TOOL_LIFE_SOURCE = "the approved cutting schedule and qualified Taylor tool-life record"
+
+
+class _MachiningInputError(RefusalError, ValueError):
+    """A machining input that cannot be used without correction."""
+
+
+def _machining_refusal(message: str, *, subject: str, source: str) -> _MachiningInputError:
+    return _MachiningInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _machining_input_source(name: str) -> str:
+    if name in {"diameter", "target_roughness"}:
+        return _MACHINING_GEOMETRY_SOURCE
+    if name in {"specific_cutting_force"}:
+        return _MACHINING_MATERIAL_SOURCE
+    if name in {"taylor_speed_constant", "tool_nose_radius"}:
+        return _MACHINING_TOOL_SOURCE
+    return _MACHINING_PROCESS_SOURCE
+
 
 __all__ = [
     "cutting_power",
@@ -54,9 +83,15 @@ def cutting_speed(*, diameter: Quantity, spindle_speed: Quantity) -> Quantity:
     d = diameter.to("m").magnitude
     n = revolutions_per_minute(spindle_speed, name="spindle_speed")
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _machining_refusal(
+            "diameter must be positive", subject="diameter", source=_MACHINING_GEOMETRY_SOURCE
+        )
     if n < 0:
-        raise ValueError("spindle_speed must be non-negative")
+        raise _machining_refusal(
+            "spindle_speed must be non-negative",
+            subject="spindle_speed",
+            source=_MACHINING_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=pi * d * n, unit="m/min")
 
 
@@ -73,9 +108,15 @@ def spindle_speed_for_cutting_speed(*, cutting_speed: Quantity, diameter: Quanti
     v = cutting_speed.to("m/min").magnitude
     d = diameter.to("m").magnitude
     if v < 0:
-        raise ValueError("cutting_speed must be non-negative")
+        raise _machining_refusal(
+            "cutting_speed must be non-negative",
+            subject="cutting_speed",
+            source=_MACHINING_PROCESS_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _machining_refusal(
+            "diameter must be positive", subject="diameter", source=_MACHINING_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=v / (pi * d), unit="rpm")
 
 
@@ -100,9 +141,17 @@ def material_removal_rate(
     f = feed.to("mm").magnitude
     d = depth_of_cut.to("mm").magnitude
     if v < 0:
-        raise ValueError("cutting_speed must be non-negative")
+        raise _machining_refusal(
+            "cutting_speed must be non-negative",
+            subject="cutting_speed",
+            source=_MACHINING_PROCESS_SOURCE,
+        )
     if f <= 0 or d <= 0:
-        raise ValueError("feed and depth_of_cut must be positive")
+        raise _machining_refusal(
+            "feed and depth_of_cut must be positive",
+            subject="feed and depth_of_cut",
+            source=_MACHINING_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=v * f * d / 1000.0, unit="cm**3/min")
 
 
@@ -127,9 +176,17 @@ def taylor_tool_life(
     v = cutting_speed.to("m/min").magnitude
     c = taylor_speed_constant.to("m/min").magnitude
     if v <= 0 or c <= 0:
-        raise ValueError("cutting_speed and taylor_speed_constant must be positive")
+        raise _machining_refusal(
+            "cutting_speed and taylor_speed_constant must be positive",
+            subject="cutting_speed and taylor_speed_constant",
+            source=_MACHINING_TOOL_LIFE_SOURCE,
+        )
     if not 0.0 < taylor_exponent < 1.0:
-        raise ValueError(f"taylor_exponent must be in (0, 1); got {taylor_exponent}")
+        raise _machining_refusal(
+            f"taylor_exponent must be in (0, 1); got {taylor_exponent}",
+            subject="taylor_exponent",
+            source=_MACHINING_TOOL_SOURCE,
+        )
     return Quantity(magnitude=(c / v) ** (1.0 / taylor_exponent), unit="min")
 
 
@@ -147,9 +204,15 @@ def theoretical_surface_roughness(*, feed: Quantity, tool_nose_radius: Quantity)
     f = feed.to("mm").magnitude
     r = tool_nose_radius.to("mm").magnitude
     if f <= 0:
-        raise ValueError("feed must be positive")
+        raise _machining_refusal(
+            "feed must be positive", subject="feed", source=_MACHINING_PROCESS_SOURCE
+        )
     if r <= 0:
-        raise ValueError("tool_nose_radius must be positive")
+        raise _machining_refusal(
+            "tool_nose_radius must be positive",
+            subject="tool_nose_radius",
+            source=_MACHINING_TOOL_SOURCE,
+        )
     ra_mm = f * f / (32.0 * r)
     return Quantity(magnitude=ra_mm * 1000.0, unit="micrometer")
 
@@ -168,9 +231,15 @@ def peak_to_valley_roughness(*, feed: Quantity, tool_nose_radius: Quantity) -> Q
     f = feed.to("mm").magnitude
     r = tool_nose_radius.to("mm").magnitude
     if f <= 0:
-        raise ValueError("feed must be positive")
+        raise _machining_refusal(
+            "feed must be positive", subject="feed", source=_MACHINING_PROCESS_SOURCE
+        )
     if r <= 0:
-        raise ValueError("tool_nose_radius must be positive")
+        raise _machining_refusal(
+            "tool_nose_radius must be positive",
+            subject="tool_nose_radius",
+            source=_MACHINING_TOOL_SOURCE,
+        )
     rt_mm = f * f / (8.0 * r)
     return Quantity(magnitude=rt_mm * 1000.0, unit="micrometer")
 
@@ -190,9 +259,17 @@ def feed_for_surface_roughness(
     ra_mm = target_roughness.to("mm").magnitude
     r = tool_nose_radius.to("mm").magnitude
     if ra_mm <= 0:
-        raise ValueError("target_roughness must be positive")
+        raise _machining_refusal(
+            "target_roughness must be positive",
+            subject="target_roughness",
+            source=_MACHINING_GEOMETRY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("tool_nose_radius must be positive")
+        raise _machining_refusal(
+            "tool_nose_radius must be positive",
+            subject="tool_nose_radius",
+            source=_MACHINING_TOOL_SOURCE,
+        )
     return Quantity(magnitude=(32.0 * r * ra_mm) ** 0.5, unit="mm")
 
 
@@ -218,18 +295,32 @@ def cutting_power(*, specific_cutting_force: Quantity, material_removal_rate: Qu
     k_s = specific_cutting_force.to("Pa").magnitude
     mrr = material_removal_rate.to("m**3/s").magnitude
     if k_s <= 0:
-        raise ValueError("specific_cutting_force must be positive")
+        raise _machining_refusal(
+            "specific_cutting_force must be positive",
+            subject="specific_cutting_force",
+            source=_MACHINING_MATERIAL_SOURCE,
+        )
     if mrr < 0:
-        raise ValueError("material_removal_rate must be non-negative")
+        raise _machining_refusal(
+            "material_removal_rate must be non-negative",
+            subject="material_removal_rate",
+            source=_MACHINING_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=k_s * mrr, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _machining_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_machining_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _machining_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_machining_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

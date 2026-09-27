@@ -14027,6 +14027,96 @@ def test_machining_theoretical_surface_roughness_and_feed_inverse():
         theoretical_surface_roughness(feed=_q("0.2 mm"), tool_nose_radius=_q("0 mm"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "cutting_speed",
+            {"diameter": _q("0 mm"), "spindle_speed": _q("1000 rpm")},
+            "diameter",
+            "the part drawing or verified machining geometry record",
+        ),
+        (
+            "cutting_speed",
+            {"diameter": _q("50 mm"), "spindle_speed": _q("-1 rpm")},
+            "spindle_speed",
+            "the approved machining setup and cutting-parameter schedule",
+        ),
+        (
+            "cutting_power",
+            {
+                "specific_cutting_force": _q("0 MPa"),
+                "material_removal_rate": _q("100 cm**3/min"),
+            },
+            "specific_cutting_force",
+            "the workpiece cutting-data record or qualified machining trial",
+        ),
+        (
+            "taylor_tool_life",
+            {
+                "cutting_speed": _q("0 m/min"),
+                "taylor_speed_constant": _q("400 m/min"),
+                "taylor_exponent": 0.25,
+            },
+            "cutting_speed and taylor_speed_constant",
+            "the approved cutting schedule and qualified Taylor tool-life record",
+        ),
+        (
+            "taylor_tool_life",
+            {
+                "cutting_speed": _q("150 m/min"),
+                "taylor_speed_constant": _q("400 m/min"),
+                "taylor_exponent": 1.0,
+            },
+            "taylor_exponent",
+            "the tool datasheet or qualified tool-life and geometry record",
+        ),
+        (
+            "feed_for_surface_roughness",
+            {"target_roughness": _q("0 micrometer"), "tool_nose_radius": _q("0.8 mm")},
+            "target_roughness",
+            "the part drawing or verified machining geometry record",
+        ),
+    ),
+)
+def test_core_machining_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_core_machining_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/machining.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_machining_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 18
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_magnetics_solenoid_field_pressure_and_holding_force():
     from math import pi
 

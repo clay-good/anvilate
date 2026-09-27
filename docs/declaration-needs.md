@@ -346,6 +346,10 @@ The complete drilling, electrochemical-machining, and laser-cutting families fol
 all 40 refusal sites. Tool and kerf geometry, workpiece cutting and thermal properties, spindle
 limits, electrical and electrolyte settings, feed schedules, and laser setup point to drawings,
 material records, datasheets, qualified plans, or calibrated trials.
+The complete conventional-machining family follows the contract at all 18 refusal sites. Part and
+tool geometry, cutting parameters, finish requirements, workpiece cutting properties, spindle
+settings, and Taylor tool-life data point to drawings, setup schedules, datasheets, or qualified
+trials.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
