@@ -24,9 +24,31 @@ candidate is returned to the backend as validation context up to the bounded ret
 exhaustion raises `CompilationFailure` and no candidate reaches another subsystem. A
 successful `CompilationResult` keeps the typed `DesignSpec` in `result.spec` and the
 reasoning/configuration in `result.provenance`. Screening, geometry, and export accept the
-former, not the reasoning-bearing wrapper. The repository still ships no model adapter and
-initiates no cloud call; local and user-configured cloud adapters belong outside this
-orchestration contract.
+former, not the reasoning-bearing wrapper.
+
+The first adapter is `OllamaBackend`. It talks only to an explicitly configured loopback
+Ollama origin, defaults to `http://127.0.0.1:11434`, and uses the standard-library HTTP
+client rather than an SDK. Constructing it makes no request. The unconstrained pass omits
+Ollama's `format` field; the packaging pass sends the exact schema in `format`, disables
+streaming, and validates the returned JSON through the same Anvilate front door. Malformed
+model content consumes the ordinary bounded retry budget. Service and transport failures
+remain errors rather than being misreported as low-quality model output.
+
+```python
+from anvilate.compilation import OllamaBackend, compile_intent
+
+backend = OllamaBackend(model="qwen3:8b")
+result = compile_intent("A CNC-machined A36 lifting lug for a 50 kN load.", backend)
+print(result.spec)
+print(result.provenance.configuration)
+```
+
+Tests replace the transport and run the complete two-pass compile with the socket layer
+closed. That proves the adapter has no import-time or construction-time network behavior
+and lets an embedded local runtime remain genuinely air-gapped. The default transport uses
+the loopback HTTP origin only when compilation is invoked. A llama.cpp adapter and an
+explicitly configured cloud adapter are still unbuilt; no cloud call is initiated anywhere
+in this path.
 
 The measurement came first on purpose: a compiler shipped against a metric that hides the
 wrong-but-valid failure would look like it was improving as it got worse.

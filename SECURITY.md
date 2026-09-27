@@ -12,9 +12,10 @@ decision not to fix before any public disclosure.
 ## What this tool touches
 
 Anvilate reads engineering documents and writes engineering documents. It runs no
-generated code, opens no network connection on any ordinary path, and is designed to be
-run against files that arrived from somebody else — an RFQ sheet, a calibration
-certificate, a QIF result.
+generated code and opens no network connection unless a caller consents to a dataset fetch
+or explicitly invokes the loopback-only Ollama adapter. It is designed to be run against
+files that arrived from somebody else — an RFQ sheet, a calibration certificate, a QIF
+result.
 
 Each row below is a property the suite holds, not a description of intent. The test named
 is the one that fails if the property stops being true.
@@ -23,10 +24,11 @@ is the one that fails if the property stops being true.
 | --- | --- |
 | Every YAML document — spec files and the bundled datasets alike — is read with `yaml.safe_load`. No document can construct a Python object. | `tests/test_contract.py` sweeps the package for the unsafe loaders |
 | The library never calls `eval`, `exec`, `pickle`, `os.system` or any other way of running what it read — the `os` exec/spawn/fork family, `runpy`, `pty`, `ctypes`. The sole `subprocess` import is `_mcp_tasks.py`, whose fixed argv launches Anvilate's own worker; no document field chooses an executable or command argument. Calls are judged on what they **resolve** to, so `from os import system` is the same finding as `os.system`. | `test_the_library_runs_nothing_it_reads`, `test_the_task_worker_is_the_only_process_boundary`, and `test_the_resolver_reads_a_call_written_the_other_way` |
-| `anvilate.fetch` is the only module that may import a network client, and a new module importing any of twenty-three stdlib or third-party clients fails the build. | `test_fetch_is_the_only_module_that_imports_a_network_client` |
+| `anvilate.fetch` and `anvilate.compilation` are the only modules that may import a network client: the former requires fetch consent, and the latter accepts only an explicitly invoked loopback Ollama origin. A new module importing any of twenty-three stdlib or third-party clients fails the build. | `test_only_explicit_transports_import_a_network_client` |
 | The package's third-party imports are exactly the dependencies `pyproject.toml` declares, so a client nobody thought to blocklist fails too. | `test_the_packages_third_party_imports_are_exactly_its_declared_dependencies` |
 | No module is imported by a literal string handed to `import_module`, which would carry a client past every sweep that reads import statements. | `test_no_module_is_imported_by_a_name_assembled_at_run_time` |
 | Nothing fetches without the caller stating consent, and a fetch refuses before it reaches the transport. | `test_the_one_network_capable_path_refuses_before_it_reaches_the_transport` |
+| Constructing the local-model adapter makes no request, its endpoint must be loopback, and the complete two-pass compile runs under the closed socket layer when an embedded transport is supplied. | `test_local_model_compilation_can_run_with_the_socket_layer_closed`, `tests/test_compilation.py` |
 | A fetched payload's digest is verified on download **and on every later read**; a mismatch raises rather than being used. | `tests/test_fetch.py` |
 | The whole screening path completes with the socket layer closed. | `test_the_golden_path_completes_with_the_socket_layer_closed` |
 | An XML document from outside — a DCC or a QIF result — cannot read a file off the host through an external entity, and cannot hang the reader through entity expansion. | `test_a_malformed_certificate_is_refused_by_the_documented_exception`, `test_a_hostile_document_is_a_complaint_rather_than_a_read_or_a_hang` |
@@ -39,7 +41,7 @@ disposition.** Every scorecard says so, and a check that could not run reports
 `not_evaluated` rather than a pass — but no software property makes a design safe. A
 licensed engineer signs the work.
 
-The roadmap in [`openspec/specs/`](openspec/specs/) describes a natural-language front end
-that will run a model over untrusted text. Its threat model is written down in
-`openspec/specs/sandbox-security` and none of it is shipped. When it is, this page changes
-with it.
+The roadmap in [`openspec/specs/`](openspec/specs/) describes a complete natural-language
+front end around the model adapter now shipped. Its remaining threat model is written down
+in `openspec/specs/sandbox-security`; the loopback and bounded-response controls implemented
+so far are the start, not a claim that the whole front end exists.

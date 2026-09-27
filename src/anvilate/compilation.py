@@ -40,13 +40,16 @@ have for compiler configurations to be judged honestly.
 
 from __future__ import annotations
 
+import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
+from dataclasses import dataclass, field
 from enum import StrEnum
 from functools import cache
 from math import isclose
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -56,6 +59,7 @@ from ._models import (
     Provenance,
     RevalidatedModel,
     StatableModel,
+    parse_json,
     rebuilt_quantities,
 )
 from .contracts import element_json_schemas, spec_json_schema
@@ -67,6 +71,7 @@ __all__ = [
     "CompilationBackend",
     "CompilationAttempt",
     "CompilationEvaluation",
+    "CompilationCandidateError",
     "CompilationFailure",
     "CompilationMode",
     "CompilationOutcome",
@@ -78,6 +83,8 @@ __all__ = [
     "COMPILATION_TASK_SET_VERSION",
     "DecodingConfiguration",
     "FieldOutcome",
+    "OllamaBackend",
+    "OllamaError",
     "compile_intent",
     "default_compilation_task_set",
     "evaluate_task_set",
@@ -116,9 +123,14 @@ class CompilationBackend(Protocol):
     the backend's constraint is not trusted as validation.
     """
 
-    name: str
-    model: str
-    supports_two_pass: bool
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
+
+    @property
+    def supports_two_pass(self) -> bool: ...
 
     def reason(self, prompt: str) -> str: ...
 
@@ -130,6 +142,195 @@ class CompilationBackend(Protocol):
         reasoning: str | None,
         validation_error: str | None,
     ) -> Mapping[str, Any]: ...
+
+
+class CompilationCandidateError(ValueError):
+    """A model response that constrained packaging could not turn into a candidate."""
+
+
+class OllamaError(RuntimeError):
+    """The configured local Ollama service failed or returned an invalid API response."""
+
+
+_OLLAMA_RESPONSE_LIMIT = 4 * 1024 * 1024
+_OllamaTransport = Callable[[str, bytes, float], bytes]
+
+
+def _ollama_http_post(url: str, body: bytes, timeout: float) -> bytes:
+    """POST one bounded request to a caller-configured loopback Ollama service."""
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    request = Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - loopback is validated
+            return response.read(_OLLAMA_RESPONSE_LIMIT + 1)
+    except HTTPError as error:
+        detail = error.read(1025)[:1024].decode("utf-8", errors="replace").strip()
+        suffix = f": {detail}" if detail else ""
+        raise OllamaError(f"Ollama returned HTTP {error.code}{suffix}") from None
+    except (TimeoutError, URLError, OSError) as error:
+        raise OllamaError(f"could not reach local Ollama at {url}: {error}") from None
+
+
+@dataclass(frozen=True)
+class OllamaBackend:
+    """A local-only Ollama adapter for :func:`compile_intent`.
+
+    Construction is offline. The first request occurs only when ``reason`` or
+    ``package_spec`` is called. ``transport`` replaces the standard-library HTTP client,
+    which keeps contract tests and air-gapped evaluation independent of a running server.
+    """
+
+    model: str
+    endpoint: str = "http://127.0.0.1:11434"
+    timeout: float = 120.0
+    transport: _OllamaTransport = field(default=_ollama_http_post, repr=False, compare=False)
+    name: str = field(default="ollama", init=False)
+    supports_two_pass: bool = field(default=True, init=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.model, str) or not self.model.strip():
+            raise ValueError("Ollama model must be a nonblank local model name")
+        if len(self.model) > 1_024:
+            raise ValueError("Ollama model must be no longer than 1,024 characters")
+        if not isinstance(self.timeout, int | float) or isinstance(self.timeout, bool):
+            raise TypeError("Ollama timeout must be a number of seconds")
+        if not 0 < self.timeout <= 600:
+            raise ValueError("Ollama timeout must be greater than 0 and at most 600 seconds")
+        if not callable(self.transport):
+            raise TypeError("Ollama transport must be callable")
+        if not isinstance(self.endpoint, str):
+            raise TypeError("Ollama endpoint must be a string")
+
+        parsed = urlsplit(self.endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or parsed.hostname not in {"127.0.0.1", "::1", "localhost"}
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "Ollama endpoint must be an http(s) loopback origin such as http://127.0.0.1:11434"
+            )
+        try:
+            _ = parsed.port
+        except ValueError as error:
+            raise ValueError(f"Ollama endpoint has an invalid port: {error}") from None
+
+    @property
+    def chat_url(self) -> str:
+        """The configured loopback chat endpoint."""
+        return f"{self.endpoint.rstrip('/')}/api/chat"
+
+    def reason(self, prompt: str) -> str:
+        """Run the unconstrained first pass and return its ordinary text content."""
+        reasoning = self._chat(
+            {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Reason through the engineering description before it is "
+                            "packaged as Anvilate Spec IR. Identify only stated facts, "
+                            "units, and missing information. Do not invent requirements."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+            }
+        )
+        if len(reasoning) > 4_096:
+            raise OllamaError(
+                "Ollama reasoning response exceeds the 4,096-character provenance limit"
+            )
+        return reasoning
+
+    def package_spec(
+        self,
+        prompt: str,
+        *,
+        schema: dict[str, Any],
+        reasoning: str | None,
+        validation_error: str | None,
+    ) -> Mapping[str, Any]:
+        """Package one candidate under Ollama's JSON-Schema output constraint."""
+        context = [f"Design request:\n{prompt}"]
+        if reasoning is not None:
+            context.append(f"Prior unconstrained analysis:\n{reasoning}")
+        if validation_error is not None:
+            context.append(
+                "The previous candidate was rejected by Anvilate validation. Correct this "
+                f"error:\n{validation_error}"
+            )
+        context.append(
+            "Return only one JSON object conforming to this exact schema:\n"
+            + json.dumps(schema, separators=(",", ":"), sort_keys=True)
+        )
+        content = self._chat(
+            {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Package the supplied facts as Anvilate Spec IR. Preserve units "
+                            "and do not invent engineering requirements. Return JSON only."
+                        ),
+                    },
+                    {"role": "user", "content": "\n\n".join(context)},
+                ],
+                "stream": False,
+                "format": deepcopy(schema),
+                "options": {"temperature": 0},
+            }
+        )
+        try:
+            candidate = parse_json(content)
+        except ValueError as error:
+            raise CompilationCandidateError(
+                f"Ollama constrained response was not JSON: {error}"
+            ) from None
+        if not isinstance(candidate, Mapping):
+            raise CompilationCandidateError(
+                f"Ollama constrained response must be a JSON object; got {type(candidate).__name__}"
+            )
+        return dict(candidate)
+
+    def _chat(self, payload: Mapping[str, Any]) -> str:
+        try:
+            body = json.dumps(payload, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        except (TypeError, ValueError) as error:
+            raise OllamaError(f"could not encode the Ollama request: {error}") from None
+        response = self.transport(self.chat_url, body, float(self.timeout))
+        if not isinstance(response, bytes):
+            raise OllamaError(f"Ollama transport must return bytes; got {type(response).__name__}")
+        if len(response) > _OLLAMA_RESPONSE_LIMIT:
+            raise OllamaError(f"Ollama response exceeds the {_OLLAMA_RESPONSE_LIMIT:,}-byte limit")
+        try:
+            envelope = parse_json(response)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise OllamaError(f"Ollama returned an invalid JSON response: {error}") from None
+        if not isinstance(envelope, Mapping):
+            raise OllamaError("Ollama response must be a JSON object")
+        service_error = envelope.get("error")
+        if isinstance(service_error, str) and service_error.strip():
+            raise OllamaError(f"Ollama refused the request: {service_error}")
+        message = envelope.get("message")
+        content = message.get("content") if isinstance(message, Mapping) else None
+        if not isinstance(content, str) or not content.strip():
+            raise OllamaError("Ollama response has no nonblank message.content")
+        return content
 
 
 class DecodingConfiguration(StatableModel):
@@ -221,12 +422,16 @@ def compile_intent(
     schema = spec_json_schema()
     failures: list[str] = []
     for attempt in range(1, retry_budget + 2):
-        candidate = backend.package_spec(
-            prompt,
-            schema=deepcopy(schema),
-            reasoning=reasoning,
-            validation_error=failures[-1] if failures else None,
-        )
+        try:
+            candidate = backend.package_spec(
+                prompt,
+                schema=deepcopy(schema),
+                reasoning=reasoning,
+                validation_error=failures[-1] if failures else None,
+            )
+        except CompilationCandidateError as invalid:
+            failures.append(str(invalid))
+            continue
         try:
             if not isinstance(candidate, Mapping):
                 raise ValueError(

@@ -189,10 +189,17 @@ class TaskStore:
                 os.killpg(pid, 0)
             except ProcessLookupError:
                 return
+            except PermissionError:
+                # macOS can transiently report EPERM while a just-signalled group is being
+                # reaped. It is not proof that the group is alive, so keep the bounded poll
+                # rather than turning an already-recorded cancellation into an exception.
+                pass
             time.sleep(0.02)
         try:
             os.killpg(pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (PermissionError, ProcessLookupError):
+            # The group either vanished or no longer contains a process this caller can
+            # signal. In both cases there is no owned process left that this method can kill.
             pass
 
     def read(self, task_id: str) -> dict[str, Any]:

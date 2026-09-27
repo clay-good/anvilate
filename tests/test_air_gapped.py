@@ -1,11 +1,11 @@
-"""The pipeline under a closed socket layer, and the one door that can open.
+"""The pipeline under a closed socket layer, and the two doors that can open.
 
 `sandbox-security` asks for this in as many words: in air-gapped mode the whole pipeline
 completes with **zero network calls**, and the property is held by an automated test that
 fails on any attempted access rather than by anybody's recollection of what the code does.
 Until `anvilate.fetch` shipped there was nothing in the package that could open a socket,
-which made the claim easy and unwatched. Now there is exactly one line that can, so the
-claim is worth stating and worth attacking.
+which made the claim easy and unwatched. The fetch transport and the explicit local-model
+transport are now the two narrow paths that can, so the claim is worth stating and attacking.
 
 Three things are asserted here, and the second is the one that gives the first any value.
 
@@ -18,15 +18,16 @@ Three things are asserted here, and the second is the one that gives the first a
   passes every run and means nothing, and this shape of test is the easiest one in the
   repository to write wrong: patch a name nothing calls, and the golden path goes green
   because it was never going to make a call anyway.
-* **The one door stays shut unless a caller opens it.** `fetch_dataset` refuses without
-  consent *before* it reaches the transport, so nothing implicit can trip it — and with
-  consent it really does try the network, which the block catches. That is the difference
-  between a library that does not phone home and a library nobody has checked.
+* **Both doors stay shut unless a caller opens one.** `fetch_dataset` refuses without
+  consent *before* it reaches the transport. `OllamaBackend` makes no call when imported or
+  constructed and accepts only a loopback origin; compilation is the explicit operation
+  that invokes it. That is the difference between a library that does not phone home and a
+  library nobody has checked.
 
 The last three tests are the ratchet, and they are three because naming clients is not a
-job that finishes. `fetch` is the only module that imports a network client; the package's
-third-party imports are exactly its declared dependencies, so a client nobody thought to
-blocklist fails anyway; and no import is smuggled past both as a string.
+job that finishes. `fetch` and `compilation` are the only modules that import a network
+client; the package's third-party imports are exactly its declared dependencies, so a client
+nobody thought to blocklist fails anyway; and no import is smuggled past both as a string.
 """
 
 from __future__ import annotations
@@ -168,6 +169,35 @@ def test_a_report_renders_and_a_spec_compiles_offline(monkeypatch: pytest.Monkey
     assert response["result"]["structuredContent"]["errors"] == []
 
 
+def test_local_model_compilation_can_run_with_the_socket_layer_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An embedded model transport needs no socket, including during adapter construction."""
+    from anvilate.compilation import OllamaBackend, compile_intent
+
+    responses = iter(
+        (
+            b'{"message":{"content":"identified only stated inputs"}}',
+            b'{"message":{"content":"{\\"name\\":\\"offline_lug\\",'
+            b'\\"description\\":\\"An offline compiled lifting lug.\\",'
+            b'\\"units\\":{\\"value\\":\\"SI\\",\\"origin\\":\\"user_stated\\"},'
+            b'\\"material\\":{\\"ref\\":\\"ASTM-A36\\"},'
+            b'\\"manufacturing\\":{\\"process\\":\\"cnc_milling\\"},'
+            b'\\"acceptance\\":{\\"tiers\\":[\\"T1_analytical\\"]}}"}}',
+        )
+    )
+
+    def embedded_transport(url: str, body: bytes, timeout: float) -> bytes:
+        return next(responses)
+
+    with _no_network(monkeypatch):
+        backend = OllamaBackend(model="embedded-local", transport=embedded_transport)
+        result = compile_intent("Make an A36 lifting lug.", backend)
+
+    assert result.spec.name == "offline_lug"
+    assert result.provenance.configuration.backend == "ollama"
+
+
 def test_the_one_network_capable_path_refuses_before_it_reaches_the_transport(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
@@ -214,7 +244,7 @@ def test_consent_opens_the_door_and_the_block_is_what_shuts_it(
     assert not (tmp_path / "consented-probe.json").exists()
 
 
-def test_fetch_is_the_only_module_that_imports_a_network_client() -> None:
+def test_only_explicit_transports_import_a_network_client() -> None:
     """Derived from the source, so a second door fails here rather than being noticed.
 
     The tests above run the paths that exist today; this one is about the paths that do
@@ -265,10 +295,9 @@ def test_fetch_is_the_only_module_that_imports_a_network_client() -> None:
         if found:
             offenders[str(path.relative_to(package))] = found
 
-    assert offenders == {"fetch.py": {"urllib"}}, (
-        f"the package's network surface has moved: {offenders}. One module imports a "
-        "network client, it is the fetch-on-first-use flow, and the import is inside the "
-        "transport function rather than at module scope."
+    assert offenders == {"compilation.py": {"urllib"}, "fetch.py": {"urllib"}}, (
+        f"the package's network surface has moved: {offenders}. Only the consented dataset "
+        "fetch and explicit loopback model adapter may import a network client."
     )
 
     # SECURITY.md argues from the size of this set, and a number in prose has nothing

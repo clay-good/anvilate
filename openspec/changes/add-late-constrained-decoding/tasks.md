@@ -62,8 +62,10 @@
 
 ## Note
 
-The orchestration contract and the first versioned task corpus are built; model adapters are not.
-That boundary is deliberate: Anvilate supplies the schema, validation, retries, provenance,
-and pass isolation without choosing a local server or initiating a cloud call. The
+The orchestration contract, first versioned task corpus, and local Ollama adapter are built.
+The adapter is loopback-only, makes no request until invoked, leaves reasoning unconstrained,
+and sends the exact published schema to Ollama for packaging. Its transport is injectable,
+so the complete two-pass path is tested with the socket layer closed. Llama.cpp and
+user-configured cloud adapters remain unbuilt, and no cloud call exists in this path. The
 measurement vocabulary shipped first so a compiler could not look better by hiding the
 wrong-but-valid case.

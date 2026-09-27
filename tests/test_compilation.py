@@ -8,10 +8,13 @@ thing a user cares about falls. These tests pin the vocabulary that makes that v
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from anvilate.compilation import (
     COMPILATION_TASK_SET_VERSION,
+    CompilationCandidateError,
     CompilationEvaluation,
     CompilationFailure,
     CompilationMode,
@@ -20,6 +23,8 @@ from anvilate.compilation import (
     CompilationTask,
     CompilationTaskSet,
     FieldOutcome,
+    OllamaBackend,
+    OllamaError,
     compile_intent,
     default_compilation_task_set,
     evaluate_task_set,
@@ -74,6 +79,19 @@ class _Backend:
     def package_spec(self, prompt, *, schema, reasoning, validation_error):
         self.package_calls.append((prompt, schema, reasoning, validation_error))
         return next(self.outputs)
+
+
+class _OllamaTransport:
+    def __init__(self, contents: list[str | bytes]):
+        self.contents = iter(contents)
+        self.calls: list[tuple[str, dict, float]] = []
+
+    def __call__(self, url: str, body: bytes, timeout: float) -> bytes:
+        self.calls.append((url, json.loads(body), timeout))
+        content = next(self.contents)
+        if isinstance(content, bytes):
+            return content
+        return json.dumps({"message": {"role": "assistant", "content": content}}).encode()
 
 
 # --- the compiler boundary ---------------------------------------------------------------
@@ -145,6 +163,76 @@ def test_the_retry_budget_is_bounded_before_the_backend_runs():
         compile_intent("Make a lifting lug.", backend, retry_budget=6)
     assert backend.reason_calls == []
     assert backend.package_calls == []
+
+
+def test_ollama_runs_an_unconstrained_pass_then_packages_under_the_exact_schema():
+    transport = _OllamaTransport(["identified stated inputs", json.dumps(_VALID_SPEC)])
+    backend = OllamaBackend(model="qwen3:8b", transport=transport)
+
+    result = compile_intent("Make a lifting lug.", backend)
+
+    assert result.spec.name == "compiled_lug"
+    assert result.provenance.reasoning == "identified stated inputs"
+    assert len(transport.calls) == 2
+    reason_url, reason_request, timeout = transport.calls[0]
+    package_url, package_request, _ = transport.calls[1]
+    assert reason_url == package_url == "http://127.0.0.1:11434/api/chat"
+    assert timeout == 120.0
+    assert reason_request["stream"] is False
+    assert "format" not in reason_request
+    assert package_request["stream"] is False
+    assert package_request["options"] == {"temperature": 0}
+    assert package_request["format"]["$schema"] == ("https://json-schema.org/draft/2020-12/schema")
+    assert "identified stated inputs" in package_request["messages"][1]["content"]
+
+
+def test_ollama_candidate_json_failure_is_bounded_and_retried_with_context():
+    transport = _OllamaTransport(["reasoning", "not json", json.dumps(_VALID_SPEC)])
+    result = compile_intent(
+        "Make a lifting lug.",
+        OllamaBackend(model="local", transport=transport),
+        retry_budget=1,
+    )
+
+    assert result.provenance.attempts == 2
+    assert result.provenance.validation_errors == (
+        "Ollama constrained response was not JSON: Expecting value: line 1 column 1 (char 0)",
+    )
+    assert result.provenance.validation_errors[0] in transport.calls[2][1]["messages"][1]["content"]
+
+
+def test_ollama_refuses_nonlocal_endpoints_and_invalid_service_responses():
+    with pytest.raises(ValueError, match="loopback origin"):
+        OllamaBackend(model="local", endpoint="https://models.example.com")
+
+    service_error = _OllamaTransport([b'{"error":"model not found"}'])
+    with pytest.raises(OllamaError, match="model not found"):
+        OllamaBackend(model="missing", transport=service_error).reason("Compile this.")
+
+    malformed = _OllamaTransport([b'{"message":{"content":""}}'])
+    with pytest.raises(OllamaError, match="no nonblank message.content"):
+        OllamaBackend(model="local", transport=malformed).reason("Compile this.")
+
+    oversized = _OllamaTransport([b"x" * (4 * 1024 * 1024 + 1)])
+    with pytest.raises(OllamaError, match="4,194,304-byte limit"):
+        OllamaBackend(model="local", transport=oversized).reason("Compile this.")
+
+
+def test_ollama_construction_is_offline_and_candidate_errors_are_distinct():
+    calls = 0
+
+    def transport(url: str, body: bytes, timeout: float) -> bytes:
+        nonlocal calls
+        calls += 1
+        return json.dumps({"message": {"content": "[]"}}).encode()
+
+    backend = OllamaBackend(model="local", transport=transport)
+    assert calls == 0
+    with pytest.raises(CompilationCandidateError, match="must be a JSON object"):
+        backend.package_spec(
+            "Compile this.", schema={"type": "object"}, reasoning=None, validation_error=None
+        )
+    assert calls == 1
 
 
 # --- the versioned task corpus -----------------------------------------------------------

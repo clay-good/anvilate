@@ -143,6 +143,33 @@ def test_cancellation_terminates_the_worker_and_returns_not_evaluated(monkeypatc
     assert not running, "the task record completed but its worker process survived cancellation"
 
 
+def test_a_transient_permission_error_while_reaping_does_not_break_cancellation(
+    monkeypatch, tmp_path
+):
+    """macOS may briefly return EPERM for a group that accepted SIGTERM and is exiting."""
+    import signal
+
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    store.attach_worker(task_id, 12345)
+    monkeypatch.setattr(store, "_owns_worker", lambda pid, owned_task: True)
+    calls = []
+
+    def killpg(pid, requested_signal):
+        calls.append((pid, requested_signal))
+        if requested_signal == signal.SIGTERM:
+            return
+        if len([call for call in calls if call[1] == 0]) == 1:
+            raise PermissionError("group is being reaped")
+        raise ProcessLookupError
+
+    monkeypatch.setattr(os, "killpg", killpg)
+    store.cancel(task_id, {"cancelled": True}, "Cancellation honored.")
+
+    assert calls == [(12345, signal.SIGTERM), (12345, 0), (12345, 0)]
+    assert store.read(task_id)["status"] == "completed"
+
+
 def test_task_update_is_an_ack_and_unknown_handles_are_refused(monkeypatch, tmp_path):
     monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
     task_id = _task_call()["result"]["taskId"]

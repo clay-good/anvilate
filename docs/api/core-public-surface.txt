@@ -104,6 +104,7 @@ compilation.CONSTRAINT_TAX_CITATION
 compilation.COMPILATION_TASK_SET_VERSION
 compilation.CompilationAttempt
 compilation.CompilationBackend
+compilation.CompilationCandidateError
 compilation.CompilationEvaluation
 compilation.CompilationFailure
 compilation.CompilationMode
@@ -115,6 +116,8 @@ compilation.CompilationTask
 compilation.CompilationTaskSet
 compilation.DecodingConfiguration
 compilation.FieldOutcome
+compilation.OllamaBackend
+compilation.OllamaError
 compilation.compile_intent
 compilation.default_compilation_task_set
 compilation.evaluate_task_set
