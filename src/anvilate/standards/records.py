@@ -133,7 +133,10 @@ def dimensioned(expected: str, name: str) -> AfterValidator:
         if not prop.quantity.has_dimension(expected):
             raise DimensionError(
                 f"{name} expects a {expected} quantity "
-                f"but received {prop.quantity.dimensionality} ({prop.quantity})"
+                f"but received {prop.quantity.dimensionality} ({prop.quantity})",
+                action="replace",
+                subject=f"the {name} property value {prop.quantity}",
+                source=f"a cited property matching the record's declared {expected} dimension",
             )
         return prop
 

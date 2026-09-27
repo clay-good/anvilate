@@ -19,6 +19,7 @@ import pint
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
+from ..refusal import RefusalError, Remedy
 from .registry import UREG
 
 __all__ = [
@@ -91,8 +92,21 @@ def _is_angle(quantity: pint.Quantity) -> bool:
     return quantity.units in _ANGLE_UNITS
 
 
-class UnitError(ValueError):
-    """Base class for unit and dimension problems."""
+class UnitError(RefusalError, ValueError):
+    """A unit or dimension request that cannot be used without correction."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action: str = "correct",
+        subject: str = "the unit or quantity named in this refusal",
+        source: str = "the originating document and the applicable unit definition",
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action=action, subject=subject, source=source),),
+        )
 
 
 class MissingUnitError(UnitError):
@@ -213,7 +227,12 @@ def _unit_object(unit: str) -> pint.Unit:
         # that is an unreadable spelling, so any failure gets the same sentence. The message
         # is kept when there is one, and named when there is not.
         detail = str(failure) or f"{type(failure).__name__} with no message"
-        raise UnitError(f"could not read the unit {unit!r}: {detail}") from failure
+        raise UnitError(
+            f"could not read the unit {unit!r}: {detail}",
+            action="replace",
+            subject=f"the unit expression {unit!r}",
+            source="a valid spelling from the bundled unit registry",
+        ) from failure
 
 
 @lru_cache(maxsize=8192)
@@ -320,14 +339,22 @@ class Quantity(RevalidatedModel):
         try:
             _unit_object(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
-            raise UnitError(f"unknown unit {self.unit!r}{_nearest_unit(self.unit)}") from exc
+            raise UnitError(
+                f"unknown unit {self.unit!r}{_nearest_unit(self.unit)}",
+                action="replace",
+                subject=f"the unit expression {self.unit!r}",
+                source="a valid spelling in the bundled unit registry",
+            ) from exc
         for token in re.findall(r"[A-Za-z]+", self.unit):
             if token in _CASE_TRAPS:
                 raise UnitError(
                     f"unit {self.unit!r} contains {token!r}, which is {_CASE_TRAPS[token]}. "
                     f"No dimension check can catch that difference, so this spelling is "
                     f"refused rather than converted. If you meant it, write the magnitude "
-                    f"in the base unit — {_CASE_TRAPS_REMEDY[token]}"
+                    f"in the base unit — {_CASE_TRAPS_REMEDY[token]}",
+                    action="rewrite",
+                    subject=f"the case-sensitive unit {token!r} in {self.unit!r}",
+                    source=f"the base-unit equivalence {_CASE_TRAPS_REMEDY[token]}",
                 )
         return self
 
@@ -358,16 +385,31 @@ class Quantity(RevalidatedModel):
         except ValueError:
             pass
         else:
-            raise MissingUnitError(f"{text!r} has no unit; a physical quantity must state its unit")
+            raise MissingUnitError(
+                f"{text!r} has no unit; a physical quantity must state its unit",
+                action="state",
+                subject=f"the unit for physical quantity {text!r}",
+                source="the originating design document or measurement record",
+            )
         try:
             pq = UREG.Quantity(text)
         except Exception as exc:
             offset = _offset_temperature(text)
             if offset is None:
-                raise UnitError(f"could not parse quantity {text!r}") from exc
+                raise UnitError(
+                    f"could not parse quantity {text!r}",
+                    action="rewrite",
+                    subject=f"the physical quantity {text!r}",
+                    source="a magnitude and valid unit from the originating document",
+                ) from exc
             pq = offset
         if pq.dimensionless and not _is_angle(pq):
-            raise MissingUnitError(f"{text!r} has no unit; a physical quantity must state its unit")
+            raise MissingUnitError(
+                f"{text!r} has no unit; a physical quantity must state its unit",
+                action="state",
+                subject=f"the unit for physical quantity {text!r}",
+                source="the originating design document or measurement record",
+            )
         return cls(magnitude=pq.magnitude, unit=_stable_short_unit(f"{pq.units:~}"))
 
     @property
@@ -599,7 +641,10 @@ def require_dimension(expected: str, *, name: str) -> Any:
         if not value.has_dimension(expected):
             raise DimensionError(
                 f"{name} expects a {expected} quantity "
-                f"but received {value.dimensionality} ({value})"
+                f"but received {value.dimensionality} ({value})",
+                action="replace",
+                subject=f"the {name} value {value}",
+                source=f"a quantity matching the field's declared {expected} dimension",
             )
         return value
 

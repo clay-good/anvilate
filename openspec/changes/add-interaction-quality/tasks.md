@@ -68,8 +68,11 @@
       names a catalogue range covering the requested temperatures. The complete tolerance
       range family now follows the same contract: ISO 2768/286, fit-clearance, and process
       capability refusals name the concrete input and the governing table, declaration, or
-      dataset while retaining `ValueError` compatibility. The remaining ordinary
-      `ValueError` inventory keeps this task open
+      dataset while retaining `ValueError` compatibility. The complete unit-refusal family
+      now does too: quantity parsing, dimensional validators, and D-SI calibration expressions
+      name the rejected input and the originating document, field dimension, unit registry,
+      or PTB mapping that can repair it, again retaining `ValueError` compatibility. The
+      remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed

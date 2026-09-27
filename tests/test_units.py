@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import math
 import pathlib
 from typing import Annotated
@@ -95,6 +96,42 @@ def test_bare_number_rejected():
 def test_unknown_unit_rejected():
     with pytest.raises(UnitError):
         Quantity.parse("5 flurbs")
+
+
+def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
+    with pytest.raises(UnitError) as refused:
+        Quantity.parse("5 flurbs")
+    assert isinstance(refused.value, ValueError)
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "rewrite"
+    assert remedy.subject == "the physical quantity '5 flurbs'"
+    assert "originating document" in remedy.source
+
+    with pytest.raises(MissingUnitError) as missing:
+        Quantity.parse("75")
+    assert missing.value.remedies[0].subject == "the unit for physical quantity '75'"
+
+    root = pathlib.Path(__file__).parents[1]
+    sites: list[tuple[pathlib.Path, ast.Call]] = []
+    for relative in (
+        pathlib.Path("src/anvilate/units/quantity.py"),
+        pathlib.Path("src/anvilate/standards/records.py"),
+        pathlib.Path("src/anvilate/dcc.py"),
+    ):
+        path = root / relative
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Raise)
+                and isinstance(node.exc, ast.Call)
+                and isinstance(node.exc.func, ast.Name)
+                and node.exc.func.id in {"UnitError", "MissingUnitError", "DimensionError"}
+            ):
+                sites.append((relative, node.exc))
+
+    assert len(sites) == 19
+    for path, call in sites:
+        keywords = {keyword.arg for keyword in call.keywords}
+        assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
 
 
 def test_plausible_units_offered_for_bare_load():

@@ -245,11 +245,19 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
     falls back to the bare unit with the magnitude scaled — right answer, plainer rendering.
     """
     if not unit.strip():
-        raise UnitError("a D-SI unit expression is empty; a measured value must state its unit")
+        raise UnitError(
+            "a D-SI unit expression is empty; a measured value must state its unit",
+            action="state",
+            subject="the D-SI unit for the measured value",
+            source="the issuing laboratory's declaration under PTB D-SI v2.2.1",
+        )
     if not unit.lstrip().startswith("\\"):
         raise UnitError(
             f"{unit!r} is not a D-SI unit expression; every token begins with a backslash "
-            "(for example '\\\\milli\\\\metre')"
+            "(for example '\\\\milli\\\\metre')",
+            action="rewrite",
+            subject=f"the D-SI unit expression {unit!r}",
+            source="PTB D-SI v2.2.1 escape-sequence syntax",
         )
 
     # One entry per factor: its bare Pint symbol, its prefixed spelling, the prefix's power
@@ -264,32 +272,51 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
         exponent = _TOTHE.match(token)
         if exponent is not None:
             if not factors:
-                raise UnitError(f"{unit!r} applies an exponent before naming a unit")
+                raise UnitError(
+                    f"{unit!r} applies an exponent before naming a unit",
+                    action="reorder",
+                    subject=f"the exponent in D-SI expression {unit!r}",
+                    source="PTB D-SI v2.2.1 unit-then-exponent syntax",
+                )
             power = int(exponent.group("exponent"))
             if power == 0:
                 # A unit to the zeroth power is dimensionless. Legal arithmetic, and a
                 # measured quantity that states it has said nothing about what it measured.
                 raise UnitError(
                     f"{unit!r} raises a unit to the zeroth power, which leaves no unit at "
-                    "all; a measured value must state what it measures"
+                    "all; a measured value must state what it measures",
+                    action="replace",
+                    subject=f"the zero exponent in D-SI expression {unit!r}",
+                    source="the issuing laboratory's dimensional measurement declaration",
                 )
             factors[-1][3] = power
             continue
         if token in _D_SI_PREFIXES:
             if pending is not None:
-                raise UnitError(f"{unit!r} stacks two prefixes: {pending_token!r} then {token!r}")
+                raise UnitError(
+                    f"{unit!r} stacks two prefixes: {pending_token!r} then {token!r}",
+                    action="select",
+                    subject=f"one prefix for the unit in D-SI expression {unit!r}",
+                    source="the declared PTB D-SI v2.2.1 prefix vocabulary",
+                )
             pending, pending_token = _D_SI_PREFIXES[token], token
             continue
         if token not in _D_SI_UNITS:
             raise UnitError(
                 f"unknown D-SI token {token!r} in {unit!r}; this module accepts "
                 f"{len(_D_SI_UNITS)} units and {len(_D_SI_PREFIXES)} prefixes, and refuses "
-                "the rest rather than guessing at what was meant"
+                "the rest rather than guessing at what was meant",
+                action="replace or register",
+                subject=f"the D-SI token {token!r} in {unit!r}",
+                source="the module's declared PTB D-SI v2.2.1 unit and prefix vocabulary",
             )
         if pending is not None and token in _UNPREFIXABLE:
             raise UnitError(
                 f"{unit!r} prefixes {token!r}, which does not take one — "
-                "an offset or fixed-magnitude unit is not scaled by a prefix"
+                "an offset or fixed-magnitude unit is not scaled by a prefix",
+                action="remove",
+                subject=f"the prefix before {token!r} in D-SI expression {unit!r}",
+                source="the unprefixable-unit rules in the PTB D-SI mapping",
             )
         symbol = _D_SI_UNITS[token]
         prefix_symbol, prefix_power = pending if pending is not None else ("", 0)
@@ -298,15 +325,28 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
         pending, pending_token = None, None
 
     if pending is not None:
-        raise UnitError(f"{unit!r} ends with the prefix {pending_token!r} and no unit after it")
+        raise UnitError(
+            f"{unit!r} ends with the prefix {pending_token!r} and no unit after it",
+            action="state",
+            subject=f"the unit after prefix {pending_token!r} in {unit!r}",
+            source="the issuing laboratory's PTB D-SI unit declaration",
+        )
     if not factors:
-        raise UnitError(f"{unit!r} names no unit")
+        raise UnitError(
+            f"{unit!r} names no unit",
+            action="state",
+            subject=f"a unit in D-SI expression {unit!r}",
+            source="the issuing laboratory's PTB D-SI unit declaration",
+        )
     # Degrees Celsius is an offset unit: it is a temperature on its own and nothing at all
     # inside a product, where Pint would have to pick an origin it has not been given.
     if "degreecelsius" in named and len(factors) > 1:
         raise UnitError(
             f"{unit!r} multiplies degrees Celsius by another unit; an offset temperature has "
-            "no meaning in a product — the certificate should state kelvin"
+            "no meaning in a product — the certificate should state kelvin",
+            action="replace",
+            subject=f"degrees Celsius in the product {unit!r}",
+            source="the certificate's equivalent absolute temperature stated in kelvin",
         )
 
     bare = _expression(factors, prefixed=False)
@@ -318,7 +358,12 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
     try:
         plain = Quantity(magnitude=value * scale, unit=bare).to(bare)
     except Exception as exc:  # pragma: no cover - the table is what keeps this unreachable
-        raise UnitError(f"{unit!r} maps to {bare!r}, which is not a unit: {exc}") from exc
+        raise UnitError(
+            f"{unit!r} maps to {bare!r}, which is not a unit: {exc}",
+            action="correct",
+            subject=f"the D-SI mapping from {unit!r} to {bare!r}",
+            source="the module's PTB D-SI v2.2.1 mapping table",
+        ) from exc
     if prefixed == bare:
         return plain
     # The proof: the prefixed spelling has to be the same physical quantity. A collision

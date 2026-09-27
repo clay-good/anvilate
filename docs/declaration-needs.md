@@ -242,6 +242,10 @@ or catalogue range that can replace it. Tolerance-range refusals now cover the w
 ISO 2768 linear and angular lookups, ISO 286 grades and zones, fit-clearance bounds, and
 process-capability lookups all identify the rejected input and the standard table, design
 declaration, or process dataset that can repair it while retaining `ValueError` compatibility.
+Unit refusals follow the same contract across quantity parsing, dimensional validators, and
+Digital Calibration Certificate D-SI expressions: each identifies the rejected quantity,
+unit, token, prefix, or exponent and points to the originating document, declared field
+dimension, bundled unit registry, or PTB D-SI mapping that supplies the correction.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
