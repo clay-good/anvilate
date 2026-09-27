@@ -22,7 +22,29 @@ target yield requires.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_HALL_PETCH_MATERIAL_SOURCE = "the material certificate or cited Hall-Petch fit"
+_HALL_PETCH_GRAIN_SOURCE = "the metallography report or thermomechanical process target"
+
+
+class _HallPetchInputError(RefusalError, ValueError):
+    """A Hall-Petch input that cannot be used without correction."""
+
+
+def _hall_petch_refusal(message: str, *, subject: str, source: str) -> _HallPetchInputError:
+    return _HallPetchInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hall_petch_input_source(name: str) -> str:
+    if name in {"grain_diameter", "yield_strength"}:
+        return _HALL_PETCH_GRAIN_SOURCE
+    return _HALL_PETCH_MATERIAL_SOURCE
+
 
 __all__ = [
     "hall_petch_grain_diameter_for_yield",
@@ -51,11 +73,23 @@ def hall_petch_yield_strength(
     k = strengthening_coefficient.to("Pa*m**0.5").magnitude
     d = grain_diameter.to("m").magnitude
     if sigma_0 < 0:
-        raise ValueError("friction_stress must be non-negative")
+        raise _hall_petch_refusal(
+            "friction_stress must be non-negative",
+            subject="friction_stress",
+            source=_HALL_PETCH_MATERIAL_SOURCE,
+        )
     if k < 0:
-        raise ValueError("strengthening_coefficient must be non-negative")
+        raise _hall_petch_refusal(
+            "strengthening_coefficient must be non-negative",
+            subject="strengthening_coefficient",
+            source=_HALL_PETCH_MATERIAL_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("grain_diameter must be positive")
+        raise _hall_petch_refusal(
+            "grain_diameter must be positive",
+            subject="grain_diameter",
+            source=_HALL_PETCH_GRAIN_SOURCE,
+        )
     sigma_y = sigma_0 + k * d**-0.5
     return Quantity(magnitude=sigma_y, unit="Pa").to("MPa")
 
@@ -82,10 +116,16 @@ def hall_petch_grain_diameter_for_yield(
     k = strengthening_coefficient.to("Pa*m**0.5").magnitude
     sigma_y = yield_strength.to("Pa").magnitude
     if k <= 0:
-        raise ValueError("strengthening_coefficient must be positive")
+        raise _hall_petch_refusal(
+            "strengthening_coefficient must be positive",
+            subject="strengthening_coefficient",
+            source=_HALL_PETCH_MATERIAL_SOURCE,
+        )
     if sigma_y <= sigma_0:
-        raise ValueError(
-            "yield_strength must exceed friction_stress (grain refinement adds to σ_0)"
+        raise _hall_petch_refusal(
+            "yield_strength must exceed friction_stress (grain refinement adds to σ_0)",
+            subject="yield_strength and friction_stress",
+            source=_HALL_PETCH_GRAIN_SOURCE,
         )
     d = (k / (sigma_y - sigma_0)) ** 2
     return Quantity(magnitude=d, unit="m").to("um")
@@ -93,10 +133,16 @@ def hall_petch_grain_diameter_for_yield(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hall_petch_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hall_petch_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hall_petch_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hall_petch_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

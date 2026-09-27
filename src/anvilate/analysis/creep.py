@@ -28,11 +28,36 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log10
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 # Typical Larson-Miller constant for steels; the caller overrides it to match the
 # material's own master-curve fit (it commonly runs from about 15 to 25).
 LARSON_MILLER_CONSTANT = 20.0
+
+_CREEP_MASTER_CURVE_SOURCE = "the certified creep test or cited Larson-Miller master curve"
+_CREEP_SERVICE_SOURCE = "the approved high-temperature service duty and temperature record"
+_CREEP_SPECTRUM_SOURCE = "the verified operating history and rupture-life assessment"
+
+
+class _CreepInputError(RefusalError, ValueError):
+    """A creep-screening input that cannot be used without correction."""
+
+
+def _creep_refusal(message: str, *, subject: str, source: str) -> _CreepInputError:
+    return _CreepInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _creep_input_source(name: str) -> str:
+    if name.startswith("service_times[") or name.startswith("rupture_lives["):
+        return _CREEP_SPECTRUM_SOURCE
+    if name == "temperature":
+        return _CREEP_SERVICE_SOURCE
+    return _CREEP_MASTER_CURVE_SOURCE
+
 
 __all__ = [
     "LARSON_MILLER_CONSTANT",
@@ -45,10 +70,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _creep_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_creep_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _creep_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_creep_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -78,9 +109,17 @@ def larson_miller_parameter(
     t_kelvin = temperature.to("K").magnitude
     hours = rupture_time.to("hour").magnitude
     if t_kelvin <= 0:
-        raise ValueError("temperature must be a positive absolute temperature")
+        raise _creep_refusal(
+            "temperature must be a positive absolute temperature",
+            subject="temperature",
+            source=_CREEP_SERVICE_SOURCE,
+        )
     if hours <= 0:
-        raise ValueError(f"rupture_time must be positive; got {rupture_time}")
+        raise _creep_refusal(
+            f"rupture_time must be positive; got {rupture_time}",
+            subject="rupture_time",
+            source=_CREEP_MASTER_CURVE_SOURCE,
+        )
     return t_kelvin * (constant + log10(hours))
 
 
@@ -105,7 +144,11 @@ def larson_miller_rupture_life(
     _require(temperature, "[temperature]", "temperature")
     t_kelvin = temperature.to("K").magnitude
     if t_kelvin <= 0:
-        raise ValueError("temperature must be a positive absolute temperature")
+        raise _creep_refusal(
+            "temperature must be a positive absolute temperature",
+            subject="temperature",
+            source=_CREEP_SERVICE_SOURCE,
+        )
     exponent = parameter / t_kelvin - constant
     return Quantity(magnitude=10.0**exponent, unit="hour")
 
@@ -127,12 +170,18 @@ def larson_miller_temperature_limit(
     _require(rupture_time, "[time]", "rupture_time")
     hours = rupture_time.to("hour").magnitude
     if hours <= 0:
-        raise ValueError(f"rupture_time must be positive; got {rupture_time}")
+        raise _creep_refusal(
+            f"rupture_time must be positive; got {rupture_time}",
+            subject="rupture_time",
+            source=_CREEP_MASTER_CURVE_SOURCE,
+        )
     denominator = constant + log10(hours)
     if denominator <= 0:
-        raise ValueError(
+        raise _creep_refusal(
             "constant + log10(rupture_time in hours) must be positive; "
-            "the rupture time is too short for this constant"
+            "the rupture time is too short for this constant",
+            subject="constant and rupture_time",
+            source=_CREEP_MASTER_CURVE_SOURCE,
         )
     return Quantity(magnitude=parameter / denominator, unit="K")
 
@@ -156,17 +205,29 @@ def creep_life_fraction_damage(
     non-negative and the rupture lives positive. Returns the dimensionless damage D.
     """
     if not isinstance(service_times, Sequence):
-        raise ValueError(
-            f"service_times must be a sequence, not a single value; got {service_times!r}"
+        raise _creep_refusal(
+            f"service_times must be a sequence, not a single value; got {service_times!r}",
+            subject="service_times",
+            source=_CREEP_SPECTRUM_SOURCE,
         )
     if not isinstance(rupture_lives, Sequence):
-        raise ValueError(
-            f"rupture_lives must be a sequence, not a single value; got {rupture_lives!r}"
+        raise _creep_refusal(
+            f"rupture_lives must be a sequence, not a single value; got {rupture_lives!r}",
+            subject="rupture_lives",
+            source=_CREEP_SPECTRUM_SOURCE,
         )
     if len(service_times) != len(rupture_lives):
-        raise ValueError("service_times and rupture_lives must have the same length")
+        raise _creep_refusal(
+            "service_times and rupture_lives must have the same length",
+            subject="service_times and rupture_lives",
+            source=_CREEP_SPECTRUM_SOURCE,
+        )
     if not service_times:
-        raise ValueError("service_times and rupture_lives must be non-empty")
+        raise _creep_refusal(
+            "service_times and rupture_lives must be non-empty",
+            subject="service_times and rupture_lives",
+            source=_CREEP_SPECTRUM_SOURCE,
+        )
     total = 0.0
     for i, (t_service, t_rupture) in enumerate(zip(service_times, rupture_lives, strict=True)):
         _require(t_service, "[time]", f"service_times[{i}]")
@@ -174,8 +235,16 @@ def creep_life_fraction_damage(
         used = t_service.to("hour").magnitude
         life = t_rupture.to("hour").magnitude
         if used < 0:
-            raise ValueError(f"service_times[{i}] must be non-negative; got {t_service}")
+            raise _creep_refusal(
+                f"service_times[{i}] must be non-negative; got {t_service}",
+                subject=f"service_times[{i}]",
+                source=_CREEP_SPECTRUM_SOURCE,
+            )
         if life <= 0:
-            raise ValueError(f"rupture_lives[{i}] must be positive; got {t_rupture}")
+            raise _creep_refusal(
+                f"rupture_lives[{i}] must be positive; got {t_rupture}",
+                subject=f"rupture_lives[{i}]",
+                source=_CREEP_SPECTRUM_SOURCE,
+            )
         total += used / life
     return total

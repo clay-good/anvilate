@@ -15558,6 +15558,111 @@ def test_creep_life_fraction_damage_robinson_rule():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "hall_petch_yield_strength",
+            {
+                "friction_stress": _q("-1 MPa"),
+                "strengthening_coefficient": _q("0.5 MPa*m**0.5"),
+                "grain_diameter": _q("20 um"),
+            },
+            "friction_stress",
+            "the material certificate or cited Hall-Petch fit",
+        ),
+        (
+            "hall_petch_yield_strength",
+            {
+                "friction_stress": _q("50 MPa"),
+                "strengthening_coefficient": _q("0.5 MPa*m**0.5"),
+                "grain_diameter": _q("0 um"),
+            },
+            "grain_diameter",
+            "the metallography report or thermomechanical process target",
+        ),
+        (
+            "hall_petch_grain_diameter_for_yield",
+            {
+                "friction_stress": _q("50 MPa"),
+                "strengthening_coefficient": _q("0.5 MPa*m**0.5"),
+                "yield_strength": _q("50 MPa"),
+            },
+            "yield_strength and friction_stress",
+            "the metallography report or thermomechanical process target",
+        ),
+        (
+            "larson_miller_parameter",
+            {"temperature": _q("0 K"), "rupture_time": _q("100000 hour")},
+            "temperature",
+            "the approved high-temperature service duty and temperature record",
+        ),
+        (
+            "larson_miller_parameter",
+            {"temperature": _q("811 K"), "rupture_time": _q("0 hour")},
+            "rupture_time",
+            "the certified creep test or cited Larson-Miller master curve",
+        ),
+        (
+            "creep_life_fraction_damage",
+            {
+                "service_times": [_q("1000 hour")],
+                "rupture_lives": [_q("10000 hour"), _q("8000 hour")],
+            },
+            "service_times and rupture_lives",
+            "the verified operating history and rupture-life assessment",
+        ),
+    ),
+)
+def test_material_strengthening_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("hall_petch", "_hall_petch_refusal", 7),
+        ("creep", "_creep_refusal", 13),
+    ),
+)
+def test_every_material_strengthening_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_agma_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
 

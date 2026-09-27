@@ -186,6 +186,11 @@
       alloy properties, wall inspections and retirement limits, and cathodic-protection inputs,
       sourced to operating records, drawings, test reports, certificates, integrity assessments, or
       approved designs.
+      The complete Hall–Petch and creep families add 20 structured sites for grain size, friction
+      stress, strengthening coefficients, target yield, service temperature and duration,
+      Larson–Miller master-curve data, operating spectra, and rupture-life blocks, sourced to
+      metallography, material certificates, creep tests, cited curves, approved service records, or
+      integrity assessments.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

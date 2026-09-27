@@ -367,6 +367,10 @@ The complete wear and corrosion families follow the contract at all 33 refusal s
 sliding duty, wear allowances, tribology data, coupon exposures, electrochemical tests, material and
 alloy properties, wall inspections and retirement limits, and cathodic-protection inputs point to
 operating records, drawings, test reports, certificates, integrity assessments, or approved designs.
+The complete Hall–Petch and creep families follow the contract at all 20 refusal sites. Grain size,
+friction stress, strengthening coefficients, target yield, service temperature and duration,
+Larson–Miller master-curve data, operating spectra, and rupture-life blocks point to metallography,
+material certificates, creep tests, cited curves, approved service records, or integrity assessments.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
