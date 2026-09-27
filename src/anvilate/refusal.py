@@ -8,7 +8,9 @@ replacement value.
 
 from __future__ import annotations
 
-from pydantic import ConfigDict
+from typing import Self
+
+from pydantic import ConfigDict, PrivateAttr
 
 from ._models import Named, RevalidatedModel
 
@@ -23,8 +25,20 @@ class Remedy(RevalidatedModel):
     action: Named
     subject: Named
     source: Named
+    _rendered: str | None = PrivateAttr(default=None)
+
+    @classmethod
+    def rendered(cls, *, action: str, subject: str, source: str, text: str) -> Self:
+        """Build a typed remedy while preserving an established presentation string."""
+        if not text.strip():
+            raise ValueError("a rendered remedy cannot be blank")
+        remedy = cls(action=action, subject=subject, source=source)
+        remedy._rendered = text
+        return remedy
 
     def __str__(self) -> str:
+        if self._rendered is not None:
+            return self._rendered
         return f"{self.action} {self.subject} using {self.source}"
 
 

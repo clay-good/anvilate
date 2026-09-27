@@ -336,11 +336,7 @@ def _run_worker(task_id: str, nonce: str) -> int:
                         "message": str(refusal),
                         "data": {
                             "issues": list(refusal.issues),
-                            "remedies": list(refusal.remedies)
-                            or [
-                                f"correct the named {operation} argument using its "
-                                f"inputSchema from tools/list, then call {operation} again"
-                            ],
+                            "remedies": [str(remedy) for remedy in refusal.remedies],
                         },
                     },
                     f"{operation} was refused.",

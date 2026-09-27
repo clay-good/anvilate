@@ -51,9 +51,11 @@
       refusal carries those remedies in `remedy` instead of its generic sentence.
       **Raised-refusal migration has started:** `anvilate.refusal.Remedy` requires an action,
       concrete subject, and source, while `RefusalError` refuses an empty remedy set.
-      `ExportRefused`, the artifact gate exposed directly to Python callers, now carries
-      that structure without changing its message. The remaining ordinary `ValueError`
-      inventory keeps this task open
+      `ExportRefused`, the artifact gate exposed directly to Python callers, carries that
+      structure without changing its message. MCP handler-level argument refusals now do the
+      same; both the synchronous and task transports render their records to the established
+      JSON-RPC strings, including exact nested Design Spec corrections. The remaining ordinary
+      `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed

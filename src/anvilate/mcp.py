@@ -54,6 +54,7 @@ from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
 from .geometry import GeometrySummary
+from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
 
@@ -902,7 +903,23 @@ _JSON_TYPES: dict[str, Any] = {
 }
 
 
-class _InvalidArguments(ValueError):
+def _argument_remedy_text(operation: str) -> str:
+    return (
+        f"correct the named {operation} argument using its inputSchema from tools/list, "
+        f"then call {operation} again"
+    )
+
+
+def _argument_remedy_record(operation: str) -> Remedy:
+    return Remedy.rendered(
+        action="correct",
+        subject=f"the named {operation} argument",
+        source=f"the {operation} inputSchema returned by tools/list",
+        text=_argument_remedy_text(operation),
+    )
+
+
+class _InvalidArguments(RefusalError):
     """A handler's own refusal of arguments the published schema could not check itself.
 
     :func:`_argument_issues` validates what a tool's input schema states inline — types,
@@ -911,10 +928,24 @@ class _InvalidArguments(ValueError):
     the client as INVALID_PARAMS rather than as a traceback.
     """
 
-    def __init__(self, issues: list[str], remedies: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        issues: list[str],
+        *,
+        operation: str,
+        remedies: tuple[str, ...] = (),
+    ) -> None:
         self.issues = tuple(issues)
-        self.remedies = tuple(dict.fromkeys(remedies))
-        super().__init__("; ".join(issues))
+        structured = tuple(
+            Remedy.rendered(
+                action="apply",
+                subject=f"the Design Spec correction: {text}",
+                source="the published Design Spec schema and validation issue",
+                text=text,
+            )
+            for text in dict.fromkeys(remedies)
+        ) or (_argument_remedy_record(operation),)
+        super().__init__("; ".join(issues), remedies=structured)
 
 
 class _Unavailable(RuntimeError):
@@ -938,10 +969,7 @@ def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, A
 
 def _argument_remedy(tool: ToolDefinition) -> str:
     """The fallback repair when a handler cannot name a more specific edit."""
-    return (
-        f"correct the named {tool.name} argument using its inputSchema from tools/list, "
-        f"then call {tool.name} again"
-    )
+    return _argument_remedy_text(tool.name)
 
 
 def _client_supports_tasks(params: Mapping[str, Any]) -> bool:
@@ -1187,7 +1215,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             INVALID_PARAMS,
             str(refusal),
             issues=list(refusal.issues),
-            remedies=list(refusal.remedies) or [_argument_remedy(tool)],
+            remedies=[str(remedy) for remedy in refusal.remedies],
         )
     except _Unavailable as refusal:
         return _error(
@@ -1377,16 +1405,19 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
     except SpecValidationError as failure:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
-            failure.remedies,
+            operation="build_part",
+            remedies=failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
+        raise _InvalidArguments([f"spec: {_reason(failure)}"], operation="build_part") from failure
     try:
         built = build_spec(spec)
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
         raise _Unavailable(str(failure)) from failure
     except GeometryError as failure:
-        raise _InvalidArguments([f"spec.element_params: {failure}"]) from failure
+        raise _InvalidArguments(
+            [f"spec.element_params: {failure}"], operation="build_part"
+        ) from failure
     geometry = built.summary().model_dump(mode="json", by_alias=True)
     handle = subject_store().publish(
         _BUILT_GEOMETRY,
@@ -1437,11 +1468,13 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
             width_px=arguments.get("width_px", 800),
         )
     except UnknownSubject as unknown:
-        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="render_viewport"
+        ) from unknown
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
         raise _Unavailable(str(failure)) from failure
     except GeometryError as failure:
-        raise _InvalidArguments([str(failure)]) from failure
+        raise _InvalidArguments([str(failure)], operation="render_viewport") from failure
     return {"viewport": rendered.document().model_dump(mode="json")}
 
 
@@ -1453,11 +1486,13 @@ def _measure_geometry(arguments: Mapping[str, Any]) -> dict[str, Any]:
         built = _built_geometry(arguments["subject"])
         measurement = measure_geometry(built, arguments["query"])
     except UnknownSubject as unknown:
-        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="measure_geometry"
+        ) from unknown
     except GeometryUnavailable as failure:
         raise _Unavailable(str(failure)) from failure
     except GeometryError as failure:
-        raise _InvalidArguments([f"query: {failure}"]) from failure
+        raise _InvalidArguments([f"query: {failure}"], operation="measure_geometry") from failure
     return {"measurement": measurement.model_dump(mode="json")}
 
 
@@ -1498,10 +1533,13 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     except SpecValidationError as failure:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
-            failure.remedies,
+            operation="run_validation",
+            remedies=failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
+        raise _InvalidArguments(
+            [f"spec: {_reason(failure)}"], operation="run_validation"
+        ) from failure
     card = screen_spec(spec).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
@@ -1533,7 +1571,9 @@ def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
     try:
         return {"scorecard": _screening(handle)["scorecard"]}
     except UnknownSubject as unknown:
-        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="read_scorecard"
+        ) from unknown
 
 
 def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -1595,7 +1635,9 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     try:
         record = _screening(handle)
     except UnknownSubject as unknown:
-        raise _InvalidArguments([f"subject: {unknown.args[0]}"]) from unknown
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="export_artifact"
+        ) from unknown
 
     try:
         spec = parse_spec(record["spec"])
@@ -1625,7 +1667,8 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
                 f"subject: {handle} resolves to a screening record this build cannot read "
                 f"({unreadable}). Publish the screening again with this release and export "
                 f"the handle it returns"
-            ]
+            ],
+            operation="export_artifact",
         ) from unreadable
     # The digest of the bundle's own canonical JSON, which is the same content addressing
     # the store and the attestation layer use — so the sha256 a client is handed names the
@@ -1681,10 +1724,13 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
     except SpecValidationError as failure:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
-            failure.remedies,
+            operation="run_fea_validation",
+            remedies=failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
-        raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
+        raise _InvalidArguments(
+            [f"spec: {_reason(failure)}"], operation="run_fea_validation"
+        ) from failure
     card = screen_spec(spec)
     entries = tuple(
         entry.model_copy(

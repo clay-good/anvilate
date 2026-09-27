@@ -623,6 +623,43 @@ def test_tool_refusals_carry_structured_issues_and_remedies():
     ]
 
 
+def test_raised_argument_refusals_keep_typed_remedies_behind_the_same_wire_text():
+    """The wire compatibility adapter must not turn the new record back into loose prose."""
+    from anvilate.mcp import _run_validation
+    from anvilate.refusal import RefusalError, Remedy
+
+    document = _spec_document()
+    document.pop("name")
+    with pytest.raises(RefusalError) as caught:
+        _run_validation({"spec": document})
+
+    remedies = caught.value.remedies
+    assert remedies and all(isinstance(remedy, Remedy) for remedy in remedies)
+    assert all(remedy.action and remedy.subject and remedy.source for remedy in remedies)
+    expected = ["add `name` to the document, for example `name: bracket-01`"]
+    assert [str(remedy) for remedy in remedies] == expected
+    assert "`name`" in remedies[0].subject
+    assert _call("run_validation", {"spec": document})["error"]["data"]["remedies"] == expected
+
+
+def test_a_generic_raised_argument_refusal_also_has_a_concrete_typed_remedy():
+    """No direct handler path may recreate the old empty-remedies raised refusal."""
+    from anvilate.mcp import _read_scorecard
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError) as caught:
+        _read_scorecard({"subject": "sha256:" + "0" * 64})
+
+    assert [str(remedy) for remedy in caught.value.remedies] == [
+        "correct the named read_scorecard argument using its inputSchema from tools/list, "
+        "then call read_scorecard again"
+    ]
+    remedy = caught.value.remedies[0]
+    assert remedy.action == "correct"
+    assert remedy.subject == "the named read_scorecard argument"
+    assert remedy.source == "the read_scorecard inputSchema returned by tools/list"
+
+
 def test_the_unbounded_validation_tool_requires_the_tasks_extension():
     missing_capability = _call("run_fea_validation", {"spec": {}})["error"]
     assert missing_capability["code"] == -32021

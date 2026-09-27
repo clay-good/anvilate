@@ -82,6 +82,26 @@ def test_a_raised_refusal_cannot_exist_without_a_structured_remedy() -> None:
         Remedy(action="supply", subject=" ", source="the design basis")
     with pytest.raises(ValueError, match="at least one structured remedy"):
         RefusalError("cannot continue", remedies=())
+    with pytest.raises(ValueError, match="cannot be blank"):
+        Remedy.rendered(
+            action="correct",
+            subject="the rejected field",
+            source="the published schema",
+            text=" ",
+        )
+
+    rendered = Remedy.rendered(
+        action="correct",
+        subject="the rejected field",
+        source="the published schema",
+        text="keep this established repair text exactly",
+    )
+    assert str(rendered) == "keep this established repair text exactly"
+    assert rendered.model_dump() == {
+        "action": "correct",
+        "subject": "the rejected field",
+        "source": "the published schema",
+    }
 
 
 def _pack_screens() -> list[tuple[str, object, object]]:

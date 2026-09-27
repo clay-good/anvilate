@@ -257,6 +257,11 @@ argument to change and the live contract to read, so a client does not have to p
 human `message` back into an edit. Transport defects such as malformed JSON remain ordinary
 JSON-RPC errors because there is no valid tool call to repair yet.
 
+Handler-level argument refusals also carry `Remedy` records before serialization. Each record
+requires an action, a concrete subject, and a source; synchronous calls and task workers render
+the records to the existing strings at the wire boundary. That keeps the JSON-RPC contract
+stable while preventing an internal raised refusal from existing with an empty repair.
+
 - **`-32602`, a bad argument.** Checked against the published input schema — required
   properties present, no property outside `properties`, each value's type, and every
   `enum`, numeric bound and length the schema declares. Deliberately partial: the `$ref`s
