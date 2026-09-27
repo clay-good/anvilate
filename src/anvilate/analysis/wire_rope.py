@@ -37,6 +37,7 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 from __future__ import annotations
 
 from ..units import Quantity, require_finite
+from ._lifting import _LiftingInputError
 
 __all__ = [
     "wire_rope_bending_stress",
@@ -45,13 +46,31 @@ __all__ = [
     "wire_rope_sheave_pressure",
 ]
 
+_SOURCES = {
+    "wire_diameter": "the selected wire-rope manufacturer's datasheet",
+    "rope_diameter": "the selected wire-rope manufacturer's datasheet",
+    "rope_modulus": "the selected wire-rope manufacturer's datasheet",
+    "metal_area": "the selected wire-rope manufacturer's datasheet",
+    "sheave_diameter": "the sheave or reeving drawing",
+    "allowable_bending_stress": "the cited fatigue design basis or wire-rope catalogue",
+    "tension": "the cited lifting load case or rigging plan",
+}
+
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _LiftingInputError(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            action="replace",
+            subject=f"the {name} value {value!r}",
+            source=_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _LiftingInputError(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            action="replace",
+            subject=f"the {name} value {value}",
+            source=_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -64,7 +83,12 @@ def _positive_mm(value: Quantity, name: str) -> float:
     _require(value, "[length]", name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _LiftingInputError(
+            f"{name} must be positive; got {value}",
+            action="replace",
+            subject=f"the {name} value {value}",
+            source=_source(name),
+        )
     return magnitude
 
 
@@ -72,7 +96,12 @@ def _positive_mpa(value: Quantity, name: str) -> float:
     _require(value, "[pressure]", name)
     magnitude = value.to("MPa").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _LiftingInputError(
+            f"{name} must be positive; got {value}",
+            action="replace",
+            subject=f"the {name} value {value}",
+            source=_source(name),
+        )
     return magnitude
 
 
@@ -95,8 +124,12 @@ def wire_rope_bending_stress(
     d_sheave = _positive_mm(sheave_diameter, "sheave_diameter")
     e_r = _positive_mpa(rope_modulus, "rope_modulus")
     if d_w >= d_sheave:
-        raise ValueError(
-            f"wire_diameter ({wire_diameter}) must be below the sheave_diameter ({sheave_diameter})"
+        raise _LiftingInputError(
+            f"wire_diameter ({wire_diameter}) must be below the sheave_diameter "
+            f"({sheave_diameter})",
+            action="replace",
+            subject=f"the wire_diameter {wire_diameter} or sheave_diameter {sheave_diameter}",
+            source="the selected rope datasheet and reeving drawing",
         )
     return Quantity(magnitude=e_r * d_w / d_sheave, unit="MPa")
 
@@ -147,7 +180,12 @@ def wire_rope_equivalent_bending_load(
     _require(metal_area, "[area]", "metal_area")
     a_m = metal_area.to("mm**2").magnitude
     if a_m <= 0:
-        raise ValueError(f"metal_area must be positive; got {metal_area}")
+        raise _LiftingInputError(
+            f"metal_area must be positive; got {metal_area}",
+            action="replace",
+            subject=f"the metal_area value {metal_area}",
+            source=_source("metal_area"),
+        )
     return Quantity(magnitude=stress.to("MPa").magnitude * a_m, unit="N")
 
 
@@ -169,11 +207,24 @@ def wire_rope_sheave_pressure(
     _require(tension, "[force]", "tension")
     force = tension.to("N").magnitude
     if force <= 0:
-        raise ValueError(f"tension must be positive; got {tension}")
+        raise _LiftingInputError(
+            f"tension must be positive; got {tension}",
+            action="replace",
+            subject=f"the tension value {tension}",
+            source=_source("tension"),
+        )
     d_rope = _positive_mm(rope_diameter, "rope_diameter")
     d_sheave = _positive_mm(sheave_diameter, "sheave_diameter")
     if d_rope >= d_sheave:
-        raise ValueError(
-            f"rope_diameter ({rope_diameter}) must be below the sheave_diameter ({sheave_diameter})"
+        raise _LiftingInputError(
+            f"rope_diameter ({rope_diameter}) must be below the sheave_diameter "
+            f"({sheave_diameter})",
+            action="replace",
+            subject=f"the rope_diameter {rope_diameter} or sheave_diameter {sheave_diameter}",
+            source="the selected rope datasheet and reeving drawing",
         )
     return Quantity(magnitude=2 * force / (d_rope * d_sheave), unit="MPa")
+
+
+def _source(name: str) -> str:
+    return _SOURCES[name]

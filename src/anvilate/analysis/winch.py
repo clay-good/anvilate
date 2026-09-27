@@ -31,6 +31,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity, require_finite
+from ._lifting import _LiftingInputError
 
 __all__ = [
     "drum_working_radius",
@@ -38,13 +39,27 @@ __all__ = [
     "drum_rope_capacity",
 ]
 
+_SOURCES = {
+    "core_diameter": "the winch drum drawing",
+    "rope_diameter": "the selected wire-rope datasheet",
+    "torque": "the winch drive specification and cited lifting load case",
+}
+
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _LiftingInputError(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            action="replace",
+            subject=f"the {name} value {value!r}",
+            source=_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _LiftingInputError(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            action="replace",
+            subject=f"the {name} value {value}",
+            source=_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -57,13 +72,23 @@ def _positive_mm(value: Quantity, name: str) -> float:
     _require(value, "[length]", name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _LiftingInputError(
+            f"{name} must be positive; got {value}",
+            action="replace",
+            subject=f"the {name} value {value}",
+            source=_source(name),
+        )
     return magnitude
 
 
 def _check_layer(layer: int, name: str = "layer") -> int:
     if layer < 1:
-        raise ValueError(f"{name} must be at least 1; got {layer}")
+        raise _LiftingInputError(
+            f"{name} must be at least 1; got {layer}",
+            action="replace",
+            subject=f"the {name} value {layer}",
+            source="the drum drawing and spooling plan",
+        )
     return layer
 
 
@@ -105,7 +130,12 @@ def drum_line_pull(
     _require(torque, "[force] * [length]", "torque")
     t = torque.to("N*m").magnitude
     if t <= 0:
-        raise ValueError(f"torque must be positive; got {torque}")
+        raise _LiftingInputError(
+            f"torque must be positive; got {torque}",
+            action="replace",
+            subject=f"the torque value {torque}",
+            source=_source("torque"),
+        )
     radius_m = (
         drum_working_radius(core_diameter=core_diameter, rope_diameter=rope_diameter, layer=layer)
         .to("m")
@@ -133,7 +163,16 @@ def drum_rope_capacity(
     core = _positive_mm(core_diameter, "core_diameter")
     rope = _positive_mm(rope_diameter, "rope_diameter")
     if wraps_per_layer < 1:
-        raise ValueError(f"wraps_per_layer must be at least 1; got {wraps_per_layer}")
+        raise _LiftingInputError(
+            f"wraps_per_layer must be at least 1; got {wraps_per_layer}",
+            action="replace",
+            subject=f"the wraps_per_layer value {wraps_per_layer}",
+            source="the drum drawing and spooling plan",
+        )
     m = _check_layer(layers, "layers")
     length_mm = pi * wraps_per_layer * m * (core + m * rope)
     return Quantity(magnitude=length_mm / 1000.0, unit="m")
+
+
+def _source(name: str) -> str:
+    return _SOURCES[name]

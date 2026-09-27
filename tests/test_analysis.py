@@ -14316,27 +14316,32 @@ def test_every_rigging_input_refusal_carries_a_structured_remedy(invoke, subject
     }
 
 
-def test_every_rigging_input_refusal_site_requires_explicit_structured_fields():
+def test_every_lifting_input_refusal_site_requires_explicit_structured_fields():
     import ast
     import pathlib
 
-    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/rigging.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
     structured = []
     unstructured = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
-            continue
-        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_RiggingInputError":
-            structured.append(node.exc)
-        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
-            unstructured.append(node.exc)
+    root = pathlib.Path(__file__).parents[1]
+    for relative in (
+        pathlib.Path("src/anvilate/analysis/rigging.py"),
+        pathlib.Path("src/anvilate/analysis/winch.py"),
+        pathlib.Path("src/anvilate/analysis/wire_rope.py"),
+    ):
+        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+                continue
+            if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_LiftingInputError":
+                structured.append((relative, node.exc))
+            if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+                unstructured.append((relative, node.exc))
 
-    assert len(structured) == 8
+    assert len(structured) == 22
     assert unstructured == []
-    for call in structured:
+    for path, call in structured:
         assert {"action", "subject", "source"} <= {keyword.arg for keyword in call.keywords}, (
-            f"src/anvilate/analysis/rigging.py:{call.lineno}"
+            f"{path}:{call.lineno}"
         )
 
 
@@ -15109,6 +15114,147 @@ def test_wire_rope_sheave_pressure_is_projected_area_bearing():
         wire_rope_sheave_pressure(
             tension=_q("-1 N"), rope_diameter=_q("13 mm"), sheave_diameter=_q("250 mm")
         )
+
+
+@pytest.mark.parametrize(
+    ("invoke", "subject", "source"),
+    (
+        (
+            lambda w, _r: w.drum_working_radius(
+                core_diameter=200, rope_diameter=_q("13 mm"), layer=1
+            ),
+            "the core_diameter value 200",
+            "the winch drum drawing",
+        ),
+        (
+            lambda w, _r: w.drum_working_radius(
+                core_diameter=_q("200 N"), rope_diameter=_q("13 mm"), layer=1
+            ),
+            "the core_diameter value 200 N",
+            "the winch drum drawing",
+        ),
+        (
+            lambda w, _r: w.drum_working_radius(
+                core_diameter=_q("0 mm"), rope_diameter=_q("13 mm"), layer=1
+            ),
+            "the core_diameter value 0 mm",
+            "the winch drum drawing",
+        ),
+        (
+            lambda w, _r: w.drum_working_radius(
+                core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=0
+            ),
+            "the layer value 0",
+            "the drum drawing and spooling plan",
+        ),
+        (
+            lambda w, _r: w.drum_line_pull(
+                torque=_q("0 N*m"),
+                core_diameter=_q("200 mm"),
+                rope_diameter=_q("13 mm"),
+                layer=1,
+            ),
+            "the torque value 0 m * N",
+            "the winch drive specification and cited lifting load case",
+        ),
+        (
+            lambda w, _r: w.drum_rope_capacity(
+                core_diameter=_q("200 mm"),
+                rope_diameter=_q("13 mm"),
+                wraps_per_layer=0,
+                layers=2,
+            ),
+            "the wraps_per_layer value 0",
+            "the drum drawing and spooling plan",
+        ),
+        (
+            lambda _w, r: r.wire_rope_bending_stress(
+                wire_diameter=1,
+                sheave_diameter=_q("250 mm"),
+                rope_modulus=_q("83 GPa"),
+            ),
+            "the wire_diameter value 1",
+            "the selected wire-rope manufacturer's datasheet",
+        ),
+        (
+            lambda _w, r: r.wire_rope_bending_stress(
+                wire_diameter=_q("1 N"),
+                sheave_diameter=_q("250 mm"),
+                rope_modulus=_q("83 GPa"),
+            ),
+            "the wire_diameter value 1 N",
+            "the selected wire-rope manufacturer's datasheet",
+        ),
+        (
+            lambda _w, r: r.wire_rope_bending_stress(
+                wire_diameter=_q("0 mm"),
+                sheave_diameter=_q("250 mm"),
+                rope_modulus=_q("83 GPa"),
+            ),
+            "the wire_diameter value 0 mm",
+            "the selected wire-rope manufacturer's datasheet",
+        ),
+        (
+            lambda _w, r: r.wire_rope_bending_stress(
+                wire_diameter=_q("0.9 mm"),
+                sheave_diameter=_q("250 mm"),
+                rope_modulus=_q("0 MPa"),
+            ),
+            "the rope_modulus value 0 MPa",
+            "the selected wire-rope manufacturer's datasheet",
+        ),
+        (
+            lambda _w, r: r.wire_rope_bending_stress(
+                wire_diameter=_q("10 mm"),
+                sheave_diameter=_q("5 mm"),
+                rope_modulus=_q("83 GPa"),
+            ),
+            "the wire_diameter 10 mm or sheave_diameter 5 mm",
+            "the selected rope datasheet and reeving drawing",
+        ),
+        (
+            lambda _w, r: r.wire_rope_equivalent_bending_load(
+                wire_diameter=_q("0.9 mm"),
+                sheave_diameter=_q("250 mm"),
+                rope_modulus=_q("83 GPa"),
+                metal_area=_q("0 mm**2"),
+            ),
+            "the metal_area value 0 mm ** 2",
+            "the selected wire-rope manufacturer's datasheet",
+        ),
+        (
+            lambda _w, r: r.wire_rope_sheave_pressure(
+                tension=_q("-1 N"),
+                rope_diameter=_q("13 mm"),
+                sheave_diameter=_q("250 mm"),
+            ),
+            "the tension value -1 N",
+            "the cited lifting load case or rigging plan",
+        ),
+        (
+            lambda _w, r: r.wire_rope_sheave_pressure(
+                tension=_q("12 kN"),
+                rope_diameter=_q("13 mm"),
+                sheave_diameter=_q("13 mm"),
+            ),
+            "the rope_diameter 13 mm or sheave_diameter 13 mm",
+            "the selected rope datasheet and reeving drawing",
+        ),
+    ),
+)
+def test_every_winch_and_wire_rope_refusal_carries_a_structured_remedy(invoke, subject, source):
+    from anvilate.analysis import winch, wire_rope
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        invoke(winch, wire_rope)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
 
 
 def test_specific_film_ratio_sets_the_lubrication_regime():

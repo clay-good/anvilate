@@ -45,8 +45,8 @@ from __future__ import annotations
 
 from math import radians, sin, tan
 
-from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+from ._lifting import _LiftingInputError
 
 __all__ = [
     "sling_tension_factor",
@@ -57,19 +57,9 @@ __all__ = [
 ]
 
 
-class _RiggingInputError(RefusalError, ValueError):
-    """A rigging input that cannot be used without a concrete correction."""
-
-    def __init__(self, message: str, *, action: str, subject: str, source: str) -> None:
-        super().__init__(
-            message,
-            remedies=(Remedy(action=action, subject=subject, source=source),),
-        )
-
-
 def _check_angle(angle_from_horizontal: float) -> float:
     if not 0 < angle_from_horizontal <= 90:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"angle_from_horizontal must be in (0, 90] degrees; got {angle_from_horizontal}",
             action="replace",
             subject=f"the angle_from_horizontal value {angle_from_horizontal}",
@@ -80,7 +70,7 @@ def _check_angle(angle_from_horizontal: float) -> float:
 
 def _check_legs(number_of_legs: int) -> int:
     if number_of_legs < 1:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"number_of_legs must be at least 1; got {number_of_legs}",
             action="replace",
             subject=f"the number_of_legs value {number_of_legs}",
@@ -193,7 +183,7 @@ def tackle_lead_line_tension(
 
 def _check_parts(supporting_parts: int) -> int:
     if supporting_parts < 1:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"supporting_parts must be at least 1; got {supporting_parts}",
             action="replace",
             subject=f"the supporting_parts value {supporting_parts}",
@@ -204,7 +194,7 @@ def _check_parts(supporting_parts: int) -> int:
 
 def _check_efficiency(sheave_efficiency: float) -> float:
     if not 0 < sheave_efficiency <= 1:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"sheave_efficiency must be in (0, 1]; got {sheave_efficiency}",
             action="replace",
             subject=f"the sheave_efficiency value {sheave_efficiency}",
@@ -220,7 +210,7 @@ def _check_lead_sheaves(lead_sheaves: int) -> int:
     # frictionless answer for a tackle whose lead nobody counted.
     require_finite(lead_sheaves, name="lead_sheaves")
     if lead_sheaves < 0:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"lead_sheaves must be non-negative; got {lead_sheaves}",
             action="replace",
             subject=f"the lead_sheaves value {lead_sheaves}",
@@ -231,21 +221,21 @@ def _check_lead_sheaves(lead_sheaves: int) -> int:
 
 def _require_force(load: Quantity) -> None:
     if not isinstance(load, Quantity):
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"load must be a [force] quantity; got {load!r}",
             action="replace",
             subject=f"the sling or tackle load {load!r}",
             source="the cited lifting load case or rigging plan",
         )
     if not load.has_dimension("[force]"):
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"load must be a [force] quantity; got {load.dimensionality} ({load})",
             action="replace",
             subject=f"the sling or tackle load {load}",
             source="a force quantity from the cited lifting load case or rigging plan",
         )
     if load.to("N").magnitude <= 0:
-        raise _RiggingInputError(
+        raise _LiftingInputError(
             f"load must be positive; got {load}",
             action="replace",
             subject=f"the sling or tackle load {load}",

@@ -78,9 +78,10 @@
       STEP/3MF exchange artifacts, measured-interface confirmation and checks, audited-pattern
       construction, viewport/query arguments, and CLI adapters all name the rejected subject
       and its schema, CAD source, cited requirement, audited pattern, or supported grammar.
-      The complete rigging analytical-input family now does too: sling angles and leg counts,
-      tackle rope parts, sheave efficiency, lead-sheave count, and force inputs point to the
-      rigging plan, measured geometry, reeving diagram, manufacturer data, or load case. The
+      The complete lifting-mechanics analytical-input family now does too: sling angles and
+      leg counts, tackle rope parts, sheave efficiency, winch drum and spooling inputs, drive
+      torque, and wire-rope/sheave properties point to the rigging plan, measured geometry,
+      drum or reeving drawing, manufacturer data, or load case. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
