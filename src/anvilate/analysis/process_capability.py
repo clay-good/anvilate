@@ -23,7 +23,25 @@ from __future__ import annotations
 
 from math import erf, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import require_finite
+
+_PROCESS_SPEC_SOURCE = "the product drawing or approved process control plan"
+_PROCESS_STUDY_SOURCE = "the qualified process-capability study or measurement dataset"
+
+
+class _ProcessCapabilityInputError(RefusalError, ValueError):
+    """A process-capability input that cannot be used without correction."""
+
+
+def _process_capability_refusal(
+    message: str, *, subject: str, source: str
+) -> _ProcessCapabilityInputError:
+    return _ProcessCapabilityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "expected_defect_rate_ppm",
@@ -48,9 +66,17 @@ def process_capability_index(
     require_finite(lower_spec_limit, name="lower_spec_limit")
     require_finite(process_std_dev, name="process_std_dev")
     if upper_spec_limit <= lower_spec_limit:
-        raise ValueError("upper_spec_limit must exceed lower_spec_limit")
+        raise _process_capability_refusal(
+            "upper_spec_limit must exceed lower_spec_limit",
+            subject="upper_spec_limit and lower_spec_limit",
+            source=_PROCESS_SPEC_SOURCE,
+        )
     if process_std_dev <= 0:
-        raise ValueError("process_std_dev must be positive")
+        raise _process_capability_refusal(
+            "process_std_dev must be positive",
+            subject="process_std_dev",
+            source=_PROCESS_STUDY_SOURCE,
+        )
     return (upper_spec_limit - lower_spec_limit) / (6.0 * process_std_dev)
 
 
@@ -77,9 +103,17 @@ def process_capability_ratio(
     require_finite(process_mean, name="process_mean")
     require_finite(process_std_dev, name="process_std_dev")
     if upper_spec_limit <= lower_spec_limit:
-        raise ValueError("upper_spec_limit must exceed lower_spec_limit")
+        raise _process_capability_refusal(
+            "upper_spec_limit must exceed lower_spec_limit",
+            subject="upper_spec_limit and lower_spec_limit",
+            source=_PROCESS_SPEC_SOURCE,
+        )
     if process_std_dev <= 0:
-        raise ValueError("process_std_dev must be positive")
+        raise _process_capability_refusal(
+            "process_std_dev must be positive",
+            subject="process_std_dev",
+            source=_PROCESS_STUDY_SOURCE,
+        )
     upper = upper_spec_limit - process_mean
     lower = process_mean - lower_spec_limit
     return min(upper, lower) / (3.0 * process_std_dev)

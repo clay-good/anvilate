@@ -32100,6 +32100,89 @@ def test_tolerance_stack_worst_case_and_rss():
         rss_tolerance_stack([_q("0.1 s")])
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "process_capability_index",
+            {"upper_spec_limit": 9.5, "lower_spec_limit": 10.5, "process_std_dev": 0.1},
+            "upper_spec_limit and lower_spec_limit",
+            "the product drawing or approved process control plan",
+        ),
+        (
+            "process_capability_ratio",
+            {
+                "upper_spec_limit": 10.5,
+                "lower_spec_limit": 9.5,
+                "process_mean": 10.0,
+                "process_std_dev": 0.0,
+            },
+            "process_std_dev",
+            "the qualified process-capability study or measurement dataset",
+        ),
+        (
+            "worst_case_tolerance_stack",
+            {"tolerances": _q("0.1 mm")},
+            "tolerances",
+            "the dimension-chain drawing or approved tolerance-analysis worksheet",
+        ),
+        (
+            "rss_tolerance_stack",
+            {"tolerances": [_q("0.1 s")]},
+            "tolerances[0]",
+            "the dimension-chain drawing or approved tolerance-analysis worksheet",
+        ),
+    ),
+)
+def test_manufacturing_quality_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("process_capability", "_process_capability_refusal", 4),
+        ("tolerance_stack", "_tolerance_stack_refusal", 5),
+    ),
+)
+def test_every_manufacturing_quality_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_dc_circuit_maximum_power_transfer():
     from anvilate.analysis import maximum_power_transfer, resistive_power
 

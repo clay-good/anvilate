@@ -309,6 +309,9 @@ attenuation requirements, photometer records, glass certificates, layouts, or ca
 The complete adhesive-joint and coating families follow the contract at all 11 refusal sites. Joint
 geometry, loads, bond strength, film thickness, and volume solids point to drawings, load cases,
 product or qualification records, coating specifications, and calibrated film-gage records.
+The complete process-capability and tolerance-stack families follow the contract at all nine refusal
+sites. Specification limits, statistical spread, and dimension-chain contributors point to product
+drawings, control plans, qualified capability studies, and approved tolerance worksheets.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

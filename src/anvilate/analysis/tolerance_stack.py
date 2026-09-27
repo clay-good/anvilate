@@ -25,7 +25,22 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_TOLERANCE_CHAIN_SOURCE = "the dimension-chain drawing or approved tolerance-analysis worksheet"
+
+
+class _ToleranceStackInputError(RefusalError, ValueError):
+    """A tolerance-stack input that cannot be used without correction."""
+
+
+def _tolerance_stack_refusal(message: str, *, subject: str) -> _ToleranceStackInputError:
+    return _ToleranceStackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_TOLERANCE_CHAIN_SOURCE),),
+    )
+
 
 __all__ = [
     "rss_tolerance_stack",
@@ -43,7 +58,10 @@ def worst_case_tolerance_stack(tolerances: Sequence[Quantity]) -> Quantity:
     statistical view would. Pass at least one tolerance. Returns the worst-case stack in mm.
     """
     if not isinstance(tolerances, Sequence):
-        raise ValueError(f"tolerances must be a sequence, not a single value; got {tolerances!r}")
+        raise _tolerance_stack_refusal(
+            f"tolerances must be a sequence, not a single value; got {tolerances!r}",
+            subject="tolerances",
+        )
     values = _tolerances_in_mm(tolerances)
     return Quantity(magnitude=sum(abs(t) for t in values), unit="mm")
 
@@ -61,14 +79,19 @@ def rss_tolerance_stack(tolerances: Sequence[Quantity]) -> Quantity:
     process-capability margin. Pass at least one tolerance. Returns the RSS stack in mm.
     """
     if not isinstance(tolerances, Sequence):
-        raise ValueError(f"tolerances must be a sequence, not a single value; got {tolerances!r}")
+        raise _tolerance_stack_refusal(
+            f"tolerances must be a sequence, not a single value; got {tolerances!r}",
+            subject="tolerances",
+        )
     values = _tolerances_in_mm(tolerances)
     return Quantity(magnitude=sum(t * t for t in values) ** 0.5, unit="mm")
 
 
 def _tolerances_in_mm(tolerances: Sequence[Quantity]) -> list[float]:
     if len(tolerances) == 0:
-        raise ValueError("tolerances must contain at least one part tolerance")
+        raise _tolerance_stack_refusal(
+            "tolerances must contain at least one part tolerance", subject="tolerances"
+        )
     values: list[float] = []
     for idx, tol in enumerate(tolerances):
         _check(tol, "[length]", f"tolerances[{idx}]")
@@ -78,10 +101,13 @@ def _tolerances_in_mm(tolerances: Sequence[Quantity]) -> list[float]:
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _tolerance_stack_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}", subject=name
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _tolerance_stack_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
