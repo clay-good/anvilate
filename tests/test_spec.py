@@ -2032,6 +2032,7 @@ def _refusal(document: str):  # type: ignore[no-untyped-def]
 
 
 def test_a_missing_field_is_told_how_to_add_it_and_an_unknown_one_its_nearest_name():
+    from anvilate.refusal import RefusalError, Remedy
     from anvilate.spec.validate import _REQUIRED_FIELD_EXAMPLES
 
     lines = dict(_REQUIRED_FIELD_EXAMPLES)
@@ -2039,7 +2040,12 @@ def test_a_missing_field_is_told_how_to_add_it_and_an_unknown_one_its_nearest_na
     lines["material"] = "material: {rf: AA-6061-T6}"
     lines["version"] = 'version: "1.18.0"'
     failure = _refusal("\n".join(lines.values()))
-    remedies = " | ".join(failure.remedies)
+    assert isinstance(failure, RefusalError)
+    assert isinstance(failure, ValueError), "the public exception hierarchy changed"
+    assert failure.remedies and all(isinstance(item, Remedy) for item in failure.remedies)
+    assert any(item.subject == "the Design Spec field `manufacturing`" for item in failure.remedies)
+    assert all("Design Spec schema" in item.source for item in failure.remedies)
+    remedies = " | ".join(failure.remedy_texts)
     assert "add `manufacturing` to the document, for example " in remedies
     assert "`manufacturing: {process: cnc_milling}`" in remedies
     assert "remove `material.rf`, which `material` does not have (did you mean `ref`?)" in remedies
@@ -2048,7 +2054,7 @@ def test_a_missing_field_is_told_how_to_add_it_and_an_unknown_one_its_nearest_na
     # The message carries the remedy too, so the library and MCP readers get it as well.
     assert "did you mean `ref`?" in str(failure)
     # MCP joins a refusal's issues with "; ", so a remedy must not carry one.
-    assert not [remedy for remedy in failure.remedies if ";" in remedy]
+    assert not [remedy for remedy in failure.remedy_texts if ";" in remedy]
 
 
 def test_a_failure_with_no_remedy_to_state_states_none():
@@ -2056,7 +2062,8 @@ def test_a_failure_with_no_remedy_to_state_states_none():
     at_name = [error for error in failure.errors if error["loc"] == "name"]
     assert at_name, failure.errors
     assert all(error.get("remedy") is None for error in at_name)
-    assert failure.remedies == ()
+    assert failure.remedy_texts == ()
+    assert any(remedy.subject == "the Design Spec field `name`" for remedy in failure.remedies)
 
 
 def _required_lines() -> list[str]:
@@ -2070,7 +2077,7 @@ def test_a_document_that_is_not_a_mapping_says_what_it_is_and_what_to_write(docu
     failure = _refusal(document)
     assert f"spec must be a mapping, and this document is {found}" in str(failure)
     assert "<root>" not in str(failure)
-    assert failure.remedies == (
+    assert failure.remedy_texts == (
         "write a mapping of fields, starting with the required ones: `name`, `description`, "
         "`units`, `material`, `manufacturing`, `acceptance`",
     )
@@ -2109,7 +2116,7 @@ def test_an_ordinary_mistake_is_told_a_value_that_validates(line, written, remed
     key = line.split(":", 1)[0]
     others = [kept for kept in _required_lines() if not kept.startswith(f"{key}:")]
     failure = _refusal("\n".join([*others, "name: bracket-01", line]))
-    assert failure.remedies == (remedy,)
+    assert failure.remedy_texts == (remedy,)
     value = re.search(r" as (?:a list, )?`([^`]*)`", remedy).group(1)
     head, tail = line.rsplit(written, 1)
     load_spec_yaml("\n".join([*others, "name: bracket-01", head + value + tail]))

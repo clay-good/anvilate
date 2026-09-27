@@ -1375,7 +1375,7 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         # CLI's JSON refusal reads, so an agent does not have to parse them back out.
         return {
             "errors": [_refusal_line(e["loc"], e["msg"]) for e in failure.errors],
-            "remedies": list(failure.remedies),
+            "remedies": list(failure.remedy_texts),
         }
     except (ValueError, TypeError, KeyError) as failure:
         # parse_spec raises SpecValidationError for a schema failure; anything else is a
@@ -1406,7 +1406,7 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
             operation="build_part",
-            remedies=failure.remedies,
+            remedies=failure.remedy_texts,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {_reason(failure)}"], operation="build_part") from failure
@@ -1534,7 +1534,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
             operation="run_validation",
-            remedies=failure.remedies,
+            remedies=failure.remedy_texts,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments(
@@ -1725,7 +1725,7 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
             operation="run_fea_validation",
-            remedies=failure.remedies,
+            remedies=failure.remedy_texts,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments(

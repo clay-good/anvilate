@@ -62,7 +62,9 @@
       recorded validation errors, while retaining their `ValueError` ancestry. Unsupported
       Spec IR versions now point to a supporting release or reviewed current schema, and
       unknown material/component references point to the injected live registry and nearest
-      identifiers. The cited-data validity gates now structure their repairs too: insufficient
+      identifiers. Design Spec validation now exposes typed remedies for every schema or YAML
+      issue while retaining its existing per-field repair strings at CLI and MCP surfaces.
+      The cited-data validity gates now structure their repairs too: insufficient
       material basis names the required property record or explicit basis decision, profile
       applicability names a profile covering the stated contexts, and optical range refusal
       names a catalogue range covering the requested temperatures. The complete tolerance

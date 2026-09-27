@@ -236,7 +236,10 @@ response and schema; `CompilationFailure` names the backend/model candidate and 
 validation errors while retaining `ValueError` compatibility. `UnsupportedSchemaVersion`
 points from the declared schema to a supporting release or reviewed current schema;
 `UnknownReferenceError` points from the rejected identifier to the injected live registry and
-its nearest entries. Material-basis, profile-applicability, and ranged optical-property
+its nearest entries. `SpecValidationError` turns every schema or YAML issue into a typed
+remedy naming the exact field or parser position and the current Design Spec schema or YAML
+syntax as its authority; CLI and MCP consumers retain their established repair strings.
+Material-basis, profile-applicability, and ranged optical-property
 refusals name the exact property or profile that cannot be used and the cited record, profile,
 or catalogue range that can replace it. Tolerance-range refusals now cover the whole family:
 ISO 2768 linear and angular lookups, ISO 286 grades and zones, fit-clearance bounds, and

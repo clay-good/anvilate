@@ -2567,9 +2567,9 @@ def _load(path: Path, *, err, command: str, named: bool = False):
             line = _refusal_line(problem["loc"], problem["msg"])
             print(f"anvilate {command}: {where}{line}", file=err)
         _state_remedies(
-            tuple(f"in {path}, {remedy}" for remedy in failure.remedies)
+            tuple(f"in {path}, {remedy}" for remedy in failure.remedy_texts)
             if named
-            else failure.remedies
+            else failure.remedy_texts
         )
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:

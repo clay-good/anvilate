@@ -119,7 +119,7 @@ Units are first-class — mix `kip`, `ksi`, `in`, `mm` and `MPa` freely.
 - **Screening packs** for structural steel, cold-formed steel, aluminum, concrete, masonry, timber, geotechnical, hydraulics, pressure vessels, process piping, lifting devices, machinery, and building services — each check naming the clause it came from.
 - **An analytical library** (237 closed-form modules and 1,883 public symbols, each dimension-checked and tested; 6,610 tests).
 - **Reports and exports:** calculation reports (text, HTML, PDF), DXF, STEP, 3MF and QIF — written only when the checks pass, or stamped `UNVALIDATED`.
-- **A command line** — `anvilate check`, `build`, `export`, `verify`, `interfaces`, `diff`, `doctor`. See [the CLI guide](docs/headless-cli.md).
+- **A command line** — `anvilate check`, `build`, `export`, `verify`, `interfaces`, `diff`, `doctor`, with field-specific repairs for invalid specs. See [the CLI guide](docs/headless-cli.md).
 - **An MCP server** exposing the pipeline's eight operations to an agent. See [agent integration](docs/agent-mcp-integration.md).
 - **510 runnable examples**, each executed in CI. Start with the [highlights](docs/example-highlights.md) or browse the [full gallery](examples/README.md).
 

@@ -19,6 +19,7 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from .._models import _refusal_line
+from ..refusal import RefusalError, Remedy
 from .ir import SCHEMA_VERSION, DesignSpec
 from .provenance import _BareValue
 from .references import ReferenceResolver, UnknownReferenceError, default_resolver
@@ -191,22 +192,48 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
     return None
 
 
-class SpecValidationError(ValueError):
+def _structured_remedy(error: Mapping[str, Any]) -> Remedy:
+    """A typed repair for one validation issue without changing its established text."""
+    location = str(error.get("loc", ""))
+    if location.startswith("line ") or location == "<root>":
+        subject = f"the Design Spec document at {location}"
+        source = "YAML syntax and the reported parser position"
+    elif location:
+        subject = f"the Design Spec field `{location}`"
+        source = "the current Design Spec schema and the field's originating requirement"
+    else:
+        subject = "the Design Spec document"
+        source = "the current Design Spec schema and the document's originating requirements"
+    rendered = error.get("remedy")
+    if isinstance(rendered, str) and rendered.strip():
+        return Remedy.rendered(
+            action=rendered.split(maxsplit=1)[0],
+            subject=subject,
+            source=source,
+            text=rendered,
+        )
+    return Remedy(action="correct", subject=subject, source=source)
+
+
+class SpecValidationError(RefusalError, ValueError):
     """A spec failed schema validation. Carries the offending field paths.
 
     Each error is a ``{"loc", "msg"}`` mapping, and carries a ``"remedy"`` when its kind has
     one: a missing field says to add it (with a line that validates, for a required
     top-level field), and an unknown one says to remove it and names the nearest real field.
+    ``remedies`` exposes the typed repair contract for every issue; ``remedy_texts`` preserves
+    the established strings emitted by CLI and MCP surfaces for issues with tailored advice.
     """
 
     def __init__(self, errors: list[dict[str, Any]]) -> None:
         self.errors = errors
         lines = [f"  {_refusal_line(e['loc'], e['msg'])}" for e in errors]
-        super().__init__("spec failed validation:\n" + "\n".join(lines))
+        remedies = tuple(_structured_remedy(error) for error in errors)
+        super().__init__("spec failed validation:\n" + "\n".join(lines), remedies=remedies)
 
     @property
-    def remedies(self) -> tuple[str, ...]:
-        """Each distinct remedy the errors carry, in order."""
+    def remedy_texts(self) -> tuple[str, ...]:
+        """Each established transport-facing remedy string, deduplicated in order."""
         return tuple(dict.fromkeys(e["remedy"] for e in self.errors if e.get("remedy")))
 
     @classmethod
