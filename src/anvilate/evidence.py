@@ -34,8 +34,8 @@ from .standards import (
     default_extrusion_table,
     default_hex_bolt_table,
     default_hex_nut_table,
-    default_profile_table,
     default_washer_table,
+    resolve_profile,
 )
 from .tolerance import general_tolerance_source, resolve_class
 
@@ -212,10 +212,9 @@ def collect_provenance(
         if isinstance(interface, StandardComponentInterface):
             records.append(_component_source(interface.ref, providers, components))
     # A member section named by its profile designation resolved from the bundled EN 10365
-    # table, so its dimensions came from there and the trail says so — for the element, and
-    # for each member of a structure, which names its section one level down.
+    # table or the verified local AISC cache, so its dimensions' source travels with it.
     for named_section in _named_sections(spec.element_params or {}):
-        profile = default_profile_table().get(named_section)
+        profile = resolve_profile(named_section)
         records.append(
             SourceRecord(
                 ref=named_section,

@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
+import os
+from zipfile import ZIP_DEFLATED, ZipFile
+
 import pytest
 
 from anvilate.analysis.section import CrossSection
-from anvilate.standards import UnknownProfileError, canonical_designation, default_profile_table
+from anvilate.fetch import DatasetRecipe
+from anvilate.standards import (
+    UnknownProfileError,
+    cached_aisc_profile_table,
+    canonical_aisc_designation,
+    canonical_designation,
+    default_profile_table,
+    fetch_aisc_profile_table,
+)
 from anvilate.units import Quantity
 
 # The anchor: area and second moments as the two public tabulations the bundled dimensions
@@ -162,6 +175,143 @@ def test_a_name_the_table_does_not_hold_is_refused_with_what_it_nearly_named():
     assert "declared by its properties" in str(refused.value)
     with pytest.raises(UnknownProfileError):
         default_profile_table().get("W12x26")
+
+
+def _test_aisc_workbook() -> bytes:
+    strings = ["Type", "AISC_Manual_Label", "d", "bf", "tw", "tf", "kdes", "W", "W12X26"]
+    shared = "".join(f"<si><t>{value}</t></si>" for value in strings)
+    cells = "".join(
+        (
+            '<c r="A1" t="s"><v>0</v></c>',
+            '<c r="C1" t="s"><v>1</v></c>',
+            '<c r="G1" t="s"><v>2</v></c>',
+            '<c r="L1" t="s"><v>3</v></c>',
+            '<c r="Q1" t="s"><v>4</v></c>',
+            '<c r="T1" t="s"><v>5</v></c>',
+            '<c r="Y1" t="s"><v>6</v></c>',
+        )
+    )
+    values = "".join(
+        (
+            '<c r="A2" t="s"><v>7</v></c>',
+            '<c r="C2" t="s"><v>8</v></c>',
+            '<c r="G2"><v>12.2</v></c>',
+            '<c r="L2"><v>6.49</v></c>',
+            '<c r="Q2"><v>0.23</v></c>',
+            '<c r="T2"><v>0.38</v></c>',
+            '<c r="Y2"><v>0.68</v></c>',
+        )
+    )
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    output = io.BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "xl/sharedStrings.xml",
+            f'<sst xmlns="{namespace}" count="9" uniqueCount="9">{shared}</sst>',
+        )
+        archive.writestr(
+            "xl/worksheets/sheet2.xml",
+            f'<worksheet xmlns="{namespace}"><sheetData><row r="1">{cells}</row>'
+            f'<row r="2">{values}</row></sheetData></worksheet>',
+        )
+    return output.getvalue()
+
+
+def _test_aisc_recipe(payload: bytes) -> DatasetRecipe:
+    return DatasetRecipe(
+        name="aisc-shapes-database-v16.0.xlsx",
+        url="https://example.invalid/aisc-shapes-database-v16.0.xlsx",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        license="LicenseRef-AISC-Terms",
+        source="AISC Shapes Database v16.0, test fixture",
+        redistributable=False,
+    )
+
+
+def test_aisc_designations_have_one_stable_spelling():
+    for written in ("W12X26", "W12x26", "w 12 x 26", " W12×26 "):
+        assert canonical_aisc_designation(written) == "W12X26"
+    assert canonical_aisc_designation("IPE 200") is None
+
+
+def test_an_aisc_fetch_verifies_caches_and_computes_the_section_from_geometry(
+    tmp_path, monkeypatch
+):
+    from anvilate.standards import profiles
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    table = fetch_aisc_profile_table(
+        retrieved="2026-09-27",
+        consent=True,
+        cache_dir=tmp_path,
+        opener=lambda _url: payload,
+    )
+    assert len(table) == 1
+    profile = table.get("w12x26")
+    section = profile.section()
+    assert section.area.to("in**2").magnitude == pytest.approx(7.65, rel=2e-3)
+    assert section.second_moment.to("in**4").magnitude == pytest.approx(204, rel=3e-3)
+    assert table.provenance.redistributable is False
+    assert profile.depth.citation.license == "LicenseRef-AISC-Terms"
+
+    def no_network(_url: str) -> bytes:
+        raise AssertionError("a cached AISC profile lookup touched the network")
+
+    again = fetch_aisc_profile_table(retrieved="2026-09-28", cache_dir=tmp_path, opener=no_network)
+    assert again.get("W12X26").section() == section
+
+
+def test_a_w_shape_is_not_guessed_before_the_workbook_is_fetched(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    assert cached_aisc_profile_table() is None
+    card = _card("W12x26")
+    refusal = next(entry for entry in card.entries if "W12x26" in entry.detail)
+    assert refusal.status.value == "not_evaluated"
+    assert "Fetch it once" in refusal.detail
+    assert not list(tmp_path.iterdir())
+
+
+def test_a_fetched_w_shape_screens_offline_and_records_fetch_provenance(tmp_path, monkeypatch):
+    import json
+
+    from anvilate.evidence import provenance_for
+    from anvilate.spec import load_spec_yaml
+    from anvilate.standards import profiles
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    table = fetch_aisc_profile_table(
+        retrieved="2026-09-27",
+        consent=True,
+        opener=lambda _url: payload,
+    )
+    explicit = json.dumps(table.get("W12X26").section().model_dump(mode="json"))
+    named, declared = _card("W12x26"), _card(explicit)
+    by_name = {entry.name: entry for entry in named.entries}
+    by_properties = {entry.name: entry for entry in declared.entries}
+    assert (
+        by_name["floor_beam bending"].safety_factor
+        == by_properties["floor_beam bending"].safety_factor
+    )
+
+    records = provenance_for(load_spec_yaml(_BEAM_SPEC.format(section="W12x26")))
+    (section,) = [record for record in records if record.kind == "section"]
+    assert section.ref == "W12x26"
+    assert section.name == "W12X26"
+    assert section.sources == ("AISC Shapes Database v16.0, test fixture",)
+
+
+def test_the_aisc_recipe_fetches_and_parses_the_publisher_workbook(tmp_path):
+    if not os.environ.get("ANVILATE_ALLOW_NETWORK"):
+        pytest.skip("set ANVILATE_ALLOW_NETWORK=1 to exercise the real AISC recipe")
+
+    table = fetch_aisc_profile_table(retrieved="2026-09-27", consent=True, cache_dir=tmp_path)
+    assert len(table) == 289
+    section = table.get("W12x26").section()
+    assert section.area.to("in**2").magnitude == pytest.approx(7.65, rel=2e-3)
+    assert section.second_moment.to("in**4").magnitude == pytest.approx(204, rel=3e-3)
 
 
 def test_every_dimension_carries_its_citation():

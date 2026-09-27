@@ -92,7 +92,7 @@ from ..standards import (
     AllowableBasis,
     MaterialsDatabase,
     default_materials_db,
-    default_profile_table,
+    resolve_profile,
 )
 from ..units import Quantity, spoken
 from ._guarded import (
@@ -188,21 +188,21 @@ _BLOCK_SHEAR_SHEAR_FRACTION = 0.6
 
 
 def _named_section(value: object) -> object:
-    """A profile designation such as ``IPE 200`` resolves to its section; anything else passes.
+    """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
-    Resolved from the bundled EN 10365 table with no network call. A name the table does not
-    hold is refused with the entries it nearly named, never read as some other section.
+    EN profiles are bundled. AISC W-shapes resolve only from the verified local cache; this
+    validator never downloads implicitly. A name no table holds is refused with near misses.
     """
     if isinstance(value, str):
         try:
-            return default_profile_table().get(value).section()
+            return resolve_profile(value).section()
         except LookupError as unknown:
             raise ValueError(str(unknown.args[0])) from None
     return value
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``).
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``).
 MemberSection = Annotated[
     CrossSection, BeforeValidator(_named_section, json_schema_input_type=str | CrossSection)
 ]

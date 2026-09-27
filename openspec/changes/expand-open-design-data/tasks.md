@@ -28,7 +28,11 @@
       temperature or environment, and `SpecimenMetadata` requires both. The cited paper
       (Int. J. Fatigue 2023, 107743) is behind a paywall. Ship it when a source states them,
       not by writing "room temperature" in
-- [ ] 2.4 AISC shapes fetch-on-first-use importer (checksum, provenance, never bundled)
+- [x] 2.4 AISC shapes fetch-on-first-use importer — the v16.0 publisher workbook is pinned
+      by SHA-256 and fetched only after explicit consent. Its W-shape geometry is parsed into
+      cited sections from the verified local cache; provenance travels into evidence, and the
+      existing release-content gate ensures the non-redistributable workbook never ships
+      (`standards/profiles.py`, `tests/test_profiles.py`)
 - [x] 2.5 Bundled EN-profile open data with citations — `standards/data/en_profiles.yaml`:
       the 42 EN 10365 IPE and HEA profiles as dimensions, CC0, each cited; properties computed
       with the root fillets and held to the published tabulations (tests/test_profiles.py)
@@ -52,9 +56,10 @@
       read; a provenance sidecar the cache is self-describing from; and the retrieval date
       stated by the caller, since nothing in the package may read the clock. The transport
       is injectable, so the whole flow is tested offline.
-- [ ] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data) — the bundled
-      half is done: `section: IPE 200` in a spec screens as the declared section and records
-      its source (tests/test_profiles.py). The post-fetch half follows the AISC importer (2.4)
+- [x] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data) — both routes
+      screen as the equivalent declared section and record their source. `section: IPE 200`
+      uses the bundled EN table; after one consented fetch, `section: W12x26` uses the verified
+      local AISC cache without touching the network (`tests/test_profiles.py`)
 - [x] 4.3 Docs: where each data class comes from, its basis, and its legal status —
       `docs/citations.md`, completed 2026-08-28. The three classes are each answered on
       that page: the **bundled** tables now by name rather than by count, in a table whose

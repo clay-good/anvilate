@@ -265,10 +265,11 @@ build rather than going stale in a document.
 | `tolerance/data/iso286_grades.yaml` | ISO 286-1 standard tolerance grades (IT grades) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/process_capability.yaml` | DFM screening estimates (typical finest achievable tolerances) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 
-Fetched data is not in that table, because none of it is in the package. One recipe ships
-today — the MUSE benchmark's case index (CC BY 4.0, pinned to a commit rather than a
-branch, since a leaderboard benchmark moves and a published score has to name the version
-it was measured against) — and what ships is the URL and the digest, never the payload.
+Fetched data is not in that table, because none of it is in the package. Two recipes ship:
+the MUSE benchmark's case index (CC BY 4.0, pinned to a commit rather than a branch, since a
+leaderboard benchmark moves and a published score has to name the version it was measured
+against), and the AISC Shapes Database v16.0 workbook (`LicenseRef-AISC-Terms`). What ships
+is the publisher URL and the digest, never either payload.
 
 ## A named profile is a cited section
 
@@ -290,8 +291,26 @@ leaves the fillets out and is 4% short on the area of an IPE 200. A test holds e
 profile to the published tabulations' own area and second moments: IPE to 0.1%, and HEA to
 0.5% because that tabulation rounds its areas. The evidence bundle records the section as a
 `section` source with the dataset's citation. A name the table does not hold is refused with
-the profiles it nearly named, and any other section is declared by its properties. AISC
-shapes are a fetch, not a bundle; that importer is still to come.
+the profiles it nearly named, and any other section is declared by its properties.
+
+AISC W-shapes use the same named-section path without redistributing AISC's workbook. The
+caller first records the user's consent and retrieval date:
+
+```python
+from anvilate.standards import fetch_aisc_profile_table
+
+fetch_aisc_profile_table(retrieved="2026-09-27", consent=True)
+```
+
+That call downloads the publisher's AISC Shapes Database v16.0 workbook, verifies its
+pinned SHA-256 digest, and stores the workbook and provenance sidecar in the local Anvilate
+data cache. A spec can then write `section: W12x26`; later runs resolve it offline from the
+verified cache. Anvilate reads the depth, flange width, web thickness, flange thickness and
+design k-distance, derives the root radius, and computes the section properties. It does not
+copy AISC's tabulated properties or substitute a nearby shape. Without the cached workbook,
+the check is `NOT_EVALUATED` and tells the caller how to fetch it or declare a locally sourced
+section. The workbook is recorded as `LicenseRef-AISC-Terms`, non-redistributable, and never
+ships in an Anvilate release.
 
 ## Data this library may read and may not ship
 
