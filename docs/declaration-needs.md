@@ -263,10 +263,11 @@ Every shared boolean branch selector across the analytical layer is structured t
 25 call sites reject truthy strings and numeric stand-ins by naming the exact flag and the
 engineering declaration that decides it: a boundary condition, load case, drawing, service
 record, manufacturer configuration, or governing design basis.
-The complete belt, roller-chain, and worm-drive input family follows the same contract.
-Its 57 refusal sites identify the rejected force, speed, geometry, tooth count, material
-property, or operating duty and point to the drive drawing, manufacturer catalogue,
-material/traction data, operating load case, or governing drive equation that can replace it.
+The complete belt, roller-chain, worm-drive, and gear input families follow the same contract.
+Their 130 refusal sites identify the rejected force, speed, geometry, tooth count, material
+property, rating factor, train layout, or operating duty and point to the drive or gearset
+drawing, manufacturer catalogue, material/traction data, rating basis, shaft-speed declaration,
+operating load case, or governing drive equation that can replace it.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

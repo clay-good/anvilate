@@ -36,6 +36,7 @@ from pydantic import BaseModel, ConfigDict
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s, revolutions_per_minute, revolutions_per_second
 from ._counting import whole_count_ceil
+from ._power_transmission import _drive_refusal
 from .contact import hertz_cylinder_contact
 
 # Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
@@ -45,6 +46,23 @@ _BARTH_FACTORS = {
     "hobbed": (3.56, True),
     "precision": (5.56, True),
 }
+
+_GEAR_GEOMETRY_SOURCE = "the gearset drawing or selected gear catalogue"
+_GEAR_LOAD_SOURCE = "the gearbox operating torque or load case"
+_GEAR_SPEED_SOURCE = "the shaft-speed declaration"
+_GEAR_RATING_SOURCE = "the AGMA/ISO rating basis and material property records"
+_GEAR_TRAIN_SOURCE = "the gearbox kinematic layout or gear-train drawing"
+
+
+def _gear_input_source(name: str) -> str:
+    if name in {"torque", "input_torque", "tangential_load"}:
+        return _GEAR_LOAD_SOURCE
+    if "speed" in name or "frequency" in name:
+        return _GEAR_SPEED_SOURCE
+    if name in {"allowable_stress", "modulus_pinion", "modulus_gear"}:
+        return _GEAR_RATING_SOURCE
+    return _GEAR_GEOMETRY_SOURCE
+
 
 __all__ = [
     "helical_face_contact_ratio",
@@ -93,10 +111,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_gear_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _drive_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gear_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -117,11 +141,17 @@ def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quant
     _require(torque, "[force] * [length]", "torque")
     _require(pitch_diameter, "[length]", "pitch_diameter")
     if pitch_diameter.to("mm").magnitude <= 0:
-        raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
+        raise _drive_refusal(
+            f"pitch_diameter must be positive; got {pitch_diameter}",
+            subject="pitch_diameter",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if torque.magnitude == 0:
-        raise ValueError(
+        raise _drive_refusal(
             "torque is zero: a gear transmitting no torque has no tangential load to "
-            "screen. That is nothing to evaluate, not a mesh at zero margin."
+            "screen. That is nothing to evaluate, not a mesh at zero margin.",
+            subject="torque",
+            source=_GEAR_LOAD_SOURCE,
         )
     # A reversing or back-driving mesh torque is real, and its magnitude is the load the
     # tooth carries. Left signed, this producer handed a negative W_t to three consumers
@@ -135,7 +165,11 @@ def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quant
 
 def _check_pressure_angle(pressure_angle: float) -> float:
     if not 0 < pressure_angle < 90:
-        raise ValueError(f"pressure_angle (degrees) must lie in (0, 90); got {pressure_angle}")
+        raise _drive_refusal(
+            f"pressure_angle (degrees) must lie in (0, 90); got {pressure_angle}",
+            subject="pressure_angle",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     return radians(pressure_angle)
 
 
@@ -187,7 +221,11 @@ def bevel_pitch_cone_angle(*, pinion_teeth: int, gear_teeth: int) -> float:
 
 def _check_cone_angle(pitch_cone_angle: float) -> float:
     if not 0 <= pitch_cone_angle < 90:
-        raise ValueError(f"pitch_cone_angle (degrees) must lie in [0, 90); got {pitch_cone_angle}")
+        raise _drive_refusal(
+            f"pitch_cone_angle (degrees) must lie in [0, 90); got {pitch_cone_angle}",
+            subject="pitch_cone_angle",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     return radians(pitch_cone_angle)
 
 
@@ -232,7 +270,11 @@ def bevel_gear_axial_load(
 
 def _check_helix_angle(helix_angle: float) -> float:
     if not 0 <= helix_angle < 90:
-        raise ValueError(f"helix_angle (degrees) must lie in [0, 90); got {helix_angle}")
+        raise _drive_refusal(
+            f"helix_angle (degrees) must lie in [0, 90); got {helix_angle}",
+            subject="helix_angle",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     return radians(helix_angle)
 
 
@@ -301,21 +343,33 @@ def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity)
     """
     _require(pitch_diameter, "[length]", "pitch_diameter")
     if not isinstance(rotational_speed, Quantity):
-        raise ValueError(
-            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}"
+        raise _drive_refusal(
+            f"rotational_speed must be a [frequency] quantity; got {rotational_speed!r}",
+            subject="rotational_speed",
+            source=_GEAR_SPEED_SOURCE,
         )
     if not rotational_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"rotational_speed must be a [frequency] quantity; got "
-            f"{rotational_speed.dimensionality} ({rotational_speed})"
+            f"{rotational_speed.dimensionality} ({rotational_speed})",
+            subject="rotational_speed",
+            source=_GEAR_SPEED_SOURCE,
         )
     d = pitch_diameter.to("m").magnitude
     # V = omega * r = pi * d * n
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
-        raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
+        raise _drive_refusal(
+            f"pitch_diameter must be positive; got {pitch_diameter}",
+            subject="pitch_diameter",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _drive_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_GEAR_SPEED_SOURCE,
+        )
     return Quantity(magnitude=omega * d / 2.0, unit="m/s")
 
 
@@ -332,19 +386,31 @@ def barth_velocity_factor(*, pitch_line_velocity: Quantity, quality: str = "cut"
     screen. Returns the dimensionless K_v (≥ 1).
     """
     if not isinstance(pitch_line_velocity, Quantity):
-        raise ValueError(
-            f"pitch_line_velocity must be a [velocity] quantity; got {pitch_line_velocity!r}"
+        raise _drive_refusal(
+            f"pitch_line_velocity must be a [velocity] quantity; got {pitch_line_velocity!r}",
+            subject="pitch_line_velocity",
+            source=_GEAR_SPEED_SOURCE,
         )
     if not pitch_line_velocity.has_dimension("[velocity]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"pitch_line_velocity must be a [velocity] quantity; got "
-            f"{pitch_line_velocity.dimensionality} ({pitch_line_velocity})"
+            f"{pitch_line_velocity.dimensionality} ({pitch_line_velocity})",
+            subject="pitch_line_velocity",
+            source=_GEAR_SPEED_SOURCE,
         )
     if quality not in _BARTH_FACTORS:
-        raise ValueError(f"quality must be one of {sorted(_BARTH_FACTORS)}; got {quality!r}")
+        raise _drive_refusal(
+            f"quality must be one of {sorted(_BARTH_FACTORS)}; got {quality!r}",
+            subject="gear manufacturing quality",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     v = pitch_line_velocity.to("m/s").magnitude
     if v < 0:
-        raise ValueError(f"pitch_line_velocity must be non-negative; got {pitch_line_velocity}")
+        raise _drive_refusal(
+            f"pitch_line_velocity must be non-negative; got {pitch_line_velocity}",
+            subject="pitch_line_velocity",
+            source=_GEAR_SPEED_SOURCE,
+        )
     a, use_sqrt = _BARTH_FACTORS[quality]
     return (a + (sqrt(v) if use_sqrt else v)) / a
 
@@ -370,11 +436,23 @@ def lewis_bending_stress(
     _require(module, "[length]", "module")
     _require(face_width, "[length]", "face_width")
     if module.to("mm").magnitude <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if face_width.to("mm").magnitude <= 0:
-        raise ValueError(f"face_width must be positive; got {face_width}")
+        raise _drive_refusal(
+            f"face_width must be positive; got {face_width}",
+            subject="face_width",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if form_factor <= 0:
-        raise ValueError(f"form_factor (Lewis Y) must be positive; got {form_factor}")
+        raise _drive_refusal(
+            f"form_factor (Lewis Y) must be positive; got {form_factor}",
+            subject="form_factor",
+            source=_GEAR_RATING_SOURCE,
+        )
     stress = tangential_load.pint / (face_width.pint * module.pint * form_factor)
     return Quantity(magnitude=float(stress.to("MPa").magnitude), unit="MPa")
 
@@ -398,11 +476,23 @@ def lewis_module_for_bending_stress(
     _require(face_width, "[length]", "face_width")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if face_width.to("mm").magnitude <= 0:
-        raise ValueError(f"face_width must be positive; got {face_width}")
+        raise _drive_refusal(
+            f"face_width must be positive; got {face_width}",
+            subject="face_width",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if form_factor <= 0:
-        raise ValueError(f"form_factor (Lewis Y) must be positive; got {form_factor}")
+        raise _drive_refusal(
+            f"form_factor (Lewis Y) must be positive; got {form_factor}",
+            subject="form_factor",
+            source=_GEAR_RATING_SOURCE,
+        )
     if allowable_stress.to("MPa").magnitude <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _drive_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_GEAR_RATING_SOURCE,
+        )
     module = tangential_load.pint / (face_width.pint * form_factor * allowable_stress.pint)
     return Quantity(magnitude=float(module.to("mm").magnitude), unit="mm")
 
@@ -438,11 +528,23 @@ def agma_bending_stress(
     _require(module, "[length]", "module")
     _require(face_width, "[length]", "face_width")
     if module.to("mm").magnitude <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if face_width.to("mm").magnitude <= 0:
-        raise ValueError(f"face_width must be positive; got {face_width}")
+        raise _drive_refusal(
+            f"face_width must be positive; got {face_width}",
+            subject="face_width",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor (AGMA Y_J) must be positive; got {geometry_factor}")
+        raise _drive_refusal(
+            f"geometry_factor (AGMA Y_J) must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_GEAR_RATING_SOURCE,
+        )
     factors = {
         "overload_factor": overload_factor,
         "dynamic_factor": dynamic_factor,
@@ -452,7 +554,11 @@ def agma_bending_stress(
     }
     for name, value in factors.items():
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _drive_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_GEAR_RATING_SOURCE,
+            )
     derating = (
         overload_factor
         * dynamic_factor
@@ -493,11 +599,23 @@ def agma_module_for_bending_stress(
     _require(face_width, "[length]", "face_width")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if face_width.to("mm").magnitude <= 0:
-        raise ValueError(f"face_width must be positive; got {face_width}")
+        raise _drive_refusal(
+            f"face_width must be positive; got {face_width}",
+            subject="face_width",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor (AGMA Y_J) must be positive; got {geometry_factor}")
+        raise _drive_refusal(
+            f"geometry_factor (AGMA Y_J) must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_GEAR_RATING_SOURCE,
+        )
     if allowable_stress.to("MPa").magnitude <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _drive_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_GEAR_RATING_SOURCE,
+        )
     factors = {
         "overload_factor": overload_factor,
         "dynamic_factor": dynamic_factor,
@@ -507,7 +625,11 @@ def agma_module_for_bending_stress(
     }
     for name, value in factors.items():
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _drive_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_GEAR_RATING_SOURCE,
+            )
     derating = (
         overload_factor
         * dynamic_factor
@@ -553,7 +675,11 @@ def gear_contact_stress(
     d1 = pinion_pitch_diameter.to("mm").magnitude
     d2 = gear_pitch_diameter.to("mm").magnitude
     if d1 <= 0 or d2 <= 0:
-        raise ValueError("pinion_pitch_diameter and gear_pitch_diameter must be positive")
+        raise _drive_refusal(
+            "pinion_pitch_diameter and gear_pitch_diameter must be positive",
+            subject="pinion and gear pitch diameters",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     normal_load = tangential_load.to("N").magnitude / cos(phi)
     result = hertz_cylinder_contact(
         force=Quantity(magnitude=normal_load, unit="N"),
@@ -604,17 +730,29 @@ def agma_contact_stress(
     _require(modulus_pinion, "[pressure]", "modulus_pinion")
     _require(modulus_gear, "[pressure]", "modulus_gear")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor (AGMA I) must be positive; got {geometry_factor}")
+        raise _drive_refusal(
+            f"geometry_factor (AGMA I) must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_GEAR_RATING_SOURCE,
+        )
     wt = tangential_load.to("N").magnitude
     dw1 = pinion_pitch_diameter.to("mm").magnitude
     b = face_width.to("mm").magnitude
     e1 = modulus_pinion.to("MPa").magnitude
     e2 = modulus_gear.to("MPa").magnitude
     if dw1 <= 0 or b <= 0 or e1 <= 0 or e2 <= 0:
-        raise ValueError("pinion_pitch_diameter, face_width, and both moduli must be positive")
+        raise _drive_refusal(
+            "pinion_pitch_diameter, face_width, and both moduli must be positive",
+            subject="gear contact geometry and elastic moduli",
+            source=_GEAR_RATING_SOURCE,
+        )
     for nu, name in ((poisson_pinion, "poisson_pinion"), (poisson_gear, "poisson_gear")):
         if not 0 <= nu < 0.5:
-            raise ValueError(f"{name} must be in [0, 0.5); got {nu}")
+            raise _drive_refusal(
+                f"{name} must be in [0, 0.5); got {nu}",
+                subject=name,
+                source=_GEAR_RATING_SOURCE,
+            )
     factors = {
         "overload_factor": overload_factor,
         "dynamic_factor": dynamic_factor,
@@ -624,7 +762,11 @@ def agma_contact_stress(
     }
     for name, value in factors.items():
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _drive_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_GEAR_RATING_SOURCE,
+            )
     elastic_coefficient = (
         1.0 / (pi * ((1.0 - poisson_pinion**2) / e1 + (1.0 - poisson_gear**2) / e2))
     ) ** 0.5
@@ -648,7 +790,11 @@ def _check_tooth_count(count: int, name: str) -> int:
     require_finite(count, name=name)
     whole = int(count)
     if whole != count or whole <= 0:
-        raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")
+        raise _drive_refusal(
+            f"{name} must be a positive whole number of teeth; got {count}",
+            subject=name,
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     return whole
 
 
@@ -684,12 +830,20 @@ def spur_gear_contact_ratio(
     phi = _check_pressure_angle(pressure_angle)
     m = module.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     a = m if addendum is None else addendum.to("mm").magnitude
     if addendum is not None:
         _require(addendum, "[length]", "addendum")
         if a <= 0:
-            raise ValueError(f"addendum must be positive; got {addendum}")
+            raise _drive_refusal(
+                f"addendum must be positive; got {addendum}",
+                subject="addendum",
+                source=_GEAR_GEOMETRY_SOURCE,
+            )
     r1 = m * n1 / 2.0
     r2 = m * n2 / 2.0
     rb1 = r1 * cos(phi)
@@ -719,7 +873,11 @@ def minimum_teeth_to_avoid_undercut(
     phi = _check_pressure_angle(pressure_angle)
     require_finite(addendum_coefficient, name="addendum_coefficient")
     if addendum_coefficient <= 0:
-        raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
+        raise _drive_refusal(
+            f"addendum_coefficient must be positive; got {addendum_coefficient}",
+            subject="addendum_coefficient",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     exact = 2.0 * addendum_coefficient / sin(phi) ** 2
     return whole_count_ceil(exact)
 
@@ -755,7 +913,11 @@ def involute_angle(*, involute_value: float) -> float:
     # literally the bracket's upper bound — as a pressure angle.
     require_finite(involute_value, name="involute_value")
     if involute_value < 0:
-        raise ValueError(f"involute_value must be non-negative; got {involute_value}")
+        raise _drive_refusal(
+            f"involute_value must be non-negative; got {involute_value}",
+            subject="involute_value",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if involute_value == 0:
         return 0.0
     # Newton alone is not safe here: tan(phi) has a pole at pi/2, so a step can throw the iterate
@@ -780,9 +942,11 @@ def involute_angle(*, involute_value: float) -> float:
         if abs(step) < 1e-15 and abs(tan(phi) - phi - involute_value) < 1e-14:
             break
     if abs(tan(phi) - phi - involute_value) > 1e-9 * max(1.0, involute_value):
-        raise ValueError(
+        raise _drive_refusal(
             f"could not invert the involute function for involute_value={involute_value}; the "
-            f"root does not lie in (0, 90) degrees"
+            f"root does not lie in (0, 90) degrees",
+            subject="involute_value",
+            source=_GEAR_GEOMETRY_SOURCE,
         )
     return degrees(phi)
 
@@ -814,10 +978,18 @@ def base_tangent_length(
     z = _check_tooth_count(teeth, "teeth")
     k = _check_tooth_count(teeth_spanned, "teeth_spanned")
     if k >= z:
-        raise ValueError(f"teeth_spanned ({teeth_spanned}) must be below teeth ({teeth})")
+        raise _drive_refusal(
+            f"teeth_spanned ({teeth_spanned}) must be below teeth ({teeth})",
+            subject="teeth_spanned",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     m = module.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     phi = _check_pressure_angle(pressure_angle)
     inv = tan(phi) - phi
     w_k = m * cos(phi) * ((k - 0.5) * pi + z * inv)
@@ -853,13 +1025,19 @@ def gear_tooth_thickness_at_radius(
     m = module.to("mm").magnitude
     r = radius.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     phi = _check_pressure_angle(pressure_angle)
     r_b = (m * z / 2.0) * cos(phi)
     if r < r_b:
-        raise ValueError(
+        raise _drive_refusal(
             f"radius ({radius}) must be at least the base radius ({r_b:.4f} mm); "
-            "there is no involute flank inside the base circle"
+            "there is no involute flank inside the base circle",
+            subject="radius",
+            source=_GEAR_GEOMETRY_SOURCE,
         )
     phi_r = acos(r_b / r)
     thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
@@ -871,10 +1049,12 @@ def gear_tooth_thickness_at_radius(
     # caller's own `> 0.3*m` comparison is never handed a number that would pass it by
     # being nonsense.
     if thickness <= 0:
-        raise ValueError(
+        raise _drive_refusal(
             f"radius ({radius}) is at or past the pointed radius of this tooth: the "
             f"involutes meet before it and the arc thickness comes out {thickness:.4f} mm. "
-            "Reduce the addendum or use more teeth"
+            "Reduce the addendum or use more teeth",
+            subject="radius and tooth geometry",
+            source=_GEAR_GEOMETRY_SOURCE,
         )
     return Quantity(magnitude=thickness, unit="mm")
 
@@ -890,7 +1070,11 @@ def gear_pitch_diameter(*, module: Quantity, teeth: int) -> Quantity:
     _require(module, "[length]", "module")
     m = module.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     n = _check_tooth_count(teeth, "teeth")
     return Quantity(magnitude=m * n, unit="mm")
 
@@ -906,7 +1090,11 @@ def gear_outside_diameter(
     outside diameter in mm.
     """
     if addendum_coefficient <= 0:
-        raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
+        raise _drive_refusal(
+            f"addendum_coefficient must be positive; got {addendum_coefficient}",
+            subject="addendum_coefficient",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     d = gear_pitch_diameter(module=module, teeth=teeth).to("mm").magnitude
     m = module.to("mm").magnitude
     return Quantity(magnitude=d + 2.0 * addendum_coefficient * m, unit="mm")
@@ -923,7 +1111,11 @@ def gear_root_diameter(
     addendum). Returns the root diameter in mm.
     """
     if dedendum_coefficient <= 0:
-        raise ValueError(f"dedendum_coefficient must be positive; got {dedendum_coefficient}")
+        raise _drive_refusal(
+            f"dedendum_coefficient must be positive; got {dedendum_coefficient}",
+            subject="dedendum_coefficient",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     d = gear_pitch_diameter(module=module, teeth=teeth).to("mm").magnitude
     m = module.to("mm").magnitude
     return Quantity(magnitude=d - 2.0 * dedendum_coefficient * m, unit="mm")
@@ -942,7 +1134,11 @@ def gear_center_distance(*, module: Quantity, pinion_teeth: int, gear_teeth: int
     _require(module, "[length]", "module")
     m = module.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
     n2 = _check_tooth_count(gear_teeth, "gear_teeth")
     return Quantity(magnitude=m * (n1 + n2) / 2.0, unit="mm")
@@ -962,7 +1158,11 @@ def gear_module_for_center_distance(
     _require(center_distance, "[length]", "center_distance")
     a = center_distance.to("mm").magnitude
     if a <= 0:
-        raise ValueError(f"center_distance must be positive; got {center_distance}")
+        raise _drive_refusal(
+            f"center_distance must be positive; got {center_distance}",
+            subject="center_distance",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
     n2 = _check_tooth_count(gear_teeth, "gear_teeth")
     return Quantity(magnitude=2.0 * a / (n1 + n2), unit="mm")
@@ -983,18 +1183,26 @@ def _operating_pressure_angle_rad(
     m = module.to("mm").magnitude
     a_w = operating_center_distance.to("mm").magnitude
     if m <= 0:
-        raise ValueError(f"module must be positive; got {module}")
+        raise _drive_refusal(
+            f"module must be positive; got {module}",
+            subject="module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if a_w <= 0:
-        raise ValueError(
-            f"operating_center_distance must be positive; got {operating_center_distance}"
+        raise _drive_refusal(
+            f"operating_center_distance must be positive; got {operating_center_distance}",
+            subject="operating_center_distance",
+            source=_GEAR_GEOMETRY_SOURCE,
         )
     phi = _check_pressure_angle(pressure_angle)
     a = m * (z1 + z2) / 2.0  # standard (reference) centre distance
     ratio = a * cos(phi) / a_w
     if ratio >= 1.0:
-        raise ValueError(
+        raise _drive_refusal(
             f"operating_center_distance ({operating_center_distance}) is below the base "
-            f"centre a*cos(phi) = {a * cos(phi):.4f} mm; the teeth cannot mesh"
+            f"centre a*cos(phi) = {a * cos(phi):.4f} mm; the teeth cannot mesh",
+            subject="operating_center_distance",
+            source=_GEAR_GEOMETRY_SOURCE,
         )
     return acos(ratio)
 
@@ -1085,26 +1293,34 @@ def gear_train_value(
     (loss-free) torque by |e| to get the output torque.
     """
     if not isinstance(driver_teeth, Sequence):
-        raise ValueError(
-            f"driver_teeth must be a sequence, not a single value; got {driver_teeth!r}"
+        raise _drive_refusal(
+            f"driver_teeth must be a sequence, not a single value; got {driver_teeth!r}",
+            subject="driver_teeth",
+            source=_GEAR_TRAIN_SOURCE,
         )
     if not isinstance(driven_teeth, Sequence):
-        raise ValueError(
-            f"driven_teeth must be a sequence, not a single value; got {driven_teeth!r}"
+        raise _drive_refusal(
+            f"driven_teeth must be a sequence, not a single value; got {driven_teeth!r}",
+            subject="driven_teeth",
+            source=_GEAR_TRAIN_SOURCE,
         )
     if len(driver_teeth) == 0 or len(driver_teeth) != len(driven_teeth):
-        raise ValueError(
+        raise _drive_refusal(
             f"driver_teeth and driven_teeth must be non-empty and equal length "
             f"(one entry per mesh); got {len(driver_teeth)} drivers and "
-            f"{len(driven_teeth)} driven"
+            f"{len(driven_teeth)} driven",
+            subject="gear-train tooth-count sequences",
+            source=_GEAR_TRAIN_SOURCE,
         )
     drivers = [_check_tooth_count(n, "driver_teeth entry") for n in driver_teeth]
     driven = [_check_tooth_count(n, "driven_teeth entry") for n in driven_teeth]
     mesh_count = len(driven)
     if not 0 <= internal_meshes <= mesh_count:
-        raise ValueError(
+        raise _drive_refusal(
             f"internal_meshes must lie in [0, {mesh_count}] for a {mesh_count}-mesh "
-            f"train; got {internal_meshes}"
+            f"train; got {internal_meshes}",
+            subject="internal_meshes",
+            source=_GEAR_TRAIN_SOURCE,
         )
     sign = -1.0 if (mesh_count - internal_meshes) % 2 else 1.0
     return sign * prod(drivers) / prod(driven)
@@ -1123,15 +1339,25 @@ def gear_train_efficiency(*, mesh_efficiencies: Sequence[float]) -> float:
     dimensionless overall efficiency.
     """
     if not isinstance(mesh_efficiencies, Sequence):
-        raise ValueError(
-            f"mesh_efficiencies must be a sequence, not a single value; got {mesh_efficiencies!r}"
+        raise _drive_refusal(
+            f"mesh_efficiencies must be a sequence, not a single value; got {mesh_efficiencies!r}",
+            subject="mesh_efficiencies",
+            source=_GEAR_RATING_SOURCE,
         )
     effs = list(mesh_efficiencies)
     if len(effs) == 0:
-        raise ValueError("mesh_efficiencies must contain at least one mesh")
+        raise _drive_refusal(
+            "mesh_efficiencies must contain at least one mesh",
+            subject="mesh_efficiencies",
+            source=_GEAR_RATING_SOURCE,
+        )
     for eff in effs:
         if not 0.0 < eff <= 1.0:
-            raise ValueError(f"each mesh efficiency must lie in (0, 1]; got {eff}")
+            raise _drive_refusal(
+                f"each mesh efficiency must lie in (0, 1]; got {eff}",
+                subject="mesh efficiency",
+                source=_GEAR_RATING_SOURCE,
+            )
     return prod(effs)
 
 
@@ -1176,14 +1402,18 @@ def planetary_planet_teeth(*, sun_teeth: int, ring_teeth: int) -> int:
     sun = _check_tooth_count(sun_teeth, "sun_teeth")
     ring = _check_tooth_count(ring_teeth, "ring_teeth")
     if ring <= sun:
-        raise ValueError(
+        raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
-            f"got ring {ring} vs sun {sun}"
+            f"got ring {ring} vs sun {sun}",
+            subject="sun and ring tooth counts",
+            source=_GEAR_TRAIN_SOURCE,
         )
     if (ring - sun) % 2:
-        raise ValueError(
+        raise _drive_refusal(
             f"no whole-tooth planet fits: ring_teeth - sun_teeth = {ring - sun} is odd, "
-            f"so N_p = (N_r - N_s)/2 is not a whole number"
+            f"so N_p = (N_r - N_s)/2 is not a whole number",
+            subject="sun and ring tooth counts",
+            source=_GEAR_TRAIN_SOURCE,
         )
     return (ring - sun) // 2
 
@@ -1202,20 +1432,28 @@ def planetary_can_assemble(*, sun_teeth: int, ring_teeth: int, planet_count: int
     ring = _check_tooth_count(ring_teeth, "ring_teeth")
     count = _check_tooth_count(planet_count, "planet_count")
     if ring <= sun:
-        raise ValueError(
+        raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
-            f"got ring {ring} vs sun {sun}"
+            f"got ring {ring} vs sun {sun}",
+            subject="sun and ring tooth counts",
+            source=_GEAR_TRAIN_SOURCE,
         )
     return (sun + ring) % count == 0
 
 
 def _check_speed(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [frequency] quantity; got {value!r}")
+        raise _drive_refusal(
+            f"{name} must be a [frequency] quantity; got {value!r}",
+            subject=name,
+            source=_GEAR_SPEED_SOURCE,
+        )
     if not value.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _drive_refusal(
             f"{name} must be a rotational-speed ([frequency]) quantity; got "
-            f"{value.dimensionality} ({value})"
+            f"{value.dimensionality} ({value})",
+            subject=name,
+            source=_GEAR_SPEED_SOURCE,
         )
     return revolutions_per_minute(value, name=name)
 
@@ -1249,16 +1487,20 @@ def planetary_speed(
     sun = _check_tooth_count(sun_teeth, "sun_teeth")
     ring = _check_tooth_count(ring_teeth, "ring_teeth")
     if ring <= sun:
-        raise ValueError(
+        raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
-            f"got ring {ring} vs sun {sun}"
+            f"got ring {ring} vs sun {sun}",
+            subject="sun and ring tooth counts",
+            source=_GEAR_TRAIN_SOURCE,
         )
     speeds = {"sun_speed": sun_speed, "carrier_speed": carrier_speed, "ring_speed": ring_speed}
     unknowns = [name for name, value in speeds.items() if value is None]
     if len(unknowns) != 1:
-        raise ValueError(
+        raise _drive_refusal(
             f"exactly one of sun_speed, carrier_speed, ring_speed must be None (the "
-            f"unknown to solve for); got {len(unknowns)} unknowns"
+            f"unknown to solve for); got {len(unknowns)} unknowns",
+            subject="planetary member speeds",
+            source=_GEAR_TRAIN_SOURCE,
         )
     (unknown,) = unknowns
     if unknown == "carrier_speed":
@@ -1319,14 +1561,20 @@ def planetary_torques(
     sun = _check_tooth_count(sun_teeth, "sun_teeth")
     ring = _check_tooth_count(ring_teeth, "ring_teeth")
     if ring <= sun:
-        raise ValueError(
+        raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
-            f"got ring {ring} vs sun {sun}"
+            f"got ring {ring} vs sun {sun}",
+            subject="sun and ring tooth counts",
+            source=_GEAR_TRAIN_SOURCE,
         )
     _require(input_torque, "[force] * [length]", "input_torque")
     ratios = {"sun": float(sun), "ring": float(ring), "carrier": -float(sun + ring)}
     if input_member not in ratios:
-        raise ValueError(f"input_member must be one of {sorted(ratios)}; got {input_member!r}")
+        raise _drive_refusal(
+            f"input_member must be one of {sorted(ratios)}; got {input_member!r}",
+            subject="input_member",
+            source=_GEAR_TRAIN_SOURCE,
+        )
     scale = input_torque.to("N*m").magnitude / ratios[input_member]
     return PlanetaryTorques(
         sun_torque=Quantity(magnitude=scale * ratios["sun"], unit="N*m"),
@@ -1348,7 +1596,11 @@ def gear_mesh_frequency(*, tooth_count: int, rotational_frequency: Quantity) -> 
     _require(rotational_frequency, "[frequency]", "rotational_frequency")
     fr = revolutions_per_second(rotational_frequency, name="rotational_frequency")
     if fr < 0:
-        raise ValueError("rotational_frequency must be non-negative")
+        raise _drive_refusal(
+            "rotational_frequency must be non-negative",
+            subject="rotational_frequency",
+            source=_GEAR_SPEED_SOURCE,
+        )
     return Quantity(magnitude=n * fr, unit="Hz")
 
 
@@ -1375,7 +1627,11 @@ def gear_tooth_repeat_frequency(
     _require(pinion_rotational_frequency, "[frequency]", "pinion_rotational_frequency")
     fr = revolutions_per_second(pinion_rotational_frequency, name="pinion_rotational_frequency")
     if fr < 0:
-        raise ValueError("pinion_rotational_frequency must be non-negative")
+        raise _drive_refusal(
+            "pinion_rotational_frequency must be non-negative",
+            subject="pinion_rotational_frequency",
+            source=_GEAR_SPEED_SOURCE,
+        )
     gmf = n_p * fr
     lcm = n_p * n_g // gcd(n_p, n_g)
     return Quantity(magnitude=gmf / lcm, unit="Hz")
@@ -1410,7 +1666,15 @@ def helical_face_contact_ratio(
     f = face_width.to("mm").magnitude
     mn = normal_module.to("mm").magnitude
     if f <= 0:
-        raise ValueError("face_width must be positive")
+        raise _drive_refusal(
+            "face_width must be positive",
+            subject="face_width",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     if mn <= 0:
-        raise ValueError("normal_module must be positive")
+        raise _drive_refusal(
+            "normal_module must be positive",
+            subject="normal_module",
+            source=_GEAR_GEOMETRY_SOURCE,
+        )
     return f * sin(psi) / (pi * mn)
