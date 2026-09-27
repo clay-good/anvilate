@@ -14248,6 +14248,98 @@ def test_tackle_mechanical_advantage_matches_the_tension_chain():
         tackle_mechanical_advantage(supporting_parts=4, sheave_efficiency=0.95, lead_sheaves=-1)
 
 
+@pytest.mark.parametrize(
+    ("invoke", "subject", "source"),
+    (
+        (
+            lambda r: r.sling_tension_factor(angle_from_horizontal=0),
+            "the angle_from_horizontal value 0",
+            "the sling arrangement drawing or measured sling geometry",
+        ),
+        (
+            lambda r: r.sling_leg_tension(
+                load=_q("10 kN"), number_of_legs=0, angle_from_horizontal=45
+            ),
+            "the number_of_legs value 0",
+            "the rigging plan and installed sling assembly",
+        ),
+        (
+            lambda r: r.tackle_mechanical_advantage(supporting_parts=0, sheave_efficiency=0.95),
+            "the supporting_parts value 0",
+            "the tackle reeving diagram",
+        ),
+        (
+            lambda r: r.tackle_mechanical_advantage(supporting_parts=4, sheave_efficiency=1.2),
+            "the sheave_efficiency value 1.2",
+            "the sheave manufacturer's data or a cited rigging handbook",
+        ),
+        (
+            lambda r: r.tackle_mechanical_advantage(
+                supporting_parts=4, sheave_efficiency=0.95, lead_sheaves=-1
+            ),
+            "the lead_sheaves value -1",
+            "the tackle reeving diagram between the moving block and lead line",
+        ),
+        (
+            lambda r: r.sling_leg_tension(load=10, number_of_legs=2, angle_from_horizontal=45),
+            "the sling or tackle load 10",
+            "the cited lifting load case or rigging plan",
+        ),
+        (
+            lambda r: r.sling_leg_tension(
+                load=_q("10 mm"), number_of_legs=2, angle_from_horizontal=45
+            ),
+            "the sling or tackle load 10 mm",
+            "a force quantity from the cited lifting load case or rigging plan",
+        ),
+        (
+            lambda r: r.sling_leg_tension(
+                load=_q("0 N"), number_of_legs=2, angle_from_horizontal=45
+            ),
+            "the sling or tackle load 0 N",
+            "a positive force from the cited lifting load case or rigging plan",
+        ),
+    ),
+)
+def test_every_rigging_input_refusal_carries_a_structured_remedy(invoke, subject, source):
+    from anvilate.analysis import rigging
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        invoke(rigging)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_rigging_input_refusal_site_requires_explicit_structured_fields():
+    import ast
+    import pathlib
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/rigging.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    structured = []
+    unstructured = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_RiggingInputError":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 8
+    assert unstructured == []
+    for call in structured:
+        assert {"action", "subject", "source"} <= {keyword.arg for keyword in call.keywords}, (
+            f"src/anvilate/analysis/rigging.py:{call.lineno}"
+        )
+
+
 def test_gasket_seating_and_operating_bolt_loads():
     from math import pi
 

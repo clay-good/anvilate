@@ -254,6 +254,10 @@ pattern errors, STEP/3MF exchange artifacts, measured-interface confirmation and
 audited-pattern construction, viewport arguments, geometry queries, and their CLI adapters
 name the rejected artifact, declaration, candidate, or argument and the schema, source CAD
 model, cited requirement, audited pattern, or supported grammar that can repair it.
+The complete multi-leg sling and block-and-tackle input family is structured as well:
+invalid angles, leg and rope-part counts, sheave efficiency, lead-sheave count, and load
+quantities identify the rejected argument and point to the rigging plan, sling geometry,
+reeving diagram, manufacturer data, or cited load case that supplies its correction.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
