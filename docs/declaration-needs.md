@@ -288,6 +288,9 @@ The complete geometric-optics family follows the contract at all 36 refusal site
 distances, apertures, wavelengths, refractive indices, dispersion data, and focus criteria point to
 the optical drawing, calibrated setup, lens catalogue, glass or spectral record, or governing
 optical design basis.
+The complete universal-joint family follows the contract at all three refusal sites. Invalid shaft
+misalignment angles point to the driveline drawing or measured operating geometry that supplies
+the correction.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

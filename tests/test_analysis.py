@@ -33910,6 +33910,50 @@ def test_universal_joint_speed_ratio_max_and_fluctuation():
         universal_joint_max_speed_ratio(shaft_angle=-5.0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs"),
+    (
+        ("universal_joint_speed_ratio", {"shaft_angle": 90.0, "input_angle": 0.0}),
+        ("universal_joint_max_speed_ratio", {"shaft_angle": -5.0}),
+        ("universal_joint_speed_fluctuation", {"shaft_angle": 90.0}),
+    ),
+)
+def test_universal_joint_refusals_carry_structured_remedies(function_name, kwargs):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": "shaft_angle",
+        "source": "the driveline drawing or measured operating geometry",
+    }
+
+
+def test_every_universal_joint_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/universal_joint.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_universal_joint_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 3
+    assert unstructured == []
+
+
 def test_sunset_hour_angle_and_daylight_hours():
     from anvilate.analysis import daylight_hours, sunset_hour_angle
 

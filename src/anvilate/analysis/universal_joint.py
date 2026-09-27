@@ -23,6 +23,28 @@ from __future__ import annotations
 
 from math import cos, radians, sin
 
+from ..refusal import RefusalError, Remedy
+
+_DRIVELINE_GEOMETRY_SOURCE = "the driveline drawing or measured operating geometry"
+
+
+class _UniversalJointInputError(RefusalError, ValueError):
+    """A universal-joint input that cannot be used without correction."""
+
+
+def _universal_joint_refusal(message: str) -> _UniversalJointInputError:
+    return _UniversalJointInputError(
+        message,
+        remedies=(
+            Remedy(
+                action="replace",
+                subject="shaft_angle",
+                source=_DRIVELINE_GEOMETRY_SOURCE,
+            ),
+        ),
+    )
+
+
 __all__ = [
     "universal_joint_max_speed_ratio",
     "universal_joint_speed_fluctuation",
@@ -39,7 +61,7 @@ def universal_joint_speed_ratio(*, shaft_angle: float, input_angle: float) -> fl
     twice per revolution. Returns the speed ratio as a plain float.
     """
     if not 0.0 <= shaft_angle < 90.0:
-        raise ValueError(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
+        raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     beta = radians(shaft_angle)
     theta = radians(input_angle)
     return cos(beta) / (1.0 - sin(beta) ** 2 * cos(theta) ** 2)
@@ -54,7 +76,7 @@ def universal_joint_max_speed_ratio(*, shaft_angle: float) -> float:
     float (≥ 1).
     """
     if not 0.0 <= shaft_angle < 90.0:
-        raise ValueError(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
+        raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     return 1.0 / cos(radians(shaft_angle))
 
 
@@ -67,6 +89,6 @@ def universal_joint_speed_fluctuation(*, shaft_angle: float) -> float:
     cancel the ripple. Returns the fluctuation as a plain float.
     """
     if not 0.0 <= shaft_angle < 90.0:
-        raise ValueError(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
+        raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     c = cos(radians(shaft_angle))
     return 1.0 / c - c
