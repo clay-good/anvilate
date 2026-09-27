@@ -135,7 +135,8 @@ def _kernel() -> Any:
         import build123d
     except ImportError as failure:  # pragma: no cover - exercised without the geometry extra
         raise GeometryUnavailable(
-            "keepout bodies need the optional dependency; install anvilate[geometry]"
+            "keepout bodies need the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for keepout-body construction",
         ) from failure
     return build123d
 

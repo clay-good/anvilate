@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import base64
+import pathlib
 import re
 from hashlib import sha256
 from math import pi
@@ -312,12 +314,49 @@ def test_step_writer_restores_the_process_global_schema(tmp_path):
 
 
 def test_step_writer_refuses_an_unknown_schema_without_writing(tmp_path):
+    from anvilate.refusal import RefusalError
+
     path = tmp_path / "base.step"
 
-    with pytest.raises(GeometryError, match="choose ap242 or ap214"):
+    with pytest.raises(GeometryError, match="choose ap242 or ap214") as refused:
         write_step(build_base_plate(_plate()), path, authorization=_STEP_AUTH, schema="ap203")
 
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "select"
+    assert remedy.subject == "the STEP schema 'ap203'"
+    assert "AP242 and AP214" in remedy.source
     assert not path.exists()
+
+
+def test_migrated_geometry_refusals_require_explicit_structured_fields():
+    root = pathlib.Path(__file__).parents[1]
+    sites: list[tuple[pathlib.Path, ast.Call]] = []
+    for relative in (
+        pathlib.Path("src/anvilate/geometry.py"),
+        pathlib.Path("src/anvilate/keepouts.py"),
+    ):
+        path = root / relative
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Raise)
+                and isinstance(node.exc, ast.Call)
+                and isinstance(node.exc.func, ast.Name)
+                and node.exc.func.id
+                in {"_ExchangeGeometryError", "GeometryUnavailable", "UnsupportedGeometry"}
+            ):
+                sites.append((relative, node.exc))
+
+    assert len(sites) == 41
+    for path, call in sites:
+        keywords = {keyword.arg for keyword in call.keywords}
+        required = {"subject"}
+        if call.func.id != "GeometryUnavailable":
+            required.add("source")
+        if call.func.id == "_ExchangeGeometryError":
+            required.add("action")
+        assert required <= keywords, f"{path}:{call.lineno}"
 
 
 @pytest.mark.parametrize(
@@ -341,8 +380,13 @@ def test_pattern_refuses_a_base_plate_without_thickness():
 
 
 def test_registry_refuses_an_element_without_an_audited_pattern():
-    with pytest.raises(UnsupportedGeometry, match="lifting_lug"):
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(UnsupportedGeometry, match="lifting_lug") as refused:
         build_spec(_spec(element_type="lifting_lug"))
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    assert refused.value.remedies[0].subject == "the element_type 'lifting_lug'"
 
 
 def test_rectangular_cover_plate_is_one_tagged_solid_with_exact_volume():

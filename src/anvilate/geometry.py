@@ -34,6 +34,7 @@ from .packs.industrial import CoverPlate
 from .packs.machinery import TransmissionShaft
 from .packs.structural import BasePlate
 from .packs.timber import TimberBeam
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import CircularLocator, DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
@@ -109,12 +110,40 @@ class GeometryError(ValueError):
     """A spec cannot produce valid geometry."""
 
 
-class GeometryUnavailable(GeometryError):
+class GeometryUnavailable(RefusalError, GeometryError):
     """The optional geometry runtime is not installed."""
 
+    def __init__(self, message: str, *, subject: str) -> None:
+        super().__init__(
+            message,
+            remedies=(
+                Remedy(
+                    action="install",
+                    subject=subject,
+                    source="the anvilate[geometry] optional dependency",
+                ),
+            ),
+        )
 
-class UnsupportedGeometry(GeometryError):
+
+class UnsupportedGeometry(RefusalError, GeometryError):
     """No audited geometry pattern exists for the requested element type."""
+
+    def __init__(self, message: str, *, subject: str, source: str) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action="select", subject=subject, source=source),),
+        )
+
+
+class _ExchangeGeometryError(RefusalError, GeometryError):
+    """An imported or exported exchange-geometry artifact cannot be used."""
+
+    def __init__(self, message: str, *, action: str, subject: str, source: str) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action=action, subject=subject, source=source),),
+        )
 
 
 class GeometrySummary(StatableModel):
@@ -847,9 +876,19 @@ def _read_step_geometry(path: Path) -> Any:
 
     reader = STEPControl_Reader()
     if reader.ReadFile(str(path)) != IFSelect_RetDone:
-        raise GeometryError(f"could not import STEP file {path}: the reader rejected it")
+        raise _ExchangeGeometryError(
+            f"could not import STEP file {path}: the reader rejected it",
+            action="replace",
+            subject=f"the STEP file {path}",
+            source="an ISO 10303-21 file readable by the installed geometry kernel",
+        )
     if reader.TransferRoots() < 1:
-        raise GeometryError(f"could not import STEP file {path}: it transfers no shape")
+        raise _ExchangeGeometryError(
+            f"could not import STEP file {path}: it transfers no shape",
+            action="replace",
+            subject=f"the STEP file {path}",
+            source="an ISO 10303-21 file containing transferable B-Rep geometry",
+        )
     shape = reader.OneShape()
     if shape.ShapeType() == TopAbs_COMPOUND:
         return Compound(shape)
@@ -875,14 +914,25 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         from OCP.Message import Message  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP interface detection needs the optional dependency; install anvilate[geometry]"
+            "STEP interface detection needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for STEP interface detection",
         ) from failure
     try:
         source_bytes = path.read_bytes()
     except OSError as failure:
-        raise GeometryError(f"could not read STEP file {path}: {failure}") from failure
+        raise _ExchangeGeometryError(
+            f"could not read STEP file {path}: {failure}",
+            action="make readable",
+            subject=f"the STEP file {path}",
+            source="the file path and permissions supplied for STEP interface detection",
+        ) from failure
     if not source_bytes.lstrip().startswith(b"ISO-10303-21;"):
-        raise GeometryError(f"could not import STEP file {path}: missing ISO-10303-21 header")
+        raise _ExchangeGeometryError(
+            f"could not import STEP file {path}: missing ISO-10303-21 header",
+            action="replace",
+            subject=f"the exchange file {path}",
+            source="an ISO 10303-21 STEP file with its required header",
+        )
     try:
         # OCCT writes parser diagnostics through process-global printers, bypassing the
         # caller's stdout stream. Remove them only while this locked import runs so JSON
@@ -900,7 +950,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
     except GeometryError:
         raise  # already says which file and why
     except Exception as failure:
-        raise GeometryError(f"could not import STEP file {path}: {failure}") from failure
+        raise _ExchangeGeometryError(
+            f"could not import STEP file {path}: {failure}",
+            action="replace or repair",
+            subject=f"the STEP file {path}",
+            source="ISO 10303-21 and the installed geometry kernel's import requirements",
+        ) from failure
     solids = list(shape.solids())
     if (
         not shape.is_valid
@@ -908,11 +963,14 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         or any(not solid.is_valid or solid.volume <= 0 for solid in solids)
     ):
         unusable = sum(1 for solid in solids if not solid.is_valid or solid.volume <= 0)
-        raise GeometryError(
+        raise _ExchangeGeometryError(
             "STEP interface detection needs valid positive-volume solids; the file has "
             f"{len(solids)} solid(s), {unusable} of them invalid or empty"
             + ("" if shape.is_valid else ", and its shape as a whole is not valid")
-            + ". A file carrying only tessellated or surface geometry has no solid to read"
+            + ". A file carrying only tessellated or surface geometry has no solid to read",
+            action="replace or repair",
+            subject=f"the solid geometry in STEP file {path}",
+            source="a valid positive-volume B-Rep solid in the source CAD model",
         )
     records = []
     for solid in solids:
@@ -925,9 +983,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         }
         records.append((_candidate_id("solid", signature), solid, volume, center, minimum, maximum))
     if len({record[0] for record in records}) != len(solids):
-        raise GeometryError(
+        raise _ExchangeGeometryError(
             "STEP interface detection cannot distinguish coincident solids with identical "
-            "measured geometry"
+            "measured geometry",
+            action="separate or identify",
+            subject=f"the coincident solids in STEP file {path}",
+            source="distinct B-Rep placement or geometry in the source assembly",
         )
     solid_ids = {
         solid_id: solid for solid_id, solid, _volume, _center, _minimum, _maximum in records
@@ -954,9 +1015,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         try:
             overlap = first_solid & second_solid
         except Exception as failure:
-            raise GeometryError(
+            raise _ExchangeGeometryError(
                 f"could not measure solid interference between {first_solid_id} and "
-                f"{second_solid_id}: {failure}"
+                f"{second_solid_id}: {failure}",
+                action="repair",
+                subject=f"the B-Rep pair {first_solid_id} and {second_solid_id}",
+                source=f"the exact imported topology in STEP file {path}",
             ) from failure
         if overlap is None or float(overlap.volume) <= 1e-9:
             continue
@@ -1026,8 +1090,11 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 if any(face.is_same(cylinder) for face in solid.faces())
             ]
             if len(containing) != 1:
-                raise GeometryError(
-                    "a cylindrical face could not be assigned to one imported solid"
+                raise _ExchangeGeometryError(
+                    "a cylindrical face could not be assigned to one imported solid",
+                    action="repair",
+                    subject="the ambiguous cylindrical face in the imported assembly",
+                    source=f"one owning solid in STEP file {path}",
                 )
             axis_origin, axis_direction = _canonical_axis(axis_point, direction)
             positions = sorted(
@@ -1113,7 +1180,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             if any(face.is_same(plane.face) for face in solid.faces())
         ]
         if len(containing) != 1:
-            raise GeometryError("a planar face could not be assigned to exactly one imported solid")
+            raise _ExchangeGeometryError(
+                "a planar face could not be assigned to exactly one imported solid",
+                action="repair",
+                subject="the ambiguous planar face in the imported assembly",
+                source=f"exactly one owning solid in STEP file {path}",
+            )
         solid_id = containing[0] if len(solids) > 1 else None
         center = _rounded_point(plane.center)
         normal = _rounded_point(plane.normal)
@@ -1260,9 +1332,12 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                     aligned_second = second_plane.face.moved(Location(translation))
                 overlap = first_plane.face & aligned_second
             except Exception as failure:
-                raise GeometryError(
+                raise _ExchangeGeometryError(
                     f"could not measure planar overlap between {endpoints[0][1]} and "
-                    f"{endpoints[1][1]}: {failure}"
+                    f"{endpoints[1][1]}: {failure}",
+                    action="repair",
+                    subject=f"the planar face pair {endpoints[0][1]} and {endpoints[1][1]}",
+                    source=f"the exact imported topology in STEP file {path}",
                 ) from failure
             if overlap is None:
                 continue
@@ -1890,7 +1965,8 @@ def _kernel():
         from build123d import Align, Box, Cylinder, export_step
     except ImportError as failure:  # pragma: no cover - exercised without the geometry extra
         raise GeometryUnavailable(
-            "3D geometry needs the optional dependency; install anvilate[geometry]"
+            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for audited solid construction",
         ) from failure
     return Align, Box, Cylinder, export_step
 
@@ -2123,7 +2199,9 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
     tag = spec.element_type or "<undeclared>"
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {tag!r}; "
-        "supported: base_plate, cover_plate, transmission_shaft, timber_beam"
+        "supported: base_plate, cover_plate, transmission_shaft, timber_beam",
+        subject=f"the element_type {tag!r}",
+        source="the audited geometry pattern registry",
     )
 
 
@@ -2235,7 +2313,11 @@ def render_viewport(
         TRANSMISSION_SHAFT_PATTERN,
         TIMBER_BEAM_PATTERN,
     }:
-        raise UnsupportedGeometry(f"viewport rendering has no projector for {built.pattern!r}")
+        raise UnsupportedGeometry(
+            f"viewport rendering has no projector for {built.pattern!r}",
+            subject=f"the viewport pattern {built.pattern!r}",
+            source="a pattern with an audited viewport projector",
+        )
     if not 64 <= width_px <= 4096:
         raise GeometryError(f"viewport width_px must be from 64 through 4096; got {width_px}")
     if view not in {"iso", "front", "top", "right"}:
@@ -2413,9 +2495,12 @@ def _semantic_pmi(
 
     def faces(tag: str) -> Any:
         if tag not in built.faces:
-            raise GeometryError(
+            raise _ExchangeGeometryError(
                 f"a geometric tolerance names '{tag}', which the {built.pattern} solid does not "
-                f"tag; it tags {sorted(built.faces)}"
+                f"tag; it tags {sorted(built.faces)}",
+                action="replace",
+                subject=f"the AP242 PMI face tag {tag!r}",
+                source=f"a face tag exposed by the {built.pattern} geometry pattern",
             )
         sequence = TDF_LabelSequence()
         for face in built.faces[tag]:
@@ -2488,7 +2573,8 @@ def _write_step_shape(
         from OCP.XSControl import XSControl_WorkSession  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "3D geometry needs the optional dependency; install anvilate[geometry]"
+            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for STEP writing",
         ) from failure
 
     with _STEP_IO_LOCK:
@@ -2514,7 +2600,12 @@ def _write_step_shape(
         try:
             setting = "AP242DIS" if schema == "ap242" else "AP214IS"
             if not Interface_Static.SetCVal_s("write.step.schema", setting):
-                raise GeometryError(f"the installed geometry kernel cannot select {schema.upper()}")
+                raise _ExchangeGeometryError(
+                    f"the installed geometry kernel cannot select {schema.upper()}",
+                    action="install or select",
+                    subject=f"STEP schema {schema.upper()}",
+                    source="a geometry kernel supporting the requested STEP schema",
+                )
             messenger = Message.DefaultMessenger_s()
             for printer in messenger.Printers():
                 printer.SetTraceLevel(Message_Gravity.Message_Fail)
@@ -2523,9 +2614,19 @@ def _write_step_shape(
             writer.SetPropsMode(True)
             writer.SetDimTolMode(bool(tolerances))
             if not writer.Transfer(document, STEPControl_StepModelType.STEPControl_AsIs):
-                raise GeometryError("STEP writer could not transfer the built solid")
+                raise _ExchangeGeometryError(
+                    "STEP writer could not transfer the built solid",
+                    action="repair",
+                    subject=f"the {built.name} solid supplied to the STEP writer",
+                    source="valid transferable B-Rep geometry from the audited pattern",
+                )
             if writer.Write(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
-                raise GeometryError("STEP writer could not write the built solid")
+                raise _ExchangeGeometryError(
+                    "STEP writer could not write the built solid",
+                    action="make writable",
+                    subject=f"the STEP output {path}",
+                    source="the requested output path and filesystem permissions",
+                )
         except BaseException:
             # BaseException, not Exception: a Ctrl-C mid-write is a KeyboardInterrupt, and
             # it used to leave a truncated STEP file at the path a finished one belongs at.
@@ -2552,25 +2653,39 @@ def read_step_validation_properties(path: Path) -> StepValidationProperties:
         )
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP validation needs the optional dependency; install anvilate[geometry]"
+            "STEP validation needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for STEP validation-property reading",
         ) from failure
 
     with _STEP_IO_LOCK:
         reader = STEPCAFControl_Reader()
         reader.SetPropsMode(True)
         if reader.ReadFile(str(path)) != IFSelect_ReturnStatus.IFSelect_RetDone:
-            raise GeometryError(f"could not read STEP file {path}")
+            raise _ExchangeGeometryError(
+                f"could not read STEP file {path}",
+                action="replace or repair",
+                subject=f"the STEP file {path}",
+                source="an ISO 10303-21 file readable by the installed geometry kernel",
+            )
         document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
         application = XCAFApp_Application.GetApplication_s()
         application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"), document)
         application.InitDocument(document)
         if not reader.Transfer(document):
-            raise GeometryError(f"could not transfer STEP file {path}")
+            raise _ExchangeGeometryError(
+                f"could not transfer STEP file {path}",
+                action="replace or repair",
+                subject=f"the STEP geometry in {path}",
+                source="transferable B-Rep geometry in the source CAD file",
+            )
         labels = TDF_LabelSequence()
         XCAFDoc_DocumentTool.ShapeTool_s(document.Main()).GetFreeShapes(labels)
         if labels.Length() != 1:
-            raise GeometryError(
-                f"STEP integrity verification needs one part; found {labels.Length()}"
+            raise _ExchangeGeometryError(
+                f"STEP integrity verification needs one part; found {labels.Length()}",
+                action="supply",
+                subject=f"one part in STEP file {path}",
+                source="the single-part STEP integrity-verification contract",
             )
         label = labels.Value(1)
         area = XCAFDoc_Area()
@@ -2586,7 +2701,12 @@ def read_step_validation_properties(path: Path) -> StepValidationProperties:
             if not label.FindAttribute(attribute_type.GetID_s(), attribute)
         ]
         if missing:
-            raise GeometryError("STEP is missing validation properties: " + ", ".join(missing))
+            raise _ExchangeGeometryError(
+                "STEP is missing validation properties: " + ", ".join(missing),
+                action="write",
+                subject=f"the missing {', '.join(missing)} properties in {path}",
+                source=_GVP_RECOMMENDED_PRACTICE,
+            )
         point = centroid.Get()
         properties = StepValidationProperties(
             volume_mm3=float(volume.Get()),
@@ -2599,9 +2719,19 @@ def read_step_validation_properties(path: Path) -> StepValidationProperties:
             *properties.centroid_mm,
         )
         if not all(isfinite(value) for value in values):
-            raise GeometryError("STEP validation properties must all be finite")
+            raise _ExchangeGeometryError(
+                "STEP validation properties must all be finite",
+                action="replace",
+                subject=f"the non-finite validation properties in {path}",
+                source=_GVP_RECOMMENDED_PRACTICE,
+            )
         if properties.volume_mm3 <= 0 or properties.surface_area_mm2 <= 0:
-            raise GeometryError("STEP volume and surface-area properties must be positive")
+            raise _ExchangeGeometryError(
+                "STEP volume and surface-area properties must be positive",
+                action="replace",
+                subject=f"the volume and surface-area properties in {path}",
+                source=_GVP_RECOMMENDED_PRACTICE,
+            )
         return properties
 
 
@@ -2611,12 +2741,18 @@ def verify_step_integrity(path: Path) -> StepValidationProperties:
         from build123d import CenterOf
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP validation needs the optional dependency; install anvilate[geometry]"
+            "STEP validation needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for STEP integrity verification",
         ) from failure
     expected = read_step_validation_properties(path)
     received = _read_step_geometry(path)
     if not received.is_valid or len(received.solids()) != 1:
-        raise GeometryError("received STEP geometry is not one valid solid")
+        raise _ExchangeGeometryError(
+            "received STEP geometry is not one valid solid",
+            action="replace or repair",
+            subject=f"the received geometry in STEP file {path}",
+            source="one valid B-Rep solid under the STEP integrity-verification contract",
+        )
     volume_deviation = abs(float(received.volume) - expected.volume_mm3) / expected.volume_mm3
     area_deviation = (
         abs(float(received.area) - expected.surface_area_mm2) / expected.surface_area_mm2
@@ -2640,7 +2776,12 @@ def verify_step_integrity(path: Path) -> StepValidationProperties:
             f"centroid differs by {centroid_deviation:g} mm (limit {centroid_limit:g} mm)"
         )
     if failures:
-        raise GeometryError("STEP geometric validation failed: " + "; ".join(failures))
+        raise _ExchangeGeometryError(
+            "STEP geometric validation failed: " + "; ".join(failures),
+            action="regenerate or repair",
+            subject=f"the geometric validation properties in STEP file {path}",
+            source=_GVP_RECOMMENDED_PRACTICE,
+        )
     return expected
 
 
@@ -2660,26 +2801,47 @@ def write_step(
     semantic PMI, so tolerances with ``schema="ap214"`` are refused rather than dropped.
     """
     if not built.is_valid:
-        raise GeometryError("refusing to write invalid geometry")
+        raise _ExchangeGeometryError(
+            "refusing to write invalid geometry",
+            action="repair",
+            subject=f"the invalid {built.name} geometry",
+            source="the audited pattern's positive-volume solid checks",
+        )
     if tolerances and schema != "ap242":
-        raise GeometryError(
+        raise _ExchangeGeometryError(
             "semantic PMI is an AP242 construct and AP214 cannot carry it; write AP242, or "
-            "write AP214 without the tolerances"
+            "write AP214 without the tolerances",
+            action="select",
+            subject="AP242 for the STEP export with semantic PMI",
+            source="the STEP schema's semantic-PMI capability",
         )
     if schema not in {"ap242", "ap214"}:
-        raise GeometryError(f"unsupported STEP schema {schema!r}; choose ap242 or ap214")
+        raise _ExchangeGeometryError(
+            f"unsupported STEP schema {schema!r}; choose ap242 or ap214",
+            action="select",
+            subject=f"the STEP schema {schema!r}",
+            source="the supported AP242 and AP214 export schemas",
+        )
     _write_step_shape(built, path, schema=schema, tolerances=tuple(tolerances))
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as failure:
         path.unlink(missing_ok=True)
-        raise GeometryError(
-            "STEP writer produced a non-UTF-8 file; refusing to release it"
+        raise _ExchangeGeometryError(
+            "STEP writer produced a non-UTF-8 file; refusing to release it",
+            action="regenerate",
+            subject=f"the STEP output {path}",
+            source="the UTF-8 STEP post-processing contract",
         ) from failure
     expected_schema = _AP242_SCHEMA if schema == "ap242" else _AP214_SCHEMA
     if expected_schema not in text:
         path.unlink(missing_ok=True)
-        raise GeometryError(f"STEP writer did not declare {schema.upper()}; refusing to release it")
+        raise _ExchangeGeometryError(
+            f"STEP writer did not declare {schema.upper()}; refusing to release it",
+            action="regenerate",
+            subject=f"the schema declaration in STEP output {path}",
+            source=f"the requested {schema.upper()} export schema",
+        )
     descriptions = [
         "Open CASCADE Model",
         _GVP_RECOMMENDED_PRACTICE,
@@ -2704,8 +2866,11 @@ def write_step(
     )
     if products_changed != 1 or descriptions_changed != 1 or filename_changed != 1:
         path.unlink(missing_ok=True)
-        raise GeometryError(
-            "STEP writer produced an unrecognized header; refusing an unstamped file"
+        raise _ExchangeGeometryError(
+            "STEP writer produced an unrecognized header; refusing an unstamped file",
+            action="regenerate",
+            subject=f"the product, description, and filename header in {path}",
+            source="the deterministic STEP identification and authorization metadata contract",
         )
     path.write_text(text, encoding="utf-8")
     try:
@@ -2732,11 +2897,26 @@ def render_3mf(
     from .export.threemf import render_mesh_3mf
 
     if not built.is_valid:
-        raise GeometryError("refusing to write invalid geometry")
+        raise _ExchangeGeometryError(
+            "refusing to write invalid geometry",
+            action="repair",
+            subject=f"the invalid {built.name} geometry",
+            source="the audited pattern's positive-volume solid checks",
+        )
     if isinstance(tolerance_mm, bool) or not isinstance(tolerance_mm, int | float):
-        raise GeometryError(f"tolerance_mm must be a number of millimetres; got {tolerance_mm!r}")
+        raise _ExchangeGeometryError(
+            f"tolerance_mm must be a number of millimetres; got {tolerance_mm!r}",
+            action="replace",
+            subject=f"the 3MF tessellation tolerance {tolerance_mm!r}",
+            source="a numeric millimetre tolerance from 0 through 1",
+        )
     if not 0 < tolerance_mm <= 1.0:
-        raise GeometryError(f"tolerance_mm must lie in (0, 1] mm; got {tolerance_mm!r}")
+        raise _ExchangeGeometryError(
+            f"tolerance_mm must lie in (0, 1] mm; got {tolerance_mm!r}",
+            action="replace",
+            subject=f"the 3MF tessellation tolerance {tolerance_mm!r}",
+            source="a numeric millimetre tolerance in the interval (0, 1]",
+        )
     raw_vertices, raw_triangles = built.shape.tessellate(tolerance_mm, 0.1)
     welded: dict[tuple[float, float, float], int] = {}
     remap: list[int] = []
@@ -2753,9 +2933,12 @@ def render_3mf(
         ) / 6
     solid = built.volume_mm3
     if signed <= 0 or abs(signed - solid) > 0.01 * solid:
-        raise GeometryError(
+        raise _ExchangeGeometryError(
             f"the tessellation encloses {signed:.6g} mm^3 and the solid {solid:.6g} mm^3; a "
-            "mesh that does not hold the solid's volume, facing outward, is not the part"
+            "mesh that does not hold the solid's volume, facing outward, is not the part",
+            action="regenerate or repair",
+            subject=f"the tessellated mesh for {built.name}",
+            source="the closed, outward-facing 3MF mesh and 1% solid-volume agreement checks",
         )
     return render_mesh_3mf(
         vertices=vertices, triangles=triangles, name=built.name, authorization=authorization
