@@ -54,6 +54,24 @@ transcript, which scores incomplete.
 with the system prompt, the retry policy and the context window as much as with the model,
 so a number recorded without them cannot be compared with another one.
 
+`default_versioned_task_set()` wraps the published corpus in `AgentTaskSet` version 1.0.0.
+`evaluate_task_set()` retains that version and the complete ordered task-id list beside the
+report; an `AgentEvaluation` refuses a report that silently drops or adds a task.
+
+## The recommendation joins both evidence sets
+
+`assess_local_model_recommendation()` accepts a compilation-gate decision, a versioned
+agent evaluation, and an explicit `AgentRecommendationPolicy`. It refuses mismatched model
+names and task-set versions, then applies completion, mean-iteration, and tool-call-error
+thresholds independently. No threshold has a library default, and the result has no
+composite score.
+
+Nothing attempted remains not evaluated: a run with no completed task fails the completion
+gate and has no mean iteration count; a run with no calls has no tool-call error rate. Neither
+absence can satisfy a zero-error policy. `LocalModelRecommendation.render_markdown()` places
+the compilation figures beside the agent-driving figures, including the exact client and
+harness, and names every failed gate in release-note-ready Markdown.
+
 ## Scope
 
 **The corpus is written now**, as `agenteval.default_task_set`: eight tasks over the eight
@@ -70,7 +88,9 @@ image and measurements rather than describing or calculating values the model in
 here runs a model: this package initiates no sampling and ships none. It scores a transcript,
 which is what makes it testable offline and what keeps the published recommendation gated on
 a measurement rather than an impression — and the delta between "with the skill" and "without
-it" stays unpublished until somebody outside this package produces the transcripts.
+it" stays unpublished until somebody outside this package produces the transcripts. The
+publication path is built; without those real transcripts its honest output is no
+recommendation.
 
 ## The other half: external suites, referenced rather than bundled
 

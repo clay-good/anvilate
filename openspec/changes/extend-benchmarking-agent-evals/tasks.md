@@ -49,10 +49,13 @@
 
 ## 3. Publication
 
-- [ ] 3.1 Release-notes integration and local-model recommendation update path — compilation
-      evidence now has a release-note renderer and an explicit three-metric gate. This stays
-      open until agent-driving completion, iteration, and tool-error evidence is joined to
-      that publication path
+- [x] 3.1 Release-notes integration and local-model recommendation update path — the
+      published agent corpus is versioned, its evaluation proves every task is represented,
+      and `assess_local_model_recommendation()` joins it to the compilation decision only
+      when both name the same model. All six metrics retain independent thresholds and the
+      renderer records both task-set versions, model backend, client, scaffold/settings,
+      policies, decisions, and every failed gate. Real transcripts remain deliberately
+      unmeasured; the path does not manufacture a recommendation without them
 
 ## Scope as shipped 2026-08-25 — tasks 2.1-2.3
 

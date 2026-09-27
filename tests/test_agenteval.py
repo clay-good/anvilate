@@ -20,13 +20,28 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.agenteval import (
+    AGENT_TASK_SET_VERSION,
     AgentEvalReport,
+    AgentEvaluation,
+    AgentRecommendationPolicy,
     AgentRunOutcome,
     AgentTask,
+    AgentTaskSet,
+    LocalModelRecommendation,
     ToolCall,
+    assess_local_model_recommendation,
+    default_task_set,
+    default_versioned_task_set,
+    evaluate_task_set,
     score_run_set,
     score_transcript,
     task_set_issues,
+)
+from anvilate.compilation import (
+    CompilationMode,
+    CompilationRecommendation,
+    CompilationRecommendationPolicy,
+    DecodingConfiguration,
 )
 from anvilate.mcp import REQUIRED_OPERATIONS, tool_catalog
 
@@ -336,6 +351,179 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
         "a task with no note is a prompt whose grading rule nobody wrote down"
     )
     assert len({task.task_id for task in tasks}) == len(tasks)
+
+
+# --- recommendation evidence is versioned and complete -------------------------------
+
+
+def _agent_evaluation(*, model_name: str = "a-local-7b") -> AgentEvaluation:
+    task_set = AgentTaskSet(version=AGENT_TASK_SET_VERSION, tasks=tuple(_covering_set()))
+    transcripts = {task.task_id: _calls(*task.required_tools) for task in task_set.tasks}
+    return evaluate_task_set(
+        task_set,
+        transcripts,
+        model_name=model_name,
+        client="anvilate-cli 1.4.0",
+        harness="scaffold v3; 3 retries; 32k context; tool-choice auto",
+    )
+
+
+def _compilation_recommendation(*, recommended: bool = True) -> CompilationRecommendation:
+    reasons = () if recommended else ("field correctness 70.0% is below 80.0%",)
+    return CompilationRecommendation(
+        task_set_version="1.0.0",
+        configuration=DecodingConfiguration(
+            backend="llama.cpp",
+            model="a-local-7b",
+            mode=CompilationMode.TWO_PASS,
+            retry_budget=2,
+        ),
+        schema_validity=1.0,
+        field_correctness=0.9 if recommended else 0.7,
+        wrong_but_valid_rate=0.0,
+        policy=CompilationRecommendationPolicy(
+            task_set_version="1.0.0",
+            minimum_schema_validity=0.9,
+            minimum_field_correctness=0.8,
+            maximum_wrong_but_valid_rate=0.1,
+            reference="release policy 2026-09",
+        ),
+        recommended=recommended,
+        reasons=reasons,
+    )
+
+
+def _agent_policy(**overrides) -> AgentRecommendationPolicy:
+    values = {
+        "task_set_version": AGENT_TASK_SET_VERSION,
+        "minimum_completion_rate": 0.9,
+        "maximum_mean_iterations": 2.0,
+        "maximum_tool_call_error_rate": 0.05,
+        "reference": "agent-driving release policy 2026-09",
+    }
+    values.update(overrides)
+    return AgentRecommendationPolicy(**values)
+
+
+def test_the_published_agent_corpus_and_evaluation_are_versioned_and_complete():
+    task_set = default_versioned_task_set()
+    assert task_set.version == AGENT_TASK_SET_VERSION == "1.0.0"
+    assert task_set.tasks == default_task_set()
+
+    evaluation = _agent_evaluation()
+    assert evaluation.task_set_version == "1.0.0"
+    assert evaluation.task_ids == tuple(outcome.task_id for outcome in evaluation.report.outcomes)
+
+
+def test_a_versioned_agent_evaluation_refuses_a_partial_report():
+    evaluation = _agent_evaluation()
+    with pytest.raises(ValidationError, match="task set and report outcomes differ"):
+        AgentEvaluation(
+            task_set_version=evaluation.task_set_version,
+            task_ids=(*evaluation.task_ids, "silently-skipped"),
+            report=evaluation.report,
+        )
+
+
+def test_local_model_recommendation_requires_both_evidence_sets_to_clear_policy():
+    decision = assess_local_model_recommendation(
+        _compilation_recommendation(), _agent_evaluation(), _agent_policy()
+    )
+    assert isinstance(decision, LocalModelRecommendation)
+    assert decision.recommended is True
+    assert decision.reasons == ()
+    for forbidden in ("score", "success_rate", "passed", "overall"):
+        assert not hasattr(decision, forbidden)
+
+    refused = assess_local_model_recommendation(
+        _compilation_recommendation(recommended=False),
+        _agent_evaluation(),
+        _agent_policy(minimum_completion_rate=1.0),
+    )
+    assert refused.recommended is False
+    assert refused.reasons == ("compilation: field correctness 70.0% is below 80.0%",)
+
+
+def test_unattempted_agent_work_is_not_a_passing_zero_error_run():
+    task_set = AgentTaskSet(version="1.0.0", tasks=tuple(_covering_set()))
+    evaluation = evaluate_task_set(
+        task_set,
+        {task.task_id: [] for task in task_set.tasks},
+        model_name="a-local-7b",
+        client="anvilate-cli 1.4.0",
+        harness="scaffold v3; 3 retries; 32k context; tool-choice auto",
+    )
+    decision = assess_local_model_recommendation(
+        _compilation_recommendation(), evaluation, _agent_policy()
+    )
+    assert decision.recommended is False
+    assert decision.reasons == (
+        "agent completion 0.0% is below 90.0%",
+        "agent mean iterations were not evaluated because no task completed",
+        "agent tool-call error rate was not evaluated because no call was made",
+    )
+
+
+def test_agent_iteration_and_tool_error_gates_fail_independently_of_completion():
+    task_set = AgentTaskSet(version="1.0.0", tasks=tuple(_covering_set()))
+    transcripts = {}
+    for task in task_set.tasks:
+        required = task.required_tools[0]
+        transcripts[task.task_id] = [
+            *_calls(required, required, required),
+            ToolCall(tool="invented", failed=True, error="no such tool"),
+        ]
+    evaluation = evaluate_task_set(
+        task_set,
+        transcripts,
+        model_name="a-local-7b",
+        client="anvilate-cli 1.4.0",
+        harness="scaffold v3; 3 retries; 32k context; tool-choice auto",
+    )
+    decision = assess_local_model_recommendation(
+        _compilation_recommendation(), evaluation, _agent_policy()
+    )
+    assert evaluation.report.completion_rate == 1.0
+    assert decision.reasons == (
+        "agent mean iterations 3.0 exceeds 2.0",
+        "agent tool-call error rate 25.0% exceeds 5.0%",
+    )
+
+
+def test_joined_recommendation_refuses_stale_or_different_model_evidence():
+    with pytest.raises(ValueError, match="agent evidence is stale"):
+        assess_local_model_recommendation(
+            _compilation_recommendation(),
+            _agent_evaluation(),
+            _agent_policy(task_set_version="2.0.0"),
+        )
+    with pytest.raises(ValueError, match="different models"):
+        assess_local_model_recommendation(
+            _compilation_recommendation(),
+            _agent_evaluation(model_name="another-model"),
+            _agent_policy(),
+        )
+
+
+def test_joined_recommendation_markdown_discloses_both_configurations_and_all_metrics():
+    rendered = assess_local_model_recommendation(
+        _compilation_recommendation(), _agent_evaluation(), _agent_policy()
+    ).render_markdown()
+    for expected in (
+        "Compilation evidence",
+        "Schema validity",
+        "Field correctness",
+        "Wrong-but-valid",
+        "Agent-driving evidence",
+        "Completion",
+        "Mean iterations",
+        "Tool-call errors",
+        "anvilate-cli 1.4.0",
+        "scaffold v3; 3 retries; 32k context; tool-choice auto",
+        "agent-driving release policy 2026-09",
+        "Overall decision: **recommended**",
+    ):
+        assert expected in rendered
 
 
 def test_the_corpus_reaches_every_backed_operation():

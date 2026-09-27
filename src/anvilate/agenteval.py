@@ -48,23 +48,36 @@ format and its gate are what a corpus needs to be judged against.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from ._models import RevalidatedModel, each_one
+from ._models import Named, Provenance, RevalidatedModel, each_one
+from .compilation import CompilationRecommendation
 from .mcp import REQUIRED_OPERATIONS, tool_catalog
 
 __all__ = [
+    "AGENT_TASK_SET_VERSION",
+    "AgentEvaluation",
     "AgentEvalReport",
+    "AgentRecommendationPolicy",
     "AgentRunOutcome",
     "AgentTask",
+    "AgentTaskSet",
+    "LocalModelRecommendation",
     "ToolCall",
+    "assess_local_model_recommendation",
     "default_task_set",
+    "default_versioned_task_set",
+    "evaluate_task_set",
     "score_run_set",
     "score_transcript",
     "task_set_issues",
 ]
+
+AGENT_TASK_SET_VERSION = "1.0.0"
+_SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
 class ToolCall(RevalidatedModel):
@@ -146,6 +159,28 @@ class AgentTask(RevalidatedModel):
         blank = [name for name in self.operations if not name.strip()]
         if blank:
             raise ValueError(f"task {self.task_id!r} names an empty operation")
+        return self
+
+
+class AgentTaskSet(RevalidatedModel):
+    """A versioned, complete corpus held against the live tool catalog."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    tasks: tuple[AgentTask, ...]
+
+    @field_validator("version")
+    @classmethod
+    def _version_is_semantic(cls, value: str) -> str:
+        if _SEMVER.fullmatch(value) is None:
+            raise ValueError("agent task-set version must be semantic (X.Y.Z)")
+        return value
+
+    @model_validator(mode="after")
+    def _covers_the_surface(self) -> AgentTaskSet:
+        if issues := task_set_issues(self.tasks):
+            raise ValueError("invalid agent task set: " + "; ".join(issues))
         return self
 
 
@@ -349,6 +384,165 @@ class AgentEvalReport(RevalidatedModel):
         return "\n".join([self.summary(), *(f"  {outcome}" for outcome in ranked)])
 
 
+class AgentEvaluation(RevalidatedModel):
+    """A complete agent report tied to the exact versioned corpus it scored."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_set_version: str
+    task_ids: tuple[Named, ...]
+    report: AgentEvalReport
+
+    @field_validator("task_set_version")
+    @classmethod
+    def _version_is_semantic(cls, value: str) -> str:
+        if _SEMVER.fullmatch(value) is None:
+            raise ValueError("agent evaluation task-set version must be semantic (X.Y.Z)")
+        return value
+
+    @model_validator(mode="after")
+    def _report_covers_the_task_set(self) -> AgentEvaluation:
+        reported = tuple(outcome.task_id for outcome in self.report.outcomes)
+        if reported != self.task_ids:
+            raise ValueError(
+                "agent evaluation task set and report outcomes differ: "
+                f"expected {self.task_ids}, reported {reported}"
+            )
+        return self
+
+
+class AgentRecommendationPolicy(RevalidatedModel):
+    """Explicit agent-driving thresholds for one corpus version."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_set_version: str
+    minimum_completion_rate: float = Field(ge=0.0, le=1.0)
+    maximum_mean_iterations: float = Field(ge=1.0)
+    maximum_tool_call_error_rate: float = Field(ge=0.0, le=1.0)
+    reference: Provenance
+
+    @field_validator("task_set_version")
+    @classmethod
+    def _version_is_semantic(cls, value: str) -> str:
+        if _SEMVER.fullmatch(value) is None:
+            raise ValueError("agent recommendation task-set version must be semantic (X.Y.Z)")
+        return value
+
+
+class LocalModelRecommendation(RevalidatedModel):
+    """Compilation and agent-driving evidence joined without a composite score."""
+
+    model_config = ConfigDict(frozen=True)
+
+    compilation: CompilationRecommendation
+    agent_evaluation: AgentEvaluation
+    agent_policy: AgentRecommendationPolicy
+    recommended: bool
+    reasons: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def _decision_matches_its_reasons(self) -> LocalModelRecommendation:
+        if self.agent_evaluation.task_set_version != self.agent_policy.task_set_version:
+            raise ValueError("agent evidence and recommendation policy name different task sets")
+        if self.agent_evaluation.report.model_name != self.compilation.configuration.model:
+            raise ValueError("compilation and agent evidence name different models")
+        if self.recommended == bool(self.reasons):
+            raise ValueError(
+                "a recommended model has no failing gates; a refusal names at least one"
+            )
+        return self
+
+    def render_markdown(self) -> str:
+        """Render both evidence sets and their independent release gates."""
+        report = self.agent_evaluation.report
+        iterations = (
+            f"{report.mean_iterations:.1f}"
+            if report.mean_iterations is not None
+            else "not evaluated"
+        )
+        errors = (
+            f"{report.tool_call_error_rate:.1%}"
+            if report.tool_call_error_rate is not None
+            else "not evaluated"
+        )
+        decision = "recommended" if self.recommended else "not recommended"
+        lines = [
+            "### Compilation evidence",
+            "",
+            self.compilation.render_markdown(),
+            "",
+            "### Agent-driving evidence",
+            "",
+            "| Model | Client | Task set | Harness | Completion | Mean iterations | "
+            "Tool-call errors |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: |",
+            f"| {report.model_name} | {report.client} | "
+            f"{self.agent_evaluation.task_set_version} | {report.harness} | "
+            f"{report.completion_rate:.1%} | {iterations} | {errors} |",
+            "",
+            (
+                "Agent policy: completion >= "
+                f"{self.agent_policy.minimum_completion_rate:.1%}; mean iterations <= "
+                f"{self.agent_policy.maximum_mean_iterations:.1f}; tool-call errors <= "
+                f"{self.agent_policy.maximum_tool_call_error_rate:.1%}. "
+                f"Source: {self.agent_policy.reference}"
+            ),
+            "",
+            f"Overall decision: **{decision}**.",
+        ]
+        if self.reasons:
+            lines.extend(("", "Gate failures:", *(f"- {reason}" for reason in self.reasons)))
+        return "\n".join(lines)
+
+
+def assess_local_model_recommendation(
+    compilation: CompilationRecommendation,
+    agent_evaluation: AgentEvaluation,
+    policy: AgentRecommendationPolicy,
+) -> LocalModelRecommendation:
+    """Join current compilation and agent evidence, applying every gate independently."""
+    if agent_evaluation.task_set_version != policy.task_set_version:
+        raise ValueError(
+            "agent evidence is stale for this recommendation policy: "
+            f"run {agent_evaluation.task_set_version}, policy {policy.task_set_version}"
+        )
+    report = agent_evaluation.report
+    if report.model_name != compilation.configuration.model:
+        raise ValueError(
+            "compilation and agent evidence name different models: "
+            f"{compilation.configuration.model!r} and {report.model_name!r}"
+        )
+
+    reasons = [f"compilation: {reason}" for reason in compilation.reasons]
+    if report.completion_rate < policy.minimum_completion_rate:
+        reasons.append(
+            f"agent completion {report.completion_rate:.1%} is below "
+            f"{policy.minimum_completion_rate:.1%}"
+        )
+    if report.mean_iterations is None:
+        reasons.append("agent mean iterations were not evaluated because no task completed")
+    elif report.mean_iterations > policy.maximum_mean_iterations:
+        reasons.append(
+            f"agent mean iterations {report.mean_iterations:.1f} exceeds "
+            f"{policy.maximum_mean_iterations:.1f}"
+        )
+    if report.tool_call_error_rate is None:
+        reasons.append("agent tool-call error rate was not evaluated because no call was made")
+    elif report.tool_call_error_rate > policy.maximum_tool_call_error_rate:
+        reasons.append(
+            f"agent tool-call error rate {report.tool_call_error_rate:.1%} exceeds "
+            f"{policy.maximum_tool_call_error_rate:.1%}"
+        )
+    return LocalModelRecommendation(
+        compilation=compilation,
+        agent_evaluation=agent_evaluation,
+        agent_policy=policy,
+        recommended=not reasons,
+        reasons=tuple(reasons),
+    )
+
+
 def score_transcript(task: AgentTask, calls: Sequence[ToolCall]) -> AgentRunOutcome:
     """One run's transcript against the task it was attempting."""
     return AgentRunOutcome(
@@ -387,6 +581,29 @@ def score_run_set(
         client=client,
         harness=harness,
         outcomes=tuple(score_transcript(task, transcripts[task.task_id]) for task in tasks),
+    )
+
+
+def evaluate_task_set(
+    task_set: AgentTaskSet,
+    transcripts: dict[str, Sequence[ToolCall]],
+    *,
+    model_name: str,
+    client: str,
+    harness: str,
+) -> AgentEvaluation:
+    """Score every task and retain the corpus version needed for publication."""
+    report = score_run_set(
+        task_set.tasks,
+        transcripts,
+        model_name=model_name,
+        client=client,
+        harness=harness,
+    )
+    return AgentEvaluation(
+        task_set_version=task_set.version,
+        task_ids=tuple(task.task_id for task in task_set.tasks),
+        report=report,
     )
 
 
@@ -557,3 +774,8 @@ def default_task_set() -> tuple[AgentTask, ...]:
     quietly narrowing what the eval covers.
     """
     return _TASK_SET
+
+
+def default_versioned_task_set() -> AgentTaskSet:
+    """The published agent-driving corpus with the version release evidence names."""
+    return AgentTaskSet(version=AGENT_TASK_SET_VERSION, tasks=_TASK_SET)
