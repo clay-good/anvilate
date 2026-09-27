@@ -23134,6 +23134,152 @@ def test_every_manufacturing_forming_refusal_site_is_structured(module_name, hel
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "injection_clamp_force",
+            {"projected_area": _q("0 cm**2"), "cavity_pressure": _q("50 MPa")},
+            "projected_area",
+            "the molded-part and runner CAD model or verified mold drawing",
+        ),
+        (
+            "injection_clamp_force",
+            {"projected_area": _q("100 cm**2"), "cavity_pressure": _q("0 MPa")},
+            "cavity_pressure",
+            "the molding-machine datasheet or qualified process setup",
+        ),
+        (
+            "injection_cooling_time",
+            {
+                "wall_thickness": _q("2 mm"),
+                "thermal_diffusivity": _q("0 m**2/s"),
+                "melt_temperature": _q("220 degC"),
+                "mold_temperature": _q("40 degC"),
+                "ejection_temperature": _q("80 degC"),
+            },
+            "thermal_diffusivity",
+            "the polymer thermal-property datasheet or qualified material record",
+        ),
+        (
+            "injection_cooling_time",
+            {
+                "wall_thickness": _q("2 mm"),
+                "thermal_diffusivity": _q("1e-7 m**2/s"),
+                "melt_temperature": _q("80 degC"),
+                "mold_temperature": _q("40 degC"),
+                "ejection_temperature": _q("100 degC"),
+            },
+            "melt_temperature, ejection_temperature, and mold_temperature",
+            "the approved molding process sheet or calibrated temperature record",
+        ),
+        (
+            "centrifugal_g_factor",
+            {"rotational_speed": _q("0 rpm"), "radius": _q("0.5 m")},
+            "rotational_speed",
+            "the approved mold speed setpoint or calibrated tachometer record",
+        ),
+        (
+            "centrifugal_speed_for_g_factor",
+            {"g_factor": 50.0, "radius": _q("0 m")},
+            "radius",
+            "the centrifugal mold drawing or verified radius record",
+        ),
+        (
+            "centrifugal_speed_for_g_factor",
+            {"g_factor": 0.0, "radius": _q("0.5 m")},
+            "g_factor",
+            "the qualified centrifugal-casting process plan",
+        ),
+        (
+            "centrifugal_wall_pressure",
+            {
+                "rotational_speed": _q("300 rpm"),
+                "density": _q("0 kg/m**3"),
+                "inner_radius": _q("0.4 m"),
+                "outer_radius": _q("0.5 m"),
+            },
+            "density",
+            "the certified melt density or qualified alloy-property record",
+        ),
+        (
+            "gating_fill_time",
+            {
+                "casting_volume": _q("0 cm**3"),
+                "choke_area": _q("2 cm**2"),
+                "effective_head": _q("0.2 m"),
+                "discharge_coefficient": 0.8,
+            },
+            "casting_volume",
+            "the casting and gating drawing or verified solid-model properties",
+        ),
+        (
+            "gating_fill_time",
+            {
+                "casting_volume": _q("2000 cm**3"),
+                "choke_area": _q("2 cm**2"),
+                "effective_head": _q("0.2 m"),
+                "discharge_coefficient": 0.0,
+            },
+            "discharge_coefficient",
+            "the approved mold-fill process plan or calibrated pour trial",
+        ),
+    ),
+)
+def test_molding_and_casting_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_names", "site_count"),
+    (
+        ("injection_molding", {"_injection_molding_refusal"}, 9),
+        ("centrifugal_casting", {"_centrifugal_casting_refusal"}, 10),
+        (
+            "casting_gating",
+            {"_casting_gating_refusal", "_casting_gating_process_refusal"},
+            11,
+        ),
+    ),
+)
+def test_every_molding_and_casting_refusal_site_is_structured(
+    module_name, helper_names, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id in helper_names:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_electroplating_mass_thickness_and_time_inverse():
     from anvilate.analysis import (
         electroplating_deposition_thickness,

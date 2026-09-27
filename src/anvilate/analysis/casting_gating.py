@@ -20,9 +20,31 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
+_GATING_GEOMETRY_SOURCE = "the casting and gating drawing or verified solid-model properties"
+_GATING_PROCESS_SOURCE = "the approved mold-fill process plan or calibrated pour trial"
+
+
+class _CastingGatingInputError(RefusalError, ValueError):
+    """A casting-gating input that cannot be used without correction."""
+
+
+def _casting_gating_refusal(message: str, *, subject: str) -> _CastingGatingInputError:
+    return _CastingGatingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_GATING_GEOMETRY_SOURCE),),
+    )
+
+
+def _casting_gating_process_refusal(message: str, *, subject: str) -> _CastingGatingInputError:
+    return _CastingGatingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_GATING_PROCESS_SOURCE),),
+    )
+
 
 __all__ = [
     "gating_choke_area",
@@ -55,11 +77,11 @@ def gating_fill_time(
     a = choke_area.to("m**2").magnitude
     h = effective_head.to("m").magnitude
     if v <= 0:
-        raise ValueError("casting_volume must be positive")
+        raise _casting_gating_refusal("casting_volume must be positive", subject="casting_volume")
     if a <= 0:
-        raise ValueError("choke_area must be positive")
+        raise _casting_gating_refusal("choke_area must be positive", subject="choke_area")
     if h <= 0:
-        raise ValueError("effective_head must be positive")
+        raise _casting_gating_refusal("effective_head must be positive", subject="effective_head")
     _fraction(discharge_coefficient, "discharge_coefficient")
     velocity = sqrt(2.0 * STANDARD_GRAVITY_M_PER_S2 * h)
     return Quantity(magnitude=v / (discharge_coefficient * a * velocity), unit="s")
@@ -87,11 +109,11 @@ def gating_choke_area(
     t = fill_time.to("s").magnitude
     h = effective_head.to("m").magnitude
     if v <= 0:
-        raise ValueError("casting_volume must be positive")
+        raise _casting_gating_refusal("casting_volume must be positive", subject="casting_volume")
     if t <= 0:
-        raise ValueError("fill_time must be positive")
+        raise _casting_gating_process_refusal("fill_time must be positive", subject="fill_time")
     if h <= 0:
-        raise ValueError("effective_head must be positive")
+        raise _casting_gating_refusal("effective_head must be positive", subject="effective_head")
     _fraction(discharge_coefficient, "discharge_coefficient")
     velocity = sqrt(2.0 * STANDARD_GRAVITY_M_PER_S2 * h)
     area_m2 = v / (discharge_coefficient * t * velocity)
@@ -113,23 +135,31 @@ def sprue_taper_ratio(*, top_head: Quantity, bottom_head: Quantity) -> float:
     h_top = top_head.to("m").magnitude
     h_bottom = bottom_head.to("m").magnitude
     if h_top <= 0:
-        raise ValueError("top_head must be positive")
+        raise _casting_gating_refusal("top_head must be positive", subject="top_head")
     if h_bottom <= h_top:
-        raise ValueError("bottom_head must be greater than top_head (the sprue falls)")
+        raise _casting_gating_refusal(
+            "bottom_head must be greater than top_head (the sprue falls)",
+            subject="bottom_head and top_head",
+        )
     return sqrt(h_bottom / h_top)
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be a fraction in (0, 1]; got {value}")
+        raise _casting_gating_process_refusal(
+            f"{name} must be a fraction in (0, 1]; got {value}", subject=name
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _casting_gating_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}", subject=name
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _casting_gating_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

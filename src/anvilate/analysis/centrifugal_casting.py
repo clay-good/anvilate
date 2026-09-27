@@ -24,11 +24,38 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
 
 # Standard gravitational acceleration.
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
+_CENTRIFUGAL_SPEED_SOURCE = "the approved mold speed setpoint or calibrated tachometer record"
+_CENTRIFUGAL_GEOMETRY_SOURCE = "the centrifugal mold drawing or verified radius record"
+_CENTRIFUGAL_PROCESS_SOURCE = "the qualified centrifugal-casting process plan"
+_CENTRIFUGAL_MATERIAL_SOURCE = "the certified melt density or qualified alloy-property record"
+
+
+class _CentrifugalCastingInputError(RefusalError, ValueError):
+    """A centrifugal-casting input that cannot be used without correction."""
+
+
+def _centrifugal_casting_refusal(
+    message: str, *, subject: str, source: str
+) -> _CentrifugalCastingInputError:
+    return _CentrifugalCastingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _centrifugal_casting_input_source(name: str) -> str:
+    if name == "rotational_speed":
+        return _CENTRIFUGAL_SPEED_SOURCE
+    if name == "density":
+        return _CENTRIFUGAL_MATERIAL_SOURCE
+    return _CENTRIFUGAL_GEOMETRY_SOURCE
+
 
 __all__ = [
     "centrifugal_g_factor",
@@ -52,9 +79,15 @@ def centrifugal_g_factor(*, rotational_speed: Quantity, radius: Quantity) -> flo
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     r = radius.to("m").magnitude
     if omega <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _centrifugal_casting_refusal(
+            "rotational_speed must be positive",
+            subject="rotational_speed",
+            source=_CENTRIFUGAL_SPEED_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _centrifugal_casting_refusal(
+            "radius must be positive", subject="radius", source=_CENTRIFUGAL_GEOMETRY_SOURCE
+        )
     return omega * omega * r / STANDARD_GRAVITY_M_PER_S2
 
 
@@ -69,9 +102,15 @@ def centrifugal_speed_for_g_factor(*, g_factor: float, radius: Quantity) -> Quan
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if g_factor <= 0:
-        raise ValueError("g_factor must be positive")
+        raise _centrifugal_casting_refusal(
+            "g_factor must be positive",
+            subject="g_factor",
+            source=_CENTRIFUGAL_PROCESS_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _centrifugal_casting_refusal(
+            "radius must be positive", subject="radius", source=_CENTRIFUGAL_GEOMETRY_SOURCE
+        )
     omega = sqrt(g_factor * STANDARD_GRAVITY_M_PER_S2 / r)
     return Quantity(magnitude=omega, unit="rad/s").to("rpm")
 
@@ -101,23 +140,43 @@ def centrifugal_wall_pressure(
     r_i = inner_radius.to("m").magnitude
     r_o = outer_radius.to("m").magnitude
     if omega <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _centrifugal_casting_refusal(
+            "rotational_speed must be positive",
+            subject="rotational_speed",
+            source=_CENTRIFUGAL_SPEED_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _centrifugal_casting_refusal(
+            "density must be positive", subject="density", source=_CENTRIFUGAL_MATERIAL_SOURCE
+        )
     if r_i < 0:
-        raise ValueError("inner_radius must be non-negative")
+        raise _centrifugal_casting_refusal(
+            "inner_radius must be non-negative",
+            subject="inner_radius",
+            source=_CENTRIFUGAL_GEOMETRY_SOURCE,
+        )
     if r_o <= r_i:
-        raise ValueError("outer_radius must be greater than inner_radius")
+        raise _centrifugal_casting_refusal(
+            "outer_radius must be greater than inner_radius",
+            subject="outer_radius and inner_radius",
+            source=_CENTRIFUGAL_GEOMETRY_SOURCE,
+        )
     p_pa = 0.5 * rho * omega * omega * (r_o * r_o - r_i * r_i)
     return Quantity(magnitude=p_pa / 1.0e6, unit="MPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _centrifugal_casting_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_centrifugal_casting_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _centrifugal_casting_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_centrifugal_casting_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

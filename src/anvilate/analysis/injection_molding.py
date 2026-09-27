@@ -27,7 +27,39 @@ from __future__ import annotations
 
 from math import log, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_INJECTION_GEOMETRY_SOURCE = "the molded-part and runner CAD model or verified mold drawing"
+_INJECTION_MACHINE_SOURCE = "the molding-machine datasheet or qualified process setup"
+_INJECTION_MATERIAL_SOURCE = "the polymer thermal-property datasheet or qualified material record"
+_INJECTION_TEMPERATURE_SOURCE = (
+    "the approved molding process sheet or calibrated temperature record"
+)
+
+
+class _InjectionMoldingInputError(RefusalError, ValueError):
+    """An injection-molding input that cannot be used without correction."""
+
+
+def _injection_molding_refusal(
+    message: str, *, subject: str, source: str
+) -> _InjectionMoldingInputError:
+    return _InjectionMoldingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _injection_molding_input_source(name: str) -> str:
+    if name in {"projected_area", "wall_thickness"}:
+        return _INJECTION_GEOMETRY_SOURCE
+    if name in {"clamp_force", "cavity_pressure"}:
+        return _INJECTION_MACHINE_SOURCE
+    if name == "thermal_diffusivity":
+        return _INJECTION_MATERIAL_SOURCE
+    return _INJECTION_TEMPERATURE_SOURCE
+
 
 __all__ = [
     "injection_clamp_force",
@@ -50,9 +82,17 @@ def injection_clamp_force(*, projected_area: Quantity, cavity_pressure: Quantity
     a = projected_area.to("m**2").magnitude
     p = cavity_pressure.to("Pa").magnitude
     if a <= 0:
-        raise ValueError("projected_area must be positive")
+        raise _injection_molding_refusal(
+            "projected_area must be positive",
+            subject="projected_area",
+            source=_INJECTION_GEOMETRY_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("cavity_pressure must be positive")
+        raise _injection_molding_refusal(
+            "cavity_pressure must be positive",
+            subject="cavity_pressure",
+            source=_INJECTION_MACHINE_SOURCE,
+        )
     return Quantity(magnitude=a * p / 1000.0, unit="kN")
 
 
@@ -70,9 +110,17 @@ def max_projected_area_for_clamp(*, clamp_force: Quantity, cavity_pressure: Quan
     f = clamp_force.to("N").magnitude
     p = cavity_pressure.to("Pa").magnitude
     if f <= 0:
-        raise ValueError("clamp_force must be positive")
+        raise _injection_molding_refusal(
+            "clamp_force must be positive",
+            subject="clamp_force",
+            source=_INJECTION_MACHINE_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("cavity_pressure must be positive")
+        raise _injection_molding_refusal(
+            "cavity_pressure must be positive",
+            subject="cavity_pressure",
+            source=_INJECTION_MACHINE_SOURCE,
+        )
     return Quantity(magnitude=f / p * 1.0e4, unit="cm**2")
 
 
@@ -104,21 +152,39 @@ def injection_cooling_time(
     t_mold = mold_temperature.to("K").magnitude
     t_eject = ejection_temperature.to("K").magnitude
     if s <= 0:
-        raise ValueError("wall_thickness must be positive")
+        raise _injection_molding_refusal(
+            "wall_thickness must be positive",
+            subject="wall_thickness",
+            source=_INJECTION_GEOMETRY_SOURCE,
+        )
     if alpha <= 0:
-        raise ValueError("thermal_diffusivity must be positive")
+        raise _injection_molding_refusal(
+            "thermal_diffusivity must be positive",
+            subject="thermal_diffusivity",
+            source=_INJECTION_MATERIAL_SOURCE,
+        )
     if not t_melt > t_eject > t_mold:
-        raise ValueError("temperatures must satisfy melt > ejection > mold")
+        raise _injection_molding_refusal(
+            "temperatures must satisfy melt > ejection > mold",
+            subject="melt_temperature, ejection_temperature, and mold_temperature",
+            source=_INJECTION_TEMPERATURE_SOURCE,
+        )
     ratio = (4.0 / pi) * (t_melt - t_mold) / (t_eject - t_mold)
     return Quantity(magnitude=(s**2 / (pi**2 * alpha)) * log(ratio), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _injection_molding_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_injection_molding_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _injection_molding_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_injection_molding_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

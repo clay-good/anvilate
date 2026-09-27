@@ -336,6 +336,9 @@ sheet gauges, walls, and draw ratios point to drawings, CAD, process plans, or c
 The complete extrusion, forging, and rolling families follow the contract at all 32 refusal sites.
 Billet and pass geometry, material flow properties, efficiencies, friction, press loads, and mill
 speeds point to drawings, certified tests, qualified trials, process plans, or calibrated records.
+The complete injection-molding, centrifugal-casting, and casting-gating families follow the contract
+at all 30 refusal sites. Mold and gating geometry, machine setup, thermal and melt properties,
+temperatures, spin speed, fill time, and discharge data point to drawings, plans, or calibrated trials.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
