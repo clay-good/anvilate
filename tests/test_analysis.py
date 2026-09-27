@@ -2806,6 +2806,82 @@ def test_spring_rejects_wire_wider_than_coil():
         spring_index(mean_coil_diameter=_q("5 mm"), wire_diameter=_q("5 mm"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "spring_shear_stress",
+            {
+                "force": _q("100 mm"),
+                "mean_coil_diameter": _q("20 mm"),
+                "wire_diameter": _q("2 mm"),
+            },
+            "force",
+            "the spring operating load and travel case",
+        ),
+        (
+            "spring_index",
+            {"mean_coil_diameter": _q("5 mm"), "wire_diameter": _q("5 mm")},
+            "wire and mean coil diameters",
+            "the spring drawing or selected manufacturer catalogue",
+        ),
+        (
+            "helical_spring_rate",
+            {
+                "mean_coil_diameter": _q("32 mm"),
+                "wire_diameter": _q("4 mm"),
+                "active_coils": 10,
+                "shear_modulus": _q("0 GPa"),
+            },
+            "shear_modulus",
+            "the spring material certificate or cited property record",
+        ),
+        (
+            "spring_stored_energy",
+            {"spring_rate": _q("1 N"), "deflection": _q("10 mm")},
+            "spring_rate",
+            "the governing spring design basis or supplier data",
+        ),
+    ),
+)
+def test_spring_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_spring_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/spring.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_spring_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 37
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_helical_spring_rate_matches_worked_example():
     # d = 4 mm, D = 32 mm (C = 8), Na = 10, G = 79.3 GPa:
     # k = G*d^4/(8*D^3*Na) = 79.3e9*2.56e-10/(8*3.2768e-5*10) = 7744 N/m.

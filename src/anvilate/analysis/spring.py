@@ -22,7 +22,33 @@ from math import log, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SPRING_LOAD_SOURCE = "the spring operating load and travel case"
+_SPRING_GEOMETRY_SOURCE = "the spring drawing or selected manufacturer catalogue"
+_SPRING_MATERIAL_SOURCE = "the spring material certificate or cited property record"
+_SPRING_DESIGN_SOURCE = "the governing spring design basis or supplier data"
+
+
+class _SpringInputError(RefusalError, ValueError):
+    """A spring input that cannot be used without correction."""
+
+
+def _spring_refusal(message: str, *, subject: str, source: str) -> _SpringInputError:
+    return _SpringInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _spring_input_source(name: str) -> str:
+    if name in {"force", "deflection"}:
+        return _SPRING_LOAD_SOURCE
+    if "modulus" in name or name == "poisson_ratio":
+        return _SPRING_MATERIAL_SOURCE
+    return _SPRING_GEOMETRY_SOURCE
+
 
 # End-condition constant α relating a coil's free length to its effective column
 # length for the buckling screen (Shigley, Mechanical Engineering Design, Table
@@ -62,10 +88,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _spring_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_spring_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _spring_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_spring_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -85,9 +117,11 @@ def spring_index(*, mean_coil_diameter: Quantity, wire_diameter: Quantity) -> fl
     big = mean_coil_diameter.to("mm").magnitude
     small = wire_diameter.to("mm").magnitude
     if not 0 < small < big:
-        raise ValueError(
+        raise _spring_refusal(
             f"wire_diameter ({wire_diameter}) must be positive and below the mean coil "
-            f"diameter ({mean_coil_diameter})"
+            f"diameter ({mean_coil_diameter})",
+            subject="wire and mean coil diameters",
+            source=_SPRING_GEOMETRY_SOURCE,
         )
     return big / small
 
@@ -98,7 +132,11 @@ def wahl_factor(spring_index: float) -> float:
     curvature and direct shear. ``spring_index`` must exceed 1."""
     c = spring_index
     if c <= 1:
-        raise ValueError(f"spring_index must exceed 1; got {c}")
+        raise _spring_refusal(
+            f"spring_index must exceed 1; got {c}",
+            subject="spring_index",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     return (4 * c - 1) / (4 * c - 4) + 0.615 / c
 
 
@@ -140,9 +178,17 @@ def helical_spring_rate(
     spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
     _require(shear_modulus, "[pressure]", "shear_modulus")
     if active_coils <= 0:
-        raise ValueError(f"active_coils must be positive; got {active_coils}")
+        raise _spring_refusal(
+            f"active_coils must be positive; got {active_coils}",
+            subject="active_coils",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if shear_modulus.to("Pa").magnitude <= 0:
-        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+        raise _spring_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     rate = (
         shear_modulus.pint * wire_diameter.pint**4 / (8 * mean_coil_diameter.pint**3 * active_coils)
     )
@@ -175,9 +221,17 @@ def helical_spring_active_coils_for_rate(
     d = wire_diameter.to("mm").magnitude
     big_d = mean_coil_diameter.to("mm").magnitude
     if k <= 0:
-        raise ValueError(f"target_rate must be positive; got {target_rate}")
+        raise _spring_refusal(
+            f"target_rate must be positive; got {target_rate}",
+            subject="target_rate",
+            source=_SPRING_DESIGN_SOURCE,
+        )
     if g <= 0:
-        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+        raise _spring_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     return g * d**4 / (8.0 * big_d**3 * k)
 
 
@@ -196,9 +250,17 @@ def helical_spring_solid_length(*, total_coils: float, wire_diameter: Quantity) 
     _require(wire_diameter, "[length]", "wire_diameter")
     d = wire_diameter.to("mm").magnitude
     if total_coils <= 0:
-        raise ValueError(f"total_coils must be positive; got {total_coils}")
+        raise _spring_refusal(
+            f"total_coils must be positive; got {total_coils}",
+            subject="total_coils",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError(f"wire_diameter must be positive; got {wire_diameter}")
+        raise _spring_refusal(
+            f"wire_diameter must be positive; got {wire_diameter}",
+            subject="wire_diameter",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=total_coils * d, unit="mm")
 
 
@@ -265,16 +327,26 @@ def helical_spring_buckling(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(shear_modulus, "[pressure]", "shear_modulus")
     if end_condition_constant <= 0:
-        raise ValueError(f"end_condition_constant must be positive; got {end_condition_constant}")
+        raise _spring_refusal(
+            f"end_condition_constant must be positive; got {end_condition_constant}",
+            subject="end_condition_constant",
+            source=_SPRING_DESIGN_SOURCE,
+        )
     l0 = free_length.to("mm").magnitude
     d = mean_coil_diameter.to("mm").magnitude
     if not d > 0:
-        raise ValueError(f"mean_coil_diameter must be positive; got {mean_coil_diameter}")
+        raise _spring_refusal(
+            f"mean_coil_diameter must be positive; got {mean_coil_diameter}",
+            subject="mean_coil_diameter",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     e = elastic_modulus.to("Pa").magnitude
     g = shear_modulus.to("Pa").magnitude
     if not e > g > 0:
-        raise ValueError(
-            f"need elastic_modulus > shear_modulus > 0; got E={elastic_modulus}, G={shear_modulus}"
+        raise _spring_refusal(
+            f"need elastic_modulus > shear_modulus > 0; got E={elastic_modulus}, G={shear_modulus}",
+            subject="elastic_modulus and shear_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
         )
 
     lam = end_condition_constant * l0 / d
@@ -304,15 +376,25 @@ def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quan
     dimension-checked and ``deflection`` must be non-negative.
     """
     if not isinstance(spring_rate, Quantity):
-        raise ValueError(f"spring_rate must be a [force] / [length] quantity; got {spring_rate!r}")
+        raise _spring_refusal(
+            f"spring_rate must be a [force] / [length] quantity; got {spring_rate!r}",
+            subject="spring_rate",
+            source=_SPRING_DESIGN_SOURCE,
+        )
     if not spring_rate.has_dimension("[force] / [length]"):
-        raise ValueError(
+        raise _spring_refusal(
             f"spring_rate must be a [force]/[length] quantity; got "
-            f"{spring_rate.dimensionality} ({spring_rate})"
+            f"{spring_rate.dimensionality} ({spring_rate})",
+            subject="spring_rate",
+            source=_SPRING_DESIGN_SOURCE,
         )
     _require(deflection, "[length]", "deflection")
     if deflection.to("mm").magnitude < 0:
-        raise ValueError(f"deflection must be non-negative; got {deflection}")
+        raise _spring_refusal(
+            f"deflection must be non-negative; got {deflection}",
+            subject="deflection",
+            source=_SPRING_LOAD_SOURCE,
+        )
     energy = spring_rate.pint * deflection.pint**2 / 2
     converted = energy.to("J")
     return Quantity(magnitude=float(converted.magnitude), unit="J")
@@ -320,19 +402,33 @@ def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quan
 
 def _rates_in_n_per_mm(spring_rates: Sequence[Quantity]) -> list[float]:
     if len(spring_rates) < 1:
-        raise ValueError("at least one spring rate is required")
+        raise _spring_refusal(
+            "at least one spring rate is required",
+            subject="spring_rates",
+            source=_SPRING_DESIGN_SOURCE,
+        )
     values = []
     for rate in spring_rates:
         if not isinstance(rate, Quantity):
-            raise ValueError(f"rate must be a [force] / [length] quantity; got {rate!r}")
+            raise _spring_refusal(
+                f"rate must be a [force] / [length] quantity; got {rate!r}",
+                subject="spring rate",
+                source=_SPRING_DESIGN_SOURCE,
+            )
         if not rate.has_dimension("[force] / [length]"):
-            raise ValueError(
+            raise _spring_refusal(
                 f"each spring rate must be a [force]/[length] quantity; got "
-                f"{rate.dimensionality} ({rate})"
+                f"{rate.dimensionality} ({rate})",
+                subject="spring rate",
+                source=_SPRING_DESIGN_SOURCE,
             )
         k = rate.to("N/mm").magnitude
         if k <= 0:
-            raise ValueError(f"each spring rate must be positive; got {rate}")
+            raise _spring_refusal(
+                f"each spring rate must be positive; got {rate}",
+                subject="spring rate",
+                source=_SPRING_DESIGN_SOURCE,
+            )
         values.append(k)
     return values
 
@@ -346,8 +442,10 @@ def springs_in_series(spring_rates: Sequence[Quantity]) -> Quantity:
     force-per-length; pass at least one. Returns the combined rate in N/mm.
     """
     if not isinstance(spring_rates, Sequence):
-        raise ValueError(
-            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}"
+        raise _spring_refusal(
+            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}",
+            subject="spring_rates",
+            source=_SPRING_DESIGN_SOURCE,
         )
     rates = _rates_in_n_per_mm(spring_rates)
     combined = 1.0 / sum(1.0 / k for k in rates)
@@ -364,8 +462,10 @@ def springs_in_parallel(spring_rates: Sequence[Quantity]) -> Quantity:
     force-per-length; pass at least one. Returns the combined rate in N/mm.
     """
     if not isinstance(spring_rates, Sequence):
-        raise ValueError(
-            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}"
+        raise _spring_refusal(
+            f"spring_rates must be a sequence, not a single value; got {spring_rates!r}",
+            subject="spring_rates",
+            source=_SPRING_DESIGN_SOURCE,
         )
     rates = _rates_in_n_per_mm(spring_rates)
     return Quantity(magnitude=sum(rates), unit="N/mm")
@@ -395,9 +495,17 @@ def helical_torsion_spring_rate(
     spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if active_coils <= 0:
-        raise ValueError(f"active_coils must be positive; got {active_coils}")
+        raise _spring_refusal(
+            f"active_coils must be positive; got {active_coils}",
+            subject="active_coils",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if elastic_modulus.to("Pa").magnitude <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _spring_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     rate = (
         elastic_modulus.pint * wire_diameter.pint**4 / (64 * mean_coil_diameter.pint * active_coils)
     )
@@ -438,12 +546,20 @@ def _leaf_geometry(
     _require(leaf_width, "[length]", "leaf_width")
     _require(leaf_thickness, "[length]", "leaf_thickness")
     if num_leaves < 1:
-        raise ValueError(f"num_leaves must be a positive integer; got {num_leaves}")
+        raise _spring_refusal(
+            f"num_leaves must be a positive integer; got {num_leaves}",
+            subject="num_leaves",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     ell = length.to("mm").magnitude
     b = leaf_width.to("mm").magnitude
     t = leaf_thickness.to("mm").magnitude
     if ell <= 0 or b <= 0 or t <= 0:
-        raise ValueError("length, leaf_width, and leaf_thickness must be positive")
+        raise _spring_refusal(
+            "length, leaf_width, and leaf_thickness must be positive",
+            subject="leaf-spring length, width, and thickness",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     return ell, num_leaves * b, t
 
 
@@ -518,17 +634,35 @@ def _belleville_geometry(
     de = outer_diameter.to("mm").magnitude
     di = inner_diameter.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _spring_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if h <= 0:
-        raise ValueError(f"cone_height must be positive; got {cone_height}")
+        raise _spring_refusal(
+            f"cone_height must be positive; got {cone_height}",
+            subject="cone_height",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if di <= 0:
-        raise ValueError(f"inner_diameter must be positive; got {inner_diameter}")
+        raise _spring_refusal(
+            f"inner_diameter must be positive; got {inner_diameter}",
+            subject="inner_diameter",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if de <= di:
-        raise ValueError(
-            f"outer_diameter ({outer_diameter}) must exceed inner_diameter ({inner_diameter})"
+        raise _spring_refusal(
+            f"outer_diameter ({outer_diameter}) must exceed inner_diameter ({inner_diameter})",
+            subject="Belleville washer diameters",
+            source=_SPRING_GEOMETRY_SOURCE,
         )
     if not 0 <= poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in [0, 0.5); got {poisson_ratio}")
+        raise _spring_refusal(
+            f"poisson_ratio must lie in [0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     ratio = de / di
     k1 = (6.0 / (pi * log(ratio))) * ((ratio - 1.0) / ratio) ** 2
     return t, h, de, k1
@@ -563,13 +697,19 @@ def belleville_washer_force(
     _require(deflection, "[length]", "deflection")
     y = deflection.to("mm").magnitude
     if not 0 <= y <= h:
-        raise ValueError(
-            f"deflection must lie in [0, cone_height] = [0, {cone_height}]; got {deflection}"
+        raise _spring_refusal(
+            f"deflection must lie in [0, cone_height] = [0, {cone_height}]; got {deflection}",
+            subject="deflection",
+            source=_SPRING_LOAD_SOURCE,
         )
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _spring_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     force = (
         4.0 * e * y / ((1.0 - poisson_ratio**2) * k1 * de**2) * (t * (h - y) * (h - y / 2.0) + t**3)
     )
@@ -599,7 +739,11 @@ def belleville_flat_load(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _spring_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_SPRING_MATERIAL_SOURCE,
+        )
     force = 4.0 * e * h * t**3 / ((1.0 - poisson_ratio**2) * k1 * de**2)
     return Quantity(magnitude=force, unit="N")
 
@@ -610,9 +754,17 @@ def _spiral_strip(width: Quantity, thickness: Quantity) -> tuple[float, float]:
     b = width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if b <= 0:
-        raise ValueError(f"width must be positive; got {width}")
+        raise _spring_refusal(
+            f"width must be positive; got {width}",
+            subject="width",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _spring_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     return b, t
 
 
@@ -640,7 +792,11 @@ def spiral_spring_rate(
     length = developed_length.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if length <= 0:
-        raise ValueError(f"developed_length must be positive; got {developed_length}")
+        raise _spring_refusal(
+            f"developed_length must be positive; got {developed_length}",
+            subject="developed_length",
+            source=_SPRING_GEOMETRY_SOURCE,
+        )
     # E [MPa=N/mm^2], b,t,L [mm] -> k_theta in N*mm/rad; convert to N*m/rad.
     k_theta_n_mm = e * b * t**3 / (12.0 * length)
     return Quantity(magnitude=k_theta_n_mm / 1000.0, unit="N*m")

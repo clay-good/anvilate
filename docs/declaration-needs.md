@@ -276,6 +276,10 @@ The complete shaft-torsion input family follows the contract at all 39 refusal s
 loads, speeds, section dimensions, material properties, fatigue factors, and design margins point
 to the operating case, dynamometer record, shaft drawing, material certificate, or governing
 fatigue calculation that supplies the correction.
+The complete spring-analysis family is structured at all 37 refusal sites. Coil, leaf,
+Belleville, and spiral-spring refusals identify the rejected load, travel, rate, geometry,
+material property, or end condition and point to the operating case, spring drawing,
+manufacturer catalogue, material record, or governing spring design basis.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
