@@ -74,11 +74,10 @@
       now does too: quantity parsing, dimensional validators, and D-SI calibration expressions
       name the rejected input and the originating document, field dimension, unit registry,
       or PTB mapping that can repair it, again retaining `ValueError` compatibility. Geometry
-      migration now covers optional-runtime and unsupported-pattern errors and the complete
-      exchange-artifact lifecycle (STEP import/detection/verification/writing and 3MF
-      tessellation), naming the artifact and its kernel, schema, CAD source, or validation
-      practice. Interface confirmation and pattern construction remain in the ordinary
-      `GeometryError` inventory. The
+      migration now covers the complete family: optional runtime and unsupported patterns,
+      STEP/3MF exchange artifacts, measured-interface confirmation and checks, audited-pattern
+      construction, viewport/query arguments, and CLI adapters all name the rejected subject
+      and its schema, CAD source, cited requirement, audited pattern, or supported grammar. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

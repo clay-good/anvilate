@@ -254,8 +254,13 @@ def test_geometry_measurements_are_read_from_the_brep(query, value, unit, featur
 
 
 def test_geometry_measurement_refuses_an_unknown_query_and_lists_the_grammar():
-    with pytest.raises(GeometryError, match=r"area:<semantic-face>"):
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(GeometryError, match=r"area:<semantic-face>") as refused:
         measure_geometry(build_base_plate(_plate()), "mass")
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    assert refused.value.remedies[0].subject == "the geometry query 'mass'"
 
 
 @pytest.mark.parametrize("width", (63, 4097))
@@ -336,6 +341,7 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
     for relative in (
         pathlib.Path("src/anvilate/geometry.py"),
         pathlib.Path("src/anvilate/keepouts.py"),
+        pathlib.Path("src/anvilate/cli.py"),
     ):
         path = root / relative
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -344,17 +350,22 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
                 and isinstance(node.exc, ast.Call)
                 and isinstance(node.exc.func, ast.Name)
                 and node.exc.func.id
-                in {"_ExchangeGeometryError", "GeometryUnavailable", "UnsupportedGeometry"}
+                in {
+                    "GeometryError",
+                    "_ExchangeGeometryError",
+                    "GeometryUnavailable",
+                    "UnsupportedGeometry",
+                }
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 41
+    assert len(sites) == 87
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         required = {"subject"}
         if call.func.id != "GeometryUnavailable":
             required.add("source")
-        if call.func.id == "_ExchangeGeometryError":
+        if call.func.id in {"GeometryError", "_ExchangeGeometryError"}:
             required.add("action")
         assert required <= keywords, f"{path}:{call.lineno}"
 

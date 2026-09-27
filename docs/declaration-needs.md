@@ -249,12 +249,11 @@ Unit refusals follow the same contract across quantity parsing, dimensional vali
 Digital Calibration Certificate D-SI expressions: each identifies the rejected quantity,
 unit, token, prefix, or exponent and points to the originating document, declared field
 dimension, bundled unit registry, or PTB D-SI mapping that supplies the correction.
-Geometry migration now covers the complete optional-runtime and unsupported-pattern
-boundaries plus the exchange-artifact lifecycle: STEP import and interface detection,
-validation properties and integrity checks, AP242/AP214 writing, and 3MF tessellation name
-the artifact or geometry and the kernel, schema, source CAD model, or validation practice
-that can repair it. Interface confirmation and audited-pattern construction remain in the
-ordinary `GeometryError` inventory.
+The complete geometry family follows the contract too. Optional-runtime and unsupported-
+pattern errors, STEP/3MF exchange artifacts, measured-interface confirmation and checks,
+audited-pattern construction, viewport arguments, geometry queries, and their CLI adapters
+name the rejected artifact, declaration, candidate, or argument and the schema, source CAD
+model, cited requirement, audited pattern, or supported grammar that can repair it.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

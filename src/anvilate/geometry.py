@@ -106,44 +106,42 @@ _GVP_RECOMMENDED_PRACTICE = (
 _STEP_IO_LOCK = Lock()
 
 
-class GeometryError(ValueError):
-    """A spec cannot produce valid geometry."""
-
-
-class GeometryUnavailable(RefusalError, GeometryError):
-    """The optional geometry runtime is not installed."""
-
-    def __init__(self, message: str, *, subject: str) -> None:
-        super().__init__(
-            message,
-            remedies=(
-                Remedy(
-                    action="install",
-                    subject=subject,
-                    source="the anvilate[geometry] optional dependency",
-                ),
-            ),
-        )
-
-
-class UnsupportedGeometry(RefusalError, GeometryError):
-    """No audited geometry pattern exists for the requested element type."""
-
-    def __init__(self, message: str, *, subject: str, source: str) -> None:
-        super().__init__(
-            message,
-            remedies=(Remedy(action="select", subject=subject, source=source),),
-        )
-
-
-class _ExchangeGeometryError(RefusalError, GeometryError):
-    """An imported or exported exchange-geometry artifact cannot be used."""
+class GeometryError(RefusalError, ValueError):
+    """A geometry request that cannot proceed without a concrete correction."""
 
     def __init__(self, message: str, *, action: str, subject: str, source: str) -> None:
         super().__init__(
             message,
             remedies=(Remedy(action=action, subject=subject, source=source),),
         )
+
+
+class GeometryUnavailable(GeometryError):
+    """The optional geometry runtime is not installed."""
+
+    def __init__(self, message: str, *, subject: str) -> None:
+        super().__init__(
+            message,
+            action="install",
+            subject=subject,
+            source="the anvilate[geometry] optional dependency",
+        )
+
+
+class UnsupportedGeometry(GeometryError):
+    """No audited geometry pattern exists for the requested element type."""
+
+    def __init__(self, message: str, *, subject: str, source: str) -> None:
+        super().__init__(
+            message,
+            action="select",
+            subject=subject,
+            source=source,
+        )
+
+
+class _ExchangeGeometryError(GeometryError):
+    """An imported or exported exchange-geometry artifact cannot be used."""
 
 
 class GeometrySummary(StatableModel):
@@ -1481,15 +1479,28 @@ def confirm_planar_contact(
     """Accept one exact measured planar contact without inventing interface geometry."""
     confirmer = confirmed_by.strip()
     if not confirmer:
-        raise GeometryError("accepting a contact candidate names the person confirming it")
+        raise GeometryError(
+            "accepting a contact candidate names the person confirming it",
+            action="state",
+            subject=f"the reviewer accepting contact candidate {contact_id!r}",
+            source="the person authorized to confirm the measured interface",
+        )
     contact_name = name.strip()
     if not contact_name:
-        raise GeometryError("an accepted planar contact has a non-blank name")
+        raise GeometryError(
+            "an accepted planar contact has a non-blank name",
+            action="state",
+            subject=f"the contract name for contact candidate {contact_id!r}",
+            source="the assembly interface declaration",
+        )
     matches = [contact for contact in candidates.planar_contacts if contact.id == contact_id]
     if len(matches) != 1:
         available = ", ".join(contact.id for contact in candidates.planar_contacts) or "none"
         raise GeometryError(
-            f"contact candidate {contact_id!r} was not found exactly once; available: {available}"
+            f"contact candidate {contact_id!r} was not found exactly once; available: {available}",
+            action="select",
+            subject=f"the planar contact candidate {contact_id!r}",
+            source=f"the detected contacts in STEP source {candidates.source_name}",
         )
     contact = matches[0]
     return ConfirmedPlanarContact(
@@ -1516,11 +1527,19 @@ def check_planar_contact_area(
     if not minimum_overlap_area.has_dimension("[length]**2"):
         raise GeometryError(
             "minimum contact area must be an area; got "
-            f"{minimum_overlap_area.dimensionality} ({minimum_overlap_area})"
+            f"{minimum_overlap_area.dimensionality} ({minimum_overlap_area})",
+            action="replace",
+            subject=f"the minimum contact area {minimum_overlap_area}",
+            source=f"an area quantity from requirement {reference!r}",
         )
     minimum_mm2 = minimum_overlap_area.to("mm^2").magnitude
     if minimum_mm2 < 0:
-        raise GeometryError("minimum contact area must not be negative")
+        raise GeometryError(
+            "minimum contact area must not be negative",
+            action="replace",
+            subject=f"the minimum contact area {minimum_overlap_area}",
+            source=f"a nonnegative area from requirement {reference!r}",
+        )
     margin = round(confirmed.overlap_area_mm2 - minimum_mm2, 9)
     return PlanarContactAreaCheck(
         confirmed_contact=confirmed,
@@ -1541,15 +1560,28 @@ def confirm_cylindrical_mate(
     """Accept one exact cylindrical mate without judging its fit."""
     confirmer = confirmed_by.strip()
     if not confirmer:
-        raise GeometryError("accepting a cylindrical mate names the person confirming it")
+        raise GeometryError(
+            "accepting a cylindrical mate names the person confirming it",
+            action="state",
+            subject=f"the reviewer accepting cylindrical mate {mate_id!r}",
+            source="the person authorized to confirm the measured interface",
+        )
     mate_name = name.strip()
     if not mate_name:
-        raise GeometryError("an accepted cylindrical mate has a non-blank name")
+        raise GeometryError(
+            "an accepted cylindrical mate has a non-blank name",
+            action="state",
+            subject=f"the contract name for cylindrical mate {mate_id!r}",
+            source="the assembly interface declaration",
+        )
     matches = [mate for mate in candidates.cylindrical_mates if mate.id == mate_id]
     if len(matches) != 1:
         available = ", ".join(mate.id for mate in candidates.cylindrical_mates) or "none"
         raise GeometryError(
-            f"cylindrical mate {mate_id!r} was not found exactly once; available: {available}"
+            f"cylindrical mate {mate_id!r} was not found exactly once; available: {available}",
+            action="select",
+            subject=f"the cylindrical mate candidate {mate_id!r}",
+            source=f"the detected mates in STEP source {candidates.source_name}",
         )
     mate = matches[0]
     return ConfirmedCylindricalMate(
@@ -1581,15 +1613,28 @@ def confirm_planar_gap(
     """Accept one exact planar gap without inventing an allowable clearance."""
     confirmer = confirmed_by.strip()
     if not confirmer:
-        raise GeometryError("accepting a planar gap names the person confirming it")
+        raise GeometryError(
+            "accepting a planar gap names the person confirming it",
+            action="state",
+            subject=f"the reviewer accepting planar gap {gap_id!r}",
+            source="the person authorized to confirm the measured interface",
+        )
     gap_name = name.strip()
     if not gap_name:
-        raise GeometryError("an accepted planar gap has a non-blank name")
+        raise GeometryError(
+            "an accepted planar gap has a non-blank name",
+            action="state",
+            subject=f"the contract name for planar gap {gap_id!r}",
+            source="the assembly interface declaration",
+        )
     matches = [gap for gap in candidates.planar_gaps if gap.id == gap_id]
     if len(matches) != 1:
         available = ", ".join(gap.id for gap in candidates.planar_gaps) or "none"
         raise GeometryError(
-            f"planar gap {gap_id!r} was not found exactly once; available: {available}"
+            f"planar gap {gap_id!r} was not found exactly once; available: {available}",
+            action="select",
+            subject=f"the planar gap candidate {gap_id!r}",
+            source=f"the detected gaps in STEP source {candidates.source_name}",
         )
     gap = matches[0]
     return ConfirmedPlanarGap(
@@ -1618,13 +1663,28 @@ def check_planar_gap_clearance(
     """Check a confirmed gap against caller-supplied, cited clearance limits."""
     for label, bound in (("minimum gap", minimum_gap), ("maximum gap", maximum_gap)):
         if not bound.has_dimension("[length]"):
-            raise GeometryError(f"{label} must be a length; got {bound.dimensionality} ({bound})")
+            raise GeometryError(
+                f"{label} must be a length; got {bound.dimensionality} ({bound})",
+                action="replace",
+                subject=f"the {label} bound {bound}",
+                source=f"a length quantity from requirement {reference!r}",
+            )
     minimum_mm = minimum_gap.to("mm").magnitude
     maximum_mm = maximum_gap.to("mm").magnitude
     if minimum_mm < 0 or maximum_mm < 0:
-        raise GeometryError("planar gap limits must not be negative")
+        raise GeometryError(
+            "planar gap limits must not be negative",
+            action="replace",
+            subject=f"the planar gap limits {minimum_gap} through {maximum_gap}",
+            source=f"nonnegative clearance limits from requirement {reference!r}",
+        )
     if minimum_mm > maximum_mm:
-        raise GeometryError("minimum gap must not exceed maximum gap")
+        raise GeometryError(
+            "minimum gap must not exceed maximum gap",
+            action="reorder or replace",
+            subject=f"the planar gap limits {minimum_gap} through {maximum_gap}",
+            source=f"ordered clearance limits from requirement {reference!r}",
+        )
     lower_margin = round(confirmed.separation_mm - minimum_mm, 9)
     upper_margin = round(maximum_mm - confirmed.separation_mm, 9)
     return PlanarGapClearanceCheck(
@@ -1648,11 +1708,19 @@ def check_cylindrical_mate_engagement(
     if not minimum_engagement.has_dimension("[length]"):
         raise GeometryError(
             "minimum axial engagement must be a length; got "
-            f"{minimum_engagement.dimensionality} ({minimum_engagement})"
+            f"{minimum_engagement.dimensionality} ({minimum_engagement})",
+            action="replace",
+            subject=f"the minimum axial engagement {minimum_engagement}",
+            source=f"a length quantity from requirement {reference!r}",
         )
     minimum_mm = minimum_engagement.to("mm").magnitude
     if minimum_mm < 0:
-        raise GeometryError("minimum axial engagement must not be negative")
+        raise GeometryError(
+            "minimum axial engagement must not be negative",
+            action="replace",
+            subject=f"the minimum axial engagement {minimum_engagement}",
+            source=f"a nonnegative engagement from requirement {reference!r}",
+        )
     margin = round(confirmed.axial_engagement_mm - minimum_mm, 9)
     return CylindricalMateEngagementCheck(
         confirmed_mate=confirmed,
@@ -1864,11 +1932,26 @@ def confirm_step_interface(
     """
     confirmer = confirmed_by.strip()
     if not confirmer:
-        raise GeometryError("accepting an interface candidate names the person confirming it")
+        raise GeometryError(
+            "accepting an interface candidate names the person confirming it",
+            action="state",
+            subject=f"the reviewer accepting pattern candidate {pattern_id!r}",
+            source="the person authorized to confirm the measured interface",
+        )
     if not name.strip():
-        raise GeometryError("an accepted interface contract has a non-blank name")
+        raise GeometryError(
+            "an accepted interface contract has a non-blank name",
+            action="state",
+            subject=f"the interface contract name for pattern candidate {pattern_id!r}",
+            source="the mating-part interface declaration",
+        )
     if not mating_plane.strip():
-        raise GeometryError("an accepted interface names its semantic mating-plane tag")
+        raise GeometryError(
+            "an accepted interface names its semantic mating-plane tag",
+            action="state",
+            subject=f"the mating-plane tag for pattern candidate {pattern_id!r}",
+            source="the mating part's semantic face declaration",
+        )
 
     matches = [
         (face, pattern)
@@ -1882,7 +1965,10 @@ def confirm_step_interface(
         )
         choices = ", ".join(available) if available else "none"
         raise GeometryError(
-            f"pattern candidate {pattern_id!r} was not found exactly once; available: {choices}"
+            f"pattern candidate {pattern_id!r} was not found exactly once; available: {choices}",
+            action="select",
+            subject=f"the hole-pattern candidate {pattern_id!r}",
+            source=f"the detected patterns in STEP source {candidates.source_name}",
         )
     face, pattern = matches[0]
     locator = None
@@ -1894,7 +1980,10 @@ def confirm_step_interface(
             locator_choices = ", ".join(feature.id for feature in face.locating_features) or "none"
             raise GeometryError(
                 f"locating feature {locating_feature_id!r} was not found on {face.id}; "
-                f"available: {locator_choices}"
+                f"available: {locator_choices}",
+                action="select",
+                subject=f"the locating feature {locating_feature_id!r} on {face.id}",
+                source="the locating features measured on the selected interface face",
             )
         locator = locator_matches[0]
     x_axis, y_axis, normal = _interface_basis(face.normal)
@@ -1956,7 +2045,10 @@ def confirm_step_interface(
         return ConfirmedStepInterface.model_validate(confirmed_data)
     except ValueError as failure:
         raise GeometryError(
-            f"could not create the confirmed interface contract: {failure}"
+            f"could not create the confirmed interface contract: {failure}",
+            action="correct",
+            subject=f"the interface contract for pattern candidate {pattern_id!r}",
+            source="the measured candidate and the Design Spec interface schema",
         ) from failure
 
 
@@ -1975,9 +2067,19 @@ def _positive_mm(value: Any, field: str, *, element: str = "base_plate") -> floa
     try:
         magnitude = float(value.to("mm").magnitude)
     except (TypeError, ValueError) as failure:
-        raise GeometryError(f"{element} {field} must be a length; got {value}") from failure
+        raise GeometryError(
+            f"{element} {field} must be a length; got {value}",
+            action="replace",
+            subject=f"the {element} element_params.{field} value {value}",
+            source=f"a length quantity in the {element} Design Spec declaration",
+        ) from failure
     if magnitude <= 0:
-        raise GeometryError(f"{element} {field} must be greater than zero; got {magnitude:g} mm")
+        raise GeometryError(
+            f"{element} {field} must be greater than zero; got {magnitude:g} mm",
+            action="replace",
+            subject=f"the {element} element_params.{field} value {magnitude:g} mm",
+            source=f"a positive dimension in the {element} Design Spec declaration",
+        )
     return magnitude
 
 
@@ -2003,18 +2105,31 @@ def _tag_box_faces(shape: Any) -> Mapping[str, tuple[Any, ...]]:
             name = directions[key]
         except KeyError as failure:  # pragma: no cover - a box primitive cannot produce this
             raise GeometryError(
-                f"base_plate produced a face with unexpected normal {key}"
+                f"base_plate produced a face with unexpected normal {key}",
+                action="rebuild or report",
+                subject=f"the unexpected base_plate face normal {key}",
+                source="the audited box topology and installed geometry kernel",
             ) from failure
         tagged[name] = (face,)
     if set(tagged) != set(directions.values()):  # pragma: no cover - kernel corruption guard
-        raise GeometryError(f"base_plate face tagging incomplete: got {sorted(tagged)}")
+        raise GeometryError(
+            f"base_plate face tagging incomplete: got {sorted(tagged)}",
+            action="rebuild or report",
+            subject="the incomplete base_plate semantic face tags",
+            source="the audited base_plate/1 topology and installed geometry kernel",
+        )
     return MappingProxyType(tagged)
 
 
 def build_base_plate(plate: BasePlate) -> BuiltGeometry:
     """Build the audited rectangular base-plate pattern from declared dimensions."""
     if plate.plate_thickness is None:
-        raise GeometryError("base_plate geometry needs element_params.plate_thickness")
+        raise GeometryError(
+            "base_plate geometry needs element_params.plate_thickness",
+            action="state",
+            subject="the base_plate element_params.plate_thickness value",
+            source="the base_plate Design Spec or its cited plate declaration",
+        )
     width = _positive_mm(plate.width, "width")
     depth = _positive_mm(plate.depth, "depth")
     thickness = _positive_mm(plate.plate_thickness, "plate_thickness")
@@ -2035,7 +2150,12 @@ def build_base_plate(plate: BasePlate) -> BuiltGeometry:
         ),
     )
     if not built.is_valid:  # pragma: no cover - Box with guarded dimensions is valid
-        raise GeometryError("base_plate pattern did not produce one valid positive-volume solid")
+        raise GeometryError(
+            "base_plate pattern did not produce one valid positive-volume solid",
+            action="rebuild or report",
+            subject="the base_plate/1 generated solid",
+            source="the audited pattern's positive-volume B-Rep contract",
+        )
     return built
 
 
@@ -2056,7 +2176,12 @@ def _tag_round_faces(shape: Any, *, has_bore: bool) -> Mapping[str, tuple[Any, .
         tagged["bore"] = (curved[1],)
     expected = {"bottom", "perimeter", "top"} | ({"bore"} if has_bore else set())
     if set(tagged) != expected:  # pragma: no cover - primitive topology corruption guard
-        raise GeometryError(f"cover_plate face tagging incomplete: got {sorted(tagged)}")
+        raise GeometryError(
+            f"cover_plate face tagging incomplete: got {sorted(tagged)}",
+            action="rebuild or report",
+            subject="the incomplete cover_plate semantic face tags",
+            source="the audited cover_plate/1 topology and installed geometry kernel",
+        )
     return MappingProxyType(tagged)
 
 
@@ -2088,7 +2213,10 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
             if hole >= diameter:
                 raise GeometryError(
                     "cover_plate hole_diameter must be below diameter; "
-                    f"got {hole:g} mm and {diameter:g} mm"
+                    f"got {hole:g} mm and {diameter:g} mm",
+                    action="replace",
+                    subject=f"the cover_plate hole_diameter {hole:g} mm",
+                    source=f"a value below the declared {diameter:g} mm outside diameter",
                 )
             shape = shape - Cylinder(
                 hole / 2,
@@ -2105,7 +2233,12 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
         dimensions_mm=MappingProxyType(dimensions),
     )
     if not built.is_valid:  # pragma: no cover - guarded primitives are valid
-        raise GeometryError("cover_plate pattern did not produce one valid positive-volume solid")
+        raise GeometryError(
+            "cover_plate pattern did not produce one valid positive-volume solid",
+            action="rebuild or report",
+            subject="the cover_plate/1 generated solid",
+            source="the audited pattern's positive-volume B-Rep contract",
+        )
     return built
 
 
@@ -2119,12 +2252,20 @@ def _tag_shaft_faces(shape: Any) -> Mapping[str, tuple[Any, ...]]:
             tag = "outside_surface"
         else:  # pragma: no cover - a cylinder primitive cannot produce another surface
             raise GeometryError(
-                f"transmission_shaft produced an unexpected {face.geom_type.name} face"
+                f"transmission_shaft produced an unexpected {face.geom_type.name} face",
+                action="rebuild or report",
+                subject=f"the unexpected transmission_shaft {face.geom_type.name} face",
+                source="the audited cylinder topology and installed geometry kernel",
             )
         tagged[tag] = (face,)
     expected = {"drive_end", "driven_end", "outside_surface"}
     if set(tagged) != expected:  # pragma: no cover - primitive topology corruption guard
-        raise GeometryError(f"transmission_shaft face tagging incomplete: got {sorted(tagged)}")
+        raise GeometryError(
+            f"transmission_shaft face tagging incomplete: got {sorted(tagged)}",
+            action="rebuild or report",
+            subject="the incomplete transmission_shaft semantic face tags",
+            source="the audited transmission_shaft/1 topology and installed geometry kernel",
+        )
     return MappingProxyType(tagged)
 
 
@@ -2133,7 +2274,12 @@ def build_transmission_shaft(
 ) -> BuiltGeometry:
     """Build an audited prismatic solid-round shaft from its declared diameter and length."""
     if shaft.length is None:
-        raise GeometryError("transmission_shaft geometry needs element_params.length")
+        raise GeometryError(
+            "transmission_shaft geometry needs element_params.length",
+            action="state",
+            subject="the transmission_shaft element_params.length value",
+            source="the transmission_shaft Design Spec declaration",
+        )
     diameter = _positive_mm(shaft.diameter, "diameter", element="transmission_shaft")
     length = _positive_mm(shaft.length, "length", element="transmission_shaft")
     Align, _Box, Cylinder, _export_step = _kernel()
@@ -2151,7 +2297,10 @@ def build_transmission_shaft(
     )
     if not built.is_valid:  # pragma: no cover - guarded Cylinder dimensions are valid
         raise GeometryError(
-            "transmission_shaft pattern did not produce one valid positive-volume solid"
+            "transmission_shaft pattern did not produce one valid positive-volume solid",
+            action="rebuild or report",
+            subject="the transmission_shaft/1 generated solid",
+            source="the audited pattern's positive-volume B-Rep contract",
         )
     return built
 
@@ -2177,7 +2326,12 @@ def build_timber_beam(beam: TimberBeam) -> BuiltGeometry:
         dimensions_mm=MappingProxyType({"width": width, "span": span, "depth": depth}),
     )
     if not built.is_valid:  # pragma: no cover - guarded Box dimensions are valid
-        raise GeometryError("timber_beam pattern did not produce one valid positive-volume solid")
+        raise GeometryError(
+            "timber_beam pattern did not produce one valid positive-volume solid",
+            action="rebuild or report",
+            subject="the timber_beam/1 generated solid",
+            source="the audited pattern's positive-volume B-Rep contract",
+        )
     return built
 
 
@@ -2195,7 +2349,12 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
         if spec.element_type == "timber_beam":
             return build_timber_beam(TimberBeam(**dict(spec.element_params)))
     except ValueError as failure:
-        raise GeometryError(f"invalid {spec.element_type} element_params: {failure}") from failure
+        raise GeometryError(
+            f"invalid {spec.element_type} element_params: {failure}",
+            action="correct",
+            subject=f"the {spec.element_type} element_params mapping",
+            source="the selected audited pattern's parameter schema",
+        ) from failure
     tag = spec.element_type or "<undeclared>"
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {tag!r}; "
@@ -2319,9 +2478,19 @@ def render_viewport(
             source="a pattern with an audited viewport projector",
         )
     if not 64 <= width_px <= 4096:
-        raise GeometryError(f"viewport width_px must be from 64 through 4096; got {width_px}")
+        raise GeometryError(
+            f"viewport width_px must be from 64 through 4096; got {width_px}",
+            action="replace",
+            subject=f"the viewport width_px value {width_px}",
+            source="an integer width from 64 through 4096 pixels",
+        )
     if view not in {"iso", "front", "top", "right"}:
-        raise GeometryError(f"unknown viewport {view!r}; choose iso, front, top, or right")
+        raise GeometryError(
+            f"unknown viewport {view!r}; choose iso, front, top, or right",
+            action="select",
+            subject=f"the viewport name {view!r}",
+            source="the supported iso, front, top, and right viewport registry",
+        )
     if "diameter" in built.dimensions_mm:
         return _render_round_geometry(built, view=view, width_px=width_px)
     height_px = max(64, round(width_px * 0.75))
@@ -2447,7 +2616,12 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
                 feature=tag,
             )
     supported = "volume, a declared dimension, face_count, hole_diameter, or area:<semantic-face>"
-    raise GeometryError(f"unsupported geometry query {query!r}; choose {supported}")
+    raise GeometryError(
+        f"unsupported geometry query {query!r}; choose {supported}",
+        action="select",
+        subject=f"the geometry query {query!r}",
+        source=f"the supported query grammar: {supported}",
+    )
 
 
 def _step_string(value: str) -> str:

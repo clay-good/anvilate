@@ -1510,10 +1510,16 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                 if solid_ids:
                     available = ", ".join(solid_ids)
                     raise GeometryError(
-                        f"solid candidate {args.solid!r} was not found; available: {available}"
+                        f"solid candidate {args.solid!r} was not found; available: {available}",
+                        action="select",
+                        subject=f"the --solid candidate {args.solid!r}",
+                        source=f"the detected solid IDs in STEP file {args.step}",
                     )
                 raise GeometryError(
-                    "this STEP contains one solid and exposes no solid ID; omit --solid"
+                    "this STEP contains one solid and exposes no solid ID; omit --solid",
+                    action="omit",
+                    subject=f"--solid {args.solid!r} for the single-solid STEP file",
+                    source="the unambiguous single solid detected in the input STEP file",
                 )
             related_interferences = tuple(
                 candidate
@@ -1579,7 +1585,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         reference=args.requirement,
                     )
                 except ValueError as failure:
-                    raise GeometryError(str(failure)) from failure
+                    raise GeometryError(
+                        str(failure),
+                        action="correct",
+                        subject=f"the --min-contact-area value {args.min_contact_area!r}",
+                        source="an area quantity from the cited --requirement",
+                    ) from failure
         elif args.accept_mate is not None:
             accepted_mate = confirm_cylindrical_mate(
                 detected,
@@ -1595,7 +1606,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         reference=args.requirement,
                     )
                 except ValueError as failure:
-                    raise GeometryError(str(failure)) from failure
+                    raise GeometryError(
+                        str(failure),
+                        action="correct",
+                        subject=f"the --min-engagement value {args.min_engagement!r}",
+                        source="a length quantity from the cited --requirement",
+                    ) from failure
             if args.fit is not None:
                 try:
                     basic_size = Quantity.parse(args.basic_size)
@@ -1605,7 +1621,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         designation=args.fit,
                     )
                 except ValueError as failure:
-                    raise GeometryError(str(failure)) from failure
+                    raise GeometryError(
+                        str(failure),
+                        action="correct",
+                        subject="the --basic-size and --fit values",
+                        source="an ISO 286 basic size and encoded fit designation",
+                    ) from failure
         elif args.accept_gap is not None:
             accepted_gap = confirm_planar_gap(
                 detected,
@@ -1622,7 +1643,12 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
                         reference=args.requirement,
                     )
                 except ValueError as failure:
-                    raise GeometryError(str(failure)) from failure
+                    raise GeometryError(
+                        str(failure),
+                        action="correct",
+                        subject="the --min-gap and --max-gap values",
+                        source="ordered length limits from the cited --requirement",
+                    ) from failure
         assembly_scorecard = (
             None
             if detected.interference_scorecard is None
