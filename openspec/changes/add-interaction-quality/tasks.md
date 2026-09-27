@@ -98,6 +98,10 @@
       complete spring-analysis family adds 37 structured sites for coil, leaf, Belleville, and
       spiral-spring load, travel, rate, geometry, material, and end-condition inputs, sourced to
       operating cases, drawings, catalogues, material records, or the spring design basis. The
+      complete combustion-analysis family adds 37 structured sites for fuel composition, air and
+      flue-gas conditions, heating values, thermochemical properties, and loss assumptions,
+      sourced to ultimate analyses, calibrated measurements, certificates, or the combustion
+      model. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

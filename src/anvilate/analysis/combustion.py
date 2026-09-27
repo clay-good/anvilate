@@ -24,7 +24,25 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_FUEL_ANALYSIS_SOURCE = "the fuel ultimate analysis or supplier composition record"
+_COMBUSTION_CASE_SOURCE = "the burner operating case or calibrated flue-gas measurement"
+_THERMOCHEMICAL_SOURCE = "the fuel certificate or cited thermochemical property record"
+_COMBUSTION_MODEL_SOURCE = "the governing combustion model and stated design assumptions"
+
+
+class _CombustionInputError(RefusalError, ValueError):
+    """A combustion input that cannot be used without correction."""
+
+
+def _combustion_refusal(message: str, *, subject: str, source: str) -> _CombustionInputError:
+    return _CombustionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "actual_air_fuel_ratio",
@@ -71,12 +89,20 @@ def stoichiometric_air_fuel_ratio(
         ("sulfur", sulfur),
     ):
         if not 0.0 <= value <= 1.0:
-            raise ValueError(f"{name} mass fraction must be in [0, 1]; got {value}")
+            raise _combustion_refusal(
+                f"{name} mass fraction must be in [0, 1]; got {value}",
+                subject=f"{name} mass fraction",
+                source=_FUEL_ANALYSIS_SOURCE,
+            )
     oxygen_demand = (
         _O2_PER_CARBON * carbon + _O2_PER_HYDROGEN * hydrogen + _O2_PER_SULFUR * sulfur - oxygen
     )
     if oxygen_demand <= 0:
-        raise ValueError("net oxygen demand must be positive (a combustible fuel)")
+        raise _combustion_refusal(
+            "net oxygen demand must be positive (a combustible fuel)",
+            subject="fuel ultimate analysis",
+            source=_FUEL_ANALYSIS_SOURCE,
+        )
     return oxygen_demand / _OXYGEN_MASS_FRACTION_AIR
 
 
@@ -90,7 +116,11 @@ def excess_air_from_flue_oxygen(*, flue_oxygen_percent: float) -> float:
     for 17%).
     """
     if not 0.0 <= flue_oxygen_percent < 20.9:
-        raise ValueError(f"flue_oxygen_percent must be in [0, 20.9); got {flue_oxygen_percent}")
+        raise _combustion_refusal(
+            f"flue_oxygen_percent must be in [0, 20.9); got {flue_oxygen_percent}",
+            subject="flue_oxygen_percent",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     return flue_oxygen_percent / (20.9 - flue_oxygen_percent)
 
 
@@ -107,9 +137,17 @@ def actual_air_fuel_ratio(
     the dimensionless actual air-fuel ratio by mass.
     """
     if stoichiometric_air_fuel_ratio <= 0:
-        raise ValueError("stoichiometric_air_fuel_ratio must be positive")
+        raise _combustion_refusal(
+            "stoichiometric_air_fuel_ratio must be positive",
+            subject="stoichiometric_air_fuel_ratio",
+            source=_FUEL_ANALYSIS_SOURCE,
+        )
     if excess_air_fraction < 0:
-        raise ValueError("excess_air_fraction must be non-negative")
+        raise _combustion_refusal(
+            "excess_air_fraction must be non-negative",
+            subject="excess_air_fraction",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     return stoichiometric_air_fuel_ratio * (1.0 + excess_air_fraction)
 
 
@@ -127,9 +165,17 @@ def equivalence_ratio(
     fuel. Both ratios must be positive. Returns the dimensionless equivalence ratio.
     """
     if stoichiometric_air_fuel_ratio <= 0:
-        raise ValueError("stoichiometric_air_fuel_ratio must be positive")
+        raise _combustion_refusal(
+            "stoichiometric_air_fuel_ratio must be positive",
+            subject="stoichiometric_air_fuel_ratio",
+            source=_FUEL_ANALYSIS_SOURCE,
+        )
     if actual_air_fuel_ratio <= 0:
-        raise ValueError("actual_air_fuel_ratio must be positive")
+        raise _combustion_refusal(
+            "actual_air_fuel_ratio must be positive",
+            subject="actual_air_fuel_ratio",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     return stoichiometric_air_fuel_ratio / actual_air_fuel_ratio
 
 
@@ -142,7 +188,11 @@ def equivalence_ratio_from_excess_air(*, excess_air_fraction: float) -> float:
     fraction must be greater than −1. Returns the dimensionless equivalence ratio.
     """
     if excess_air_fraction <= -1.0:
-        raise ValueError("excess_air_fraction must be greater than -1")
+        raise _combustion_refusal(
+            "excess_air_fraction must be greater than -1",
+            subject="excess_air_fraction",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     return 1.0 / (1.0 + excess_air_fraction)
 
 
@@ -165,26 +215,50 @@ def siegert_dry_flue_gas_loss(
     Returns the dry flue-gas loss as a percentage.
     """
     if not isinstance(flue_temperature, Quantity):
-        raise ValueError(
-            f"flue_temperature must be a [temperature] quantity; got {flue_temperature!r}"
+        raise _combustion_refusal(
+            f"flue_temperature must be a [temperature] quantity; got {flue_temperature!r}",
+            subject="flue_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
         )
     if not flue_temperature.has_dimension("[temperature]"):
-        raise ValueError("flue_temperature must be a [temperature] quantity")
+        raise _combustion_refusal(
+            "flue_temperature must be a [temperature] quantity",
+            subject="flue_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     if not isinstance(combustion_air_temperature, Quantity):
-        raise ValueError(
+        raise _combustion_refusal(
             f"combustion_air_temperature must be a [temperature] quantity; "
-            f"got {combustion_air_temperature!r}"
+            f"got {combustion_air_temperature!r}",
+            subject="combustion_air_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
         )
     if not combustion_air_temperature.has_dimension("[temperature]"):
-        raise ValueError("combustion_air_temperature must be a [temperature] quantity")
+        raise _combustion_refusal(
+            "combustion_air_temperature must be a [temperature] quantity",
+            subject="combustion_air_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     t_flue = flue_temperature.to("degC").magnitude
     t_air = combustion_air_temperature.to("degC").magnitude
     if t_flue <= t_air:
-        raise ValueError("flue_temperature must exceed the combustion air temperature")
+        raise _combustion_refusal(
+            "flue_temperature must exceed the combustion air temperature",
+            subject="flue and combustion-air temperatures",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     if not 0 <= flue_oxygen_percent < 21:
-        raise ValueError("flue_oxygen_percent must be in [0, 21)")
+        raise _combustion_refusal(
+            "flue_oxygen_percent must be in [0, 21)",
+            subject="flue_oxygen_percent",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     if siegert_factor <= 0:
-        raise ValueError("siegert_factor must be positive")
+        raise _combustion_refusal(
+            "siegert_factor must be positive",
+            subject="siegert_factor",
+            source=_COMBUSTION_MODEL_SOURCE,
+        )
     return siegert_factor * (t_flue - t_air) / (21.0 - flue_oxygen_percent)
 
 
@@ -202,12 +276,24 @@ def combustion_efficiency(
     stack temperature or the excess air lifts it directly. Returns the efficiency as a percentage.
     """
     if dry_flue_gas_loss_percent < 0:
-        raise ValueError("dry_flue_gas_loss_percent must be non-negative")
+        raise _combustion_refusal(
+            "dry_flue_gas_loss_percent must be non-negative",
+            subject="dry_flue_gas_loss_percent",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     if other_losses_percent < 0:
-        raise ValueError("other_losses_percent must be non-negative")
+        raise _combustion_refusal(
+            "other_losses_percent must be non-negative",
+            subject="other_losses_percent",
+            source=_COMBUSTION_MODEL_SOURCE,
+        )
     efficiency = 100.0 - dry_flue_gas_loss_percent - other_losses_percent
     if efficiency <= 0:
-        raise ValueError("the losses given exceed 100% (check the inputs)")
+        raise _combustion_refusal(
+            "the losses given exceed 100% (check the inputs)",
+            subject="combustion loss inputs",
+            source=_COMBUSTION_MODEL_SOURCE,
+        )
     return efficiency
 
 
@@ -223,17 +309,25 @@ def wobbe_index(*, higher_heating_value: Quantity, gas_specific_gravity: float) 
     the same volumetric-energy units as the heating value.
     """
     if not isinstance(higher_heating_value, Quantity):
-        raise ValueError(
+        raise _combustion_refusal(
             f"higher_heating_value must be a [energy]/[volume] quantity; "
-            f"got {higher_heating_value!r}"
+            f"got {higher_heating_value!r}",
+            subject="higher_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not higher_heating_value.has_dimension("[energy]/[volume]"):
-        raise ValueError(
+        raise _combustion_refusal(
             "higher_heating_value must be a volumetric energy density (energy per volume); got "
-            f"{higher_heating_value.dimensionality} ({higher_heating_value})"
+            f"{higher_heating_value.dimensionality} ({higher_heating_value})",
+            subject="higher_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if gas_specific_gravity <= 0:
-        raise ValueError("gas_specific_gravity must be positive")
+        raise _combustion_refusal(
+            "gas_specific_gravity must be positive",
+            subject="gas_specific_gravity",
+            source=_THERMOCHEMICAL_SOURCE,
+        )
     hhv = higher_heating_value.to("MJ/m**3").magnitude
     return Quantity(magnitude=hhv / sqrt(gas_specific_gravity), unit="MJ/m**3")
 
@@ -257,32 +351,49 @@ def lower_heating_value(
     same mass-specific units.
     """
     if not isinstance(higher_heating_value, Quantity):
-        raise ValueError(
-            f"higher_heating_value must be a [energy]/[mass] quantity; got {higher_heating_value!r}"
+        raise _combustion_refusal(
+            f"higher_heating_value must be a [energy]/[mass] quantity; "
+            f"got {higher_heating_value!r}",
+            subject="higher_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not higher_heating_value.has_dimension("[energy]/[mass]"):
-        raise ValueError(
+        raise _combustion_refusal(
             "higher_heating_value must be a mass-specific energy (energy per mass); got "
-            f"{higher_heating_value.dimensionality} ({higher_heating_value})"
+            f"{higher_heating_value.dimensionality} ({higher_heating_value})",
+            subject="higher_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if water_mass_per_fuel_mass < 0:
-        raise ValueError("water_mass_per_fuel_mass must be non-negative")
+        raise _combustion_refusal(
+            "water_mass_per_fuel_mass must be non-negative",
+            subject="water_mass_per_fuel_mass",
+            source=_FUEL_ANALYSIS_SOURCE,
+        )
     if latent_heat is None:
         h_fg = _WATER_LATENT_HEAT_MJ_PER_KG
     else:
         if not isinstance(latent_heat, Quantity):
-            raise ValueError(f"latent_heat must be a [energy]/[mass] quantity; got {latent_heat!r}")
+            raise _combustion_refusal(
+                f"latent_heat must be a [energy]/[mass] quantity; got {latent_heat!r}",
+                subject="latent_heat",
+                source=_THERMOCHEMICAL_SOURCE,
+            )
         if not latent_heat.has_dimension("[energy]/[mass]"):
-            raise ValueError(
+            raise _combustion_refusal(
                 "latent_heat must be a mass-specific energy (energy per mass); got "
-                f"{latent_heat.dimensionality} ({latent_heat})"
+                f"{latent_heat.dimensionality} ({latent_heat})",
+                subject="latent_heat",
+                source=_THERMOCHEMICAL_SOURCE,
             )
         h_fg = latent_heat.to("MJ/kg").magnitude
     hhv = higher_heating_value.to("MJ/kg").magnitude
     lhv = hhv - water_mass_per_fuel_mass * h_fg
     if lhv <= 0:
-        raise ValueError(
-            "the water latent-heat term exceeds the higher heating value (LHV ≤ 0); check inputs"
+        raise _combustion_refusal(
+            "the water latent-heat term exceeds the higher heating value (LHV ≤ 0); check inputs",
+            subject="heating value and water-content inputs",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     return Quantity(magnitude=lhv, unit="MJ/kg")
 
@@ -314,42 +425,70 @@ def adiabatic_flame_temperature(
     must be absolute. Returns the adiabatic flame temperature in K.
     """
     if not isinstance(lower_heating_value, Quantity):
-        raise ValueError(
-            f"lower_heating_value must be a [energy]/[mass] quantity; got {lower_heating_value!r}"
+        raise _combustion_refusal(
+            f"lower_heating_value must be a [energy]/[mass] quantity; got {lower_heating_value!r}",
+            subject="lower_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not lower_heating_value.has_dimension("[energy]/[mass]"):
-        raise ValueError(
+        raise _combustion_refusal(
             "lower_heating_value must be a mass-specific energy (energy per mass); got "
-            f"{lower_heating_value.dimensionality} ({lower_heating_value})"
+            f"{lower_heating_value.dimensionality} ({lower_heating_value})",
+            subject="lower_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not isinstance(product_specific_heat, Quantity):
-        raise ValueError(
+        raise _combustion_refusal(
             f"product_specific_heat must be a [energy]/([mass]*[temperature]) quantity; "
-            f"got {product_specific_heat!r}"
+            f"got {product_specific_heat!r}",
+            subject="product_specific_heat",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not product_specific_heat.has_dimension("[energy]/([mass]*[temperature])"):
-        raise ValueError(
+        raise _combustion_refusal(
             "product_specific_heat must be a specific heat (energy per mass per temperature); got "
-            f"{product_specific_heat.dimensionality} ({product_specific_heat})"
+            f"{product_specific_heat.dimensionality} ({product_specific_heat})",
+            subject="product_specific_heat",
+            source=_THERMOCHEMICAL_SOURCE,
         )
     if not isinstance(inlet_temperature, Quantity):
-        raise ValueError(
-            f"inlet_temperature must be a [temperature] quantity; got {inlet_temperature!r}"
+        raise _combustion_refusal(
+            f"inlet_temperature must be a [temperature] quantity; got {inlet_temperature!r}",
+            subject="inlet_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
         )
     if not inlet_temperature.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _combustion_refusal(
             "inlet_temperature must be a temperature; got "
-            f"{inlet_temperature.dimensionality} ({inlet_temperature})"
+            f"{inlet_temperature.dimensionality} ({inlet_temperature})",
+            subject="inlet_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
         )
     lhv = lower_heating_value.to("J/kg").magnitude
     c_p = product_specific_heat.to("J/(kg*K)").magnitude
     t_0 = inlet_temperature.to("K").magnitude
     if lhv <= 0:
-        raise ValueError("lower_heating_value must be positive")
+        raise _combustion_refusal(
+            "lower_heating_value must be positive",
+            subject="lower_heating_value",
+            source=_THERMOCHEMICAL_SOURCE,
+        )
     if air_fuel_ratio <= 0:
-        raise ValueError("air_fuel_ratio must be positive")
+        raise _combustion_refusal(
+            "air_fuel_ratio must be positive",
+            subject="air_fuel_ratio",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     if c_p <= 0:
-        raise ValueError("product_specific_heat must be positive")
+        raise _combustion_refusal(
+            "product_specific_heat must be positive",
+            subject="product_specific_heat",
+            source=_THERMOCHEMICAL_SOURCE,
+        )
     if t_0 <= 0:
-        raise ValueError("inlet_temperature must be a positive absolute temperature")
+        raise _combustion_refusal(
+            "inlet_temperature must be a positive absolute temperature",
+            subject="inlet_temperature",
+            source=_COMBUSTION_CASE_SOURCE,
+        )
     return Quantity(magnitude=t_0 + lhv / ((1.0 + air_fuel_ratio) * c_p), unit="K")

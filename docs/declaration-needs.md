@@ -280,6 +280,10 @@ The complete spring-analysis family is structured at all 37 refusal sites. Coil,
 Belleville, and spiral-spring refusals identify the rejected load, travel, rate, geometry,
 material property, or end condition and point to the operating case, spring drawing,
 manufacturer catalogue, material record, or governing spring design basis.
+The complete combustion-analysis family follows the contract at all 37 refusal sites. Fuel
+composition, air and flue-gas conditions, heating values, thermochemical properties, and loss
+assumptions point to the ultimate analysis, calibrated operating measurements, fuel certificate,
+property record, or governing combustion model that supplies the correction.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

@@ -20560,6 +20560,73 @@ def test_combustion_wobbe_index_and_lower_heating_value():
         lower_heating_value(higher_heating_value=_q("5 MJ/kg"), water_mass_per_fuel_mass=3.0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "stoichiometric_air_fuel_ratio",
+            {"carbon": 1.1, "hydrogen": 0.0},
+            "carbon mass fraction",
+            "the fuel ultimate analysis or supplier composition record",
+        ),
+        (
+            "excess_air_from_flue_oxygen",
+            {"flue_oxygen_percent": 21.0},
+            "flue_oxygen_percent",
+            "the burner operating case or calibrated flue-gas measurement",
+        ),
+        (
+            "wobbe_index",
+            {"higher_heating_value": _q("38 MJ/m**3"), "gas_specific_gravity": 0.0},
+            "gas_specific_gravity",
+            "the fuel certificate or cited thermochemical property record",
+        ),
+        (
+            "combustion_efficiency",
+            {"dry_flue_gas_loss_percent": 10.0, "other_losses_percent": -1.0},
+            "other_losses_percent",
+            "the governing combustion model and stated design assumptions",
+        ),
+    ),
+)
+def test_combustion_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_combustion_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/combustion.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_combustion_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 37
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_open_channel_rational_method_peak_runoff():
     from anvilate.analysis import rational_method_peak_runoff
 
