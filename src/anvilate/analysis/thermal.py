@@ -1300,7 +1300,11 @@ def laminar_tube_convection_coefficient(
     heat-transfer regime, which is why exchangers run turbulent. Valid for Re below ~2300; above the
     transition the flow turns turbulent. Returns h in W/(m²·K).
     """
-    require_flag(constant_wall_temperature, name="constant_wall_temperature")
+    require_flag(
+        constant_wall_temperature,
+        name="constant_wall_temperature",
+        source="the thermal boundary-condition declaration",
+    )
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
     _require(diameter, "[length]", "diameter")
     k = thermal_conductivity.to("W/(m*K)").magnitude
@@ -1334,7 +1338,11 @@ def dittus_boelter_convection_coefficient(
     so it reports "not evaluated" for laminar or transitional flow rather than extrapolating.
     Otherwise returns h in W/(m²·K).
     """
-    require_flag(heating, name="heating")
+    require_flag(
+        heating,
+        name="heating",
+        source="the fluid and wall temperature direction",
+    )
     _require(fluid_velocity, "[velocity]", "fluid_velocity")
     _require(diameter, "[length]", "diameter")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -1801,7 +1809,11 @@ def horizontal_plate_natural_convection_coefficient(
     :func:`vertical_plate_natural_convection_coefficient`, and
     ``hot_surface_facing_up`` selects the case. Returns h in W/(m²·K).
     """
-    require_flag(hot_surface_facing_up, name="hot_surface_facing_up")
+    require_flag(
+        hot_surface_facing_up,
+        name="hot_surface_facing_up",
+        source="the surface orientation and gravity direction",
+    )
     _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
     _require(characteristic_length, "[length]", "characteristic_length")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")

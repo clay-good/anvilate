@@ -100,7 +100,11 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     pushing back into the soil. ``friction_angle`` φ is in degrees; set ``passive`` True for K_p.
     Returns the dimensionless coefficient.
     """
-    require_flag(passive, name="passive")
+    require_flag(
+        passive,
+        name="passive",
+        source="the retaining-wall movement and earth-pressure design case",
+    )
     _check_friction_angle(friction_angle)
     if passive:
         return tan(radians(45.0 + friction_angle / 2.0)) ** 2
@@ -337,7 +341,11 @@ def rankine_lateral_thrust(
     thrust per unit wall length in kN/m — multiply by the wall length for the total force, and
     note the soil triangle's resultant acts at H/3 above the base.
     """
-    require_flag(passive, name="passive")
+    require_flag(
+        passive,
+        name="passive",
+        source="the retaining-wall movement and earth-pressure design case",
+    )
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _require(height, "[length]", "height")
     gamma = unit_weight.to("kN/m**3").magnitude

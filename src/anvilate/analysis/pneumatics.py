@@ -161,7 +161,11 @@ def cylinder_free_air_demand(
     ``gauge_supply_pressure`` p_g, and ``atmospheric_pressure`` p_atm (default 1 atm). This is the
     sizing load a compressor and its receiver are matched to. Returns the free-air demand in L/min.
     """
-    require_flag(double_acting, name="double_acting")
+    require_flag(
+        double_acting,
+        name="double_acting",
+        source="the cylinder manufacturer's actuation configuration",
+    )
     per_stroke = cylinder_air_consumption_per_stroke(
         bore_diameter=bore_diameter,
         stroke=stroke,

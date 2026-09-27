@@ -134,7 +134,11 @@ def relativistic_doppler_frequency(
     beta = v/c. Unlike the classical Doppler effect it applies to light and folds in time dilation.
     The speed must be below c. Returns the observed frequency in Hz.
     """
-    require_flag(approaching, name="approaching")
+    require_flag(
+        approaching,
+        name="approaching",
+        source="the source-observer relative-motion declaration",
+    )
     _check(source_frequency, "1/[time]", "source_frequency")
     _check(velocity, "[length]/[time]", "velocity")
     f0 = count_rate_per_second(source_frequency, name="source_frequency")

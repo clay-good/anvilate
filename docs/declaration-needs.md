@@ -259,6 +259,10 @@ leg and rope-part counts, sheave efficiency, lead-sheave count, winch drum geome
 spooling counts, drive torque, rope properties, and sheave geometry identify the rejected
 argument and point to the rigging plan, measured geometry, drum or reeving drawing,
 manufacturer data, or cited load case that supplies its correction.
+Every shared boolean branch selector across the analytical layer is structured too. The
+25 call sites reject truthy strings and numeric stand-ins by naming the exact flag and the
+engineering declaration that decides it: a boundary condition, load case, drawing, service
+record, manufacturer configuration, or governing design basis.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

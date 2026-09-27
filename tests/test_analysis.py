@@ -14345,6 +14345,61 @@ def test_every_lifting_input_refusal_site_requires_explicit_structured_fields():
         )
 
 
+def test_a_shared_branch_flag_refusal_carries_its_callers_source():
+    from anvilate.analysis import rankine_earth_pressure_coefficient
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError, match="passive must be True or False; got 'false'") as refused:
+        rankine_earth_pressure_coefficient(
+            friction_angle=30.0,
+            passive="false",  # type: ignore[arg-type]
+        )
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": "the passive flag 'false'",
+        "source": "the retaining-wall movement and earth-pressure design case",
+    }
+
+
+def test_every_shared_branch_flag_caller_names_its_source():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    root = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis"
+    callers = []
+    for path in root.glob("*.py"):
+        tree = parsed_source(path)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "require_flag"
+            ):
+                callers.append((path, node))
+
+    assert len(callers) == 25
+    for path, call in callers:
+        assert {"name", "source"} <= {keyword.arg for keyword in call.keywords}, (
+            f"{path.relative_to(root.parent.parent.parent)}:{call.lineno}"
+        )
+
+    helper = parsed_source(root / "_flags.py")
+    raises = [
+        node.exc
+        for node in ast.walk(helper)
+        if isinstance(node, ast.Raise)
+        and isinstance(node.exc, ast.Call)
+        and isinstance(node.exc.func, ast.Name)
+        and node.exc.func.id == "_FlagInputError"
+    ]
+    assert len(raises) == 1
+    assert {"action", "subject", "source"} <= {keyword.arg for keyword in raises[0].keywords}
+
+
 def test_gasket_seating_and_operating_bolt_loads():
     from math import pi
 

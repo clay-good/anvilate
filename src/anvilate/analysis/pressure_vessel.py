@@ -1334,7 +1334,11 @@ def thick_wall_cylinder(
     thin-wall screen under-reports the bore. Every quantity argument is
     dimension-checked and must be positive.
     """
-    require_flag(closed_ends, name="closed_ends")
+    require_flag(
+        closed_ends,
+        name="closed_ends",
+        source="the vessel boundary-condition drawing",
+    )
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
     _require(wall_thickness, "[length]", "wall_thickness")
@@ -1377,7 +1381,11 @@ def thick_wall_cylinder_stress_at_radius(
     ``wall_thickness`` set r_o = r_i + t; ``radius`` r must lie within the wall. Returns the
     :class:`ThickWallStress` at r.
     """
-    require_flag(closed_ends, name="closed_ends")
+    require_flag(
+        closed_ends,
+        name="closed_ends",
+        source="the vessel boundary-condition drawing",
+    )
     _require(pressure, "[pressure]", "pressure")
     _require(inner_radius, "[length]", "inner_radius")
     _require(wall_thickness, "[length]", "wall_thickness")

@@ -600,7 +600,11 @@ def nds_euler_buckling_stress(
     formula would give: a column that slender is outside the standard, and the number is
     not a design value.
     """
-    require_flag(during_construction, name="during_construction")
+    require_flag(
+        during_construction,
+        name="during_construction",
+        source="the construction-stage load case",
+    )
     if not isinstance(min_modulus, Quantity):
         raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
     if not min_modulus.has_dimension("[pressure]"):

@@ -663,7 +663,11 @@ def aisc_web_local_yielding_strength(
     strength; a thin web at a short bearing is where beams crush at their supports.
     Returns R_n in kN.
     """
-    require_flag(at_member_end, name="at_member_end")
+    require_flag(
+        at_member_end,
+        name="at_member_end",
+        source="the member reaction location in the structural model",
+    )
     _require(web_yield, "[pressure]", "web_yield")
     _require(web_thickness, "[length]", "web_thickness")
     _require(fillet_distance, "[length]", "fillet_distance")
@@ -702,7 +706,11 @@ def aisc_bearing_length_for_web_yielding(
     the web alone already carries the reaction over its fillet spread the result clamps
     to zero (no bearing length is required). Returns N in mm.
     """
-    require_flag(at_member_end, name="at_member_end")
+    require_flag(
+        at_member_end,
+        name="at_member_end",
+        source="the member reaction location in the structural model",
+    )
     _require(required_reaction, "[force]", "required_reaction")
     _require(web_yield, "[pressure]", "web_yield")
     _require(web_thickness, "[length]", "web_thickness")
@@ -743,7 +751,11 @@ def aisc_web_crippling_strength(
     E. A thicker web dominates (the t_w² term); a thin web at a member end with a short
     bearing is the weakest case. Returns R_n in kN.
     """
-    require_flag(at_member_end, name="at_member_end")
+    require_flag(
+        at_member_end,
+        name="at_member_end",
+        source="the member reaction location in the structural model",
+    )
     _require(web_thickness, "[length]", "web_thickness")
     _require(flange_thickness, "[length]", "flange_thickness")
     _require(member_depth, "[length]", "member_depth")
@@ -796,7 +808,11 @@ def aisc_web_compression_buckling_strength(
     two-sided companion to the one-sided web local yielding and crippling checks.
     Returns R_n in kN.
     """
-    require_flag(at_member_end, name="at_member_end")
+    require_flag(
+        at_member_end,
+        name="at_member_end",
+        source="the member reaction location in the structural model",
+    )
     _require(web_thickness, "[length]", "web_thickness")
     _require(clear_web_depth, "[length]", "clear_web_depth")
     _require(web_yield, "[pressure]", "web_yield")

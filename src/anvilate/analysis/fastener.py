@@ -426,7 +426,11 @@ def bolt_bearing_strength(
     govern; a generous one lets bearing govern at the 2.4·d·t·F_u cap. This is the
     strength complement to the raw :func:`bearing_stress`. Returns R_n per bolt in kN.
     """
-    require_flag(deformation_at_service_considered, name="deformation_at_service_considered")
+    require_flag(
+        deformation_at_service_considered,
+        name="deformation_at_service_considered",
+        source="the AISC 360 bearing-strength design basis",
+    )
     _require(clear_distance, "[length]", "clear_distance")
     _require(plate_thickness, "[length]", "plate_thickness")
     _require(bolt_diameter, "[length]", "bolt_diameter")
@@ -765,7 +769,11 @@ def recommended_bolt_preload(*, proof_load: Quantity, permanent: bool = False) -
     one. ``proof_load`` F_p is the bolt's proof load (:func:`bolt_proof_load`), which
     must be a positive force. Returns the recommended preload in newtons.
     """
-    require_flag(permanent, name="permanent")
+    require_flag(
+        permanent,
+        name="permanent",
+        source="the bolted-joint service declaration",
+    )
     _require(proof_load, "[force]", "proof_load")
     fp = proof_load.to("N").magnitude
     if fp <= 0:

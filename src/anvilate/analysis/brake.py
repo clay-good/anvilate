@@ -221,7 +221,11 @@ def short_shoe_normal_force(
     b + μ·a and friction fights the application — the same shoe brakes harder in
     one rotation direction than the other. Returns the normal force in newtons.
     """
-    require_flag(self_energizing, name="self_energizing")
+    require_flag(
+        self_energizing,
+        name="self_energizing",
+        source="the brake geometry and drum rotation direction",
+    )
     _require(actuation_force, "[force]", "actuation_force")
     f = actuation_force.to("N").magnitude
     if f < 0:
