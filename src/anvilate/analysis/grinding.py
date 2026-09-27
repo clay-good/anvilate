@@ -25,7 +25,35 @@ indexes wheel behaviour, and the specific energy a grind consumes.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_GRINDING_GEOMETRY_SOURCE = "the grinding operation sheet or verified wheel-contact geometry"
+_GRINDING_SPEED_SOURCE = "the approved feed and wheel-speed schedule or calibrated speed record"
+_GRINDING_POWER_SOURCE = "the spindle datasheet or calibrated grinding-power record"
+_GRINDING_RATE_SOURCE = "the verified grinding removal-rate calculation or process trial"
+
+
+class _GrindingInputError(RefusalError, ValueError):
+    """A grinding input that cannot be used without correction."""
+
+
+def _grinding_refusal(message: str, *, subject: str, source: str) -> _GrindingInputError:
+    return _GrindingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _grinding_input_source(name: str) -> str:
+    if name in {"workpiece_speed", "wheel_speed"}:
+        return _GRINDING_SPEED_SOURCE
+    if name == "power":
+        return _GRINDING_POWER_SOURCE
+    if name == "specific_removal_rate":
+        return _GRINDING_RATE_SOURCE
+    return _GRINDING_GEOMETRY_SOURCE
+
 
 __all__ = [
     "grinding_equivalent_chip_thickness",
@@ -52,9 +80,17 @@ def grinding_specific_removal_rate(
     a_e = depth_of_cut.to("mm").magnitude
     v_w = workpiece_speed.to("mm/s").magnitude
     if a_e <= 0:
-        raise ValueError("depth_of_cut must be positive")
+        raise _grinding_refusal(
+            "depth_of_cut must be positive",
+            subject="depth_of_cut",
+            source=_GRINDING_GEOMETRY_SOURCE,
+        )
     if v_w <= 0:
-        raise ValueError("workpiece_speed must be positive")
+        raise _grinding_refusal(
+            "workpiece_speed must be positive",
+            subject="workpiece_speed",
+            source=_GRINDING_SPEED_SOURCE,
+        )
     return Quantity(magnitude=a_e * v_w, unit="mm**2/s")
 
 
@@ -75,9 +111,17 @@ def grinding_equivalent_chip_thickness(
     q = specific_removal_rate.to("mm**2/s").magnitude
     v_s = wheel_speed.to("mm/s").magnitude
     if q <= 0:
-        raise ValueError("specific_removal_rate must be positive")
+        raise _grinding_refusal(
+            "specific_removal_rate must be positive",
+            subject="specific_removal_rate",
+            source=_GRINDING_RATE_SOURCE,
+        )
     if v_s <= 0:
-        raise ValueError("wheel_speed must be positive")
+        raise _grinding_refusal(
+            "wheel_speed must be positive",
+            subject="wheel_speed",
+            source=_GRINDING_SPEED_SOURCE,
+        )
     return Quantity(magnitude=q / v_s * 1000.0, unit="micrometer")
 
 
@@ -102,21 +146,37 @@ def grinding_specific_energy(
     q = specific_removal_rate.to("mm**2/s").magnitude
     b = wheel_width.to("mm").magnitude
     if p <= 0:
-        raise ValueError("power must be positive")
+        raise _grinding_refusal(
+            "power must be positive", subject="power", source=_GRINDING_POWER_SOURCE
+        )
     if q <= 0:
-        raise ValueError("specific_removal_rate must be positive")
+        raise _grinding_refusal(
+            "specific_removal_rate must be positive",
+            subject="specific_removal_rate",
+            source=_GRINDING_RATE_SOURCE,
+        )
     if b <= 0:
-        raise ValueError("wheel_width must be positive")
+        raise _grinding_refusal(
+            "wheel_width must be positive",
+            subject="wheel_width",
+            source=_GRINDING_GEOMETRY_SOURCE,
+        )
     total_removal_rate = b * q  # mm**3/s
     return Quantity(magnitude=p / total_removal_rate, unit="J/mm**3")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _grinding_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_grinding_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _grinding_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_grinding_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

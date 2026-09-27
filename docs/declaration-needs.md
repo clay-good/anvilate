@@ -339,6 +339,9 @@ speeds point to drawings, certified tests, qualified trials, process plans, or c
 The complete injection-molding, centrifugal-casting, and casting-gating families follow the contract
 at all 30 refusal sites. Mold and gating geometry, machine setup, thermal and melt properties,
 temperatures, spin speed, fill time, and discharge data point to drawings, plans, or calibrated trials.
+The complete broaching, grinding, and EDM families follow the contract at all 29 refusal sites.
+Tool and cut geometry, material allowables, removal rates, wheel and feed speeds, spindle power,
+electrical settings, pulse timing, and erosion data point to drawings, schedules, or calibrated trials.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

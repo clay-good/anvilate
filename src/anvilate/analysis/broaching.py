@@ -22,8 +22,31 @@ broach itself can carry before it yields.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._counting import whole_count_floor
+
+_BROACH_GEOMETRY_SOURCE = "the broach and workpiece drawing or verified geometry record"
+_BROACH_MATERIAL_SOURCE = "the workpiece cutting-data record or certified broach allowable"
+_BROACH_PROCESS_SOURCE = "the approved broaching process plan"
+
+
+class _BroachingInputError(RefusalError, ValueError):
+    """A broaching input that cannot be used without correction."""
+
+
+def _broaching_refusal(message: str, *, subject: str, source: str) -> _BroachingInputError:
+    return _BroachingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _broaching_input_source(name: str) -> str:
+    if name in {"specific_cutting_force", "allowable_stress"}:
+        return _BROACH_MATERIAL_SOURCE
+    return _BROACH_GEOMETRY_SOURCE
+
 
 __all__ = [
     "broaching_cutting_force",
@@ -50,9 +73,17 @@ def broaching_teeth_in_cut(*, workpiece_length: Quantity, tooth_pitch: Quantity)
     length = workpiece_length.to("mm").magnitude
     pitch = tooth_pitch.to("mm").magnitude
     if length <= 0:
-        raise ValueError("workpiece_length must be positive")
+        raise _broaching_refusal(
+            "workpiece_length must be positive",
+            subject="workpiece_length",
+            source=_BROACH_GEOMETRY_SOURCE,
+        )
     if pitch <= 0:
-        raise ValueError("tooth_pitch must be positive")
+        raise _broaching_refusal(
+            "tooth_pitch must be positive",
+            subject="tooth_pitch",
+            source=_BROACH_GEOMETRY_SOURCE,
+        )
     return max(1, whole_count_floor(length / pitch))
 
 
@@ -80,13 +111,27 @@ def broaching_cutting_force(
     w = cut_width.to("m").magnitude
     t = rise_per_tooth.to("m").magnitude
     if k_s <= 0:
-        raise ValueError("specific_cutting_force must be positive")
+        raise _broaching_refusal(
+            "specific_cutting_force must be positive",
+            subject="specific_cutting_force",
+            source=_BROACH_MATERIAL_SOURCE,
+        )
     if not isinstance(teeth_in_cut, int) or teeth_in_cut < 1:
-        raise ValueError("teeth_in_cut must be an integer of at least 1")
+        raise _broaching_refusal(
+            "teeth_in_cut must be an integer of at least 1",
+            subject="teeth_in_cut",
+            source=_BROACH_PROCESS_SOURCE,
+        )
     if w <= 0:
-        raise ValueError("cut_width must be positive")
+        raise _broaching_refusal(
+            "cut_width must be positive", subject="cut_width", source=_BROACH_GEOMETRY_SOURCE
+        )
     if t <= 0:
-        raise ValueError("rise_per_tooth must be positive")
+        raise _broaching_refusal(
+            "rise_per_tooth must be positive",
+            subject="rise_per_tooth",
+            source=_BROACH_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=k_s * teeth_in_cut * w * t / 1000.0, unit="kN")
 
 
@@ -105,18 +150,30 @@ def broaching_pull_capacity(*, allowable_stress: Quantity, root_area: Quantity) 
     sigma = allowable_stress.to("Pa").magnitude
     area = root_area.to("m**2").magnitude
     if sigma <= 0:
-        raise ValueError("allowable_stress must be positive")
+        raise _broaching_refusal(
+            "allowable_stress must be positive",
+            subject="allowable_stress",
+            source=_BROACH_MATERIAL_SOURCE,
+        )
     if area <= 0:
-        raise ValueError("root_area must be positive")
+        raise _broaching_refusal(
+            "root_area must be positive", subject="root_area", source=_BROACH_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=sigma * area / 1000.0, unit="kN")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _broaching_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_broaching_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _broaching_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_broaching_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

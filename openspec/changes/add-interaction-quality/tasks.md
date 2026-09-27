@@ -156,6 +156,9 @@
       The complete injection-molding, centrifugal-casting, and casting-gating families add 30 sites
       for mold and gating geometry, machine setup, thermal and melt properties, temperatures, spin
       speed, fill time, and discharge data, sourced to drawings, plans, or calibrated trials.
+      The complete broaching, grinding, and EDM families add 29 structured sites for tool and cut
+      geometry, material allowables, removal rates, wheel and feed speeds, spindle power, electrical
+      settings, pulse timing, and erosion data, sourced to drawings, schedules, or calibrated trials.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

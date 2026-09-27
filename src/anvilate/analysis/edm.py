@@ -24,7 +24,32 @@ removal rate those give at a stated wear ratio.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_EDM_ELECTRICAL_SOURCE = "the approved EDM electrical setup or calibrated generator record"
+_EDM_TIMING_SOURCE = "the qualified EDM pulse schedule"
+_EDM_MATERIAL_SOURCE = "the workpiece erosion-data record or qualified EDM trial"
+
+
+class _EDMInputError(RefusalError, ValueError):
+    """An EDM input that cannot be used without correction."""
+
+
+def _edm_refusal(message: str, *, subject: str, source: str) -> _EDMInputError:
+    return _EDMInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _edm_input_source(name: str) -> str:
+    if name in {"pulse_on_time", "pulse_off_time"}:
+        return _EDM_TIMING_SOURCE
+    if name == "erosion_coefficient":
+        return _EDM_MATERIAL_SOURCE
+    return _EDM_ELECTRICAL_SOURCE
+
 
 __all__ = [
     "edm_discharge_energy",
@@ -51,11 +76,23 @@ def edm_discharge_energy(
     i = peak_current.to("A").magnitude
     t_on = pulse_on_time.to("s").magnitude
     if u <= 0:
-        raise ValueError("gap_voltage must be positive")
+        raise _edm_refusal(
+            "gap_voltage must be positive",
+            subject="gap_voltage",
+            source=_EDM_ELECTRICAL_SOURCE,
+        )
     if i <= 0:
-        raise ValueError("peak_current must be positive")
+        raise _edm_refusal(
+            "peak_current must be positive",
+            subject="peak_current",
+            source=_EDM_ELECTRICAL_SOURCE,
+        )
     if t_on <= 0:
-        raise ValueError("pulse_on_time must be positive")
+        raise _edm_refusal(
+            "pulse_on_time must be positive",
+            subject="pulse_on_time",
+            source=_EDM_TIMING_SOURCE,
+        )
     return Quantity(magnitude=u * i * t_on * 1000.0, unit="mJ")
 
 
@@ -74,9 +111,17 @@ def edm_duty_factor(*, pulse_on_time: Quantity, pulse_off_time: Quantity) -> flo
     t_on = pulse_on_time.to("s").magnitude
     t_off = pulse_off_time.to("s").magnitude
     if t_on <= 0:
-        raise ValueError("pulse_on_time must be positive")
+        raise _edm_refusal(
+            "pulse_on_time must be positive",
+            subject="pulse_on_time",
+            source=_EDM_TIMING_SOURCE,
+        )
     if t_off < 0:
-        raise ValueError("pulse_off_time must be non-negative")
+        raise _edm_refusal(
+            "pulse_off_time must be non-negative",
+            subject="pulse_off_time",
+            source=_EDM_TIMING_SOURCE,
+        )
     return t_on / (t_on + t_off)
 
 
@@ -98,23 +143,41 @@ def edm_material_removal_rate(
     k = erosion_coefficient.to("mm**3/(min*A)").magnitude
     i = peak_current.to("A").magnitude
     if k <= 0:
-        raise ValueError("erosion_coefficient must be positive")
+        raise _edm_refusal(
+            "erosion_coefficient must be positive",
+            subject="erosion_coefficient",
+            source=_EDM_MATERIAL_SOURCE,
+        )
     if i <= 0:
-        raise ValueError("peak_current must be positive")
+        raise _edm_refusal(
+            "peak_current must be positive",
+            subject="peak_current",
+            source=_EDM_ELECTRICAL_SOURCE,
+        )
     return Quantity(magnitude=k * i * duty_factor, unit="mm**3/min")
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be a fraction in (0, 1]; got {value}")
+        raise _edm_refusal(
+            f"{name} must be a fraction in (0, 1]; got {value}",
+            subject=name,
+            source=_EDM_TIMING_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _edm_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_edm_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _edm_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_edm_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -22845,6 +22845,145 @@ def test_edm_discharge_energy_duty_factor_and_removal_rate():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "broaching_teeth_in_cut",
+            {"workpiece_length": _q("25 mm"), "tooth_pitch": _q("0 mm")},
+            "tooth_pitch",
+            "the broach and workpiece drawing or verified geometry record",
+        ),
+        (
+            "broaching_cutting_force",
+            {
+                "specific_cutting_force": _q("0 MPa"),
+                "teeth_in_cut": 3,
+                "cut_width": _q("10 mm"),
+                "rise_per_tooth": _q("0.05 mm"),
+            },
+            "specific_cutting_force",
+            "the workpiece cutting-data record or certified broach allowable",
+        ),
+        (
+            "broaching_cutting_force",
+            {
+                "specific_cutting_force": _q("1500 MPa"),
+                "teeth_in_cut": 0,
+                "cut_width": _q("10 mm"),
+                "rise_per_tooth": _q("0.05 mm"),
+            },
+            "teeth_in_cut",
+            "the approved broaching process plan",
+        ),
+        (
+            "grinding_specific_removal_rate",
+            {"depth_of_cut": _q("0 mm"), "workpiece_speed": _q("200 mm/s")},
+            "depth_of_cut",
+            "the grinding operation sheet or verified wheel-contact geometry",
+        ),
+        (
+            "grinding_equivalent_chip_thickness",
+            {"specific_removal_rate": _q("4 mm**2/s"), "wheel_speed": _q("0 m/s")},
+            "wheel_speed",
+            "the approved feed and wheel-speed schedule or calibrated speed record",
+        ),
+        (
+            "grinding_specific_energy",
+            {
+                "power": _q("0 W"),
+                "specific_removal_rate": _q("4 mm**2/s"),
+                "wheel_width": _q("20 mm"),
+            },
+            "power",
+            "the spindle datasheet or calibrated grinding-power record",
+        ),
+        (
+            "grinding_specific_energy",
+            {
+                "power": _q("2 kW"),
+                "specific_removal_rate": _q("0 mm**2/s"),
+                "wheel_width": _q("20 mm"),
+            },
+            "specific_removal_rate",
+            "the verified grinding removal-rate calculation or process trial",
+        ),
+        (
+            "edm_discharge_energy",
+            {"gap_voltage": _q("0 V"), "peak_current": _q("20 A"), "pulse_on_time": _q("100 us")},
+            "gap_voltage",
+            "the approved EDM electrical setup or calibrated generator record",
+        ),
+        (
+            "edm_material_removal_rate",
+            {
+                "erosion_coefficient": _q("2 mm**3/(min*A)"),
+                "peak_current": _q("20 A"),
+                "duty_factor": 0.0,
+            },
+            "duty_factor",
+            "the qualified EDM pulse schedule",
+        ),
+        (
+            "edm_material_removal_rate",
+            {
+                "erosion_coefficient": _q("0 mm**3/(min*A)"),
+                "peak_current": _q("20 A"),
+                "duty_factor": 0.5,
+            },
+            "erosion_coefficient",
+            "the workpiece erosion-data record or qualified EDM trial",
+        ),
+    ),
+)
+def test_machining_process_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("broaching", "_broaching_refusal", 10),
+        ("grinding", "_grinding_refusal", 9),
+        ("edm", "_edm_refusal", 10),
+    ),
+)
+def test_every_machining_process_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_centrifugal_casting_g_factor_speed_inverse_and_wall_pressure():
     from anvilate.analysis import (
         centrifugal_g_factor,
