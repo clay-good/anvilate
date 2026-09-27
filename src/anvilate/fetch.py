@@ -39,6 +39,7 @@ from typing import Protocol
 from pydantic import ConfigDict, field_validator
 
 from ._models import Named, Provenance, RevalidatedModel, StatableModel
+from .refusal import RefusalError, Remedy
 
 __all__ = [
     "ConsentRequired",
@@ -55,12 +56,12 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-class ConsentRequired(RuntimeError):
+class ConsentRequired(RefusalError):
     """A fetch was attempted without the caller stating that the user agreed to it."""
 
 
-class IntegrityError(RuntimeError):
-    """A payload's digest is not the one its recipe declares."""
+class IntegrityError(RefusalError):
+    """A cached or downloaded dataset cannot prove its identity and provenance."""
 
 
 class Opener(Protocol):
@@ -205,6 +206,19 @@ def _provenance_path(recipe: DatasetRecipe, root: Path) -> Path:
     return root / f"{recipe.name}.provenance.json"
 
 
+def _integrity_remedy(recipe: DatasetRecipe, *, action: str, subject: str) -> tuple[Remedy, ...]:
+    return (
+        Remedy(
+            action=action,
+            subject=subject,
+            source=(
+                f"{recipe.source} at {recipe.url}, verified against the recipe SHA-256 "
+                f"{recipe.sha256}"
+            ),
+        ),
+    )
+
+
 def _verify(payload: bytes, recipe: DatasetRecipe, *, where: str) -> None:
     digest = hashlib.sha256(payload).hexdigest()
     if digest != recipe.sha256:
@@ -212,7 +226,16 @@ def _verify(payload: bytes, recipe: DatasetRecipe, *, where: str) -> None:
             f"{recipe.name} {where} hashes to {digest}, and its recipe declares "
             f"{recipe.sha256}. Refusing it: a payload that is not the one the digest "
             "names is not the dataset — truncated, mirrored, edited in the cache, or "
-            "left over from a recipe that has since been pointed at a new version."
+            "left over from a recipe that has since been pointed at a new version.",
+            remedies=_integrity_remedy(
+                recipe,
+                action="delete and refetch" if where == "in the cache" else "verify and retry",
+                subject=(
+                    f"the cached {recipe.name} payload"
+                    if where == "in the cache"
+                    else f"the {recipe.name} dataset recipe and payload"
+                ),
+            ),
         )
 
 
@@ -233,7 +256,12 @@ def cached_dataset(
     if not sidecar.exists():
         raise IntegrityError(
             f"{payload} is cached with no {sidecar.name} beside it, so nothing can say "
-            f"where it came from or under what licence. Delete {payload} and fetch again."
+            f"where it came from or under what licence. Delete {payload} and fetch again.",
+            remedies=_integrity_remedy(
+                recipe,
+                action="delete and refetch",
+                subject=f"the cached {recipe.name} payload and missing provenance sidecar",
+            ),
         )
     _verify(payload.read_bytes(), recipe, where="in the cache")
     try:
@@ -246,9 +274,27 @@ def cached_dataset(
         raise IntegrityError(
             f"{sidecar} is beside {payload.name} and is not UTF-8 text ({unreadable}), so "
             "nothing can say where it came from or under what licence. Delete both and "
-            "fetch again."
+            "fetch again.",
+            remedies=_integrity_remedy(
+                recipe,
+                action="delete and refetch",
+                subject=f"the cached {recipe.name} payload and unreadable provenance sidecar",
+            ),
         ) from unreadable
-    return payload, FetchProvenance.model_validate_json(text)
+    try:
+        provenance = FetchProvenance.model_validate_json(text)
+    except ValueError as invalid:
+        raise IntegrityError(
+            f"{sidecar} is not valid fetch provenance ({invalid}), so nothing can reliably "
+            "say where the cached payload came from or under what licence. Delete both and "
+            "fetch again.",
+            remedies=_integrity_remedy(
+                recipe,
+                action="delete and refetch",
+                subject=f"the cached {recipe.name} payload and invalid provenance sidecar",
+            ),
+        ) from invalid
+    return payload, provenance
 
 
 def fetch_dataset(
@@ -279,7 +325,17 @@ def fetch_dataset(
         raise ConsentRequired(
             f"{recipe.name} is not cached and would be downloaded from {recipe.url} "
             f"({recipe.source}, {recipe.license}). Anvilate does not fetch anything "
-            "without being told the user agreed: pass consent=True once they have."
+            "without being told the user agreed: pass consent=True once they have.",
+            remedies=(
+                Remedy(
+                    action="obtain explicit consent",
+                    subject=f"the download of dataset {recipe.name}",
+                    source=(
+                        f"the user after reviewing {recipe.source} at {recipe.url} under "
+                        f"{recipe.license}"
+                    ),
+                ),
+            ),
         )
 
     payload = (opener or _https_get)(recipe.url)

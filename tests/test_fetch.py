@@ -40,12 +40,23 @@ def _recipe(**overrides) -> DatasetRecipe:
 
 
 def test_a_fetch_without_consent_is_refused_and_says_what_it_would_have_downloaded(tmp_path):
+    from anvilate.refusal import RefusalError
+
     with pytest.raises(ConsentRequired) as refused:
         fetch_dataset(_recipe(), retrieved="2026-08-27", cache_dir=tmp_path)
     message = str(refused.value)
     # The caller has to ask a person, so the refusal carries what the person needs.
     assert "https://example.invalid/cases.csv" in message
     assert "CC-BY-4.0" in message
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, RuntimeError), "the public exception hierarchy changed"
+    assert len(refused.value.remedies) == 1
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "obtain explicit consent"
+    assert remedy.subject == "the download of dataset cases.csv"
+    assert "the user" in remedy.source
+    assert "https://example.invalid/cases.csv" in remedy.source
+    assert "CC-BY-4.0" in remedy.source
     assert not list(tmp_path.iterdir()), "a refused fetch wrote something"
 
 
@@ -98,6 +109,10 @@ def test_a_payload_that_is_not_the_digest_is_refused_and_nothing_is_written(tmp_
             opener=lambda url: _PAYLOAD[:-1],
         )
     assert "as downloaded" in str(refused.value)
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "verify and retry"
+    assert remedy.subject == "the cases.csv dataset recipe and payload"
+    assert _recipe().sha256 in remedy.source
     assert not list(tmp_path.iterdir()), "a failed fetch left a partial file in the cache"
 
 
@@ -110,8 +125,10 @@ def test_a_cached_payload_that_changed_under_the_cache_is_refused(tmp_path):
         opener=lambda url: _PAYLOAD,
     )
     (tmp_path / "cases.csv").write_bytes(_PAYLOAD + b"chair,PLA\n")
-    with pytest.raises(IntegrityError, match="in the cache"):
+    with pytest.raises(IntegrityError, match="in the cache") as refused:
         cached_dataset(_recipe(), cache_dir=tmp_path)
+    assert refused.value.remedies[0].action == "delete and refetch"
+    assert refused.value.remedies[0].subject == "the cached cases.csv payload"
 
 
 def test_a_payload_with_no_provenance_beside_it_is_refused(tmp_path):
@@ -283,6 +300,25 @@ def test_a_provenance_sidecar_that_is_not_utf8_text_is_refused_like_a_missing_on
     (tmp_path / "cases.csv.provenance.json").write_bytes(b"\xff\xfe{\x00}\x00")
     with pytest.raises(IntegrityError, match="not UTF-8 text"):
         cached_dataset(_recipe(), cache_dir=tmp_path)
+
+
+def test_an_invalid_provenance_sidecar_is_one_structured_integrity_refusal(tmp_path):
+    """A readable sidecar can still be unusable; callers get the documented exception."""
+    from anvilate.refusal import RefusalError
+
+    (tmp_path / "cases.csv").write_bytes(_PAYLOAD)
+    (tmp_path / "cases.csv.provenance.json").write_text('{"name": "cases.csv"}')
+
+    with pytest.raises(IntegrityError, match="not valid fetch provenance") as refused:
+        cached_dataset(_recipe(), cache_dir=tmp_path)
+
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, RuntimeError), "the public exception hierarchy changed"
+    assert len(refused.value.remedies) == 1
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "delete and refetch"
+    assert remedy.subject == "the cached cases.csv payload and invalid provenance sidecar"
+    assert _recipe().url in remedy.source
 
 
 def test_a_copy_cannot_put_a_recipe_where_its_validators_refuse_to():

@@ -336,6 +336,13 @@ because an evidence bundle's digest has to rebuild identically. A payload whose 
 sidecar is missing is refused too; data whose origin the cache cannot state is data nothing
 should cite.
 
+These raised refusals are also structured. `ConsentRequired.remedies` names the dataset
+download, says to obtain explicit consent, and identifies the user reviewing the publisher
+URL and licence as the authority. `IntegrityError.remedies` distinguishes a bad download
+from a stale or incomplete cache: verify the recipe and payload before retrying the former;
+delete and refetch the named cached payload and provenance sidecar for the latter. Their
+exception messages and `RuntimeError` compatibility remain unchanged.
+
 **An attribution licence is a condition, not a formality.** CC BY 4.0 grants the use in
 exchange for the credit, so the flow that fetches the data is the one that can state it:
 `attribution()` turns a provenance record into the credit line — source, URL, licence,
