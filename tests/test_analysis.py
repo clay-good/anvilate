@@ -3584,6 +3584,148 @@ def test_wire_drawing_stress_force_and_max_reduction():
         wire_drawing_max_reduction(die_half_angle=0.0, friction_coefficient=0.05)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "bend_allowance",
+            {
+                "bend_angle": 200.0,
+                "inner_radius": _q("1 mm"),
+                "thickness": _q("1 mm"),
+                "k_factor": 0.4,
+            },
+            "bend_angle",
+            "the part drawing or verified sheet-metal flat-pattern geometry",
+        ),
+        (
+            "neutral_axis_radius",
+            {"inner_radius": _q("1 mm"), "thickness": _q("1 mm"), "k_factor": 0.9},
+            "k_factor",
+            "the qualified bend table or measured bend-development trial",
+        ),
+        (
+            "minimum_bend_radius",
+            {"thickness": _q("2 mm"), "reduction_of_area_percent": 0.0},
+            "reduction_of_area_percent",
+            "the sheet material certificate or qualified formability test",
+        ),
+        (
+            "air_bending_force",
+            {
+                "ultimate_tensile_strength": _q("400 MPa"),
+                "bend_length": _q("1000 mm"),
+                "thickness": _q("2 mm"),
+                "die_opening": _q("16 mm"),
+                "force_coefficient": 0.0,
+            },
+            "force_coefficient",
+            "the approved press-brake, punch, or deep-draw process plan",
+        ),
+        (
+            "air_bending_force",
+            {
+                "ultimate_tensile_strength": _q("0 MPa"),
+                "bend_length": _q("1000 mm"),
+                "thickness": _q("2 mm"),
+                "die_opening": _q("16 mm"),
+            },
+            "ultimate_tensile_strength, bend_length, thickness, and die_opening",
+            "the part drawing and sheet material certificate or qualified formability test",
+        ),
+        (
+            "sprung_bend_radius",
+            {"initial_bend_radius": _q("20 mm"), "springback_factor": 1.5},
+            "springback_factor",
+            "the qualified bend table or measured bend-development trial",
+        ),
+        (
+            "wire_drawing_stress",
+            {
+                "flow_stress": _q("0 MPa"),
+                "initial_area": _q("10 mm**2"),
+                "final_area": _q("8 mm**2"),
+                "die_half_angle": 6.0,
+                "friction_coefficient": 0.05,
+            },
+            "flow_stress",
+            "the wire material certificate or qualified flow-stress test",
+        ),
+        (
+            "wire_drawing_stress",
+            {
+                "flow_stress": _q("400 MPa"),
+                "initial_area": _q("8 mm**2"),
+                "final_area": _q("10 mm**2"),
+                "die_half_angle": 6.0,
+                "friction_coefficient": 0.05,
+            },
+            "initial_area and final_area",
+            "the wire drawing plan or verified incoming and finished wire geometry",
+        ),
+        (
+            "wire_drawing_max_reduction",
+            {"die_half_angle": 0.0, "friction_coefficient": 0.05},
+            "die_half_angle",
+            "the qualified die schedule and lubrication record",
+        ),
+        (
+            "wire_drawing_force",
+            {"drawing_stress": _q("0 MPa"), "final_area": _q("8 mm**2")},
+            "drawing_stress",
+            "the verified drawing-stress calculation or qualified process trial",
+        ),
+    ),
+)
+def test_sheet_metal_and_wire_drawing_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("sheetmetal", "_sheetmetal_refusal", 27),
+        ("wire_drawing", "_wire_drawing_refusal", 12),
+    ),
+)
+def test_every_sheet_metal_and_wire_drawing_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_extrusion_ratio_pressure_and_force():
     from math import log, pi
 

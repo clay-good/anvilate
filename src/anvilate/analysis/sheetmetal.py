@@ -35,7 +35,41 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import pi, radians, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SHEETMETAL_GEOMETRY_SOURCE = "the part drawing or verified sheet-metal flat-pattern geometry"
+_SHEETMETAL_MATERIAL_SOURCE = "the sheet material certificate or qualified formability test"
+_SHEETMETAL_PROCESS_SOURCE = "the approved press-brake, punch, or deep-draw process plan"
+_SHEETMETAL_BEND_SOURCE = "the qualified bend table or measured bend-development trial"
+_SHEETMETAL_GEOMETRY_AND_MATERIAL_SOURCE = (
+    "the part drawing and sheet material certificate or qualified formability test"
+)
+
+
+class _SheetMetalInputError(RefusalError, ValueError):
+    """A sheet-metal input that cannot be used without correction."""
+
+
+def _sheetmetal_refusal(message: str, *, subject: str, source: str) -> _SheetMetalInputError:
+    return _SheetMetalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _sheetmetal_input_source(name: str) -> str:
+    if name in {
+        "ultimate_tensile_strength",
+        "ultimate_shear_strength",
+        "yield_strength",
+        "elastic_modulus",
+    }:
+        return _SHEETMETAL_MATERIAL_SOURCE
+    if name in {"cutting_force", "die_opening"}:
+        return _SHEETMETAL_PROCESS_SOURCE
+    return _SHEETMETAL_GEOMETRY_SOURCE
+
 
 __all__ = [
     "neutral_axis_radius",
@@ -59,10 +93,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _sheetmetal_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_sheetmetal_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _sheetmetal_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_sheetmetal_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -85,13 +125,21 @@ def _bend_geometry(
     r = inner_radius.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if r < 0 or t <= 0:
-        raise ValueError(f"{name} must be non-negative and thickness positive")
+        raise _sheetmetal_refusal(
+            f"{name} must be non-negative and thickness positive",
+            subject=f"{name} and thickness",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     return r, t
 
 
 def _check_bend_angle(bend_angle: float) -> float:
     if not 0 < bend_angle < 180:
-        raise ValueError(f"bend_angle must be in (0, 180) degrees; got {bend_angle}")
+        raise _sheetmetal_refusal(
+            f"bend_angle must be in (0, 180) degrees; got {bend_angle}",
+            subject="bend_angle",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     return bend_angle
 
 
@@ -108,7 +156,11 @@ def neutral_axis_radius(
     """
     r, t = _bend_geometry(inner_radius, thickness)
     if not 0 <= k_factor <= 0.5:
-        raise ValueError(f"k_factor must be in [0, 0.5]; got {k_factor}")
+        raise _sheetmetal_refusal(
+            f"k_factor must be in [0, 0.5]; got {k_factor}",
+            subject="k_factor",
+            source=_SHEETMETAL_BEND_SOURCE,
+        )
     return Quantity(magnitude=r + k_factor * t, unit="mm")
 
 
@@ -184,17 +236,27 @@ def flat_pattern_length(
     result as Σ(outside flanges) − n_bends·:func:`bend_deduction`.)
     """
     if not isinstance(flange_lengths, Sequence):
-        raise ValueError(
-            f"flange_lengths must be a sequence, not a single value; got {flange_lengths!r}"
+        raise _sheetmetal_refusal(
+            f"flange_lengths must be a sequence, not a single value; got {flange_lengths!r}",
+            subject="flange_lengths",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
         )
     if len(flange_lengths) < 2:
-        raise ValueError("flat_pattern_length needs at least two flanges (one bend)")
+        raise _sheetmetal_refusal(
+            "flat_pattern_length needs at least two flanges (one bend)",
+            subject="flange_lengths",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     total = 0.0
     for i, flange in enumerate(flange_lengths):
         _require(flange, "[length]", f"flange_lengths[{i}]")
         length = flange.to("mm").magnitude
         if length <= 0:
-            raise ValueError(f"flange_lengths[{i}] must be positive; got {flange}")
+            raise _sheetmetal_refusal(
+                f"flange_lengths[{i}] must be positive; got {flange}",
+                subject=f"flange_lengths[{i}]",
+                source=_SHEETMETAL_GEOMETRY_SOURCE,
+            )
         total += length
     ba = bend_allowance(
         bend_angle=bend_angle, inner_radius=inner_radius, thickness=thickness, k_factor=k_factor
@@ -215,10 +277,16 @@ def minimum_bend_radius(*, thickness: Quantity, reduction_of_area_percent: float
     _require(thickness, "[length]", "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _sheetmetal_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     if not 0 < reduction_of_area_percent <= 100:
-        raise ValueError(
-            f"reduction_of_area_percent must be in (0, 100]; got {reduction_of_area_percent}"
+        raise _sheetmetal_refusal(
+            f"reduction_of_area_percent must be in (0, 100]; got {reduction_of_area_percent}",
+            subject="reduction_of_area_percent",
+            source=_SHEETMETAL_MATERIAL_SOURCE,
         )
     r_min = t * (50.0 / reduction_of_area_percent - 1.0)
     return Quantity(magnitude=max(0.0, r_min), unit="mm")
@@ -251,9 +319,17 @@ def air_bending_force(
     t = thickness.to("mm").magnitude
     v = die_opening.to("mm").magnitude
     if su <= 0 or length <= 0 or t <= 0 or v <= 0:
-        raise ValueError("strength, bend_length, thickness, and die_opening must be positive")
+        raise _sheetmetal_refusal(
+            "strength, bend_length, thickness, and die_opening must be positive",
+            subject="ultimate_tensile_strength, bend_length, thickness, and die_opening",
+            source=_SHEETMETAL_GEOMETRY_AND_MATERIAL_SOURCE,
+        )
     if force_coefficient <= 0:
-        raise ValueError(f"force_coefficient must be positive; got {force_coefficient}")
+        raise _sheetmetal_refusal(
+            f"force_coefficient must be positive; got {force_coefficient}",
+            subject="force_coefficient",
+            source=_SHEETMETAL_PROCESS_SOURCE,
+        )
     force_n = force_coefficient * su * length * t**2 / v
     return Quantity(magnitude=force_n / 1000.0, unit="kN")
 
@@ -277,7 +353,11 @@ def shear_cutting_force(
     t = thickness.to("mm").magnitude
     tau = ultimate_shear_strength.to("MPa").magnitude
     if length <= 0 or t <= 0 or tau <= 0:
-        raise ValueError("cut_length, thickness, and ultimate_shear_strength must be positive")
+        raise _sheetmetal_refusal(
+            "cut_length, thickness, and ultimate_shear_strength must be positive",
+            subject="cut_length, thickness, and ultimate_shear_strength",
+            source=_SHEETMETAL_GEOMETRY_AND_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=length * t * tau / 1000.0, unit="kN")
 
 
@@ -294,7 +374,11 @@ def round_hole_punching_force(
     _require(hole_diameter, "[length]", "hole_diameter")
     d = hole_diameter.to("mm").magnitude
     if d <= 0:
-        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+        raise _sheetmetal_refusal(
+            f"hole_diameter must be positive; got {hole_diameter}",
+            subject="hole_diameter",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     return shear_cutting_force(
         cut_length=Quantity(magnitude=pi * d, unit="mm"),
         thickness=thickness,
@@ -314,9 +398,17 @@ def stripping_force(*, cutting_force: Quantity, strip_factor: float = 0.1) -> Qu
     _require(cutting_force, "[force]", "cutting_force")
     f = cutting_force.to("kN").magnitude
     if f <= 0:
-        raise ValueError(f"cutting_force must be positive; got {cutting_force}")
+        raise _sheetmetal_refusal(
+            f"cutting_force must be positive; got {cutting_force}",
+            subject="cutting_force",
+            source=_SHEETMETAL_PROCESS_SOURCE,
+        )
     if not 0 < strip_factor <= 1:
-        raise ValueError(f"strip_factor must be in (0, 1]; got {strip_factor}")
+        raise _sheetmetal_refusal(
+            f"strip_factor must be in (0, 1]; got {strip_factor}",
+            subject="strip_factor",
+            source=_SHEETMETAL_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=f * strip_factor, unit="kN")
 
 
@@ -334,7 +426,11 @@ def cup_blank_diameter(*, cup_diameter: Quantity, cup_height: Quantity) -> Quant
     d = cup_diameter.to("mm").magnitude
     h = cup_height.to("mm").magnitude
     if d <= 0 or h <= 0:
-        raise ValueError("cup_diameter and cup_height must be positive")
+        raise _sheetmetal_refusal(
+            "cup_diameter and cup_height must be positive",
+            subject="cup_diameter and cup_height",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=(d**2 + 4.0 * d * h) ** 0.5, unit="mm")
 
 
@@ -352,7 +448,11 @@ def draw_ratio(*, blank_diameter: Quantity, punch_diameter: Quantity) -> float:
     big = blank_diameter.to("mm").magnitude
     small = punch_diameter.to("mm").magnitude
     if big <= 0 or small <= 0:
-        raise ValueError("blank_diameter and punch_diameter must be positive")
+        raise _sheetmetal_refusal(
+            "blank_diameter and punch_diameter must be positive",
+            subject="blank_diameter and punch_diameter",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     return big / small
 
 
@@ -382,11 +482,17 @@ def deep_draw_force(
     su = ultimate_tensile_strength.to("MPa").magnitude
     big = blank_diameter.to("mm").magnitude
     if d <= 0 or t <= 0 or su <= 0 or big <= 0:
-        raise ValueError("punch_diameter, thickness, strength, and blank_diameter must be positive")
+        raise _sheetmetal_refusal(
+            "punch_diameter, thickness, strength, and blank_diameter must be positive",
+            subject="punch_diameter, thickness, ultimate_tensile_strength, and blank_diameter",
+            source=_SHEETMETAL_GEOMETRY_AND_MATERIAL_SOURCE,
+        )
     bracket = big / d - draw_constant
     if bracket <= 0:
-        raise ValueError(
-            f"draw ratio D/d ({big / d:.3f}) must exceed draw_constant ({draw_constant})"
+        raise _sheetmetal_refusal(
+            f"draw ratio D/d ({big / d:.3f}) must exceed draw_constant ({draw_constant})",
+            subject="blank_diameter, punch_diameter, and draw_constant",
+            source=_SHEETMETAL_PROCESS_SOURCE,
         )
     return Quantity(magnitude=pi * d * t * su * bracket / 1000.0, unit="kN")
 
@@ -413,11 +519,19 @@ def springback_factor(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if r <= 0:
-        raise ValueError("initial_bend_radius must be positive")
+        raise _sheetmetal_refusal(
+            "initial_bend_radius must be positive",
+            subject="initial_bend_radius",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     y = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if y <= 0 or e <= 0:
-        raise ValueError("yield_strength and elastic_modulus must be positive")
+        raise _sheetmetal_refusal(
+            "yield_strength and elastic_modulus must be positive",
+            subject="yield_strength and elastic_modulus",
+            source=_SHEETMETAL_MATERIAL_SOURCE,
+        )
     x = r * y / (e * t)
     # The cubic factors exactly as 4x^3 - 3x + 1 = (2x - 1)^2*(x + 1), which is non-negative for
     # every x > 0 -- so a "k_s <= 0" test was dead code, reachable only at the single point
@@ -425,11 +539,13 @@ def springback_factor(
     # its root it RISES, so K_s grew with resilience (backwards), crossed 1 at x = sqrt(3)/2,
     # and returned 39.2 for a spring-steel strip -- a part springing TIGHTER than it was formed.
     if x >= 0.5:
-        raise ValueError(
+        raise _sheetmetal_refusal(
             f"R_i*Y/(E*t) = {x:.4f} is at or past 0.5, where the springback cubic turns back "
             f"upward and stops describing springback (it would report less recovery for a more "
             f"resilient material, and K_s > 1 past 0.866). Check the bend radius, thickness, "
-            f"and Y/E ratio."
+            f"and Y/E ratio.",
+            subject="initial_bend_radius, thickness, yield_strength, and elastic_modulus",
+            source=_SHEETMETAL_GEOMETRY_AND_MATERIAL_SOURCE,
         )
     return 4.0 * x**3 - 3.0 * x + 1.0
 
@@ -445,9 +561,17 @@ def sprung_bend_radius(*, initial_bend_radius: Quantity, springback_factor: floa
     _require(initial_bend_radius, "[length]", "initial_bend_radius")
     r = initial_bend_radius.to("mm").magnitude
     if r <= 0:
-        raise ValueError("initial_bend_radius must be positive")
+        raise _sheetmetal_refusal(
+            "initial_bend_radius must be positive",
+            subject="initial_bend_radius",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     if not 0.0 < springback_factor <= 1.0:
-        raise ValueError(f"springback_factor must be in (0, 1]; got {springback_factor}")
+        raise _sheetmetal_refusal(
+            f"springback_factor must be in (0, 1]; got {springback_factor}",
+            subject="springback_factor",
+            source=_SHEETMETAL_BEND_SOURCE,
+        )
     return Quantity(magnitude=r / springback_factor, unit="mm")
 
 
@@ -472,7 +596,15 @@ def sprung_bend_angle(
     _require(sprung_bend_radius, "[length]", "sprung_bend_radius")
     r_f = sprung_bend_radius.to("mm").magnitude
     if r_i <= 0:
-        raise ValueError("initial_bend_radius must be positive")
+        raise _sheetmetal_refusal(
+            "initial_bend_radius must be positive",
+            subject="initial_bend_radius",
+            source=_SHEETMETAL_GEOMETRY_SOURCE,
+        )
     if r_f < r_i:
-        raise ValueError("sprung_bend_radius must be at least the initial_bend_radius")
+        raise _sheetmetal_refusal(
+            "sprung_bend_radius must be at least the initial_bend_radius",
+            subject="sprung_bend_radius",
+            source=_SHEETMETAL_BEND_SOURCE,
+        )
     return theta_i * (r_i + t / 2.0) / (r_f + t / 2.0)

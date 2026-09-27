@@ -355,6 +355,10 @@ contract at all 40 refusal sites. Joint and nugget geometry, loads, electrode an
 properties, code factors, electrical settings, heat input, chemical composition, and spot-weld
 schedules point to drawings, governing analyses, certificates, qualified procedures, or calibrated
 equipment records.
+The complete sheet-metal and wire-drawing families follow the contract at all 39 refusal sites.
+Flat-pattern, bend, blank, punch, die, and wire geometry; material formability and strength;
+press, drawing, stripping, lubrication, and springback factors; and drawing stress point to part
+drawings, certificates, qualified trials, bend tables, or approved process schedules.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

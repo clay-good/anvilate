@@ -172,6 +172,10 @@
       code factors, electrical settings, heat input, chemical composition, and spot-weld schedules,
       sourced to drawings, governing analyses, certificates, qualified procedures, or calibrated
       equipment records.
+      The complete sheet-metal and wire-drawing families add 39 structured sites for flat-pattern,
+      bend, blank, punch, die, and wire geometry; material formability and strength; press, drawing,
+      stripping, lubrication, and springback factors; and drawing stress, sourced to part drawings,
+      certificates, qualified trials, bend tables, or approved process schedules.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
