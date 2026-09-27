@@ -144,6 +144,9 @@
       The complete living-hinge, ball-screw, and governor families add 18 structured sites for hinge
       geometry and material strain, screw load, lead and efficiency, and governor speed, height, and
       masses, sourced to drawings, catalogues, requirements, datasheets, load cases, or records.
+      The complete ASCE load-combination, AISC compactness, and beam-foundation families add 19
+      structured sites for load effects, steel properties and limits, foundation response, beam
+      properties, and reactions, sourced to models, records, specifications, tables, or reports.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

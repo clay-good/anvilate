@@ -30,7 +30,37 @@ deflection and moment of a point load on an infinite beam.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FOUNDATION_LOAD_SOURCE = "the governing structural load case or verified reaction record"
+_FOUNDATION_SOIL_SOURCE = "the geotechnical report or calibrated foundation-response record"
+_FOUNDATION_MATERIAL_SOURCE = "the governing beam material specification or certified modulus"
+_FOUNDATION_SECTION_SOURCE = "the beam section drawing or verified section-property record"
+
+
+class _BeamFoundationInputError(RefusalError, ValueError):
+    """A beam-foundation input that cannot be used without correction."""
+
+
+def _beam_foundation_refusal(
+    message: str, *, subject: str, source: str
+) -> _BeamFoundationInputError:
+    return _BeamFoundationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _beam_foundation_input_source(name: str) -> str:
+    if name == "load":
+        return _FOUNDATION_LOAD_SOURCE
+    if name == "foundation_modulus":
+        return _FOUNDATION_SOIL_SOURCE
+    if name == "elastic_modulus":
+        return _FOUNDATION_MATERIAL_SOURCE
+    return _FOUNDATION_SECTION_SOURCE
+
 
 __all__ = [
     "foundation_characteristic_parameter",
@@ -41,10 +71,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _beam_foundation_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_beam_foundation_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _beam_foundation_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_beam_foundation_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -75,11 +111,23 @@ def foundation_characteristic_parameter(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(second_moment, "[length]**4", "second_moment")
     if foundation_modulus.to("N/mm**2").magnitude <= 0:
-        raise ValueError(f"foundation_modulus must be positive; got {foundation_modulus}")
+        raise _beam_foundation_refusal(
+            f"foundation_modulus must be positive; got {foundation_modulus}",
+            subject="foundation_modulus",
+            source=_FOUNDATION_SOIL_SOURCE,
+        )
     if elastic_modulus.to("MPa").magnitude <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _beam_foundation_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_FOUNDATION_MATERIAL_SOURCE,
+        )
     if second_moment.to("mm**4").magnitude <= 0:
-        raise ValueError(f"second_moment must be positive; got {second_moment}")
+        raise _beam_foundation_refusal(
+            f"second_moment must be positive; got {second_moment}",
+            subject="second_moment",
+            source=_FOUNDATION_SECTION_SOURCE,
+        )
     beta = (foundation_modulus.pint / (4 * elastic_modulus.pint * second_moment.pint)) ** 0.25
     converted = beta.to("1/mm")
     return Quantity(magnitude=float(converted.magnitude), unit="1/mm")
@@ -104,7 +152,11 @@ def beam_on_elastic_foundation_max_deflection(
     """
     _require(load, "[force]", "load")
     if load.to("N").magnitude <= 0:
-        raise ValueError(f"load must be positive; got {load}")
+        raise _beam_foundation_refusal(
+            f"load must be positive; got {load}",
+            subject="load",
+            source=_FOUNDATION_LOAD_SOURCE,
+        )
     beta = foundation_characteristic_parameter(
         foundation_modulus=foundation_modulus,
         elastic_modulus=elastic_modulus,
@@ -136,7 +188,11 @@ def beam_on_elastic_foundation_max_moment(
     """
     _require(load, "[force]", "load")
     if load.to("N").magnitude <= 0:
-        raise ValueError(f"load must be positive; got {load}")
+        raise _beam_foundation_refusal(
+            f"load must be positive; got {load}",
+            subject="load",
+            source=_FOUNDATION_LOAD_SOURCE,
+        )
     beta = foundation_characteristic_parameter(
         foundation_modulus=foundation_modulus,
         elastic_modulus=elastic_modulus,

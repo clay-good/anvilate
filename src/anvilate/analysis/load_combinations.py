@@ -20,7 +20,22 @@ for forces, moments, or stresses alike.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LOAD_EFFECT_SOURCE = "the governing structural load model or verified load-effect record"
+
+
+class _LoadCombinationInputError(RefusalError, ValueError):
+    """A load-combination input that cannot be used without correction."""
+
+
+def _load_combination_refusal(message: str, *, subject: str) -> _LoadCombinationInputError:
+    return _LoadCombinationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_LOAD_EFFECT_SOURCE),),
+    )
+
 
 __all__ = [
     "asce7_lrfd_factored_load",
@@ -37,19 +52,24 @@ def _effects(
 ) -> tuple[float, float, float, float, float]:
     """Resolve the five load effects to magnitudes in the dead load's units."""
     if not isinstance(dead, Quantity):
-        raise ValueError("dead must be a Quantity load effect")
+        raise _load_combination_refusal("dead must be a Quantity load effect", subject="dead")
     unit = dead.unit
     d = require_finite(dead, name="dead")
     if d < 0:
-        raise ValueError("dead must be non-negative (pass load effects in a consistent sense)")
+        raise _load_combination_refusal(
+            "dead must be non-negative (pass load effects in a consistent sense)", subject="dead"
+        )
 
     def resolve(value: Quantity | None, name: str) -> float:
         if value is None:
             return 0.0
+        if not isinstance(value, Quantity):
+            raise _load_combination_refusal(f"{name} must be a Quantity load effect", subject=name)
         if not value.has_dimension(dead.dimensionality):
-            raise ValueError(
+            raise _load_combination_refusal(
                 f"{name} must share the dead load's dimensionality "
-                f"({dead.dimensionality}); got {value.dimensionality}"
+                f"({dead.dimensionality}); got {value.dimensionality}",
+                subject=name,
             )
         # A non-finite effect is refused here rather than carried. `max(combinations)`
         # DROPS a NaN candidate instead of propagating it, so a single NaN wind load
@@ -60,7 +80,9 @@ def _effects(
         require_finite(value, name=name)
         m = value.to(unit).magnitude
         if m < 0:
-            raise ValueError(f"{name} must be non-negative (use a consistent sense)")
+            raise _load_combination_refusal(
+                f"{name} must be non-negative (use a consistent sense)", subject=name
+            )
         return m
 
     return (

@@ -13656,6 +13656,120 @@ def test_beam_on_elastic_foundation_rejects_bad_inputs():
         beam_on_elastic_foundation_max_deflection(load=_q("0 kN"), **good)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "asce7_lrfd_factored_load",
+            {"dead": 10.0},
+            "dead",
+            "the governing structural load model or verified load-effect record",
+        ),
+        (
+            "asce7_lrfd_factored_load",
+            {"dead": _q("10 kN"), "live": 5.0},
+            "live",
+            "the governing structural load model or verified load-effect record",
+        ),
+        (
+            "flexural_flange_slenderness_limits",
+            {"elastic_modulus": _q("200 mm"), "yield_strength": _q("345 MPa")},
+            "elastic_modulus",
+            "the governing steel material specification or certified property record",
+        ),
+        (
+            "classify_flexural_element",
+            {"slenderness": -1.0, "plastic_limit": 10.0, "noncompact_limit": 20.0},
+            "slenderness",
+            "the selected section table or verified cross-section calculation",
+        ),
+        (
+            "classify_flexural_element",
+            {"slenderness": 5.0, "plastic_limit": 20.0, "noncompact_limit": 10.0},
+            "plastic_limit and noncompact_limit",
+            "the applicable AISC 360 Table B4.1b compactness calculation",
+        ),
+        (
+            "foundation_characteristic_parameter",
+            {
+                "foundation_modulus": _q("0 N/mm**2"),
+                "elastic_modulus": _q("200 GPa"),
+                "second_moment": _q("1e6 mm**4"),
+            },
+            "foundation_modulus",
+            "the geotechnical report or calibrated foundation-response record",
+        ),
+        (
+            "beam_on_elastic_foundation_max_deflection",
+            {
+                "load": _q("0 kN"),
+                "foundation_modulus": _q("50 N/mm**2"),
+                "elastic_modulus": _q("200 GPa"),
+                "second_moment": _q("1e6 mm**4"),
+            },
+            "load",
+            "the governing structural load case or verified reaction record",
+        ),
+        (
+            "foundation_characteristic_parameter",
+            {
+                "foundation_modulus": _q("50 N/mm**2"),
+                "elastic_modulus": _q("200 GPa"),
+                "second_moment": _q("1e6 mm"),
+            },
+            "second_moment",
+            "the beam section drawing or verified section-property record",
+        ),
+    ),
+)
+def test_structural_model_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("load_combinations", "_load_combination_refusal", 5),
+        ("aisc_compactness", "_aisc_compactness_refusal", 7),
+        ("beam_foundation", "_beam_foundation_refusal", 7),
+    ),
+)
+def test_every_structural_model_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_machining_cutting_speed_mrr_and_taylor_tool_life():
     from math import pi
 

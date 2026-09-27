@@ -17,7 +17,26 @@ from __future__ import annotations
 from enum import StrEnum
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_AISC_MATERIAL_SOURCE = "the governing steel material specification or certified property record"
+_AISC_SECTION_SOURCE = "the selected section table or verified cross-section calculation"
+_AISC_LIMIT_SOURCE = "the applicable AISC 360 Table B4.1b compactness calculation"
+
+
+class _AISCCompactnessInputError(RefusalError, ValueError):
+    """An AISC compactness input that cannot be used without correction."""
+
+
+def _aisc_compactness_refusal(
+    message: str, *, subject: str, source: str
+) -> _AISCCompactnessInputError:
+    return _AISCCompactnessInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "CompactnessClass",
@@ -48,17 +67,37 @@ class CompactnessClass(StrEnum):
 
 def _slenderness_root(elastic_modulus: Quantity, yield_strength: Quantity) -> float:
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aisc_compactness_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_AISC_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aisc_compactness_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_AISC_MATERIAL_SOURCE,
+        )
     if not isinstance(yield_strength, Quantity):
-        raise ValueError(f"yield_strength must be a [pressure] quantity; got {yield_strength!r}")
+        raise _aisc_compactness_refusal(
+            f"yield_strength must be a [pressure] quantity; got {yield_strength!r}",
+            subject="yield_strength",
+            source=_AISC_MATERIAL_SOURCE,
+        )
     if not yield_strength.has_dimension("[pressure]"):
-        raise ValueError(f"yield_strength must be a [pressure] quantity; got {yield_strength}")
+        raise _aisc_compactness_refusal(
+            f"yield_strength must be a [pressure] quantity; got {yield_strength}",
+            subject="yield_strength",
+            source=_AISC_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     fy = yield_strength.to("MPa").magnitude
     if e <= 0 or fy <= 0:
-        raise ValueError("elastic_modulus and yield_strength must be positive")
+        raise _aisc_compactness_refusal(
+            "elastic_modulus and yield_strength must be positive",
+            subject="elastic_modulus and yield_strength",
+            source=_AISC_MATERIAL_SOURCE,
+        )
     return sqrt(e / fy)
 
 
@@ -110,9 +149,17 @@ def classify_flexural_element(
     Returns the :class:`CompactnessClass`.
     """
     if slenderness < 0:
-        raise ValueError("slenderness must be non-negative")
+        raise _aisc_compactness_refusal(
+            "slenderness must be non-negative",
+            subject="slenderness",
+            source=_AISC_SECTION_SOURCE,
+        )
     if not 0 < plastic_limit < noncompact_limit:
-        raise ValueError("require 0 < plastic_limit < noncompact_limit")
+        raise _aisc_compactness_refusal(
+            "require 0 < plastic_limit < noncompact_limit",
+            subject="plastic_limit and noncompact_limit",
+            source=_AISC_LIMIT_SOURCE,
+        )
     if slenderness <= plastic_limit:
         return CompactnessClass.COMPACT
     if slenderness <= noncompact_limit:

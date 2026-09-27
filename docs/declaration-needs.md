@@ -327,6 +327,9 @@ and ramp geometry point to approved records, drawings, analyses, specifications,
 The complete living-hinge, ball-screw, and governor families follow the contract at all 18 refusal
 sites. Hinge geometry and material strain, screw load, lead and efficiency, governor speed, height,
 and masses point to drawings, catalogues, requirements, datasheets, load cases, or calibrated records.
+The complete ASCE load-combination, AISC compactness, and beam-foundation families follow the
+contract at all 19 refusal sites. Load effects, steel properties and section limits, foundation
+response, beam properties, and reactions point to models, records, specifications, tables, or reports.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
