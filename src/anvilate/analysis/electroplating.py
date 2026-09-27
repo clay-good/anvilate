@@ -17,10 +17,37 @@ sets the tank's cycle time and, with it, the throughput of the plating line.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 # Faraday constant: charge per mole of electrons.
 FARADAY_C_PER_MOL = 96485.332
+
+_PLATING_PROCESS_SOURCE = "the qualified plating cycle or calibrated rectifier record"
+_PLATING_GEOMETRY_SOURCE = "the coating specification or verified plated-area drawing"
+_PLATING_MATERIAL_SOURCE = "the plating-bath record or coating-metal material certificate"
+
+
+class _ElectroplatingInputError(RefusalError, ValueError):
+    """An electroplating input that cannot be used without correction."""
+
+
+def _electroplating_refusal(
+    message: str, *, subject: str, source: str
+) -> _ElectroplatingInputError:
+    return _ElectroplatingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _electroplating_input_source(name: str) -> str:
+    if name in {"plated_area", "target_thickness"}:
+        return _PLATING_GEOMETRY_SOURCE
+    if name == "density":
+        return _PLATING_MATERIAL_SOURCE
+    return _PLATING_PROCESS_SOURCE
+
 
 __all__ = [
     "electroplating_deposition_thickness",
@@ -47,14 +74,24 @@ def electroplating_mass_deposited(
     _check(current, "[current]", "current")
     _check(plating_time, "[time]", "plating_time")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _electroplating_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_PLATING_MATERIAL_SOURCE,
+        )
     _fraction(current_efficiency, "current_efficiency")
     amps = current.to("A").magnitude
     t = plating_time.to("s").magnitude
     if amps <= 0:
-        raise ValueError("current must be positive")
+        raise _electroplating_refusal(
+            "current must be positive", subject="current", source=_PLATING_PROCESS_SOURCE
+        )
     if t < 0:
-        raise ValueError("plating_time must be non-negative")
+        raise _electroplating_refusal(
+            "plating_time must be non-negative",
+            subject="plating_time",
+            source=_PLATING_PROCESS_SOURCE,
+        )
     m = equivalent_weight * amps * t * current_efficiency / FARADAY_C_PER_MOL
     return Quantity(magnitude=m, unit="g")
 
@@ -82,20 +119,36 @@ def electroplating_deposition_thickness(
     _check(plated_area, "[area]", "plated_area")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _electroplating_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_PLATING_MATERIAL_SOURCE,
+        )
     _fraction(current_efficiency, "current_efficiency")
     amps = current.to("A").magnitude
     t = plating_time.to("s").magnitude
     area_cm2 = plated_area.to("cm**2").magnitude
     rho = density.to("g/cm**3").magnitude
     if amps <= 0:
-        raise ValueError("current must be positive")
+        raise _electroplating_refusal(
+            "current must be positive", subject="current", source=_PLATING_PROCESS_SOURCE
+        )
     if t < 0:
-        raise ValueError("plating_time must be non-negative")
+        raise _electroplating_refusal(
+            "plating_time must be non-negative",
+            subject="plating_time",
+            source=_PLATING_PROCESS_SOURCE,
+        )
     if area_cm2 <= 0:
-        raise ValueError("plated_area must be positive")
+        raise _electroplating_refusal(
+            "plated_area must be positive",
+            subject="plated_area",
+            source=_PLATING_GEOMETRY_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _electroplating_refusal(
+            "density must be positive", subject="density", source=_PLATING_MATERIAL_SOURCE
+        )
     mass_g = equivalent_weight * amps * t * current_efficiency / FARADAY_C_PER_MOL
     thickness_cm = mass_g / (rho * area_cm2)
     return Quantity(magnitude=thickness_cm * 1.0e4, unit="micrometer")
@@ -123,20 +176,36 @@ def electroplating_time_for_thickness(
     _check(plated_area, "[area]", "plated_area")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _electroplating_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_PLATING_MATERIAL_SOURCE,
+        )
     _fraction(current_efficiency, "current_efficiency")
     delta_cm = target_thickness.to("cm").magnitude
     amps = current.to("A").magnitude
     area_cm2 = plated_area.to("cm**2").magnitude
     rho = density.to("g/cm**3").magnitude
     if delta_cm <= 0:
-        raise ValueError("target_thickness must be positive")
+        raise _electroplating_refusal(
+            "target_thickness must be positive",
+            subject="target_thickness",
+            source=_PLATING_GEOMETRY_SOURCE,
+        )
     if amps <= 0:
-        raise ValueError("current must be positive")
+        raise _electroplating_refusal(
+            "current must be positive", subject="current", source=_PLATING_PROCESS_SOURCE
+        )
     if area_cm2 <= 0:
-        raise ValueError("plated_area must be positive")
+        raise _electroplating_refusal(
+            "plated_area must be positive",
+            subject="plated_area",
+            source=_PLATING_GEOMETRY_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _electroplating_refusal(
+            "density must be positive", subject="density", source=_PLATING_MATERIAL_SOURCE
+        )
     charge = delta_cm * FARADAY_C_PER_MOL * rho * area_cm2
     t_s = charge / (equivalent_weight * amps * current_efficiency)
     return Quantity(magnitude=t_s / 60.0, unit="min")
@@ -144,15 +213,25 @@ def electroplating_time_for_thickness(
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be a fraction in (0, 1]; got {value}")
+        raise _electroplating_refusal(
+            f"{name} must be a fraction in (0, 1]; got {value}",
+            subject=name,
+            source=_PLATING_PROCESS_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _electroplating_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_electroplating_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _electroplating_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_electroplating_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

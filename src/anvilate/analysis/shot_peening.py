@@ -24,7 +24,29 @@ from __future__ import annotations
 
 from math import exp, log, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PEENING_SETUP_SOURCE = "the qualified shot-peening procedure or calibrated media-flow record"
+_PEENING_COVERAGE_SOURCE = "the peening specification or verified coverage test record"
+
+
+class _ShotPeeningInputError(RefusalError, ValueError):
+    """A shot-peening input that cannot be used without correction."""
+
+
+def _shot_peening_refusal(message: str, *, subject: str, source: str) -> _ShotPeeningInputError:
+    return _ShotPeeningInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _shot_peening_input_source(name: str) -> str:
+    if name in {"dimple_diameter", "impact_flux"}:
+        return _PEENING_SETUP_SOURCE
+    return _PEENING_COVERAGE_SOURCE
+
 
 __all__ = [
     "peening_coverage",
@@ -47,9 +69,15 @@ def peening_impact_coverage_rate(*, dimple_diameter: Quantity, impact_flux: Quan
     d = dimple_diameter.to("mm").magnitude
     phi = impact_flux.to("1/(mm**2*s)").magnitude
     if d <= 0:
-        raise ValueError("dimple_diameter must be positive")
+        raise _shot_peening_refusal(
+            "dimple_diameter must be positive",
+            subject="dimple_diameter",
+            source=_PEENING_SETUP_SOURCE,
+        )
     if phi <= 0:
-        raise ValueError("impact_flux must be positive")
+        raise _shot_peening_refusal(
+            "impact_flux must be positive", subject="impact_flux", source=_PEENING_SETUP_SOURCE
+        )
     lam = pi * d * d / 4.0 * phi
     return Quantity(magnitude=lam, unit="1/s")
 
@@ -68,9 +96,17 @@ def peening_coverage(*, coverage_rate: Quantity, exposure_time: Quantity) -> flo
     lam = coverage_rate.to("1/s").magnitude
     t = exposure_time.to("s").magnitude
     if lam <= 0:
-        raise ValueError("coverage_rate must be positive")
+        raise _shot_peening_refusal(
+            "coverage_rate must be positive",
+            subject="coverage_rate",
+            source=_PEENING_COVERAGE_SOURCE,
+        )
     if t < 0:
-        raise ValueError("exposure_time must be non-negative")
+        raise _shot_peening_refusal(
+            "exposure_time must be non-negative",
+            subject="exposure_time",
+            source=_PEENING_COVERAGE_SOURCE,
+        )
     return 1.0 - exp(-lam * t)
 
 
@@ -85,10 +121,16 @@ def peening_time_for_coverage(*, coverage_rate: Quantity, target_coverage: float
     _check(coverage_rate, "1/[time]", "coverage_rate")
     lam = coverage_rate.to("1/s").magnitude
     if lam <= 0:
-        raise ValueError("coverage_rate must be positive")
+        raise _shot_peening_refusal(
+            "coverage_rate must be positive",
+            subject="coverage_rate",
+            source=_PEENING_COVERAGE_SOURCE,
+        )
     if not 0.0 < target_coverage < 1.0:
-        raise ValueError(
-            "target_coverage must be a fraction in (0, 1); 100% coverage is unreachable"
+        raise _shot_peening_refusal(
+            "target_coverage must be a fraction in (0, 1); 100% coverage is unreachable",
+            subject="target_coverage",
+            source=_PEENING_COVERAGE_SOURCE,
         )
     t = -log(1.0 - target_coverage) / lam
     return Quantity(magnitude=t, unit="s")
@@ -96,10 +138,16 @@ def peening_time_for_coverage(*, coverage_rate: Quantity, target_coverage: float
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _shot_peening_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_shot_peening_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _shot_peening_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_shot_peening_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

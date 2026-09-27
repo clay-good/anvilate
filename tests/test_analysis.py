@@ -23880,6 +23880,124 @@ def test_electroplating_mass_thickness_and_time_inverse():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "electroplating_mass_deposited",
+            {
+                "current": _q("0 A"),
+                "plating_time": _q("3600 s"),
+                "equivalent_weight": 29.5,
+                "current_efficiency": 0.95,
+            },
+            "current",
+            "the qualified plating cycle or calibrated rectifier record",
+        ),
+        (
+            "electroplating_time_for_thickness",
+            {
+                "target_thickness": _q("0 micrometer"),
+                "current": _q("10 A"),
+                "plated_area": _q("100 cm**2"),
+                "equivalent_weight": 29.5,
+                "density": _q("8.9 g/cm**3"),
+                "current_efficiency": 0.95,
+            },
+            "target_thickness",
+            "the coating specification or verified plated-area drawing",
+        ),
+        (
+            "electroplating_deposition_thickness",
+            {
+                "current": _q("10 A"),
+                "plating_time": _q("3600 s"),
+                "plated_area": _q("100 cm**2"),
+                "equivalent_weight": 29.5,
+                "density": _q("0 g/cm**3"),
+                "current_efficiency": 0.95,
+            },
+            "density",
+            "the plating-bath record or coating-metal material certificate",
+        ),
+        (
+            "electroplating_mass_deposited",
+            {
+                "current": _q("10 A"),
+                "plating_time": _q("3600 s"),
+                "equivalent_weight": 29.5,
+                "current_efficiency": 1.5,
+            },
+            "current_efficiency",
+            "the qualified plating cycle or calibrated rectifier record",
+        ),
+        (
+            "peening_impact_coverage_rate",
+            {"dimple_diameter": _q("0 mm"), "impact_flux": _q("500 1/(mm**2*s)")},
+            "dimple_diameter",
+            "the qualified shot-peening procedure or calibrated media-flow record",
+        ),
+        (
+            "peening_time_for_coverage",
+            {"coverage_rate": _q("1 1/s"), "target_coverage": 1.0},
+            "target_coverage",
+            "the peening specification or verified coverage test record",
+        ),
+        (
+            "peening_coverage",
+            {"coverage_rate": _q("1 1/s"), "exposure_time": _q("-1 s")},
+            "exposure_time",
+            "the peening specification or verified coverage test record",
+        ),
+    ),
+)
+def test_surface_treatment_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("electroplating", "_electroplating_refusal", 16),
+        ("shot_peening", "_shot_peening_refusal", 8),
+    ),
+)
+def test_every_surface_treatment_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_spot_weld_heat_current_inverse_and_nugget_energy():
     from anvilate.analysis import (
         spot_weld_current_for_heat,
