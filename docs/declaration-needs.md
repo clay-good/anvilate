@@ -297,6 +297,9 @@ formulation, calibrated concentration record, cited property record, or reactor 
 The complete Geneva and Scotch-yoke families follow the contract at all 10 refusal sites. Station
 counts, center distances, crank radii, and drive speeds point to mechanism drawings, indexing
 requirements, selected crank geometry, operating cases, or calibrated speed measurements.
+The complete piezoelectric and strain-gauge families follow the contract at all nine refusal sites.
+Material coefficients, transducer geometry, measured loads, gauge factors, and bridge-arm choices
+point to datasheets, certificates, drawings, calibrated records, or the bridge wiring configuration.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

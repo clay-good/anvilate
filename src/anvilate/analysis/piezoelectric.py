@@ -21,7 +21,32 @@ force a measured charge infers.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PIEZO_PROPERTY_SOURCE = "the transducer datasheet or calibration certificate"
+_PIEZO_GEOMETRY_SOURCE = "the piezoelectric element drawing or measured geometry"
+_PIEZO_MEASUREMENT_SOURCE = "the calibrated transducer operating or measurement record"
+
+
+class _PiezoelectricInputError(RefusalError, ValueError):
+    """A piezoelectric input that cannot be used without correction."""
+
+
+def _piezoelectric_refusal(message: str, *, subject: str, source: str) -> _PiezoelectricInputError:
+    return _PiezoelectricInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _piezoelectric_input_source(name: str) -> str:
+    if "coefficient" in name:
+        return _PIEZO_PROPERTY_SOURCE
+    if name == "thickness":
+        return _PIEZO_GEOMETRY_SOURCE
+    return _PIEZO_MEASUREMENT_SOURCE
+
 
 __all__ = [
     "piezoelectric_charge",
@@ -62,7 +87,11 @@ def piezoelectric_open_circuit_voltage(
     sigma = stress.to("Pa").magnitude
     t = thickness.to("m").magnitude
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _piezoelectric_refusal(
+            "thickness must be positive",
+            subject="thickness",
+            source=_PIEZO_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=g33 * sigma * t, unit="V")
 
 
@@ -78,16 +107,26 @@ def piezoelectric_force_from_charge(*, charge: Quantity, charge_coefficient: Qua
     q = charge.to("C").magnitude
     d33 = charge_coefficient.to("C/N").magnitude
     if d33 <= 0:
-        raise ValueError("charge_coefficient must be positive")
+        raise _piezoelectric_refusal(
+            "charge_coefficient must be positive",
+            subject="charge_coefficient",
+            source=_PIEZO_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=q / d33, unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _piezoelectric_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_piezoelectric_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _piezoelectric_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_piezoelectric_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -23,6 +23,23 @@ strain a measured bridge voltage infers.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
+
+_GAUGE_CALIBRATION_SOURCE = "the strain-gauge datasheet or calibration certificate"
+_BRIDGE_CONFIGURATION_SOURCE = "the bridge wiring diagram or data-acquisition configuration"
+
+
+class _StrainGaugeInputError(RefusalError, ValueError):
+    """A strain-gauge input that cannot be used without correction."""
+
+
+def _strain_gauge_refusal(message: str, *, subject: str, source: str) -> _StrainGaugeInputError:
+    return _StrainGaugeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "gauge_strain_from_resistance",
     "strain_from_bridge_output",
@@ -41,7 +58,11 @@ def gauge_strain_from_resistance(*, resistance_change_ratio: float, gauge_factor
     reading of 0.002 at GF 2.0 is 0.001 = 1000 microstrain.
     """
     if gauge_factor <= 0:
-        raise ValueError("gauge_factor must be positive")
+        raise _strain_gauge_refusal(
+            "gauge_factor must be positive",
+            subject="gauge_factor",
+            source=_GAUGE_CALIBRATION_SOURCE,
+        )
     return resistance_change_ratio / gauge_factor
 
 
@@ -54,9 +75,17 @@ def wheatstone_bridge_output(*, gauge_factor: float, strain: float, active_arms:
     plain float (volts out per volt of excitation); multiply by the excitation voltage for a signal.
     """
     if gauge_factor <= 0:
-        raise ValueError("gauge_factor must be positive")
+        raise _strain_gauge_refusal(
+            "gauge_factor must be positive",
+            subject="gauge_factor",
+            source=_GAUGE_CALIBRATION_SOURCE,
+        )
     if active_arms not in _ACTIVE_ARMS:
-        raise ValueError("active_arms must be 1 (quarter), 2 (half), or 4 (full bridge)")
+        raise _strain_gauge_refusal(
+            "active_arms must be 1 (quarter), 2 (half), or 4 (full bridge)",
+            subject="active_arms",
+            source=_BRIDGE_CONFIGURATION_SOURCE,
+        )
     return active_arms * gauge_factor * strain / 4.0
 
 
@@ -71,7 +100,15 @@ def strain_from_bridge_output(
     the strain as a plain float (m/m).
     """
     if gauge_factor <= 0:
-        raise ValueError("gauge_factor must be positive")
+        raise _strain_gauge_refusal(
+            "gauge_factor must be positive",
+            subject="gauge_factor",
+            source=_GAUGE_CALIBRATION_SOURCE,
+        )
     if active_arms not in _ACTIVE_ARMS:
-        raise ValueError("active_arms must be 1 (quarter), 2 (half), or 4 (full bridge)")
+        raise _strain_gauge_refusal(
+            "active_arms must be 1 (quarter), 2 (half), or 4 (full bridge)",
+            subject="active_arms",
+            source=_BRIDGE_CONFIGURATION_SOURCE,
+        )
     return 4.0 * output_ratio / (active_arms * gauge_factor)

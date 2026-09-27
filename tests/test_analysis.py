@@ -36570,6 +36570,94 @@ def test_strain_gauge_bridge_output_and_strain_inverse():
         strain_from_bridge_output(output_ratio=0.001, gauge_factor=2.0, active_arms=0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "piezoelectric_charge",
+            {"charge_coefficient": _q("593 pF"), "force": _q("100 N")},
+            "charge_coefficient",
+            "the transducer datasheet or calibration certificate",
+        ),
+        (
+            "piezoelectric_open_circuit_voltage",
+            {
+                "voltage_coefficient": _q("19.7e-3 V*m/N"),
+                "stress": _q("1 MPa"),
+                "thickness": _q("0 mm"),
+            },
+            "thickness",
+            "the piezoelectric element drawing or measured geometry",
+        ),
+        (
+            "piezoelectric_charge",
+            {"charge_coefficient": _q("593e-12 C/N"), "force": _q("100 Pa")},
+            "force",
+            "the calibrated transducer operating or measurement record",
+        ),
+        (
+            "wheatstone_bridge_output",
+            {"gauge_factor": 0.0, "strain": 0.001},
+            "gauge_factor",
+            "the strain-gauge datasheet or calibration certificate",
+        ),
+        (
+            "wheatstone_bridge_output",
+            {"gauge_factor": 2.0, "strain": 0.001, "active_arms": 3},
+            "active_arms",
+            "the bridge wiring diagram or data-acquisition configuration",
+        ),
+    ),
+)
+def test_electromechanical_sensor_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("piezoelectric", "_piezoelectric_refusal", 4),
+        ("strain_gauge", "_strain_gauge_refusal", 5),
+    ),
+)
+def test_every_electromechanical_sensor_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_rtd_and_thermistor_temperature_sensors():
     from math import exp
 
