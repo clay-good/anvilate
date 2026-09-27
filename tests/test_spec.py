@@ -364,18 +364,31 @@ def test_known_references_resolve():
 
 
 def test_unknown_material_rejected_with_suggestions():
+    from anvilate.refusal import RefusalError
+
     spec = golden_bracket().model_copy(update={"material": MaterialRef(ref="AA-6061-T7")})
     with pytest.raises(UnknownReferenceError) as exc:
         validate_references(spec)
+    assert isinstance(exc.value, RefusalError)
+    assert isinstance(exc.value, ValueError), "the public exception hierarchy changed"
     assert "AA-6061-T6" in exc.value.suggestions
+    assert len(exc.value.remedies) == 1
+    remedy = exc.value.remedies[0]
+    assert remedy.action == "replace"
+    assert remedy.subject == "the unknown material reference 'AA-6061-T7'"
+    assert "live material registry" in remedy.source
+    assert "AA-6061-T6" in remedy.source
 
 
 def test_unknown_component_rejected():
     spec = golden_bracket().model_copy(
         update={"interfaces": [StandardComponentInterface(ref="NEMA99", tag="bore")]}
     )
-    with pytest.raises(UnknownReferenceError):
+    with pytest.raises(UnknownReferenceError) as refused:
         validate_references(spec)
+    remedy = refused.value.remedies[0]
+    assert remedy.subject == "the unknown component reference 'NEMA99'"
+    assert "live component registry" in remedy.source
 
 
 # --- Requirement: Assumption provenance ---
@@ -496,10 +509,20 @@ def test_current_version_stamped():
 
 
 def test_unsupported_major_version_refused():
+    from anvilate.refusal import RefusalError
+
     data = dump_and_load_dict(golden_bracket())
     data["anvilate_spec"] = "2.0.0"
-    with pytest.raises(UnsupportedSchemaVersion):
+    with pytest.raises(UnsupportedSchemaVersion) as refused:
         parse_spec(data)
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    assert len(refused.value.remedies) == 1
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "upgrade or migrate"
+    assert remedy.subject == "the Design Spec schema declaration 2.0.0"
+    assert "supporting 2.0.0" in remedy.source
+    assert SCHEMA_VERSION in remedy.source
 
 
 def test_an_older_minor_loads_and_still_says_which_version_it_is():

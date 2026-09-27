@@ -79,6 +79,12 @@ this release's version, which left a reviewer no trace that it had ever been new
 
 A different **major** version is refused as it always was.
 
+Both version refusals now carry a structured `Remedy` as well as their unchanged message.
+The concrete subject is the document's `anvilate_spec` declaration; its source is either an
+Anvilate release that supports that declaration or this release's schema after the document
+has been reviewed against it. `UnsupportedSchemaVersion` remains a `ValueError`, so existing
+loaders do not need a different guard.
+
 **A document that declares nothing is read as this release's version, and that is safe only
 while nothing migrates.** The section above is about the version a document comes back at
 *after* the walk; the default is the version it starts the walk at, and the same argument
@@ -376,6 +382,11 @@ fail           material resolution
 
 The near misses are the half that matters: "unknown material" invites the reader to supply a
 remembered number, which is the one thing this library exists to stop.
+
+Direct `validate_references` callers receive the same repair authority without parsing the
+message: `UnknownReferenceError.remedies` names the rejected material or component identifier
+and cites the injected resolver's live registry, including its nearest registered identifiers.
+The exception remains a `ValueError` for compatibility.
 
 A team whose alloy is not one of the bundled records passes their own resolver —
 `screen_spec(spec, resolver=...)`, built from `MaterialsDatabase.extended` — rather than

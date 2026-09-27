@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..refusal import RefusalError, Remedy
 from .ir import SCHEMA_VERSION
 
 __all__ = ["SCHEMA_VERSION", "UnsupportedSchemaVersion", "migrate_to_current"]
@@ -19,8 +20,29 @@ __all__ = ["SCHEMA_VERSION", "UnsupportedSchemaVersion", "migrate_to_current"]
 _MIGRATIONS: dict[str, tuple[str, Callable[[dict], dict]]] = {}
 
 
-class UnsupportedSchemaVersion(ValueError):
+class UnsupportedSchemaVersion(RefusalError, ValueError):
     """A spec declares a schema version this release cannot load."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        declared: str = "the declared version",
+        current: str = SCHEMA_VERSION,
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(
+                Remedy(
+                    action="upgrade or migrate",
+                    subject=f"the Design Spec schema declaration {declared}",
+                    source=(
+                        f"an Anvilate release supporting {declared}, or schema {current} "
+                        "after reviewing the document against it"
+                    ),
+                ),
+            ),
+        )
 
 
 def _major(version: str) -> int:
@@ -72,7 +94,8 @@ def migrate_to_current(data: dict) -> dict:
     if _major(declared) != _major(SCHEMA_VERSION):
         raise UnsupportedSchemaVersion(
             f"spec declares schema {declared}; this release supports major "
-            f"version {_major(SCHEMA_VERSION)} (current {SCHEMA_VERSION})"
+            f"version {_major(SCHEMA_VERSION)} (current {SCHEMA_VERSION})",
+            declared=declared,
         )
     # A minor bump is backward compatible, not forward: a 1.3.0 reader is promised nothing
     # about a 1.9.0 document. Its new fields would be caught by `extra="forbid"` only if it
@@ -85,7 +108,8 @@ def migrate_to_current(data: dict) -> dict:
             f"({SCHEMA_VERSION}). A minor version is backward compatible, not forward: "
             f"this build cannot tell whether {declared} changed the meaning of a field it "
             f"reads. Upgrade anvilate, or set anvilate_spec to {SCHEMA_VERSION} or below "
-            f"once you have checked the document against it"
+            f"once you have checked the document against it",
+            declared=declared,
         )
     version = declared
     migrated = dict(data)

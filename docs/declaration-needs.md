@@ -223,8 +223,8 @@ subject, and the source or authority the caller should use. `RefusalError` refus
 without at least one such record. Its message remains plain text for people and existing
 callers; `remedies` lets a program present the next step without parsing that text.
 
-The export gate, MCP argument handlers, dataset-fetch policy, and intent compiler are the
-migrated raised boundaries.
+The export gate, MCP argument handlers, dataset-fetch policy, intent compiler, and Spec IR
+version/reference front door are the migrated raised boundaries.
 `ExportRefused.remedies` tells the caller to apply the explicit override to the export
 blocked by the named checks, using the export policy and those checks. An MCP handler that
 rejects an argument raises the same structured contract internally; the synchronous and task
@@ -233,9 +233,12 @@ clients do not see a wire-format change. `ConsentRequired` names the dataset dow
 person who must authorize it; `IntegrityError` names the cached or downloaded dataset and the
 publisher recipe used to recover it. `CompilationCandidateError` names the malformed backend
 response and schema; `CompilationFailure` names the backend/model candidate and its recorded
-validation errors while retaining `ValueError` compatibility. This is progress toward the
-interaction-quality requirement, not a claim that every Python `ValueError` has been migrated;
-ordinary validation exceptions remain the open inventory.
+validation errors while retaining `ValueError` compatibility. `UnsupportedSchemaVersion`
+points from the declared schema to a supporting release or reviewed current schema;
+`UnknownReferenceError` points from the rejected identifier to the injected live registry and
+its nearest entries. This is progress toward the interaction-quality requirement, not a claim
+that every Python `ValueError` has been migrated; ordinary validation exceptions remain the
+open inventory.
 
 ## Status
 

@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from ..refusal import RefusalError, Remedy
+
 __all__ = [
     "ReferenceResolver",
     "StaticReferenceResolver",
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-class UnknownReferenceError(ValueError):
+class UnknownReferenceError(RefusalError, ValueError):
     """A referenced material or component ID is not in the databases."""
 
     def __init__(self, ref: str, kind: str, suggestions: list[str]) -> None:
@@ -36,7 +38,19 @@ class UnknownReferenceError(ValueError):
         self.kind = kind
         self.suggestions = suggestions
         hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
-        super().__init__(f"unknown {kind} reference {ref!r}{hint}")
+        source = f"the live {kind} registry"
+        if suggestions:
+            source += f"; nearest registered identifiers: {', '.join(suggestions)}"
+        super().__init__(
+            f"unknown {kind} reference {ref!r}{hint}",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject=f"the unknown {kind} reference {ref!r}",
+                    source=source,
+                ),
+            ),
+        )
 
 
 class ReferenceResolver(Protocol):
