@@ -20,7 +20,30 @@ volume needs.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ACCUMULATOR_GEOMETRY_SOURCE = "the accumulator catalogue or verified vessel-volume record"
+_ACCUMULATOR_PRESSURE_SOURCE = "the hydraulic operating case or calibrated precharge record"
+_ACCUMULATOR_DUTY_SOURCE = "the governing accumulator duty cycle and gas-process model"
+
+
+class _AccumulatorInputError(RefusalError, ValueError):
+    """An accumulator input that cannot be used without correction."""
+
+
+def _accumulator_refusal(message: str, *, subject: str, source: str) -> _AccumulatorInputError:
+    return _AccumulatorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _accumulator_input_source(name: str) -> str:
+    if "pressure" in name:
+        return _ACCUMULATOR_PRESSURE_SOURCE
+    return _ACCUMULATOR_GEOMETRY_SOURCE
+
 
 __all__ = [
     "accumulator_size_for_volume",
@@ -30,15 +53,29 @@ __all__ = [
 
 def _fraction(precharge: float, p_min: float, p_max: float, n: float) -> float:
     if precharge <= 0 or p_min <= 0 or p_max <= 0:
-        raise ValueError("all pressures must be positive (absolute)")
+        raise _accumulator_refusal(
+            "all pressures must be positive (absolute)",
+            subject="precharge, minimum, and maximum pressures",
+            source=_ACCUMULATOR_PRESSURE_SOURCE,
+        )
     if precharge > p_min:
-        raise ValueError(
-            "precharge_pressure must not exceed minimum_pressure (or no fluid is drawn)"
+        raise _accumulator_refusal(
+            "precharge_pressure must not exceed minimum_pressure (or no fluid is drawn)",
+            subject="precharge_pressure and minimum_pressure",
+            source=_ACCUMULATOR_PRESSURE_SOURCE,
         )
     if p_max <= p_min:
-        raise ValueError("maximum_pressure must exceed minimum_pressure")
+        raise _accumulator_refusal(
+            "maximum_pressure must exceed minimum_pressure",
+            subject="minimum_pressure and maximum_pressure",
+            source=_ACCUMULATOR_PRESSURE_SOURCE,
+        )
     if n < 1.0:
-        raise ValueError("polytropic_exponent must be at least 1 (1 isothermal, ~1.4 adiabatic)")
+        raise _accumulator_refusal(
+            "polytropic_exponent must be at least 1 (1 isothermal, ~1.4 adiabatic)",
+            subject="polytropic_exponent",
+            source=_ACCUMULATOR_DUTY_SOURCE,
+        )
     return (precharge / p_min) ** (1.0 / n) - (precharge / p_max) ** (1.0 / n)
 
 
@@ -66,7 +103,11 @@ def accumulator_usable_volume(
     _check(maximum_pressure, "[pressure]", "maximum_pressure")
     v0 = total_volume.to("L").magnitude
     if v0 <= 0:
-        raise ValueError("total_volume must be positive")
+        raise _accumulator_refusal(
+            "total_volume must be positive",
+            subject="total_volume",
+            source=_ACCUMULATOR_GEOMETRY_SOURCE,
+        )
     fraction = _fraction(
         precharge_pressure.to("Pa").magnitude,
         minimum_pressure.to("Pa").magnitude,
@@ -101,7 +142,11 @@ def accumulator_size_for_volume(
     require_finite(polytropic_exponent, name="polytropic_exponent")
     dv = required_volume.to("L").magnitude
     if dv <= 0:
-        raise ValueError("required_volume must be positive")
+        raise _accumulator_refusal(
+            "required_volume must be positive",
+            subject="required_volume",
+            source=_ACCUMULATOR_GEOMETRY_SOURCE,
+        )
     fraction = _fraction(
         precharge_pressure.to("Pa").magnitude,
         minimum_pressure.to("Pa").magnitude,
@@ -113,10 +158,16 @@ def accumulator_size_for_volume(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _accumulator_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_accumulator_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _accumulator_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_accumulator_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

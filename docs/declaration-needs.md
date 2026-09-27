@@ -312,6 +312,9 @@ product or qualification records, coating specifications, and calibrated film-ga
 The complete process-capability and tolerance-stack families follow the contract at all nine refusal
 sites. Specification limits, statistical spread, and dimension-chain contributors point to product
 drawings, control plans, qualified capability studies, and approved tolerance worksheets.
+The complete accumulator and tank-flow families follow the contract at all 15 refusal sites. Vessel
+volume, pressures, duty models, tank geometry, liquid levels, and discharge coefficients point to
+catalogues, operating cases, drawings, calibrated measurements, or orifice records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

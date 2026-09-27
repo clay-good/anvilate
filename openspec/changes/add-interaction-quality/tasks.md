@@ -129,6 +129,9 @@
       The complete process-capability and tolerance-stack families add nine structured sites for
       specification limits, statistical spread, and dimension-chain contributors, sourced to
       drawings, control plans, qualified capability studies, and approved tolerance worksheets.
+      The complete accumulator and tank-flow families add 15 structured sites for vessel volume,
+      pressures, duty models, tank geometry, liquid levels, and discharge coefficients, sourced to
+      catalogues, operating cases, drawings, calibrated measurements, or orifice records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

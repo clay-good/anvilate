@@ -21,7 +21,30 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_TANK_GEOMETRY_SOURCE = "the tank and orifice drawing or verified geometry record"
+_TANK_LEVEL_SOURCE = "the drain operating case or calibrated liquid-level measurement"
+_ORIFICE_PROPERTY_SOURCE = "the orifice datasheet or calibrated discharge record"
+
+
+class _TankFlowInputError(RefusalError, ValueError):
+    """A tank-flow input that cannot be used without correction."""
+
+
+def _tank_flow_refusal(message: str, *, subject: str, source: str) -> _TankFlowInputError:
+    return _TankFlowInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _tank_flow_input_source(name: str) -> str:
+    if "head" in name:
+        return _TANK_LEVEL_SOURCE
+    return _TANK_GEOMETRY_SOURCE
+
 
 __all__ = [
     "tank_drain_time",
@@ -42,7 +65,9 @@ def torricelli_efflux_velocity(*, head: Quantity) -> Quantity:
     _check(head, "[length]", "head")
     h = head.to("m").magnitude
     if h < 0:
-        raise ValueError("head must be non-negative")
+        raise _tank_flow_refusal(
+            "head must be non-negative", subject="head", source=_TANK_LEVEL_SOURCE
+        )
     return Quantity(magnitude=sqrt(2.0 * _GRAVITY * h), unit="m/s")
 
 
@@ -72,23 +97,45 @@ def tank_drain_time(
     h1 = initial_head.to("m").magnitude
     h2 = final_head.to("m").magnitude
     if a_t <= 0 or a_o <= 0:
-        raise ValueError("tank_area and orifice_area must be positive")
+        raise _tank_flow_refusal(
+            "tank_area and orifice_area must be positive",
+            subject="tank_area and orifice_area",
+            source=_TANK_GEOMETRY_SOURCE,
+        )
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+        raise _tank_flow_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_ORIFICE_PROPERTY_SOURCE,
+        )
     if h1 < 0 or h2 < 0:
-        raise ValueError("heads must be non-negative")
+        raise _tank_flow_refusal(
+            "heads must be non-negative",
+            subject="initial_head and final_head",
+            source=_TANK_LEVEL_SOURCE,
+        )
     if h2 > h1:
-        raise ValueError("final_head must not exceed initial_head (the tank drains down)")
+        raise _tank_flow_refusal(
+            "final_head must not exceed initial_head (the tank drains down)",
+            subject="initial_head and final_head",
+            source=_TANK_LEVEL_SOURCE,
+        )
     t = (a_t / (discharge_coefficient * a_o)) * sqrt(2.0 / _GRAVITY) * (sqrt(h1) - sqrt(h2))
     return Quantity(magnitude=t, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _tank_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_tank_flow_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _tank_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_tank_flow_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

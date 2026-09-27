@@ -21246,6 +21246,126 @@ def test_accumulator_usable_volume_and_size_round_trip():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "accumulator_usable_volume",
+            {
+                "total_volume": _q("0 L"),
+                "precharge_pressure": _q("90 bar"),
+                "minimum_pressure": _q("100 bar"),
+                "maximum_pressure": _q("200 bar"),
+            },
+            "total_volume",
+            "the accumulator catalogue or verified vessel-volume record",
+        ),
+        (
+            "accumulator_usable_volume",
+            {
+                "total_volume": _q("10 L"),
+                "precharge_pressure": _q("120 bar"),
+                "minimum_pressure": _q("100 bar"),
+                "maximum_pressure": _q("200 bar"),
+            },
+            "precharge_pressure and minimum_pressure",
+            "the hydraulic operating case or calibrated precharge record",
+        ),
+        (
+            "accumulator_usable_volume",
+            {
+                "total_volume": _q("10 L"),
+                "precharge_pressure": _q("90 bar"),
+                "minimum_pressure": _q("100 bar"),
+                "maximum_pressure": _q("200 bar"),
+                "polytropic_exponent": 0.5,
+            },
+            "polytropic_exponent",
+            "the governing accumulator duty cycle and gas-process model",
+        ),
+        (
+            "tank_drain_time",
+            {
+                "tank_area": _q("0 m**2"),
+                "orifice_area": _q("0.01 m**2"),
+                "discharge_coefficient": 0.6,
+                "initial_head": _q("4 m"),
+                "final_head": _q("0 m"),
+            },
+            "tank_area and orifice_area",
+            "the tank and orifice drawing or verified geometry record",
+        ),
+        (
+            "tank_drain_time",
+            {
+                "tank_area": _q("10 m**2"),
+                "orifice_area": _q("0.01 m**2"),
+                "discharge_coefficient": 0.6,
+                "initial_head": _q("2 m"),
+                "final_head": _q("4 m"),
+            },
+            "initial_head and final_head",
+            "the drain operating case or calibrated liquid-level measurement",
+        ),
+        (
+            "tank_drain_time",
+            {
+                "tank_area": _q("10 m**2"),
+                "orifice_area": _q("0.01 m**2"),
+                "discharge_coefficient": 0.0,
+                "initial_head": _q("4 m"),
+                "final_head": _q("0 m"),
+            },
+            "discharge_coefficient",
+            "the orifice datasheet or calibrated discharge record",
+        ),
+    ),
+)
+def test_fluid_storage_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("accumulator", "_accumulator_refusal", 8),
+        ("tank_flow", "_tank_flow_refusal", 7),
+    ),
+)
+def test_every_fluid_storage_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 
