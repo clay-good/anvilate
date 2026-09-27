@@ -20,7 +20,23 @@ dry film needs, and the theoretical coverage a volume of coating gives.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_COATING_THICKNESS_SOURCE = "the coating specification or calibrated film-gage record"
+_COATING_PRODUCT_SOURCE = "the coating product datasheet or batch certificate"
+
+
+class _CoatingInputError(RefusalError, ValueError):
+    """A coating input that cannot be used without correction."""
+
+
+def _coating_refusal(message: str, *, subject: str, source: str) -> _CoatingInputError:
+    return _CoatingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "coating_dry_film_thickness",
@@ -44,7 +60,11 @@ def coating_dry_film_thickness(
     _fraction(volume_solids_fraction, "volume_solids_fraction")
     wft = wet_film_thickness.to("um").magnitude
     if wft < 0:
-        raise ValueError("wet_film_thickness must be non-negative")
+        raise _coating_refusal(
+            "wet_film_thickness must be non-negative",
+            subject="wet_film_thickness",
+            source=_COATING_THICKNESS_SOURCE,
+        )
     return Quantity(magnitude=wft * volume_solids_fraction, unit="um")
 
 
@@ -64,7 +84,11 @@ def coating_wet_film_thickness(
     _fraction(volume_solids_fraction, "volume_solids_fraction")
     dft = dry_film_thickness.to("um").magnitude
     if dft < 0:
-        raise ValueError("dry_film_thickness must be non-negative")
+        raise _coating_refusal(
+            "dry_film_thickness must be non-negative",
+            subject="dry_film_thickness",
+            source=_COATING_THICKNESS_SOURCE,
+        )
     return Quantity(magnitude=dft / volume_solids_fraction, unit="um")
 
 
@@ -85,21 +109,35 @@ def coating_theoretical_coverage(
     _check(dry_film_thickness, "[length]", "dry_film_thickness")
     dft = dry_film_thickness.to("m").magnitude
     if dft <= 0:
-        raise ValueError("dry_film_thickness must be positive")
+        raise _coating_refusal(
+            "dry_film_thickness must be positive",
+            subject="dry_film_thickness",
+            source=_COATING_THICKNESS_SOURCE,
+        )
     return Quantity(magnitude=volume_solids_fraction / dft * 1e-3, unit="m**2/L")
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _coating_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_COATING_PRODUCT_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _coating_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_COATING_THICKNESS_SOURCE,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _coating_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_COATING_THICKNESS_SOURCE,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -15320,6 +15320,92 @@ def test_adhesive_bond_capacities_and_lap_shear():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "lap_joint_average_shear_stress",
+            {"load": _q("5 kN"), "overlap_length": _q("0 mm"), "joint_width": _q("20 mm")},
+            "overlap_length",
+            "the bonded-joint drawing or measured interface geometry",
+        ),
+        (
+            "lap_joint_average_shear_stress",
+            {"load": _q("0 N"), "overlap_length": _q("25 mm"), "joint_width": _q("20 mm")},
+            "load",
+            "the governing joint load case or verified test load",
+        ),
+        (
+            "cylindrical_bond_axial_capacity",
+            {
+                "interface_diameter": _q("20 mm"),
+                "engagement_length": _q("15 mm"),
+                "bond_shear_strength": _q("0 MPa"),
+            },
+            "bond_shear_strength",
+            "the adhesive datasheet or qualified bond-strength record",
+        ),
+        (
+            "coating_theoretical_coverage",
+            {"volume_solids_fraction": 0.5, "dry_film_thickness": _q("0 um")},
+            "dry_film_thickness",
+            "the coating specification or calibrated film-gage record",
+        ),
+        (
+            "coating_dry_film_thickness",
+            {"wet_film_thickness": _q("200 um"), "volume_solids_fraction": 1.5},
+            "volume_solids_fraction",
+            "the coating product datasheet or batch certificate",
+        ),
+    ),
+)
+def test_surface_engineering_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("adhesive", "_adhesive_refusal", 5),
+        ("coating", "_coating_refusal", 6),
+    ),
+)
+def test_every_surface_engineering_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_drum_line_pull_falls_as_the_drum_fills():
     from anvilate.analysis import drum_line_pull, drum_working_radius
 

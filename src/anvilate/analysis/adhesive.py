@@ -37,7 +37,32 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ADHESIVE_GEOMETRY_SOURCE = "the bonded-joint drawing or measured interface geometry"
+_ADHESIVE_LOAD_SOURCE = "the governing joint load case or verified test load"
+_ADHESIVE_PROPERTY_SOURCE = "the adhesive datasheet or qualified bond-strength record"
+
+
+class _AdhesiveInputError(RefusalError, ValueError):
+    """An adhesive-joint input that cannot be used without correction."""
+
+
+def _adhesive_refusal(message: str, *, subject: str, source: str) -> _AdhesiveInputError:
+    return _AdhesiveInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _adhesive_input_source(name: str) -> str:
+    if name == "load":
+        return _ADHESIVE_LOAD_SOURCE
+    if name == "bond_shear_strength":
+        return _ADHESIVE_PROPERTY_SOURCE
+    return _ADHESIVE_GEOMETRY_SOURCE
+
 
 __all__ = [
     "lap_joint_average_shear_stress",
@@ -48,10 +73,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _adhesive_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_adhesive_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _adhesive_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_adhesive_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -64,7 +95,11 @@ def _positive_mm(value: Quantity, name: str) -> float:
     _require(value, "[length]", name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _adhesive_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_ADHESIVE_GEOMETRY_SOURCE,
+        )
     return magnitude
 
 
@@ -72,7 +107,11 @@ def _positive_mpa(value: Quantity, name: str) -> float:
     _require(value, "[pressure]", name)
     magnitude = value.to("MPa").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _adhesive_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_ADHESIVE_PROPERTY_SOURCE,
+        )
     return magnitude
 
 
@@ -94,7 +133,11 @@ def lap_joint_average_shear_stress(
     _require(load, "[force]", "load")
     force = load.to("N").magnitude
     if force <= 0:
-        raise ValueError(f"load must be positive; got {load}")
+        raise _adhesive_refusal(
+            f"load must be positive; got {load}",
+            subject="load",
+            source=_ADHESIVE_LOAD_SOURCE,
+        )
     overlap = _positive_mm(overlap_length, "overlap_length")
     width = _positive_mm(joint_width, "joint_width")
     return Quantity(magnitude=force / (overlap * width), unit="MPa")

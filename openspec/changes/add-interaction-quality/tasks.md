@@ -123,6 +123,9 @@
       intensities, refractive indices, incidence angles, and total-internal-reflection conditions,
       sourced to attenuation requirements, photometer records, glass certificates, layouts, or
       calibrated setups.
+      The complete adhesive-joint and coating families add 11 structured sites for joint geometry,
+      loads, bond strength, film thickness, and volume solids, sourced to drawings, load cases,
+      product or qualification records, coating specifications, and calibrated gage records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

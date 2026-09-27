@@ -306,6 +306,9 @@ levels point to spectral requirements, calibrated sources or setups, and transit
 The complete polarization and Fresnel families follow the contract at all 14 refusal sites. Optical
 intensities, refractive indices, incidence angles, and total-internal-reflection conditions point to
 attenuation requirements, photometer records, glass certificates, layouts, or calibrated setups.
+The complete adhesive-joint and coating families follow the contract at all 11 refusal sites. Joint
+geometry, loads, bond strength, film thickness, and volume solids point to drawings, load cases,
+product or qualification records, coating specifications, and calibrated film-gage records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
