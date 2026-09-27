@@ -324,7 +324,18 @@ def _run_worker(task_id: str, nonce: str) -> int:
             except _InvalidArguments as refusal:
                 store.fail(
                     task_id,
-                    {"code": INVALID_PARAMS, "message": str(refusal)},
+                    {
+                        "code": INVALID_PARAMS,
+                        "message": str(refusal),
+                        "data": {
+                            "issues": list(refusal.issues),
+                            "remedies": list(refusal.remedies)
+                            or [
+                                f"correct the named {operation} argument using its "
+                                f"inputSchema from tools/list, then call {operation} again"
+                            ],
+                        },
+                    },
                     f"{operation} was refused.",
                 )
                 return 1

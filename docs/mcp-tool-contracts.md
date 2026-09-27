@@ -250,6 +250,13 @@ what a Design Spec can and cannot be screened on. Two of its decisions differ fr
 
 Everything else ends in a refusal, and the kinds are worth separating:
 
+Every actionable `tools/call` refusal carries machine-readable repair data under
+`error.data`. Invalid arguments include `issues` and `remedies`; other refusals include
+`remedies`, alongside fields such as `requiredCapabilities`. Each remedy names the tool or
+argument to change and the live contract to read, so a client does not have to parse the
+human `message` back into an edit. Transport defects such as malformed JSON remain ordinary
+JSON-RPC errors because there is no valid tool call to repair yet.
+
 - **`-32602`, a bad argument.** Checked against the published input schema — required
   properties present, no property outside `properties`, each value's type, and every
   `enum`, numeric bound and length the schema declares. Deliberately partial: the `$ref`s

@@ -909,8 +909,9 @@ class _InvalidArguments(ValueError):
     the client as INVALID_PARAMS rather than as a traceback.
     """
 
-    def __init__(self, issues: list[str]) -> None:
-        self.issues = issues
+    def __init__(self, issues: list[str], remedies: tuple[str, ...] = ()) -> None:
+        self.issues = tuple(issues)
+        self.remedies = tuple(dict.fromkeys(remedies))
         super().__init__("; ".join(issues))
 
 
@@ -931,6 +932,14 @@ def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, A
     if data:
         error["data"] = data
     return {"jsonrpc": "2.0", "id": request_id, "error": error}
+
+
+def _argument_remedy(tool: ToolDefinition) -> str:
+    """The fallback repair when a handler cannot name a more specific edit."""
+    return (
+        f"correct the named {tool.name} argument using its inputSchema from tools/list, "
+        f"then call {tool.name} again"
+    )
 
 
 def _client_supports_tasks(params: Mapping[str, Any]) -> bool:
@@ -1077,21 +1086,47 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     if params is None:
         params = {}
     if not isinstance(params, Mapping):
-        return _error(request_id, INVALID_PARAMS, "tool params must be a JSON object")
+        return _error(
+            request_id,
+            INVALID_PARAMS,
+            "tool params must be a JSON object",
+            remedies=["write tools/call params as a JSON object with name and arguments"],
+        )
     name = params.get("name")
     if not isinstance(name, str):
-        return _error(request_id, INVALID_PARAMS, "tool name must be a JSON string")
+        return _error(
+            request_id,
+            INVALID_PARAMS,
+            "tool name must be a JSON string",
+            remedies=["write params.name as a tool name returned by tools/list"],
+        )
     tools = {tool.name: tool for tool in tool_catalog()}
     tool = tools.get(name)
     if tool is None:
-        return _error(request_id, METHOD_NOT_FOUND, f"unknown tool {name!r}")
+        return _error(
+            request_id,
+            METHOD_NOT_FOUND,
+            f"unknown tool {name!r}",
+            remedies=["choose params.name from the tool names returned by tools/list"],
+        )
 
     arguments = params.get("arguments") or {}
     if not isinstance(arguments, dict):
-        return _error(request_id, INVALID_PARAMS, "arguments must be a JSON object")
+        return _error(
+            request_id,
+            INVALID_PARAMS,
+            "arguments must be a JSON object",
+            remedies=[_argument_remedy(tool)],
+        )
     issues = _argument_issues(tool, arguments)
     if issues:
-        return _error(request_id, INVALID_PARAMS, "; ".join(issues))
+        return _error(
+            request_id,
+            INVALID_PARAMS,
+            "; ".join(issues),
+            issues=issues,
+            remedies=[_argument_remedy(tool)],
+        )
 
     if tool.dispatch is Dispatch.TASK:
         if tool.name not in _TASK_DISPATCH:
@@ -1099,6 +1134,10 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
                 request_id,
                 TOOL_UNAVAILABLE,
                 f"{tool.name} is task-dispatched, but {_UNBUILT_TASKS[tool.name]}",
+                remedies=[
+                    f"enable the {tool.name} task capability named in this error or use a "
+                    "served validation tier"
+                ],
             )
         if not _client_supports_tasks(params):
             return _error(
@@ -1106,6 +1145,9 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
                 MISSING_REQUIRED_CLIENT_CAPABILITY,
                 "Missing required client capability",
                 requiredCapabilities={"extensions": {TASKS_EXTENSION: {}}},
+                remedies=[
+                    f"declare the {TASKS_EXTENSION} extension in params._meta clientCapabilities"
+                ],
             )
         from ._mcp_tasks import launch_task
 
@@ -1118,6 +1160,9 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"{tool.name} names nothing in its input to act on, so a server with no memory "
             f"between calls cannot serve it. Either the tool takes what it acts on as an "
             f"argument or the server holds a session; the contract does not yet say which",
+            remedies=[
+                f"supply the {tool.name} subject through the argument named by tools/list"
+            ],
         )
     handler = _DISPATCH.get(tool.name)
     if handler is None:
@@ -1132,13 +1177,25 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"{tool.name} is not dispatched yet: {waiting}. The contract and this handler "
             f"are built and the operation is not; a result invented here would be "
             f"indistinguishable from a real one",
+            remedies=[f"use the {tool.name} capability or alternative named in this error"],
         )
     try:
         structured = handler(arguments)
     except _InvalidArguments as refusal:
-        return _error(request_id, INVALID_PARAMS, str(refusal))
+        return _error(
+            request_id,
+            INVALID_PARAMS,
+            str(refusal),
+            issues=list(refusal.issues),
+            remedies=list(refusal.remedies) or [_argument_remedy(tool)],
+        )
     except _Unavailable as refusal:
-        return _error(request_id, TOOL_UNAVAILABLE, str(refusal))
+        return _error(
+            request_id,
+            TOOL_UNAVAILABLE,
+            str(refusal),
+            remedies=[f"use the {tool.name} capability or alternative named in this error"],
+        )
     except Exception as unexpected:  # noqa: BLE001 - the last resort, argued below
         # Anything a handler did not anticipate becomes a response rather than an exception,
         # because the alternative is not "the client sees a traceback" — it is that
@@ -1319,7 +1376,8 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
         spec = parse_spec(dict(arguments["spec"]))
     except SpecValidationError as failure:
         raise _InvalidArguments(
-            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
+            failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
@@ -1439,7 +1497,8 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         spec = parse_spec(document)
     except SpecValidationError as failure:
         raise _InvalidArguments(
-            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
+            failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure
@@ -1621,7 +1680,8 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
         spec = parse_spec(document)
     except SpecValidationError as failure:
         raise _InvalidArguments(
-            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors]
+            [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
+            failure.remedies,
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {_reason(failure)}"]) from failure

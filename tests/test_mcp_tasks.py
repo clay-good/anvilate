@@ -191,6 +191,9 @@ def test_invalid_spec_is_a_task_refusal_not_an_internal_server_defect(monkeypatc
     assert failed["error"]["code"] == -32602
     assert "spec." in failed["error"]["message"]
     assert "internal" not in failed["error"]["message"].lower()
+    assert failed["error"]["data"]["issues"]
+    assert failed["error"]["data"]["remedies"]
+    assert any("name" in remedy for remedy in failed["error"]["data"]["remedies"])
     progress = failed["_meta"]["dev.anvilate/progress"]
     assert progress["completedUnits"] == 0
     assert progress["indeterminate"] is False

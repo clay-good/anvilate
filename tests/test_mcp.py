@@ -593,6 +593,37 @@ def test_a_boolean_is_not_a_number():
     assert _call("render_viewport", {"view": "iso", "width_px": True})["error"]["code"] == -32602
 
 
+def test_tool_refusals_carry_structured_issues_and_remedies():
+    """An agent can repair a rejected call without parsing its prose message."""
+    unknown = _call("render_viewpor", {})["error"]
+    assert unknown["data"]["remedies"] == [
+        "choose params.name from the tool names returned by tools/list"
+    ]
+
+    malformed = _call("render_viewport", {"view": "sideways"})["error"]
+    assert malformed["data"]["issues"] == [
+        "render_viewport requires 'subject'",
+        "render_viewport.view must be one of ['front', 'iso', 'right', 'top']; "
+        "got 'sideways'",
+    ]
+    assert malformed["data"]["remedies"] == [
+        "correct the named render_viewport argument using its inputSchema from tools/list, "
+        "then call render_viewport again"
+    ]
+
+    document = _spec_document()
+    document.pop("name")
+    nested = _call("run_validation", {"spec": document})["error"]
+    assert nested["data"]["issues"][0].startswith("spec.name:")
+    assert any("name" in remedy for remedy in nested["data"]["remedies"])
+
+    capability = _call("run_fea_validation", {"spec": {}})["error"]
+    assert capability["data"]["requiredCapabilities"]
+    assert capability["data"]["remedies"] == [
+        "declare the io.modelcontextprotocol/tasks extension in params._meta clientCapabilities"
+    ]
+
+
 def test_the_unbounded_validation_tool_requires_the_tasks_extension():
     missing_capability = _call("run_fea_validation", {"spec": {}})["error"]
     assert missing_capability["code"] == -32021

@@ -25,7 +25,10 @@
       value may come from — progress: every gap the library builds through
       `ScorecardEntry.from_safety_factor` states its reason and the field to declare
       (`unavailable=`, 34 call sites, held by a gate in tests/conftest.py). Raised
-      refusals carry their remedy in the message text (2.2), with no structured field yet. The
+      refusals carry their remedy in the message text (2.2). MCP `tools/call` refusals also
+      carry `error.data.remedies`; invalid arguments carry `error.data.issues`, and nested
+      Design Spec failures preserve their exact per-field remedies through synchronous and
+      task-dispatched calls. Other Python ValueErrors have no structured field yet. The
       structured field is `ScorecardEntry.needs` (add-declaration-completeness): 61 of the
       library's 111 not-evaluated sites carry it (nine in screening, and every screen
       elsewhere that stops for a value), and so do all 34 `from_safety_factor` calls that
@@ -44,7 +47,7 @@
       a held list (a missing or mistyped path, an empty directory, a UTF-16 file, a YAML
       syntax error, a missing or unknown argument, a mistyped command, an export past a
       failing card, a missing optional dependency) gets its own `remedy` rather than the
-      generic sentence, derived from the CLI's own diagnostic forms The CLI's JSON
+      generic sentence, derived from the CLI's own diagnostic forms. The CLI's JSON
       refusal carries those remedies in `remedy` instead of its generic sentence
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
