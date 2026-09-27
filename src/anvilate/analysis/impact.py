@@ -24,10 +24,42 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 # The impact factor for a load applied suddenly with no drop (h = 0): K = 2.
 SUDDENLY_APPLIED_FACTOR = 2.0
+_IMPACT_DROP_SOURCE = "the governing drop or shock-load case"
+_IMPACT_RESPONSE_SOURCE = (
+    "the verified static analysis or calibrated deflection-and-stiffness record"
+)
+_IMPACT_STRESS_SOURCE = "the verified static stress analysis"
+_IMPACT_MASS_SOURCE = "the approved impactor mass-properties record"
+_IMPACT_MOTION_SOURCE = "the governing impact-speed case or calibrated velocity record"
+
+
+class _ImpactInputError(RefusalError, ValueError):
+    """An impact input that cannot be used without correction."""
+
+
+def _impact_refusal(message: str, *, subject: str, source: str) -> _ImpactInputError:
+    return _ImpactInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _impact_input_source(name: str) -> str:
+    if name == "drop_height":
+        return _IMPACT_DROP_SOURCE
+    if name in {"static_deflection", "stiffness"}:
+        return _IMPACT_RESPONSE_SOURCE
+    if name == "static_stress":
+        return _IMPACT_STRESS_SOURCE
+    if name == "mass":
+        return _IMPACT_MASS_SOURCE
+    return _IMPACT_MOTION_SOURCE
+
 
 __all__ = [
     "SUDDENLY_APPLIED_FACTOR",
@@ -39,10 +71,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _impact_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_impact_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _impact_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_impact_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -67,9 +105,17 @@ def impact_factor(*, drop_height: Quantity, static_deflection: Quantity) -> floa
     h = drop_height.to("mm").magnitude
     delta = static_deflection.to("mm").magnitude
     if h < 0:
-        raise ValueError(f"drop_height must be non-negative; got {drop_height}")
+        raise _impact_refusal(
+            f"drop_height must be non-negative; got {drop_height}",
+            subject="drop_height",
+            source=_IMPACT_DROP_SOURCE,
+        )
     if delta <= 0:
-        raise ValueError(f"static_deflection must be positive; got {static_deflection}")
+        raise _impact_refusal(
+            f"static_deflection must be positive; got {static_deflection}",
+            subject="static_deflection",
+            source=_IMPACT_RESPONSE_SOURCE,
+        )
     return 1.0 + sqrt(1.0 + 2.0 * h / delta)
 
 
@@ -111,9 +157,19 @@ def horizontal_impact_force(*, mass: Quantity, velocity: Quantity, stiffness: Qu
     v = velocity.to("m/s").magnitude
     k = stiffness.to("N/m").magnitude
     if m <= 0:
-        raise ValueError(f"mass must be positive; got {mass}")
+        raise _impact_refusal(
+            f"mass must be positive; got {mass}", subject="mass", source=_IMPACT_MASS_SOURCE
+        )
     if v <= 0:
-        raise ValueError(f"velocity must be positive; got {velocity}")
+        raise _impact_refusal(
+            f"velocity must be positive; got {velocity}",
+            subject="velocity",
+            source=_IMPACT_MOTION_SOURCE,
+        )
     if k <= 0:
-        raise ValueError(f"stiffness must be positive; got {stiffness}")
+        raise _impact_refusal(
+            f"stiffness must be positive; got {stiffness}",
+            subject="stiffness",
+            source=_IMPACT_RESPONSE_SOURCE,
+        )
     return Quantity(magnitude=v * sqrt(m * k), unit="N")

@@ -19,7 +19,24 @@ from __future__ import annotations
 
 from math import atan, cos, degrees, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FRICTION_LOAD_SOURCE = "the governing contact load case or calibrated force record"
+_FRICTION_PROPERTY_SOURCE = "the interface friction test data or approved material specification"
+_FRICTION_GEOMETRY_SOURCE = "the ramp drawing or verified incline survey"
+
+
+class _FrictionInputError(RefusalError, ValueError):
+    """A friction input that cannot be used without correction."""
+
+
+def _friction_refusal(message: str, *, subject: str, source: str) -> _FrictionInputError:
+    return _FrictionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "angle_of_repose",
@@ -39,9 +56,17 @@ def friction_force(*, normal_force: Quantity, friction_coefficient: float) -> Qu
     _check(normal_force, "[force]", "normal_force")
     n = normal_force.to("N").magnitude
     if n < 0:
-        raise ValueError("normal_force must be non-negative")
+        raise _friction_refusal(
+            "normal_force must be non-negative",
+            subject="normal_force",
+            source=_FRICTION_LOAD_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError("friction_coefficient must be non-negative")
+        raise _friction_refusal(
+            "friction_coefficient must be non-negative",
+            subject="friction_coefficient",
+            source=_FRICTION_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=friction_coefficient * n, unit="N")
 
 
@@ -54,7 +79,11 @@ def angle_of_repose(*, friction_coefficient: float) -> Quantity:
     angle in degrees.
     """
     if friction_coefficient < 0:
-        raise ValueError("friction_coefficient must be non-negative")
+        raise _friction_refusal(
+            "friction_coefficient must be non-negative",
+            subject="friction_coefficient",
+            source=_FRICTION_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=degrees(atan(friction_coefficient)), unit="degree")
 
 
@@ -71,21 +100,37 @@ def force_to_slide_up_incline(
     _check(weight, "[force]", "weight")
     w = weight.to("N").magnitude
     if w < 0:
-        raise ValueError("weight must be non-negative")
+        raise _friction_refusal(
+            "weight must be non-negative", subject="weight", source=_FRICTION_LOAD_SOURCE
+        )
     if not 0.0 <= incline_angle < 90.0:
-        raise ValueError(f"incline_angle must be in [0, 90) degrees; got {incline_angle}")
+        raise _friction_refusal(
+            f"incline_angle must be in [0, 90) degrees; got {incline_angle}",
+            subject="incline_angle",
+            source=_FRICTION_GEOMETRY_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError("friction_coefficient must be non-negative")
+        raise _friction_refusal(
+            "friction_coefficient must be non-negative",
+            subject="friction_coefficient",
+            source=_FRICTION_PROPERTY_SOURCE,
+        )
     theta = radians(incline_angle)
     return Quantity(magnitude=w * (sin(theta) + friction_coefficient * cos(theta)), unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _friction_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_FRICTION_LOAD_SOURCE,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _friction_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_FRICTION_LOAD_SOURCE,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

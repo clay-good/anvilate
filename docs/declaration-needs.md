@@ -321,6 +321,9 @@ material specifications, approved stress records, manufacturer catalogues, or gl
 The complete mass-energy, gravitation, and circular-motion families follow the contract at all 21
 refusal sites. Masses, reaction energies, nuclide identity, body and curve geometry, speeds, traction,
 and gravity point to inventories, calibrated records, physical models, drawings, or test data.
+The complete work-energy, impact, and friction families follow the contract at all 20 refusal sites.
+Mass properties, loads, motion, travel, gravity, drop cases, elastic response, interface properties,
+and ramp geometry point to approved records, drawings, analyses, specifications, or calibrated tests.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

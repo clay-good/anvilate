@@ -20,9 +20,39 @@ work-energy theorem relating them.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
+_WORK_MASS_SOURCE = "the approved mass-properties record"
+_WORK_MOTION_SOURCE = "the governing motion case or calibrated speed record"
+_WORK_LOAD_SOURCE = "the governing load case or calibrated force record"
+_WORK_GEOMETRY_SOURCE = "the governing elevation or travel drawing"
+_WORK_GRAVITY_SOURCE = "the site gravity model or calibrated acceleration record"
+
+
+class _WorkEnergyInputError(RefusalError, ValueError):
+    """A work-energy input that cannot be used without correction."""
+
+
+def _work_energy_refusal(message: str, *, subject: str, source: str) -> _WorkEnergyInputError:
+    return _WorkEnergyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _work_energy_input_source(name: str) -> str:
+    if name == "mass":
+        return _WORK_MASS_SOURCE
+    if name == "velocity":
+        return _WORK_MOTION_SOURCE
+    if name == "force":
+        return _WORK_LOAD_SOURCE
+    if name in {"height", "distance"}:
+        return _WORK_GEOMETRY_SOURCE
+    return _WORK_GRAVITY_SOURCE
+
 
 __all__ = [
     "gravitational_potential_energy",
@@ -44,7 +74,9 @@ def kinetic_energy(*, mass: Quantity, velocity: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     v = velocity.to("m/s").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _work_energy_refusal(
+            "mass must be positive", subject="mass", source=_WORK_MASS_SOURCE
+        )
     return Quantity(magnitude=0.5 * m * v * v, unit="J")
 
 
@@ -62,14 +94,18 @@ def gravitational_potential_energy(
     m = mass.to("kg").magnitude
     h = height.to("m").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _work_energy_refusal(
+            "mass must be positive", subject="mass", source=_WORK_MASS_SOURCE
+        )
     if gravity is None:
         g = _STANDARD_GRAVITY
     else:
         _check(gravity, "[acceleration]", "gravity")
         g = gravity.to("m/s**2").magnitude
         if g <= 0:
-            raise ValueError("gravity must be positive")
+            raise _work_energy_refusal(
+                "gravity must be positive", subject="gravity", source=_WORK_GRAVITY_SOURCE
+            )
     return Quantity(magnitude=m * g * h, unit="J")
 
 
@@ -106,10 +142,16 @@ def mechanical_power(*, force: Quantity, velocity: Quantity) -> Quantity:
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _work_energy_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_work_energy_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _work_energy_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_work_energy_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

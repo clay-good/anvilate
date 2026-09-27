@@ -32333,6 +32333,101 @@ def test_work_energy_mechanical_power():
         mechanical_power(force=_q("100 kg"), velocity=_q("5 m/s"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "kinetic_energy",
+            {"mass": _q("0 kg"), "velocity": _q("20 m/s")},
+            "mass",
+            "the approved mass-properties record",
+        ),
+        (
+            "gravitational_potential_energy",
+            {"mass": _q("10 kg"), "height": _q("2 m"), "gravity": _q("0 m/s**2")},
+            "gravity",
+            "the site gravity model or calibrated acceleration record",
+        ),
+        (
+            "impact_factor",
+            {"drop_height": _q("-5 mm"), "static_deflection": _q("5 mm")},
+            "drop_height",
+            "the governing drop or shock-load case",
+        ),
+        (
+            "horizontal_impact_force",
+            {"mass": _q("10 kg"), "velocity": _q("2 m/s"), "stiffness": _q("0 N/m")},
+            "stiffness",
+            "the verified static analysis or calibrated deflection-and-stiffness record",
+        ),
+        (
+            "friction_force",
+            {"normal_force": _q("-1 N"), "friction_coefficient": 0.3},
+            "normal_force",
+            "the governing contact load case or calibrated force record",
+        ),
+        (
+            "angle_of_repose",
+            {"friction_coefficient": -0.1},
+            "friction_coefficient",
+            "the interface friction test data or approved material specification",
+        ),
+        (
+            "force_to_slide_up_incline",
+            {"weight": _q("100 N"), "incline_angle": 90.0, "friction_coefficient": 0.3},
+            "incline_angle",
+            "the ramp drawing or verified incline survey",
+        ),
+    ),
+)
+def test_energy_and_contact_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("work_energy", "_work_energy_refusal", 5),
+        ("impact", "_impact_refusal", 7),
+        ("friction", "_friction_refusal", 8),
+    ),
+)
+def test_every_energy_and_contact_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_ohms_law_resistive_power_and_parallel_resistance():
     from anvilate.analysis import (
         ohms_law_voltage,
