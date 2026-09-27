@@ -30375,6 +30375,126 @@ def test_shell_and_tube_effectiveness_ntu_inverse_and_crossflow_cmax_mixed():
         crossflow_cmax_mixed_effectiveness(ntu=1.5, capacity_ratio=1.5)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "rc_beta1",
+            {"concrete_strength": _q("0 MPa")},
+            "concrete_strength",
+            "the concrete batch report or reinforcing-steel certificate",
+        ),
+        (
+            "rc_beam_nominal_moment",
+            {
+                "steel_area": _q("1500 mm**2"),
+                "steel_yield": _q("420 MPa"),
+                "concrete_strength": _q("30 MPa"),
+                "beam_width": _q("300 mm"),
+                "effective_depth": _q("0 mm"),
+            },
+            "effective_depth",
+            "the structural drawing or verified section schedule",
+        ),
+        (
+            "rc_stress_block_depth",
+            {
+                "steel_area": _q("0 mm**2"),
+                "steel_yield": _q("420 MPa"),
+                "concrete_strength": _q("30 MPa"),
+                "beam_width": _q("300 mm"),
+            },
+            "steel_area, steel_yield, concrete_strength, and beam_width",
+            "the structural drawing, reinforcement schedule, and material certificates",
+        ),
+        (
+            "rc_concrete_shear_strength",
+            {
+                "concrete_strength": _q("30 MPa"),
+                "beam_width": _q("300 mm"),
+                "effective_depth": _q("550 mm"),
+                "lightweight_factor": 0.0,
+            },
+            "lightweight_factor",
+            "the governing ACI 318 edition and approved design criteria",
+        ),
+        (
+            "rc_max_bar_spacing_crack_control",
+            {"steel_service_stress": _q("200 MPa"), "clear_cover": _q("-1 mm")},
+            "clear_cover",
+            "the approved reinforcement schedule and bar detailing",
+        ),
+        (
+            "rc_max_bar_spacing_crack_control",
+            {"steel_service_stress": _q("0 MPa"), "clear_cover": _q("40 mm")},
+            "steel_service_stress",
+            "the verified service-load analysis and crack-control detail",
+        ),
+        (
+            "rc_tension_steel_for_moment",
+            {
+                "required_moment": _q("5000 kN*m"),
+                "steel_yield": _q("420 MPa"),
+                "concrete_strength": _q("30 MPa"),
+                "beam_width": _q("300 mm"),
+                "effective_depth": _q("550 mm"),
+            },
+            "required_moment and beam section",
+            "the governing factored load case and design actions",
+        ),
+        (
+            "rc_column_axial_strength",
+            {
+                "gross_area": _q("1000 mm**2"),
+                "steel_area": _q("1000 mm**2"),
+                "concrete_strength": _q("30 MPa"),
+                "steel_yield": _q("420 MPa"),
+            },
+            "steel_area and gross_area",
+            "the approved reinforcement schedule and bar detailing",
+        ),
+    ),
+)
+def test_reinforced_concrete_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_reinforced_concrete_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/reinforced_concrete.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_rc_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 41
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_rc_beam_moment_and_steel_inverse_round_trip():
     from anvilate.analysis import (
         rc_beam_nominal_moment,

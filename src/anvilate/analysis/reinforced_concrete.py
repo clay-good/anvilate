@@ -17,7 +17,43 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_RC_GEOMETRY_SOURCE = "the structural drawing or verified section schedule"
+_RC_MATERIAL_SOURCE = "the concrete batch report or reinforcing-steel certificate"
+_RC_REINFORCEMENT_SOURCE = "the approved reinforcement schedule and bar detailing"
+_RC_LOAD_SOURCE = "the governing factored load case and design actions"
+_RC_CODE_SOURCE = "the governing ACI 318 edition and approved design criteria"
+_RC_SECTION_SOURCE = "the structural drawing, reinforcement schedule, and material certificates"
+_RC_SERVICE_SOURCE = "the verified service-load analysis and crack-control detail"
+
+
+class _ReinforcedConcreteInputError(RefusalError, ValueError):
+    """Invalid reinforced-concrete input with a machine-readable repair."""
+
+
+def _rc_refusal(message: str, *, subject: str, source: str) -> _ReinforcedConcreteInputError:
+    return _ReinforcedConcreteInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rc_input_source(subject: str) -> str:
+    if subject in {
+        "concrete_strength",
+        "steel_yield",
+        "steel_modulus",
+        "steel_service_stress",
+    }:
+        return _RC_MATERIAL_SOURCE
+    if "steel_area" in subject or subject == "bar_diameter":
+        return _RC_REINFORCEMENT_SOURCE
+    if "moment" in subject or "shear" in subject:
+        return _RC_LOAD_SOURCE
+    return _RC_GEOMETRY_SOURCE
+
 
 __all__ = [
     "rc_stress_block_depth",
@@ -60,10 +96,16 @@ _ACI_STRESS_BLOCK_FACTOR = 0.85  # the 0.85·f'c Whitney stress-block intensity
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rc_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rc_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rc_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rc_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -96,8 +138,10 @@ def rc_stress_block_depth(
     fc = concrete_strength.to("MPa").magnitude
     b = beam_width.to("mm").magnitude
     if as_mm2 <= 0 or fy <= 0 or fc <= 0 or b <= 0:
-        raise ValueError(
-            "steel_area, steel_yield, concrete_strength, and beam_width must be positive"
+        raise _rc_refusal(
+            "steel_area, steel_yield, concrete_strength, and beam_width must be positive",
+            subject="steel_area, steel_yield, concrete_strength, and beam_width",
+            source=_RC_SECTION_SOURCE,
         )
     return Quantity(magnitude=as_mm2 * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * b), unit="mm")
 
@@ -119,12 +163,14 @@ def _reject_beyond_the_steel(
     for exactly this reason. Same module, same physics, two different answers.
     """
     if block_depth >= beta1 * effective_depth:
-        raise ValueError(
+        raise _rc_refusal(
             f"{label}: the stress block reaches the tension steel (a = {block_depth:.4g} mm "
             f"against beta1*d = {beta1 * effective_depth:.4g} mm, so c >= d), and the "
             f"steel is no longer in tension — the nominal-moment expression assumes it has "
             f"yielded in tension. This is an over-reinforced or mis-entered section; "
-            f"screen it as such rather than reading a moment off it"
+            f"screen it as such rather than reading a moment off it",
+            subject="reinforcement layout and section depth",
+            source=_RC_REINFORCEMENT_SOURCE,
         )
 
 
@@ -158,7 +204,11 @@ def rc_beam_nominal_moment(
     _require(effective_depth, "[length]", "effective_depth")
     d = effective_depth.to("mm").magnitude
     if d <= 0:
-        raise ValueError(f"effective_depth must be positive; got {effective_depth}")
+        raise _rc_refusal(
+            f"effective_depth must be positive; got {effective_depth}",
+            subject="effective_depth",
+            source=_RC_GEOMETRY_SOURCE,
+        )
     _reject_beyond_the_steel(
         block_depth=a,
         effective_depth=d,
@@ -208,9 +258,17 @@ def rc_t_beam_moment(
     hf = flange_thickness.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if min(a_s, fy, fc, bf, bw, hf, d) <= 0:
-        raise ValueError("all areas, strengths, and dimensions must be positive")
+        raise _rc_refusal(
+            "all areas, strengths, and dimensions must be positive",
+            subject="T-beam reinforcement, strengths, and dimensions",
+            source=_RC_SECTION_SOURCE,
+        )
     if bw > bf:
-        raise ValueError("web_width cannot exceed flange_width")
+        raise _rc_refusal(
+            "web_width cannot exceed flange_width",
+            subject="web_width and flange_width",
+            source=_RC_GEOMETRY_SOURCE,
+        )
     a_rectangular = a_s * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bf)
     if a_rectangular <= hf:
         # The stress block stays in the flange: a wide rectangular beam.
@@ -221,7 +279,11 @@ def rc_t_beam_moment(
     moment_flange = a_sf * fy * (d - hf / 2.0)
     a_sw = a_s - a_sf
     if a_sw <= 0:
-        raise ValueError("the flange overhang alone balances the steel; check the geometry")
+        raise _rc_refusal(
+            "the flange overhang alone balances the steel; check the geometry",
+            subject="T-beam reinforcement and flange geometry",
+            source=_RC_SECTION_SOURCE,
+        )
     a_w = a_sw * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bw)
     _reject_beyond_the_steel(
         block_depth=a_w,
@@ -277,9 +339,17 @@ def rc_doubly_reinforced_moment(
     dp = compression_steel_depth.to("mm").magnitude
     es = steel_modulus.to("MPa").magnitude
     if min(a_s, a_sp, fy, fc, b, d, dp, es) <= 0:
-        raise ValueError("all areas, strengths, and dimensions must be positive")
+        raise _rc_refusal(
+            "all areas, strengths, and dimensions must be positive",
+            subject="doubly reinforced section inputs",
+            source=_RC_SECTION_SOURCE,
+        )
     if not dp < d:
-        raise ValueError("compression_steel_depth must be less than effective_depth")
+        raise _rc_refusal(
+            "compression_steel_depth must be less than effective_depth",
+            subject="compression_steel_depth and effective_depth",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     beta1 = rc_beta1(concrete_strength=concrete_strength)
     ecu = _ACI_CONCRETE_ULTIMATE_STRAIN
     strain_yield = fy / es
@@ -340,14 +410,20 @@ def rc_tension_steel_for_moment(
     b = beam_width.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if mn <= 0 or fy <= 0 or fc <= 0 or b <= 0 or d <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _rc_refusal(
+            "all inputs must be positive",
+            subject="required moment, material strengths, and beam geometry",
+            source=_RC_SECTION_SOURCE,
+        )
     # T² − (1.7·f'c·b·d)·T + 1.7·f'c·b·M_n = 0, from M_n = T·d − T²/(1.7·f'c·b).
     coeff = 1.7 * fc * b  # = 2·0.85·f'c·b
     discriminant = (coeff * d) ** 2 - 4.0 * coeff * mn
     if discriminant < 0:
-        raise ValueError(
+        raise _rc_refusal(
             "the required moment exceeds the section's flexural capacity; deepen or "
-            "widen the beam (or use compression steel)"
+            "widen the beam (or use compression steel)",
+            subject="required_moment and beam section",
+            source=_RC_LOAD_SOURCE,
         )
     tension_force = (coeff * d - sqrt(discriminant)) / 2.0
     # The discriminant only runs out at the parabola's vertex (a = d), which is about a third
@@ -364,11 +440,13 @@ def rc_tension_steel_for_moment(
         / (_ACI_CONCRETE_ULTIMATE_STRAIN + fy / _ACI_STEEL_MODULUS_MPA)
     )
     if neutral_axis > balanced_c:
-        raise ValueError(
+        raise _rc_refusal(
             f"the required moment needs more steel than the section can balance ductilely: the "
             f"neutral axis lands at c = {neutral_axis:.1f} mm against a balanced c_b = "
             f"{balanced_c:.1f} mm, so the beam would fail by concrete crushing before the steel "
-            f"yields. Deepen or widen it, or add compression steel."
+            f"yields. Deepen or widen it, or add compression steel.",
+            subject="required_moment and reinforcement layout",
+            source=_RC_LOAD_SOURCE,
         )
     return Quantity(magnitude=tension_force / fy, unit="mm**2")
 
@@ -398,9 +476,17 @@ def rc_concrete_shear_strength(
     b = beam_width.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if fc <= 0 or b <= 0 or d <= 0:
-        raise ValueError("concrete_strength, beam_width, and effective_depth must be positive")
+        raise _rc_refusal(
+            "concrete_strength, beam_width, and effective_depth must be positive",
+            subject="concrete_strength, beam_width, and effective_depth",
+            source=_RC_SECTION_SOURCE,
+        )
     if lightweight_factor <= 0:
-        raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
+        raise _rc_refusal(
+            f"lightweight_factor must be positive; got {lightweight_factor}",
+            subject="lightweight_factor",
+            source=_RC_CODE_SOURCE,
+        )
     vc_n = 0.17 * lightweight_factor * sqrt(fc) * b * d
     return Quantity(magnitude=vc_n / 1000.0, unit="kN")
 
@@ -432,7 +518,11 @@ def rc_shear_reinforcement_strength(
     d = effective_depth.to("mm").magnitude
     s = stirrup_spacing.to("mm").magnitude
     if av <= 0 or fyt <= 0 or d <= 0 or s <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _rc_refusal(
+            "all inputs must be positive",
+            subject="stirrup reinforcement and section dimensions",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     vs_n = av * fyt * d / s
     return Quantity(magnitude=vs_n / 1000.0, unit="kN")
 
@@ -472,7 +562,11 @@ def rc_stirrup_spacing_for_shear(
     fyt = stirrup_yield.to("MPa").magnitude
     d = effective_depth.to("mm").magnitude
     if vs <= 0 or av <= 0 or fyt <= 0 or d <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _rc_refusal(
+            "all inputs must be positive",
+            subject="required shear and stirrup reinforcement inputs",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     # The strength spacing alone is unbounded as V_s falls, and at a wide spacing no stirrup
     # crosses a 45° diagonal crack at all — which makes the V_s the companion function
     # reports fictitious. ACI's d/2 ≤ 600 mm cap was documented here as the caller's job and
@@ -511,11 +605,17 @@ def rc_column_axial_strength(
     fc = concrete_strength.to("MPa").magnitude
     fy = steel_yield.to("MPa").magnitude
     if ag <= 0 or ast <= 0 or fc <= 0 or fy <= 0:
-        raise ValueError(
-            "gross_area, steel_area, concrete_strength, and steel_yield must be positive"
+        raise _rc_refusal(
+            "gross_area, steel_area, concrete_strength, and steel_yield must be positive",
+            subject="column geometry, reinforcement, and strengths",
+            source=_RC_SECTION_SOURCE,
         )
     if ast >= ag:
-        raise ValueError(f"steel_area ({steel_area}) must be below the gross area ({gross_area})")
+        raise _rc_refusal(
+            f"steel_area ({steel_area}) must be below the gross area ({gross_area})",
+            subject="steel_area and gross_area",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     po_n = _ACI_STRESS_BLOCK_FACTOR * fc * (ag - ast) + fy * ast
     return Quantity(magnitude=po_n / 1000.0, unit="kN")
 
@@ -568,9 +668,17 @@ def rc_column_balanced_point(
     fy = steel_yield.to("MPa").magnitude
     es = steel_modulus.to("MPa").magnitude
     if min(b, h, d, dp, a_s, a_sp, fc, fy, es) <= 0:
-        raise ValueError("all dimensions, areas, and material properties must be positive")
+        raise _rc_refusal(
+            "all dimensions, areas, and material properties must be positive",
+            subject="column geometry, reinforcement, and material properties",
+            source=_RC_SECTION_SOURCE,
+        )
     if not dp < d < h:
-        raise ValueError("require compression_steel_depth < tension_steel_depth < total_depth")
+        raise _rc_refusal(
+            "require compression_steel_depth < tension_steel_depth < total_depth",
+            subject="compression_steel_depth, tension_steel_depth, and total_depth",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     strain_yield = fy / es
     c_b = _ACI_CONCRETE_ULTIMATE_STRAIN / (_ACI_CONCRETE_ULTIMATE_STRAIN + strain_yield) * d
     beta1 = rc_beta1(concrete_strength=concrete_strength)
@@ -602,7 +710,11 @@ def rc_beta1(*, concrete_strength: Quantity) -> float:
     _require(concrete_strength, "[pressure]", "concrete_strength")
     fc = concrete_strength.to("MPa").magnitude
     if fc <= 0:
-        raise ValueError(f"concrete_strength must be positive; got {concrete_strength}")
+        raise _rc_refusal(
+            f"concrete_strength must be positive; got {concrete_strength}",
+            subject="concrete_strength",
+            source=_RC_MATERIAL_SOURCE,
+        )
     if fc <= 28.0:
         return 0.85
     if fc >= 55.0:
@@ -631,10 +743,18 @@ def rc_net_tensile_strain(
     a = stress_block_depth.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if a <= 0 or d <= 0:
-        raise ValueError("stress_block_depth and effective_depth must be positive")
+        raise _rc_refusal(
+            "stress_block_depth and effective_depth must be positive",
+            subject="stress_block_depth and effective_depth",
+            source=_RC_GEOMETRY_SOURCE,
+        )
     c = a / rc_beta1(concrete_strength=concrete_strength)
     if c >= d:
-        raise ValueError("the neutral axis reaches the steel; check the inputs")
+        raise _rc_refusal(
+            "the neutral axis reaches the steel; check the inputs",
+            subject="stress_block_depth and reinforcement depth",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     return _ACI_CONCRETE_ULTIMATE_STRAIN * (d - c) / c
 
 
@@ -665,11 +785,23 @@ def rc_strength_reduction_factor(
     fy = steel_yield.to("MPa").magnitude
     es = steel_modulus.to("MPa").magnitude
     if fy <= 0 or es <= 0:
-        raise ValueError("steel_yield and steel_modulus must be positive")
+        raise _rc_refusal(
+            "steel_yield and steel_modulus must be positive",
+            subject="steel_yield and steel_modulus",
+            source=_RC_MATERIAL_SOURCE,
+        )
     if net_tensile_strain < 0:
-        raise ValueError(f"net_tensile_strain must be non-negative; got {net_tensile_strain}")
+        raise _rc_refusal(
+            f"net_tensile_strain must be non-negative; got {net_tensile_strain}",
+            subject="net_tensile_strain",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     if not 0 < compression_controlled_factor <= 0.90:
-        raise ValueError("compression_controlled_factor must be in (0, 0.90]")
+        raise _rc_refusal(
+            "compression_controlled_factor must be in (0, 0.90]",
+            subject="compression_controlled_factor",
+            source=_RC_CODE_SOURCE,
+        )
     strain_yield = fy / es
     tension_controlled = strain_yield + 0.003
     if net_tensile_strain <= strain_yield:
@@ -716,7 +848,11 @@ def rc_development_length(
     fy = steel_yield.to("MPa").magnitude
     fc = concrete_strength.to("MPa").magnitude
     if db <= 0 or fy <= 0 or fc <= 0:
-        raise ValueError("bar_diameter, steel_yield, and concrete_strength must be positive")
+        raise _rc_refusal(
+            "bar_diameter, steel_yield, and concrete_strength must be positive",
+            subject="bar_diameter, steel_yield, and concrete_strength",
+            source=_RC_SECTION_SOURCE,
+        )
     for factor, label in (
         (location_factor, "location_factor"),
         (coating_factor, "coating_factor"),
@@ -724,7 +860,11 @@ def rc_development_length(
         (size_spacing_constant, "size_spacing_constant"),
     ):
         if factor <= 0:
-            raise ValueError(f"{label} must be positive; got {factor}")
+            raise _rc_refusal(
+                f"{label} must be positive; got {factor}",
+                subject=label,
+                source=_RC_CODE_SOURCE,
+            )
     # ACI 318 §25.4.1.4: the value of sqrt(f'c) used in a development-length calculation
     # shall not exceed 8.3 MPa (100 psi). The clause has no exception, and it binds on
     # ordinary high-strength column concrete: without it, f'c = 100 MPa detailed the bar
@@ -760,12 +900,24 @@ def rc_max_bar_spacing_crack_control(
     fs = steel_service_stress.to("MPa").magnitude
     cc = clear_cover.to("mm").magnitude
     if fs <= 0:
-        raise ValueError(f"steel_service_stress must be positive; got {steel_service_stress}")
+        raise _rc_refusal(
+            f"steel_service_stress must be positive; got {steel_service_stress}",
+            subject="steel_service_stress",
+            source=_RC_SERVICE_SOURCE,
+        )
     if cc < 0:
-        raise ValueError(f"clear_cover must be non-negative; got {clear_cover}")
+        raise _rc_refusal(
+            f"clear_cover must be non-negative; got {clear_cover}",
+            subject="clear_cover",
+            source=_RC_REINFORCEMENT_SOURCE,
+        )
     spacing = min(380.0 * (280.0 / fs) - 2.5 * cc, 300.0 * (280.0 / fs))
     if spacing <= 0:
-        raise ValueError("the cover and steel stress leave no permissible spacing; check inputs")
+        raise _rc_refusal(
+            "the cover and steel stress leave no permissible spacing; check inputs",
+            subject="clear_cover and steel_service_stress",
+            source=_RC_SERVICE_SOURCE,
+        )
     return Quantity(magnitude=spacing, unit="mm")
 
 
@@ -792,7 +944,11 @@ def rc_minimum_flexural_steel(
     b = beam_width.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _rc_refusal(
+            "all inputs must be positive",
+            subject="minimum flexural reinforcement inputs",
+            source=_RC_SECTION_SOURCE,
+        )
     ratio = max(0.25 * sqrt(fc) / fy, 1.4 / fy)
     return Quantity(magnitude=ratio * b * d, unit="mm**2")
 
@@ -823,7 +979,11 @@ def rc_maximum_tension_controlled_steel(
     b = beam_width.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _rc_refusal(
+            "all inputs must be positive",
+            subject="tension-controlled reinforcement inputs",
+            source=_RC_SECTION_SOURCE,
+        )
     beta1 = rc_beta1(concrete_strength=concrete_strength)
     ratio = _ACI_STRESS_BLOCK_FACTOR * beta1 * (fc / fy) * _TENSION_CONTROLLED_C_OVER_D
     return Quantity(magnitude=ratio * b * d, unit="mm**2")
@@ -861,8 +1021,10 @@ def rc_two_way_shear_strength(
     bo = critical_perimeter.to("mm").magnitude
     d = effective_depth.to("mm").magnitude
     if fc <= 0 or bo <= 0 or d <= 0:
-        raise ValueError(
-            "concrete_strength, critical_perimeter, and effective_depth must be positive"
+        raise _rc_refusal(
+            "concrete_strength, critical_perimeter, and effective_depth must be positive",
+            subject="concrete_strength, critical_perimeter, and effective_depth",
+            source=_RC_SECTION_SOURCE,
         )
     # A NaN aspect ratio passes `< 1.0` and then the three-way `min()` below drops the
     # 0.17(1+2/beta) term entirely — the punching-shear capacity came back 45.6% higher on a
@@ -871,9 +1033,17 @@ def rc_two_way_shear_strength(
     require_finite(column_position_factor, name="column_position_factor")
     require_finite(lightweight_factor, name="lightweight_factor")
     if column_aspect_ratio < 1.0:
-        raise ValueError(f"column_aspect_ratio must be at least 1; got {column_aspect_ratio}")
+        raise _rc_refusal(
+            f"column_aspect_ratio must be at least 1; got {column_aspect_ratio}",
+            subject="column_aspect_ratio",
+            source=_RC_GEOMETRY_SOURCE,
+        )
     if column_position_factor <= 0 or lightweight_factor <= 0:
-        raise ValueError("column_position_factor and lightweight_factor must be positive")
+        raise _rc_refusal(
+            "column_position_factor and lightweight_factor must be positive",
+            subject="column_position_factor and lightweight_factor",
+            source=_RC_CODE_SOURCE,
+        )
     lam_root = lightweight_factor * sqrt(fc)
     stress = min(
         0.33 * lam_root,
@@ -906,11 +1076,17 @@ def rc_cracking_moment(
     ig = gross_inertia.to("mm**4").magnitude
     yt = extreme_tension_distance.to("mm").magnitude
     if fc <= 0 or ig <= 0 or yt <= 0:
-        raise ValueError(
-            "concrete_strength, gross_inertia, and extreme_tension_distance must be positive"
+        raise _rc_refusal(
+            "concrete_strength, gross_inertia, and extreme_tension_distance must be positive",
+            subject="concrete_strength, gross_inertia, and extreme_tension_distance",
+            source=_RC_SECTION_SOURCE,
         )
     if lightweight_factor <= 0:
-        raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
+        raise _rc_refusal(
+            f"lightweight_factor must be positive; got {lightweight_factor}",
+            subject="lightweight_factor",
+            source=_RC_CODE_SOURCE,
+        )
     fr = _ACI_MODULUS_OF_RUPTURE_FACTOR * lightweight_factor * sqrt(fc)
     return Quantity(magnitude=fr * ig / yt / 1.0e6, unit="kN*m")
 
@@ -944,9 +1120,17 @@ def rc_effective_moment_of_inertia(
     mcr = cracking_moment.to("N*mm").magnitude
     ma = applied_moment.to("N*mm").magnitude
     if icr <= 0 or ig <= 0 or mcr <= 0 or ma <= 0:
-        raise ValueError("all inertias and moments must be positive")
+        raise _rc_refusal(
+            "all inertias and moments must be positive",
+            subject="section inertias and moment inputs",
+            source=_RC_SERVICE_SOURCE,
+        )
     if icr > ig:
-        raise ValueError("cracked_inertia cannot exceed gross_inertia")
+        raise _rc_refusal(
+            "cracked_inertia cannot exceed gross_inertia",
+            subject="cracked_inertia and gross_inertia",
+            source=_RC_GEOMETRY_SOURCE,
+        )
     if ma <= _ACI_EFFECTIVE_CRACKING_FRACTION * mcr:
         return Quantity(magnitude=ig, unit="mm**4")
     ratio = _ACI_EFFECTIVE_CRACKING_FRACTION * mcr / ma

@@ -375,6 +375,10 @@ The complete elastic-constant, axial-response, and stress-combination families f
 at all 32 refusal sites. Elastic properties, section geometry, design factors, load-case stresses,
 stress-concentration data, and allowable strengths point to material certificates, drawings,
 verified load cases, or cited property and concentration references.
+The complete reinforced-concrete family follows the contract at all 41 refusal sites. Concrete and
+reinforcing properties, section geometry, bar layouts, factored actions, service-load crack-control
+inputs, and ACI factors point to batch reports, certificates, structural drawings, reinforcement
+schedules, verified load cases, or the governing ACI 318 criteria.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

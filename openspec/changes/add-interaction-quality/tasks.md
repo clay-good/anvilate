@@ -195,6 +195,10 @@
       structured sites for elastic properties, section geometry, design factors, load-case stresses,
       stress-concentration data, and allowable strengths, sourced to material certificates,
       drawings, verified load cases, or cited property and concentration references.
+      The complete reinforced-concrete family adds 41 structured sites for concrete and reinforcing
+      properties, section geometry, bar layouts, factored actions, service-load crack-control
+      inputs, and ACI factors, sourced to batch reports, certificates, structural drawings,
+      reinforcement schedules, verified load cases, or the governing ACI 318 criteria.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
