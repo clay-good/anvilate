@@ -28,7 +28,24 @@ from __future__ import annotations
 
 from math import radians
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_HINGE_GEOMETRY_SOURCE = "the molded-part drawing or verified hinge geometry record"
+_HINGE_MATERIAL_SOURCE = "the polymer datasheet or qualified living-hinge material record"
+_HINGE_MOTION_SOURCE = "the product articulation requirement or verified fold-angle record"
+
+
+class _LivingHingeInputError(RefusalError, ValueError):
+    """A living-hinge input that cannot be used without correction."""
+
+
+def _living_hinge_refusal(message: str, *, subject: str, source: str) -> _LivingHingeInputError:
+    return _LivingHingeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "living_hinge_fold_strain",
@@ -38,20 +55,34 @@ __all__ = [
 
 def _positive_mm(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _living_hinge_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_HINGE_GEOMETRY_SOURCE,
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(
-            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+        raise _living_hinge_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_HINGE_GEOMETRY_SOURCE,
         )
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _living_hinge_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_HINGE_GEOMETRY_SOURCE,
+        )
     return magnitude
 
 
 def _check_fold_angle(fold_angle: float) -> float:
     if not 0 < fold_angle <= 180:
-        raise ValueError(f"fold_angle must be in (0, 180] degrees; got {fold_angle}")
+        raise _living_hinge_refusal(
+            f"fold_angle must be in (0, 180] degrees; got {fold_angle}",
+            subject="fold_angle",
+            source=_HINGE_MOTION_SOURCE,
+        )
     return fold_angle
 
 
@@ -84,6 +115,10 @@ def living_hinge_web_length_for_strain(
     """
     t = _positive_mm(web_thickness, "web_thickness")
     if permissible_strain <= 0:
-        raise ValueError(f"permissible_strain must be positive; got {permissible_strain}")
+        raise _living_hinge_refusal(
+            f"permissible_strain must be positive; got {permissible_strain}",
+            subject="permissible_strain",
+            source=_HINGE_MATERIAL_SOURCE,
+        )
     theta = radians(_check_fold_angle(fold_angle))
     return Quantity(magnitude=theta * t / (2.0 * permissible_strain), unit="mm")

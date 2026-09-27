@@ -324,6 +324,9 @@ and gravity point to inventories, calibrated records, physical models, drawings,
 The complete work-energy, impact, and friction families follow the contract at all 20 refusal sites.
 Mass properties, loads, motion, travel, gravity, drop cases, elastic response, interface properties,
 and ramp geometry point to approved records, drawings, analyses, specifications, or calibrated tests.
+The complete living-hinge, ball-screw, and governor families follow the contract at all 18 refusal
+sites. Hinge geometry and material strain, screw load, lead and efficiency, governor speed, height,
+and masses point to drawings, catalogues, requirements, datasheets, load cases, or calibrated records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

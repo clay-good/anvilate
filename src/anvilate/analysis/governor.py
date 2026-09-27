@@ -23,10 +23,34 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
 
 _GRAVITY = 9.80665  # m/s**2
+_GOVERNOR_SPEED_SOURCE = "the governing speed setpoint or calibrated tachometer record"
+_GOVERNOR_GEOMETRY_SOURCE = "the governor drawing or calibrated height measurement"
+_GOVERNOR_MASS_SOURCE = "the governor mass-properties drawing or calibrated mass record"
+
+
+class _GovernorInputError(RefusalError, ValueError):
+    """A governor input that cannot be used without correction."""
+
+
+def _governor_refusal(message: str, *, subject: str, source: str) -> _GovernorInputError:
+    return _GovernorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _governor_input_source(name: str) -> str:
+    if name == "angular_speed":
+        return _GOVERNOR_SPEED_SOURCE
+    if name == "height":
+        return _GOVERNOR_GEOMETRY_SOURCE
+    return _GOVERNOR_MASS_SOURCE
+
 
 __all__ = [
     "porter_governor_height",
@@ -45,7 +69,11 @@ def watt_governor_height(*, angular_speed: Quantity) -> Quantity:
     _check(angular_speed, "1/[time]", "angular_speed")
     omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     if omega <= 0:
-        raise ValueError("angular_speed must be positive")
+        raise _governor_refusal(
+            "angular_speed must be positive",
+            subject="angular_speed",
+            source=_GOVERNOR_SPEED_SOURCE,
+        )
     return Quantity(magnitude=_GRAVITY / (omega * omega), unit="m")
 
 
@@ -59,7 +87,9 @@ def watt_governor_speed(*, height: Quantity) -> Quantity:
     _check(height, "[length]", "height")
     h = height.to("m").magnitude
     if h <= 0:
-        raise ValueError("height must be positive")
+        raise _governor_refusal(
+            "height must be positive", subject="height", source=_GOVERNOR_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=sqrt(_GRAVITY / h), unit="rad/s")
 
 
@@ -81,20 +111,36 @@ def porter_governor_height(
     m = ball_mass.to("kg").magnitude
     big_m = central_load.to("kg").magnitude
     if omega <= 0:
-        raise ValueError("angular_speed must be positive")
+        raise _governor_refusal(
+            "angular_speed must be positive",
+            subject="angular_speed",
+            source=_GOVERNOR_SPEED_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("ball_mass must be positive")
+        raise _governor_refusal(
+            "ball_mass must be positive", subject="ball_mass", source=_GOVERNOR_MASS_SOURCE
+        )
     if big_m < 0:
-        raise ValueError("central_load must be non-negative")
+        raise _governor_refusal(
+            "central_load must be non-negative",
+            subject="central_load",
+            source=_GOVERNOR_MASS_SOURCE,
+        )
     return Quantity(magnitude=(_GRAVITY / (omega * omega)) * (m + big_m) / m, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _governor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_governor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _governor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_governor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

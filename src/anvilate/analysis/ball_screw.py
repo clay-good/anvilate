@@ -24,7 +24,30 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BALL_SCREW_LOAD_SOURCE = "the governing axis load case or calibrated thrust record"
+_BALL_SCREW_GEOMETRY_SOURCE = "the selected ball-screw catalogue or verified lead record"
+_BALL_SCREW_EFFICIENCY_SOURCE = "the ball-screw manufacturer efficiency data"
+
+
+class _BallScrewInputError(RefusalError, ValueError):
+    """A ball-screw input that cannot be used without correction."""
+
+
+def _ball_screw_refusal(message: str, *, subject: str, source: str) -> _BallScrewInputError:
+    return _BallScrewInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _ball_screw_input_source(name: str) -> str:
+    if name == "axial_load":
+        return _BALL_SCREW_LOAD_SOURCE
+    return _BALL_SCREW_GEOMETRY_SOURCE
+
 
 __all__ = [
     "ball_screw_back_drive_torque",
@@ -51,9 +74,17 @@ def ball_screw_drive_torque(
     f = axial_load.to("N").magnitude
     length = lead.to("m").magnitude
     if f <= 0 or length <= 0:
-        raise ValueError("axial_load and lead must be positive")
+        raise _ball_screw_refusal(
+            "axial_load and lead must be positive",
+            subject="axial_load and lead",
+            source=_BALL_SCREW_GEOMETRY_SOURCE,
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+        raise _ball_screw_refusal(
+            f"efficiency must be in (0, 1]; got {efficiency}",
+            subject="efficiency",
+            source=_BALL_SCREW_EFFICIENCY_SOURCE,
+        )
     return Quantity(magnitude=f * length / (2.0 * pi * efficiency), unit="N*m")
 
 
@@ -77,18 +108,32 @@ def ball_screw_back_drive_torque(
     f = axial_load.to("N").magnitude
     length = lead.to("m").magnitude
     if f <= 0 or length <= 0:
-        raise ValueError("axial_load and lead must be positive")
+        raise _ball_screw_refusal(
+            "axial_load and lead must be positive",
+            subject="axial_load and lead",
+            source=_BALL_SCREW_GEOMETRY_SOURCE,
+        )
     if not 0.0 < back_drive_efficiency <= 1.0:
-        raise ValueError(f"back_drive_efficiency must be in (0, 1]; got {back_drive_efficiency}")
+        raise _ball_screw_refusal(
+            f"back_drive_efficiency must be in (0, 1]; got {back_drive_efficiency}",
+            subject="back_drive_efficiency",
+            source=_BALL_SCREW_EFFICIENCY_SOURCE,
+        )
     return Quantity(magnitude=f * length * back_drive_efficiency / (2.0 * pi), unit="N*m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _ball_screw_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ball_screw_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _ball_screw_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ball_screw_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

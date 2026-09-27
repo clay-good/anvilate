@@ -141,6 +141,9 @@
       The complete work-energy, impact, and friction families add 20 structured sites for mass
       properties, loads, motion, travel, gravity, drop cases, elastic response, interface properties,
       and ramp geometry, sourced to records, drawings, analyses, specifications, or calibrated tests.
+      The complete living-hinge, ball-screw, and governor families add 18 structured sites for hinge
+      geometry and material strain, screw load, lead and efficiency, and governor speed, height, and
+      masses, sourced to drawings, catalogues, requirements, datasheets, load cases, or records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

@@ -14883,6 +14883,111 @@ def test_living_hinge_fold_strain_and_web_length_inverse():
         lh.living_hinge_web_length_for_strain(web_thickness=_q("0.4 mm"), permissible_strain=0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "living_hinge_fold_strain",
+            {"web_thickness": _q("0 mm"), "web_length": _q("1.5 mm")},
+            "web_thickness",
+            "the molded-part drawing or verified hinge geometry record",
+        ),
+        (
+            "living_hinge_fold_strain",
+            {"web_thickness": _q("0.4 mm"), "web_length": _q("1.5 mm"), "fold_angle": 270},
+            "fold_angle",
+            "the product articulation requirement or verified fold-angle record",
+        ),
+        (
+            "living_hinge_web_length_for_strain",
+            {"web_thickness": _q("0.4 mm"), "permissible_strain": 0},
+            "permissible_strain",
+            "the polymer datasheet or qualified living-hinge material record",
+        ),
+        (
+            "ball_screw_drive_torque",
+            {"axial_load": _q("5000 N"), "lead": _q("0 mm"), "efficiency": 0.9},
+            "axial_load and lead",
+            "the selected ball-screw catalogue or verified lead record",
+        ),
+        (
+            "ball_screw_drive_torque",
+            {"axial_load": _q("5000 N"), "lead": _q("10 mm"), "efficiency": 1.5},
+            "efficiency",
+            "the ball-screw manufacturer efficiency data",
+        ),
+        (
+            "watt_governor_height",
+            {"angular_speed": _q("0 rad/s")},
+            "angular_speed",
+            "the governing speed setpoint or calibrated tachometer record",
+        ),
+        (
+            "watt_governor_speed",
+            {"height": _q("0 m")},
+            "height",
+            "the governor drawing or calibrated height measurement",
+        ),
+        (
+            "porter_governor_height",
+            {
+                "angular_speed": _q("10 rad/s"),
+                "ball_mass": _q("2 kg"),
+                "central_load": _q("-1 kg"),
+            },
+            "central_load",
+            "the governor mass-properties drawing or calibrated mass record",
+        ),
+    ),
+)
+def test_mechanical_drive_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("living_hinge", "_living_hinge_refusal", 5),
+        ("ball_screw", "_ball_screw_refusal", 6),
+        ("governor", "_governor_refusal", 7),
+    ),
+)
+def test_every_mechanical_drive_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_agma_bending_stress_derates_the_lewis_form():
     from anvilate.analysis import agma_bending_stress, lewis_bending_stress
 
