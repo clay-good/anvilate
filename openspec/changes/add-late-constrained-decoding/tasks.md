@@ -62,10 +62,10 @@
 
 ## Note
 
-The orchestration contract, first versioned task corpus, and local Ollama adapter are built.
-The adapter is loopback-only, makes no request until invoked, leaves reasoning unconstrained,
-and sends the exact published schema to Ollama for packaging. Its transport is injectable,
-so the complete two-pass path is tested with the socket layer closed. Llama.cpp and
-user-configured cloud adapters remain unbuilt, and no cloud call exists in this path. The
-measurement vocabulary shipped first so a compiler could not look better by hiding the
-wrong-but-valid case.
+The orchestration contract, first versioned task corpus, and local Ollama and llama.cpp
+adapters are built. Both are loopback-only, make no request until invoked, leave reasoning
+unconstrained, and send the exact published schema to their packaging endpoint. Their
+transports are injectable, so both complete two-pass paths are tested with the socket layer
+closed. A user-configured cloud adapter remains unbuilt, and no cloud call exists in this
+path. The measurement vocabulary shipped first so a compiler could not look better by
+hiding the wrong-but-valid case.

@@ -116,6 +116,8 @@ compilation.CompilationTask
 compilation.CompilationTaskSet
 compilation.DecodingConfiguration
 compilation.FieldOutcome
+compilation.LlamaCppBackend
+compilation.LlamaCppError
 compilation.OllamaBackend
 compilation.OllamaError
 compilation.compile_intent

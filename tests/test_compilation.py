@@ -23,6 +23,8 @@ from anvilate.compilation import (
     CompilationTask,
     CompilationTaskSet,
     FieldOutcome,
+    LlamaCppBackend,
+    LlamaCppError,
     OllamaBackend,
     OllamaError,
     compile_intent,
@@ -33,6 +35,7 @@ from anvilate.compilation import (
     score_task_set,
     task_set_issues,
 )
+from anvilate.contracts import spec_json_schema
 from anvilate.units import Quantity
 
 _TASK = CompilationTask(
@@ -92,6 +95,21 @@ class _OllamaTransport:
         if isinstance(content, bytes):
             return content
         return json.dumps({"message": {"role": "assistant", "content": content}}).encode()
+
+
+class _LlamaCppTransport:
+    def __init__(self, contents: list[str | bytes]):
+        self.contents = iter(contents)
+        self.calls: list[tuple[str, dict, float]] = []
+
+    def __call__(self, url: str, body: bytes, timeout: float) -> bytes:
+        self.calls.append((url, json.loads(body), timeout))
+        content = next(self.contents)
+        if isinstance(content, bytes):
+            return content
+        return json.dumps(
+            {"choices": [{"message": {"role": "assistant", "content": content}}]}
+        ).encode()
 
 
 # --- the compiler boundary ---------------------------------------------------------------
@@ -227,6 +245,83 @@ def test_ollama_construction_is_offline_and_candidate_errors_are_distinct():
         return json.dumps({"message": {"content": "[]"}}).encode()
 
     backend = OllamaBackend(model="local", transport=transport)
+    assert calls == 0
+    with pytest.raises(CompilationCandidateError, match="must be a JSON object"):
+        backend.package_spec(
+            "Compile this.", schema={"type": "object"}, reasoning=None, validation_error=None
+        )
+    assert calls == 1
+
+
+def test_llama_cpp_runs_an_unconstrained_pass_then_packages_under_the_exact_schema():
+    transport = _LlamaCppTransport(["identified stated inputs", json.dumps(_VALID_SPEC)])
+    backend = LlamaCppBackend(model="qwen3-8b.gguf", transport=transport)
+
+    result = compile_intent("Make a lifting lug.", backend)
+
+    assert result.spec.name == "compiled_lug"
+    assert result.provenance.reasoning == "identified stated inputs"
+    assert result.provenance.configuration.backend == "llama.cpp"
+    assert len(transport.calls) == 2
+    reason_url, reason_request, timeout = transport.calls[0]
+    package_url, package_request, _ = transport.calls[1]
+    assert reason_url == package_url == "http://127.0.0.1:8080/v1/chat/completions"
+    assert timeout == 120.0
+    assert reason_request["stream"] is False
+    assert "response_format" not in reason_request
+    assert package_request["stream"] is False
+    assert package_request["temperature"] == 0
+    assert package_request["response_format"] == {
+        "type": "json_object",
+        "schema": spec_json_schema(),
+    }
+    assert package_request["response_format"]["schema"]["$schema"] == (
+        "https://json-schema.org/draft/2020-12/schema"
+    )
+    assert "identified stated inputs" in package_request["messages"][1]["content"]
+
+
+def test_llama_cpp_candidate_json_failure_is_bounded_and_retried_with_context():
+    transport = _LlamaCppTransport(["reasoning", "not json", json.dumps(_VALID_SPEC)])
+    result = compile_intent(
+        "Make a lifting lug.",
+        LlamaCppBackend(model="local.gguf", transport=transport),
+        retry_budget=1,
+    )
+
+    assert result.provenance.attempts == 2
+    assert result.provenance.validation_errors == (
+        "llama.cpp constrained response was not JSON: Expecting value: line 1 column 1 (char 0)",
+    )
+    assert result.provenance.validation_errors[0] in transport.calls[2][1]["messages"][1]["content"]
+
+
+def test_llama_cpp_refuses_nonlocal_endpoints_and_invalid_service_responses():
+    with pytest.raises(ValueError, match="loopback origin"):
+        LlamaCppBackend(model="local.gguf", endpoint="https://models.example.com")
+
+    service_error = _LlamaCppTransport([b'{"error":{"message":"model not loaded"}}'])
+    with pytest.raises(LlamaCppError, match="model not loaded"):
+        LlamaCppBackend(model="missing.gguf", transport=service_error).reason("Compile this.")
+
+    malformed = _LlamaCppTransport([b'{"choices":[]}'])
+    with pytest.raises(LlamaCppError, match=r"choices\[0\]\.message\.content"):
+        LlamaCppBackend(model="local.gguf", transport=malformed).reason("Compile this.")
+
+    oversized = _LlamaCppTransport([b"x" * (4 * 1024 * 1024 + 1)])
+    with pytest.raises(LlamaCppError, match="4,194,304-byte limit"):
+        LlamaCppBackend(model="local.gguf", transport=oversized).reason("Compile this.")
+
+
+def test_llama_cpp_construction_is_offline_and_candidate_errors_are_distinct():
+    calls = 0
+
+    def transport(url: str, body: bytes, timeout: float) -> bytes:
+        nonlocal calls
+        calls += 1
+        return json.dumps({"choices": [{"message": {"content": "[]"}}]}).encode()
+
+    backend = LlamaCppBackend(model="local.gguf", transport=transport)
     assert calls == 0
     with pytest.raises(CompilationCandidateError, match="must be a JSON object"):
         backend.package_spec(

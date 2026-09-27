@@ -198,6 +198,35 @@ def test_local_model_compilation_can_run_with_the_socket_layer_closed(
     assert result.provenance.configuration.backend == "ollama"
 
 
+def test_llama_cpp_compilation_can_run_with_the_socket_layer_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The second local backend preserves the same embedded, socket-free boundary."""
+    from anvilate.compilation import LlamaCppBackend, compile_intent
+
+    responses = iter(
+        (
+            b'{"choices":[{"message":{"content":"identified only stated inputs"}}]}',
+            b'{"choices":[{"message":{"content":"{\\"name\\":\\"offline_lug\\",'
+            b'\\"description\\":\\"An offline compiled lifting lug.\\",'
+            b'\\"units\\":{\\"value\\":\\"SI\\",\\"origin\\":\\"user_stated\\"},'
+            b'\\"material\\":{\\"ref\\":\\"ASTM-A36\\"},'
+            b'\\"manufacturing\\":{\\"process\\":\\"cnc_milling\\"},'
+            b'\\"acceptance\\":{\\"tiers\\":[\\"T1_analytical\\"]}}"}}]}',
+        )
+    )
+
+    def embedded_transport(url: str, body: bytes, timeout: float) -> bytes:
+        return next(responses)
+
+    with _no_network(monkeypatch):
+        backend = LlamaCppBackend(model="embedded.gguf", transport=embedded_transport)
+        result = compile_intent("Make an A36 lifting lug.", backend)
+
+    assert result.spec.name == "offline_lug"
+    assert result.provenance.configuration.backend == "llama.cpp"
+
+
 def test_the_one_network_capable_path_refuses_before_it_reaches_the_transport(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:

@@ -26,13 +26,15 @@ successful `CompilationResult` keeps the typed `DesignSpec` in `result.spec` and
 reasoning/configuration in `result.provenance`. Screening, geometry, and export accept the
 former, not the reasoning-bearing wrapper.
 
-The first adapter is `OllamaBackend`. It talks only to an explicitly configured loopback
-Ollama origin, defaults to `http://127.0.0.1:11434`, and uses the standard-library HTTP
-client rather than an SDK. Constructing it makes no request. The unconstrained pass omits
-Ollama's `format` field; the packaging pass sends the exact schema in `format`, disables
-streaming, and validates the returned JSON through the same Anvilate front door. Malformed
-model content consumes the ordinary bounded retry budget. Service and transport failures
-remain errors rather than being misreported as low-quality model output.
+The local adapters are `OllamaBackend` and `LlamaCppBackend`. They accept only explicitly
+configured loopback origins, defaulting to `http://127.0.0.1:11434` and
+`http://127.0.0.1:8080`, and use the standard-library HTTP client rather than an SDK.
+Constructing either makes no request. The unconstrained pass omits the structured-output
+field. The packaging pass sends the exact schema in Ollama's `format` or llama.cpp's
+`response_format`, disables streaming, and validates the returned JSON through the same
+Anvilate front door. Malformed model content consumes the ordinary bounded retry budget.
+Service and transport failures remain errors rather than being misreported as low-quality
+model output.
 
 ```python
 from anvilate.compilation import OllamaBackend, compile_intent
@@ -43,12 +45,20 @@ print(result.spec)
 print(result.provenance.configuration)
 ```
 
+For a `llama-server` listening on its default port, only the backend changes:
+
+```python
+from anvilate.compilation import LlamaCppBackend, compile_intent
+
+backend = LlamaCppBackend(model="qwen3-8b.gguf")
+result = compile_intent("A CNC-machined A36 lifting lug for a 50 kN load.", backend)
+```
+
 Tests replace the transport and run the complete two-pass compile with the socket layer
-closed. That proves the adapter has no import-time or construction-time network behavior
-and lets an embedded local runtime remain genuinely air-gapped. The default transport uses
-the loopback HTTP origin only when compilation is invoked. A llama.cpp adapter and an
-explicitly configured cloud adapter are still unbuilt; no cloud call is initiated anywhere
-in this path.
+closed. That proves neither adapter has import-time or construction-time network behavior
+and lets an embedded local runtime remain genuinely air-gapped. Each default transport uses
+its loopback HTTP origin only when compilation is invoked. An explicitly configured cloud
+adapter is still unbuilt; no cloud call is initiated anywhere in this path.
 
 The measurement came first on purpose: a compiler shipped against a metric that hides the
 wrong-but-valid failure would look like it was improving as it got worse.

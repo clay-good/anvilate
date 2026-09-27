@@ -13,7 +13,7 @@ decision not to fix before any public disclosure.
 
 Anvilate reads engineering documents and writes engineering documents. It runs no
 generated code and opens no network connection unless a caller consents to a dataset fetch
-or explicitly invokes the loopback-only Ollama adapter. It is designed to be run against
+or explicitly invokes a loopback-only local-model adapter. It is designed to be run against
 files that arrived from somebody else — an RFQ sheet, a calibration certificate, a QIF
 result.
 
@@ -24,7 +24,7 @@ is the one that fails if the property stops being true.
 | --- | --- |
 | Every YAML document — spec files and the bundled datasets alike — is read with `yaml.safe_load`. No document can construct a Python object. | `tests/test_contract.py` sweeps the package for the unsafe loaders |
 | The library never calls `eval`, `exec`, `pickle`, `os.system` or any other way of running what it read — the `os` exec/spawn/fork family, `runpy`, `pty`, `ctypes`. The sole `subprocess` import is `_mcp_tasks.py`, whose fixed argv launches Anvilate's own worker; no document field chooses an executable or command argument. Calls are judged on what they **resolve** to, so `from os import system` is the same finding as `os.system`. | `test_the_library_runs_nothing_it_reads`, `test_the_task_worker_is_the_only_process_boundary`, and `test_the_resolver_reads_a_call_written_the_other_way` |
-| `anvilate.fetch` and `anvilate.compilation` are the only modules that may import a network client: the former requires fetch consent, and the latter accepts only an explicitly invoked loopback Ollama origin. A new module importing any of twenty-three stdlib or third-party clients fails the build. | `test_only_explicit_transports_import_a_network_client` |
+| `anvilate.fetch` and `anvilate.compilation` are the only modules that may import a network client: the former requires fetch consent, and the latter accepts only explicitly invoked loopback Ollama or llama.cpp origins. A new module importing any of twenty-three stdlib or third-party clients fails the build. | `test_only_explicit_transports_import_a_network_client` |
 | The package's third-party imports are exactly the dependencies `pyproject.toml` declares, so a client nobody thought to blocklist fails too. | `test_the_packages_third_party_imports_are_exactly_its_declared_dependencies` |
 | No module is imported by a literal string handed to `import_module`, which would carry a client past every sweep that reads import statements. | `test_no_module_is_imported_by_a_name_assembled_at_run_time` |
 | Nothing fetches without the caller stating consent, and a fetch refuses before it reaches the transport. | `test_the_one_network_capable_path_refuses_before_it_reaches_the_transport` |
