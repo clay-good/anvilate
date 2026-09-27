@@ -379,6 +379,10 @@ The complete reinforced-concrete family follows the contract at all 41 refusal s
 reinforcing properties, section geometry, bar layouts, factored actions, service-load crack-control
 inputs, and ACI factors point to batch reports, certificates, structural drawings, reinforcement
 schedules, verified load cases, or the governing ACI 318 criteria.
+The complete cold-formed-steel family follows the contract at all 21 refusal sites. Plate geometry,
+material properties, AISI coefficients, gross-section yield values, elastic buckling results, and DSM
+strength objects point to profile drawings, mill certificates, the governing AISI S100 criteria,
+approved yield calculations, or cited finite-strip analyses.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

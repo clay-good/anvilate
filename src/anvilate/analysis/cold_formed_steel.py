@@ -24,8 +24,29 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, Provenance, RevalidatedModel
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
+
+_CFS_GEOMETRY_SOURCE = "the cold-formed section drawing or verified profile measurement"
+_CFS_MATERIAL_SOURCE = "the mill certificate or approved cold-formed steel properties"
+_CFS_BUCKLING_SOURCE = "the finite-strip analysis report, including software, version, and model"
+_CFS_CODE_SOURCE = "the governing AISI S100 edition and selected member conditions"
+_CFS_YIELD_SOURCE = "the approved gross-section yield calculation"
+_CFS_STRENGTH_SOURCE = "the completed DSM strength calculation and buckling evidence"
+_CFS_PLATE_SOURCE = "the section drawing, governing stress result, and material certificate"
+
+
+class _ColdFormedSteelInputError(RefusalError, ValueError):
+    """Invalid cold-formed-steel input with a machine-readable repair."""
+
+
+def _cfs_refusal(message: str, *, subject: str, source: str) -> _ColdFormedSteelInputError:
+    return _ColdFormedSteelInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "aisi_plate_slenderness",
@@ -64,30 +85,68 @@ def aisi_plate_slenderness(
     effective; above it, it sheds load. Returns the dimensionless λ.
     """
     if not isinstance(flat_width, Quantity):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
+        raise _cfs_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width!r}",
+            subject="flat_width",
+            source=_CFS_GEOMETRY_SOURCE,
+        )
     if not flat_width.has_dimension("[length]"):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+        raise _cfs_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width}",
+            subject="flat_width",
+            source=_CFS_GEOMETRY_SOURCE,
+        )
     if not isinstance(thickness, Quantity):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
+        raise _cfs_refusal(
+            f"thickness must be a [length] quantity; got {thickness!r}",
+            subject="thickness",
+            source=_CFS_GEOMETRY_SOURCE,
+        )
     if not thickness.has_dimension("[length]"):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+        raise _cfs_refusal(
+            f"thickness must be a [length] quantity; got {thickness}",
+            subject="thickness",
+            source=_CFS_GEOMETRY_SOURCE,
+        )
     if not isinstance(stress, Quantity):
-        raise ValueError(f"stress must be a [pressure] quantity; got {stress!r}")
+        raise _cfs_refusal(
+            f"stress must be a [pressure] quantity; got {stress!r}",
+            subject="stress",
+            source=_CFS_PLATE_SOURCE,
+        )
     if not stress.has_dimension("[pressure]"):
-        raise ValueError(f"stress must be a [pressure] quantity; got {stress}")
+        raise _cfs_refusal(
+            f"stress must be a [pressure] quantity; got {stress}",
+            subject="stress",
+            source=_CFS_PLATE_SOURCE,
+        )
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _cfs_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_CFS_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _cfs_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_CFS_MATERIAL_SOURCE,
+        )
     w = flat_width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     f = stress.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if w <= 0 or t <= 0 or f <= 0 or e <= 0:
-        raise ValueError("flat_width, thickness, stress, and elastic_modulus must be positive")
+        raise _cfs_refusal(
+            "flat_width, thickness, stress, and elastic_modulus must be positive",
+            subject="plate geometry, stress, and elastic modulus",
+            source=_CFS_PLATE_SOURCE,
+        )
     if plate_buckling_coefficient <= 0:
-        raise ValueError(
-            f"plate_buckling_coefficient must be positive; got {plate_buckling_coefficient}"
+        raise _cfs_refusal(
+            f"plate_buckling_coefficient must be positive; got {plate_buckling_coefficient}",
+            subject="plate_buckling_coefficient",
+            source=_CFS_CODE_SOURCE,
         )
     return (_AISI_WINTER_COEFFICIENT / sqrt(plate_buckling_coefficient)) * (w / t) * sqrt(f / e)
 
@@ -206,11 +265,17 @@ class ElasticBuckling(RevalidatedModel):
             # With one mode unknown there is no minimum.
             require_finite(value, name=f"{name} elastic buckling value")
             if value.magnitude <= 0:
-                raise ValueError(f"{name} elastic buckling value must be positive; got {value}")
+                raise _cfs_refusal(
+                    f"{name} elastic buckling value must be positive; got {value}",
+                    subject=f"{name} elastic buckling value",
+                    source=_CFS_BUCKLING_SOURCE,
+                )
         if not self.source.strip():
-            raise ValueError(
+            raise _cfs_refusal(
                 "source must record where the elastic buckling values came from — the "
-                "finite-strip run, the software and version, or the reference"
+                "finite-strip run, the software and version, or the reference",
+                subject="elastic buckling source",
+                source=_CFS_BUCKLING_SOURCE,
             )
         return self
 
@@ -478,22 +543,36 @@ def dsm_compression_strength(
     local, distortional and global failures call for different repairs.
     """
     if not isinstance(yield_load, Quantity):
-        raise ValueError(f"yield_load must be a [force] quantity; got {yield_load!r}")
+        raise _cfs_refusal(
+            f"yield_load must be a [force] quantity; got {yield_load!r}",
+            subject="yield_load",
+            source=_CFS_YIELD_SOURCE,
+        )
     if not yield_load.has_dimension("[force]"):
-        raise ValueError(f"yield_load must be a [force] quantity; got {yield_load}")
+        raise _cfs_refusal(
+            f"yield_load must be a [force] quantity; got {yield_load}",
+            subject="yield_load",
+            source=_CFS_YIELD_SOURCE,
+        )
     for value, name in (
         (elastic_buckling.local, "local"),
         (elastic_buckling.global_, "global_"),
         (elastic_buckling.distortional, "distortional"),
     ):
         if value is not None and not value.has_dimension("[force]"):
-            raise ValueError(
+            raise _cfs_refusal(
                 f"a compression check needs {name} as a [force] quantity; got {value}. "
-                f"(A moment belongs to dsm_flexural_strength.)"
+                f"(A moment belongs to dsm_flexural_strength.)",
+                subject=f"{name} elastic buckling load",
+                source=_CFS_BUCKLING_SOURCE,
             )
     py = yield_load.to("kN").magnitude
     if py <= 0:
-        raise ValueError(f"yield_load must be positive; got {yield_load}")
+        raise _cfs_refusal(
+            f"yield_load must be positive; got {yield_load}",
+            subject="yield_load",
+            source=_CFS_YIELD_SOURCE,
+        )
     p_ne = _dsm_global_compression(py, elastic_buckling.global_.to("kN").magnitude)
     p_nl = _dsm_reduced(
         p_ne,
@@ -585,24 +664,36 @@ def dsm_flexural_strength(
     M_crl, M_crd and M_cre. Returns a :class:`DSMStrength` naming the governing mode.
     """
     if not isinstance(yield_moment, Quantity):
-        raise ValueError(
-            f"yield_moment must be a [force] * [length] quantity; got {yield_moment!r}"
+        raise _cfs_refusal(
+            f"yield_moment must be a [force] * [length] quantity; got {yield_moment!r}",
+            subject="yield_moment",
+            source=_CFS_YIELD_SOURCE,
         )
     if not yield_moment.has_dimension("[force] * [length]"):
-        raise ValueError(f"yield_moment must be a moment quantity; got {yield_moment}")
+        raise _cfs_refusal(
+            f"yield_moment must be a moment quantity; got {yield_moment}",
+            subject="yield_moment",
+            source=_CFS_YIELD_SOURCE,
+        )
     for value, name in (
         (elastic_buckling.local, "local"),
         (elastic_buckling.global_, "global_"),
         (elastic_buckling.distortional, "distortional"),
     ):
         if value is not None and not value.has_dimension("[force] * [length]"):
-            raise ValueError(
+            raise _cfs_refusal(
                 f"a flexural check needs {name} as a moment quantity; got {value}. "
-                f"(A force belongs to dsm_compression_strength.)"
+                f"(A force belongs to dsm_compression_strength.)",
+                subject=f"{name} elastic buckling moment",
+                source=_CFS_BUCKLING_SOURCE,
             )
     my = yield_moment.to("kN*m").magnitude
     if my <= 0:
-        raise ValueError(f"yield_moment must be positive; got {yield_moment}")
+        raise _cfs_refusal(
+            f"yield_moment must be positive; got {yield_moment}",
+            subject="yield_moment",
+            source=_CFS_YIELD_SOURCE,
+        )
     m_cre = elastic_buckling.global_.to("kN*m").magnitude
     if m_cre < _DSM_FLEXURE_ELASTIC_LIMIT * my:
         m_ne = m_cre
@@ -715,7 +806,11 @@ def dsm_scorecard(
     ``NOT_EVALUATED`` when it would otherwise have passed.
     """
     if strength is not None and not isinstance(strength, DSMStrength):
-        raise ValueError(f"strength must be a DSMStrength; got {strength!r}")
+        raise _cfs_refusal(
+            f"strength must be a DSMStrength; got {strength!r}",
+            subject="strength",
+            source=_CFS_STRENGTH_SOURCE,
+        )
     if strength is None:
         return ScorecardEntry(
             name=name,

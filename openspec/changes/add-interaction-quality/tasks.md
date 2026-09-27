@@ -199,6 +199,10 @@
       properties, section geometry, bar layouts, factored actions, service-load crack-control
       inputs, and ACI factors, sourced to batch reports, certificates, structural drawings,
       reinforcement schedules, verified load cases, or the governing ACI 318 criteria.
+      The complete cold-formed-steel family adds 21 structured sites for plate geometry, material
+      properties, AISI coefficients, gross-section yield values, elastic buckling results, and DSM
+      strength objects, sourced to profile drawings, mill certificates, the governing AISI S100
+      criteria, approved yield calculations, or cited finite-strip analyses.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

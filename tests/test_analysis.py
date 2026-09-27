@@ -43192,6 +43192,128 @@ def test_miter_bend_rates_below_the_pipe_it_is_made_from():
             asme_b313_miter_bend_pressure(miter_angle=bad, **common)
 
 
+@pytest.mark.parametrize(
+    ("case", "subject", "source"),
+    (
+        (
+            "plate_geometry",
+            "flat_width",
+            "the cold-formed section drawing or verified profile measurement",
+        ),
+        (
+            "plate_material",
+            "elastic_modulus",
+            "the mill certificate or approved cold-formed steel properties",
+        ),
+        (
+            "plate_code",
+            "plate_buckling_coefficient",
+            "the governing AISI S100 edition and selected member conditions",
+        ),
+        (
+            "compression_yield",
+            "yield_load",
+            "the approved gross-section yield calculation",
+        ),
+        (
+            "compression_buckling",
+            "local elastic buckling load",
+            "the finite-strip analysis report, including software, version, and model",
+        ),
+        (
+            "flexural_yield",
+            "yield_moment",
+            "the approved gross-section yield calculation",
+        ),
+        (
+            "scorecard_strength",
+            "strength",
+            "the completed DSM strength calculation and buckling evidence",
+        ),
+    ),
+)
+def test_cold_formed_steel_refusals_carry_structured_remedies(case, subject, source):
+    from anvilate.analysis import (
+        ElasticBuckling,
+        aisi_plate_slenderness,
+        dsm_compression_strength,
+        dsm_flexural_strength,
+        dsm_scorecard,
+    )
+    from anvilate.refusal import RefusalError
+
+    force_buckling = ElasticBuckling(local=_q("120 kN"), global_=_q("900 kN"), source="x")
+    moment_buckling = ElasticBuckling(local=_q("22 kN*m"), global_=_q("30 kN*m"), source="x")
+
+    def invoke():
+        if case == "plate_geometry":
+            return aisi_plate_slenderness(
+                flat_width=_q("1 MPa"),
+                thickness=_q("1.5 mm"),
+                stress=_q("345 MPa"),
+                elastic_modulus=_q("203000 MPa"),
+            )
+        if case == "plate_material":
+            return aisi_plate_slenderness(
+                flat_width=_q("100 mm"),
+                thickness=_q("1.5 mm"),
+                stress=_q("345 MPa"),
+                elastic_modulus=_q("1 mm"),
+            )
+        if case == "plate_code":
+            return aisi_plate_slenderness(
+                flat_width=_q("100 mm"),
+                thickness=_q("1.5 mm"),
+                stress=_q("345 MPa"),
+                elastic_modulus=_q("203000 MPa"),
+                plate_buckling_coefficient=0.0,
+            )
+        if case == "compression_yield":
+            return dsm_compression_strength(yield_load=_q("1 mm"), elastic_buckling=force_buckling)
+        if case == "compression_buckling":
+            return dsm_compression_strength(
+                yield_load=_q("245 kN"), elastic_buckling=moment_buckling
+            )
+        if case == "flexural_yield":
+            return dsm_flexural_strength(
+                yield_moment=_q("0 kN*m"), elastic_buckling=moment_buckling
+            )
+        return dsm_scorecard("member", demand=_q("60 kN"), strength="not a DSM result")
+
+    with pytest.raises(ValueError) as refused:
+        invoke()
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_cold_formed_steel_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/cold_formed_steel.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_cfs_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 21
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_dsm_compression_anchors_to_the_hand_worked_curves():
     """Every DSM branch, worked by hand from AISI S100 Appendix 1 and pinned.
 
