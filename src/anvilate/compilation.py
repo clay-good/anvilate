@@ -48,7 +48,7 @@ from functools import cache
 from math import isclose
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from ._models import (
     FrozenMap,
@@ -65,6 +65,8 @@ from .units import Quantity, UnitError
 __all__ = [
     "CONSTRAINT_TAX_CITATION",
     "CompilationBackend",
+    "CompilationAttempt",
+    "CompilationEvaluation",
     "CompilationFailure",
     "CompilationMode",
     "CompilationOutcome",
@@ -78,6 +80,7 @@ __all__ = [
     "FieldOutcome",
     "compile_intent",
     "default_compilation_task_set",
+    "evaluate_task_set",
     "field_value",
     "score_candidate",
     "score_task_set",
@@ -257,7 +260,7 @@ def compile_intent(
     )
 
 
-class FieldOutcome(BaseModel):
+class FieldOutcome(StatableModel):
     """One reference field compared against what the compiler produced.
 
     ``matched`` is True only when the field was found and agreed. ``detail`` says what
@@ -291,7 +294,7 @@ class FieldOutcome(BaseModel):
         return line
 
 
-class CompilationOutcome(RevalidatedModel):
+class CompilationOutcome(StatableModel):
     """One task's result: whether the output parsed, and how each field fared.
 
     ``schema_valid`` and the field outcomes are deliberately independent. The combination
@@ -725,7 +728,7 @@ def score_candidate(
     )
 
 
-class CompilationReport(RevalidatedModel):
+class CompilationReport(StatableModel):
     """Three numbers over a task set, and deliberately not a fourth that averages them.
 
     There is no ``score``, no ``success_rate``, and no ``passed``. Every one of those would
@@ -851,4 +854,114 @@ def score_task_set(
             for task in tasks
         ),
         configuration=configuration,
+    )
+
+
+class CompilationAttempt(StatableModel):
+    """One corpus task's validated result or its bounded compilation failure."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_id: Named
+    result: CompilationResult | None = None
+    failure: CompilationProvenance | None = None
+    error: str | None = None
+
+    @model_validator(mode="after")
+    def _is_exactly_one_outcome(self) -> CompilationAttempt:
+        if (self.result is None) == (self.failure is None):
+            raise ValueError(
+                f"compilation attempt {self.task_id!r} must carry exactly one of result or failure"
+            )
+        if self.result is not None:
+            if self.error is not None or not self.result.provenance.succeeded:
+                raise ValueError(
+                    f"successful compilation attempt {self.task_id!r} cannot carry a failure"
+                )
+        elif self.error is None or self.failure is None or self.failure.succeeded:
+            raise ValueError(
+                f"failed compilation attempt {self.task_id!r} needs an unsuccessful "
+                "provenance record and its error"
+            )
+        return self
+
+
+class CompilationEvaluation(StatableModel):
+    """Every attempt in a versioned corpus and the three-number report derived from them."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_set_version: str
+    attempts: tuple[CompilationAttempt, ...]
+    report: CompilationReport
+
+    @model_validator(mode="after")
+    def _report_covers_the_attempts(self) -> CompilationEvaluation:
+        attempted = tuple(attempt.task_id for attempt in self.attempts)
+        reported = tuple(outcome.task_id for outcome in self.report.outcomes)
+        if attempted != reported:
+            raise ValueError(
+                "compilation evaluation attempts and report outcomes differ: "
+                f"attempted {attempted}, reported {reported}"
+            )
+        return self
+
+
+def evaluate_task_set(
+    task_set: CompilationTaskSet,
+    backend: CompilationBackend,
+    *,
+    retry_budget: int = 2,
+) -> CompilationEvaluation:
+    """Compile and score every task without dropping bounded compilation failures.
+
+    A backend exception is not a candidate that failed schema validation: it aborts the run
+    rather than publishing a partial report as a complete measurement. Only
+    :class:`CompilationFailure`, which proves the bounded packaging attempts ran, becomes a
+    schema-invalid task outcome.
+    """
+    issues = task_set_issues(task_set)
+    if issues:
+        raise ValueError("the compilation task set is stale: " + "; ".join(issues))
+
+    attempts: list[CompilationAttempt] = []
+    candidates: dict[str, DesignSpec] = {}
+    parse_errors: dict[str, str] = {}
+    configurations: list[DecodingConfiguration] = []
+    for task in task_set.tasks:
+        try:
+            result = compile_intent(task.prompt, backend, retry_budget=retry_budget)
+        except CompilationFailure as failure:
+            message = str(failure)
+            attempts.append(
+                CompilationAttempt(
+                    task_id=task.task_id,
+                    failure=failure.provenance,
+                    error=message,
+                )
+            )
+            parse_errors[task.task_id] = message
+            configurations.append(failure.provenance.configuration)
+        else:
+            attempts.append(CompilationAttempt(task_id=task.task_id, result=result))
+            candidates[task.task_id] = result.spec
+            configurations.append(result.provenance.configuration)
+
+    first = configurations[0]
+    if any(configuration != first for configuration in configurations[1:]):
+        raise ValueError("one evaluation run produced more than one decoding configuration")
+    label = (
+        f"task set {task_set.version}; backend {first.backend}; model {first.model}; "
+        f"{first.mode.value}; schema {first.schema_version}; retry budget {first.retry_budget}"
+    )
+    report = score_task_set(
+        task_set.tasks,
+        candidates,
+        parse_errors=parse_errors,
+        configuration=label,
+    )
+    return CompilationEvaluation(
+        task_set_version=task_set.version,
+        attempts=tuple(attempts),
+        report=report,
     )

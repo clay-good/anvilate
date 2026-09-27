@@ -129,3 +129,12 @@ Renaming `manufacturing.process` or a pack field such as `pipe_run.flow_rate` th
 breaks CI at the task that still names it. This is a schema-drift gate, not a model result:
 the separate release gate remains open until the corpus is run through real configured
 models and its correctness effect is recorded.
+
+`evaluate_task_set(task_set, backend)` is the runner an external harness uses for that model
+work. It compiles every prompt, retains each validated spec or bounded failure with its
+provenance, and derives the three-number `CompilationReport` without dropping failed tasks.
+The report's configuration names the task-set version, backend, model, pass shape, Spec IR
+version, and retry budget. A backend transport or implementation defect aborts the run; it
+is not converted into a schema-invalid answer, because a partial run is not a low-scoring
+complete run. The runner remains offline until the caller injects a backend that chooses to
+communicate with a model.

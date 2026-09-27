@@ -12,6 +12,7 @@ import pytest
 
 from anvilate.compilation import (
     COMPILATION_TASK_SET_VERSION,
+    CompilationEvaluation,
     CompilationFailure,
     CompilationMode,
     CompilationOutcome,
@@ -21,6 +22,7 @@ from anvilate.compilation import (
     FieldOutcome,
     compile_intent,
     default_compilation_task_set,
+    evaluate_task_set,
     field_value,
     score_candidate,
     score_task_set,
@@ -195,6 +197,86 @@ def test_a_task_set_refuses_an_unversioned_or_duplicate_corpus():
         CompilationTaskSet(version="next", tasks=(task,))
     with pytest.raises(ValueError, match="repeats task ids"):
         CompilationTaskSet(version="1.0.0", tasks=(task, task))
+
+
+def _evaluation_task_set() -> CompilationTaskSet:
+    return CompilationTaskSet(
+        version="1.0.0",
+        tasks=(
+            CompilationTask(
+                task_id="valid",
+                prompt="Compile the valid lug.",
+                reference={"name": "compiled_lug", "material.ref": "ASTM-A36"},
+            ),
+            CompilationTask(
+                task_id="invalid",
+                prompt="Compile another lug.",
+                reference={"name": "another_lug"},
+            ),
+        ),
+    )
+
+
+def test_evaluation_retains_every_success_and_bounded_failure_then_scores_all_tasks():
+    backend = _Backend([_VALID_SPEC, *([{"name": "invalid"}] * 3)])
+    evaluation = evaluate_task_set(_evaluation_task_set(), backend)
+
+    assert isinstance(evaluation, CompilationEvaluation)
+    assert [attempt.task_id for attempt in evaluation.attempts] == ["valid", "invalid"]
+    assert evaluation.attempts[0].result is not None
+    assert evaluation.attempts[1].failure is not None
+    assert evaluation.attempts[1].failure.succeeded is False
+    assert evaluation.report.schema_validity == pytest.approx(0.5)
+    assert evaluation.report.field_correctness == pytest.approx(2 / 3)
+    assert "task set 1.0.0" in evaluation.report.configuration
+    assert "test-backend" in evaluation.report.configuration
+    assert "small-local-model" in evaluation.report.configuration
+    assert "two_pass" in evaluation.report.configuration
+    assert "schema 1.18.0" in evaluation.report.configuration
+    assert "retry budget 2" in evaluation.report.configuration
+
+
+def test_backend_identity_changes_attribution_not_the_spec_contract_or_outcomes():
+    task_set = CompilationTaskSet(version="1.0.0", tasks=(_evaluation_task_set().tasks[0],))
+    local = _Backend([_VALID_SPEC])
+    cloud = _Backend([_VALID_SPEC])
+    cloud.name = "user-cloud-endpoint"
+    cloud.model = "cloud-model"
+
+    local_run = evaluate_task_set(task_set, local)
+    cloud_run = evaluate_task_set(task_set, cloud)
+    assert local_run.report.outcomes == cloud_run.report.outcomes
+    assert local_run.attempts[0].result.spec == cloud_run.attempts[0].result.spec
+    assert local_run.report.configuration != cloud_run.report.configuration
+
+
+def test_an_unexpected_backend_defect_aborts_instead_of_becoming_a_low_score():
+    class BrokenBackend(_Backend):
+        def package_spec(self, prompt, *, schema, reasoning, validation_error):
+            raise RuntimeError("backend transport broke")
+
+    with pytest.raises(RuntimeError, match="transport broke"):
+        evaluate_task_set(
+            CompilationTaskSet(version="1.0.0", tasks=(_evaluation_task_set().tasks[0],)),
+            BrokenBackend([]),
+        )
+
+
+def test_evaluation_refuses_a_stale_corpus_before_calling_the_backend():
+    stale = CompilationTaskSet(
+        version="1.0.0",
+        tasks=(
+            CompilationTask(
+                task_id="stale",
+                prompt="Compile a stale field.",
+                reference={"material.identifer": "ASTM-A36"},
+            ),
+        ),
+    )
+    backend = _Backend([_VALID_SPEC])
+    with pytest.raises(ValueError, match="task set is stale"):
+        evaluate_task_set(stale, backend)
+    assert backend.reason_calls == []
 
 
 def _candidate(**overrides) -> dict:

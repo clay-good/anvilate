@@ -29,7 +29,9 @@
       and **no fourth number that averages them**. `CompilationReport` has no `score`, no
       `success_rate` and no `passed`; a contract test asserts none can be added. A scalar
       over a constrained decoder is dominated by validity, the number constraint drives to
-      100%, so it rises while the thing a user cares about falls
+      100%, so it rises while the thing a user cares about falls. `evaluate_task_set()` now
+      runs every corpus task and retains successes and bounded failures before deriving those
+      metrics; an unexpected backend defect aborts rather than masquerading as a low score
 - [ ] 2.3 Gate the published local-model recommendation on all three — there is no published
       recommendation yet, and gating one that does not exist is not a thing that can be done
 
@@ -46,8 +48,10 @@
       rather than an omission
 - [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — the corpus half is
       now live: `task_set_issues()` makes a stale Spec IR or pack-element field fail CI and
-      adversary tests prove both directions. This remains open because a real model run and
-      its correctness delta still need an external harness; path validity is not evaluation
+      adversary tests prove both directions. The model-independent runner is now live too,
+      retaining all attempts and attributing the task set, backend, model, pass shape, schema,
+      and retry budget. This remains open because real model outputs and their correctness
+      delta have not been measured; executable infrastructure is not an evaluation result
 
 ## 4. Docs
 
