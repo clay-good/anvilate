@@ -143,3 +143,62 @@ def test_the_record_says_which_kind_of_number_it_carries():
     assert modulus.value.has_dimension("[pressure]")
     assert "stress" in str(stress) and "modulus" in str(modulus)
     assert stress.property is not modulus.property
+
+
+@pytest.mark.parametrize(
+    "case,subject,source",
+    (
+        (
+            "record",
+            "table",
+            "the grade stamp, material certificate, cited NDS Supplement table, or project "
+            "specification",
+        ),
+        (
+            "factor",
+            "adjustment factor C_D",
+            "the governing NDS edition, Table 4.3.1, and selected conditions",
+        ),
+    ),
+)
+def test_timber_record_refusals_carry_structured_remedies(case, subject, source):
+    from anvilate.refusal import RefusalError
+
+    if case == "record":
+        with pytest.raises(ValidationError) as refused:
+            _value(table=" ")
+        error = refused.value.errors()[0]["ctx"]["error"]
+    else:
+        with pytest.raises(ValueError) as refused:
+            _value().adjusted({"C_D": 0.0})
+        error = refused.value
+
+    assert isinstance(error, RefusalError)
+    assert error.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_timber_record_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/standards/timber.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_timber_record_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 5
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno

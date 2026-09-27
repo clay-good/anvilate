@@ -29,6 +29,7 @@ from ..analysis import (
     nds_shear_stress,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
     Direction,
@@ -41,6 +42,24 @@ from ..scorecard import (
 from ..standards.timber import TimberDesignValue, TimberProperty
 from ..units import Quantity
 from ._guarded import GuardedInputs
+
+_TIMBER_GEOMETRY_SOURCE = "the timber member drawing or verified section dimensions"
+_TIMBER_LOAD_SOURCE = "the governing load combination and timber member demand analysis"
+_TIMBER_RECORD_SOURCE = "the beam's cited NDS reference-value records"
+_TIMBER_CODE_SOURCE = "the governing NDS edition and selected design conditions"
+_TIMBER_DOCUMENT_SOURCE = "the timber beam declaration and supporting design records"
+
+
+class _TimberPackInputError(RefusalError, ValueError):
+    """Invalid timber-pack input with a machine-readable repair."""
+
+
+def _timber_pack_refusal(message: str, *, subject: str, source: str) -> _TimberPackInputError:
+    return _TimberPackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "TimberBeam",
@@ -135,39 +154,55 @@ class TimberBeam(GuardedInputs):
     def _well_formed(self) -> TimberBeam:
         for value, name in ((self.width, "width"), (self.depth, "depth"), (self.span, "span")):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _timber_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_TIMBER_GEOMETRY_SOURCE,
+                )
         expected = "[force]" if self.load_type is TimberLoad.POINT else "[force] / [length]"
         if not self.load.has_dimension(expected):
-            raise ValueError(
+            raise _timber_pack_refusal(
                 f"load must be a {expected} quantity for a {self.load_type.value} load; "
-                f"got {self.load}"
+                f"got {self.load}",
+                subject="load",
+                source=_TIMBER_LOAD_SOURCE,
             )
         if (self.sustained_load is None) != (self.creep_factor is None):
-            raise ValueError(
+            raise _timber_pack_refusal(
                 "sustained_load and creep_factor are declared together: the creep factor "
-                "multiplies the deflection of the sustained part of the load"
+                "multiplies the deflection of the sustained part of the load",
+                subject="sustained_load and creep_factor",
+                source=_TIMBER_LOAD_SOURCE,
             )
         if self.sustained_load is not None:
             if not self.sustained_load.has_dimension(expected):
-                raise ValueError(
+                raise _timber_pack_refusal(
                     f"sustained_load must be a {expected} quantity, like load; "
-                    f"got {self.sustained_load}"
+                    f"got {self.sustained_load}",
+                    subject="sustained_load",
+                    source=_TIMBER_LOAD_SOURCE,
                 )
             if self.sustained_load.to(str(self.load.unit)).magnitude > self.load.magnitude:
-                raise ValueError(
+                raise _timber_pack_refusal(
                     f"sustained_load ({self.sustained_load}) is the long-term part of load "
-                    f"({self.load}) and cannot exceed it"
+                    f"({self.load}) and cannot exceed it",
+                    subject="sustained_load",
+                    source=_TIMBER_LOAD_SOURCE,
                 )
         if self.creep_factor is not None and self.creep_factor < 1:
-            raise ValueError(
+            raise _timber_pack_refusal(
                 f"creep_factor must be at least 1, since creep only adds deflection; got "
-                f"{self.creep_factor}"
+                f"{self.creep_factor}",
+                subject="creep_factor",
+                source=_TIMBER_CODE_SOURCE,
             )
         if self.deflection_limit is not None and not self.deflection_limit.has_dimension(
             "[length]"
         ):
-            raise ValueError(
-                f"deflection_limit must be a [length] quantity; got {self.deflection_limit}"
+            raise _timber_pack_refusal(
+                f"deflection_limit must be a [length] quantity; got {self.deflection_limit}",
+                subject="deflection_limit",
+                source=_TIMBER_DOCUMENT_SOURCE,
             )
         for field, record, wanted in (
             ("bending", self.bending, TimberProperty.BENDING),
@@ -180,25 +215,35 @@ class TimberBeam(GuardedInputs):
             ),
         ):
             if record is not None and record.property is not wanted:
-                raise ValueError(
+                raise _timber_pack_refusal(
                     f"{field} must be the {wanted.value} reference value; this record is "
-                    f"{record.property.value}"
+                    f"{record.property.value}",
+                    subject=field,
+                    source=_TIMBER_RECORD_SOURCE,
                 )
         if (self.bearing_length is None) != (self.compression_perpendicular is None):
-            raise ValueError(
+            raise _timber_pack_refusal(
                 "bearing_length and compression_perpendicular are declared together: the "
-                "bearing check needs the length of each support and the F_c_perp value"
+                "bearing check needs the length of each support and the F_c_perp value",
+                subject="bearing_length and compression_perpendicular",
+                source=_TIMBER_DOCUMENT_SOURCE,
             )
         for value, name in (
             (self.bearing_length, "bearing_length"),
             (self.bearing_end_distance, "bearing_end_distance"),
         ):
             if value is not None and not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _timber_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_TIMBER_GEOMETRY_SOURCE,
+                )
         if "C_b" in self.compression_perpendicular_factors:
-            raise ValueError(
+            raise _timber_pack_refusal(
                 "compression_perpendicular_factors: C_b is derived from bearing_length and "
-                "bearing_end_distance (NDS §3.10.4), so the document does not state it"
+                "bearing_end_distance (NDS §3.10.4), so the document does not state it",
+                subject="compression_perpendicular_factors",
+                source=_TIMBER_CODE_SOURCE,
             )
         records = [
             r
@@ -207,9 +252,11 @@ class TimberBeam(GuardedInputs):
         ]
         woods = {(r.species, r.grade) for r in records}
         if len(woods) > 1:
-            raise ValueError(
+            raise _timber_pack_refusal(
                 "bending, shear and modulus describe one piece of wood, and these records "
-                f"name {sorted(f'{species} {grade}' for species, grade in woods)}"
+                f"name {sorted(f'{species} {grade}' for species, grade in woods)}",
+                subject="bending, shear, modulus, and compression_perpendicular records",
+                source=_TIMBER_RECORD_SOURCE,
             )
         # The chains are checked here, so a factor NDS does not apply is refused before any
         # screen runs, naming the field that carries it.
@@ -225,12 +272,20 @@ class TimberBeam(GuardedInputs):
         ):
             if record is None:
                 if factors:
-                    raise ValueError(f"{field} were given with no record to apply them to")
+                    raise _timber_pack_refusal(
+                        f"{field} were given with no record to apply them to",
+                        subject=field,
+                        source=_TIMBER_DOCUMENT_SOURCE,
+                    )
                 continue
             try:
                 record.adjusted(factors)
             except ValueError as refused:
-                raise ValueError(f"{field}: {refused}") from None
+                raise _timber_pack_refusal(
+                    f"{field}: {refused}",
+                    subject=field,
+                    source=_TIMBER_CODE_SOURCE,
+                ) from None
         return self
 
     @property

@@ -396,6 +396,10 @@ The complete NDS timber-analysis family follows the contract at all 57 refusal s
 bearing geometry, reference and adjusted design values, factor selections, applied forces and
 stresses, stability inputs, and completed interaction screens point to timber drawings, grade or
 material records, cited NDS Supplement tables, verified load analyses, or the governing NDS criteria.
+The timber reference-record and beam-pack layers follow it at all 19 refusal sites too. Provenance,
+property values, adjustment-factor applicability, beam geometry and loading, record consistency,
+creep and bearing declarations, and factor chains point to the same drawings, records, analyses,
+and cited NDS criteria; a pack-level wrapper preserves a structured repair instead of flattening it.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

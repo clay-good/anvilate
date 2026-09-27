@@ -40,7 +40,25 @@ from typing import TYPE_CHECKING
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel, cited
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_TIMBER_RECORD_SOURCE = (
+    "the grade stamp, material certificate, cited NDS Supplement table, or project specification"
+)
+_TIMBER_FACTOR_SOURCE = "the governing NDS edition, Table 4.3.1, and selected conditions"
+
+
+class _TimberRecordError(RefusalError, ValueError):
+    """Invalid timber reference-value input with a machine-readable repair."""
+
+
+def _timber_record_refusal(message: str, *, subject: str, source: str) -> _TimberRecordError:
+    return _TimberRecordError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "NDS_APPLICABLE_FACTORS",
@@ -155,15 +173,25 @@ class TimberDesignValue(RevalidatedModel):
             ("grade", self.grade),
         ):
             if not text.strip():
-                raise ValueError(
+                raise _timber_record_refusal(
                     f"a timber design value must state its {field}; the number alone does "
-                    f"not say which piece of wood it describes"
+                    f"not say which piece of wood it describes",
+                    subject=field,
+                    source=_TIMBER_RECORD_SOURCE,
                 )
         if not self.value.has_dimension("[pressure]"):
-            raise ValueError(f"a design value is a stress or a modulus; got {self.value}")
+            raise _timber_record_refusal(
+                f"a design value is a stress or a modulus; got {self.value}",
+                subject="value",
+                source=_TIMBER_RECORD_SOURCE,
+            )
         magnitude = self.value.to("MPa").magnitude
         if not isfinite(magnitude) or magnitude <= 0:
-            raise ValueError(f"a design value must be positive and finite; got {self.value}")
+            raise _timber_record_refusal(
+                f"a design value must be positive and finite; got {self.value}",
+                subject="value",
+                source=_TIMBER_RECORD_SOURCE,
+            )
         return self
 
     @property
@@ -189,17 +217,21 @@ class TimberDesignValue(RevalidatedModel):
         offered = set(factors)
         inapplicable = sorted(offered - allowed)
         if inapplicable:
-            raise ValueError(
+            raise _timber_record_refusal(
                 f"NDS Table 4.3.1 does not apply {inapplicable} to {self.property.value}; "
                 f"it takes {sorted(allowed)}. A factor the table omits is not a "
                 f"conservative extra — applying C_D to a modulus, for one, makes the "
                 f"member stiffer than the standard allows on exactly the check deflection "
-                f"governs"
+                f"governs",
+                subject="adjustment factors",
+                source=_TIMBER_FACTOR_SOURCE,
             )
         for name, factor in factors.items():
             if not isfinite(factor) or factor <= 0:
-                raise ValueError(
-                    f"the adjustment factor {name} must be positive and finite; got {factor}"
+                raise _timber_record_refusal(
+                    f"the adjustment factor {name} must be positive and finite; got {factor}",
+                    subject=f"adjustment factor {name}",
+                    source=_TIMBER_FACTOR_SOURCE,
                 )
         product = 1.0
         for factor in factors.values():

@@ -217,6 +217,10 @@
       stresses, stability inputs, and completed interaction screens, sourced to timber drawings,
       grade or material records, cited NDS Supplement tables, verified load analyses, or the
       governing NDS criteria.
+      The timber reference-record and beam-pack layers add 19 more structured sites for provenance,
+      property values, factor applicability, beam geometry and loading, record consistency, creep
+      and bearing declarations, and factor chains; the pack wrapper preserves the structured repair
+      from a refused record instead of flattening it into plain text.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

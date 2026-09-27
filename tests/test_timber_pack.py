@@ -189,3 +189,71 @@ def test_the_support_bearing_derives_its_own_area_factor() -> None:
         _screen(**bearing, compression_perpendicular_factors={"C_b": 1.25})
     with pytest.raises(ValidationError, match="declared together"):
         _screen(bearing_length={"magnitude": 1.5, "unit": "inch"})
+
+
+@pytest.mark.parametrize(
+    "changes,subject,source",
+    (
+        (
+            {"width": {"magnitude": 1.5, "unit": "MPa"}},
+            "width",
+            "the timber member drawing or verified section dimensions",
+        ),
+        (
+            {"load": {"magnitude": 80.0, "unit": "MPa"}},
+            "load",
+            "the governing load combination and timber member demand analysis",
+        ),
+        (
+            {"bending": _value("F_v", 180.0)},
+            "bending",
+            "the beam's cited NDS reference-value records",
+        ),
+        (
+            {"modulus_factors": {"C_D": 1.15}},
+            "modulus_factors",
+            "the governing NDS edition and selected design conditions",
+        ),
+        (
+            {"modulus": None, "modulus_factors": {"C_M": 1.0}},
+            "modulus_factors",
+            "the timber beam declaration and supporting design records",
+        ),
+    ),
+)
+def test_timber_pack_refusals_carry_structured_remedies(changes, subject, source):
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValidationError) as refused:
+        _screen(**changes)
+
+    error = refused.value.errors()[0]["ctx"]["error"]
+    assert isinstance(error, RefusalError)
+    assert error.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_timber_pack_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/packs/timber.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_timber_pack_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 14
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
