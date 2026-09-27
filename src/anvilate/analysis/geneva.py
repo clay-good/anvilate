@@ -27,7 +27,22 @@ from __future__ import annotations
 
 from math import cos, pi, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_GENEVA_DESIGN_SOURCE = "the Geneva mechanism drawing or indexing requirement"
+
+
+class _GenevaInputError(RefusalError, ValueError):
+    """A Geneva mechanism input that cannot be used without correction."""
+
+
+def _geneva_refusal(message: str, *, subject: str) -> _GenevaInputError:
+    return _GenevaInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_GENEVA_DESIGN_SOURCE),),
+    )
+
 
 __all__ = [
     "geneva_index_angle",
@@ -40,10 +55,11 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _geneva_refusal(f"{name} must be a {expected} quantity; got {value!r}", subject=name)
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _geneva_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -59,7 +75,10 @@ def _check_slots(slots: int) -> int:
     require_finite(slots, name="slots")
     whole = int(slots)
     if whole != slots or whole < 3:
-        raise ValueError(f"slots must be a whole number ≥ 3 for an external Geneva; got {slots}")
+        raise _geneva_refusal(
+            f"slots must be a whole number ≥ 3 for an external Geneva; got {slots}",
+            subject="slots",
+        )
     return whole
 
 
@@ -88,7 +107,10 @@ def geneva_crank_radius(*, slots: int, center_distance: Quantity) -> Quantity:
     _require(center_distance, "[length]", "center_distance")
     c = center_distance.to("mm").magnitude
     if c <= 0:
-        raise ValueError(f"center_distance must be positive; got {center_distance}")
+        raise _geneva_refusal(
+            f"center_distance must be positive; got {center_distance}",
+            subject="center_distance",
+        )
     return Quantity(magnitude=c * sin(pi / n), unit="mm")
 
 
@@ -105,7 +127,10 @@ def geneva_driven_radius(*, slots: int, center_distance: Quantity) -> Quantity:
     _require(center_distance, "[length]", "center_distance")
     c = center_distance.to("mm").magnitude
     if c <= 0:
-        raise ValueError(f"center_distance must be positive; got {center_distance}")
+        raise _geneva_refusal(
+            f"center_distance must be positive; got {center_distance}",
+            subject="center_distance",
+        )
     return Quantity(magnitude=c * cos(pi / n), unit="mm")
 
 

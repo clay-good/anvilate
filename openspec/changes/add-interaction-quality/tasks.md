@@ -109,6 +109,9 @@
       complete acid-base and chemical-equilibrium families add 10 structured sites for buffer
       concentrations, thermochemical properties, and absolute temperatures, sourced to
       formulation, calibrated concentration, property, or reactor operating records. The
+      complete Geneva and Scotch-yoke families add 10 structured sites for station counts, center
+      distances, crank radii, and drive speeds, sourced to mechanism drawings, indexing
+      requirements, operating cases, or calibrated measurements. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

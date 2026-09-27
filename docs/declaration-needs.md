@@ -294,6 +294,9 @@ the correction.
 The complete acid-base and chemical-equilibrium families follow the contract at all 10 refusal
 sites. Buffer concentrations, thermochemical properties, and absolute temperatures point to the
 formulation, calibrated concentration record, cited property record, or reactor operating case.
+The complete Geneva and Scotch-yoke families follow the contract at all 10 refusal sites. Station
+counts, center distances, crank radii, and drive speeds point to mechanism drawings, indexing
+requirements, selected crank geometry, operating cases, or calibrated speed measurements.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

@@ -25,8 +25,24 @@ from __future__ import annotations
 
 from math import cos, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_YOKE_GEOMETRY_SOURCE = "the Scotch-yoke mechanism drawing or selected crank geometry"
+_YOKE_OPERATING_SOURCE = "the drive operating case or calibrated rotational-speed measurement"
+
+
+class _ScotchYokeInputError(RefusalError, ValueError):
+    """A Scotch-yoke input that cannot be used without correction."""
+
+
+def _scotch_yoke_refusal(message: str, *, subject: str, source: str) -> _ScotchYokeInputError:
+    return _ScotchYokeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "scotch_yoke_displacement",
@@ -37,10 +53,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _scotch_yoke_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_YOKE_GEOMETRY_SOURCE,
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _scotch_yoke_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_YOKE_GEOMETRY_SOURCE,
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -53,17 +75,27 @@ def _crank_radius_mm(crank_radius: Quantity) -> float:
     _require(crank_radius, "[length]", "crank_radius")
     r = crank_radius.to("mm").magnitude
     if r <= 0:
-        raise ValueError(f"crank_radius must be positive; got {crank_radius}")
+        raise _scotch_yoke_refusal(
+            f"crank_radius must be positive; got {crank_radius}",
+            subject="crank_radius",
+            source=_YOKE_GEOMETRY_SOURCE,
+        )
     return r
 
 
 def _speed_rad_s(crank_speed: Quantity) -> float:
     if not isinstance(crank_speed, Quantity):
-        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
+        raise _scotch_yoke_refusal(
+            f"crank_speed must be a [frequency] quantity; got {crank_speed!r}",
+            subject="crank_speed",
+            source=_YOKE_OPERATING_SOURCE,
+        )
     if not crank_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _scotch_yoke_refusal(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
-            f"{crank_speed.dimensionality} ({crank_speed})"
+            f"{crank_speed.dimensionality} ({crank_speed})",
+            subject="crank_speed",
+            source=_YOKE_OPERATING_SOURCE,
         )
     return angular_speed_rad_per_s(crank_speed, name="crank_speed")
 
