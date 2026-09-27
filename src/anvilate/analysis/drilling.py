@@ -24,8 +24,33 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_minute
+
+_DRILLING_GEOMETRY_SOURCE = "the hole and drill drawing or verified tool-geometry record"
+_DRILLING_MATERIAL_SOURCE = "the workpiece cutting-data record or qualified drilling trial"
+_DRILLING_MACHINE_SOURCE = "the spindle datasheet or approved drilling process plan"
+
+
+class _DrillingInputError(RefusalError, ValueError):
+    """A drilling input that cannot be used without correction."""
+
+
+def _drilling_refusal(message: str, *, subject: str, source: str) -> _DrillingInputError:
+    return _DrillingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _drilling_input_source(name: str) -> str:
+    if name == "specific_cutting_energy":
+        return _DRILLING_MATERIAL_SOURCE
+    if name in {"feed_per_revolution", "spindle_speed", "torque_limit"}:
+        return _DRILLING_MACHINE_SOURCE
+    return _DRILLING_GEOMETRY_SOURCE
+
 
 __all__ = [
     "drilling_feed_for_torque_limit",
@@ -51,11 +76,23 @@ def drilling_material_removal_rate(
     f = feed_per_revolution.to("mm").magnitude
     n = revolutions_per_minute(spindle_speed, name="spindle_speed")
     if d <= 0:
-        raise ValueError("drill_diameter must be positive")
+        raise _drilling_refusal(
+            "drill_diameter must be positive",
+            subject="drill_diameter",
+            source=_DRILLING_GEOMETRY_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("feed_per_revolution must be positive")
+        raise _drilling_refusal(
+            "feed_per_revolution must be positive",
+            subject="feed_per_revolution",
+            source=_DRILLING_MACHINE_SOURCE,
+        )
     if n < 0:
-        raise ValueError("spindle_speed must be non-negative")
+        raise _drilling_refusal(
+            "spindle_speed must be non-negative",
+            subject="spindle_speed",
+            source=_DRILLING_MACHINE_SOURCE,
+        )
     mrr_mm3_min = pi / 4.0 * d * d * f * n
     return Quantity(magnitude=mrr_mm3_min / 1000.0, unit="cm**3/min")
 
@@ -80,11 +117,23 @@ def drilling_torque(
     f = feed_per_revolution.to("m").magnitude
     d = drill_diameter.to("m").magnitude
     if u <= 0:
-        raise ValueError("specific_cutting_energy must be positive")
+        raise _drilling_refusal(
+            "specific_cutting_energy must be positive",
+            subject="specific_cutting_energy",
+            source=_DRILLING_MATERIAL_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("feed_per_revolution must be positive")
+        raise _drilling_refusal(
+            "feed_per_revolution must be positive",
+            subject="feed_per_revolution",
+            source=_DRILLING_MACHINE_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("drill_diameter must be positive")
+        raise _drilling_refusal(
+            "drill_diameter must be positive",
+            subject="drill_diameter",
+            source=_DRILLING_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=u * f * d * d / 8.0, unit="N*m")
 
 
@@ -107,21 +156,39 @@ def drilling_feed_for_torque_limit(
     u = specific_cutting_energy.to("Pa").magnitude
     d = drill_diameter.to("m").magnitude
     if m <= 0:
-        raise ValueError("torque_limit must be positive")
+        raise _drilling_refusal(
+            "torque_limit must be positive",
+            subject="torque_limit",
+            source=_DRILLING_MACHINE_SOURCE,
+        )
     if u <= 0:
-        raise ValueError("specific_cutting_energy must be positive")
+        raise _drilling_refusal(
+            "specific_cutting_energy must be positive",
+            subject="specific_cutting_energy",
+            source=_DRILLING_MATERIAL_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("drill_diameter must be positive")
+        raise _drilling_refusal(
+            "drill_diameter must be positive",
+            subject="drill_diameter",
+            source=_DRILLING_GEOMETRY_SOURCE,
+        )
     f_max_m = 8.0 * m / (u * d * d)
     return Quantity(magnitude=f_max_m * 1000.0, unit="mm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _drilling_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_drilling_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _drilling_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_drilling_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

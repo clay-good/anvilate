@@ -20,10 +20,35 @@ electrolyte sparks, and the operation shorts out.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 # Faraday constant: charge per mole of electrons.
 FARADAY_C_PER_MOL = 96485.332
+
+_ECM_ELECTRICAL_SOURCE = "the approved ECM electrical setup or calibrated power-supply record"
+_ECM_MATERIAL_SOURCE = "the workpiece material certificate or verified dissolution-data record"
+_ECM_PROCESS_SOURCE = "the qualified ECM electrolyte and feed process plan"
+
+
+class _ECMInputError(RefusalError, ValueError):
+    """An ECM input that cannot be used without correction."""
+
+
+def _ecm_refusal(message: str, *, subject: str, source: str) -> _ECMInputError:
+    return _ECMInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _ecm_input_source(name: str) -> str:
+    if name in {"current", "current_density", "applied_voltage"}:
+        return _ECM_ELECTRICAL_SOURCE
+    if name in {"density", "equivalent_weight"}:
+        return _ECM_MATERIAL_SOURCE
+    return _ECM_PROCESS_SOURCE
+
 
 __all__ = [
     "ecm_equilibrium_gap",
@@ -46,13 +71,21 @@ def ecm_material_removal_rate(
     _check(current, "[current]", "current")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _ecm_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_ECM_MATERIAL_SOURCE,
+        )
     amps = current.to("A").magnitude
     rho = density.to("g/cm**3").magnitude
     if amps < 0:
-        raise ValueError("current must be non-negative")
+        raise _ecm_refusal(
+            "current must be non-negative", subject="current", source=_ECM_ELECTRICAL_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _ecm_refusal(
+            "density must be positive", subject="density", source=_ECM_MATERIAL_SOURCE
+        )
     q_cm3_per_s = amps * equivalent_weight / (rho * FARADAY_C_PER_MOL)
     return Quantity(magnitude=q_cm3_per_s * 60.0, unit="cm**3/min")
 
@@ -71,13 +104,23 @@ def ecm_feed_rate(
     _check(current_density, "[current]/[length]**2", "current_density")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _ecm_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_ECM_MATERIAL_SOURCE,
+        )
     j = current_density.to("A/cm**2").magnitude
     rho = density.to("g/cm**3").magnitude
     if j < 0:
-        raise ValueError("current_density must be non-negative")
+        raise _ecm_refusal(
+            "current_density must be non-negative",
+            subject="current_density",
+            source=_ECM_ELECTRICAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _ecm_refusal(
+            "density must be positive", subject="density", source=_ECM_MATERIAL_SOURCE
+        )
     f_cm_per_s = j * equivalent_weight / (rho * FARADAY_C_PER_MOL)
     return Quantity(magnitude=f_cm_per_s * 10.0 * 60.0, unit="mm/min")
 
@@ -105,29 +148,51 @@ def ecm_equilibrium_gap(
     _check(feed_rate, "[length]/[time]", "feed_rate")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
-        raise ValueError("equivalent_weight must be positive")
+        raise _ecm_refusal(
+            "equivalent_weight must be positive",
+            subject="equivalent_weight",
+            source=_ECM_MATERIAL_SOURCE,
+        )
     kappa = electrolyte_conductivity.to("S/cm").magnitude
     u = applied_voltage.to("V").magnitude
     f_cm_per_s = feed_rate.to("cm/s").magnitude
     rho = density.to("g/cm**3").magnitude
     if kappa <= 0:
-        raise ValueError("electrolyte_conductivity must be positive")
+        raise _ecm_refusal(
+            "electrolyte_conductivity must be positive",
+            subject="electrolyte_conductivity",
+            source=_ECM_PROCESS_SOURCE,
+        )
     if u <= 0:
-        raise ValueError("applied_voltage must be positive")
+        raise _ecm_refusal(
+            "applied_voltage must be positive",
+            subject="applied_voltage",
+            source=_ECM_ELECTRICAL_SOURCE,
+        )
     if f_cm_per_s <= 0:
-        raise ValueError("feed_rate must be positive")
+        raise _ecm_refusal(
+            "feed_rate must be positive", subject="feed_rate", source=_ECM_PROCESS_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _ecm_refusal(
+            "density must be positive", subject="density", source=_ECM_MATERIAL_SOURCE
+        )
     g_cm = kappa * u * equivalent_weight / (rho * FARADAY_C_PER_MOL * f_cm_per_s)
     return Quantity(magnitude=g_cm * 10.0, unit="mm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _ecm_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ecm_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _ecm_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ecm_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

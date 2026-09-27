@@ -22,8 +22,39 @@ supports at a thickness, and the thickness a power can cut at a minimum usable s
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_LASER_GEOMETRY_SOURCE = "the part drawing or verified laser-cut kerf record"
+_LASER_MATERIAL_SOURCE = "the workpiece material certificate or verified thermal-property record"
+_LASER_PROCESS_SOURCE = "the qualified laser cutting schedule or calibrated machine record"
+
+
+class _LaserCuttingInputError(RefusalError, ValueError):
+    """A laser-cutting input that cannot be used without correction."""
+
+
+def _laser_cutting_refusal(message: str, *, subject: str, source: str) -> _LaserCuttingInputError:
+    return _LaserCuttingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _laser_cutting_input_source(name: str) -> str:
+    if name in {"thickness", "kerf_width"}:
+        return _LASER_GEOMETRY_SOURCE
+    if name in {
+        "specific_heat",
+        "temperature_rise",
+        "latent_heat_of_fusion",
+        "density",
+        "specific_removal_energy",
+    }:
+        return _LASER_MATERIAL_SOURCE
+    return _LASER_PROCESS_SOURCE
+
 
 __all__ = [
     "laser_cutting_speed",
@@ -51,11 +82,23 @@ def laser_specific_removal_energy(
     dt = temperature_difference_kelvin(temperature_rise, name="temperature_rise")
     lf = latent_heat_of_fusion.to("J/kg").magnitude
     if c <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _laser_cutting_refusal(
+            "specific_heat must be positive",
+            subject="specific_heat",
+            source=_LASER_MATERIAL_SOURCE,
+        )
     if dt <= 0:
-        raise ValueError("temperature_rise must be positive")
+        raise _laser_cutting_refusal(
+            "temperature_rise must be positive",
+            subject="temperature_rise",
+            source=_LASER_MATERIAL_SOURCE,
+        )
     if lf < 0:
-        raise ValueError("latent_heat_of_fusion must be non-negative")
+        raise _laser_cutting_refusal(
+            "latent_heat_of_fusion must be non-negative",
+            subject="latent_heat_of_fusion",
+            source=_LASER_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=(c * dt + lf) / 1.0e6, unit="MJ/kg")
 
 
@@ -89,15 +132,27 @@ def laser_cutting_speed(
     rho = density.to("kg/m**3").magnitude
     e_m = specific_removal_energy.to("J/kg").magnitude
     if p <= 0:
-        raise ValueError("beam_power must be positive")
+        raise _laser_cutting_refusal(
+            "beam_power must be positive", subject="beam_power", source=_LASER_PROCESS_SOURCE
+        )
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _laser_cutting_refusal(
+            "thickness must be positive", subject="thickness", source=_LASER_GEOMETRY_SOURCE
+        )
     if w <= 0:
-        raise ValueError("kerf_width must be positive")
+        raise _laser_cutting_refusal(
+            "kerf_width must be positive", subject="kerf_width", source=_LASER_GEOMETRY_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _laser_cutting_refusal(
+            "density must be positive", subject="density", source=_LASER_MATERIAL_SOURCE
+        )
     if e_m <= 0:
-        raise ValueError("specific_removal_energy must be positive")
+        raise _laser_cutting_refusal(
+            "specific_removal_energy must be positive",
+            subject="specific_removal_energy",
+            source=_LASER_MATERIAL_SOURCE,
+        )
     v_m_per_s = coupling_efficiency * p / (rho * t * w * e_m)
     return Quantity(magnitude=v_m_per_s * 60.0, unit="m/min")
 
@@ -132,30 +187,54 @@ def laser_max_cut_thickness(
     rho = density.to("kg/m**3").magnitude
     e_m = specific_removal_energy.to("J/kg").magnitude
     if p <= 0:
-        raise ValueError("beam_power must be positive")
+        raise _laser_cutting_refusal(
+            "beam_power must be positive", subject="beam_power", source=_LASER_PROCESS_SOURCE
+        )
     if v <= 0:
-        raise ValueError("cutting_speed must be positive")
+        raise _laser_cutting_refusal(
+            "cutting_speed must be positive",
+            subject="cutting_speed",
+            source=_LASER_PROCESS_SOURCE,
+        )
     if w <= 0:
-        raise ValueError("kerf_width must be positive")
+        raise _laser_cutting_refusal(
+            "kerf_width must be positive", subject="kerf_width", source=_LASER_GEOMETRY_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _laser_cutting_refusal(
+            "density must be positive", subject="density", source=_LASER_MATERIAL_SOURCE
+        )
     if e_m <= 0:
-        raise ValueError("specific_removal_energy must be positive")
+        raise _laser_cutting_refusal(
+            "specific_removal_energy must be positive",
+            subject="specific_removal_energy",
+            source=_LASER_MATERIAL_SOURCE,
+        )
     t_max_m = coupling_efficiency * p / (rho * v * w * e_m)
     return Quantity(magnitude=t_max_m * 1000.0, unit="mm")
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be a fraction in (0, 1]; got {value}")
+        raise _laser_cutting_refusal(
+            f"{name} must be a fraction in (0, 1]; got {value}",
+            subject=name,
+            source=_LASER_PROCESS_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _laser_cutting_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_laser_cutting_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _laser_cutting_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_laser_cutting_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

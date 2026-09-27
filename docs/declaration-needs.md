@@ -342,6 +342,10 @@ temperatures, spin speed, fill time, and discharge data point to drawings, plans
 The complete broaching, grinding, and EDM families follow the contract at all 29 refusal sites.
 Tool and cut geometry, material allowables, removal rates, wheel and feed speeds, spindle power,
 electrical settings, pulse timing, and erosion data point to drawings, schedules, or calibrated trials.
+The complete drilling, electrochemical-machining, and laser-cutting families follow the contract at
+all 40 refusal sites. Tool and kerf geometry, workpiece cutting and thermal properties, spindle
+limits, electrical and electrolyte settings, feed schedules, and laser setup point to drawings,
+material records, datasheets, qualified plans, or calibrated trials.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

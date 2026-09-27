@@ -22798,6 +22798,164 @@ def test_laser_cutting_removal_energy_speed_and_thickness_ceiling():
         )
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "drilling_torque",
+            {
+                "specific_cutting_energy": _q("2 J/mm**3"),
+                "feed_per_revolution": _q("0.2 mm"),
+                "drill_diameter": _q("0 mm"),
+            },
+            "drill_diameter",
+            "the hole and drill drawing or verified tool-geometry record",
+        ),
+        (
+            "drilling_torque",
+            {
+                "specific_cutting_energy": _q("0 J/mm**3"),
+                "feed_per_revolution": _q("0.2 mm"),
+                "drill_diameter": _q("10 mm"),
+            },
+            "specific_cutting_energy",
+            "the workpiece cutting-data record or qualified drilling trial",
+        ),
+        (
+            "drilling_feed_for_torque_limit",
+            {
+                "torque_limit": _q("0 N*m"),
+                "specific_cutting_energy": _q("2 J/mm**3"),
+                "drill_diameter": _q("10 mm"),
+            },
+            "torque_limit",
+            "the spindle datasheet or approved drilling process plan",
+        ),
+        (
+            "ecm_material_removal_rate",
+            {"current": _q("-1 A"), "equivalent_weight": 27.925, "density": _q("7.87 g/cm**3")},
+            "current",
+            "the approved ECM electrical setup or calibrated power-supply record",
+        ),
+        (
+            "ecm_material_removal_rate",
+            {"current": _q("1000 A"), "equivalent_weight": 27.925, "density": _q("0 g/cm**3")},
+            "density",
+            "the workpiece material certificate or verified dissolution-data record",
+        ),
+        (
+            "ecm_equilibrium_gap",
+            {
+                "electrolyte_conductivity": _q("0 S/cm"),
+                "applied_voltage": _q("15 V"),
+                "feed_rate": _q("2 mm/min"),
+                "equivalent_weight": 27.925,
+                "density": _q("7.87 g/cm**3"),
+            },
+            "electrolyte_conductivity",
+            "the qualified ECM electrolyte and feed process plan",
+        ),
+        (
+            "laser_cutting_speed",
+            {
+                "beam_power": _q("2000 W"),
+                "coupling_efficiency": 0.4,
+                "thickness": _q("0 mm"),
+                "kerf_width": _q("0.3 mm"),
+                "density": _q("7850 kg/m**3"),
+                "specific_removal_energy": _q("1.01 MJ/kg"),
+            },
+            "thickness",
+            "the part drawing or verified laser-cut kerf record",
+        ),
+        (
+            "laser_specific_removal_energy",
+            {
+                "specific_heat": _q("0 J/(kg*K)"),
+                "temperature_rise": _q("1480 K"),
+                "latent_heat_of_fusion": _q("270 kJ/kg"),
+            },
+            "specific_heat",
+            "the workpiece material certificate or verified thermal-property record",
+        ),
+        (
+            "laser_cutting_speed",
+            {
+                "beam_power": _q("0 W"),
+                "coupling_efficiency": 0.4,
+                "thickness": _q("5 mm"),
+                "kerf_width": _q("0.3 mm"),
+                "density": _q("7850 kg/m**3"),
+                "specific_removal_energy": _q("1.01 MJ/kg"),
+            },
+            "beam_power",
+            "the qualified laser cutting schedule or calibrated machine record",
+        ),
+        (
+            "laser_cutting_speed",
+            {
+                "beam_power": _q("2000 W"),
+                "coupling_efficiency": 0.0,
+                "thickness": _q("5 mm"),
+                "kerf_width": _q("0.3 mm"),
+                "density": _q("7850 kg/m**3"),
+                "specific_removal_energy": _q("1.01 MJ/kg"),
+            },
+            "coupling_efficiency",
+            "the qualified laser cutting schedule or calibrated machine record",
+        ),
+    ),
+)
+def test_additional_machining_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("drilling", "_drilling_refusal", 11),
+        ("ecm", "_ecm_refusal", 13),
+        ("laser_cutting", "_laser_cutting_refusal", 16),
+    ),
+)
+def test_every_additional_machining_refusal_site_is_structured(
+    module_name, helper_name, site_count
+):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_edm_discharge_energy_duty_factor_and_removal_rate():
     from anvilate.analysis import (
         edm_discharge_energy,
