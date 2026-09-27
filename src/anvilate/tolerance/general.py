@@ -14,6 +14,7 @@ from enum import StrEnum
 from pydantic import ConfigDict
 
 from .._models import Provenance, RevalidatedModel, parse_yaml
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 
 __all__ = [
@@ -105,8 +106,21 @@ class GeneralTolerance(RevalidatedModel):
         return f"{self.nominal} ±{self.deviation} (ISO 2768 {self.tolerance_class.letter})"
 
 
-class ToleranceRangeError(ValueError):
-    """A nominal dimension or class has no ISO 2768-1 general tolerance."""
+class ToleranceRangeError(RefusalError, ValueError):
+    """A tolerance request that the encoded evidence cannot resolve."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        action: str = "correct",
+        subject: str = "the tolerance input named in this refusal",
+        source: str = "the applicable tolerance standard, table, or explicit design tolerance",
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action=action, subject=subject, source=source),),
+        )
 
 
 class _Table:
@@ -158,7 +172,10 @@ def general_tolerance(
         raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
-            f"general tolerance needs a length; got {nominal.dimensionality} ({nominal})"
+            f"general tolerance needs a length; got {nominal.dimensionality} ({nominal})",
+            action="replace",
+            subject=f"the general-tolerance nominal {nominal}",
+            source="a length quantity governed by ISO 2768-1",
         )
     cls = (
         tolerance_class
@@ -170,7 +187,10 @@ def general_tolerance(
     if magnitude < table.min_nominal_mm:
         raise ToleranceRangeError(
             f"{nominal} is below ISO 2768-1's {table.min_nominal_mm:g} mm minimum; "
-            "dimensions this small need an explicit tolerance"
+            "dimensions this small need an explicit tolerance",
+            action="declare",
+            subject=f"an explicit tolerance for the {nominal} nominal",
+            source=f"the design requirement or drawing because {table.source} does not cover it",
         )
     low = table.min_nominal_mm
     for index, row in enumerate(table.ranges):
@@ -180,7 +200,13 @@ def general_tolerance(
             label = _range_label(low, up_to, first=index == 0)
             if deviation is None:
                 raise ToleranceRangeError(
-                    f"ISO 2768-1 class {cls.letter} is not defined for the {label} range"
+                    f"ISO 2768-1 class {cls.letter} is not defined for the {label} range",
+                    action="select or declare",
+                    subject=f"the tolerance for class {cls.letter} in the {label} range",
+                    source=(
+                        f"a class defined by {table.source} for that range or an explicit "
+                        "design tolerance"
+                    ),
                 )
             return GeneralTolerance(
                 nominal=nominal,
@@ -191,7 +217,10 @@ def general_tolerance(
             )
         low = up_to
     raise ToleranceRangeError(
-        f"{nominal} exceeds ISO 2768-1's {low:g} mm maximum; needs an explicit tolerance"
+        f"{nominal} exceeds ISO 2768-1's {low:g} mm maximum; needs an explicit tolerance",
+        action="declare",
+        subject=f"an explicit tolerance for the {nominal} nominal",
+        source=f"the design requirement or drawing because {table.source} does not cover it",
     )
 
 
@@ -271,7 +300,10 @@ def general_angular_tolerance(
     if not shorter_leg.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"angular tolerance is keyed by the shorter leg length; "
-            f"got {shorter_leg.dimensionality} ({shorter_leg})"
+            f"got {shorter_leg.dimensionality} ({shorter_leg})",
+            action="replace",
+            subject=f"the angular-tolerance shorter leg {shorter_leg}",
+            source="a length quantity governed by ISO 2768-1",
         )
     cls = (
         tolerance_class
@@ -281,7 +313,12 @@ def general_angular_tolerance(
     doc = _angular_table()
     magnitude = shorter_leg.to("mm").magnitude
     if magnitude <= 0:
-        raise ToleranceRangeError(f"shorter leg must be greater than 0 mm; got {shorter_leg}")
+        raise ToleranceRangeError(
+            f"shorter leg must be greater than 0 mm; got {shorter_leg}",
+            action="replace",
+            subject=f"the angular-tolerance shorter leg {shorter_leg}",
+            source=f"a positive shorter-leg length governed by {doc['dataset']['source']}",
+        )
     low = 0.0
     for index, row in enumerate(doc["ranges"]):
         up_to = row["leg_up_to_mm"]
@@ -294,4 +331,9 @@ def general_angular_tolerance(
                 source=doc["dataset"]["source"],
             )
         low = float(up_to)
-    raise ToleranceRangeError("no ISO 2768-1 angular range matched")  # unreachable: open top
+    raise ToleranceRangeError(  # unreachable: open top
+        "no ISO 2768-1 angular range matched",
+        action="declare",
+        subject=f"an angular tolerance for the {shorter_leg} shorter leg",
+        source=f"the design requirement or {doc['dataset']['source']}",
+    )

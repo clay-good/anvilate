@@ -102,7 +102,10 @@ def process_capability(process: str) -> ProcessCapability:
     if row is None:
         known = ", ".join(sorted(doc["processes"]))
         raise ToleranceRangeError(
-            f"no tolerance-capability record for process {process!r}; have {known}"
+            f"no tolerance-capability record for process {process!r}; have {known}",
+            action="replace",
+            subject=f"the tolerance-capability process {process!r}",
+            source=f"a process identifier in {doc['dataset']['source']}; available: {known}",
         )
     return ProcessCapability(
         process=process,
@@ -125,7 +128,10 @@ def tolerance_is_achievable(process: str, demanded_width: Quantity) -> Achievabi
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "
-            f"({demanded_width})"
+            f"({demanded_width})",
+            action="replace",
+            subject=f"the demanded tolerance band {demanded_width}",
+            source="a total length band from the design tolerance declaration",
         )
     cap = process_capability(process)
     demanded_mm = demanded_width.to("mm").magnitude
@@ -155,7 +161,10 @@ def processes_that_can_hold(demanded_width: Quantity) -> list[str]:
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "
-            f"({demanded_width})"
+            f"({demanded_width})",
+            action="replace",
+            subject=f"the demanded tolerance band {demanded_width}",
+            source="a total length band from the design tolerance declaration",
         )
     demanded_mm = demanded_width.to("mm").magnitude
     processes = _table()["processes"]

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from math import sqrt
+from pathlib import Path
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -127,6 +129,41 @@ def test_above_maximum_requires_explicit_tolerance() -> None:
 def test_non_length_nominal_rejected() -> None:
     with pytest.raises(ToleranceRangeError, match="length"):
         general_tolerance(Quantity(magnitude=5, unit="kg"), "m")
+
+
+def test_tolerance_range_refusals_carry_structured_remedies() -> None:
+    with pytest.raises(ToleranceRangeError) as refused:
+        general_tolerance(_mm(0.2), "m")
+
+    error = refused.value
+    assert isinstance(error, ValueError)
+    assert len(error.remedies) == 1
+    remedy = error.remedies[0]
+    assert remedy.action == "declare"
+    assert remedy.subject == "an explicit tolerance for the 0.2 mm nominal"
+    assert "ISO 2768-1" in remedy.source
+
+    root = Path(__file__).parents[1]
+    sites: list[tuple[Path, ast.Call]] = []
+    for relative in (
+        Path("src/anvilate/tolerance/general.py"),
+        Path("src/anvilate/tolerance/iso286.py"),
+        Path("src/anvilate/tolerance/process.py"),
+    ):
+        path = root / relative
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Raise)
+                and isinstance(node.exc, ast.Call)
+                and isinstance(node.exc.func, ast.Name)
+                and node.exc.func.id == "ToleranceRangeError"
+            ):
+                sites.append((relative, node.exc))
+
+    assert len(sites) == 18
+    for path, call in sites:
+        keywords = {keyword.arg for keyword in call.keywords}
+        assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
 
 
 # --- Angular general tolerances (ISO 2768-1) ---

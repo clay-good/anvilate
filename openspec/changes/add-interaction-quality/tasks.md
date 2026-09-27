@@ -65,7 +65,10 @@
       identifiers. The cited-data validity gates now structure their repairs too: insufficient
       material basis names the required property record or explicit basis decision, profile
       applicability names a profile covering the stated contexts, and optical range refusal
-      names a catalogue range covering the requested temperatures. The remaining ordinary
+      names a catalogue range covering the requested temperatures. The complete tolerance
+      range family now follows the same contract: ISO 2768/286, fit-clearance, and process
+      capability refusals name the concrete input and the governing table, declaration, or
+      dataset while retaining `ValueError` compatibility. The remaining ordinary
       `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

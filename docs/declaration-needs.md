@@ -238,7 +238,11 @@ points from the declared schema to a supporting release or reviewed current sche
 `UnknownReferenceError` points from the rejected identifier to the injected live registry and
 its nearest entries. Material-basis, profile-applicability, and ranged optical-property
 refusals name the exact property or profile that cannot be used and the cited record, profile,
-or catalogue range that can replace it. This is progress toward the interaction-quality
+or catalogue range that can replace it. Tolerance-range refusals now cover the whole family:
+ISO 2768 linear and angular lookups, ISO 286 grades and zones, fit-clearance bounds, and
+process-capability lookups all identify the rejected input and the standard table, design
+declaration, or process dataset that can repair it while retaining `ValueError` compatibility.
+This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
 

@@ -95,13 +95,21 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
         raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
-            f"standard tolerance needs a length; got {nominal.dimensionality} ({nominal})"
+            f"standard tolerance needs a length; got {nominal.dimensionality} ({nominal})",
+            action="replace",
+            subject=f"the ISO 286 basic size {nominal}",
+            source="a positive length quantity governed by ISO 286-1",
         )
     it = _parse_grade(grade)
     doc = _table()
     magnitude = nominal.to("mm").magnitude
     if magnitude <= 0:
-        raise ToleranceRangeError(f"basic size must be greater than 0 mm; got {nominal}")
+        raise ToleranceRangeError(
+            f"basic size must be greater than 0 mm; got {nominal}",
+            action="replace",
+            subject=f"the ISO 286 basic size {nominal}",
+            source=f"a positive basic size governed by {doc['dataset']['source']}",
+        )
     low = 0.0
     for index, row in enumerate(doc["ranges"]):
         up_to = float(row["up_to_mm"])
@@ -110,7 +118,10 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
             if it not in widths:
                 grades = ", ".join(f"IT{g}" for g in sorted(widths))
                 raise ToleranceRangeError(
-                    f"IT{it} is not in the encoded ISO 286-1 table (have {grades})"
+                    f"IT{it} is not in the encoded ISO 286-1 table (have {grades})",
+                    action="select",
+                    subject=f"the tolerance grade IT{it} for basic size {nominal}",
+                    source=f"an encoded grade in {doc['dataset']['source']}: {grades}",
                 )
             return StandardTolerance(
                 nominal=nominal,
@@ -122,7 +133,13 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
         low = up_to
     raise ToleranceRangeError(
         f"{nominal} exceeds ISO 286-1's {doc['max_nominal_mm']:g} mm maximum "
-        "for this table; needs an explicit tolerance"
+        "for this table; needs an explicit tolerance",
+        action="declare",
+        subject=f"an explicit tolerance for the {nominal} basic size",
+        source=(
+            f"the design requirement or drawing because {doc['dataset']['source']} "
+            "does not cover it"
+        ),
     )
 
 
@@ -227,7 +244,13 @@ def _delta_correction(letter: str, grade: int, nominal: Quantity) -> float:
         up = letter.upper()
         raise ToleranceRangeError(
             f"the delta-corrected hole '{up}{grade}' is out of range; the encoded "
-            f"ISO 286 special rule covers {up}{_HOLE_MIN_GRADE} through {up}{cap}"
+            f"ISO 286 special rule covers {up}{_HOLE_MIN_GRADE} through {up}{cap}",
+            action="select",
+            subject=f"the ISO 286 hole zone {up}{grade}",
+            source=(
+                f"the {up}{_HOLE_MIN_GRADE} through {up}{cap} special-rule band in "
+                f"{_deviation_table()['dataset']['source']}"
+            ),
         )
     it_n = standard_tolerance(nominal, grade).width.to("mm").magnitude
     it_prev = standard_tolerance(nominal, grade - 1).width.to("mm").magnitude
@@ -323,7 +346,10 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
         encoded = ", ".join(sorted(_ENCODED_LETTERS))
         raise ToleranceRangeError(
             f"fundamental deviation for zone '{letter}' is not yet encoded; "
-            f"the encoded letters are {encoded} (each with its uppercase hole form)"
+            f"the encoded letters are {encoded} (each with its uppercase hole form)",
+            action="select",
+            subject=f"the ISO 286 zone {letter!r}",
+            source=f"an encoded zone in {_deviation_table()['dataset']['source']}: {encoded}",
         )
     grade_tol = standard_tolerance(nominal, grade)
     hole = letter.isupper()
@@ -360,7 +386,10 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
             raise ToleranceRangeError(
                 f"the {base} zone is encoded only up to {max_mm:g} mm, "
                 f"where the coarse diameter steps are exact; {nominal} needs the "
-                "finer-stepped table"
+                "finer-stepped table",
+                action="supply",
+                subject=f"the finer-stepped ISO 286 {letter}{grade_tol.grade} zone at {nominal}",
+                source=f"an ISO 286 table extending {_deviation_table()['dataset']['source']}",
             )
         ei = _fundamental_dev("ei", base, nominal_mm)
         if hole:
@@ -426,7 +455,10 @@ class Fit(RevalidatedModel):
         for bound in (min_required, max_required):
             if not bound.has_dimension("[length]"):
                 raise ToleranceRangeError(
-                    f"clearance requirement must be a length; got {bound.dimensionality} ({bound})"
+                    f"clearance requirement must be a length; got {bound.dimensionality} ({bound})",
+                    action="replace",
+                    subject=f"the clearance requirement {bound} for fit {self.designation}",
+                    source="a length bound from the fit's design requirement",
                 )
         lo = self.min_clearance.to("mm").magnitude
         hi = self.max_clearance.to("mm").magnitude
