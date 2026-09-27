@@ -29,6 +29,7 @@ from __future__ import annotations
 from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
+from ..refusal import RefusalError, Remedy
 from ..scorecard import Scorecard
 
 __all__ = [
@@ -59,7 +60,7 @@ NOTICE_KEY = "ANVILATE_EXPORT_NOTICE"
 BLOCKING_KEY = "ANVILATE_EXPORT_BLOCKING"
 
 
-class ExportRefused(RuntimeError):
+class ExportRefused(RefusalError):
     """Raised when an export is attempted on a part whose acceptance checks did not pass.
 
     Carries the blocking check names so the message says *what* is unmet rather than that
@@ -73,7 +74,14 @@ class ExportRefused(RuntimeError):
         super().__init__(
             f"export is gated on the acceptance checks passing, and these did not: {named}. "
             f"Pass override=True to export anyway; the file will be watermarked as "
-            f"unvalidated"
+            f"unvalidated",
+            remedies=(
+                Remedy(
+                    action="pass override=True for",
+                    subject=f"the export blocked by {named}",
+                    source="the export policy and the blocking checks named in this refusal",
+                ),
+            ),
         )
 
 

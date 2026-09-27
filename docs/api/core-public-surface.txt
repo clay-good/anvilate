@@ -384,6 +384,8 @@ profile.SuppliedValue
 profile.Profile
 profile.ProfileBinding
 profile.OutsideApplicability
+refusal.RefusalError
+refusal.Remedy
 environment_profiles.BENCHTOP
 environment_profiles.HANDHELD
 environment_profiles.VEHICLE_MOUNTED

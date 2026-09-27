@@ -104,6 +104,12 @@ def test_a_failing_card_refuses_and_names_the_check():
     # The message has to tell the caller the door they are allowed to open, or the only
     # way past a refusal they meant is to go around the gate.
     assert "override=True" in str(refusal.value)
+    assert refusal.value.remedies[0].model_dump() == {
+        "action": "pass override=True for",
+        "subject": "the export blocked by net tension",
+        "source": "the export policy and the blocking checks named in this refusal",
+    }
+    assert "using the export policy" in str(refusal.value.remedies[0])
 
 
 def test_a_check_that_could_not_run_blocks_as_hard_as_one_that_failed():

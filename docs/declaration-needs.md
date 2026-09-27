@@ -215,6 +215,20 @@ The sweep sees a refusal however it is spelled, whether as a status keyword,
 a status chosen in a branch and held in a local, or an `update` dict on a copy. Every unit a
 declared need offers is also parsed and checked against the dimension it states.
 
+## Raised refusals
+
+A `NOT_EVALUATED` result remains data on a scorecard. A raised refusal now has a parallel
+structured contract in `anvilate.refusal`: each `Remedy` names the action, its concrete
+subject, and the source or authority the caller should use. `RefusalError` refuses to exist
+without at least one such record. Its message remains plain text for people and existing
+callers; `remedies` lets a program present the next step without parsing that text.
+
+The export gate is the first migrated raised boundary. `ExportRefused.remedies` tells the
+caller to apply the explicit override to the export blocked by the named checks, using the
+export policy and those checks. This is progress toward the interaction-quality requirement, not
+a claim that every Python `ValueError` has been migrated; ordinary validation exceptions
+remain the open inventory.
+
 ## Status
 
 This is the consolidated report and its CLI rendering

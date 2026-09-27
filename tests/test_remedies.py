@@ -71,6 +71,19 @@ def test_the_remedy_gate_catches_a_pronoun_and_a_bare_imperative() -> None:
     assert not _SUBJECTLESS.search("state the assumption or leave the line out")
 
 
+def test_a_raised_refusal_cannot_exist_without_a_structured_remedy() -> None:
+    """The first raised-refusal contract: action, subject, and source are all required."""
+    import pytest
+    from pydantic import ValidationError
+
+    from anvilate.refusal import RefusalError, Remedy
+
+    with pytest.raises(ValidationError, match="blank"):
+        Remedy(action="supply", subject=" ", source="the design basis")
+    with pytest.raises(ValueError, match="at least one structured remedy"):
+        RefusalError("cannot continue", remedies=())
+
+
 def _pack_screens() -> list[tuple[str, object, object]]:
     """Every pack screen with the element model its first parameter takes."""
     import importlib
