@@ -41368,6 +41368,84 @@ def test_the_circular_shaft_torsion_functions_guard_like_the_rest_of_their_modul
     assert shaft_torsional_stress(torque=_q("500 N*m"), diameter=_q("40 mm")).magnitude > 0
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "torque_from_power",
+            {"power": _q("10 kW"), "rotational_speed": _q("0 rpm")},
+            "rotational_speed",
+            "the shaft operating load case or dynamometer record",
+        ),
+        (
+            "shaft_twist_angle",
+            {
+                "torque": _q("500 N*m"),
+                "length": _q("1 m"),
+                "diameter": _q("40 mm"),
+                "shear_modulus": _q("0 GPa"),
+            },
+            "shear_modulus",
+            "the material certificate or cited mechanical-property record",
+        ),
+        (
+            "open_section_torsion_constant",
+            {"rectangles": ((_q("100 mm"),),)},
+            "rectangles[0]",
+            "the shaft or section drawing and selected stock size",
+        ),
+        (
+            "shaft_diameter_de_goodman",
+            {
+                "alternating_bending_moment": _q("100 N*m"),
+                "mean_torque": _q("50 N*m"),
+                "endurance_limit": _q("200 MPa"),
+                "ultimate_strength": _q("600 MPa"),
+                "required_safety_factor": 0.0,
+            },
+            "required_safety_factor",
+            "the shaft design basis or governing fatigue calculation",
+        ),
+    ),
+)
+def test_torsion_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_torsion_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/torsion.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_torsion_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 39
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_a_thin_wall_shell_refuses_a_vacuum_because_buckling_is_the_limit_state():
     """A negative membrane stress is not the answer to "what does external pressure do".
 

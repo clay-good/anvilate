@@ -24,8 +24,49 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_SHAFT_LOAD_SOURCE = "the shaft operating load case or dynamometer record"
+_SHAFT_GEOMETRY_SOURCE = "the shaft or section drawing and selected stock size"
+_SHAFT_MATERIAL_SOURCE = "the material certificate or cited mechanical-property record"
+_SHAFT_DESIGN_SOURCE = "the shaft design basis or governing fatigue calculation"
+
+
+class _TorsionInputError(RefusalError, ValueError):
+    """A torsion input that cannot be used without correction."""
+
+
+def _torsion_refusal(message: str, *, subject: str, source: str) -> _TorsionInputError:
+    return _TorsionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _torsion_input_source(name: str) -> str:
+    if name in {
+        "power",
+        "rotational_speed",
+        "torque",
+        "bending_moment",
+        "alternating_bending_moment",
+        "mean_bending_moment",
+        "mean_torque",
+        "alternating_torque",
+    }:
+        return _SHAFT_LOAD_SOURCE
+    if name in {
+        "shear_modulus",
+        "allowable_shear",
+        "yield_strength",
+        "endurance_limit",
+        "ultimate_strength",
+    }:
+        return _SHAFT_MATERIAL_SOURCE
+    return _SHAFT_GEOMETRY_SOURCE
+
 
 __all__ = [
     "torque_from_power",
@@ -63,10 +104,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _torsion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_torsion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _torsion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_torsion_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -85,7 +132,11 @@ def _require_positive(value: Quantity, name: str) -> None:
     ZeroDivisionError rather than a message naming the operand.
     """
     if value.magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _torsion_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_torsion_input_source(name),
+        )
 
 
 def _require_torque_magnitude(torque: Quantity) -> None:
@@ -96,9 +147,11 @@ def _require_torque_magnitude(torque: Quantity) -> None:
     back-driving torque is a real load, and its magnitude is what the shaft feels.
     """
     if torque.magnitude == 0:
-        raise ValueError(
+        raise _torsion_refusal(
             "torque is zero: there is no torsional stress or twist to report. A load case "
-            "that does not twist the shaft has nothing to evaluate."
+            "that does not twist the shaft has nothing to evaluate.",
+            subject="torque",
+            source=_SHAFT_LOAD_SOURCE,
         )
 
 
@@ -120,9 +173,17 @@ def torque_from_power(*, power: Quantity, rotational_speed: Quantity) -> Quantit
     _require(power, "[power]", "power")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if angular_speed_rad_per_s(rotational_speed, name="rotational_speed") <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _torsion_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_SHAFT_LOAD_SOURCE,
+        )
     if power.to("W").magnitude <= 0:
-        raise ValueError(f"power must be positive; got {power}")
+        raise _torsion_refusal(
+            f"power must be positive; got {power}",
+            subject="power",
+            source=_SHAFT_LOAD_SOURCE,
+        )
     return _as_quantity(power.pint / rotational_speed.pint, "N*m")
 
 
@@ -141,9 +202,17 @@ def power_from_torque(*, torque: Quantity, rotational_speed: Quantity) -> Quanti
     t = torque.to("N*m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if t <= 0:
-        raise ValueError(f"torque must be positive; got {torque}")
+        raise _torsion_refusal(
+            f"torque must be positive; got {torque}",
+            subject="torque",
+            source=_SHAFT_LOAD_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _torsion_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_SHAFT_LOAD_SOURCE,
+        )
     return Quantity(magnitude=t * omega, unit="W")
 
 
@@ -162,9 +231,11 @@ def polar_second_moment_hollow(*, outer_diameter: Quantity, inner_diameter: Quan
     do = outer_diameter.to("mm").magnitude
     di = inner_diameter.to("mm").magnitude
     if not 0 <= di < do:
-        raise ValueError(
+        raise _torsion_refusal(
             f"inner_diameter ({inner_diameter}) must be non-negative and below "
-            f"outer_diameter ({outer_diameter})"
+            f"outer_diameter ({outer_diameter})",
+            subject="inner and outer shaft diameters",
+            source=_SHAFT_GEOMETRY_SOURCE,
         )
     return _as_quantity(pi * (outer_diameter.pint**4 - inner_diameter.pint**4) / 32, "mm**4")
 
@@ -208,7 +279,11 @@ def shaft_von_mises_stress(
     _require(torque, "[force] * [length]", "torque")
     _require(diameter, "[length]", "diameter")
     if diameter.magnitude <= 0:
-        raise ValueError(f"diameter must be positive; got {diameter}")
+        raise _torsion_refusal(
+            f"diameter must be positive; got {diameter}",
+            subject="diameter",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     m = bending_moment.to("N*mm").magnitude
     t = torque.to("N*mm").magnitude
     d = diameter.to("mm").magnitude
@@ -237,11 +312,19 @@ def shaft_diameter_for_torque(
     _require(torque, "[force] * [length]", "torque")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _torsion_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     t = torque.to("N*mm").magnitude
     tau = allowable_shear.to("MPa").magnitude
     if tau <= 0:
-        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+        raise _torsion_refusal(
+            f"allowable_shear must be positive; got {allowable_shear}",
+            subject="allowable_shear",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     d_min = (16 * required_safety_factor * t / (pi * tau)) ** (1.0 / 3.0)
     return Quantity(magnitude=d_min, unit="mm")
 
@@ -275,12 +358,20 @@ def shaft_diameter_for_bending_torsion(
     _require(torque, "[force] * [length]", "torque")
     _require(yield_strength, "[pressure]", "yield_strength")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _torsion_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     m = bending_moment.to("N*mm").magnitude
     t = torque.to("N*mm").magnitude
     sy = yield_strength.to("MPa").magnitude
     if sy <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _torsion_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     equivalent = sqrt(m * m + 0.75 * t * t)
     d_min = (32 * required_safety_factor * equivalent / (pi * sy)) ** (1.0 / 3.0)
     return Quantity(magnitude=d_min, unit="mm")
@@ -335,11 +426,23 @@ def shaft_diameter_de_goodman(
     se = endurance_limit.to("MPa").magnitude
     sut = ultimate_strength.to("MPa").magnitude
     if se <= 0 or sut <= 0:
-        raise ValueError("endurance_limit and ultimate_strength must be positive")
+        raise _torsion_refusal(
+            "endurance_limit and ultimate_strength must be positive",
+            subject="endurance_limit and ultimate_strength",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     if bending_fatigue_factor <= 0 or torsion_fatigue_factor <= 0:
-        raise ValueError("the fatigue stress-concentration factors must be positive")
+        raise _torsion_refusal(
+            "the fatigue stress-concentration factors must be positive",
+            subject="fatigue stress-concentration factors",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _torsion_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     alternating = sqrt(
         4.0 * (bending_fatigue_factor * m_a) ** 2 + 3.0 * (torsion_fatigue_factor * t_a) ** 2
     )
@@ -399,17 +502,31 @@ def shaft_diameter_de_gerber(
     se = endurance_limit.to("MPa").magnitude
     sut = ultimate_strength.to("MPa").magnitude
     if se <= 0 or sut <= 0:
-        raise ValueError("endurance_limit and ultimate_strength must be positive")
+        raise _torsion_refusal(
+            "endurance_limit and ultimate_strength must be positive",
+            subject="endurance_limit and ultimate_strength",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     if bending_fatigue_factor <= 0 or torsion_fatigue_factor <= 0:
-        raise ValueError("the fatigue stress-concentration factors must be positive")
+        raise _torsion_refusal(
+            "the fatigue stress-concentration factors must be positive",
+            subject="fatigue stress-concentration factors",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _torsion_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_SHAFT_DESIGN_SOURCE,
+        )
     a = sqrt(4.0 * (bending_fatigue_factor * m_a) ** 2 + 3.0 * (torsion_fatigue_factor * t_a) ** 2)
     b = sqrt(4.0 * (bending_fatigue_factor * m_m) ** 2 + 3.0 * (torsion_fatigue_factor * t_m) ** 2)
     if a <= 0:
-        raise ValueError(
+        raise _torsion_refusal(
             "the alternating load term is zero — there is no fatigue to size for; "
-            "use the static shaft_diameter_for_bending_torsion instead"
+            "use the static shaft_diameter_for_bending_torsion instead",
+            subject="alternating shaft load",
+            source=_SHAFT_LOAD_SOURCE,
         )
     root = 1.0 + sqrt(1.0 + (2.0 * b * se / (a * sut)) ** 2)
     d_min = (8.0 * a * required_safety_factor / (pi * se) * root) ** (1.0 / 3.0)
@@ -440,7 +557,11 @@ def hollow_shaft_diameter_for_bending_torsion(
     Source: Shigley's *Mechanical Engineering Design*, combined bending and torsion of shafts.
     """
     if not 0.0 <= bore_ratio < 1.0:
-        raise ValueError(f"bore_ratio must be in [0, 1); got {bore_ratio}")
+        raise _torsion_refusal(
+            f"bore_ratio must be in [0, 1); got {bore_ratio}",
+            subject="bore_ratio",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     solid = shaft_diameter_for_bending_torsion(
         bending_moment=bending_moment,
         torque=torque,
@@ -566,11 +687,17 @@ def _rectangular_tube_median(width: Quantity, height: Quantity, wall_thickness: 
     h = height.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _torsion_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     if not (2 * t < w and 2 * t < h):
-        raise ValueError(
+        raise _torsion_refusal(
             f"wall_thickness ({wall_thickness}) must be under half of both the width "
-            f"({width}) and the height ({height}) to leave a cavity"
+            f"({width}) and the height ({height}) to leave a cavity",
+            subject="rectangular tube wall and outer dimensions",
+            source=_SHAFT_GEOMETRY_SOURCE,
         )
     # Median (wall-centreline) side lengths: one half-wall in from each outer face.
     return w - t, h - t
@@ -656,11 +783,17 @@ def _thin_open_strip_dims(width: Quantity, thickness: Quantity):
     b = width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if b <= 0 or t <= 0:
-        raise ValueError("width and thickness must be positive")
+        raise _torsion_refusal(
+            "width and thickness must be positive",
+            subject="width and thickness",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     if b < t:
-        raise ValueError(
+        raise _torsion_refusal(
             f"width ({width}) is the long dimension and must be at least the "
-            f"thickness ({thickness})"
+            f"thickness ({thickness})",
+            subject="thin-open width and thickness",
+            source=_SHAFT_GEOMETRY_SOURCE,
         )
     # The docstrings ask for b/t ≳ 10 and the validator only enforced b ≥ t, so a square
     # bar was accepted: J came back 2.37x too STIFF, the twist 2.37x understated (216.8°
@@ -670,11 +803,13 @@ def _thin_open_strip_dims(width: Quantity, thickness: Quantity):
     # seam of a series solution; `rectangular_bar_torsion_constant` in this same file is
     # the exact form for anything stubbier.
     if b / t < _THIN_OPEN_STRIP_RATIO_LIMIT:
-        raise ValueError(
+        raise _torsion_refusal(
             f"width/thickness = {b / t:.4g} is below the b/t = "
             f"{_THIN_OPEN_STRIP_RATIO_LIMIT:.0f} this thin-open form holds to (it wants "
             f"b/t ≳ 10). At b/t = 1 it reports a section 2.37x too stiff and a peak shear "
-            f"37.5% low, both unconservative. Use the exact rectangular_bar_* functions."
+            f"37.5% low, both unconservative. Use the exact rectangular_bar_* functions.",
+            subject="thin-open width-to-thickness ratio",
+            source=_SHAFT_GEOMETRY_SOURCE,
         )
     return b, t
 
@@ -710,14 +845,24 @@ def open_section_torsion_constant(
     mm⁴.
     """
     if not isinstance(rectangles, Sequence):
-        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
+        raise _torsion_refusal(
+            f"rectangles must be a sequence, not a single value; got {rectangles!r}",
+            subject="rectangles",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     if not rectangles:
-        raise ValueError("rectangles must be a non-empty sequence")
+        raise _torsion_refusal(
+            "rectangles must be a non-empty sequence",
+            subject="rectangles",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     total = 0.0
     for i, rect in enumerate(rectangles):
         if not isinstance(rect, Sequence) or len(rect) != 2:
-            raise ValueError(
-                f"rectangles[{i}] must be a (long_dimension, thickness) pair; got {rect!r}"
+            raise _torsion_refusal(
+                f"rectangles[{i}] must be a (long_dimension, thickness) pair; got {rect!r}",
+                subject=f"rectangles[{i}]",
+                source=_SHAFT_GEOMETRY_SOURCE,
             )
         b, t = _thin_open_strip_dims(rect[0], rect[1])
         total += b * t**3 / 3.0
@@ -774,7 +919,11 @@ def _rectangular_bar_sides(width: Quantity, thickness: Quantity) -> tuple[float,
     w = width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if w <= 0 or t <= 0:
-        raise ValueError("width and thickness must be positive")
+        raise _torsion_refusal(
+            "width and thickness must be positive",
+            subject="width and thickness",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     return (w, t) if w >= t else (t, w)
 
 
@@ -822,7 +971,11 @@ def rectangular_bar_twist_angle(
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _torsion_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     _require(shear_modulus, "[pressure]", "shear_modulus")
     a, b = _rectangular_bar_sides(width, thickness)
     j = Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4").pint
@@ -860,11 +1013,17 @@ def _elliptical_axes(semi_major_axis: Quantity, semi_minor_axis: Quantity) -> tu
     a = semi_major_axis.to("mm").magnitude
     b = semi_minor_axis.to("mm").magnitude
     if a <= 0 or b <= 0:
-        raise ValueError("semi_major_axis and semi_minor_axis must be positive")
+        raise _torsion_refusal(
+            "semi_major_axis and semi_minor_axis must be positive",
+            subject="semi-major and semi-minor axes",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     if b > a:
-        raise ValueError(
+        raise _torsion_refusal(
             f"semi_minor_axis ({semi_minor_axis}) must not exceed semi_major_axis "
-            f"({semi_major_axis})"
+            f"({semi_major_axis})",
+            subject="semi-major and semi-minor axes",
+            source=_SHAFT_GEOMETRY_SOURCE,
         )
     return a, b
 
@@ -907,7 +1066,11 @@ def elliptical_bar_twist_angle(
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _torsion_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     _require(shear_modulus, "[pressure]", "shear_modulus")
     a, b = _elliptical_axes(semi_major_axis, semi_minor_axis)
     jt = Quantity(magnitude=pi * a**3 * b**3 / (a**2 + b**2), unit="mm**4").pint
@@ -919,7 +1082,11 @@ def _triangle_side(side_length: Quantity) -> float:
     _require(side_length, "[length]", "side_length")
     s = side_length.to("mm").magnitude
     if s <= 0:
-        raise ValueError(f"side_length must be positive; got {side_length}")
+        raise _torsion_refusal(
+            f"side_length must be positive; got {side_length}",
+            subject="side_length",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     return s
 
 
@@ -954,7 +1121,11 @@ def triangular_bar_twist_angle(
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _torsion_refusal(
+            f"length must be positive; got {length}",
+            subject="length",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     _require(shear_modulus, "[pressure]", "shear_modulus")
     s = _triangle_side(side_length)
     jt = Quantity(magnitude=sqrt(3.0) * s**4 / 80.0, unit="mm**4").pint
@@ -982,8 +1153,16 @@ def thin_closed_tube_torsional_stress(
     am = enclosed_area.to("mm**2").magnitude
     t = wall_thickness.to("mm").magnitude
     if am <= 0:
-        raise ValueError(f"enclosed_area must be positive; got {enclosed_area}")
+        raise _torsion_refusal(
+            f"enclosed_area must be positive; got {enclosed_area}",
+            subject="enclosed_area",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _torsion_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_SHAFT_GEOMETRY_SOURCE,
+        )
     stress = torque.pint / (2 * enclosed_area.pint * wall_thickness.pint)
     return _as_quantity(stress, "MPa")

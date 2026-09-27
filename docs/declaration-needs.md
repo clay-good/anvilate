@@ -272,6 +272,10 @@ The complete compressible-flow input family is structured too. Its 27 refusal si
 the rejected flow state, gas property, nozzle geometry, discharge coefficient, or shock condition
 and point to the operating case, cited thermodynamic data, nozzle drawing, or flow-test record
 that can replace it.
+The complete shaft-torsion input family follows the contract at all 39 refusal sites. Rejected
+loads, speeds, section dimensions, material properties, fatigue factors, and design margins point
+to the operating case, dynamometer record, shaft drawing, material certificate, or governing
+fatigue calculation that supplies the correction.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

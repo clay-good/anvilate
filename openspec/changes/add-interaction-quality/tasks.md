@@ -92,6 +92,9 @@
       complete compressible-flow family adds another 27 structured sites for flow states, gas
       properties, nozzle geometry, discharge coefficients, and shock conditions, sourced to the
       operating case, cited thermodynamic data, nozzle drawing, or flow-test record. The
+      complete shaft-torsion family adds 39 structured sites for duty, speed, section geometry,
+      material properties, fatigue factors, and margins, sourced to the operating case,
+      dynamometer record, shaft drawing, material certificate, or governing calculation. The
       remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
