@@ -29,7 +29,29 @@ from math import pi
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_RIVET_GEOMETRY_SOURCE = "the joint drawing or verified rivet-and-plate geometry record"
+_RIVET_ALLOWABLE_SOURCE = "the governing material specification or approved allowable-stress record"
+
+
+class _RivetedJointInputError(RefusalError, ValueError):
+    """A riveted-joint input that cannot be used without correction."""
+
+
+def _rivet_refusal(message: str, *, subject: str, source: str) -> _RivetedJointInputError:
+    return _RivetedJointInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rivet_input_source(name: str) -> str:
+    if name.startswith("allowable_"):
+        return _RIVET_ALLOWABLE_SOURCE
+    return _RIVET_GEOMETRY_SOURCE
+
 
 __all__ = [
     "RivetedJointStrength",
@@ -39,10 +61,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rivet_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rivet_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rivet_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rivet_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -105,14 +133,26 @@ def riveted_joint_efficiency(
     _require(allowable_shear, "[pressure]", "allowable_shear")
     _require(allowable_bearing, "[pressure]", "allowable_bearing")
     if rivets_per_pitch < 1:
-        raise ValueError(f"rivets_per_pitch must be a positive integer; got {rivets_per_pitch}")
+        raise _rivet_refusal(
+            f"rivets_per_pitch must be a positive integer; got {rivets_per_pitch}",
+            subject="rivets_per_pitch",
+            source=_RIVET_GEOMETRY_SOURCE,
+        )
     p = pitch.to("mm").magnitude
     d = rivet_diameter.to("mm").magnitude
     t = plate_thickness.to("mm").magnitude
     if d <= 0 or t <= 0:
-        raise ValueError("rivet_diameter and plate_thickness must be positive")
+        raise _rivet_refusal(
+            "rivet_diameter and plate_thickness must be positive",
+            subject="rivet_diameter and plate_thickness",
+            source=_RIVET_GEOMETRY_SOURCE,
+        )
     if p <= d:
-        raise ValueError(f"pitch ({pitch}) must exceed rivet_diameter ({rivet_diameter})")
+        raise _rivet_refusal(
+            f"pitch ({pitch}) must exceed rivet_diameter ({rivet_diameter})",
+            subject="pitch and rivet_diameter",
+            source=_RIVET_GEOMETRY_SOURCE,
+        )
     st = allowable_tension.to("MPa").magnitude
     tau = allowable_shear.to("MPa").magnitude
     sc = allowable_bearing.to("MPa").magnitude
@@ -122,7 +162,11 @@ def riveted_joint_efficiency(
         (sc, "allowable_bearing"),
     ):
         if value <= 0:
-            raise ValueError(f"{name} must be positive")
+            raise _rivet_refusal(
+                f"{name} must be positive",
+                subject=name,
+                source=_RIVET_ALLOWABLE_SOURCE,
+            )
     n = rivets_per_pitch
     tearing = (p - d) * t * st  # N
     shearing = n * (pi / 4.0) * d**2 * tau

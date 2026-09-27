@@ -14336,6 +14336,101 @@ def test_o_ring_gland_squeeze_fill_and_stretch():
         o.o_ring_stretch_fraction(inner_diameter=_q("25 mm"), groove_diameter=_q("24 mm"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "riveted_joint_efficiency",
+            {
+                "pitch": _q("50 mm"),
+                "rivet_diameter": _q("20 mm"),
+                "plate_thickness": _q("10 mm"),
+                "allowable_tension": _q("80 MPa"),
+                "allowable_shear": _q("60 MPa"),
+                "allowable_bearing": _q("120 MPa"),
+                "rivets_per_pitch": 0,
+            },
+            "rivets_per_pitch",
+            "the joint drawing or verified rivet-and-plate geometry record",
+        ),
+        (
+            "riveted_joint_efficiency",
+            {
+                "pitch": _q("50 mm"),
+                "rivet_diameter": _q("20 mm"),
+                "plate_thickness": _q("10 mm"),
+                "allowable_tension": _q("80 MPa"),
+                "allowable_shear": _q("0 MPa"),
+                "allowable_bearing": _q("120 MPa"),
+            },
+            "allowable_shear",
+            "the governing material specification or approved allowable-stress record",
+        ),
+        (
+            "o_ring_squeeze_fraction",
+            {
+                "cross_section_diameter": _q("0 mm"),
+                "gland_depth": _q("2.79 mm"),
+            },
+            "cross_section_diameter",
+            "the O-ring manufacturer catalogue or verified seal size record",
+        ),
+        (
+            "o_ring_stretch_fraction",
+            {
+                "inner_diameter": _q("25 mm"),
+                "groove_diameter": _q("24 mm"),
+            },
+            "groove_diameter and inner_diameter",
+            "the seal gland drawing or approved gland-design table",
+        ),
+    ),
+)
+def test_joint_and_seal_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("rivet", "_rivet_refusal", 6),
+        ("o_ring", "_o_ring_refusal", 5),
+    ),
+)
+def test_every_joint_and_seal_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_sling_leg_tension_multiplies_with_a_flatter_angle():
     from math import cos, radians, sin
 

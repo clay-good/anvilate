@@ -315,6 +315,9 @@ drawings, control plans, qualified capability studies, and approved tolerance wo
 The complete accumulator and tank-flow families follow the contract at all 15 refusal sites. Vessel
 volume, pressures, duty models, tank geometry, liquid levels, and discharge coefficients point to
 catalogues, operating cases, drawings, calibrated measurements, or orifice records.
+The complete riveted-joint and O-ring families follow the contract at all 11 refusal sites. Joint
+geometry, rivet counts, material allowables, seal sizes, and gland dimensions point to drawings,
+material specifications, approved stress records, manufacturer catalogues, or gland-design tables.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

@@ -25,7 +25,29 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_O_RING_SIZE_SOURCE = "the O-ring manufacturer catalogue or verified seal size record"
+_O_RING_GLAND_SOURCE = "the seal gland drawing or approved gland-design table"
+
+
+class _ORingInputError(RefusalError, ValueError):
+    """An O-ring input that cannot be used without correction."""
+
+
+def _o_ring_refusal(message: str, *, subject: str, source: str) -> _ORingInputError:
+    return _ORingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _o_ring_input_source(name: str) -> str:
+    if name in {"cross_section_diameter", "inner_diameter"}:
+        return _O_RING_SIZE_SOURCE
+    return _O_RING_GLAND_SOURCE
+
 
 __all__ = [
     "o_ring_squeeze_fraction",
@@ -36,14 +58,24 @@ __all__ = [
 
 def _positive_mm(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _o_ring_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_o_ring_input_source(name),
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(
-            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+        raise _o_ring_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_o_ring_input_source(name),
         )
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _o_ring_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_o_ring_input_source(name),
+        )
     return magnitude
 
 
@@ -59,9 +91,11 @@ def o_ring_squeeze_fraction(*, cross_section_diameter: Quantity, gland_depth: Qu
     cs = _positive_mm(cross_section_diameter, "cross_section_diameter")
     e = _positive_mm(gland_depth, "gland_depth")
     if e >= cs:
-        raise ValueError(
+        raise _o_ring_refusal(
             f"gland_depth ({e} mm) must be less than cross_section_diameter ({cs} mm) "
-            "for the O-ring to be squeezed"
+            "for the O-ring to be squeezed",
+            subject="gland_depth and cross_section_diameter",
+            source=_O_RING_GLAND_SOURCE,
         )
     return (cs - e) / cs
 
@@ -95,7 +129,9 @@ def o_ring_stretch_fraction(*, inner_diameter: Quantity, groove_diameter: Quanti
     id_ = _positive_mm(inner_diameter, "inner_diameter")
     groove = _positive_mm(groove_diameter, "groove_diameter")
     if groove < id_:
-        raise ValueError(
-            f"groove_diameter ({groove} mm) must be at least the O-ring inner_diameter ({id_} mm)"
+        raise _o_ring_refusal(
+            f"groove_diameter ({groove} mm) must be at least the O-ring inner_diameter ({id_} mm)",
+            subject="groove_diameter and inner_diameter",
+            source=_O_RING_GLAND_SOURCE,
         )
     return (groove - id_) / id_
