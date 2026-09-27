@@ -47086,6 +47086,96 @@ def test_the_stability_discriminant_never_goes_negative():
     assert discriminant(0.9) == pytest.approx(1.0 / 19.0, rel=1e-12)
 
 
+@pytest.mark.parametrize(
+    "case,subject,source",
+    (
+        (
+            "duration",
+            "duration",
+            "the governing NDS edition and selected design conditions",
+        ),
+        (
+            "material",
+            "reference_value",
+            "the grade stamp, material certificate, cited NDS Supplement table, or project "
+            "specification",
+        ),
+        (
+            "geometry",
+            "width and depth",
+            "the timber member drawing or verified section dimensions",
+        ),
+        (
+            "load",
+            "bending_stress",
+            "the governing load combination and timber member demand analysis",
+        ),
+        (
+            "screen",
+            "buckling_stress and reference_bending_value",
+            "the completed NDS strength calculation and supporting declarations",
+        ),
+    ),
+)
+def test_nds_timber_refusals_carry_structured_remedies(case, subject, source):
+    from anvilate.analysis import (
+        nds_adjusted_design_value,
+        nds_beam_stability_factor,
+        nds_bending_scorecard,
+        nds_load_duration_factor,
+        nds_shear_stress,
+    )
+    from anvilate.refusal import RefusalError
+
+    def invoke():
+        if case == "duration":
+            return nds_load_duration_factor("unknown")
+        if case == "material":
+            return nds_adjusted_design_value(reference_value=_q("1 mm"), factors={})
+        if case == "geometry":
+            return nds_shear_stress(shear_force=_q("1 kN"), width=_q("1 MPa"), depth=_q("100 mm"))
+        if case == "load":
+            return nds_bending_scorecard(
+                "beam", bending_stress=_q("1 mm"), adjusted_bending_value=_q("10 MPa")
+            )
+        return nds_beam_stability_factor(
+            buckling_stress=_q("0 MPa"), reference_bending_value=_q("10 MPa")
+        )
+
+    with pytest.raises(ValueError) as refused:
+        invoke()
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_nds_timber_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/nds_timber.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_timber_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 57
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 # --- EN 1993-1-9 §8: the elastic limit on a nominal stress range -----------------------
 
 

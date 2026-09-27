@@ -212,6 +212,11 @@
       properties, buckling constants, ADM factors, member demands, heat-affected properties, and
       completed strength screens, sourced to drawings, mill certificates, cited ADM tables, project
       and welding specifications, load analyses, or the governing Aluminum Design Manual criteria.
+      The complete NDS timber-analysis family adds 57 structured sites for member and bearing
+      geometry, reference and adjusted design values, factor selections, applied forces and
+      stresses, stability inputs, and completed interaction screens, sourced to timber drawings,
+      grade or material records, cited NDS Supplement tables, verified load analyses, or the
+      governing NDS criteria.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

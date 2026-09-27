@@ -21,6 +21,7 @@ from enum import StrEnum
 from math import isfinite, prod, sqrt
 
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
@@ -52,6 +53,33 @@ _NDS_YLINEN_C_SAWN = 0.8  # sawn lumber (0.9 glulam, 0.85 round timber poles)
 # outside the standard and the number is not a design value.
 _NDS_MAX_SLENDERNESS = 50.0
 _NDS_MAX_SLENDERNESS_CONSTRUCTION = 75.0
+
+_TIMBER_GEOMETRY_SOURCE = "the timber member drawing or verified section dimensions"
+_TIMBER_MATERIAL_SOURCE = (
+    "the grade stamp, material certificate, cited NDS Supplement table, or project specification"
+)
+_TIMBER_CODE_SOURCE = "the governing NDS edition and selected design conditions"
+_TIMBER_LOAD_SOURCE = "the governing load combination and timber member demand analysis"
+_TIMBER_SCREEN_SOURCE = "the completed NDS strength calculation and supporting declarations"
+
+
+class _TimberInputError(RefusalError, ValueError):
+    """Invalid NDS timber-design input with a machine-readable repair."""
+
+
+def _timber_refusal(message: str, *, subject: str, source: str) -> _TimberInputError:
+    return _TimberInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _timber_input_source(subject: str) -> str:
+    if any(token in subject for token in ("stress", "force", "demand")):
+        return _TIMBER_LOAD_SOURCE
+    if any(token in subject for token in ("value", "modulus")):
+        return _TIMBER_MATERIAL_SOURCE
+    return _TIMBER_GEOMETRY_SOURCE
 
 
 class LoadDuration(StrEnum):
@@ -96,8 +124,10 @@ def nds_load_duration_factor(duration: LoadDuration) -> float:
     where the reference value is a record rather than a bare number.
     """
     if duration not in _LOAD_DURATION_FACTORS:
-        raise ValueError(
-            f"duration must be one of {sorted(_LOAD_DURATION_FACTORS)}; got {duration!r}"
+        raise _timber_refusal(
+            f"duration must be one of {sorted(_LOAD_DURATION_FACTORS)}; got {duration!r}",
+            subject="duration",
+            source=_TIMBER_CODE_SOURCE,
         )
     return _LOAD_DURATION_FACTORS[duration]
 
@@ -117,15 +147,25 @@ def nds_adjusted_design_value(
     kind (a stress in psi or MPa, a modulus, …).
     """
     if not isinstance(reference_value, Quantity):
-        raise ValueError(f"reference_value must be a [pressure] quantity; got {reference_value!r}")
+        raise _timber_refusal(
+            f"reference_value must be a [pressure] quantity; got {reference_value!r}",
+            subject="reference_value",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not reference_value.has_dimension("[pressure]"):
-        raise ValueError(
+        raise _timber_refusal(
             f"reference_value must be a [pressure] quantity (a design stress); got "
-            f"{reference_value.dimensionality} ({reference_value})"
+            f"{reference_value.dimensionality} ({reference_value})",
+            subject="reference_value",
+            source=_TIMBER_MATERIAL_SOURCE,
         )
     for name, value in factors.items():
         if value <= 0:
-            raise ValueError(f"adjustment factor {name!r} must be positive; got {value}")
+            raise _timber_refusal(
+                f"adjustment factor {name!r} must be positive; got {value}",
+                subject=f"adjustment factor {name!r}",
+                source=_TIMBER_CODE_SOURCE,
+            )
     ref = reference_value.to("MPa").magnitude
     return Quantity(magnitude=ref * prod(factors.values(), start=1.0), unit="MPa")
 
@@ -146,10 +186,16 @@ def _adjusted_design_value(value: Quantity, name: str) -> float:
     compression, and a fifth screen should not have to remember it.
     """
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+        raise _timber_refusal(
+            f"{name} must be a [pressure] quantity; got {value!r}",
+            subject=name,
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not value.has_dimension("[pressure]"):
-        raise ValueError(
-            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
+        raise _timber_refusal(
+            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_TIMBER_MATERIAL_SOURCE,
         )
     require_finite(value, name=name)
     return value.to("MPa").magnitude
@@ -314,10 +360,16 @@ def nds_bending_scorecard(
             needs=(_NEEDS_BENDING,),
         )
     if not isinstance(bending_stress, Quantity):
-        raise ValueError(f"bending_stress must be a [pressure] quantity; got {bending_stress!r}")
+        raise _timber_refusal(
+            f"bending_stress must be a [pressure] quantity; got {bending_stress!r}",
+            subject="bending_stress",
+            source=_TIMBER_LOAD_SOURCE,
+        )
     if not bending_stress.has_dimension("[pressure]"):
-        raise ValueError(
-            f"bending_stress must be a [pressure] quantity; got {bending_stress.dimensionality}"
+        raise _timber_refusal(
+            f"bending_stress must be a [pressure] quantity; got {bending_stress.dimensionality}",
+            subject="bending_stress",
+            source=_TIMBER_LOAD_SOURCE,
         )
     fb = abs(bending_stress.to("MPa").magnitude)
     fb_allow = _adjusted_design_value(adjusted_bending_value, "adjusted_bending_value")
@@ -362,20 +414,38 @@ def nds_shear_stress(
     force/area kind (a stress in psi or MPa).
     """
     if not isinstance(shear_force, Quantity):
-        raise ValueError(f"shear_force must be a [force] quantity; got {shear_force!r}")
+        raise _timber_refusal(
+            f"shear_force must be a [force] quantity; got {shear_force!r}",
+            subject="shear_force",
+            source=_TIMBER_LOAD_SOURCE,
+        )
     if not shear_force.has_dimension("[force]"):
-        raise ValueError(
-            f"shear_force must be a [force] quantity; got {shear_force.dimensionality}"
+        raise _timber_refusal(
+            f"shear_force must be a [force] quantity; got {shear_force.dimensionality}",
+            subject="shear_force",
+            source=_TIMBER_LOAD_SOURCE,
         )
     # As in `nds_bearing_stress`: the force is checked with `isinstance` and these were not.
     if not isinstance(width, Quantity) or not isinstance(depth, Quantity):
-        raise ValueError("width and depth must be [length] quantities")
+        raise _timber_refusal(
+            "width and depth must be [length] quantities",
+            subject="width and depth",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     if not width.has_dimension("[length]") or not depth.has_dimension("[length]"):
-        raise ValueError("width and depth must be [length] quantities")
+        raise _timber_refusal(
+            "width and depth must be [length] quantities",
+            subject="width and depth",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     b = width.to("m").magnitude
     d = depth.to("m").magnitude
     if b <= 0 or d <= 0:
-        raise ValueError("width and depth must be positive")
+        raise _timber_refusal(
+            "width and depth must be positive",
+            subject="width and depth",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     stress = 1.5 * abs(shear_force.to("N").magnitude) / (b * d)
     return Quantity(magnitude=stress / 1e6, unit="MPa")
 
@@ -403,10 +473,16 @@ def nds_shear_scorecard(
             needs=(_NEEDS_SHEAR,),
         )
     if not isinstance(shear_stress, Quantity):
-        raise ValueError(f"shear_stress must be a [pressure] quantity; got {shear_stress!r}")
+        raise _timber_refusal(
+            f"shear_stress must be a [pressure] quantity; got {shear_stress!r}",
+            subject="shear_stress",
+            source=_TIMBER_LOAD_SOURCE,
+        )
     if not shear_stress.has_dimension("[pressure]"):
-        raise ValueError(
-            f"shear_stress must be a [pressure] quantity; got {shear_stress.dimensionality}"
+        raise _timber_refusal(
+            f"shear_stress must be a [pressure] quantity; got {shear_stress.dimensionality}",
+            subject="shear_stress",
+            source=_TIMBER_LOAD_SOURCE,
         )
     fv = abs(shear_stress.to("MPa").magnitude)
     fv_allow = _adjusted_design_value(adjusted_shear_value, "adjusted_shear_value")
@@ -457,23 +533,43 @@ def nds_bearing_area_factor(
     correctly. Returns the dimensionless factor.
     """
     if not isinstance(bearing_length, Quantity):
-        raise ValueError(f"bearing_length must be a [length] quantity; got {bearing_length!r}")
+        raise _timber_refusal(
+            f"bearing_length must be a [length] quantity; got {bearing_length!r}",
+            subject="bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     if not bearing_length.has_dimension("[length]"):
-        raise ValueError(
-            f"bearing_length must be a [length] quantity; got {bearing_length.dimensionality}"
+        raise _timber_refusal(
+            f"bearing_length must be a [length] quantity; got {bearing_length.dimensionality}",
+            subject="bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
         )
     lb = bearing_length.to("inch").magnitude
     if lb <= 0:
-        raise ValueError("bearing_length must be positive")
+        raise _timber_refusal(
+            "bearing_length must be positive",
+            subject="bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     if end_distance is not None:
         if not isinstance(end_distance, Quantity):
-            raise ValueError(f"end_distance must be a [length] quantity; got {end_distance!r}")
+            raise _timber_refusal(
+                f"end_distance must be a [length] quantity; got {end_distance!r}",
+                subject="end_distance",
+                source=_TIMBER_GEOMETRY_SOURCE,
+            )
         if not end_distance.has_dimension("[length]"):
-            raise ValueError(
-                f"end_distance must be a [length] quantity; got {end_distance.dimensionality}"
+            raise _timber_refusal(
+                f"end_distance must be a [length] quantity; got {end_distance.dimensionality}",
+                subject="end_distance",
+                source=_TIMBER_GEOMETRY_SOURCE,
             )
         if end_distance.to("inch").magnitude < 0:
-            raise ValueError("end_distance must not be negative")
+            raise _timber_refusal(
+                "end_distance must not be negative",
+                subject="end_distance",
+                source=_TIMBER_GEOMETRY_SOURCE,
+            )
         # NDS 3.10.4 grants C_b only to a bearing at least 3 in from the member end.
         if end_distance.to("inch").magnitude < 3.0:
             return 1.0
@@ -501,22 +597,40 @@ def nds_bearing_stress(
     its support. Returns the bearing stress in the force/area kind (a stress in psi or MPa).
     """
     if not isinstance(bearing_force, Quantity):
-        raise ValueError(f"bearing_force must be a [force] quantity; got {bearing_force!r}")
+        raise _timber_refusal(
+            f"bearing_force must be a [force] quantity; got {bearing_force!r}",
+            subject="bearing_force",
+            source=_TIMBER_LOAD_SOURCE,
+        )
     if not bearing_force.has_dimension("[force]"):
-        raise ValueError(
-            f"bearing_force must be a [force] quantity; got {bearing_force.dimensionality}"
+        raise _timber_refusal(
+            f"bearing_force must be a [force] quantity; got {bearing_force.dimensionality}",
+            subject="bearing_force",
+            source=_TIMBER_LOAD_SOURCE,
         )
     # `isinstance` too, and for both. The force above gets it and these two went straight
     # to `.has_dimension`, which answers `AttributeError` on anything that is not a
     # Quantity — Python's complaint, not this function's.
     if not isinstance(width, Quantity) or not isinstance(bearing_length, Quantity):
-        raise ValueError("width and bearing_length must be [length] quantities")
+        raise _timber_refusal(
+            "width and bearing_length must be [length] quantities",
+            subject="width and bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     if not width.has_dimension("[length]") or not bearing_length.has_dimension("[length]"):
-        raise ValueError("width and bearing_length must be [length] quantities")
+        raise _timber_refusal(
+            "width and bearing_length must be [length] quantities",
+            subject="width and bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     b = width.to("m").magnitude
     lb = bearing_length.to("m").magnitude
     if b <= 0 or lb <= 0:
-        raise ValueError("width and bearing_length must be positive")
+        raise _timber_refusal(
+            "width and bearing_length must be positive",
+            subject="width and bearing_length",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=abs(bearing_force.to("N").magnitude) / (b * lb) / 1e6, unit="MPa")
 
 
@@ -546,10 +660,16 @@ def nds_bearing_scorecard(
             needs=(_NEEDS_BEARING,),
         )
     if not isinstance(bearing_stress, Quantity):
-        raise ValueError(f"bearing_stress must be a [pressure] quantity; got {bearing_stress!r}")
+        raise _timber_refusal(
+            f"bearing_stress must be a [pressure] quantity; got {bearing_stress!r}",
+            subject="bearing_stress",
+            source=_TIMBER_LOAD_SOURCE,
+        )
     if not bearing_stress.has_dimension("[pressure]"):
-        raise ValueError(
-            f"bearing_stress must be a [pressure] quantity; got {bearing_stress.dimensionality}"
+        raise _timber_refusal(
+            f"bearing_stress must be a [pressure] quantity; got {bearing_stress.dimensionality}",
+            subject="bearing_stress",
+            source=_TIMBER_LOAD_SOURCE,
         )
     fc = abs(bearing_stress.to("MPa").magnitude)
     fc_allow = _adjusted_design_value(adjusted_bearing_value, "adjusted_bearing_value")
@@ -606,22 +726,38 @@ def nds_euler_buckling_stress(
         source="the construction-stage load case",
     )
     if not isinstance(min_modulus, Quantity):
-        raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
+        raise _timber_refusal(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus!r}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not min_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
+        raise _timber_refusal(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
         )
     e = min_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"min_modulus must be positive; got {min_modulus}")
+        raise _timber_refusal(
+            f"min_modulus must be positive; got {min_modulus}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+        raise _timber_refusal(
+            f"slenderness_ratio must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_TIMBER_GEOMETRY_SOURCE,
+        )
     limit = _NDS_MAX_SLENDERNESS_CONSTRUCTION if during_construction else _NDS_MAX_SLENDERNESS
     if slenderness_ratio > limit:
         where = "during construction" if during_construction else "in service"
-        raise ValueError(
+        raise _timber_refusal(
             f"slenderness_ratio l_e/d = {slenderness_ratio:.4g} exceeds the NDS 3.7.1.4 limit "
-            f"of {limit:.0f} {where}: the column is outside the standard"
+            f"of {limit:.0f} {where}: the column is outside the standard",
+            subject="slenderness_ratio",
+            source=_TIMBER_CODE_SOURCE,
         )
     return Quantity(magnitude=_NDS_EULER_COEFFICIENT * e / slenderness_ratio**2, unit="MPa")
 
@@ -664,24 +800,36 @@ def nds_beam_slenderness_ratio(
         (breadth, "breadth"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+            raise _timber_refusal(
+                f"{name} must be a [length] quantity; got {value!r}",
+                subject=name,
+                source=_TIMBER_GEOMETRY_SOURCE,
+            )
         if not value.has_dimension("[length]"):
-            raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+            raise _timber_refusal(
+                f"{name} must be a [length] quantity; got {value.dimensionality}",
+                subject=name,
+                source=_TIMBER_GEOMETRY_SOURCE,
+            )
         require_finite(value, name=name)
     le = effective_length.to("mm").magnitude
     d = depth.to("mm").magnitude
     b = breadth.to("mm").magnitude
     if le <= 0 or d <= 0 or b <= 0:
-        raise ValueError(
+        raise _timber_refusal(
             f"the effective length, depth and breadth must all be positive; got "
-            f"{effective_length}, {depth}, {breadth}"
+            f"{effective_length}, {depth}, {breadth}",
+            subject="effective_length, depth, and breadth",
+            source=_TIMBER_GEOMETRY_SOURCE,
         )
     ratio = sqrt(le * d / (b * b))
     if ratio > _NDS_MAX_BEAM_SLENDERNESS:
-        raise ValueError(
+        raise _timber_refusal(
             f"R_B = {ratio:.4g} exceeds the NDS 3.3.3.7 limit of "
             f"{_NDS_MAX_BEAM_SLENDERNESS:.0f}: the beam is outside the standard, and the "
-            f"stability factor the formula would return is not a design value"
+            f"stability factor the formula would return is not a design value",
+            subject="effective_length, depth, and breadth",
+            source=_TIMBER_CODE_SOURCE,
         )
     return ratio
 
@@ -697,23 +845,37 @@ def nds_bending_buckling_stress(*, min_modulus: Quantity, slenderness_ratio: flo
     :func:`nds_beam_slenderness_ratio`. Returns F_bE as a stress.
     """
     if not isinstance(min_modulus, Quantity):
-        raise ValueError(f"min_modulus must be a [pressure] quantity; got {min_modulus!r}")
+        raise _timber_refusal(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus!r}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not min_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
+        raise _timber_refusal(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
         )
     require_finite(min_modulus, name="min_modulus")
     e = min_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"min_modulus must be positive; got {min_modulus}")
+        raise _timber_refusal(
+            f"min_modulus must be positive; got {min_modulus}",
+            subject="min_modulus",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not isfinite(slenderness_ratio) or slenderness_ratio <= 0:
-        raise ValueError(
-            f"slenderness_ratio R_B must be a positive, finite number; got {slenderness_ratio}"
+        raise _timber_refusal(
+            f"slenderness_ratio R_B must be a positive, finite number; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_TIMBER_GEOMETRY_SOURCE,
         )
     if slenderness_ratio > _NDS_MAX_BEAM_SLENDERNESS:
-        raise ValueError(
+        raise _timber_refusal(
             f"R_B = {slenderness_ratio:.4g} exceeds the NDS 3.3.3.7 limit of "
-            f"{_NDS_MAX_BEAM_SLENDERNESS:.0f}"
+            f"{_NDS_MAX_BEAM_SLENDERNESS:.0f}",
+            subject="slenderness_ratio",
+            source=_TIMBER_CODE_SOURCE,
         )
     return Quantity(
         magnitude=_NDS_BENDING_BUCKLING_COEFFICIENT * e / slenderness_ratio**2, unit="MPa"
@@ -746,16 +908,26 @@ def nds_beam_stability_factor(
         (reference_bending_value, "reference_bending_value"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+            raise _timber_refusal(
+                f"{name} must be a [pressure] quantity; got {value!r}",
+                subject=name,
+                source=_timber_input_source(name),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
+            raise _timber_refusal(
+                f"{name} must be a [pressure] quantity; got {value.dimensionality}",
+                subject=name,
+                source=_timber_input_source(name),
+            )
         require_finite(value, name=name)
     fbe = buckling_stress.to("MPa").magnitude
     fb = reference_bending_value.to("MPa").magnitude
     if fbe <= 0 or fb <= 0:
-        raise ValueError(
+        raise _timber_refusal(
             f"the buckling stress and the reference bending value must both be positive; "
-            f"got {buckling_stress} and {reference_bending_value}"
+            f"got {buckling_stress} and {reference_bending_value}",
+            subject="buckling_stress and reference_bending_value",
+            source=_TIMBER_SCREEN_SOURCE,
         )
     x = fbe / fb
     a = (1.0 + x) / _NDS_BEAM_STABILITY_A
@@ -792,13 +964,17 @@ def nds_compression_scorecard(
             needs=(_NEEDS_COMPRESSION,),
         )
     if not isinstance(compression_stress, Quantity):
-        raise ValueError(
-            f"compression_stress must be a [pressure] quantity; got {compression_stress!r}"
+        raise _timber_refusal(
+            f"compression_stress must be a [pressure] quantity; got {compression_stress!r}",
+            subject="compression_stress",
+            source=_TIMBER_LOAD_SOURCE,
         )
     if not compression_stress.has_dimension("[pressure]"):
-        raise ValueError(
+        raise _timber_refusal(
             f"compression_stress must be a [pressure] quantity; got "
-            f"{compression_stress.dimensionality}"
+            f"{compression_stress.dimensionality}",
+            subject="compression_stress",
+            source=_TIMBER_LOAD_SOURCE,
         )
     fc = abs(compression_stress.to("MPa").magnitude)
     fc_allow = _adjusted_design_value(adjusted_compression_value, "adjusted_compression_value")
@@ -849,23 +1025,43 @@ def nds_column_stability_factor(
     adjusted compression value F'_c. ``c`` must lie in (0, 1]. Returns C_P in (0, 1].
     """
     if not isinstance(euler_buckling_stress, Quantity):
-        raise ValueError(
-            f"euler_buckling_stress must be a [pressure] quantity; got {euler_buckling_stress!r}"
+        raise _timber_refusal(
+            f"euler_buckling_stress must be a [pressure] quantity; got {euler_buckling_stress!r}",
+            subject="euler_buckling_stress",
+            source=_TIMBER_SCREEN_SOURCE,
         )
     if not euler_buckling_stress.has_dimension("[pressure]"):
-        raise ValueError("euler_buckling_stress must be a [pressure] quantity")
+        raise _timber_refusal(
+            "euler_buckling_stress must be a [pressure] quantity",
+            subject="euler_buckling_stress",
+            source=_TIMBER_SCREEN_SOURCE,
+        )
     if not isinstance(reference_compression, Quantity):
-        raise ValueError(
-            f"reference_compression must be a [pressure] quantity; got {reference_compression!r}"
+        raise _timber_refusal(
+            f"reference_compression must be a [pressure] quantity; got {reference_compression!r}",
+            subject="reference_compression",
+            source=_TIMBER_MATERIAL_SOURCE,
         )
     if not reference_compression.has_dimension("[pressure]"):
-        raise ValueError("reference_compression must be a [pressure] quantity")
+        raise _timber_refusal(
+            "reference_compression must be a [pressure] quantity",
+            subject="reference_compression",
+            source=_TIMBER_MATERIAL_SOURCE,
+        )
     if not 0 < c <= 1:
-        raise ValueError(f"c must lie in (0, 1]; got {c}")
+        raise _timber_refusal(
+            f"c must lie in (0, 1]; got {c}",
+            subject="c",
+            source=_TIMBER_CODE_SOURCE,
+        )
     fce = euler_buckling_stress.to("MPa").magnitude
     fc_star = reference_compression.to("MPa").magnitude
     if fce <= 0 or fc_star <= 0:
-        raise ValueError("euler_buckling_stress and reference_compression must be positive")
+        raise _timber_refusal(
+            "euler_buckling_stress and reference_compression must be positive",
+            subject="euler_buckling_stress and reference_compression",
+            source=_TIMBER_SCREEN_SOURCE,
+        )
     alpha = fce / fc_star
     half = (1.0 + alpha) / (2.0 * c)
     return half - sqrt(half**2 - alpha / c)
@@ -902,20 +1098,34 @@ def nds_combined_bending_compression(
         (euler_buckling_stress, "euler_buckling_stress"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
+            raise _timber_refusal(
+                f"{label} must be a [pressure] quantity; got {value!r}",
+                subject=label,
+                source=_timber_input_source(label),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
+            raise _timber_refusal(
+                f"{label} must be a [pressure] quantity; got {value}",
+                subject=label,
+                source=_timber_input_source(label),
+            )
     fc = abs(compression_stress.to("MPa").magnitude)
     fpc = adjusted_compression.to("MPa").magnitude
     fb = abs(bending_stress.to("MPa").magnitude)
     fpb = adjusted_bending.to("MPa").magnitude
     fce = euler_buckling_stress.to("MPa").magnitude
     if fpc <= 0 or fpb <= 0 or fce <= 0:
-        raise ValueError("the adjusted values and Euler stress must be positive")
+        raise _timber_refusal(
+            "the adjusted values and Euler stress must be positive",
+            subject="adjusted_compression, adjusted_bending, and euler_buckling_stress",
+            source=_TIMBER_SCREEN_SOURCE,
+        )
     amplification = 1.0 - fc / fce
     if amplification <= 0:
-        raise ValueError(
+        raise _timber_refusal(
             f"compression stress ({fc:.4g} MPa) reaches the Euler buckling stress "
-            f"({fce:.4g} MPa): the member has buckled, the interaction is undefined"
+            f"({fce:.4g} MPa): the member has buckled, the interaction is undefined",
+            subject="compression_stress and euler_buckling_stress",
+            source=_TIMBER_SCREEN_SOURCE,
         )
     return (fc / fpc) ** 2 + fb / (fpb * amplification)

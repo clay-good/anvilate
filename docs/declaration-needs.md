@@ -392,6 +392,10 @@ The complete aluminum family follows the contract at all 55 refusal sites. Secti
 and temper properties, buckling constants, ADM factors, member demands, heat-affected properties,
 and completed strength screens point to drawings, mill certificates, cited ADM tables, project and
 welding specifications, load analyses, or the governing Aluminum Design Manual criteria.
+The complete NDS timber-analysis family follows the contract at all 57 refusal sites. Member and
+bearing geometry, reference and adjusted design values, factor selections, applied forces and
+stresses, stability inputs, and completed interaction screens point to timber drawings, grade or
+material records, cited NDS Supplement tables, verified load analyses, or the governing NDS criteria.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
