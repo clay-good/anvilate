@@ -416,6 +416,9 @@ class ScorecardEntry(StatableModel):
     model_config = ConfigDict(frozen=True)
 
     name: Named
+    # Stable machine identity for a discipline-module check. Human `name` remains free to
+    # include the element instance; `check_id` stays the same when that instance is renamed.
+    check_id: Named | None = Field(default=None, exclude_if=lambda value: value is None)
     status: CheckStatus
     detail: str
     reference: Provenance | None = None  # the code/standard clause behind the check, if any

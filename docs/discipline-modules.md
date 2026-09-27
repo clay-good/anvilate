@@ -1,10 +1,10 @@
 # What a discipline module declares
 
-Nine disciplines — ten packs — sit on a foundation that knows nothing about steel, timber or
-piping: units, the Spec IR, the scorecard, the citation doctrine, the evidence bundle. That
-is why a tenth domain is possible at all. What was missing was the contract: adding a domain
-meant editing a shared specification that enumerated the packs one by one, and it never had
-to answer what a module declares about itself.
+Discipline packs sit on a foundation that knows nothing about steel, timber or piping:
+units, the Spec IR, the scorecard, the citation doctrine, the evidence bundle. That is why
+another domain is possible at all. What was missing was the contract: adding a domain meant
+editing a shared specification that enumerated the packs one by one, and it never had to
+answer what a module declares about itself.
 
 A `ModuleManifest` is those answers as data.
 
@@ -14,12 +14,14 @@ from anvilate.modules import MODULE_MANIFESTS, manifest_for
 manifest_for("machinery").screens    # the screen_* functions the pack exports
 manifest_for("machinery").standards  # ("AGMA",) — the bodies its checks cite
 manifest_for("machinery").tiers      # the pipeline tiers it touches
+manifest_for("machinery").namespace  # the reserved prefix for stable check ids
 print(MODULE_MANIFESTS)              # every module this build ships
 ```
 
 | Field | What it states |
 | --- | --- |
 | `id`, `version` | The stable name a document, a dependency or a bug report uses, and the version of the module's own contract. |
+| `namespace` | The prefix reserved for the module's stable scorecard check ids. Exact and prefix-overlapping namespaces are refused. |
 | `unit_default` | The system the module's figures are written in. |
 | `standards` | The standards bodies its checks cite. Each must be one the [effectivity layer](standards-effectivity.md) recognises, so an edition can be pinned to it. |
 | `material_properties` | The property sets its screens need from a material record. |
@@ -34,10 +36,10 @@ print(MODULE_MANIFESTS)              # every module this build ships
 
 `tests/test_modules.py` derives each pack's screens from the package the same way
 `element_registry` does, and fails a manifest that names a different set, a pack with no
-manifest, a manifest for no pack, two modules claiming one id, and a standard no body
-matches. It carries a floor on the number of screens it is reading, so a refactor cannot
-turn the gate green by emptying it. Both mutations — dropping a screen from a manifest and
-deleting a manifest — were run against it.
+manifest, a manifest for no pack, two modules claiming one id or an overlapping namespace,
+and a standard no body matches. It carries a floor on the number of screens it is reading,
+so a refactor cannot turn the gate green by emptying it. Both mutations — dropping a screen
+from a manifest and deleting a manifest — were run against it.
 
 ## Choosing which modules a run uses
 
@@ -99,11 +101,12 @@ This gate found its first drift before it shipped: `industrial` declared AISC be
 pack's docstring calls its members "AISC-flavored", and no entry it builds cites AISC at
 all. The declaration was removed.
 
-A **check-name namespace** is not a field here. The spec asks a module to reserve one, and
-nothing in this library could hold a pack to it today: a check is named after the element
-instance that produced it (`col_base plate bending`), not after its module. A declared
-namespace would be a string no gate could check, so it arrives with the naming change that
-makes it true.
+A manifest's **check-id namespace** is separate from the check's display name. The name
+remains about the element instance that produced it (`col_base plate bending`); the stable
+`check_id` is the registered limit-state id placed inside the module's reserved namespace
+(`structural.steel.base_plate_bending`). The document screening path refuses a module entry
+that cannot resolve through the limit-state registry, so the namespace is an enforced
+contract rather than a label. Composite structure checks retain the member module's id.
 
 ## Writing a module
 
@@ -116,17 +119,18 @@ step:
    number, a runnable example.
 2. **Export them.** The element registry derives the tags from each pack's `__all__`, so a
    screen that is not exported is a screen no document can reach.
-3. **Add the manifest** to `MODULE_MANIFESTS`: id, version, unit default, the standards its
-   checks cite, the material properties it needs, the tiers it touches, its dependencies,
-   its screens, its coverage, and a sentence saying what it is for.
+3. **Add the manifest** to `MODULE_MANIFESTS`: id, namespace, version, unit default, the
+   standards its checks cite, the material properties it needs, the tiers it touches, its
+   dependencies, its screens, its coverage, and a sentence saying what it is for.
    Then register each limit state its checks evaluate in
    `anvilate.limit_states.DEFAULT_LIMIT_STATES`: an id, what the limit state is, and the
    (screen, check) pairs that evaluate it.
-4. **Run the suite.** Five gates will disagree with you if the manifest and the pack do not
+4. **Run the suite.** The gates will disagree with you if the manifest and the pack do not
    match: the screens it names against the pack's exports, the tags it covers against the
    registry, the standards it declares against the citations its own entries write, the
-   exercise floor over every screen it declares, and the registry's own refusal of a
-   duplicate id or an unresolvable dependency.
+   exercise floor over every screen it declares, every emitted check against the limit-state
+   registry, and the registry's own refusal of a duplicate id, overlapping namespace or
+   unresolvable dependency.
 5. **Write the capability spec** for the domain under `openspec/changes/`, not as an
    appendix to `discipline-packs`. A domain that needs the shared contract changed is
    telling you the contract is wrong, which is a different change.
@@ -146,10 +150,9 @@ and three gates key on it:
 
 ## Status
 
-This is the manifest contract, the ten shipped manifests, the completeness gate and the
-exercise floor (`openspec/changes/add-physical-domain-modules`, tasks 1.3, 2.1, 3.1, 3.2 and
-3.3), the loader (2.2), declared coverage (1.2), the authoring page (5.1) and
-duplicate-limit-state detection by registry id (2.3): 61 limit states across the 65 checks
-the shipped modules emit, two of them shared by two screens: column buckling through AISC
-§E3's `aisc_flexural_buckling_stress`, and gross yielding in tension through `axial_stress`.
-Out-of-tree modules are what remain.
+This is the manifest contract, including reserved namespaces and stable emitted check ids,
+the completeness and exercise gates (`openspec/changes/add-physical-domain-modules`, tasks
+1.1, 1.3, 2.1, 3.1, 3.2 and 3.3), the loader (2.2), declared coverage (1.2), the authoring
+page (5.1) and duplicate-limit-state detection by registry id (2.3):
+61 limit states across the 65 checks the shipped modules emit. Out-of-tree modules are what
+remain.

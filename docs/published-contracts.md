@@ -114,6 +114,16 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Scorecard 1.12.0: module checks have stable ids
+
+`ScorecardEntry.check_id` separates machine identity from the instance-specific name a
+person reads. Document-driven discipline checks resolve through the limit-state registry
+and use the module manifest's reserved namespace, so renaming an element does not rename
+the check a downstream client tracks. The field is optional for non-module and historical
+entries. Evidence Bundle 1.24.0, STEP interface candidates 1.14.0 and CLI output 1.53.0
+carry the same entry, and the MCP result schemas reference the new scorecard and bundle
+versions.
+
 ### CLI output 1.52.0: a build can be 3MF
 
 `anvilate build` writes 3MF when `--output` ends in `.3mf`, so a build result's

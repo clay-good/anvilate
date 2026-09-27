@@ -603,8 +603,7 @@ def test_tool_refusals_carry_structured_issues_and_remedies():
     malformed = _call("render_viewport", {"view": "sideways"})["error"]
     assert malformed["data"]["issues"] == [
         "render_viewport requires 'subject'",
-        "render_viewport.view must be one of ['front', 'iso', 'right', 'top']; "
-        "got 'sideways'",
+        "render_viewport.view must be one of ['front', 'iso', 'right', 'top']; got 'sideways'",
     ]
     assert malformed["data"]["remedies"] == [
         "correct the named render_viewport argument using its inputSchema from tools/list, "

@@ -2,12 +2,11 @@
 
 ## 1. Contract
 
-- [ ] 1.1 Module manifest type: id, namespace, version, unit default, standards +
-      editions, required material property sets, tiers touched, module dependencies —
-      **shipped except the namespace**: a check is named after the element instance that
-      produced it (`col_base plate bending`), not after its module, so a declared namespace
-      is a string no gate could hold a pack to. It lands with the check-naming change that
-      makes it checkable; see docs/discipline-modules.md
+- [x] 1.1 Module manifest type: id, namespace, version, unit default, standards +
+      editions, required material property sets, tiers touched, module dependencies — exact
+      and prefix-overlapping namespaces are refused; document-driven module entries carry a
+      stable namespaced `check_id` resolved through the limit-state registry while their
+      instance-specific display names remain unchanged
 - [x] 1.2 Declared screening coverage type: what the module claims it can screen
 - [x] 1.3 Deprecation state on a manifest, and what a deprecated module renders
 

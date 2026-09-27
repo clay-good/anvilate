@@ -41,8 +41,10 @@ def _shipped_packs() -> dict[str, tuple[str, ...]]:
 
 
 def _manifest(**fields: object) -> ModuleManifest:
+    identifier = fields.get("id", "example")
     declared: dict[str, object] = {
-        "id": "example",
+        "id": identifier,
+        "namespace": fields.get("namespace", identifier),
         "version": "1.0.0",
         "unit_default": UnitSystem.SI,
         "tiers": (ValidationTier.T1_ANALYTICAL,),
@@ -105,6 +107,53 @@ def test_a_standard_a_manifest_declares_is_one_the_library_knows() -> None:
 def test_the_registry_refuses_two_modules_with_one_id() -> None:
     with pytest.raises(ValidationError, match="two modules claim the same id"):
         ModuleRegistry(manifests=(_manifest(), _manifest(summary="a second module of one name")))
+
+
+def test_the_registry_refuses_duplicate_or_overlapping_namespaces() -> None:
+    with pytest.raises(ValidationError, match="same namespace"):
+        ModuleRegistry(
+            manifests=(
+                _manifest(id="first", namespace="shared"),
+                _manifest(id="second", namespace="shared"),
+            )
+        )
+    with pytest.raises(ValidationError, match="overlap"):
+        ModuleRegistry(
+            manifests=(
+                _manifest(id="first", namespace="shared"),
+                _manifest(id="second", namespace="shared.child"),
+            )
+        )
+
+
+def test_a_module_check_id_is_stable_when_the_element_is_renamed() -> None:
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate.screening import screen_spec
+    from anvilate.spec import parse_spec
+
+    path = Path(__file__).parents[1] / "examples" / "padeye.spec.yaml"
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    first = screen_spec(parse_spec(document))
+    document["element_params"]["name"] = "renamed_padeye"
+    second = screen_spec(parse_spec(document))
+
+    first_ids = [entry.check_id for entry in first.entries if entry.check_id is not None]
+    second_ids = [entry.check_id for entry in second.entries if entry.check_id is not None]
+    assert (
+        first_ids
+        == second_ids
+        == [
+            "structural.steel.lug_net_tension",
+            "structural.steel.lug_pin_bearing",
+        ]
+    )
+    assert all(
+        entry.name != other.name
+        for entry, other in zip(first.entries[:2], second.entries[:2], strict=True)
+    )
 
 
 def test_a_dependency_on_a_module_this_build_does_not_carry_is_refused() -> None:

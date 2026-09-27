@@ -6,10 +6,10 @@ pack specification. The blocker was spec shape, not capability: the contract nev
 answer what a module declares about itself, what it may depend on, which standards it is
 written against, or what stops it shipping checks nothing exercises.
 
-A :class:`ModuleManifest` is those answers as data: a stable id, its version, the unit
-system its figures are written in, the standards bodies it cites, the material property
-sets its screens need, the pipeline tiers it touches, the modules it depends on, and the
-screens it exports. :data:`MODULE_MANIFESTS` carries one per
+A :class:`ModuleManifest` is those answers as data: a stable id, its reserved check-id
+namespace, its version, the unit system its figures are written in, the standards bodies it
+cites, the material property sets its screens need, the pipeline tiers it touches, the
+modules it depends on, and the screens it exports. :data:`MODULE_MANIFESTS` carries one per
 shipped pack.
 
 **The manifest is held against the pack, not trusted.** `tests/test_modules.py` derives the
@@ -17,11 +17,9 @@ screens each pack actually exports and fails a manifest that names a different s
 pack with no manifest or a manifest for no pack. A manifest that could drift from the module
 it describes would be documentation with a type annotation on it.
 
-The spec this implements also asks a module to reserve a *check-name namespace*. That field
-is not here, because nothing in this library could hold a pack to it today: a check is named
-after the element instance that produced it (``col_base plate bending``), not after the
-module, so a declared namespace would be a string no gate could check. It arrives with the
-naming change that makes it true, not before.
+Human check names remain written for the reader (``col_base plate bending``). Stable
+machine identity is separate: document-driven module checks carry a `check_id` formed from
+the manifest namespace and the registered limit-state id.
 
 A deprecated module says so in its manifest, with the version it goes away in and what to use
 instead, so a caller reading a scorecard from it is told at the source rather than by a
@@ -70,6 +68,7 @@ class ModuleManifest(StatableModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: Named
+    namespace: Named
     version: Named
     unit_default: UnitSystem
     standards: tuple[Named, ...] = ()
@@ -113,6 +112,12 @@ class ModuleManifest(StatableModel):
         standards = ", ".join(self.standards) if self.standards else "no cited standards"
         return f"{self.id} {self.version}: {len(self.screens)} screens, {standards}{state}"
 
+    def check_id(self, limit_state_id: str) -> str:
+        """Place one registered limit state inside this module's reserved namespace."""
+        if limit_state_id == self.namespace or limit_state_id.startswith(f"{self.namespace}."):
+            return limit_state_id
+        return f"{self.namespace}.{limit_state_id}"
+
 
 class ModuleRegistry(ItemCollection, StatableModel):
     """Every module manifest this build ships, with no two claiming one id or namespace."""
@@ -123,13 +128,24 @@ class ModuleRegistry(ItemCollection, StatableModel):
 
     @model_validator(mode="after")
     def _distinct(self) -> ModuleRegistry:
-        for field in ("id",):
+        for field in ("id", "namespace"):
             claimed = [getattr(manifest, field) for manifest in self.manifests]
             if len(set(claimed)) != len(claimed):
                 doubled = sorted({name for name in claimed if claimed.count(name) > 1})
                 raise ValueError(
-                    f"two modules claim the same {field}: {doubled}; a check name that two "
+                    f"two modules claim the same {field}: {doubled}; an identity that two "
                     "modules could own is one no reader can attribute"
+                )
+        namespaces = sorted(str(manifest.namespace) for manifest in self.manifests)
+        for index, namespace in enumerate(namespaces):
+            overlap = next(
+                (other for other in namespaces[index + 1 :] if other.startswith(f"{namespace}.")),
+                None,
+            )
+            if overlap is not None:
+                raise ValueError(
+                    f"module namespaces {namespace!r} and {overlap!r} overlap; one check id "
+                    "could belong to both modules"
                 )
         known = {manifest.id for manifest in self.manifests}
         for manifest in self.manifests:
@@ -162,6 +178,7 @@ def _manifest(
 ) -> ModuleManifest:
     return ModuleManifest(
         id=identifier,
+        namespace=identifier,
         version="1.0.0",
         unit_default=unit_default,
         standards=standards,

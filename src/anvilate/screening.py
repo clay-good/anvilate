@@ -431,6 +431,29 @@ def _screen_element(
             )
         ]
     entries = list(card.entries)
+    # This may be a core orchestration screen: its members already came through this function
+    # and carry their owning modules' ids. Core entries and member refusals stay un-namespaced
+    # rather than being attributed to a module that does not own them.
+    if not screen.__module__.startswith("anvilate.packs."):
+        return entries
+    module = screen.__module__.rsplit(".", 1)[-1]
+    qualified_screen = f"{module}.{screen.__name__}"
+    from .limit_states import DEFAULT_LIMIT_STATES
+    from .modules import manifest_for
+
+    manifest = manifest_for(module)
+    identified: list[ScorecardEntry] = []
+    for produced in entries:
+        state = DEFAULT_LIMIT_STATES.identify(qualified_screen, produced.name)
+        if state is None:
+            raise RuntimeError(
+                f"{qualified_screen} emitted check {produced.name!r} with no registered "
+                "limit state; register it before the module can publish a stable check id"
+            )
+        identified.append(
+            produced.model_copy(update={"check_id": manifest.check_id(str(state.id))})
+        )
+    entries = identified
     if max_safety_factor is not None:
         # Every safety-factor check is judged against the band the document declared, not
         # only the checks whose screen happens to take a `target_safety_factor` argument.
