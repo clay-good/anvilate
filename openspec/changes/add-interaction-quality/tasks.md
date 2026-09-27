@@ -208,6 +208,10 @@
       geometry, tendon force and profile, transfer or service actions, and rupture strength, sourced
       to structural drawings, test reports, reinforcement and stressing records, governing analyses,
       or the cited TMS 402 criteria.
+      The complete aluminum family adds 55 structured sites for section geometry, alloy and temper
+      properties, buckling constants, ADM factors, member demands, heat-affected properties, and
+      completed strength screens, sourced to drawings, mill certificates, cited ADM tables, project
+      and welding specifications, load analyses, or the governing Aluminum Design Manual criteria.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

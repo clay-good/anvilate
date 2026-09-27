@@ -388,6 +388,10 @@ Masonry geometry, prism strength, reinforcement, applied and allowable stresses,
 geometry, tendon force and profile, transfer or service actions, and rupture strength point to
 structural drawings, test reports, reinforcement and stressing records, governing analyses, or the
 cited TMS 402 criteria.
+The complete aluminum family follows the contract at all 55 refusal sites. Section geometry, alloy
+and temper properties, buckling constants, ADM factors, member demands, heat-affected properties,
+and completed strength screens point to drawings, mill certificates, cited ADM tables, project and
+welding specifications, load analyses, or the governing Aluminum Design Manual criteria.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

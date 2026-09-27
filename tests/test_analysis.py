@@ -18765,6 +18765,180 @@ def test_composite_longitudinal_cte_is_stiffness_weighted():
     assert abs(a1.to("1/K").magnitude) < abs(volume_average)
 
 
+@pytest.mark.parametrize(
+    ("case", "subject", "source"),
+    (
+        (
+            "member_geometry",
+            "slenderness",
+            "the aluminum member drawing or verified section properties",
+        ),
+        (
+            "material",
+            "yield_strength and ultimate_strength",
+            "the mill certificate, cited ADM table, or project specification",
+        ),
+        (
+            "code_factor",
+            "tension_coefficient",
+            "the governing Aluminum Design Manual edition and selected conditions",
+        ),
+        (
+            "element_geometry",
+            "flat_width",
+            "the aluminum member drawing or verified section properties",
+        ),
+        (
+            "beam_demand",
+            "plastic_moment",
+            "the governing load combination and aluminum member demand analysis",
+        ),
+        (
+            "interaction_demand",
+            "axial_ratio",
+            "the governing load combination and aluminum member demand analysis",
+        ),
+        (
+            "property_record",
+            "properties",
+            "the mill certificate, cited ADM table, or project specification",
+        ),
+        (
+            "edge_support",
+            "edge_support",
+            "the governing Aluminum Design Manual edition and selected conditions",
+        ),
+        (
+            "scorecard_demand",
+            "demand_stress",
+            "the governing load combination and aluminum member demand analysis",
+        ),
+    ),
+)
+def test_aluminum_refusals_carry_structured_remedies(case, subject, source):
+    from anvilate.analysis import (
+        AlloyProperties,
+        TemperGroup,
+        aluminum_buckling_constants,
+        aluminum_buckling_stress,
+        aluminum_combined_interaction,
+        aluminum_compression_scorecard,
+        aluminum_compression_strength,
+        aluminum_lateral_torsional_moment,
+        aluminum_local_buckling_stress,
+        aluminum_tension_stress,
+    )
+    from anvilate.refusal import RefusalError
+
+    properties = AlloyProperties(
+        name="6061-T6",
+        compressive_yield=_q("241 MPa"),
+        tensile_yield=_q("240 MPa"),
+        tensile_ultimate=_q("290 MPa"),
+        elastic_modulus=_q("68900 MPa"),
+        temper_group=TemperGroup.ARTIFICIALLY_AGED,
+        source="mill certificate",
+    )
+    constants = aluminum_buckling_constants(
+        compressive_yield=properties.compressive_yield,
+        elastic_modulus=properties.elastic_modulus,
+    )
+    strength = aluminum_compression_strength(
+        properties=properties,
+        slenderness=50.0,
+        flat_width=_q("50 mm"),
+        thickness=_q("3 mm"),
+    )
+    assert strength is not None
+
+    def invoke():
+        if case == "member_geometry":
+            return aluminum_buckling_stress(
+                slenderness=-1.0,
+                intercept=_q("267 MPa"),
+                slope=_q("1.63 MPa"),
+                intersection_slenderness=66.0,
+                elastic_modulus=_q("69600 MPa"),
+            )
+        if case == "material":
+            return aluminum_tension_stress(
+                yield_strength=_q("-1 MPa"), ultimate_strength=_q("290 MPa")
+            )
+        if case == "code_factor":
+            return aluminum_tension_stress(
+                yield_strength=_q("240 MPa"),
+                ultimate_strength=_q("290 MPa"),
+                tension_coefficient=0.9,
+            )
+        if case == "element_geometry":
+            return aluminum_local_buckling_stress(
+                flat_width=_q("1 MPa"),
+                thickness=_q("3 mm"),
+                compressive_yield=properties.compressive_yield,
+                elastic_modulus=properties.elastic_modulus,
+                constants=constants,
+            )
+        if case == "beam_demand":
+            return aluminum_lateral_torsional_moment(
+                plastic_moment=_q("1 kN"),
+                section_modulus=_q("100000 mm**3"),
+                slenderness=50.0,
+                elastic_modulus=properties.elastic_modulus,
+                constants=constants,
+            )
+        if case == "interaction_demand":
+            return aluminum_combined_interaction(axial_ratio=-0.1, major_moment_ratio=0.5)
+        if case == "property_record":
+            return aluminum_compression_strength(
+                properties="not alloy properties",
+                slenderness=50.0,
+                flat_width=_q("50 mm"),
+                thickness=_q("3 mm"),
+            )
+        if case == "edge_support":
+            return aluminum_compression_strength(
+                properties=properties,
+                slenderness=50.0,
+                flat_width=_q("50 mm"),
+                thickness=_q("3 mm"),
+                edge_support="both",
+            )
+        return aluminum_compression_scorecard("column", demand_stress=_q("1 mm"), strength=strength)
+
+    with pytest.raises(ValueError) as refused:
+        invoke()
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_aluminum_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/aluminum.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_aluminum_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 55
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_aluminum_buckling_stress_two_regions():
     import math
 

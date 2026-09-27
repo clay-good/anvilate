@@ -40,8 +40,40 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Named, RevalidatedModel, cited
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
+
+_ALUMINUM_GEOMETRY_SOURCE = "the aluminum member drawing or verified section properties"
+_ALUMINUM_MATERIAL_SOURCE = "the mill certificate, cited ADM table, or project specification"
+_ALUMINUM_CODE_SOURCE = "the governing Aluminum Design Manual edition and selected conditions"
+_ALUMINUM_LOAD_SOURCE = "the governing load combination and aluminum member demand analysis"
+_ALUMINUM_WELD_SOURCE = "the welding procedure and heat-affected material certificate"
+_ALUMINUM_SCREEN_SOURCE = "the completed ADM strength calculation and supporting declarations"
+_ALUMINUM_MEMBER_SOURCE = "the member drawing, material record, and cited ADM calculation"
+
+
+class _AluminumInputError(RefusalError, ValueError):
+    """Invalid aluminum-design input with a machine-readable repair."""
+
+
+def _aluminum_refusal(message: str, *, subject: str, source: str) -> _AluminumInputError:
+    return _AluminumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _aluminum_input_source(subject: str) -> str:
+    if any(
+        token in subject
+        for token in ("strength", "yield", "ultimate", "modulus", "intercept", "slope")
+    ):
+        return _ALUMINUM_MATERIAL_SOURCE
+    if "stress" in subject or "moment" in subject or "ratio" in subject:
+        return _ALUMINUM_LOAD_SOURCE
+    return _ALUMINUM_GEOMETRY_SOURCE
+
 
 __all__ = [
     "aluminum_buckling_stress",
@@ -65,10 +97,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _aluminum_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_aluminum_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _aluminum_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_aluminum_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -113,19 +151,31 @@ def aluminum_buckling_stress(
     require_finite(slenderness, name="slenderness")
     require_finite(intersection_slenderness, name="intersection_slenderness")
     if slenderness <= 0:
-        raise ValueError(f"slenderness must be positive; got {slenderness}")
+        raise _aluminum_refusal(
+            f"slenderness must be positive; got {slenderness}",
+            subject="slenderness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if intersection_slenderness <= 0:
-        raise ValueError(
-            f"intersection_slenderness must be positive; got {intersection_slenderness}"
+        raise _aluminum_refusal(
+            f"intersection_slenderness must be positive; got {intersection_slenderness}",
+            subject="intersection_slenderness",
+            source=_ALUMINUM_CODE_SOURCE,
         )
     if b <= 0 or d <= 0 or e <= 0:
-        raise ValueError("intercept, slope, and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "intercept, slope, and elastic_modulus must be positive",
+            subject="intercept, slope, and elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if slenderness <= intersection_slenderness:
         stress = b - d * slenderness
         if stress <= 0:
-            raise ValueError(
+            raise _aluminum_refusal(
                 "the inelastic line has gone non-positive; the slenderness exceeds the "
-                "constants' valid range (check that it is below the intersection)"
+                "constants' valid range (check that it is below the intersection)",
+                subject="slenderness and buckling constants",
+                source=_ALUMINUM_CODE_SOURCE,
             )
     else:
         stress = pi**2 * e / slenderness**2
@@ -154,13 +204,21 @@ def aluminum_tension_stress(
     fty = yield_strength.to("MPa").magnitude
     ftu = ultimate_strength.to("MPa").magnitude
     if fty <= 0 or ftu <= 0:
-        raise ValueError("yield_strength and ultimate_strength must be positive")
+        raise _aluminum_refusal(
+            "yield_strength and ultimate_strength must be positive",
+            subject="yield_strength and ultimate_strength",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     # NaN passes `< 1.0` and `min(fty, ftu/k_t)` then drops net-section rupture entirely:
     # 240 MPa returned where the answer is 208, a 15.4% overstatement. k_t = 0.5 was already
     # refused, which is the tell — the guard caught the wrong kind of bad value.
     require_finite(tension_coefficient, name="tension_coefficient")
     if tension_coefficient < 1.0:
-        raise ValueError(f"tension_coefficient must be at least 1.0; got {tension_coefficient}")
+        raise _aluminum_refusal(
+            f"tension_coefficient must be at least 1.0; got {tension_coefficient}",
+            subject="tension_coefficient",
+            source=_ALUMINUM_CODE_SOURCE,
+        )
     return Quantity(magnitude=min(fty, ftu / tension_coefficient), unit="MPa")
 
 
@@ -303,17 +361,29 @@ class AlloyProperties(RevalidatedModel):
             (self.elastic_modulus, "elastic_modulus"),
         ):
             if not value.has_dimension("[pressure]"):
-                raise ValueError(f"{name} must be a [pressure] quantity; got {value}")
+                raise _aluminum_refusal(
+                    f"{name} must be a [pressure] quantity; got {value}",
+                    subject=name,
+                    source=_ALUMINUM_MATERIAL_SOURCE,
+                )
             if value.magnitude <= 0:
-                raise ValueError(f"{name} must be positive; got {value}")
+                raise _aluminum_refusal(
+                    f"{name} must be positive; got {value}",
+                    subject=name,
+                    source=_ALUMINUM_MATERIAL_SOURCE,
+                )
         if self.tension_coefficient < 1.0:
-            raise ValueError(
-                f"tension_coefficient k_t must be at least 1.0; got {self.tension_coefficient}"
+            raise _aluminum_refusal(
+                f"tension_coefficient k_t must be at least 1.0; got {self.tension_coefficient}",
+                subject="tension_coefficient",
+                source=_ALUMINUM_CODE_SOURCE,
             )
         if self.weld_affected is not None and self.weld_affected.weld_affected is not None:
-            raise ValueError(
+            raise _aluminum_refusal(
                 "a weld-affected property set has no weld-affected set of its own; the "
-                "heat-affected zone is already the reduced material"
+                "heat-affected zone is already the reduced material",
+                subject="weld_affected properties",
+                source=_ALUMINUM_WELD_SOURCE,
             )
         return self
 
@@ -366,22 +436,36 @@ def aluminum_buckling_constants(
     Returns a :class:`BucklingConstants` with B and D in MPa.
     """
     if not isinstance(compressive_yield, Quantity):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not compressive_yield.has_dimension("[pressure]"):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if temper_group is not TemperGroup.ARTIFICIALLY_AGED:
-        raise ValueError(
+        raise _aluminum_refusal(
             "only the artificially aged tempers (-T5 through -T9, ADM Table B.4.2) are "
             "implemented; an -O, -H, -T1 through -T4 temper takes ADM Table B.4.1, whose "
-            "constants have a different form and are not evaluated here"
+            "constants have a different form and are not evaluated here",
+            subject="temper_group",
+            source=_ALUMINUM_CODE_SOURCE,
         )
     # Both checked inline here rather than through `_require`, so neither picked up the
     # finiteness check that helper carries: an infinite modulus makes sqrt(B_c/E) zero, and
@@ -391,7 +475,11 @@ def aluminum_buckling_constants(
     fcy_ksi = compressive_yield.to("ksi").magnitude
     e_ksi = elastic_modulus.to("ksi").magnitude
     if fcy_ksi <= 0 or e_ksi <= 0:
-        raise ValueError("compressive_yield and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "compressive_yield and elastic_modulus must be positive",
+            subject="compressive_yield and elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     bc = fcy_ksi * (1.0 + sqrt(fcy_ksi / _BC_DENOMINATOR_KSI))
     dc = (bc / 10.0) * sqrt(bc / e_ksi)
     bp = fcy_ksi * (1.0 + (fcy_ksi / _BP_DENOMINATOR_KSI) ** (1.0 / 3.0))
@@ -432,26 +520,46 @@ def aluminum_member_buckling_stress(
     6061-T6, against about 113 for A992 steel.
     """
     if slenderness <= 0:
-        raise ValueError(f"slenderness must be positive; got {slenderness}")
+        raise _aluminum_refusal(
+            f"slenderness must be positive; got {slenderness}",
+            subject="slenderness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not isinstance(compressive_yield, Quantity):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not compressive_yield.has_dimension("[pressure]"):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     fcy = compressive_yield.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     bc = constants.intercept_member.to("MPa").magnitude
     dc = constants.slope_member.to("MPa").magnitude
     cc = constants.intersection_member
     if fcy <= 0 or e <= 0:
-        raise ValueError("compressive_yield and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "compressive_yield and elastic_modulus must be positive",
+            subject="compressive_yield and elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     lambda_1 = (bc - fcy) / dc
     if slenderness <= lambda_1:
         stress = fcy
@@ -496,33 +604,69 @@ def aluminum_local_buckling_stress(
     ``constants`` comes from :func:`aluminum_buckling_constants` for the same alloy.
     """
     if not isinstance(flat_width, Quantity):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
+        raise _aluminum_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width!r}",
+            subject="flat_width",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not flat_width.has_dimension("[length]"):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+        raise _aluminum_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width}",
+            subject="flat_width",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not isinstance(thickness, Quantity):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
+        raise _aluminum_refusal(
+            f"thickness must be a [length] quantity; got {thickness!r}",
+            subject="thickness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not thickness.has_dimension("[length]"):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+        raise _aluminum_refusal(
+            f"thickness must be a [length] quantity; got {thickness}",
+            subject="thickness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not isinstance(compressive_yield, Quantity):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield!r}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not compressive_yield.has_dimension("[pressure]"):
-        raise ValueError(
-            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}"
+        raise _aluminum_refusal(
+            f"compressive_yield must be a [pressure] quantity; got {compressive_yield}",
+            subject="compressive_yield",
+            source=_ALUMINUM_MATERIAL_SOURCE,
         )
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     b = flat_width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     if b <= 0 or t <= 0:
-        raise ValueError("flat_width and thickness must be positive")
+        raise _aluminum_refusal(
+            "flat_width and thickness must be positive",
+            subject="flat_width and thickness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     fcy = compressive_yield.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if fcy <= 0 or e <= 0:
-        raise ValueError("compressive_yield and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "compressive_yield and elastic_modulus must be positive",
+            subject="compressive_yield and elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     bp = constants.intercept_plate.to("MPa").magnitude
     dp = constants.slope_plate.to("MPa").magnitude
     k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
@@ -559,27 +703,55 @@ def aluminum_elastic_local_buckling_stress(
     one — a stronger temper does not delay it at all.
     """
     if not isinstance(flat_width, Quantity):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width!r}")
+        raise _aluminum_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width!r}",
+            subject="flat_width",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not flat_width.has_dimension("[length]"):
-        raise ValueError(f"flat_width must be a [length] quantity; got {flat_width}")
+        raise _aluminum_refusal(
+            f"flat_width must be a [length] quantity; got {flat_width}",
+            subject="flat_width",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not isinstance(thickness, Quantity):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness!r}")
+        raise _aluminum_refusal(
+            f"thickness must be a [length] quantity; got {thickness!r}",
+            subject="thickness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not thickness.has_dimension("[length]"):
-        raise ValueError(f"thickness must be a [length] quantity; got {thickness}")
+        raise _aluminum_refusal(
+            f"thickness must be a [length] quantity; got {thickness}",
+            subject="thickness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     # This function checks its lengths inline rather than through `_require`, so it never
     # picked up the finiteness check that helper carries — and an infinite thickness makes
     # the b/t ratio zero, which the buckling stress then divides by.
     require_finite(flat_width, name="flat_width")
     require_finite(thickness, name="thickness")
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     b = flat_width.to("mm").magnitude
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if b <= 0 or t <= 0 or e <= 0:
-        raise ValueError("flat_width, thickness and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "flat_width, thickness and elastic_modulus must be positive",
+            subject="flat_width, thickness, and elastic_modulus",
+            source=_ALUMINUM_MEMBER_SOURCE,
+        )
     k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
     return Quantity(magnitude=pi**2 * e / (k * b / t) ** 2, unit="MPa")
 
@@ -612,29 +784,57 @@ def aluminum_lateral_torsional_moment(
     radius of gyration from §F.4.2.
     """
     if not isinstance(plastic_moment, Quantity):
-        raise ValueError(
-            f"plastic_moment must be a [force] * [length] quantity; got {plastic_moment!r}"
+        raise _aluminum_refusal(
+            f"plastic_moment must be a [force] * [length] quantity; got {plastic_moment!r}",
+            subject="plastic_moment",
+            source=_ALUMINUM_LOAD_SOURCE,
         )
     if not plastic_moment.has_dimension("[force] * [length]"):
-        raise ValueError(f"plastic_moment must be a moment quantity; got {plastic_moment}")
+        raise _aluminum_refusal(
+            f"plastic_moment must be a moment quantity; got {plastic_moment}",
+            subject="plastic_moment",
+            source=_ALUMINUM_LOAD_SOURCE,
+        )
     if not isinstance(section_modulus, Quantity):
-        raise ValueError(
-            f"section_modulus must be a [length] ** 3 quantity; got {section_modulus!r}"
+        raise _aluminum_refusal(
+            f"section_modulus must be a [length] ** 3 quantity; got {section_modulus!r}",
+            subject="section_modulus",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
         )
     if not section_modulus.has_dimension("[length] ** 3"):
-        raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus}")
+        raise _aluminum_refusal(
+            f"section_modulus must be a [length]**3 quantity; got {section_modulus}",
+            subject="section_modulus",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}")
+        raise _aluminum_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if slenderness <= 0:
-        raise ValueError(f"slenderness must be positive; got {slenderness}")
+        raise _aluminum_refusal(
+            f"slenderness must be positive; got {slenderness}",
+            subject="slenderness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
+        )
     mnp = plastic_moment.to("kN*m").magnitude
     sc = section_modulus.to("m**3").magnitude
     e = elastic_modulus.to("kPa").magnitude  # kPa * m^3 = kN*m
     cc = constants.intersection_member
     if mnp <= 0 or sc <= 0 or e <= 0:
-        raise ValueError("plastic_moment, section_modulus and elastic_modulus must be positive")
+        raise _aluminum_refusal(
+            "plastic_moment, section_modulus and elastic_modulus must be positive",
+            subject="plastic_moment, section_modulus, and elastic_modulus",
+            source=_ALUMINUM_MEMBER_SOURCE,
+        )
     if slenderness <= cc:
         moment = mnp * (1.0 - slenderness / cc) + pi**2 * e * slenderness * sc / cc**3
     else:
@@ -667,9 +867,11 @@ def aluminum_combined_interaction(
         (minor_moment_ratio, "minor_moment_ratio"),
     ):
         if value < 0:
-            raise ValueError(
+            raise _aluminum_refusal(
                 f"{name} must be non-negative; got {value}. Interaction ratios are "
-                f"magnitudes — a sign-reversed demand still consumes capacity."
+                f"magnitudes — a sign-reversed demand still consumes capacity.",
+                subject=name,
+                source=_ALUMINUM_LOAD_SOURCE,
             )
     return axial_ratio + major_moment_ratio + minor_moment_ratio
 
@@ -933,19 +1135,29 @@ def aluminum_compression_strength(
     welded whose weld-affected properties were not supplied.
     """
     if not isinstance(properties, AlloyProperties):
-        raise ValueError(f"properties must be an AlloyProperties; got {properties!r}")
+        raise _aluminum_refusal(
+            f"properties must be an AlloyProperties; got {properties!r}",
+            subject="properties",
+            source=_ALUMINUM_MATERIAL_SOURCE,
+        )
     if not isinstance(edge_support, EdgeSupport):
-        raise ValueError(f"edge_support must be an EdgeSupport; got {edge_support!r}")
+        raise _aluminum_refusal(
+            f"edge_support must be an EdgeSupport; got {edge_support!r}",
+            subject="edge_support",
+            source=_ALUMINUM_CODE_SOURCE,
+        )
     # `min(states, ...)` picks the governing limit state, and min() DROPS a NaN candidate
     # rather than propagating it: a non-finite kL/r poisoned only the member-buckling state
     # and the function reported yielding as governing -- turning a FAIL at 147.5 MPa into a
     # PASS at 241 MPa, 63% above the real capacity, with `member_buckling = nan` sitting in
     # the returned object.
     if not isfinite(slenderness):
-        raise ValueError(
+        raise _aluminum_refusal(
             f"slenderness (kL/r) must be finite; got {slenderness}. A non-finite slenderness "
             "poisons one limit state and is then dropped by the min() that picks the "
-            "governing one, so a buckling-governed member reports as yielding-governed"
+            "governing one, so a buckling-governed member reports as yielding-governed",
+            subject="slenderness",
+            source=_ALUMINUM_GEOMETRY_SOURCE,
         )
     sets: list[tuple[bool, AlloyProperties]] = [(False, properties)]
     if welded:
@@ -1133,9 +1345,17 @@ def aluminum_compression_scorecard(
             needs=(_NEEDS_AN_ADM_STRENGTH,),
         )
     if not isinstance(demand_stress, Quantity):
-        raise ValueError(f"demand_stress must be a [pressure] quantity; got {demand_stress!r}")
+        raise _aluminum_refusal(
+            f"demand_stress must be a [pressure] quantity; got {demand_stress!r}",
+            subject="demand_stress",
+            source=_ALUMINUM_LOAD_SOURCE,
+        )
     if not demand_stress.has_dimension("[pressure]"):
-        raise ValueError(f"demand_stress must be a [pressure] quantity; got {demand_stress}")
+        raise _aluminum_refusal(
+            f"demand_stress must be a [pressure] quantity; got {demand_stress}",
+            subject="demand_stress",
+            source=_ALUMINUM_LOAD_SOURCE,
+        )
     demand = abs(demand_stress.to("MPa").magnitude)
     nominal = strength.nominal.to("MPa").magnitude
     # Zero demand is a check with nothing to evaluate, not one that passed.
