@@ -2,14 +2,17 @@
 
 ## 1. Implementation
 
-- [ ] 1.1 Two-pass compilation: unconstrained reasoning, constrained packaging — needs the
-      compiler, which is unbuilt
-- [ ] 1.2 Provenance capture of reasoning output and pass configuration — the *configuration*
-      half is done: `CompilationReport` refuses to exist without stating how it was decoded,
-      because validity and accuracy both move with the pass structure and a number without
-      its configuration cannot be compared with another one. Capturing the reasoning output
-      itself needs the compiler
-- [ ] 1.3 Single-pass fallback path, recorded when used — follows 1.1
+- [x] 1.1 Two-pass compilation: unconstrained reasoning, constrained packaging —
+      `compile_intent` injects the model backend, calls its unconstrained reasoning pass once,
+      and supplies the exact Design Spec schema to each constrained packaging attempt. Only
+      a candidate accepted by `parse_spec` is returned (`tests/test_compilation.py`)
+- [x] 1.2 Provenance capture of reasoning output and pass configuration —
+      `CompilationProvenance` retains the reasoning separately from the typed spec and names
+      the backend, model, pass shape, schema version, retry budget, attempts, and validation
+      failures. `CompilationReport` continues to require the evaluation configuration
+- [x] 1.3 Single-pass fallback path, recorded when used — a backend declaring no two-pass
+      support skips reasoning, still packages under the schema, and records
+      `single_pass_fallback`; it can never be mistaken for a two-pass run
 
 ## 2. Evaluation
 
@@ -31,7 +34,9 @@
 
 ## 3. Tests
 
-- [ ] 3.1 Reasoning output never reaches downstream stages — follows 1.1
+- [x] 3.1 Reasoning output never reaches downstream stages — the result keeps provenance
+      beside the `DesignSpec`, never inside it. A sentinel test screens the returned spec and
+      proves the private reasoning appears in neither the spec nor the scorecard
 - [x] 3.2 Metric separation asserted; a synthetic wrong-but-valid case is counted as a defect
       — a legal `DesignSpec` that read 50 kN as 50 kip scores `schema_valid` True,
       `wrong_but_valid` True, and is named by `wrong_but_valid()` rather than only counted.
@@ -49,6 +54,8 @@
 
 ## Note
 
-The compiler is unbuilt, so what shipped is the measurement vocabulary rather than the
-thing measured. That order is deliberate: a compiler shipped against a metric that hides
-the wrong-but-valid case would look like it was improving as it got worse.
+The orchestration contract is built; model adapters and the compilation task corpus are not.
+That boundary is deliberate: Anvilate supplies the schema, validation, retries, provenance,
+and pass isolation without choosing a local server or initiating a cloud call. The
+measurement vocabulary shipped first so a compiler could not look better by hiding the
+wrong-but-valid case.

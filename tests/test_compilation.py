@@ -11,10 +11,13 @@ from __future__ import annotations
 import pytest
 
 from anvilate.compilation import (
+    CompilationFailure,
+    CompilationMode,
     CompilationOutcome,
     CompilationReport,
     CompilationTask,
     FieldOutcome,
+    compile_intent,
     field_value,
     score_candidate,
     score_task_set,
@@ -36,6 +39,106 @@ _RIGHT = {
     "load_cases": [{"force": {"magnitude": 50000.0, "unit": "N"}}],
     "acceptance": {"min_safety_factor": 2.0},
 }
+
+_VALID_SPEC = {
+    "name": "compiled_lug",
+    "description": "A compiled lifting lug.",
+    "units": {"value": "SI", "origin": "user_stated"},
+    "material": {"ref": "ASTM-A36"},
+    "manufacturing": {"process": "cnc_milling"},
+    "acceptance": {"tiers": ["T1_analytical"]},
+}
+
+
+class _Backend:
+    name = "test-backend"
+    model = "small-local-model"
+
+    def __init__(self, outputs, *, two_pass=True, reasoning="private chain of thought"):
+        self.supports_two_pass = two_pass
+        self.outputs = iter(outputs)
+        self.reasoning = reasoning
+        self.reason_calls = []
+        self.package_calls = []
+
+    def reason(self, prompt):
+        self.reason_calls.append(prompt)
+        return self.reasoning
+
+    def package_spec(self, prompt, *, schema, reasoning, validation_error):
+        self.package_calls.append((prompt, schema, reasoning, validation_error))
+        return next(self.outputs)
+
+
+# --- the compiler boundary ---------------------------------------------------------------
+
+
+def test_two_pass_compilation_reasons_free_then_returns_only_validated_spec_ir():
+    backend = _Backend([_VALID_SPEC])
+    result = compile_intent("Make a lifting lug.", backend)
+
+    assert result.spec.name == "compiled_lug"
+    assert backend.reason_calls == ["Make a lifting lug."]
+    (_, schema, reasoning, validation_error) = backend.package_calls[0]
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert reasoning == "private chain of thought"
+    assert validation_error is None
+    assert result.provenance.configuration.mode is CompilationMode.TWO_PASS
+    assert result.provenance.reasoning == reasoning
+    assert result.provenance.attempts == 1
+
+
+def test_invalid_packaging_is_retried_with_the_validation_error_and_never_returned():
+    backend = _Backend([{"name": "not enough"}, _VALID_SPEC])
+    result = compile_intent("Make a lifting lug.", backend, retry_budget=1)
+
+    assert result.provenance.attempts == 2
+    assert len(result.provenance.validation_errors) == 1
+    assert backend.package_calls[0][3] is None
+    assert backend.package_calls[1][3] == result.provenance.validation_errors[0]
+    assert "description" in backend.package_calls[1][3]
+
+
+def test_exhausted_packaging_is_a_failure_with_every_rejected_attempt_recorded():
+    backend = _Backend([{"name": "still invalid"}] * 3)
+    with pytest.raises(CompilationFailure, match="failed after 3 attempts") as failure:
+        compile_intent("Make a lifting lug.", backend, retry_budget=2)
+
+    provenance = failure.value.provenance
+    assert provenance.succeeded is False
+    assert provenance.attempts == 3
+    assert len(provenance.validation_errors) == 3
+
+
+def test_a_backend_without_two_pass_support_uses_an_explicit_recorded_fallback():
+    backend = _Backend([_VALID_SPEC], two_pass=False)
+    result = compile_intent("Make a lifting lug.", backend)
+
+    assert backend.reason_calls == []
+    assert backend.package_calls[0][2] is None
+    assert result.provenance.reasoning is None
+    assert result.provenance.configuration.mode is CompilationMode.SINGLE_PASS_FALLBACK
+
+
+def test_reasoning_is_provenance_and_never_reaches_the_spec_or_its_screening_result():
+    from anvilate.screening import screen_spec
+
+    sentinel = "PRIVATE-REASONING-MUST-NOT-CROSS"
+    result = compile_intent("Make a lifting lug.", _Backend([_VALID_SPEC], reasoning=sentinel))
+    spec_document = result.spec.model_dump_json()
+    card_document = screen_spec(result.spec).model_dump_json()
+
+    assert sentinel in result.provenance.reasoning
+    assert sentinel not in spec_document
+    assert sentinel not in card_document
+
+
+def test_the_retry_budget_is_bounded_before_the_backend_runs():
+    backend = _Backend([_VALID_SPEC])
+    with pytest.raises(ValueError, match="less than or equal to 5"):
+        compile_intent("Make a lifting lug.", backend, retry_budget=6)
+    assert backend.reason_calls == []
+    assert backend.package_calls == []
 
 
 def _candidate(**overrides) -> dict:

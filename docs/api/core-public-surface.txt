@@ -101,10 +101,17 @@ cli.EXIT_CODES
 cli.main
 cli.run
 compilation.CONSTRAINT_TAX_CITATION
+compilation.CompilationBackend
+compilation.CompilationFailure
+compilation.CompilationMode
 compilation.CompilationOutcome
+compilation.CompilationProvenance
 compilation.CompilationReport
+compilation.CompilationResult
 compilation.CompilationTask
+compilation.DecodingConfiguration
 compilation.FieldOutcome
+compilation.compile_intent
 compilation.field_value
 compilation.score_candidate
 compilation.score_task_set

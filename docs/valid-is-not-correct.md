@@ -12,10 +12,24 @@ meant.
 
 ## What is built, and what is not
 
-The compiler is not built. [`anvilate.compilation`](../src/anvilate/compilation.py) is the
-half that decides whether the compiler will be any good — the **measurement** — and it exists
-first on purpose, because a compiler shipped against a metric that hides this failure would
-look like it was improving as it got worse.
+[`anvilate.compilation`](../src/anvilate/compilation.py) now contains the backend-independent
+compiler boundary and the measurement vocabulary. The caller injects a backend; Anvilate
+makes no model or network choice. A two-pass backend first reasons without a schema, then
+receives the exact Design Spec JSON Schema for constrained packaging. A backend that cannot
+separate the passes uses a single constrained pass, and that fallback is recorded rather
+than presented as equivalent.
+
+Every packaged candidate goes through the ordinary `parse_spec` front door. A malformed
+candidate is returned to the backend as validation context up to the bounded retry budget;
+exhaustion raises `CompilationFailure` and no candidate reaches another subsystem. A
+successful `CompilationResult` keeps the typed `DesignSpec` in `result.spec` and the
+reasoning/configuration in `result.provenance`. Screening, geometry, and export accept the
+former, not the reasoning-bearing wrapper. The repository still ships no model adapter and
+initiates no cloud call; local and user-configured cloud adapters belong outside this
+orchestration contract.
+
+The measurement came first on purpose: a compiler shipped against a metric that hides the
+wrong-but-valid failure would look like it was improving as it got worse.
 
 ```python
 from anvilate.compilation import CompilationTask, score_task_set

@@ -1,8 +1,10 @@
-"""Scoring a compiled spec: validity and correctness are two numbers, and stay two numbers.
+"""Compile prose into validated Spec IR, and measure validity separately from correctness.
 
-Anvilate's intent compiler will one day turn prose into Spec IR with a small local model.
-This module is the half of that which can exist before the compiler does, and it is the half
-that decides whether the compiler is any good: **the measurement.**
+The compiler orchestration is backend-independent and makes no network call itself. A backend
+is injected by the caller. If it supports two passes, reasoning is unconstrained and packaging
+receives the Design Spec JSON Schema; otherwise the recorded fallback is one constrained pass.
+Only a :class:`~anvilate.spec.DesignSpec` that passes the normal front-door validation is
+returned. Reasoning is retained beside it as provenance, never inserted into the spec.
 
 The reason it is worth building first is a specific, measured failure. Constraining every
 token of a small model's output to a schema takes schema validity from about 62% to 100% —
@@ -32,27 +34,45 @@ Quantity comparison is dimensional, so "50 kN" and "50000 N" are the same answer
 and "50 kip" are not — which is the whole point of comparing against a reference rather than
 against a string.
 
-The compiler itself, its two-pass structure, and the task corpus are not here. What is here
-is the shape a result has to have for those to be judged honestly.
+The task corpus is still separate. The scoring vocabulary below is the shape a result has to
+have for compiler configurations to be judged honestly.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from copy import deepcopy
+from enum import StrEnum
 from math import isclose
-from typing import Any
+from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ._models import FrozenMap, Provenance, RevalidatedModel, rebuilt_quantities
+from ._models import (
+    FrozenMap,
+    Named,
+    Provenance,
+    RevalidatedModel,
+    StatableModel,
+    rebuilt_quantities,
+)
+from .contracts import spec_json_schema
+from .spec import SCHEMA_VERSION, DesignSpec, SpecValidationError, parse_spec
 from .units import Quantity, UnitError
 
 __all__ = [
     "CONSTRAINT_TAX_CITATION",
+    "CompilationBackend",
+    "CompilationFailure",
+    "CompilationMode",
     "CompilationOutcome",
+    "CompilationProvenance",
     "CompilationReport",
+    "CompilationResult",
     "CompilationTask",
+    "DecodingConfiguration",
     "FieldOutcome",
+    "compile_intent",
     "field_value",
     "score_candidate",
     "score_task_set",
@@ -68,6 +88,165 @@ CONSTRAINT_TAX_CITATION = (
 # answer. A compiler is being scored on whether it read "50 kN" out of a sentence, not on
 # float formatting — but the tolerance is tight enough that 50 and 51 are different answers.
 _AGREEMENT = 1e-9
+
+
+class CompilationMode(StrEnum):
+    """Whether reasoning and constrained packaging were separate passes."""
+
+    TWO_PASS = "two_pass"
+    SINGLE_PASS_FALLBACK = "single_pass_fallback"
+
+
+class CompilationBackend(Protocol):
+    """The model-specific operations required by :func:`compile_intent`.
+
+    ``package_spec`` must apply structured-output enforcement using the supplied schema.
+    Anvilate still validates the returned mapping through the ordinary Spec IR front door;
+    the backend's constraint is not trusted as validation.
+    """
+
+    name: str
+    model: str
+    supports_two_pass: bool
+
+    def reason(self, prompt: str) -> str: ...
+
+    def package_spec(
+        self,
+        prompt: str,
+        *,
+        schema: dict[str, Any],
+        reasoning: str | None,
+        validation_error: str | None,
+    ) -> Mapping[str, Any]: ...
+
+
+class DecodingConfiguration(StatableModel):
+    """The backend, model, pass shape, schema, and retry budget behind one compilation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    backend: Named
+    model: Named
+    mode: CompilationMode
+    schema_version: str = SCHEMA_VERSION
+    retry_budget: int = Field(ge=0, le=5)
+
+
+class CompilationProvenance(StatableModel):
+    """Reasoning retained for debugging, plus how packaging produced the validated spec."""
+
+    model_config = ConfigDict(frozen=True)
+
+    configuration: DecodingConfiguration
+    reasoning: str | None
+    attempts: int = Field(ge=1, le=6)
+    validation_errors: tuple[str, ...] = ()
+    succeeded: bool = True
+
+    @model_validator(mode="after")
+    def _reasoning_matches_the_pass_shape(self) -> CompilationProvenance:
+        if self.configuration.mode is CompilationMode.TWO_PASS:
+            if self.reasoning is None or not self.reasoning.strip():
+                raise ValueError("a two-pass compilation must retain its reasoning output")
+        elif self.reasoning is not None:
+            raise ValueError("a single-pass fallback did not run a reasoning pass")
+        expected_errors = self.attempts - 1 if self.succeeded else self.attempts
+        if len(self.validation_errors) != expected_errors:
+            raise ValueError(
+                "compilation provenance has one validation error per rejected attempt; "
+                f"got {len(self.validation_errors)} errors across {self.attempts} attempts"
+            )
+        return self
+
+
+class CompilationResult(StatableModel):
+    """A validated spec and compiler provenance kept outside that downstream document."""
+
+    model_config = ConfigDict(frozen=True)
+
+    spec: DesignSpec
+    provenance: CompilationProvenance
+
+
+class CompilationFailure(ValueError):
+    """Constrained packaging exhausted its retry budget without a valid Design Spec."""
+
+    def __init__(self, message: str, *, provenance: CompilationProvenance) -> None:
+        self.provenance = provenance
+        super().__init__(message)
+
+
+def compile_intent(
+    prompt: str,
+    backend: CompilationBackend,
+    *,
+    retry_budget: int = 2,
+) -> CompilationResult:
+    """Compile ``prompt`` through an injected backend and return only validated Spec IR.
+
+    A two-pass backend reasons once without a schema, then packages under the exact Design
+    Spec schema. A backend that cannot do that uses one constrained pass and records the
+    fallback. Invalid packaging is returned to the backend as context for the next attempt;
+    it is never exposed as a candidate spec.
+    """
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("prompt must state the part to compile")
+    mode = (
+        CompilationMode.TWO_PASS
+        if backend.supports_two_pass
+        else CompilationMode.SINGLE_PASS_FALLBACK
+    )
+    configuration = DecodingConfiguration(
+        backend=backend.name,
+        model=backend.model,
+        mode=mode,
+        retry_budget=retry_budget,
+    )
+    reasoning = backend.reason(prompt) if mode is CompilationMode.TWO_PASS else None
+    if reasoning is not None and not reasoning.strip():
+        raise ValueError("the two-pass backend returned no reasoning output to retain")
+
+    schema = spec_json_schema()
+    failures: list[str] = []
+    for attempt in range(1, retry_budget + 2):
+        candidate = backend.package_spec(
+            prompt,
+            schema=deepcopy(schema),
+            reasoning=reasoning,
+            validation_error=failures[-1] if failures else None,
+        )
+        try:
+            if not isinstance(candidate, Mapping):
+                raise ValueError(
+                    "constrained packaging must return a mapping for Spec IR; "
+                    f"got {type(candidate).__name__}"
+                )
+            spec = parse_spec(dict(candidate))
+        except (SpecValidationError, TypeError, ValueError) as invalid:
+            failures.append(str(invalid))
+            continue
+        return CompilationResult(
+            spec=spec,
+            provenance=CompilationProvenance(
+                configuration=configuration,
+                reasoning=reasoning,
+                attempts=attempt,
+                validation_errors=tuple(failures),
+            ),
+        )
+
+    provenance = CompilationProvenance(
+        configuration=configuration,
+        reasoning=reasoning,
+        attempts=retry_budget + 1,
+        validation_errors=tuple(failures),
+        succeeded=False,
+    )
+    raise CompilationFailure(
+        f"intent compilation failed after {retry_budget + 1} attempts: {failures[-1]}",
+        provenance=provenance,
+    )
 
 
 class FieldOutcome(BaseModel):
