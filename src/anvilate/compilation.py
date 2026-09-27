@@ -76,6 +76,8 @@ __all__ = [
     "CompilationMode",
     "CompilationOutcome",
     "CompilationProvenance",
+    "CompilationRecommendation",
+    "CompilationRecommendationPolicy",
     "CompilationReport",
     "CompilationResult",
     "CompilationTask",
@@ -88,6 +90,7 @@ __all__ = [
     "OllamaBackend",
     "OllamaError",
     "compile_intent",
+    "assess_compilation_recommendation",
     "default_compilation_task_set",
     "evaluate_task_set",
     "field_value",
@@ -1263,6 +1266,131 @@ class CompilationEvaluation(StatableModel):
                 f"attempted {attempted}, reported {reported}"
             )
         return self
+
+
+class CompilationRecommendationPolicy(StatableModel):
+    """The explicitly declared release thresholds for one compilation task-set version."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_set_version: str
+    minimum_schema_validity: float = Field(ge=0.0, le=1.0)
+    minimum_field_correctness: float = Field(ge=0.0, le=1.0)
+    maximum_wrong_but_valid_rate: float = Field(ge=0.0, le=1.0)
+    reference: Provenance
+
+    @field_validator("task_set_version")
+    @classmethod
+    def _version_is_semantic(cls, value: str) -> str:
+        if _SEMVER.fullmatch(value) is None:
+            raise ValueError("recommendation policy task-set version must be semantic (X.Y.Z)")
+        return value
+
+
+class CompilationRecommendation(StatableModel):
+    """A release-gate decision that keeps all three compilation measures visible."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_set_version: str
+    configuration: DecodingConfiguration
+    schema_validity: float = Field(ge=0.0, le=1.0)
+    field_correctness: float = Field(ge=0.0, le=1.0)
+    wrong_but_valid_rate: float = Field(ge=0.0, le=1.0)
+    policy: CompilationRecommendationPolicy
+    recommended: bool
+    reasons: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def _decision_matches_its_reasons(self) -> CompilationRecommendation:
+        if self.recommended == bool(self.reasons):
+            raise ValueError(
+                "a recommended model has no failing gates; a refusal names at least one"
+            )
+        return self
+
+    def render_markdown(self) -> str:
+        """Render release-note-ready evidence without inventing a composite score."""
+        decoding = (
+            f"{self.configuration.mode.value}; schema {self.configuration.schema_version}; "
+            f"retry budget {self.configuration.retry_budget}"
+        )
+        decision = "recommended" if self.recommended else "not recommended"
+        lines = [
+            "| Model | Backend | Task set | Decoding | Schema validity | "
+            "Field correctness | Wrong-but-valid | Decision |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | --- |",
+            f"| {self.configuration.model} | {self.configuration.backend} | "
+            f"{self.task_set_version} | {decoding} | {self.schema_validity:.1%} | "
+            f"{self.field_correctness:.1%} | {self.wrong_but_valid_rate:.1%} | "
+            f"{decision} |",
+            "",
+            (
+                "Policy: schema validity >= "
+                f"{self.policy.minimum_schema_validity:.1%}; field correctness >= "
+                f"{self.policy.minimum_field_correctness:.1%}; wrong-but-valid <= "
+                f"{self.policy.maximum_wrong_but_valid_rate:.1%}. "
+                f"Source: {self.policy.reference}"
+            ),
+        ]
+        if self.reasons:
+            lines.extend(("", "Gate failures:", *(f"- {reason}" for reason in self.reasons)))
+        return "\n".join(lines)
+
+
+def assess_compilation_recommendation(
+    evaluation: CompilationEvaluation,
+    policy: CompilationRecommendationPolicy,
+) -> CompilationRecommendation:
+    """Apply every declared gate to complete, current evidence for one model configuration."""
+    if evaluation.task_set_version != policy.task_set_version:
+        raise ValueError(
+            "compilation evidence is stale for this recommendation policy: "
+            f"run {evaluation.task_set_version}, policy {policy.task_set_version}"
+        )
+
+    configurations = tuple(
+        attempt.result.provenance.configuration
+        if attempt.result is not None
+        else attempt.failure.configuration  # type: ignore[union-attr]
+        for attempt in evaluation.attempts
+    )
+    configuration = configurations[0]
+    if any(candidate != configuration for candidate in configurations[1:]):
+        raise ValueError("recommendation evidence contains more than one decoding configuration")
+    if configuration.schema_version != SCHEMA_VERSION:
+        raise ValueError(
+            "compilation evidence uses stale Spec IR schema "
+            f"{configuration.schema_version}; current schema is {SCHEMA_VERSION}"
+        )
+
+    report = evaluation.report
+    reasons: list[str] = []
+    if report.schema_validity < policy.minimum_schema_validity:
+        reasons.append(
+            f"schema validity {report.schema_validity:.1%} is below "
+            f"{policy.minimum_schema_validity:.1%}"
+        )
+    if report.field_correctness < policy.minimum_field_correctness:
+        reasons.append(
+            f"field correctness {report.field_correctness:.1%} is below "
+            f"{policy.minimum_field_correctness:.1%}"
+        )
+    if report.wrong_but_valid_rate > policy.maximum_wrong_but_valid_rate:
+        reasons.append(
+            f"wrong-but-valid rate {report.wrong_but_valid_rate:.1%} exceeds "
+            f"{policy.maximum_wrong_but_valid_rate:.1%}"
+        )
+    return CompilationRecommendation(
+        task_set_version=evaluation.task_set_version,
+        configuration=configuration,
+        schema_validity=report.schema_validity,
+        field_correctness=report.field_correctness,
+        wrong_but_valid_rate=report.wrong_but_valid_rate,
+        policy=policy,
+        recommended=not reasons,
+        reasons=tuple(reasons),
+    )
 
 
 def evaluate_task_set(

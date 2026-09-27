@@ -110,6 +110,8 @@ compilation.CompilationFailure
 compilation.CompilationMode
 compilation.CompilationOutcome
 compilation.CompilationProvenance
+compilation.CompilationRecommendation
+compilation.CompilationRecommendationPolicy
 compilation.CompilationReport
 compilation.CompilationResult
 compilation.CompilationTask
@@ -120,6 +122,7 @@ compilation.LlamaCppBackend
 compilation.LlamaCppError
 compilation.OllamaBackend
 compilation.OllamaError
+compilation.assess_compilation_recommendation
 compilation.compile_intent
 compilation.default_compilation_task_set
 compilation.evaluate_task_set

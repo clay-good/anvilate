@@ -19,6 +19,8 @@ from anvilate.compilation import (
     CompilationFailure,
     CompilationMode,
     CompilationOutcome,
+    CompilationRecommendation,
+    CompilationRecommendationPolicy,
     CompilationReport,
     CompilationTask,
     CompilationTaskSet,
@@ -27,6 +29,7 @@ from anvilate.compilation import (
     LlamaCppError,
     OllamaBackend,
     OllamaError,
+    assess_compilation_recommendation,
     compile_intent,
     default_compilation_task_set,
     evaluate_task_set,
@@ -460,6 +463,127 @@ def test_evaluation_refuses_a_stale_corpus_before_calling_the_backend():
     with pytest.raises(ValueError, match="task set is stale"):
         evaluate_task_set(stale, backend)
     assert backend.reason_calls == []
+
+
+def _recommendation_policy(**overrides) -> CompilationRecommendationPolicy:
+    values = {
+        "task_set_version": "1.0.0",
+        "minimum_schema_validity": 0.5,
+        "minimum_field_correctness": 0.6,
+        "maximum_wrong_but_valid_rate": 0.25,
+        "reference": "release policy approved for the 1.0.0 compilation corpus",
+    }
+    values.update(overrides)
+    return CompilationRecommendationPolicy(**values)
+
+
+def test_recommendation_gate_applies_all_three_metrics_without_a_composite_score():
+    evaluation = evaluate_task_set(
+        _evaluation_task_set(),
+        _Backend([_VALID_SPEC, *([{"name": "invalid"}] * 3)]),
+    )
+    decision = assess_compilation_recommendation(evaluation, _recommendation_policy())
+
+    assert isinstance(decision, CompilationRecommendation)
+    assert decision.recommended is True
+    assert decision.reasons == ()
+    for forbidden in ("score", "success_rate", "passed", "overall"):
+        assert not hasattr(decision, forbidden)
+
+
+def test_high_validity_with_too_many_wrong_but_valid_outputs_is_not_recommended():
+    evaluation = evaluate_task_set(
+        _evaluation_task_set(),
+        _Backend([_VALID_SPEC, _VALID_SPEC]),
+    )
+    decision = assess_compilation_recommendation(evaluation, _recommendation_policy())
+
+    assert decision.schema_validity == pytest.approx(1.0)
+    assert decision.wrong_but_valid_rate == pytest.approx(0.5)
+    assert decision.recommended is False
+    assert decision.reasons == ("wrong-but-valid rate 50.0% exceeds 25.0%",)
+
+
+def test_recommendation_gate_names_every_failed_threshold_independently():
+    evaluation = evaluate_task_set(
+        _evaluation_task_set(),
+        _Backend([_VALID_SPEC, *([{"name": "invalid"}] * 3)]),
+    )
+    decision = assess_compilation_recommendation(
+        evaluation,
+        _recommendation_policy(
+            minimum_schema_validity=0.75,
+            minimum_field_correctness=0.75,
+            maximum_wrong_but_valid_rate=0.0,
+        ),
+    )
+
+    assert decision.recommended is False
+    assert decision.reasons == (
+        "schema validity 50.0% is below 75.0%",
+        "field correctness 66.7% is below 75.0%",
+    )
+
+
+def test_recommendation_markdown_carries_the_model_run_policy_and_three_metrics():
+    evaluation = evaluate_task_set(
+        _evaluation_task_set(),
+        _Backend([_VALID_SPEC, _VALID_SPEC]),
+    )
+    rendered = assess_compilation_recommendation(
+        evaluation, _recommendation_policy()
+    ).render_markdown()
+
+    for expected in (
+        "small-local-model",
+        "test-backend",
+        "1.0.0",
+        "two_pass",
+        "schema 1.18.0",
+        "Schema validity",
+        "Field correctness",
+        "Wrong-but-valid",
+        "100.0%",
+        "66.7%",
+        "50.0%",
+        "not recommended",
+        "release policy approved",
+    ):
+        assert expected in rendered
+
+
+def test_recommendation_gate_refuses_evidence_for_another_task_set_or_schema():
+    evaluation = evaluate_task_set(
+        _evaluation_task_set(),
+        _Backend([_VALID_SPEC, *([{"name": "invalid"}] * 3)]),
+    )
+    with pytest.raises(ValueError, match="evidence is stale"):
+        assess_compilation_recommendation(
+            evaluation,
+            _recommendation_policy(task_set_version="2.0.0"),
+        )
+
+    one_task = evaluate_task_set(
+        CompilationTaskSet(version="1.0.0", tasks=(_evaluation_task_set().tasks[0],)),
+        _Backend([_VALID_SPEC]),
+    )
+    first = one_task.attempts[0]
+    assert first.result is not None
+    stale_configuration = first.result.provenance.configuration.model_copy(
+        update={"schema_version": "1.17.0"}
+    )
+    stale_result = first.result.model_copy(
+        update={
+            "provenance": first.result.provenance.model_copy(
+                update={"configuration": stale_configuration}
+            )
+        }
+    )
+    stale = one_task.model_copy(
+        update={"attempts": (first.model_copy(update={"result": stale_result}),)}
+    )
+    with pytest.raises(ValueError, match="uses stale Spec IR schema"):
+        assess_compilation_recommendation(stale, _recommendation_policy())
 
 
 def _candidate(**overrides) -> dict:

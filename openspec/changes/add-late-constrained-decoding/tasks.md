@@ -32,8 +32,12 @@
       100%, so it rises while the thing a user cares about falls. `evaluate_task_set()` now
       runs every corpus task and retains successes and bounded failures before deriving those
       metrics; an unexpected backend defect aborts rather than masquerading as a low score
-- [ ] 2.3 Gate the published local-model recommendation on all three — there is no published
-      recommendation yet, and gating one that does not exist is not a thing that can be done
+- [x] 2.3 Gate the published local-model recommendation on all three —
+      `assess_compilation_recommendation()` requires an explicit, versioned policy and applies
+      schema validity, field correctness, and wrong-but-valid thresholds independently. It
+      refuses stale evidence and renders all three figures plus the exact decoding
+      configuration for release notes. No model is recommended until a real run clears the
+      caller-declared policy
 
 ## 3. Tests
 

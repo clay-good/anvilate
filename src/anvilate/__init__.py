@@ -43,8 +43,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.callouts` — typed MBD callouts: finish, coating, and heat treat
   as check inputs with persistent characteristic identity, not annotations.
 - :mod:`anvilate.compilation` — two-pass prose-to-spec compilation through local Ollama or
-  llama.cpp models, plus scoring with schema validity and field correctness kept as separate
-  numbers because constraint moves them in opposite directions.
+  llama.cpp models, plus scoring and an explicit release gate that keep schema validity,
+  field correctness, and wrong-but-valid results separate.
 - :mod:`anvilate.contracts` — the Spec IR and the scorecard published as versioned
   JSON Schema 2020-12 artifacts, generated from the models and held against them.
 - :mod:`anvilate._assembly_declarations` — the private home of the parts, states and

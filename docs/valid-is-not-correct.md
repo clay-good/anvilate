@@ -170,3 +170,22 @@ version, and retry budget. A backend transport or implementation defect aborts t
 is not converted into a schema-invalid answer, because a partial run is not a low-scoring
 complete run. The runner remains offline until the caller injects a backend that chooses to
 communicate with a model.
+
+## A recommendation needs an explicit release policy
+
+`assess_compilation_recommendation(evaluation, policy)` is the publication gate. Its
+`CompilationRecommendationPolicy` requires the release owner to state all three thresholds,
+the task-set version they govern, and the source of that decision. Anvilate provides no
+house thresholds: choosing how much model error is acceptable is a release decision, not a
+number the measurement code can infer.
+
+The gate refuses evidence from another task-set version, a stale Spec IR schema, or a run
+that mixes decoding configurations. It applies each threshold independently. In particular,
+100% schema validity cannot rescue a candidate whose wrong-but-valid rate exceeds policy.
+The resulting `CompilationRecommendation` has no aggregate score; `reasons` names every
+failed gate.
+
+`render_markdown()` produces the release-note table row. It includes the model, backend,
+task-set version, pass shape, schema version, retry budget, all three measured figures, the
+decision, and the policy source. Producing that evidence does not publish a recommendation
+or run a model by itself.

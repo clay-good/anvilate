@@ -49,7 +49,10 @@
 
 ## 3. Publication
 
-- [ ] 3.1 Release-notes integration and local-model recommendation update path
+- [ ] 3.1 Release-notes integration and local-model recommendation update path — compilation
+      evidence now has a release-note renderer and an explicit three-metric gate. This stays
+      open until agent-driving completion, iteration, and tool-error evidence is joined to
+      that publication path
 
 ## Scope as shipped 2026-08-25 — tasks 2.1-2.3
 
