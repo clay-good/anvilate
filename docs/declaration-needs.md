@@ -330,6 +330,9 @@ and masses point to drawings, catalogues, requirements, datasheets, load cases, 
 The complete ASCE load-combination, AISC compactness, and beam-foundation families follow the
 contract at all 19 refusal sites. Load effects, steel properties and section limits, foundation
 response, beam properties, and reactions point to models, records, specifications, tables, or reports.
+The complete casting, shear-spinning, and thermoforming families follow the contract at all 24
+refusal sites. Foundry geometry and trials, spinning stock and tooling, and formed-part areas,
+sheet gauges, walls, and draw ratios point to drawings, CAD, process plans, or calibrated records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

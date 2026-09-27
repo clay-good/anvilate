@@ -147,6 +147,9 @@
       The complete ASCE load-combination, AISC compactness, and beam-foundation families add 19
       structured sites for load effects, steel properties and limits, foundation response, beam
       properties, and reactions, sourced to models, records, specifications, tables, or reports.
+      The complete casting, shear-spinning, and thermoforming families add 24 structured sites for
+      foundry geometry and trials, spinning stock and tooling, and formed-part areas, sheet gauges,
+      walls, and draw ratios, sourced to drawings, CAD, process plans, or calibrated records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

@@ -24,7 +24,30 @@ from __future__ import annotations
 
 from math import asin, degrees, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SPINNING_STOCK_SOURCE = "the blank material certificate or verified stock-gauge record"
+_SPINNING_PART_SOURCE = "the finished-part drawing or calibrated wall-thickness record"
+_SPINNING_TOOL_SOURCE = "the mandrel drawing or approved shear-spinning process plan"
+
+
+class _ShearSpinningInputError(RefusalError, ValueError):
+    """A shear-spinning input that cannot be used without correction."""
+
+
+def _shear_spinning_refusal(message: str, *, subject: str, source: str) -> _ShearSpinningInputError:
+    return _ShearSpinningInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _shear_spinning_input_source(name: str) -> str:
+    if name == "blank_thickness":
+        return _SPINNING_STOCK_SOURCE
+    return _SPINNING_PART_SOURCE
+
 
 __all__ = [
     "shear_spinning_half_angle_for_thickness",
@@ -45,9 +68,17 @@ def shear_spinning_wall_thickness(*, blank_thickness: Quantity, half_cone_angle:
     _check(blank_thickness, "[length]", "blank_thickness")
     t0 = blank_thickness.to("mm").magnitude
     if t0 <= 0:
-        raise ValueError("blank_thickness must be positive")
+        raise _shear_spinning_refusal(
+            "blank_thickness must be positive",
+            subject="blank_thickness",
+            source=_SPINNING_STOCK_SOURCE,
+        )
     if not 0.0 < half_cone_angle < 90.0:
-        raise ValueError("half_cone_angle must be in (0, 90) degrees")
+        raise _shear_spinning_refusal(
+            "half_cone_angle must be in (0, 90) degrees",
+            subject="half_cone_angle",
+            source=_SPINNING_TOOL_SOURCE,
+        )
     return Quantity(magnitude=t0 * sin(radians(half_cone_angle)), unit="mm")
 
 
@@ -61,7 +92,11 @@ def shear_spinning_reduction(*, half_cone_angle: float) -> float:
     severe cones are spun in stages. Returns the thickness reduction as a fraction (0 to 1).
     """
     if not 0.0 < half_cone_angle < 90.0:
-        raise ValueError("half_cone_angle must be in (0, 90) degrees")
+        raise _shear_spinning_refusal(
+            "half_cone_angle must be in (0, 90) degrees",
+            subject="half_cone_angle",
+            source=_SPINNING_TOOL_SOURCE,
+        )
     return 1.0 - sin(radians(half_cone_angle))
 
 
@@ -81,20 +116,38 @@ def shear_spinning_half_angle_for_thickness(
     t0 = blank_thickness.to("mm").magnitude
     tf = final_thickness.to("mm").magnitude
     if t0 <= 0:
-        raise ValueError("blank_thickness must be positive")
+        raise _shear_spinning_refusal(
+            "blank_thickness must be positive",
+            subject="blank_thickness",
+            source=_SPINNING_STOCK_SOURCE,
+        )
     if tf <= 0:
-        raise ValueError("final_thickness must be positive")
+        raise _shear_spinning_refusal(
+            "final_thickness must be positive",
+            subject="final_thickness",
+            source=_SPINNING_PART_SOURCE,
+        )
     if tf >= t0:
-        raise ValueError("final_thickness must be smaller than blank_thickness (spinning thins)")
+        raise _shear_spinning_refusal(
+            "final_thickness must be smaller than blank_thickness (spinning thins)",
+            subject="final_thickness and blank_thickness",
+            source=_SPINNING_PART_SOURCE,
+        )
     return degrees(asin(tf / t0))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _shear_spinning_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_shear_spinning_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _shear_spinning_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_shear_spinning_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

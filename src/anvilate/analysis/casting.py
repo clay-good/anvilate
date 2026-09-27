@@ -25,7 +25,30 @@ first.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CASTING_GEOMETRY_SOURCE = "the casting and riser drawing or verified solid-model properties"
+_CASTING_PROCESS_SOURCE = "the qualified foundry process sheet or calibrated pour trial"
+_CASTING_FEEDING_SOURCE = "the approved riser-design criterion or foundry practice"
+
+
+class _CastingInputError(RefusalError, ValueError):
+    """A casting input that cannot be used without correction."""
+
+
+def _casting_refusal(message: str, *, subject: str, source: str) -> _CastingInputError:
+    return _CastingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _casting_input_source(name: str) -> str:
+    if name == "mold_constant":
+        return _CASTING_PROCESS_SOURCE
+    return _CASTING_GEOMETRY_SOURCE
+
 
 __all__ = [
     "casting_modulus",
@@ -48,9 +71,15 @@ def casting_modulus(*, volume: Quantity, surface_area: Quantity) -> Quantity:
     v = volume.to("cm**3").magnitude
     a = surface_area.to("cm**2").magnitude
     if v <= 0:
-        raise ValueError("volume must be positive")
+        raise _casting_refusal(
+            "volume must be positive", subject="volume", source=_CASTING_GEOMETRY_SOURCE
+        )
     if a <= 0:
-        raise ValueError("surface_area must be positive")
+        raise _casting_refusal(
+            "surface_area must be positive",
+            subject="surface_area",
+            source=_CASTING_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=v / a, unit="cm")
 
 
@@ -69,9 +98,15 @@ def chvorinov_solidification_time(*, modulus: Quantity, mold_constant: Quantity)
     m = modulus.to("cm").magnitude
     b = mold_constant.to("min/cm**2").magnitude
     if m <= 0:
-        raise ValueError("modulus must be positive")
+        raise _casting_refusal(
+            "modulus must be positive", subject="modulus", source=_CASTING_GEOMETRY_SOURCE
+        )
     if b <= 0:
-        raise ValueError("mold_constant must be positive")
+        raise _casting_refusal(
+            "mold_constant must be positive",
+            subject="mold_constant",
+            source=_CASTING_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=b * m**2, unit="min")
 
 
@@ -91,19 +126,33 @@ def riser_modulus_for_feeding(
     """
     _check(casting_modulus, "[length]", "casting_modulus")
     if feeding_factor <= 1.0:
-        raise ValueError("feeding_factor must exceed 1 (the riser must outlast the casting)")
+        raise _casting_refusal(
+            "feeding_factor must exceed 1 (the riser must outlast the casting)",
+            subject="feeding_factor",
+            source=_CASTING_FEEDING_SOURCE,
+        )
     m_c = casting_modulus.to("cm").magnitude
     if m_c <= 0:
-        raise ValueError("casting_modulus must be positive")
+        raise _casting_refusal(
+            "casting_modulus must be positive",
+            subject="casting_modulus",
+            source=_CASTING_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=feeding_factor * m_c, unit="cm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _casting_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_casting_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _casting_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_casting_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

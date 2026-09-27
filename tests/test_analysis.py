@@ -22883,6 +22883,119 @@ def test_thermoforming_draw_ratio_wall_thinning_and_gauge_inverse():
         thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm**2"), areal_draw_ratio=2.0)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "casting_modulus",
+            {"volume": _q("0 cm**3"), "surface_area": _q("280 cm**2")},
+            "volume",
+            "the casting and riser drawing or verified solid-model properties",
+        ),
+        (
+            "chvorinov_solidification_time",
+            {"modulus": _q("1 cm"), "mold_constant": _q("0 min/cm**2")},
+            "mold_constant",
+            "the qualified foundry process sheet or calibrated pour trial",
+        ),
+        (
+            "riser_modulus_for_feeding",
+            {"casting_modulus": _q("1 cm"), "feeding_factor": 1.0},
+            "feeding_factor",
+            "the approved riser-design criterion or foundry practice",
+        ),
+        (
+            "shear_spinning_wall_thickness",
+            {"blank_thickness": _q("0 mm"), "half_cone_angle": 30.0},
+            "blank_thickness",
+            "the blank material certificate or verified stock-gauge record",
+        ),
+        (
+            "shear_spinning_reduction",
+            {"half_cone_angle": 0.0},
+            "half_cone_angle",
+            "the mandrel drawing or approved shear-spinning process plan",
+        ),
+        (
+            "shear_spinning_half_angle_for_thickness",
+            {"blank_thickness": _q("4 mm"), "final_thickness": _q("4 mm")},
+            "final_thickness and blank_thickness",
+            "the finished-part drawing or calibrated wall-thickness record",
+        ),
+        (
+            "thermoforming_areal_draw_ratio",
+            {"part_area": _q("90000 mm**2"), "sheet_area": _q("90000 mm**2")},
+            "part_area and sheet_area",
+            "the part CAD model or verified tooling-area calculation",
+        ),
+        (
+            "thermoforming_average_wall_thickness",
+            {"sheet_thickness": _q("0 mm"), "areal_draw_ratio": 2.0},
+            "sheet_thickness",
+            "the sheet specification or calibrated incoming-gauge record",
+        ),
+        (
+            "thermoforming_average_wall_thickness",
+            {"sheet_thickness": _q("2 mm"), "areal_draw_ratio": 0.5},
+            "areal_draw_ratio",
+            "the approved thermoforming draw study or tooling calculation",
+        ),
+        (
+            "thermoforming_sheet_gauge_for_wall",
+            {"minimum_wall_thickness": _q("0 mm"), "areal_draw_ratio": 2.0},
+            "minimum_wall_thickness",
+            "the finished-part drawing or calibrated wall-thickness record",
+        ),
+    ),
+)
+def test_manufacturing_forming_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name"),
+    (
+        ("casting", "_casting_refusal"),
+        ("shear_spinning", "_shear_spinning_refusal"),
+        ("thermoforming", "_thermoforming_refusal"),
+    ),
+)
+def test_every_manufacturing_forming_refusal_site_is_structured(module_name, helper_name):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 8
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_electroplating_mass_thickness_and_time_inverse():
     from anvilate.analysis import (
         electroplating_deposition_thickness,

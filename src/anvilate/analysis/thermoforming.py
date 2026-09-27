@@ -21,7 +21,33 @@ gauge a target wall requires.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_THERMOFORM_AREA_SOURCE = "the part CAD model or verified tooling-area calculation"
+_THERMOFORM_SHEET_SOURCE = "the sheet specification or calibrated incoming-gauge record"
+_THERMOFORM_WALL_SOURCE = "the finished-part drawing or calibrated wall-thickness record"
+_THERMOFORM_RATIO_SOURCE = "the approved thermoforming draw study or tooling calculation"
+
+
+class _ThermoformingInputError(RefusalError, ValueError):
+    """A thermoforming input that cannot be used without correction."""
+
+
+def _thermoforming_refusal(message: str, *, subject: str, source: str) -> _ThermoformingInputError:
+    return _ThermoformingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _thermoforming_input_source(name: str) -> str:
+    if name in {"part_area", "sheet_area"}:
+        return _THERMOFORM_AREA_SOURCE
+    if name == "sheet_thickness":
+        return _THERMOFORM_SHEET_SOURCE
+    return _THERMOFORM_WALL_SOURCE
+
 
 __all__ = [
     "thermoforming_areal_draw_ratio",
@@ -45,9 +71,15 @@ def thermoforming_areal_draw_ratio(*, part_area: Quantity, sheet_area: Quantity)
     a_part = part_area.to("mm**2").magnitude
     a_sheet = sheet_area.to("mm**2").magnitude
     if a_sheet <= 0:
-        raise ValueError("sheet_area must be positive")
+        raise _thermoforming_refusal(
+            "sheet_area must be positive", subject="sheet_area", source=_THERMOFORM_AREA_SOURCE
+        )
     if a_part <= a_sheet:
-        raise ValueError("part_area must exceed sheet_area (forming stretches the sheet)")
+        raise _thermoforming_refusal(
+            "part_area must exceed sheet_area (forming stretches the sheet)",
+            subject="part_area and sheet_area",
+            source=_THERMOFORM_AREA_SOURCE,
+        )
     return a_part / a_sheet
 
 
@@ -65,9 +97,17 @@ def thermoforming_average_wall_thickness(
     _check(sheet_thickness, "[length]", "sheet_thickness")
     t = sheet_thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError("sheet_thickness must be positive")
+        raise _thermoforming_refusal(
+            "sheet_thickness must be positive",
+            subject="sheet_thickness",
+            source=_THERMOFORM_SHEET_SOURCE,
+        )
     if areal_draw_ratio < 1.0:
-        raise ValueError("areal_draw_ratio must be at least 1 (forming cannot thicken the sheet)")
+        raise _thermoforming_refusal(
+            "areal_draw_ratio must be at least 1 (forming cannot thicken the sheet)",
+            subject="areal_draw_ratio",
+            source=_THERMOFORM_RATIO_SOURCE,
+        )
     return Quantity(magnitude=t / areal_draw_ratio, unit="mm")
 
 
@@ -85,18 +125,32 @@ def thermoforming_sheet_gauge_for_wall(
     _check(minimum_wall_thickness, "[length]", "minimum_wall_thickness")
     t_min = minimum_wall_thickness.to("mm").magnitude
     if t_min <= 0:
-        raise ValueError("minimum_wall_thickness must be positive")
+        raise _thermoforming_refusal(
+            "minimum_wall_thickness must be positive",
+            subject="minimum_wall_thickness",
+            source=_THERMOFORM_WALL_SOURCE,
+        )
     if areal_draw_ratio < 1.0:
-        raise ValueError("areal_draw_ratio must be at least 1 (forming cannot thicken the sheet)")
+        raise _thermoforming_refusal(
+            "areal_draw_ratio must be at least 1 (forming cannot thicken the sheet)",
+            subject="areal_draw_ratio",
+            source=_THERMOFORM_RATIO_SOURCE,
+        )
     return Quantity(magnitude=t_min * areal_draw_ratio, unit="mm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _thermoforming_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_thermoforming_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _thermoforming_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_thermoforming_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
