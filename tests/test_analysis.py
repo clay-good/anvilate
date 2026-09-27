@@ -29687,6 +29687,101 @@ def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
         rest_energy(mass=_q("1 J"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "rest_energy",
+            {"mass": _q("-1 g")},
+            "mass",
+            "the mass inventory or calibrated mass measurement",
+        ),
+        (
+            "binding_energy_per_nucleon",
+            {"binding_energy": _q("1783.9 MeV"), "nucleon_count": 0},
+            "nucleon_count",
+            "the identified nuclide and its verified nucleon count",
+        ),
+        (
+            "gravitational_force",
+            {"mass1": _q("0 kg"), "mass2": _q("1 kg"), "separation": _q("1 m")},
+            "mass1 and mass2",
+            "the celestial-body mass model or calibrated mass record",
+        ),
+        (
+            "gravitational_force",
+            {"mass1": _q("1 kg"), "mass2": _q("1 kg"), "separation": _q("0 m")},
+            "separation",
+            "the governing body geometry or trajectory position record",
+        ),
+        (
+            "centripetal_force",
+            {"mass": _q("0 kg"), "velocity": _q("25 m/s"), "radius": _q("50 m")},
+            "mass",
+            "the approved mass-properties record",
+        ),
+        (
+            "maximum_cornering_speed",
+            {"friction_coefficient": 0.0, "radius": _q("50 m")},
+            "friction_coefficient",
+            "the tire-road test data or approved friction specification",
+        ),
+        (
+            "maximum_cornering_speed",
+            {"friction_coefficient": 0.8, "radius": _q("50 m"), "gravity": _q("0 m/s**2")},
+            "gravity",
+            "the site gravity model or calibrated acceleration record",
+        ),
+    ),
+)
+def test_fundamental_motion_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("mass_energy", "_mass_energy_refusal", 6),
+        ("gravitation", "_gravitation_refusal", 7),
+        ("circular_motion", "_circular_motion_refusal", 8),
+    ),
+)
+def test_every_fundamental_motion_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_fresnel_oblique_s_and_p_reflectances():
     from anvilate.analysis import (
         brewster_angle,

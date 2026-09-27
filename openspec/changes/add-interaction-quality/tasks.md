@@ -135,6 +135,9 @@
       The complete riveted-joint and O-ring families add 11 structured sites for joint geometry,
       rivet counts, material allowables, seal sizes, and gland dimensions, sourced to drawings,
       material specifications, approved stress records, manufacturer catalogues, or gland tables.
+      The complete mass-energy, gravitation, and circular-motion families add 21 structured sites
+      for masses, reaction energies, nuclide identity, body and curve geometry, speeds, traction,
+      and gravity, sourced to inventories, calibrated records, models, drawings, or test data.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

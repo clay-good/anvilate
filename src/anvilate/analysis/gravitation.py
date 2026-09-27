@@ -22,9 +22,30 @@ gravitational parameter mu = G·M that orbital mechanics actually uses.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _GRAVITATIONAL_CONSTANT = 6.67430e-11  # m**3/(kg*s**2)
+_GRAVITATION_MASS_SOURCE = "the celestial-body mass model or calibrated mass record"
+_GRAVITATION_GEOMETRY_SOURCE = "the governing body geometry or trajectory position record"
+
+
+class _GravitationInputError(RefusalError, ValueError):
+    """A gravitation input that cannot be used without correction."""
+
+
+def _gravitation_refusal(message: str, *, subject: str, source: str) -> _GravitationInputError:
+    return _GravitationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _gravitation_input_source(name: str) -> str:
+    if name.startswith("mass"):
+        return _GRAVITATION_MASS_SOURCE
+    return _GRAVITATION_GEOMETRY_SOURCE
+
 
 __all__ = [
     "gravitational_force",
@@ -47,9 +68,17 @@ def gravitational_force(*, mass1: Quantity, mass2: Quantity, separation: Quantit
     m2 = mass2.to("kg").magnitude
     r = separation.to("m").magnitude
     if m1 <= 0 or m2 <= 0:
-        raise ValueError("masses must be positive")
+        raise _gravitation_refusal(
+            "masses must be positive",
+            subject="mass1 and mass2",
+            source=_GRAVITATION_MASS_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("separation must be positive")
+        raise _gravitation_refusal(
+            "separation must be positive",
+            subject="separation",
+            source=_GRAVITATION_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=_GRAVITATIONAL_CONSTANT * m1 * m2 / (r * r), unit="N")
 
 
@@ -65,9 +94,13 @@ def surface_gravity(*, mass: Quantity, radius: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     r = radius.to("m").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _gravitation_refusal(
+            "mass must be positive", subject="mass", source=_GRAVITATION_MASS_SOURCE
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _gravitation_refusal(
+            "radius must be positive", subject="radius", source=_GRAVITATION_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=_GRAVITATIONAL_CONSTANT * m / (r * r), unit="m/s**2")
 
 
@@ -82,16 +115,24 @@ def gravitational_parameter(*, mass: Quantity) -> Quantity:
     _check(mass, "[mass]", "mass")
     m = mass.to("kg").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _gravitation_refusal(
+            "mass must be positive", subject="mass", source=_GRAVITATION_MASS_SOURCE
+        )
     return Quantity(magnitude=_GRAVITATIONAL_CONSTANT * m, unit="m**3/s**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _gravitation_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_gravitation_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _gravitation_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gravitation_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

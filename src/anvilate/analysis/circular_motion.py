@@ -23,9 +23,39 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
+_CIRCULAR_MOTION_SOURCE = "the governing motion case or calibrated speed record"
+_CIRCULAR_GEOMETRY_SOURCE = "the curve or rotating-system drawing"
+_CIRCULAR_MASS_SOURCE = "the approved mass-properties record"
+_TRACTION_SOURCE = "the tire-road test data or approved friction specification"
+_GRAVITY_SOURCE = "the site gravity model or calibrated acceleration record"
+
+
+class _CircularMotionInputError(RefusalError, ValueError):
+    """A circular-motion input that cannot be used without correction."""
+
+
+def _circular_motion_refusal(
+    message: str, *, subject: str, source: str
+) -> _CircularMotionInputError:
+    return _CircularMotionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _circular_motion_input_source(name: str) -> str:
+    if name == "radius":
+        return _CIRCULAR_GEOMETRY_SOURCE
+    if name == "mass":
+        return _CIRCULAR_MASS_SOURCE
+    if name == "gravity":
+        return _GRAVITY_SOURCE
+    return _CIRCULAR_MOTION_SOURCE
+
 
 __all__ = [
     "centripetal_acceleration",
@@ -46,7 +76,9 @@ def centripetal_acceleration(*, velocity: Quantity, radius: Quantity) -> Quantit
     v = velocity.to("m/s").magnitude
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _circular_motion_refusal(
+            "radius must be positive", subject="radius", source=_CIRCULAR_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=v * v / r, unit="m/s**2")
 
 
@@ -64,9 +96,13 @@ def centripetal_force(*, mass: Quantity, velocity: Quantity, radius: Quantity) -
     v = velocity.to("m/s").magnitude
     r = radius.to("m").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _circular_motion_refusal(
+            "mass must be positive", subject="mass", source=_CIRCULAR_MASS_SOURCE
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _circular_motion_refusal(
+            "radius must be positive", subject="radius", source=_CIRCULAR_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=m * v * v / r, unit="N")
 
 
@@ -83,25 +119,39 @@ def maximum_cornering_speed(
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if friction_coefficient <= 0:
-        raise ValueError("friction_coefficient must be positive")
+        raise _circular_motion_refusal(
+            "friction_coefficient must be positive",
+            subject="friction_coefficient",
+            source=_TRACTION_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _circular_motion_refusal(
+            "radius must be positive", subject="radius", source=_CIRCULAR_GEOMETRY_SOURCE
+        )
     if gravity is None:
         g = _STANDARD_GRAVITY
     else:
         _check(gravity, "[acceleration]", "gravity")
         g = gravity.to("m/s**2").magnitude
         if g <= 0:
-            raise ValueError("gravity must be positive")
+            raise _circular_motion_refusal(
+                "gravity must be positive", subject="gravity", source=_GRAVITY_SOURCE
+            )
     return Quantity(magnitude=sqrt(friction_coefficient * g * r), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _circular_motion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_circular_motion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _circular_motion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_circular_motion_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

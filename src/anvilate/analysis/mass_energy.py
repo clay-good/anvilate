@@ -19,9 +19,31 @@ corresponds to, and the binding energy per nucleon a mass defect gives.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
+_MASS_ENERGY_MASS_SOURCE = "the mass inventory or calibrated mass measurement"
+_MASS_ENERGY_ENERGY_SOURCE = "the governing reaction energy balance or calibrated energy record"
+_NUCLIDE_SOURCE = "the identified nuclide and its verified nucleon count"
+
+
+class _MassEnergyInputError(RefusalError, ValueError):
+    """A mass-energy input that cannot be used without correction."""
+
+
+def _mass_energy_refusal(message: str, *, subject: str, source: str) -> _MassEnergyInputError:
+    return _MassEnergyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _mass_energy_input_source(name: str) -> str:
+    if name == "mass":
+        return _MASS_ENERGY_MASS_SOURCE
+    return _MASS_ENERGY_ENERGY_SOURCE
+
 
 __all__ = [
     "binding_energy_per_nucleon",
@@ -40,7 +62,9 @@ def rest_energy(*, mass: Quantity) -> Quantity:
     _check(mass, "[mass]", "mass")
     m = mass.to("kg").magnitude
     if m < 0:
-        raise ValueError("mass must be non-negative")
+        raise _mass_energy_refusal(
+            "mass must be non-negative", subject="mass", source=_MASS_ENERGY_MASS_SOURCE
+        )
     return Quantity(magnitude=m * _SPEED_OF_LIGHT * _SPEED_OF_LIGHT, unit="J")
 
 
@@ -54,7 +78,9 @@ def mass_from_energy(*, energy: Quantity) -> Quantity:
     _check(energy, "[energy]", "energy")
     e = energy.to("J").magnitude
     if e < 0:
-        raise ValueError("energy must be non-negative")
+        raise _mass_energy_refusal(
+            "energy must be non-negative", subject="energy", source=_MASS_ENERGY_ENERGY_SOURCE
+        )
     return Quantity(magnitude=e / (_SPEED_OF_LIGHT * _SPEED_OF_LIGHT), unit="kg")
 
 
@@ -69,18 +95,32 @@ def binding_energy_per_nucleon(*, binding_energy: Quantity, nucleon_count: int) 
     _check(binding_energy, "[energy]", "binding_energy")
     b = binding_energy.to("J").magnitude
     if b < 0:
-        raise ValueError("binding_energy must be non-negative")
+        raise _mass_energy_refusal(
+            "binding_energy must be non-negative",
+            subject="binding_energy",
+            source=_MASS_ENERGY_ENERGY_SOURCE,
+        )
     if nucleon_count < 1:
-        raise ValueError("nucleon_count must be a positive integer")
+        raise _mass_energy_refusal(
+            "nucleon_count must be a positive integer",
+            subject="nucleon_count",
+            source=_NUCLIDE_SOURCE,
+        )
     return Quantity(magnitude=b / nucleon_count, unit="J")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _mass_energy_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_mass_energy_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _mass_energy_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_mass_energy_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

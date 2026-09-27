@@ -318,6 +318,9 @@ catalogues, operating cases, drawings, calibrated measurements, or orifice recor
 The complete riveted-joint and O-ring families follow the contract at all 11 refusal sites. Joint
 geometry, rivet counts, material allowables, seal sizes, and gland dimensions point to drawings,
 material specifications, approved stress records, manufacturer catalogues, or gland-design tables.
+The complete mass-energy, gravitation, and circular-motion families follow the contract at all 21
+refusal sites. Masses, reaction energies, nuclide identity, body and curve geometry, speeds, traction,
+and gravity point to inventories, calibrated records, physical models, drawings, or test data.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.
