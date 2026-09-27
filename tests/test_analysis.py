@@ -33714,6 +33714,89 @@ def test_moseley_k_alpha_x_ray_wavelength():
         moseley_k_alpha_wavelength(atomic_number=1)
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "photon_energy",
+            {"wavelength": _q("0 nm")},
+            "wavelength",
+            "the spectral design requirement or calibrated spectrum measurement",
+        ),
+        (
+            "photon_flux",
+            {"optical_power": _q("-1 W"), "wavelength": _q("532 nm")},
+            "optical_power",
+            "the optical-source specification or calibrated power measurement",
+        ),
+        (
+            "compton_wavelength_shift",
+            {"scattering_angle": 181.0},
+            "scattering_angle",
+            "the calibrated beam specification or scattering-setup geometry",
+        ),
+        (
+            "compton_scattered_wavelength",
+            {"incident_wavelength": _q("0 pm"), "scattering_angle": 90.0},
+            "incident_wavelength",
+            "the calibrated beam specification or scattering-setup geometry",
+        ),
+        (
+            "rydberg_transition_wavelength",
+            {"lower_level": 3, "upper_level": 2},
+            "lower_level and upper_level",
+            "the stated ion species and atomic-transition definition",
+        ),
+    ),
+)
+def test_photon_and_atomic_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("photon", "_photon_refusal", 6),
+        ("compton", "_compton_refusal", 7),
+        ("atomic_spectra", "_atomic_spectra_refusal", 8),
+    ),
+)
+def test_every_photon_and_atomic_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_relativistic_length_momentum_and_doppler():
     from anvilate.analysis import (
         length_contraction,

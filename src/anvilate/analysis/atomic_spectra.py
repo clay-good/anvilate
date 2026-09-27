@@ -21,11 +21,25 @@ K-alpha line.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 
 _RYDBERG_ENERGY_EV = 13.605693  # eV, hydrogen ground-state binding energy
 _RYDBERG_CONSTANT = 1.0973731568e7  # 1/m
 _BOHR_RADIUS = 5.29177210903e-11  # m
+_ATOMIC_TRANSITION_SOURCE = "the stated ion species and atomic-transition definition"
+
+
+class _AtomicSpectraInputError(RefusalError, ValueError):
+    """An atomic-spectra input that cannot be used without correction."""
+
+
+def _atomic_spectra_refusal(message: str, *, subject: str) -> _AtomicSpectraInputError:
+    return _AtomicSpectraInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_ATOMIC_TRANSITION_SOURCE),),
+    )
+
 
 __all__ = [
     "bohr_energy_level",
@@ -43,9 +57,14 @@ def bohr_energy_level(*, principal_quantum_number: int, atomic_number: int = 1) 
     bound) and climbs toward zero as n grows; n = 1 is the ground state. Returns the energy in eV.
     """
     if principal_quantum_number < 1:
-        raise ValueError("principal_quantum_number must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "principal_quantum_number must be a positive integer",
+            subject="principal_quantum_number",
+        )
     if atomic_number < 1:
-        raise ValueError("atomic_number must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "atomic_number must be a positive integer", subject="atomic_number"
+        )
     e = -_RYDBERG_ENERGY_EV * atomic_number**2 / principal_quantum_number**2
     return Quantity(magnitude=e, unit="eV")
 
@@ -58,9 +77,14 @@ def bohr_orbit_radius(*, principal_quantum_number: int, atomic_number: int = 1) 
     as n² and shrink with the nuclear charge Z. Returns the radius in m.
     """
     if principal_quantum_number < 1:
-        raise ValueError("principal_quantum_number must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "principal_quantum_number must be a positive integer",
+            subject="principal_quantum_number",
+        )
     if atomic_number < 1:
-        raise ValueError("atomic_number must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "atomic_number must be a positive integer", subject="atomic_number"
+        )
     r = principal_quantum_number**2 * _BOHR_RADIUS / atomic_number
     return Quantity(magnitude=r, unit="m")
 
@@ -76,11 +100,17 @@ def rydberg_transition_wavelength(
     656 nm. Returns the wavelength in m.
     """
     if lower_level < 1:
-        raise ValueError("lower_level must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "lower_level must be a positive integer", subject="lower_level"
+        )
     if upper_level <= lower_level:
-        raise ValueError("upper_level must exceed lower_level")
+        raise _atomic_spectra_refusal(
+            "upper_level must exceed lower_level", subject="lower_level and upper_level"
+        )
     if atomic_number < 1:
-        raise ValueError("atomic_number must be a positive integer")
+        raise _atomic_spectra_refusal(
+            "atomic_number must be a positive integer", subject="atomic_number"
+        )
     inv_lambda = (
         _RYDBERG_CONSTANT * atomic_number**2 * (1.0 / lower_level**2 - 1.0 / upper_level**2)
     )
@@ -99,6 +129,9 @@ def moseley_k_alpha_wavelength(*, atomic_number: int) -> Quantity:
     wavelength in metres.
     """
     if atomic_number < 2:
-        raise ValueError("atomic_number must be at least 2 (a K_alpha line needs an L shell)")
+        raise _atomic_spectra_refusal(
+            "atomic_number must be at least 2 (a K_alpha line needs an L shell)",
+            subject="atomic_number",
+        )
     inv_lambda = 0.75 * _RYDBERG_CONSTANT * (atomic_number - 1) ** 2
     return Quantity(magnitude=1.0 / inv_lambda, unit="m")

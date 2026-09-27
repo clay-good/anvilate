@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from math import cos, radians
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
@@ -29,6 +30,19 @@ _ELECTRON_MASS = 9.1093837015e-31  # kg
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 _COMPTON_WAVELENGTH = _PLANCK_CONSTANT / (_ELECTRON_MASS * _SPEED_OF_LIGHT)  # m
 _HC = _PLANCK_CONSTANT * _SPEED_OF_LIGHT  # J*m
+_COMPTON_SETUP_SOURCE = "the calibrated beam specification or scattering-setup geometry"
+
+
+class _ComptonInputError(RefusalError, ValueError):
+    """A Compton-scattering input that cannot be used without correction."""
+
+
+def _compton_refusal(message: str, *, subject: str) -> _ComptonInputError:
+    return _ComptonInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=_COMPTON_SETUP_SOURCE),),
+    )
+
 
 __all__ = [
     "compton_electron_energy",
@@ -46,7 +60,9 @@ def compton_wavelength_shift(*, scattering_angle: float) -> Quantity:
     (2*lambda_C) for backscatter, and it is independent of the incident wavelength. Returns it in m.
     """
     if not 0.0 <= scattering_angle <= 180.0:
-        raise ValueError("scattering_angle must be in [0, 180] degrees")
+        raise _compton_refusal(
+            "scattering_angle must be in [0, 180] degrees", subject="scattering_angle"
+        )
     return Quantity(
         magnitude=_COMPTON_WAVELENGTH * (1.0 - cos(radians(scattering_angle))), unit="m"
     )
@@ -65,9 +81,13 @@ def compton_scattered_wavelength(
     _check(incident_wavelength, "[length]", "incident_wavelength")
     lam = incident_wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("incident_wavelength must be positive")
+        raise _compton_refusal(
+            "incident_wavelength must be positive", subject="incident_wavelength"
+        )
     if not 0.0 <= scattering_angle <= 180.0:
-        raise ValueError("scattering_angle must be in [0, 180] degrees")
+        raise _compton_refusal(
+            "scattering_angle must be in [0, 180] degrees", subject="scattering_angle"
+        )
     shift = _COMPTON_WAVELENGTH * (1.0 - cos(radians(scattering_angle)))
     return Quantity(magnitude=lam + shift, unit="m")
 
@@ -83,19 +103,24 @@ def compton_electron_energy(*, incident_wavelength: Quantity, scattering_angle: 
     _check(incident_wavelength, "[length]", "incident_wavelength")
     lam = incident_wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("incident_wavelength must be positive")
+        raise _compton_refusal(
+            "incident_wavelength must be positive", subject="incident_wavelength"
+        )
     if not 0.0 <= scattering_angle <= 180.0:
-        raise ValueError("scattering_angle must be in [0, 180] degrees")
+        raise _compton_refusal(
+            "scattering_angle must be in [0, 180] degrees", subject="scattering_angle"
+        )
     lam_scattered = lam + _COMPTON_WAVELENGTH * (1.0 - cos(radians(scattering_angle)))
     return Quantity(magnitude=_HC * (1.0 / lam - 1.0 / lam_scattered), unit="J")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _compton_refusal(f"{name} must be a {expected} quantity; got {value!r}", subject=name)
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _compton_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

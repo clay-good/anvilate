@@ -19,11 +19,32 @@ wavelength an energy corresponds to, and the photon flux a radiant power at that
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 _HC = _PLANCK_CONSTANT * _SPEED_OF_LIGHT  # J*m
+_SPECTRAL_INPUT_SOURCE = "the spectral design requirement or calibrated spectrum measurement"
+_OPTICAL_POWER_SOURCE = "the optical-source specification or calibrated power measurement"
+
+
+class _PhotonInputError(RefusalError, ValueError):
+    """A photon-analysis input that cannot be used without correction."""
+
+
+def _photon_refusal(message: str, *, subject: str, source: str) -> _PhotonInputError:
+    return _PhotonInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _photon_input_source(name: str) -> str:
+    if name == "optical_power":
+        return _OPTICAL_POWER_SOURCE
+    return _SPECTRAL_INPUT_SOURCE
+
 
 __all__ = [
     "photon_energy",
@@ -43,7 +64,9 @@ def photon_energy(*, wavelength: Quantity) -> Quantity:
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _photon_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SPECTRAL_INPUT_SOURCE
+        )
     return Quantity(magnitude=_HC / lam, unit="J")
 
 
@@ -58,7 +81,9 @@ def photon_wavelength_from_energy(*, energy: Quantity) -> Quantity:
     _check(energy, "[energy]", "energy")
     e = energy.to("J").magnitude
     if e <= 0:
-        raise ValueError("energy must be positive")
+        raise _photon_refusal(
+            "energy must be positive", subject="energy", source=_SPECTRAL_INPUT_SOURCE
+        )
     return Quantity(magnitude=_HC / e, unit="m")
 
 
@@ -75,18 +100,30 @@ def photon_flux(*, optical_power: Quantity, wavelength: Quantity) -> Quantity:
     p = optical_power.to("W").magnitude
     lam = wavelength.to("m").magnitude
     if p < 0:
-        raise ValueError("optical_power must be non-negative")
+        raise _photon_refusal(
+            "optical_power must be non-negative",
+            subject="optical_power",
+            source=_OPTICAL_POWER_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _photon_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SPECTRAL_INPUT_SOURCE
+        )
     return Quantity(magnitude=p * lam / _HC, unit="1/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _photon_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_photon_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _photon_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_photon_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

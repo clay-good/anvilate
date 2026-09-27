@@ -300,6 +300,9 @@ requirements, selected crank geometry, operating cases, or calibrated speed meas
 The complete piezoelectric and strain-gauge families follow the contract at all nine refusal sites.
 Material coefficients, transducer geometry, measured loads, gauge factors, and bridge-arm choices
 point to datasheets, certificates, drawings, calibrated records, or the bridge wiring configuration.
+The complete photon, Compton-scattering, and atomic-spectra families follow the contract at all 21
+refusal sites. Wavelengths, energies, optical power, scattering geometry, ion species, and quantum
+levels point to spectral requirements, calibrated sources or setups, and transition definitions.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

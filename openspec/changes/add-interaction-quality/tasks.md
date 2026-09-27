@@ -115,6 +115,10 @@
       complete piezoelectric and strain-gauge families add nine structured sites for material
       coefficients, sensor geometry, measured loads, gauge factors, and bridge-arm choices,
       sourced to datasheets, certificates, drawings, calibrated records, or wiring configurations.
+      The complete photon, Compton-scattering, and atomic-spectra families add 21 structured sites
+      for wavelengths, energies, optical power, scattering geometry, ion species, and quantum
+      levels, sourced to spectral requirements, calibrated sources or setups, and transition
+      definitions.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
