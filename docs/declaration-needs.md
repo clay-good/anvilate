@@ -333,6 +333,9 @@ response, beam properties, and reactions point to models, records, specification
 The complete casting, shear-spinning, and thermoforming families follow the contract at all 24
 refusal sites. Foundry geometry and trials, spinning stock and tooling, and formed-part areas,
 sheet gauges, walls, and draw ratios point to drawings, CAD, process plans, or calibrated records.
+The complete extrusion, forging, and rolling families follow the contract at all 32 refusal sites.
+Billet and pass geometry, material flow properties, efficiencies, friction, press loads, and mill
+speeds point to drawings, certified tests, qualified trials, process plans, or calibrated records.
 This is progress toward the interaction-quality
 requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
 exceptions remain the open inventory.

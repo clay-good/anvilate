@@ -26,7 +26,32 @@ from __future__ import annotations
 
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_EXTRUSION_GEOMETRY_SOURCE = "the billet and extrudate drawing or verified section-area record"
+_EXTRUSION_MATERIAL_SOURCE = "the qualified material flow-stress curve"
+_EXTRUSION_PROCESS_SOURCE = "the approved extrusion process plan or qualified press trial"
+
+
+class _ExtrusionInputError(RefusalError, ValueError):
+    """An extrusion input that cannot be used without correction."""
+
+
+def _extrusion_refusal(message: str, *, subject: str, source: str) -> _ExtrusionInputError:
+    return _ExtrusionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _extrusion_input_source(name: str) -> str:
+    if name in {"billet_area", "extrudate_area"}:
+        return _EXTRUSION_GEOMETRY_SOURCE
+    if name == "flow_stress":
+        return _EXTRUSION_MATERIAL_SOURCE
+    return _EXTRUSION_PROCESS_SOURCE
+
 
 __all__ = [
     "extrusion_force",
@@ -49,9 +74,17 @@ def extrusion_ratio(*, billet_area: Quantity, extrudate_area: Quantity) -> float
     a0 = billet_area.to("mm**2").magnitude
     af = extrudate_area.to("mm**2").magnitude
     if a0 <= 0 or af <= 0:
-        raise ValueError("billet_area and extrudate_area must be positive")
+        raise _extrusion_refusal(
+            "billet_area and extrudate_area must be positive",
+            subject="billet_area and extrudate_area",
+            source=_EXTRUSION_GEOMETRY_SOURCE,
+        )
     if af >= a0:
-        raise ValueError("extrudate_area must be smaller than billet_area (extrusion reduces area)")
+        raise _extrusion_refusal(
+            "extrudate_area must be smaller than billet_area (extrusion reduces area)",
+            subject="extrudate_area and billet_area",
+            source=_EXTRUSION_GEOMETRY_SOURCE,
+        )
     return a0 / af
 
 
@@ -73,11 +106,23 @@ def extrusion_pressure(
     _check(flow_stress, "[pressure]", "flow_stress")
     y = flow_stress.to("MPa").magnitude
     if y <= 0:
-        raise ValueError("flow_stress must be positive")
+        raise _extrusion_refusal(
+            "flow_stress must be positive",
+            subject="flow_stress",
+            source=_EXTRUSION_MATERIAL_SOURCE,
+        )
     if extrusion_ratio <= 1.0:
-        raise ValueError("extrusion_ratio must exceed 1 (extrusion reduces the section)")
+        raise _extrusion_refusal(
+            "extrusion_ratio must exceed 1 (extrusion reduces the section)",
+            subject="extrusion_ratio",
+            source=_EXTRUSION_PROCESS_SOURCE,
+        )
     if not 0.0 < deformation_efficiency <= 1.0:
-        raise ValueError(f"deformation_efficiency must be in (0, 1]; got {deformation_efficiency}")
+        raise _extrusion_refusal(
+            f"deformation_efficiency must be in (0, 1]; got {deformation_efficiency}",
+            subject="deformation_efficiency",
+            source=_EXTRUSION_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=y * log(extrusion_ratio) / deformation_efficiency, unit="MPa")
 
 
@@ -95,18 +140,32 @@ def extrusion_force(*, extrusion_pressure: Quantity, billet_area: Quantity) -> Q
     p = extrusion_pressure.to("Pa").magnitude
     a0 = billet_area.to("m**2").magnitude
     if p <= 0:
-        raise ValueError("extrusion_pressure must be positive")
+        raise _extrusion_refusal(
+            "extrusion_pressure must be positive",
+            subject="extrusion_pressure",
+            source=_EXTRUSION_PROCESS_SOURCE,
+        )
     if a0 <= 0:
-        raise ValueError("billet_area must be positive")
+        raise _extrusion_refusal(
+            "billet_area must be positive",
+            subject="billet_area",
+            source=_EXTRUSION_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=p * a0 / 1000.0, unit="kN")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _extrusion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_extrusion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _extrusion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_extrusion_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -28,7 +28,30 @@ from __future__ import annotations
 
 from math import log, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FORGING_GEOMETRY_SOURCE = "the billet and finished-forging drawing or verified geometry record"
+_FORGING_MATERIAL_SOURCE = "the qualified material flow curve or certified test record"
+_FORGING_PROCESS_SOURCE = "the approved forging process plan or qualified die-friction data"
+
+
+class _ForgingInputError(RefusalError, ValueError):
+    """A forging input that cannot be used without correction."""
+
+
+def _forging_refusal(message: str, *, subject: str, source: str) -> _ForgingInputError:
+    return _ForgingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _forging_input_source(name: str) -> str:
+    if name in {"initial_height", "final_height", "radius", "height"}:
+        return _FORGING_GEOMETRY_SOURCE
+    return _FORGING_MATERIAL_SOURCE
+
 
 __all__ = [
     "flow_stress_power_law",
@@ -51,9 +74,17 @@ def forging_true_strain(*, initial_height: Quantity, final_height: Quantity) -> 
     h0 = initial_height.to("mm").magnitude
     h1 = final_height.to("mm").magnitude
     if h0 <= 0 or h1 <= 0:
-        raise ValueError("initial_height and final_height must be positive")
+        raise _forging_refusal(
+            "initial_height and final_height must be positive",
+            subject="initial_height and final_height",
+            source=_FORGING_GEOMETRY_SOURCE,
+        )
     if h1 >= h0:
-        raise ValueError("final_height must be less than initial_height (an upset reduces height)")
+        raise _forging_refusal(
+            "final_height must be less than initial_height (an upset reduces height)",
+            subject="final_height and initial_height",
+            source=_FORGING_GEOMETRY_SOURCE,
+        )
     return log(h0 / h1)
 
 
@@ -76,12 +107,22 @@ def flow_stress_power_law(
     _check(strength_coefficient, "[pressure]", "strength_coefficient")
     k = strength_coefficient.to("MPa").magnitude
     if k <= 0:
-        raise ValueError("strength_coefficient must be positive")
+        raise _forging_refusal(
+            "strength_coefficient must be positive",
+            subject="strength_coefficient",
+            source=_FORGING_MATERIAL_SOURCE,
+        )
     if true_strain < 0:
-        raise ValueError("true_strain must be non-negative")
+        raise _forging_refusal(
+            "true_strain must be non-negative",
+            subject="true_strain",
+            source=_FORGING_PROCESS_SOURCE,
+        )
     if not 0.0 <= strain_hardening_exponent < 1.0:
-        raise ValueError(
-            f"strain_hardening_exponent must be in [0, 1); got {strain_hardening_exponent}"
+        raise _forging_refusal(
+            f"strain_hardening_exponent must be in [0, 1); got {strain_hardening_exponent}",
+            subject="strain_hardening_exponent",
+            source=_FORGING_MATERIAL_SOURCE,
         )
     return Quantity(magnitude=k * true_strain**strain_hardening_exponent, unit="MPa")
 
@@ -109,11 +150,23 @@ def open_die_forging_load(
     r = radius.to("m").magnitude
     h = height.to("m").magnitude
     if sigma <= 0:
-        raise ValueError("flow_stress must be positive")
+        raise _forging_refusal(
+            "flow_stress must be positive",
+            subject="flow_stress",
+            source=_FORGING_MATERIAL_SOURCE,
+        )
     if r <= 0 or h <= 0:
-        raise ValueError("radius and height must be positive")
+        raise _forging_refusal(
+            "radius and height must be positive",
+            subject="radius and height",
+            source=_FORGING_GEOMETRY_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError("friction_coefficient must be non-negative")
+        raise _forging_refusal(
+            "friction_coefficient must be non-negative",
+            subject="friction_coefficient",
+            source=_FORGING_PROCESS_SOURCE,
+        )
     area = pi * r**2
     friction_hill = 1.0 + 2.0 * friction_coefficient * r / (3.0 * h)
     return Quantity(magnitude=sigma * area * friction_hill / 1000.0, unit="kN")
@@ -121,10 +174,16 @@ def open_die_forging_load(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _forging_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_forging_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _forging_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_forging_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

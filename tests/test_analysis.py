@@ -3656,6 +3656,144 @@ def test_rolling_max_draft_contact_length_and_force():
         rolling_contact_length(roll_radius=_q("250 mm"), draft=_q("0 mm"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "extrusion_ratio",
+            {"billet_area": _q("100 mm**2"), "extrudate_area": _q("100 mm**2")},
+            "extrudate_area and billet_area",
+            "the billet and extrudate drawing or verified section-area record",
+        ),
+        (
+            "extrusion_pressure",
+            {"flow_stress": _q("0 MPa"), "extrusion_ratio": 10.0},
+            "flow_stress",
+            "the qualified material flow-stress curve",
+        ),
+        (
+            "extrusion_pressure",
+            {"flow_stress": _q("150 MPa"), "extrusion_ratio": 10.0, "deformation_efficiency": 0},
+            "deformation_efficiency",
+            "the approved extrusion process plan or qualified press trial",
+        ),
+        (
+            "forging_true_strain",
+            {"initial_height": _q("25 mm"), "final_height": _q("40 mm")},
+            "final_height and initial_height",
+            "the billet and finished-forging drawing or verified geometry record",
+        ),
+        (
+            "flow_stress_power_law",
+            {
+                "strength_coefficient": _q("600 MPa"),
+                "true_strain": 0.4,
+                "strain_hardening_exponent": 1.0,
+            },
+            "strain_hardening_exponent",
+            "the qualified material flow curve or certified test record",
+        ),
+        (
+            "open_die_forging_load",
+            {
+                "flow_stress": _q("400 MPa"),
+                "radius": _q("50 mm"),
+                "height": _q("25 mm"),
+                "friction_coefficient": -0.1,
+            },
+            "friction_coefficient",
+            "the approved forging process plan or qualified die-friction data",
+        ),
+        (
+            "maximum_draft",
+            {"roll_radius": _q("0 mm"), "friction_coefficient": 0.3},
+            "roll_radius",
+            "the roll-pass drawing or verified mill geometry record",
+        ),
+        (
+            "maximum_draft",
+            {"roll_radius": _q("250 mm"), "friction_coefficient": -0.1},
+            "friction_coefficient",
+            "the approved rolling schedule or qualified bite-friction data",
+        ),
+        (
+            "rolling_force",
+            {
+                "flow_stress": _q("0 MPa"),
+                "strip_width": _q("200 mm"),
+                "contact_length": _q("35 mm"),
+            },
+            "flow_stress",
+            "the qualified strip flow-stress curve",
+        ),
+        (
+            "rolling_power",
+            {
+                "rolling_force": _q("0 kN"),
+                "contact_length": _q("35 mm"),
+                "roll_speed": _q("100 rpm"),
+            },
+            "rolling_force",
+            "the verified mill separating-force calculation or load record",
+        ),
+        (
+            "rolling_power",
+            {
+                "rolling_force": _q("1000 kN"),
+                "contact_length": _q("35 mm"),
+                "roll_speed": _q("0 rpm"),
+            },
+            "roll_speed",
+            "the approved mill speed setpoint or calibrated tachometer record",
+        ),
+    ),
+)
+def test_bulk_forming_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "helper_name", "site_count"),
+    (
+        ("extrusion", "_extrusion_refusal", 9),
+        ("forging", "_forging_refusal", 10),
+        ("rolling", "_rolling_refusal", 13),
+    ),
+)
+def test_every_bulk_forming_refusal_site_is_structured(module_name, helper_name, site_count):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module_name}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper_name:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == site_count
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_flywheel_inertia_and_energy_round_trip():
     # A press flywheel smoothing a 5000 J energy swing at 200 rpm mean speed to a
     # coefficient of fluctuation of 0.05 needs I = dE/(omega^2*Cs) = 227.97 kg*m^2.

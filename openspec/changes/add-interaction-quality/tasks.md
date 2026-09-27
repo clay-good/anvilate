@@ -150,6 +150,9 @@
       The complete casting, shear-spinning, and thermoforming families add 24 structured sites for
       foundry geometry and trials, spinning stock and tooling, and formed-part areas, sheet gauges,
       walls, and draw ratios, sourced to drawings, CAD, process plans, or calibrated records.
+      The complete extrusion, forging, and rolling families add 32 structured sites for billet and
+      pass geometry, material flow properties, efficiencies, friction, press loads, and mill speeds,
+      sourced to drawings, certified tests, qualified trials, process plans, or calibrated records.
       The remaining ordinary `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field

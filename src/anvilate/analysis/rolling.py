@@ -26,8 +26,35 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_second
+
+_ROLLING_GEOMETRY_SOURCE = "the roll-pass drawing or verified mill geometry record"
+_ROLLING_MATERIAL_SOURCE = "the qualified strip flow-stress curve"
+_ROLLING_PROCESS_SOURCE = "the approved rolling schedule or qualified bite-friction data"
+_ROLLING_LOAD_SOURCE = "the verified mill separating-force calculation or load record"
+_ROLLING_SPEED_SOURCE = "the approved mill speed setpoint or calibrated tachometer record"
+
+
+class _RollingInputError(RefusalError, ValueError):
+    """A rolling input that cannot be used without correction."""
+
+
+def _rolling_refusal(message: str, *, subject: str, source: str) -> _RollingInputError:
+    return _RollingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rolling_input_source(name: str) -> str:
+    if name == "flow_stress":
+        return _ROLLING_MATERIAL_SOURCE
+    if name == "rolling_force":
+        return _ROLLING_LOAD_SOURCE
+    return _ROLLING_GEOMETRY_SOURCE
+
 
 __all__ = [
     "rolling_power",
@@ -49,9 +76,17 @@ def maximum_draft(*, roll_radius: Quantity, friction_coefficient: float) -> Quan
     _check(roll_radius, "[length]", "roll_radius")
     r = roll_radius.to("mm").magnitude
     if r <= 0:
-        raise ValueError("roll_radius must be positive")
+        raise _rolling_refusal(
+            "roll_radius must be positive",
+            subject="roll_radius",
+            source=_ROLLING_GEOMETRY_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError("friction_coefficient must be non-negative")
+        raise _rolling_refusal(
+            "friction_coefficient must be non-negative",
+            subject="friction_coefficient",
+            source=_ROLLING_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=friction_coefficient**2 * r, unit="mm")
 
 
@@ -69,9 +104,15 @@ def rolling_contact_length(*, roll_radius: Quantity, draft: Quantity) -> Quantit
     r = roll_radius.to("mm").magnitude
     dh = draft.to("mm").magnitude
     if r <= 0:
-        raise ValueError("roll_radius must be positive")
+        raise _rolling_refusal(
+            "roll_radius must be positive",
+            subject="roll_radius",
+            source=_ROLLING_GEOMETRY_SOURCE,
+        )
     if dh <= 0:
-        raise ValueError("draft must be positive")
+        raise _rolling_refusal(
+            "draft must be positive", subject="draft", source=_ROLLING_PROCESS_SOURCE
+        )
     return Quantity(magnitude=sqrt(r * dh), unit="mm")
 
 
@@ -97,18 +138,32 @@ def rolling_force(
     w = strip_width.to("m").magnitude
     length = contact_length.to("m").magnitude
     if y <= 0:
-        raise ValueError("flow_stress must be positive")
+        raise _rolling_refusal(
+            "flow_stress must be positive",
+            subject="flow_stress",
+            source=_ROLLING_MATERIAL_SOURCE,
+        )
     if w <= 0 or length <= 0:
-        raise ValueError("strip_width and contact_length must be positive")
+        raise _rolling_refusal(
+            "strip_width and contact_length must be positive",
+            subject="strip_width and contact_length",
+            source=_ROLLING_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=y * w * length / 1000.0, unit="kN")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rolling_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rolling_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rolling_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rolling_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -141,19 +196,37 @@ def rolling_power(
     _check(rolling_force, "[force]", "rolling_force")
     _check(contact_length, "[length]", "contact_length")
     if not isinstance(roll_speed, Quantity):
-        raise ValueError(f"roll_speed must be a [frequency] quantity; got {roll_speed!r}")
+        raise _rolling_refusal(
+            f"roll_speed must be a [frequency] quantity; got {roll_speed!r}",
+            subject="roll_speed",
+            source=_ROLLING_SPEED_SOURCE,
+        )
     if not roll_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _rolling_refusal(
             f"roll_speed must be a [frequency] quantity; got {roll_speed.dimensionality} "
-            f"({roll_speed})"
+            f"({roll_speed})",
+            subject="roll_speed",
+            source=_ROLLING_SPEED_SOURCE,
         )
     f = rolling_force.to("N").magnitude
     length = contact_length.to("m").magnitude
     n = revolutions_per_second(roll_speed, name="roll_speed")
     if f <= 0:
-        raise ValueError("rolling_force must be positive")
+        raise _rolling_refusal(
+            "rolling_force must be positive",
+            subject="rolling_force",
+            source=_ROLLING_LOAD_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("contact_length must be positive")
+        raise _rolling_refusal(
+            "contact_length must be positive",
+            subject="contact_length",
+            source=_ROLLING_GEOMETRY_SOURCE,
+        )
     if n <= 0:
-        raise ValueError("roll_speed must be positive")
+        raise _rolling_refusal(
+            "roll_speed must be positive",
+            subject="roll_speed",
+            source=_ROLLING_SPEED_SOURCE,
+        )
     return Quantity(magnitude=2.0 * pi * n * f * length, unit="W")
