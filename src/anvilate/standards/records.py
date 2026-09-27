@@ -15,6 +15,7 @@ from enum import StrEnum
 from pydantic import AfterValidator, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
+from ..refusal import RefusalError, Remedy
 from ..units import DimensionError, Quantity, spoken
 
 __all__ = [
@@ -139,7 +140,7 @@ def dimensioned(expected: str, name: str) -> AfterValidator:
     return AfterValidator(_check)
 
 
-class InsufficientBasis(ValueError):
+class InsufficientBasis(RefusalError, ValueError):
     """A strength value's population claim is weaker than the check demands.
 
     Raised rather than returned so a check cannot proceed on it by accident. The message
@@ -147,6 +148,18 @@ class InsufficientBasis(ValueError):
     fix is a data decision — find a value on the right basis, or drop the requirement and
     say why — and neither can be made from "insufficient basis".
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        subject: str = "the material property basis named in this refusal",
+        source: str = "a cited property record meeting the check's required basis",
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action="supply or explicitly relax", subject=subject, source=source),),
+        )
 
 
 def require_basis(
@@ -174,5 +187,10 @@ def require_basis(
         f"({prop.citation.source}), and this check requires at least "
         f"{spoken(required.value, joined_by=' ')}. A typical value sits in the middle of "
         f"the scatter, so roughly half the material is weaker than it; using one where a "
-        f"code demands a minimum overstates the capacity the material is sold with"
+        f"code demands a minimum overstates the capacity the material is sold with",
+        subject=(f"the {material_id} {spoken(name, joined_by=' ')} basis required by this check"),
+        source=(
+            f"a cited {spoken(required.value, joined_by=' ')} property record, or an explicit "
+            "caller decision to require a weaker basis"
+        ),
     )

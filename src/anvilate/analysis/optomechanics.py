@@ -29,6 +29,7 @@ from pydantic import ConfigDict, model_validator
 from .._models import Named, Provenance, StatableModel, cited, parse_yaml
 from ..budget import CombinationRule
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Comparison, LimitSense, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite, temperature_difference_kelvin
 from .dynamics import half_sine_shock_amplification
@@ -1158,12 +1159,24 @@ def seal_gland_extremes_scorecard(
     )
 
 
-class OutsideValidRange(ValueError):
+class OutsideValidRange(RefusalError, ValueError):
     """A property asked for outside the temperature range its source states it for.
 
     Glass catalogues such as SCHOTT's state expansion per temperature range, not as one
     number good everywhere.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        subject: str = "the ranged optical property named in this refusal",
+        source: str = "a cited material property range covering the requested temperatures",
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action="supply", subject=subject, source=source),),
+        )
 
 
 class RangedProperty(StatableModel):
@@ -1253,7 +1266,9 @@ class OpticalMaterial(StatableModel):
         stated = "; ".join(f"{r.low} to {r.high}" for r in self.cte)
         raise OutsideValidRange(
             f"{self.name}'s expansion is stated for {stated}, and {lo} to {hi} is inside none "
-            "of them"
+            "of them",
+            subject=f"{self.name} expansion coefficient covering {lo} to {hi}",
+            source=f"a material catalogue range from {self.source} covering that temperature swing",
         )
 
     def athermal_focus(

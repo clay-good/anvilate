@@ -85,8 +85,16 @@ def test_overriding_a_declaration_the_profile_never_supplied_is_refused() -> Non
     ],
 )
 def test_a_binding_outside_the_profiles_own_basis_is_refused(context: dict, match: str) -> None:
-    with pytest.raises(OutsideApplicability, match=match):
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(OutsideApplicability, match=match) as refused:
         _profile().bind(context)
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "replace"
+    assert remedy.subject == "profile ENV-COASTAL v2.1 for ambient temperature"
+    assert "ISO 12944-2 C5-M, company practice EP-3" in remedy.source
 
 
 def test_the_bounds_of_the_range_are_inside_it() -> None:

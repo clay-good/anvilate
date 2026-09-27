@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
+from .refusal import RefusalError, Remedy
 from .spec.provenance import Origin, Provenanced
 from .units import Quantity
 
@@ -90,8 +91,20 @@ def _filled(
     return model.model_copy(update={name: kind(**stated)})
 
 
-class OutsideApplicability(ValueError):
+class OutsideApplicability(RefusalError, ValueError):
     """Raised when a profile is bound to a context its own statement does not cover."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        subject: str = "the profile binding named in this refusal",
+        source: str = "a cited profile whose applicability covers the design context",
+    ) -> None:
+        super().__init__(
+            message,
+            remedies=(Remedy(action="replace", subject=subject, source=source),),
+        )
 
 
 class Applicability(StatableModel):
@@ -227,7 +240,15 @@ class Profile(StatableModel):
         if outside:
             raise OutsideApplicability(
                 f"profile {self.id} {self.version} does not apply here — {'; '.join(outside)}. "
-                "A value used outside its own basis is an invented value with a citation on it"
+                "A value used outside its own basis is an invented value with a citation on it",
+                subject=(
+                    f"profile {self.id} {self.version} for "
+                    f"{', '.join(bound.context for bound in self.applicability)}"
+                ),
+                source=(
+                    f"a cited profile covering the stated design context; this profile cites "
+                    f"{self.citation}"
+                ),
             )
         return ProfileBinding(profile=self, values=self.supplies)
 

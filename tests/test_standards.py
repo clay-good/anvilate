@@ -1690,6 +1690,7 @@ def test_a_basis_requirement_is_met_by_anything_at_or_above_it():
 
 
 def test_require_basis_refuses_a_typical_value_where_a_minimum_is_demanded():
+    from anvilate.refusal import RefusalError
     from anvilate.standards.materials import default_materials_db
     from anvilate.standards.records import AllowableBasis, InsufficientBasis, require_basis
 
@@ -1702,13 +1703,22 @@ def test_require_basis_refuses_a_typical_value_where_a_minimum_is_demanded():
         name="yield strength",
     )
     assert allowed.to("MPa").magnitude == pytest.approx(250.0)
-    with pytest.raises(InsufficientBasis, match="requires at least specification minimum"):
+    with pytest.raises(
+        InsufficientBasis, match="requires at least specification minimum"
+    ) as refused:
         require_basis(
             database.get("AISI-4140").yield_strength,
             minimum,
             material_id="AISI-4140",
             name="yield strength",
         )
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "supply or explicitly relax"
+    assert remedy.subject == "the AISI-4140 yield strength basis required by this check"
+    assert "specification minimum property record" in remedy.source
+    assert "explicit caller decision" in remedy.source
 
 
 def test_the_provenance_roll_up_states_the_basis_alongside_the_source():

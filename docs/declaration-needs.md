@@ -95,7 +95,7 @@ tightened.attribution()["manufacturing.min_wall"]  # "user override of profile E
 
 | Rule | What it means |
 | --- | --- |
-| Applicability is checked, not documented | Binding outside the profile's own stated range is refused naming the value and the bound. A bound the context does not state is refused too: an applicability nobody checked is an applicability nobody has. |
+| Applicability is checked, not documented | Binding outside the profile's own stated range is refused naming the value and the bound. A bound the context does not state is refused too: an applicability nobody checked is an applicability nobody has. The raised refusal's structured remedy names the profile and contexts and points to a cited profile that covers them. |
 | Every value is attributed | A profile-supplied value carries the profile's id, version and citation wherever it appears, so a number that governs a verdict never reads as one the engineer stated. |
 | An override is the user's, and keeps what the profile said | The profile's value stays beside the override, so a reader can see what changed and from what. Overriding a declaration the profile never supplied is refused. |
 | A profile supplies declarations only | It does not screen, weaken a refusal, or change a verdict. |
@@ -223,8 +223,8 @@ subject, and the source or authority the caller should use. `RefusalError` refus
 without at least one such record. Its message remains plain text for people and existing
 callers; `remedies` lets a program present the next step without parsing that text.
 
-The export gate, MCP argument handlers, dataset-fetch policy, intent compiler, and Spec IR
-version/reference front door are the migrated raised boundaries.
+The export gate, MCP argument handlers, dataset-fetch policy, intent compiler, Spec IR
+version/reference front door, and cited-data validity gates are the migrated raised boundaries.
 `ExportRefused.remedies` tells the caller to apply the explicit override to the export
 blocked by the named checks, using the export policy and those checks. An MCP handler that
 rejects an argument raises the same structured contract internally; the synchronous and task
@@ -236,9 +236,11 @@ response and schema; `CompilationFailure` names the backend/model candidate and 
 validation errors while retaining `ValueError` compatibility. `UnsupportedSchemaVersion`
 points from the declared schema to a supporting release or reviewed current schema;
 `UnknownReferenceError` points from the rejected identifier to the injected live registry and
-its nearest entries. This is progress toward the interaction-quality requirement, not a claim
-that every Python `ValueError` has been migrated; ordinary validation exceptions remain the
-open inventory.
+its nearest entries. Material-basis, profile-applicability, and ranged optical-property
+refusals name the exact property or profile that cannot be used and the cited record, profile,
+or catalogue range that can replace it. This is progress toward the interaction-quality
+requirement, not a claim that every Python `ValueError` has been migrated; ordinary validation
+exceptions remain the open inventory.
 
 ## Status
 

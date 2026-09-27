@@ -130,6 +130,11 @@ require_basis(record.yield_strength, AllowableBasis.SPECIFICATION_MINIMUM,
 #   this check requires at least specification minimum ...
 ```
 
+`InsufficientBasis.remedies` carries the same decision as data: supply the named material
+property on the required basis from a cited record, or explicitly decide that the check may
+use a weaker basis. It never selects that weaker basis for the caller. The exception remains
+a `ValueError` for existing analysis code.
+
 Every bundled strength is classified from **its own cited source**, not in bulk, and a
 gate in the suite fails if a new record ships without one. Two records citing the same
 book get different answers: Shigley's Table A-20 is titled "Deterministic ASTM *Minimum*

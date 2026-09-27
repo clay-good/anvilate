@@ -449,11 +449,18 @@ def test_a_glass_record_states_only_what_its_source_does() -> None:
 
 def test_an_expansion_is_refused_outside_the_range_its_catalogue_states() -> None:
     from anvilate.analysis.optomechanics import N_BK7, OutsideValidRange
+    from anvilate.refusal import RefusalError
 
     assert N_BK7.cte_over(q("253.15 K"), q("293.15 K")).to("1/K").magnitude == 7.1e-6
     assert N_BK7.cte_over(q("400 K"), q("300 K")).to("1/K").magnitude == 8.3e-6
-    with pytest.raises(OutsideValidRange, match="233.15 K to 293.15 K is inside none"):
+    with pytest.raises(OutsideValidRange, match="233.15 K to 293.15 K is inside none") as refused:
         N_BK7.cte_over(q("233.15 K"), q("293.15 K"))
+    assert isinstance(refused.value, RefusalError)
+    assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
+    remedy = refused.value.remedies[0]
+    assert remedy.action == "supply"
+    assert remedy.subject == "N-BK7 expansion coefficient covering 233.15 K to 293.15 K"
+    assert "SCHOTT Zemax catalog" in remedy.source
     lens = {
         "dn_dt": q("1.6e-6 1/K"),
         "focal_length": q("100 mm"),

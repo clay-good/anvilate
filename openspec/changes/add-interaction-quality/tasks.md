@@ -62,7 +62,11 @@
       recorded validation errors, while retaining their `ValueError` ancestry. Unsupported
       Spec IR versions now point to a supporting release or reviewed current schema, and
       unknown material/component references point to the injected live registry and nearest
-      identifiers. The remaining ordinary `ValueError` inventory keeps this task open
+      identifiers. The cited-data validity gates now structure their repairs too: insufficient
+      material basis names the required property record or explicit basis decision, profile
+      applicability names a profile covering the stated contexts, and optical range refusal
+      names a catalogue range covering the requested temperatures. The remaining ordinary
+      `ValueError` inventory keeps this task open
 - [x] 2.2 CI gate: every refusal message's remedy names a resolvable subject — an
       imperative with no noun fails — tests/test_remedies.py over every one of the library's 5,000+ refusal messages; the six "delete it" and three "name it"/"state it" remedies now name their file or field
 - [x] 2.3 CI gate carries a population floor and enumerated exclusions with causes — floors on the messages read and the remedies recognised, and no exclusions needed
