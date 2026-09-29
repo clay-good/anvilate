@@ -63,6 +63,13 @@ Pipeline operations that exceed interactive latency (FEA-class runs, full conver
 - **WHEN** an agent cancels a running validation task
 - **THEN** solver subprocesses terminate, the scorecard reports affected checks as not evaluated, and the system remains healthy
 
+#### Scenario: Worker lost after launcher exit
+
+- **WHEN** the launching server exits and its worker terminates without recording a result
+- **THEN** a reconnecting client's task poll records a durable failed outcome after proving
+  execution ownership has ended, without mistaking a live worker or reused PID for abandonment
+- **AND** an existing terminal result is preserved and no scorecard or exit code is invented
+
 ### Requirement: Registry publication
 
 Each Anvilate release SHALL publish the MCP server to the official MCP registry with accurate metadata (capabilities, version, install command), so agent clients can discover and install it without repository archaeology.

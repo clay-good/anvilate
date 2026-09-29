@@ -214,9 +214,55 @@ class TaskStore:
 
     def public(self, task_id: str) -> dict[str, Any]:
         record = self.read(task_id)
+        if record.get("_recoverable") and record["status"] not in _TERMINAL:
+            self._recover_abandoned(task_id)
+            record = self.read(task_id)
         return {
             key: value for key, value in record.items() if key == "_meta" or not key.startswith("_")
         }
+
+    def enable_recovery(self, task_id: str) -> None:
+        """Mark the record only after the launcher holds its execution lease."""
+        with self._record_lock(task_id):
+            record = self.read(task_id)
+            record["_recoverable"] = True
+            self._write(task_id, record)
+
+    @contextmanager
+    def execution_lease(self, task_id: str, inherited_fd: int | None = None):
+        """Hold one OS lease continuously across launcher, exec, and worker lifetime."""
+        import fcntl
+
+        if inherited_fd is not None:
+            with os.fdopen(inherited_fd, "a+") as lease:
+                yield lease
+            return
+        path = self._path(task_id).with_suffix(".owner")
+        with path.open("a+") as lease:
+            fcntl.flock(lease, fcntl.LOCK_EX)
+            # Closing our descriptor must not unlock the child's inherited description.
+            yield lease
+
+    def _recover_abandoned(self, task_id: str) -> None:
+        import fcntl
+
+        try:
+            lease = self._path(task_id).with_suffix(".owner").open("a+")
+        except OSError:
+            return  # Inability to inspect ownership is not proof of abandonment.
+        with lease:
+            try:
+                fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return  # A live owner or inaccessible lock must keep its current state.
+            self.fail(
+                task_id,
+                {
+                    "code": -32603,
+                    "message": "Task lost its execution owner without a terminal result.",
+                },
+                "Recovered abandoned task; no execution owner remains.",
+            )
 
     def worker_input(self, task_id: str, nonce: str) -> tuple[str, dict[str, Any]]:
         record = self.read(task_id)
@@ -296,47 +342,74 @@ def launch_task(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     nonce = record["_nonce"]
     environment = os.environ.copy()
     environment["ANVILATE_TASK_STORE"] = str(store.root)
+    with store.execution_lease(task_id) as lease:
+        store.enable_recovery(task_id)
+        try:
+            process = subprocess.Popen(  # noqa: S603 - fixed interpreter/module, no shell
+                [
+                    sys.executable,
+                    "-m",
+                    "anvilate._mcp_tasks",
+                    "--worker",
+                    task_id,
+                    nonce,
+                    str(lease.fileno()),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=environment,
+                start_new_session=True,
+                pass_fds=(lease.fileno(),),
+            )
+        except OSError as failure:
+            store.fail(
+                task_id,
+                {
+                    "code": -32603,
+                    "message": f"Worker could not start: {type(failure).__name__}: {failure}",
+                },
+                f"{operation} worker could not start.",
+            )
+            return store.public(task_id)
+        store.attach_worker(task_id, process.pid)
+        # The monitor retains the same lease until it records the exit code. If the
+        # server dies first, the child's inherited descriptor still protects live work.
+        threading.Thread(
+            target=_reap_worker,
+            args=(store, task_id, process, os.dup(lease.fileno())),
+            daemon=True,
+        ).start()
+        return store.public(task_id)
+
+
+def _reap_worker(
+    store: TaskStore, task_id: str, process: subprocess.Popen, owner_fd: int | None = None
+) -> None:
     try:
-        process = subprocess.Popen(  # noqa: S603 - fixed interpreter/module, no shell
-            [sys.executable, "-m", "anvilate._mcp_tasks", "--worker", task_id, nonce],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=environment,
-            start_new_session=True,
-        )
-    except OSError as failure:
+        exit_code = process.wait()
         store.fail(
             task_id,
             {
                 "code": -32603,
-                "message": f"Worker could not start: {type(failure).__name__}: {failure}",
+                "message": (
+                    f"Worker exited with code {exit_code} without recording a terminal result."
+                ),
             },
-            f"{operation} worker could not start.",
+            "Worker exited without recording a terminal result.",
         )
-        return store.public(task_id)
-    store.attach_worker(task_id, process.pid)
-    # Reap the child and reconcile an exit that bypassed the worker's result writer.
-    # fail() holds the record lock and preserves any terminal result, including a
-    # cancellation that raced with process exit.
-    threading.Thread(target=_reap_worker, args=(store, task_id, process), daemon=True).start()
-    return store.public(task_id)
+    finally:
+        if owner_fd is not None:
+            os.close(owner_fd)
 
 
-def _reap_worker(store: TaskStore, task_id: str, process: subprocess.Popen) -> None:
-    exit_code = process.wait()
-    store.fail(
-        task_id,
-        {
-            "code": -32603,
-            "message": f"Worker exited with code {exit_code} without recording a terminal result.",
-        },
-        "Worker exited without recording a terminal result.",
-    )
-
-
-def _run_worker(task_id: str, nonce: str) -> int:
+def _run_worker(task_id: str, nonce: str, owner_fd: int | None = None) -> int:
     store = task_store()
+    with store.execution_lease(task_id, owner_fd):
+        return _execute_worker(store, task_id, nonce)
+
+
+def _execute_worker(store: TaskStore, task_id: str, nonce: str) -> int:
     try:
         with store.worker_lease(task_id):
             operation, arguments = store.worker_input(task_id, nonce)
@@ -386,9 +459,10 @@ def _run_worker(task_id: str, nonce: str) -> int:
 
 
 def main() -> None:
-    if len(sys.argv) != 4 or sys.argv[1] != "--worker":
-        raise SystemExit("usage: python -m anvilate._mcp_tasks --worker TASK_ID NONCE")
-    raise SystemExit(_run_worker(sys.argv[2], sys.argv[3]))
+    if len(sys.argv) not in {4, 5} or sys.argv[1] != "--worker":
+        raise SystemExit("usage: python -m anvilate._mcp_tasks --worker TASK_ID NONCE [OWNER_FD]")
+    owner_fd = int(sys.argv[4]) if len(sys.argv) == 5 else None
+    raise SystemExit(_run_worker(sys.argv[2], sys.argv[3], owner_fd))
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised as a subprocess.

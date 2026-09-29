@@ -96,8 +96,15 @@ error. While the launching server remains running, its process monitor also mark
 failed if the worker exits without recording a terminal result, including exit code `0`.
 The error records the exit code, progress ends at `0/1`, and no scorecard is invented.
 A completed result, input refusal, or cancellation already recorded by the worker wins
-over the process monitor. If the launching server exits before an abruptly terminated
-worker, automatic recovery of that unfinished record is not yet implemented.
+over the process monitor.
+
+After the launching server exits, `tasks/get` can recover an abandoned task. New tasks
+carry an OS-held execution lock inherited by the worker before it starts; a live worker
+keeps that lock even during startup. If polling finds the lock released and no terminal
+result, it persists a failed task with error `-32603` and progress `0/1`. It neither guesses
+from a PID nor invents an exit code or scorecard. Lock-access errors leave the task
+unchanged. Records created before this recovery mechanism remain readable but cannot be
+automatically classified as abandoned; cancel those explicitly if needed.
 
 Task records contain the original spec arguments and final result. They persist with
 `ttlMs: null` under `ANVILATE_TASK_STORE` when that environment variable is set, otherwise

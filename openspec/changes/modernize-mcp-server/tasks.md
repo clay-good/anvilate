@@ -95,10 +95,12 @@
       backing symbol because the operation is unbuilt; a test asserts it stays undischarged,
       so an implementation cannot land without someone deciding what discharges it.
 
-- [ ] 2.5 Recover unfinished tasks after the launching server exits: worker-written
-      results remain durable, but a worker that then exits without recording an outcome
-      loses its in-server process monitor. Reconnecting clients need a safe recovery path
-      that does not mistake an active worker or a reused PID for a failed task.
+- [x] 2.5 Recover unfinished tasks after the launching server exits: an OS-held execution
+      lock spans launcher, worker startup, and execution. `tasks/get` marks a new task failed
+      only after that lock is released without a terminal result. Subprocess tests cover
+      launcher exit before worker imports, normal completion, abrupt exit, and SIGKILL;
+      live/reused PIDs, inaccessible locks, and existing terminal results cannot cause a
+      false recovery. Legacy records lack the lock contract and remain unchanged.
 
 ## 3. Release
 

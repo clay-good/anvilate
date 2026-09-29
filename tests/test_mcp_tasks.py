@@ -435,3 +435,150 @@ def test_reaping_cannot_replace_a_workers_terminal_result(tmp_path):
         finished = store.public(task_id)
         assert finished["statusMessage"] == "Original outcome."
         assert finished["error" if outcome == "fail" else "result"] == {"original": outcome}
+
+
+def test_recovery_uses_an_execution_lease_not_a_reusable_pid(tmp_path):
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    with store.execution_lease(task_id):
+        store.enable_recovery(task_id)
+        # This PID is alive, but it is not proof that the task has an owner.
+        store.attach_worker(task_id, os.getpid())
+        assert TaskStore(tmp_path).public(task_id)["status"] == "working"
+    recovered = TaskStore(tmp_path).public(task_id)
+    assert recovered["status"] == "failed"
+    assert recovered["error"]["code"] == -32603
+    assert "owner" in recovered["error"]["message"]
+    assert recovered["_meta"]["dev.anvilate/progress"]["completedUnits"] == 0
+    assert TaskStore(tmp_path).public(task_id) == recovered
+
+
+def test_recovery_does_not_guess_about_legacy_records(tmp_path):
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    assert store.public(task_id)["status"] == "working"
+
+
+def test_recovery_preserves_terminal_records(tmp_path):
+    store = TaskStore(tmp_path)
+    for outcome in ("complete", "fail", "cancel"):
+        task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+        with store.execution_lease(task_id):
+            store.enable_recovery(task_id)
+            getattr(store, outcome)(task_id, {"original": outcome}, "Original outcome.")
+        record = store.public(task_id)
+        assert record["statusMessage"] == "Original outcome."
+        assert record["error" if outcome == "fail" else "result"] == {"original": outcome}
+
+
+def test_recovery_does_not_treat_a_lock_access_error_as_abandonment(monkeypatch, tmp_path):
+    import fcntl
+
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    with store.execution_lease(task_id):
+        store.enable_recovery(task_id)
+
+    def inaccessible(*args):
+        raise PermissionError("lease inaccessible")
+
+    monkeypatch.setattr(fcntl, "flock", inaccessible)
+    assert store.public(task_id)["status"] == "working"
+
+
+# The launcher exits before the worker imports Anvilate. Only the inherited OS lock
+# protects that startup interval; no Python worker code has acquired a lease yet.
+_ORPHAN_LAUNCHER = '''
+import json, os, subprocess, sys
+from anvilate._mcp_tasks import launch_task
+popen = subprocess.Popen
+worker = """
+import os, sys, time
+from pathlib import Path
+gate = Path(sys.argv[1])
+deadline = time.monotonic() + 10
+while not gate.exists() and time.monotonic() < deadline:
+    time.sleep(0.01)
+if sys.argv[2] == "crash":
+    os._exit(7)
+if sys.argv[2] == "killed":
+    import signal
+    os.kill(os.getpid(), signal.SIGKILL)
+from anvilate._mcp_tasks import _run_worker
+raise SystemExit(_run_worker(sys.argv[3], sys.argv[4], int(sys.argv[5])))
+"""
+def delayed_worker(command, **kwargs):
+    return popen([sys.executable, "-c", worker, sys.argv[1], sys.argv[2], *command[4:]], **kwargs)
+subprocess.Popen = delayed_worker
+print(json.dumps(launch_task("run_fea_validation", {"spec": json.loads(sys.argv[3])})), flush=True)
+os._exit(0)
+'''
+
+
+def test_reconnecting_after_launcher_exit_recovers_only_an_abandoned_worker(monkeypatch, tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
+    for outcome in ("crash", "killed", "finish"):
+        gate = tmp_path / outcome
+        try:
+            launcher = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    _ORPHAN_LAUNCHER,
+                    str(gate),
+                    outcome,
+                    json.dumps(_spec_document()),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+            created = json.loads(launcher.stdout)
+            task_id = created["taskId"]
+            assert _task_request("tasks/get", task_id)["result"]["status"] == "working"
+            gate.touch()
+            terminal = _poll_terminal(task_id)
+            if outcome == "finish":
+                assert terminal["status"] == "completed"
+                assert (
+                    terminal["result"]["structuredContent"]["scorecard"]["status"]
+                    == "not_evaluated"
+                )
+            else:
+                assert terminal["status"] == "failed"
+                assert terminal["error"]["code"] == -32603
+        finally:
+            gate.touch()
+
+
+def test_monitor_keeps_ownership_until_the_exit_code_is_persisted(tmp_path):
+    import pytest
+
+    from anvilate._mcp_tasks import _reap_worker
+
+    store = TaskStore(tmp_path)
+    task_id = store.create("run_fea_validation", {"spec": {}})["taskId"]
+    with store.execution_lease(task_id) as lease:
+        store.enable_recovery(task_id)
+        monitor_fd = os.dup(lease.fileno())
+    try:
+        assert store.public(task_id)["status"] == "working"
+
+        class Worker:
+            def wait(self):
+                return 7
+
+        _reap_worker(store, task_id, Worker(), monitor_fd)
+        assert "code 7" in store.public(task_id)["error"]["message"]
+        with pytest.raises(OSError):
+            os.fstat(monitor_fd)
+    finally:
+        try:
+            os.close(monitor_fd)
+        except OSError:
+            pass
