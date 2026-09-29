@@ -4223,6 +4223,8 @@ def test_the_repository_root_holds_only_files_that_belong_there():
         "SECURITY.md",
         "LICENSE",
         "README.md",
+        # The standard manifest consumed by the official MCP Registry publisher.
+        "server.json",
         "package-lock.json",
         "package.json",
         "pyproject.toml",

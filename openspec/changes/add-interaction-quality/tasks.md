@@ -126,6 +126,9 @@
       intensities, refractive indices, incidence angles, and total-internal-reflection conditions,
       sourced to attenuation requirements, photometer records, glass certificates, layouts, or
       calibrated setups.
+      The complete optical-instrument family adds 10 structured sites for telescope, magnifier,
+      and microscope focal lengths, tube length, and near-point distance, sourced to optical
+      prescriptions, lens catalogues, or the governing viewing requirement.
       The complete adhesive-joint and coating families add 11 structured sites for joint geometry,
       loads, bond strength, film thickness, and volume solids, sourced to drawings, load cases,
       product or qualification records, coating specifications, and calibrated gage records.

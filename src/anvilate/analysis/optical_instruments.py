@@ -21,9 +21,30 @@ of objective and eyepiece.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
 _NEAR_POINT = 0.25  # m, standard least distance of distinct vision (250 mm)
+_OPTICAL_PRESCRIPTION_SOURCE = "the optical prescription or selected lens catalogue"
+_VIEWING_REQUIREMENT_SOURCE = "the viewing requirement or approved ergonomic design basis"
+
+
+class _OpticalInstrumentInputError(RefusalError, ValueError):
+    """An optical-instrument input that cannot be used without correction."""
+
+
+def _instrument_refusal(message: str, *, subject: str, source: str) -> _OpticalInstrumentInputError:
+    return _OpticalInstrumentInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _instrument_input_source(name: str) -> str:
+    if name == "near_point":
+        return _VIEWING_REQUIREMENT_SOURCE
+    return _OPTICAL_PRESCRIPTION_SOURCE
+
 
 __all__ = [
     "magnifier_angular_magnification",
@@ -47,9 +68,17 @@ def telescope_angular_magnification(
     f_o = objective_focal_length.to("m").magnitude
     f_e = eyepiece_focal_length.to("m").magnitude
     if f_o <= 0:
-        raise ValueError("objective_focal_length must be positive")
+        raise _instrument_refusal(
+            "objective_focal_length must be positive",
+            subject="objective_focal_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     if f_e <= 0:
-        raise ValueError("eyepiece_focal_length must be positive")
+        raise _instrument_refusal(
+            "eyepiece_focal_length must be positive",
+            subject="eyepiece_focal_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     return f_o / f_e
 
 
@@ -65,14 +94,22 @@ def magnifier_angular_magnification(
     _check(focal_length, "[length]", "focal_length")
     f = focal_length.to("m").magnitude
     if f <= 0:
-        raise ValueError("focal_length must be positive")
+        raise _instrument_refusal(
+            "focal_length must be positive",
+            subject="focal_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     if near_point is None:
         d = _NEAR_POINT
     else:
         _check(near_point, "[length]", "near_point")
         d = near_point.to("m").magnitude
         if d <= 0:
-            raise ValueError("near_point must be positive")
+            raise _instrument_refusal(
+                "near_point must be positive",
+                subject="near_point",
+                source=_VIEWING_REQUIREMENT_SOURCE,
+            )
     return d / f
 
 
@@ -98,27 +135,49 @@ def microscope_magnification(
     f_o = objective_focal_length.to("m").magnitude
     f_e = eyepiece_focal_length.to("m").magnitude
     if length <= 0:
-        raise ValueError("tube_length must be positive")
+        raise _instrument_refusal(
+            "tube_length must be positive",
+            subject="tube_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     if f_o <= 0:
-        raise ValueError("objective_focal_length must be positive")
+        raise _instrument_refusal(
+            "objective_focal_length must be positive",
+            subject="objective_focal_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     if f_e <= 0:
-        raise ValueError("eyepiece_focal_length must be positive")
+        raise _instrument_refusal(
+            "eyepiece_focal_length must be positive",
+            subject="eyepiece_focal_length",
+            source=_OPTICAL_PRESCRIPTION_SOURCE,
+        )
     if near_point is None:
         d = _NEAR_POINT
     else:
         _check(near_point, "[length]", "near_point")
         d = near_point.to("m").magnitude
         if d <= 0:
-            raise ValueError("near_point must be positive")
+            raise _instrument_refusal(
+                "near_point must be positive",
+                subject="near_point",
+                source=_VIEWING_REQUIREMENT_SOURCE,
+            )
     return (length / f_o) * (d / f_e)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _instrument_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_instrument_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _instrument_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_instrument_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
