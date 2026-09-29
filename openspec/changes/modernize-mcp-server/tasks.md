@@ -104,7 +104,13 @@
 
 ## 3. Release
 
-- [ ] 3.1 Registry publication automation per release
+- [x] 3.1 Registry publication automation per release — `server.json` publishes the
+      version-pinned PyPI distribution and its `anvilate-mcp` stdio entry point. Publishing
+      a GitHub release, or manually retrying its tag, checks that the tag, package metadata,
+      registry metadata, install argument, and README ownership proof agree; waits for that
+      exact PyPI version; verifies a pinned publisher binary by SHA-256; then authenticates
+      to the official registry with GitHub OIDC and publishes. The release guide records the
+      required PyPI-before-GitHub ordering and retry path
 - [ ] 3.2 Conformance run against the protocol test suite — the known JSON-RPC
       divergence is now closed: invalid request objects receive `-32600` and a null ID,
       including malformed objects without an ID; only valid notifications remain silent.

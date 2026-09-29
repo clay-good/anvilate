@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Fifty-eight pages, arranged by what you are trying to do. The [README](../README.md) is the
+Fifty-nine pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -78,6 +78,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | --- | --- |
 | [Driving Anvilate from a coding agent](agent-mcp-integration.md) | The loop that works, and the half that is not callable yet. |
 | [The MCP tool surface](mcp-tool-contracts.md) | Eight operations, two dispatch modes, and the four a stateless server cannot serve. |
+| [Publishing the MCP server](mcp-registry-release.md) | Version, publish, authenticate, and retry the official registry release. |
 | [The agent skill](agent-skill.md) | What correct use looks like, bound to the library by CI. |
 | [The published contracts](published-contracts.md) | Spec IR and scorecard as JSON Schema 2020-12. |
 | [Agent-driving evals](agent-driving-evals.md) | Whether a given local model can drive this, measured. |

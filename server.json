@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.clay-good/anvilate",
+  "title": "Anvilate",
+  "description": "Local-first analytical screening for mechanical, structural, and industrial engineering.",
+  "repository": {
+    "url": "https://github.com/clay-good/anvilate",
+    "source": "github"
+  },
+  "version": "0.0.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "anvilate",
+      "version": "0.0.1",
+      "runtimeHint": "uvx",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--from",
+          "value": "anvilate==0.0.1",
+          "description": "Install the exact Anvilate release."
+        },
+        {
+          "type": "positional",
+          "value": "anvilate-mcp",
+          "description": "Run the MCP server over stdio."
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
