@@ -89,3 +89,16 @@ systems: the **`air_receiver_holdup_time`** a tank rides out a demand burst, and
 isothermal/adiabatic/multi-stage **compression power** and discharge temperature of the
 compressor that fills it ([`examples/air_receiver_sizing.py`](../examples/air_receiver_sizing.py),
 [`examples/air_compressor_duty.py`](../examples/air_compressor_duty.py)).
+
+
+### Gas-compression input repairs
+
+Gas-compression input refusals are both `ValueError` and `RefusalError`. Each exception's
+`remedies` records identify an action, the input to correct, and the operating case,
+gas property record, or compressor specification to consult. Existing error messages
+remain available through `str(error)`.
+
+`optimal_stage_pressure_ratio` and `multistage_compression_power` require a positive
+integer `stages`; booleans, fractional values, and floats such as `2.0` are refused.
+Pass `stages=2` for a two-stage compressor. Non-finite scalar inputs are refused before
+calculating power or discharge temperature.

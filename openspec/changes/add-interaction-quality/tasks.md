@@ -49,6 +49,9 @@
       failing card, a missing optional dependency) gets its own `remedy` rather than the
       generic sentence, derived from the CLI's own diagnostic forms. The CLI's JSON
       refusal carries those remedies in `remedy` instead of its generic sentence.
+      Gas-compression refusals now identify the operating case, gas property record, or
+      compressor specification needed to repair invalid inputs. Stage counts require positive
+      integers, and non-finite scalar inputs carry the same structured remedies.
       **Raised-refusal migration has started:** `anvilate.refusal.Remedy` requires an action,
       concrete subject, and source, while `RefusalError` refuses an empty remedy set.
       `ExportRefused`, the artifact gate exposed directly to Python callers, carries that
