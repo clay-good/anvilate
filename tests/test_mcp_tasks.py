@@ -369,3 +369,69 @@ def test_the_docs_quote_the_grace_the_code_gives():
     docs = Path(__file__).parents[1] / "docs"
     for page in ("agent-mcp-integration.md", "mcp-tool-contracts.md"):
         assert f"{CANCEL_GRACE_SECONDS:g}-second grace" in (docs / page).read_text(), page
+
+
+def test_worker_launch_failure_is_a_durable_failed_task(monkeypatch, tmp_path):
+    import subprocess
+
+    monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
+
+    def cannot_start(*args, **kwargs):
+        raise OSError("worker process limit reached")
+
+    monkeypatch.setattr(subprocess, "Popen", cannot_start)
+    created = _task_call()["result"]
+    assert created["resultType"] == "task"
+    assert created["status"] == "failed"
+    failed = _poll_terminal(created["taskId"])
+    assert failed["error"]["code"] == -32603
+    assert "worker process limit reached" in failed["error"]["message"]
+    assert failed["_meta"]["dev.anvilate/progress"]["completedUnits"] == 0
+    assert "result" not in failed
+    assert handle_request({"jsonrpc": "2.0", "id": 3, "method": "tools/list"})["result"]
+
+
+def test_workers_that_exit_without_results_do_not_leave_tasks_working(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+
+    monkeypatch.setenv("ANVILATE_TASK_STORE", str(tmp_path))
+    popen = subprocess.Popen
+    for code in (0, 7, -15):
+        script = (
+            f"import os, signal; os._exit({code})"
+            if code >= 0
+            else ("import os, signal; os.kill(os.getpid(), signal.SIGTERM)")
+        )
+
+        def exit_before_result(command, *, script=script, **kwargs):
+            return popen([sys.executable, "-c", script], **kwargs)
+
+        monkeypatch.setattr(subprocess, "Popen", exit_before_result)
+        created = _task_call()["result"]
+        failed = _poll_terminal(created["taskId"])
+        assert failed["status"] == "failed"
+        assert failed["error"]["code"] == -32603
+        assert str(code) in failed["error"]["message"]
+        assert "without recording" in failed["error"]["message"]
+        assert "result" not in failed
+        assert failed["_meta"]["dev.anvilate/progress"]["indeterminate"] is False
+
+
+def test_reaping_cannot_replace_a_workers_terminal_result(tmp_path):
+    from anvilate._mcp_tasks import _reap_worker
+
+    store = TaskStore(tmp_path)
+    for outcome in ("complete", "fail", "cancel"):
+        record = store.create("run_fea_validation", {"spec": {}})
+        task_id = record["taskId"]
+
+        class Worker:
+            def wait(self, outcome=outcome, task_id=task_id):
+                getattr(store, outcome)(task_id, {"original": outcome}, "Original outcome.")
+                return 7
+
+        _reap_worker(store, task_id, Worker())
+        finished = store.public(task_id)
+        assert finished["statusMessage"] == "Original outcome."
+        assert finished["error" if outcome == "fail" else "result"] == {"original": outcome}

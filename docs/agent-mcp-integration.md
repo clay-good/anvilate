@@ -91,6 +91,14 @@ error category. For example, a document that fails Design Spec validation carrie
 code `-32602`; it is not rewritten as `-32603`, which is reserved for an actual defect in
 the server. An unavailable task operation similarly retains `-32000`.
 
+If the worker cannot start, the call returns a durable failed task containing the launch
+error. While the launching server remains running, its process monitor also marks a task
+failed if the worker exits without recording a terminal result, including exit code `0`.
+The error records the exit code, progress ends at `0/1`, and no scorecard is invented.
+A completed result, input refusal, or cancellation already recorded by the worker wins
+over the process monitor. If the launching server exits before an abruptly terminated
+worker, automatic recovery of that unfinished record is not yet implemented.
+
 Task records contain the original spec arguments and final result. They persist with
 `ttlMs: null` under `ANVILATE_TASK_STORE` when that environment variable is set, otherwise
 under Anvilate's local cache. This release does not evict them automatically; operators who

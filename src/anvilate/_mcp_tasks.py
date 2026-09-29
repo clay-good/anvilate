@@ -296,20 +296,43 @@ def launch_task(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     nonce = record["_nonce"]
     environment = os.environ.copy()
     environment["ANVILATE_TASK_STORE"] = str(store.root)
-    process = subprocess.Popen(  # noqa: S603 - fixed interpreter/module, no shell
-        [sys.executable, "-m", "anvilate._mcp_tasks", "--worker", task_id, nonce],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=environment,
-        start_new_session=True,
-    )
+    try:
+        process = subprocess.Popen(  # noqa: S603 - fixed interpreter/module, no shell
+            [sys.executable, "-m", "anvilate._mcp_tasks", "--worker", task_id, nonce],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+            start_new_session=True,
+        )
+    except OSError as failure:
+        store.fail(
+            task_id,
+            {
+                "code": -32603,
+                "message": f"Worker could not start: {type(failure).__name__}: {failure}",
+            },
+            f"{operation} worker could not start.",
+        )
+        return store.public(task_id)
     store.attach_worker(task_id, process.pid)
-    # Reaping is process hygiene, not task state. The durable JSON record remains the only
-    # source of truth; this thread merely prevents a completed detached child becoming a
-    # zombie (or producing ResourceWarning when its Popen wrapper is collected).
-    threading.Thread(target=process.wait, daemon=True).start()
+    # Reap the child and reconcile an exit that bypassed the worker's result writer.
+    # fail() holds the record lock and preserves any terminal result, including a
+    # cancellation that raced with process exit.
+    threading.Thread(target=_reap_worker, args=(store, task_id, process), daemon=True).start()
     return store.public(task_id)
+
+
+def _reap_worker(store: TaskStore, task_id: str, process: subprocess.Popen) -> None:
+    exit_code = process.wait()
+    store.fail(
+        task_id,
+        {
+            "code": -32603,
+            "message": f"Worker exited with code {exit_code} without recording a terminal result.",
+        },
+        "Worker exited without recording a terminal result.",
+    )
 
 
 def _run_worker(task_id: str, nonce: str) -> int:

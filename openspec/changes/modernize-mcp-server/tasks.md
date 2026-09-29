@@ -61,7 +61,9 @@
       completes the worker, and proves the terminal result cannot be overwritten as working.
       Expected refusals also retain their category across the subprocess boundary: invalid
       task input is `-32602`, unavailable work is `-32000`, and `-32603` is reserved for a
-      genuine internal defect.
+      genuine internal defect. Launch failures now return a durable failed task, and the
+      launching server's process monitor records an unexpected worker exit rather than
+      leaving the task working forever. Terminal results survive monitor races.
       `build_part` remains refused because task transport does not manufacture the sandboxed
       geometry generator it still waits on
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
@@ -92,6 +94,11 @@
       is a claim that can fail. The sandbox gate is declared by `build_part`, which names no
       backing symbol because the operation is unbuilt; a test asserts it stays undischarged,
       so an implementation cannot land without someone deciding what discharges it.
+
+- [ ] 2.5 Recover unfinished tasks after the launching server exits: worker-written
+      results remain durable, but a worker that then exits without recording an outcome
+      loses its in-server process monitor. Reconnecting clients need a safe recovery path
+      that does not mistake an active worker or a reused PID for a failed task.
 
 ## 3. Release
 
