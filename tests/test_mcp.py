@@ -440,7 +440,7 @@ def test_an_unknown_method_or_tool_is_a_method_not_found():
 
 
 def test_tool_call_params_are_an_object_with_a_string_name():
-    for params, expected in (([], "params"), ({"name": 7}, "name"), ({}, "name")):
+    for params, expected in (({"name": 7}, "name"), ({}, "name")):
         error = handle_request(
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}
         )["error"]
@@ -834,10 +834,10 @@ def test_every_servable_tool_is_dispatched_or_says_what_it_waits_on():
 
 
 def test_a_request_that_is_not_json_rpc_2_is_refused():
-    assert handle_request({"id": 1, "method": "tools/list"})["error"]["code"] == -32602
+    assert handle_request({"id": 1, "method": "tools/list"})["error"]["code"] == -32600
     assert (
         handle_request({"jsonrpc": "1.0", "id": 1, "method": "tools/list"})["error"]["code"]
-        == -32602
+        == -32600
     )
 
 
@@ -1234,27 +1234,21 @@ def test_the_transport_carries_a_real_compile_end_to_end():
 # --- Found auditing the handler an hour after writing it ---------------------------------
 
 
-def test_a_notification_takes_no_response_however_malformed_it_is():
-    """The first draft validated the JSON-RPC version *before* noticing there was no id,
-    so a notification with a missing or wrong ``jsonrpc`` produced an error line — a
-    spurious response in a stream the client reads one response per request.
-
-    A message with no id has nothing to answer to, so the notification check has to come
-    first. A request *with* an id and a bad version is still an error, which is the half
-    that must not be lost to the fix.
-    """
+def test_only_valid_notification_objects_are_silent():
     for message in (
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "method": "tools/call", "params": {}},
+        {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": 5}},
+    ):
+        assert handle_request(message) is None
+    for message in (
         {"jsonrpc": "1.0", "method": "notifications/initialized"},
         {"method": "notifications/initialized"},
         {},
     ):
-        assert handle_request(message) is None
-
-    assert (
-        handle_request({"jsonrpc": "1.0", "id": 5, "method": "tools/list"})["error"]["code"]
-        == -32602
-    )
+        response = handle_request(message)
+        assert response["error"]["code"] == -32600
+        assert response["id"] is None
 
 
 def test_a_value_outside_its_declared_enum_or_bounds_is_refused():
@@ -1648,8 +1642,7 @@ def test_a_request_that_is_not_an_object_is_answered_rather_than_dropped(not_an_
     forever. A number or `None` raised `TypeError` out of the handler.
 
     JSON-RPC 2.0 §5: an Invalid Request is `-32600` with `"id": null`. There is no `id`
-    member to be missing here, so this is the one id-less case this handler answers — see
-    the divergence stated in its docstring for the case it does not.
+    to recover from these values, so the response cannot carry a request identifier.
     """
     response = handle_request(not_an_object)
     assert response is not None, "a message that is not a request object was dropped"
@@ -1664,7 +1657,10 @@ def test_the_stdio_loop_and_the_handler_agree_on_a_non_object():
     Before it, the loop answered `-32600` and a direct call did not — two transports, two
     behaviours, one documented contract. This fails if the check moves back into a caller.
     """
-    responses = _serve(json.dumps([1, 2, 3]), json.dumps({"jsonrpc": "2.0", "id": 9}))
+    responses = _serve(
+        json.dumps([1, 2, 3]),
+        json.dumps({"jsonrpc": "2.0", "id": 9, "method": "tools/list"}),
+    )
     assert responses[0] == handle_request([1, 2, 3])
     assert responses[0]["error"]["code"] == -32600
     # And the loop still serves the message after it, which is the reason it catches at all.
@@ -2225,3 +2221,61 @@ def test_a_line_nested_past_the_parser_is_a_parse_error_and_the_loop_goes_on():
     first, second = (_json.loads(line) for line in sink.getvalue().strip().splitlines())
     assert first["error"]["code"] == -32700 and "nests deeper" in first["error"]["message"]
     assert second["id"] == 2 and "tools" in second["result"]
+
+
+@pytest.mark.parametrize("method", [None, 1, True, [], {}, ["tools/list"]])
+def test_invalid_method_types_are_invalid_requests_and_do_not_stop_stdio(method):
+    message = {"jsonrpc": "2.0", "id": 41, "method": method}
+    response = handle_request(message)
+    assert response["error"]["code"] == -32600
+    assert response["id"] is None
+    replies = _serve(
+        json.dumps(message),
+        json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json.dumps({"jsonrpc": "2.0", "id": 42, "method": "tools/list"}),
+    )
+    assert len(replies) == 2
+    assert replies[0] == response
+    assert replies[1]["id"] == 42 and "result" in replies[1]
+
+
+@pytest.mark.parametrize(
+    "request_id", [True, False, [], {}, None, 1.0, 1.5, float("nan"), float("inf")]
+)
+def test_invalid_request_ids_are_not_echoed(request_id):
+    response = handle_request({"jsonrpc": "2.0", "id": request_id, "method": "tools/list"})
+    assert response["error"]["code"] == -32600
+    assert response["id"] is None
+    json.dumps(response, allow_nan=False)
+
+
+@pytest.mark.parametrize("request_id", ["", "client-42", 0, 42])
+def test_mcp_request_ids_round_trip_without_coercion(request_id):
+    response = handle_request({"jsonrpc": "2.0", "id": request_id, "method": "tools/list"})
+    assert response["id"] == request_id
+    assert type(response["id"]) is type(request_id)
+    assert "result" in response
+
+
+@pytest.mark.parametrize("params", [None, True, 7, "invalid", []])
+def test_non_object_params_are_invalid_mcp_request_objects(params):
+    for identified in (True, False):
+        message = {"jsonrpc": "2.0", "method": "tools/list", "params": params}
+        if identified:
+            message["id"] = 1
+        response = handle_request(message)
+        assert response["error"]["code"] == -32600
+        assert response["id"] is None
+
+
+def test_json_rpc_invalid_request_example_is_answered_without_an_id():
+    # JSON-RPC 2.0 section 7: malformed objects are not notifications.
+    response = handle_request({"jsonrpc": "2.0", "method": 1, "params": "bar"})
+    assert response["error"]["code"] == -32600
+    assert response["id"] is None
+
+
+@pytest.mark.parametrize("method", ["initialize", "tools/list"])
+def test_successful_protocol_responses_declare_their_result_type(method):
+    response = handle_request({"jsonrpc": "2.0", "id": 1, "method": method})
+    assert response["result"]["resultType"] == "complete"

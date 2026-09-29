@@ -442,13 +442,20 @@ whatever the server did most recently.
 
 ## What a client can rely on
 
+Request and response envelopes follow the [MCP base protocol](https://modelcontextprotocol.io/specification/2026-07-28/basic)
+and [JSON-RPC Invalid Request rules](https://www.jsonrpc.org/specification#response_object).
+
 - **Both ends are checked against the schemas you were handed.** Arguments in against
   `inputSchema`, `structuredContent` out against `outputSchema`. A result that does not
   conform is refused rather than sent.
 - **Restarting the server loses nothing**, because there is nothing to lose. Reconnecting
   after a crash puts you exactly where you were.
-- **A notification gets no response line.** If you send one and then block on a read, you
-  will block forever.
+- **A valid notification gets no response line.** Invalid request objects receive
+  `-32600` with a null response ID, even when no ID was supplied. Requests require a
+  string or integer ID, a string method, `jsonrpc: "2.0"`, and object-valued parameters
+  when present. Booleans, null IDs, and floating-point IDs are refused.
+- **Successful responses declare `resultType`.** Catalog and initialization responses use
+  `"complete"`, as do synchronous tool results; dispatched work uses `"task"`.
 - **Rubbish does not take the stream down.** A line that is not JSON gets a `-32700` with a
   null id and the loop continues. Nor does a well-formed line carrying the wrong shape: a
   property declared as one of the published schemas must arrive as a JSON object, and a

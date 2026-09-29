@@ -105,18 +105,17 @@
 ## 3. Release
 
 - [ ] 3.1 Registry publication automation per release
-- [ ] 3.2 Conformance run against the protocol test suite — one divergence is known and
-      now *stated* rather than assumed, so a conformance run does not discover it as a
-      surprise: JSON-RPC 2.0 §5 answers an Invalid Request with `-32600` and `"id": null`,
-      and its §7 example does so for a message that has no `id` at all. `handle_request`
-      answers nothing to any message without an `id`, malformed or not, because a spurious
-      line desynchronizes a client reading one-for-one while a dropped error for a message
-      nobody awaited costs nothing. A message that is not an object has no `id` member to
-      be missing, and that case is now answered (it used to either vanish or raise
-      `TypeError`, depending on which non-object it was). **Blocked upstream (checked
-      2026-09-25):** the official suite (`npx @modelcontextprotocol/conformance server --url`)
+- [ ] 3.2 Conformance run against the protocol test suite — the known JSON-RPC
+      divergence is now closed: invalid request objects receive `-32600` and a null ID,
+      including malformed objects without an ID; only valid notifications remain silent.
+      MCP's string/integer request IDs and object parameters are enforced before dispatch,
+      and initialization/catalog results now carry `resultType: "complete"`. Regression
+      tests cover the official Invalid Request example and malformed methods followed by
+      a healthy call on the same stdio stream. **Blocked upstream (rechecked
+      2026-09-28):** the official suite (`npx @modelcontextprotocol/conformance server --url`)
       drives a server over HTTP, and stdio support is open as
-      modelcontextprotocol/conformance#258. This server speaks stdio only, so the run waits on
+      [modelcontextprotocol/conformance#258](https://github.com/modelcontextprotocol/conformance/issues/258).
+      This server speaks stdio only, so the run waits on
       that issue rather than on work here
 
 ## 4. Docs

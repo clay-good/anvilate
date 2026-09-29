@@ -1003,14 +1003,9 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     code. ``None`` is returned for a notification (a request with no ``id``), which the
     protocol says takes no response.
 
-    **A stated divergence, not an oversight.** JSON-RPC 2.0 §5 says an *Invalid Request* is
-    answered with a ``-32600`` error carrying ``"id": null``, and the spec's own §7 example
-    does exactly that for ``{"jsonrpc": "2.0", "method": 1, "params": "bar"}`` — a message
-    with no ``id``. This handler answers nothing to *any* message that has no ``id``,
-    malformed or not, because the two mistakes do not cost the same: a spurious line in a
-    stream a client reads one-for-one desynchronizes it, and an error dropped for a message
-    the client was never waiting on does not. A message that is not an object at all has no
-    ``id`` member to be missing, so that one is answered rather than dropped.
+    Request structure is checked before notification handling. JSON-RPC 2.0 sections
+    4–5 distinguish a valid notification from an invalid object with no id: the former
+    is silent, while the latter receives ``-32600`` with ``"id": null``.
 
     ``initialize`` reports the protocol revision and capabilities. ``tools/list`` returns
     :func:`wire_definitions`. ``tools/call`` validates the arguments against the published
@@ -1035,31 +1030,28 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
       :mod:`anvilate.store` — and the refusal is still here for the tool that stops
       declaring one.
     """
-    # "Is this an object at all" comes first, and it belongs HERE rather than in the stdio
-    # loop that used to hold it. This function is documented as the one place every
-    # transport drives, and the check living in one caller made that false: called with a
-    # list or a string, `"id" not in request` is a membership test that happens to be True,
-    # so the message vanished and the client waited forever; called with a number or None
-    # it raised TypeError out of the handler.
     if not isinstance(request, Mapping):
         return _error(None, INVALID_REQUEST, "a JSON-RPC request is an object")
-    # The notification check comes before the version check, and the order is the point: a
-    # message with no `id` has nothing to answer to, so an error response would be a line
-    # the client is not expecting and cannot match to anything. The first draft validated
-    # the version first and emitted an error for a notification whose `jsonrpc` was missing
-    # or wrong — a spurious line in a stream a client reads one-for-one.
+    if request.get("jsonrpc") != "2.0":
+        return _error(None, INVALID_REQUEST, "not a JSON-RPC 2.0 request")
+    method = request.get("method")
+    if not isinstance(method, str):
+        return _error(None, INVALID_REQUEST, "a JSON-RPC method must be a string")
+    request_id = request.get("id")
+    if "id" in request and (isinstance(request_id, bool) or not isinstance(request_id, (str, int))):
+        return _error(None, INVALID_REQUEST, "an MCP request id must be a string or integer")
+    if "params" in request and not isinstance(request["params"], Mapping):
+        return _error(None, INVALID_REQUEST, "MCP params must be a JSON object")
+    # Method-level argument failures never produce a reply to a valid notification.
     if "id" not in request:
         return None
-    request_id = request.get("id")
-    if request.get("jsonrpc") != "2.0":
-        return _error(request_id, INVALID_PARAMS, "not a JSON-RPC 2.0 request")
-    method = request.get("method")
 
     if method == "initialize":
         return {
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
+                "resultType": "complete",
                 "protocolVersion": PROTOCOL_REVISION,
                 "capabilities": {
                     "tools": {"listChanged": False},
@@ -1069,7 +1061,11 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             },
         }
     if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": wire_definitions()}}
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {"resultType": "complete", "tools": wire_definitions()},
+        }
     if method in {"tasks/get", "tasks/update", "tasks/cancel"}:
         from ._mcp_tasks import UnknownTask, task_store
 
