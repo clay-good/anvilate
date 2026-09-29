@@ -39466,6 +39466,85 @@ def test_radioactivity_decay_constant_remaining_activity_and_time():
         decay_constant_from_half_life(half_life=_q("5.27 kg"))
 
 
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "specific_activity",
+            {"half_life": _q("0 s"), "molar_mass": _q("59.9338 g/mol")},
+            "half_life",
+            "the isotope certificate or cited nuclear-data table",
+        ),
+        (
+            "remaining_activity",
+            {
+                "initial_activity": _q("100 GBq"),
+                "elapsed_time": _q("-1 s"),
+                "half_life": _q("5.27 yr"),
+            },
+            "elapsed_time",
+            "the source handling log or measurement timestamps",
+        ),
+        (
+            "time_for_activity_decay",
+            {
+                "initial_activity": _q("0 GBq"),
+                "final_activity": _q("10 GBq"),
+                "half_life": _q("5.27 yr"),
+            },
+            "initial_activity",
+            "the calibrated activity measurement or source certificate",
+        ),
+        (
+            "time_for_activity_decay",
+            {
+                "initial_activity": _q("100 GBq"),
+                "final_activity": _q("0 GBq"),
+                "half_life": _q("5.27 yr"),
+            },
+            "final_activity",
+            "the governing handling, shipment, or disposal limit",
+        ),
+    ),
+)
+def test_radioactivity_refusals_carry_structured_remedies(function_name, kwargs, subject, source):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+def test_every_radioactivity_refusal_site_is_structured():
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / "src/anvilate/analysis/radioactivity.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "_radioactivity_refusal":
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == 12
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
 def test_piezoelectric_charge_voltage_and_force_inverse():
     from anvilate.analysis import (
         piezoelectric_charge,

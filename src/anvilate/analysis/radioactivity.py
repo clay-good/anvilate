@@ -20,7 +20,35 @@ from __future__ import annotations
 
 from math import log, log2
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_NUCLIDE_DATA_SOURCE = "the isotope certificate or cited nuclear-data table"
+_ACTIVITY_RECORD_SOURCE = "the calibrated activity measurement or source certificate"
+_TIMELINE_SOURCE = "the source handling log or measurement timestamps"
+_TARGET_ACTIVITY_SOURCE = "the governing handling, shipment, or disposal limit"
+
+
+class _RadioactivityInputError(RefusalError, ValueError):
+    """A radioactive-decay input that cannot be used without correction."""
+
+
+def _radioactivity_refusal(message: str, *, subject: str, source: str) -> _RadioactivityInputError:
+    return _RadioactivityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _radioactivity_input_source(name: str) -> str:
+    if name in {"half_life", "molar_mass"}:
+        return _NUCLIDE_DATA_SOURCE
+    if name == "elapsed_time":
+        return _TIMELINE_SOURCE
+    if name == "final_activity":
+        return _TARGET_ACTIVITY_SOURCE
+    return _ACTIVITY_RECORD_SOURCE
+
 
 __all__ = [
     "decay_constant_from_half_life",
@@ -50,9 +78,17 @@ def specific_activity(*, half_life: Quantity, molar_mass: Quantity) -> Quantity:
     t_half = half_life.to("s").magnitude
     m = molar_mass.to("g/mol").magnitude
     if t_half <= 0:
-        raise ValueError("half_life must be positive")
+        raise _radioactivity_refusal(
+            "half_life must be positive",
+            subject="half_life",
+            source=_NUCLIDE_DATA_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("molar_mass must be positive")
+        raise _radioactivity_refusal(
+            "molar_mass must be positive",
+            subject="molar_mass",
+            source=_NUCLIDE_DATA_SOURCE,
+        )
     return Quantity(magnitude=log(2.0) * _AVOGADRO / (t_half * m), unit="Bq/g")
 
 
@@ -66,7 +102,11 @@ def decay_constant_from_half_life(*, half_life: Quantity) -> Quantity:
     _check(half_life, "[time]", "half_life")
     t_half = half_life.to("s").magnitude
     if t_half <= 0:
-        raise ValueError("half_life must be positive")
+        raise _radioactivity_refusal(
+            "half_life must be positive",
+            subject="half_life",
+            source=_NUCLIDE_DATA_SOURCE,
+        )
     return Quantity(magnitude=log(2.0) / t_half, unit="1/s")
 
 
@@ -87,11 +127,23 @@ def remaining_activity(
     t = elapsed_time.to("s").magnitude
     t_half = half_life.to("s").magnitude
     if a0 < 0:
-        raise ValueError("initial_activity must be non-negative")
+        raise _radioactivity_refusal(
+            "initial_activity must be non-negative",
+            subject="initial_activity",
+            source=_ACTIVITY_RECORD_SOURCE,
+        )
     if t < 0:
-        raise ValueError("elapsed_time must be non-negative")
+        raise _radioactivity_refusal(
+            "elapsed_time must be non-negative",
+            subject="elapsed_time",
+            source=_TIMELINE_SOURCE,
+        )
     if t_half <= 0:
-        raise ValueError("half_life must be positive")
+        raise _radioactivity_refusal(
+            "half_life must be positive",
+            subject="half_life",
+            source=_NUCLIDE_DATA_SOURCE,
+        )
     return Quantity(magnitude=a0 * 2.0 ** (-t / t_half), unit="Bq")
 
 
@@ -111,24 +163,44 @@ def time_for_activity_decay(
     a = final_activity.to("Bq").magnitude
     t_half = half_life.to("s").magnitude
     if a0 <= 0:
-        raise ValueError("initial_activity must be positive")
+        raise _radioactivity_refusal(
+            "initial_activity must be positive",
+            subject="initial_activity",
+            source=_ACTIVITY_RECORD_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("final_activity must be positive")
+        raise _radioactivity_refusal(
+            "final_activity must be positive",
+            subject="final_activity",
+            source=_TARGET_ACTIVITY_SOURCE,
+        )
     if a > a0:
-        raise ValueError(
-            "final_activity must not exceed initial_activity (decay only decreases it)"
+        raise _radioactivity_refusal(
+            "final_activity must not exceed initial_activity (decay only decreases it)",
+            subject="initial_activity and final_activity",
+            source="the calibrated source record and governing target activity",
         )
     if t_half <= 0:
-        raise ValueError("half_life must be positive")
+        raise _radioactivity_refusal(
+            "half_life must be positive",
+            subject="half_life",
+            source=_NUCLIDE_DATA_SOURCE,
+        )
     return Quantity(magnitude=t_half * log2(a0 / a), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _radioactivity_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_radioactivity_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _radioactivity_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_radioactivity_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
