@@ -430,7 +430,7 @@ def rc_tension_steel_for_moment(
         raise _rc_refusal(
             "the required moment exceeds the section's flexural capacity; deepen or "
             "widen the beam (or use compression steel)",
-            subject="required_moment and beam section",
+            subject="required_moment, concrete_strength, beam_width, and effective_depth",
             source=_RC_LOAD_SOURCE,
         )
     tension_force = (coeff * d - sqrt(discriminant)) / 2.0
@@ -453,7 +453,9 @@ def rc_tension_steel_for_moment(
             f"neutral axis lands at c = {neutral_axis:.1f} mm against a balanced c_b = "
             f"{balanced_c:.1f} mm, so the beam would fail by concrete crushing before the steel "
             f"yields. Deepen or widen it, or add compression steel.",
-            subject="required_moment and reinforcement layout",
+            subject=(
+                "required_moment, steel_yield, concrete_strength, beam_width, and effective_depth"
+            ),
             source=_RC_LOAD_SOURCE,
         )
     return Quantity(magnitude=tension_force / fy, unit="mm**2")
@@ -764,7 +766,7 @@ def rc_net_tensile_strain(
     if c >= d:
         raise _rc_refusal(
             "the neutral axis reaches the steel; check the inputs",
-            subject="stress_block_depth and reinforcement depth",
+            subject="stress_block_depth, effective_depth, and concrete_strength",
             source=_RC_REINFORCEMENT_SOURCE,
         )
     return _ACI_CONCRETE_ULTIMATE_STRAIN * (d - c) / c

@@ -15187,7 +15187,7 @@ def test_power_transmission_refusals_carry_structured_remedies(invoke, subject, 
         ),
         (
             lambda: barth_velocity_factor(pitch_line_velocity=_q("1 m/s"), quality="cast"),
-            "gear manufacturing quality",
+            "quality",
             "the gearset drawing or selected gear catalogue",
         ),
         (
@@ -30759,7 +30759,7 @@ def test_shell_and_tube_effectiveness_ntu_inverse_and_crossflow_cmax_mixed():
                 "beam_width": _q("300 mm"),
                 "effective_depth": _q("550 mm"),
             },
-            "required_moment and beam section",
+            "required_moment, concrete_strength, beam_width, and effective_depth",
             "the governing factored load case and design actions",
         ),
         (

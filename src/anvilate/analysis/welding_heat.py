@@ -173,7 +173,7 @@ def carbon_equivalent_iiw(
     if carbon <= 0:
         raise _welding_heat_refusal(
             f"carbon content must be positive; got {carbon}",
-            subject="carbon content",
+            subject="carbon",
             source=_WELD_COMPOSITION_SOURCE,
         )
     return (

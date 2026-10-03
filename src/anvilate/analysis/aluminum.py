@@ -174,7 +174,9 @@ def aluminum_buckling_stress(
             raise _aluminum_refusal(
                 "the inelastic line has gone non-positive; the slenderness exceeds the "
                 "constants' valid range (check that it is below the intersection)",
-                subject="slenderness and buckling constants",
+                subject=(
+                    "slenderness, intercept, slope, intersection_slenderness, and elastic_modulus"
+                ),
                 source=_ALUMINUM_CODE_SOURCE,
             )
     else:
@@ -382,7 +384,7 @@ class AlloyProperties(RevalidatedModel):
             raise _aluminum_refusal(
                 "a weld-affected property set has no weld-affected set of its own; the "
                 "heat-affected zone is already the reduced material",
-                subject="weld_affected properties",
+                subject="weld_affected",
                 source=_ALUMINUM_WELD_SOURCE,
             )
         return self

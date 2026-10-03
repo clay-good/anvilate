@@ -302,7 +302,10 @@ def choked_mass_flow_rate(
     if p0 <= 0 or t0 <= 0 or a <= 0 or r <= 0:
         raise _flow_refusal(
             "pressure, temperature, area, and gas constant must be positive",
-            subject="choked-flow pressure, temperature, area, and gas constant",
+            subject=(
+                "stagnation_pressure, stagnation_temperature, orifice_area, and "
+                "specific_gas_constant"
+            ),
             source=_NOZZLE_SOURCE,
         )
     if not 0.0 < discharge_coefficient <= 1.0:

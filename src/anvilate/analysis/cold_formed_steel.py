@@ -139,7 +139,7 @@ def aisi_plate_slenderness(
     if w <= 0 or t <= 0 or f <= 0 or e <= 0:
         raise _cfs_refusal(
             "flat_width, thickness, stress, and elastic_modulus must be positive",
-            subject="plate geometry, stress, and elastic modulus",
+            subject="flat_width, thickness, stress, and elastic_modulus",
             source=_CFS_PLATE_SOURCE,
         )
     if plate_buckling_coefficient <= 0:
@@ -274,7 +274,7 @@ class ElasticBuckling(RevalidatedModel):
             raise _cfs_refusal(
                 "source must record where the elastic buckling values came from — the "
                 "finite-strip run, the software and version, or the reference",
-                subject="ElasticBuckling.source",
+                subject="source",
                 source=_CFS_BUCKLING_SOURCE,
             )
         return self

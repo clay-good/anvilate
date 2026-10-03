@@ -401,7 +401,7 @@ def barth_velocity_factor(*, pitch_line_velocity: Quantity, quality: str = "cut"
     if quality not in _BARTH_FACTORS:
         raise _drive_refusal(
             f"quality must be one of {sorted(_BARTH_FACTORS)}; got {quality!r}",
-            subject="gear manufacturing quality",
+            subject="quality",
             source=_GEAR_GEOMETRY_SOURCE,
         )
     v = pitch_line_velocity.to("m/s").magnitude
@@ -1053,7 +1053,7 @@ def gear_tooth_thickness_at_radius(
             f"radius ({radius}) is at or past the pointed radius of this tooth: the "
             f"involutes meet before it and the arc thickness comes out {thickness:.4f} mm. "
             "Reduce the addendum or use more teeth",
-            subject="radius and tooth geometry",
+            subject="radius, module, teeth, and pressure_angle",
             source=_GEAR_GEOMETRY_SOURCE,
         )
     return Quantity(magnitude=thickness, unit="mm")

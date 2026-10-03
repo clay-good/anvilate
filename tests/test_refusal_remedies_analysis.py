@@ -454,3 +454,65 @@ def test_every_literal_remedy_subject_names_a_public_parameter():
 
     assert checked > 800, f"only {checked} literal subjects found"
     assert not prose, "\n".join(prose)
+
+
+def test_a_public_functions_remedy_subjects_name_only_its_own_parameters():
+    """The stricter form of the gate above, where the enclosing function is known.
+
+    "Names a public parameter of the module" let a subject like "the tight_tension and
+    slack_tension values" or "radius and tooth geometry" through on one matching word.
+    Inside a public function (or a public class's methods and validators), a literal
+    subject is a list of names joined by commas and "and", and every one of them must be a
+    parameter of that function or a field of that class. Private helpers serve several
+    public functions and stay under the module-level rule.
+    """
+    import ast
+    import re
+    from pathlib import Path
+
+    from conftest import parsed_source
+
+    def parameters(function: ast.FunctionDef) -> set[str]:
+        a = function.args
+        found = {x.arg for x in a.posonlyargs + a.args + a.kwonlyargs}
+        return found | {x.arg for x in (a.vararg, a.kwarg) if x is not None}
+
+    root = Path(__file__).parents[1] / "src/anvilate/analysis"
+    checked, stray = 0, []
+    for path in sorted(root.glob("*.py")):
+        for top in parsed_source(path).body:
+            scopes: list[tuple[ast.FunctionDef, set[str]]] = []
+            if isinstance(top, ast.FunctionDef) and not top.name.startswith("_"):
+                scopes = [(top, set())]
+            if isinstance(top, ast.ClassDef) and not top.name.startswith("_"):
+                fields = {
+                    f.target.id
+                    for f in top.body
+                    if isinstance(f, ast.AnnAssign) and isinstance(f.target, ast.Name)
+                }
+                scopes = [(m, fields) for m in top.body if isinstance(m, ast.FunctionDef)]
+            for function, fields in scopes:
+                allowed = parameters(function) | fields
+                for node in ast.walk(function):
+                    if not (
+                        isinstance(node, ast.keyword)
+                        and node.arg == "subject"
+                        and isinstance(node.value, ast.Constant)
+                        and isinstance(node.value.value, str)
+                    ):
+                        continue
+                    checked += 1
+                    named = [
+                        name
+                        for name in re.split(r",\s*|\s+and\s+|\s+", node.value.value)
+                        if name and name != "and"
+                    ]
+                    unknown = [name for name in named if name not in allowed]
+                    if unknown:
+                        stray.append(
+                            f"{path.name}:{node.value.lineno} {function.name}: "
+                            f"{node.value.value!r} names {unknown}"
+                        )
+
+    assert checked > 3_000, f"only {checked} subjects inside public functions were checked"
+    assert not stray, "\n".join(stray)

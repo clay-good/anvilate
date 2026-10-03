@@ -470,7 +470,7 @@ def belt_transmitted_power(
     if t1 <= t2:
         raise _drive_refusal(
             f"tight_tension ({tight_tension}) must exceed slack_tension ({slack_tension})",
-            subject="the tight_tension and slack_tension values",
+            subject="tight_tension and slack_tension",
             source="the belt installation tension and operating load case",
         )
     # The docstring said all three must be positive and only T1 > T2 was checked, so a
@@ -537,14 +537,14 @@ def belt_tight_tension_for_power(
     if p <= 0 or v <= 0:
         raise _drive_refusal(
             "power and belt_speed must be positive",
-            subject="the power and belt_speed values",
+            subject="power and belt_speed",
             source="the transmitted-power duty and pulley speed declaration",
         )
     ratio = _ratio(friction_coefficient, wrap_angle)
     if ratio <= 1:
         raise _drive_refusal(
             "the tension ratio must exceed 1 (need positive friction and wrap)",
-            subject="the friction_coefficient and wrap_angle values",
+            subject="friction_coefficient and wrap_angle",
             source="the belt/pulley material pair and belt-path drawing",
         )
     tight = (p / v) * ratio / (ratio - 1.0)
@@ -566,7 +566,7 @@ def belt_mean_tension(*, tight_tension: Quantity, slack_tension: Quantity) -> Qu
     if t1 <= 0 or t2 <= 0:
         raise _drive_refusal(
             "tight_tension and slack_tension must be positive",
-            subject="the tight_tension and slack_tension values",
+            subject="tight_tension and slack_tension",
             source="the belt installation tension and operating load case",
         )
     return Quantity(magnitude=(t1 + t2) / 2.0, unit="N")
