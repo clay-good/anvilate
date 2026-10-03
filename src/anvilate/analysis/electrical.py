@@ -848,7 +848,11 @@ def ground_rod_resistance(
     rho = soil_resistivity.to("ohm*m").magnitude
     length = rod_length.to("m").magnitude
     a = rod_radius.to("m").magnitude
-    for subject, magnitude in (("soil_resistivity", rho), ("length", length), ("rod_radius", a)):
+    for subject, magnitude in (
+        ("soil_resistivity", rho),
+        ("rod_length", length),
+        ("rod_radius", a),
+    ):
         if magnitude <= 0:
             raise _electrical_refusal(
                 "soil_resistivity, rod_length, and rod_radius must be positive",

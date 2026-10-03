@@ -124,6 +124,38 @@ def _baseline(function, dimensions: dict[str, str]) -> dict[str, object] | None:
     return kwargs
 
 
+_SCALES = (1.0, 0.1, 10.0, 0.01, 100.0, 1e-3, 1e3, 1e-6, 1e6)
+_PLAIN_TRIES = (0.5, 0.1, 0.9, 2.0, 1.5, 10.0, 0.3)
+
+
+def _succeeding(function, kwargs: dict[str, object], dimensions: dict[str, str]):
+    """``kwargs`` if the call succeeds, else a seeded search over magnitudes for one that does.
+
+    Ones everywhere put many functions outside a regime limit (a Reynolds number, a
+    slenderness, a duty), and a function the sweep cannot call successfully is a function
+    whose guards it never reaches. The seed keeps the population the same run to run.
+    """
+    import random
+
+    candidates = [kwargs]
+    rng = random.Random(f"guard-sweep:{function.__name__}")
+    for _ in range(120):
+        trial = dict(kwargs)
+        for key in kwargs:
+            if key in dimensions:
+                trial[key] = _quantity(dimensions[key], rng.choice(_SCALES))
+            elif isinstance(kwargs[key], float):
+                trial[key] = rng.choice(_PLAIN_TRIES)
+        candidates.append(trial)
+    for candidate in candidates:
+        try:
+            function(**candidate)
+        except Exception:  # noqa: BLE001 - a candidate the function refuses is not a baseline
+            continue
+        return candidate
+    return None
+
+
 def _moved(value: object, dimension: str | None, magnitude: float) -> object | None:
     if dimension is not None:
         return _quantity(dimension, magnitude)
@@ -146,9 +178,8 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
         if kwargs is None:
             tally["unbuildable"] += 1
             continue
-        try:
-            function(**kwargs)
-        except Exception:  # noqa: BLE001 - a baseline the binder cannot satisfy is skipped
+        kwargs = _succeeding(function, kwargs, dimensions[name])
+        if kwargs is None:
             tally["baseline refused"] += 1
             continue
         tally["swept"] += 1
@@ -176,6 +207,6 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
                         failures.append(f"{label}: NaN accepted, returned {result!r:.80}")
 
     # The floor goes first: a binder that stopped building calls would pass with nothing swept.
-    assert tally["swept"] > 900, tally
-    assert tally["refused"] > 7_000, tally
+    assert tally["swept"] > 1_100, tally
+    assert tally["refused"] > 8_500, tally
     assert not failures, f"{len(failures)} of {sum(tally.values())}:\n" + "\n".join(failures)

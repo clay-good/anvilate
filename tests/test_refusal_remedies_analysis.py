@@ -516,3 +516,49 @@ def test_a_public_functions_remedy_subjects_name_only_its_own_parameters():
 
     assert checked > 3_000, f"only {checked} subjects inside public functions were checked"
     assert not stray, "\n".join(stray)
+
+
+def test_a_split_guard_names_only_its_own_functions_parameters():
+    """A guard over several inputs is split into `for subject, magnitude in ((name, x), ...)`.
+
+    The names in that tuple are what the remedy will say, and they are strings, so neither
+    subject gate above reads them. One said `"length"` for `rod_length`: the split had
+    traced a local variable to a parameter of a different function in the same module.
+    """
+    import ast
+    from pathlib import Path
+
+    from conftest import parsed_source
+
+    class Splits(ast.NodeVisitor):
+        def __init__(self, path: Path) -> None:
+            self.path, self.parameters = path, [set()]
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            a = node.args
+            self.parameters.append({x.arg for x in a.posonlyargs + a.args + a.kwonlyargs})
+            self.generic_visit(node)
+            self.parameters.pop()
+
+        def visit_For(self, node: ast.For) -> None:
+            if (
+                isinstance(node.target, ast.Tuple)
+                and isinstance(node.target.elts[0], ast.Name)
+                and node.target.elts[0].id == "subject"
+                and isinstance(node.iter, ast.Tuple)
+            ):
+                for entry in node.iter.elts:
+                    if isinstance(entry, ast.Tuple) and isinstance(entry.elts[0], ast.Constant):
+                        found.append(entry.elts[0].value)
+                        if entry.elts[0].value not in self.parameters[-1]:
+                            stray.append(f"{self.path.name}:{entry.lineno}")
+            self.generic_visit(node)
+
+    found: list[str] = []
+    stray: list[str] = []
+    for path in sorted((Path(__file__).parents[1] / "src/anvilate").rglob("*.py")):
+        Splits(path).visit(parsed_source(path))
+    checked = len(found)
+
+    assert checked > 600, f"only {checked} split-guard names found"
+    assert not stray, "\n".join(stray)
