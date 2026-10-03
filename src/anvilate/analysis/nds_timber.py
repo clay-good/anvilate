@@ -372,6 +372,7 @@ def nds_bending_scorecard(
             subject="bending_stress",
             source=_TIMBER_LOAD_SOURCE,
         )
+    require_finite(bending_stress, name="bending_stress")
     fb = abs(bending_stress.to("MPa").magnitude)
     fb_allow = _adjusted_design_value(adjusted_bending_value, "adjusted_bending_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
@@ -489,6 +490,7 @@ def nds_shear_scorecard(
             subject="shear_stress",
             source=_TIMBER_LOAD_SOURCE,
         )
+    require_finite(shear_stress, name="shear_stress")
     fv = abs(shear_stress.to("MPa").magnitude)
     fv_allow = _adjusted_design_value(adjusted_shear_value, "adjusted_shear_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
@@ -681,6 +683,7 @@ def nds_bearing_scorecard(
             subject="bearing_stress",
             source=_TIMBER_LOAD_SOURCE,
         )
+    require_finite(bearing_stress, name="bearing_stress")
     fc = abs(bearing_stress.to("MPa").magnitude)
     fc_allow = _adjusted_design_value(adjusted_bearing_value, "adjusted_bearing_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
@@ -990,6 +993,7 @@ def nds_compression_scorecard(
             subject="compression_stress",
             source=_TIMBER_LOAD_SOURCE,
         )
+    require_finite(compression_stress, name="compression_stress")
     fc = abs(compression_stress.to("MPa").magnitude)
     fc_allow = _adjusted_design_value(adjusted_compression_value, "adjusted_compression_value")
     # Zero applied stress is a check with nothing to evaluate, not one that passed.

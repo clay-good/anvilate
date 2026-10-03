@@ -69,7 +69,7 @@ _SI = {
     "[luminous_flux]": "lm",
     "[illuminance]": "lx",
 }
-_PLAIN = {"float": 0.5, "int": 2, "bool": False}
+_PLAIN = {"float": 0.5, "int": 2, "bool": False, "str": "probe"}
 
 
 def _quantity(dimension: str, magnitude: float) -> Quantity | None:
@@ -223,7 +223,7 @@ def _discovered(function) -> dict[str, object] | None:
             continue
         if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
             return None
-        if parameter.annotation == "Quantity":
+        if parameter.annotation in ("Quantity", "Quantity | None"):
             quantities.append(parameter.name)
             kwargs[parameter.name] = Quantity(magnitude=1.0, unit="m")
         elif parameter.annotation in _PLAIN:
@@ -282,7 +282,7 @@ def _non_finite(result: object, depth: int = 0) -> bool:
 def _moved(value: object, dimension: str | None, magnitude: float) -> object | None:
     if isinstance(value, Quantity):
         return Quantity(magnitude=magnitude, unit=value.unit)
-    if isinstance(value, bool):
+    if isinstance(value, bool | str):
         return None
     if isinstance(value, int):
         return None if not math.isfinite(magnitude) else int(magnitude)

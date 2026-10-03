@@ -1049,6 +1049,15 @@ def isolator_selection_scorecard(
     ``NOT_EVALUATED``, never a silent pass.
     """
     require_finite(target_transmissibility, name="target_transmissibility")
+    # Refused here rather than by the sizing call below, which names the value as its own
+    # `transmissibility`, a parameter this function does not have.
+    if not 0 < target_transmissibility < 1:
+        raise _dynamics_refusal(
+            f"target_transmissibility must be in (0, 1) for isolation; "
+            f"got {target_transmissibility}",
+            subject="target_transmissibility",
+            source=_CRITERION_SOURCE,
+        )
     if selected_static_deflection is None:
         return ScorecardEntry(
             name=name,
@@ -1324,10 +1333,13 @@ def half_sine_shock_scorecard(
                         ),
                         value=amplification,
                     ),
+                    # The magnitude the margin divides by: a pulse in the negative
+                    # direction is screened on |a₀|, and substituting the signed value
+                    # printed a line that evaluates to the margin's negative.
                     SymbolValue(
                         symbol="a₀",
-                        description="peak acceleration of the half-sine pulse",
-                        value=peak_acceleration,
+                        description="peak acceleration magnitude of the half-sine pulse",
+                        value=Quantity(magnitude=a0, unit="m/s**2"),
                         unit="m/s**2",
                     ),
                 ),
