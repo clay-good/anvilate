@@ -31,8 +31,24 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .._models import ItemCollection, Named, RevalidatedModel, StatableModel
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, spoken
 from .explicit import ResolvedTolerance
+
+_REQUIREMENT_SOURCE = "the assembly's functional gap requirement on the drawing"
+_STUDY_SOURCE = "the Monte Carlo study plan: sample count, sigma level and coverage"
+
+
+class _StackupInputError(RefusalError, ValueError):
+    """A tolerance stack-up input that cannot be used without correction."""
+
+
+def _stackup_refusal(message: str, *, subject: str, source: str) -> _StackupInputError:
+    return _StackupInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "StackContributor",
@@ -148,8 +164,10 @@ class StackResult(StatableModel):
         """
         for bound in (min_required, max_required):
             if not bound.has_dimension("[length]"):
-                raise ValueError(
-                    f"gap requirement must be a length; got {bound.dimensionality} ({bound})"
+                raise _stackup_refusal(
+                    f"gap requirement must be a length; got {bound.dimensionality} ({bound})",
+                    subject="min_required and max_required",
+                    source=_REQUIREMENT_SOURCE,
                 )
         lo = self.lower.to("mm").magnitude
         hi = self.upper.to("mm").magnitude
@@ -209,8 +227,10 @@ class MonteCarloResult(BaseModel):
         """
         for bound in (min_required, max_required):
             if not bound.has_dimension("[length]"):
-                raise ValueError(
-                    f"gap requirement must be a length; got {bound.dimensionality} ({bound})"
+                raise _stackup_refusal(
+                    f"gap requirement must be a length; got {bound.dimensionality} ({bound})",
+                    subject="min_required and max_required",
+                    source=_REQUIREMENT_SOURCE,
                 )
         lo = min_required.to("mm").magnitude
         hi = max_required.to("mm").magnitude
@@ -305,11 +325,23 @@ class StackUp(ItemCollection, BaseModel):
         reproducible. Contributions rank each dimension's share of the variance.
         """
         if samples < 2:
-            raise ValueError(f"a Monte Carlo run needs at least 2 samples; got {samples}")
+            raise _stackup_refusal(
+                f"a Monte Carlo run needs at least 2 samples; got {samples}",
+                subject="samples",
+                source=_STUDY_SOURCE,
+            )
         if sigma_level <= 0:
-            raise ValueError(f"sigma_level must be positive; got {sigma_level}")
+            raise _stackup_refusal(
+                f"sigma_level must be positive; got {sigma_level}",
+                subject="sigma_level",
+                source=_STUDY_SOURCE,
+            )
         if not 0.0 < coverage < 1.0:
-            raise ValueError(f"coverage must be between 0 and 1 exclusive; got {coverage}")
+            raise _stackup_refusal(
+                f"coverage must be between 0 and 1 exclusive; got {coverage}",
+                subject="coverage",
+                source=_STUDY_SOURCE,
+            )
 
         rng = Random(seed)
         # Resolve each contributor's mean and half-width to plain mm floats once,

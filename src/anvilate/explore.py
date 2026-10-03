@@ -39,7 +39,25 @@ from math import isfinite
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import FrozenMap, Named, RevalidatedModel
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard
+
+_STUDY_SOURCE = "the study plan naming the swept parameters and the objectives"
+_RANGE_SOURCE = "the design envelope bounding each swept parameter, in its unit"
+_SAMPLING_SOURCE = "the study plan's sampling strategy, point budget, and seed"
+_EVALUATOR_SOURCE = "the evaluator's value for every objective the study declares"
+
+
+class _ExploreInputError(RefusalError, ValueError):
+    """A design-space study input that cannot be used without correction."""
+
+
+def _explore_refusal(message: str, *, subject: str, source: str) -> _ExploreInputError:
+    return _ExploreInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ObjectiveSense",
@@ -103,18 +121,28 @@ def halton_sequence(*, dimensions: int, count: int, skip: int = 1) -> tuple[tupl
     correlation between high prime bases makes it worse than a grid rather than better.
     """
     if dimensions < 1:
-        raise ValueError(f"dimensions must be at least 1; got {dimensions}")
+        raise _explore_refusal(
+            f"dimensions must be at least 1; got {dimensions}",
+            subject="dimensions",
+            source=_SAMPLING_SOURCE,
+        )
     if dimensions > _HALTON_MAX_DIMENSIONS:
-        raise ValueError(
+        raise _explore_refusal(
             f"the Halton sequence degrades past {_HALTON_MAX_DIMENSIONS} dimensions — the "
             f"high prime bases correlate and the points stripe rather than fill — and "
             f"{dimensions} were asked for. Use SamplingStrategy.GRID, or sweep fewer "
-            f"parameters at once"
+            f"parameters at once",
+            subject="dimensions",
+            source=_SAMPLING_SOURCE,
         )
     if count < 0:
-        raise ValueError(f"count must be non-negative; got {count}")
+        raise _explore_refusal(
+            f"count must be non-negative; got {count}", subject="count", source=_SAMPLING_SOURCE
+        )
     if skip < 0:
-        raise ValueError(f"skip must be non-negative; got {skip}")
+        raise _explore_refusal(
+            f"skip must be non-negative; got {skip}", subject="skip", source=_SAMPLING_SOURCE
+        )
     points = []
     for index in range(skip, skip + count):
         coordinates = []
@@ -152,18 +180,26 @@ class Parameter(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> Parameter:
         if not self.name.strip():
-            raise ValueError("a parameter needs a name")
+            raise _explore_refusal("a parameter needs a name", subject="name", source=_STUDY_SOURCE)
         if not (isfinite(self.low) and isfinite(self.high)):
-            raise ValueError(f"{self.name}: bounds must be finite; got [{self.low}, {self.high}]")
+            raise _explore_refusal(
+                f"{self.name}: bounds must be finite; got [{self.low}, {self.high}]",
+                subject="low and high",
+                source=_RANGE_SOURCE,
+            )
         if self.low >= self.high:
-            raise ValueError(
+            raise _explore_refusal(
                 f"{self.name}: low ({self.low}) must be below high ({self.high}); a "
-                f"collapsed range is a fixed value, not a swept parameter"
+                f"collapsed range is a fixed value, not a swept parameter",
+                subject="low and high",
+                source=_RANGE_SOURCE,
             )
         if self.steps < 2:
-            raise ValueError(
+            raise _explore_refusal(
                 f"{self.name}: steps must be at least 2 so both bounds are sampled; "
-                f"got {self.steps}"
+                f"got {self.steps}",
+                subject="steps",
+                source=_SAMPLING_SOURCE,
             )
         return self
 
@@ -208,22 +244,44 @@ class Study(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> Study:
         if not self.parameters:
-            raise ValueError("a study needs at least one parameter to sweep")
+            raise _explore_refusal(
+                "a study needs at least one parameter to sweep",
+                subject="parameters",
+                source=_STUDY_SOURCE,
+            )
         if not self.objectives:
-            raise ValueError(
+            raise _explore_refusal(
                 "a study needs at least one objective; without one every feasible point "
-                "is non-dominated and the front is just the feasible set"
+                "is non-dominated and the front is just the feasible set",
+                subject="objectives",
+                source=_STUDY_SOURCE,
             )
         names = [p.name for p in self.parameters]
         if len(set(names)) != len(names):
-            raise ValueError(f"duplicate parameter names in {self.name}: {sorted(names)}")
+            raise _explore_refusal(
+                f"duplicate parameter names in {self.name}: {sorted(names)}",
+                subject="parameters",
+                source=_STUDY_SOURCE,
+            )
         objective_names = [o.name for o in self.objectives]
         if len(set(objective_names)) != len(objective_names):
-            raise ValueError(f"duplicate objective names in {self.name}: {sorted(objective_names)}")
+            raise _explore_refusal(
+                f"duplicate objective names in {self.name}: {sorted(objective_names)}",
+                subject="objectives",
+                source=_STUDY_SOURCE,
+            )
         if self.budget is not None and self.budget < 1:
-            raise ValueError(f"budget must be at least 1 when given; got {self.budget}")
+            raise _explore_refusal(
+                f"budget must be at least 1 when given; got {self.budget}",
+                subject="budget",
+                source=_SAMPLING_SOURCE,
+            )
         if self.seed < 0:
-            raise ValueError(f"seed must be non-negative; got {self.seed}")
+            raise _explore_refusal(
+                f"seed must be non-negative; got {self.seed}",
+                subject="seed",
+                source=_SAMPLING_SOURCE,
+            )
         return self
 
     def grid_size(self) -> int:
@@ -435,17 +493,21 @@ def run_study(
         values: dict[str, float] = {}
         for objective in study.objectives:
             if objective.name not in evaluation.objectives:
-                raise ValueError(
+                raise _explore_refusal(
                     f"point {index} of study {study.name} returned no value for the "
                     f"declared objective {objective.name!r}; got "
-                    f"{sorted(evaluation.objectives)}"
+                    f"{sorted(evaluation.objectives)}",
+                    subject="evaluate",
+                    source=_EVALUATOR_SOURCE,
                 )
             value = evaluation.objectives[objective.name]
             if not isfinite(value):
-                raise ValueError(
+                raise _explore_refusal(
                     f"point {index} of study {study.name} returned {value} for objective "
                     f"{objective.name!r}. A non-finite objective compares False against "
-                    f"everything, so it would sit on the front without dominating anything"
+                    f"everything, so it would sit on the front without dominating anything",
+                    subject="evaluate",
+                    source=_EVALUATOR_SOURCE,
                 )
             values[objective.name] = value
         card = evaluation.scorecard

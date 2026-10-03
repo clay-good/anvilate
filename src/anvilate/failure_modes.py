@@ -32,8 +32,24 @@ from typing import Any
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel, each_one
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard
 from .verification import VerificationArchetype, VerificationMethod
+
+_CATALOGUE_SOURCE = "the failure-mode catalogue: the FMEA or design-review mode list"
+_TEST_PLAN_SOURCE = "the verification plan's test archetypes, by key"
+
+
+class _FailureModeInputError(RefusalError, ValueError):
+    """A failure-mode catalogue input that cannot be used without correction."""
+
+
+def _failure_mode_refusal(message: str, *, subject: str, source: str) -> _FailureModeInputError:
+    return _FailureModeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "DiscoveryStage",
@@ -114,10 +130,12 @@ class Applicability(StatableModel):
             or self.dissimilar_metals
             or self.assembly
         ):
-            raise ValueError(
+            raise _failure_mode_refusal(
                 "an applicability that names no element, interface, environment or material "
                 "pair applies to everything, which is the same as saying nothing about when "
-                "the mode applies"
+                "the mode applies",
+                subject="elements, interfaces, environments, dissimilar_metals, and assembly",
+                source=_CATALOGUE_SOURCE,
             )
         return self
 
@@ -181,7 +199,11 @@ class ModeCatalog(ItemCollection, StatableModel):
         identifiers = [mode.id for mode in self.modes]
         if len(set(identifiers)) != len(identifiers):
             doubled = sorted({name for name in identifiers if identifiers.count(name) > 1})
-            raise ValueError(f"the catalogue carries one mode id twice: {doubled}")
+            raise _failure_mode_refusal(
+                f"the catalogue carries one mode id twice: {doubled}",
+                subject="modes",
+                source=_CATALOGUE_SOURCE,
+            )
         return self
 
     def applicable(self, facts: Mapping[str, object]) -> tuple[FailureMode, ...]:
@@ -335,9 +357,11 @@ def coverage(
     for mode in catalogue.applicable(facts):
         unknown = sorted(key for key in mode.tested_by if key not in lookup)
         if unknown:
-            raise ValueError(
+            raise _failure_mode_refusal(
                 f"failure mode '{mode.id}' is left to {unknown}, which no verification "
-                f"archetype defines; known: {sorted(lookup)}"
+                f"archetype defines; known: {sorted(lookup)}",
+                subject="catalog and archetypes",
+                source=_TEST_PLAN_SOURCE,
             )
         declared = [entry.name for entry in ran if mode.id in entry.addresses]
         named = [name for name in mode.addressed_by if name in ran_names]

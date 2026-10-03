@@ -38,7 +38,24 @@ from ..gdt import (
     FrameModifier,
     MaterialCondition,
 )
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_DRAWING_FRAME_SOURCE = "the part drawing's feature control frame (tolerance, datum letters)"
+_TEXT_STYLE_SOURCE = "the drawing's text style (predominant character height, ISO 3098)"
+_DRAWING_LAYOUT_SOURCE = "the drawing sheet layout where the frame is placed"
+
+
+class _FcfInputError(RefusalError, ValueError):
+    """A feature-control-frame drawing input that cannot be used without correction."""
+
+
+def _fcf_refusal(message: str, *, subject: str, source: str) -> _FcfInputError:
+    return _FcfInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "DEFAULT_TEXT_HEIGHT",
@@ -422,10 +439,12 @@ def _text_width(text: str, height: float) -> float:
 def _check_characters(text: str) -> str:
     bad = sorted(set(text) - _PERMITTED_CHARACTERS)
     if bad:
-        raise ValueError(
+        raise _fcf_refusal(
             f"a feature control frame is drawn with digits, the decimal point and "
             f"upper-case datum letters only; {bad} cannot be laid out because the frame's "
-            f"width allowance was never checked against them"
+            f"width allowance was never checked against them",
+            subject="frame",
+            source=_DRAWING_FRAME_SOURCE,
         )
     return text
 
@@ -516,12 +535,24 @@ def characteristic_symbol(
 
 def _mm_height(height: Quantity) -> float:
     if not isinstance(height, Quantity):
-        raise ValueError(f"height must be a [length] quantity; got {height!r}")
+        raise _fcf_refusal(
+            f"height must be a [length] quantity; got {height!r}",
+            subject="height and text_height",
+            source=_TEXT_STYLE_SOURCE,
+        )
     if not height.has_dimension("[length]"):
-        raise ValueError(f"the character height must be a [length] quantity; got {height}")
+        raise _fcf_refusal(
+            f"the character height must be a [length] quantity; got {height}",
+            subject="height and text_height",
+            source=_TEXT_STYLE_SOURCE,
+        )
     h = height.to("mm").magnitude
     if not h > 0:
-        raise ValueError(f"the character height must be positive; got {height}")
+        raise _fcf_refusal(
+            f"the character height must be positive; got {height}",
+            subject="height and text_height",
+            source=_TEXT_STYLE_SOURCE,
+        )
     return h
 
 
@@ -547,9 +578,11 @@ def _tolerance_text(frame: FeatureControlFrame) -> str:
     value = frame.tolerance.to("mm").magnitude
     text = f"{value:g}"
     if "e" in text or "E" in text:
-        raise ValueError(
+        raise _fcf_refusal(
             f"{frame.tolerance} is {text} in millimetres, which a drawing cannot carry as "
-            f"a number; a feature control frame is drawn with a decimal value"
+            f"a number; a feature control frame is drawn with a decimal value",
+            subject="frame.tolerance",
+            source=_DRAWING_FRAME_SOURCE,
         )
     return _check_characters(text)
 

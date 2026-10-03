@@ -32,6 +32,22 @@ from .._models import RevalidatedModel
 from ..refusal import RefusalError, Remedy
 from ..scorecard import Scorecard
 
+_SCORECARD_SOURCE = "the part's acceptance scorecard from its screening run"
+_GATE_DECISION_SOURCE = "the authorization authorize_export returned for the part's scorecard"
+_ARTIFACT_NAME_SOURCE = "the exported file's name or format as written"
+
+
+class _GateInputError(RefusalError, ValueError):
+    """An export-gate input that cannot be used without correction."""
+
+
+def _gate_refusal(message: str, *, subject: str, source: str) -> _GateInputError:
+    return _GateInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "ExportAuthorization",
     "ExportRecord",
@@ -106,19 +122,25 @@ class ExportAuthorization(RevalidatedModel):
     @model_validator(mode="after")
     def _watermark_matches_the_verdict(self) -> ExportAuthorization:
         if self.validated and self.overridden:
-            raise ValueError(
+            raise _gate_refusal(
                 "an authorization cannot be both validated and overridden; an override "
-                "exists only because the acceptance checks did not pass"
+                "exists only because the acceptance checks did not pass",
+                subject="validated and overridden",
+                source=_GATE_DECISION_SOURCE,
             )
         if self.validated and self.blocking:
-            raise ValueError(
+            raise _gate_refusal(
                 f"a validated export names blocking checks {list(self.blocking)}; a check "
-                "that blocks is a check that did not pass, and the card did"
+                "that blocks is a check that did not pass, and the card did",
+                subject="validated and blocking",
+                source=_GATE_DECISION_SOURCE,
             )
         if not self.validated and not self.overridden:
-            raise ValueError(
+            raise _gate_refusal(
                 "an unvalidated export exists only as an explicit override; without one "
-                "there is no authorization to hold, there is a refusal"
+                "there is no authorization to hold, there is a refusal",
+                subject="validated and overridden",
+                source=_GATE_DECISION_SOURCE,
             )
         return self
 
@@ -192,10 +214,12 @@ def authorize_export(scorecard: Scorecard | None, *, override: bool = False) -> 
     passed = scorecard is not None and scorecard.passed
     if passed:
         if override:
-            raise ValueError(
+            raise _gate_refusal(
                 "override=True was passed for a part whose acceptance checks pass, so "
                 "there is nothing to override. An override that is a no-op means the "
-                "caller expected a failing card and did not get one"
+                "caller expected a failing card and did not get one",
+                subject="override and scorecard",
+                source=_SCORECARD_SOURCE,
             )
         return ExportAuthorization(validated=True)
     blocking = _blocking(scorecard)
@@ -229,9 +253,11 @@ class ExportRecord(RevalidatedModel):
     @model_validator(mode="after")
     def _the_artifact_is_named(self) -> ExportRecord:
         if not self.artifact.strip():
-            raise ValueError(
+            raise _gate_refusal(
                 "an export record needs the artifact it is about; an unnamed artifact is a "
-                "disclosure that an unvalidated file exists somewhere"
+                "disclosure that an unvalidated file exists somewhere",
+                subject="artifact",
+                source=_ARTIFACT_NAME_SOURCE,
             )
         return self
 

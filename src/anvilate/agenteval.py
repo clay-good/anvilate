@@ -56,6 +56,25 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from ._models import Named, Provenance, RevalidatedModel, each_one
 from .compilation import CompilationRecommendation
 from .mcp import REQUIRED_OPERATIONS, tool_catalog
+from .refusal import RefusalError, Remedy
+
+_TRANSCRIPT_SOURCE = "the agent run's recorded transcript of tool calls and their errors"
+_TASK_SET_SOURCE = "the versioned agent task set and each task's required operations"
+_RUN_SOURCE = "the eval run's record of the model, client, and harness it ran under"
+_POLICY_SOURCE = "the recommendation policy's thresholds and the task-set version it cites"
+_COMPILATION_SOURCE = "the compilation recommendation recorded for the same model"
+
+
+class _AgentevalInputError(RefusalError, ValueError):
+    """An agent-evaluation input that cannot be used without correction."""
+
+
+def _agenteval_refusal(message: str, *, subject: str, source: str) -> _AgentevalInputError:
+    return _AgentevalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "AGENT_TASK_SET_VERSION",
@@ -98,18 +117,26 @@ class ToolCall(RevalidatedModel):
     @model_validator(mode="after")
     def _failure_states_a_reason(self) -> ToolCall:
         if not self.tool.strip():
-            raise ValueError("a tool call must name the tool it called")
+            raise _agenteval_refusal(
+                "a tool call must name the tool it called",
+                subject="tool",
+                source=_TRANSCRIPT_SOURCE,
+            )
         if self.failed and not (self.error or "").strip():
-            raise ValueError(
+            raise _agenteval_refusal(
                 f"the call to {self.tool!r} is recorded as failed with no reason. The reason "
                 "is what separates a malformed argument from an operation that does not "
-                "exist, and those are different findings about the model"
+                "exist, and those are different findings about the model",
+                subject="failed and error",
+                source=_TRANSCRIPT_SOURCE,
             )
         if not self.failed and self.error is not None:
-            raise ValueError(
+            raise _agenteval_refusal(
                 f"the call to {self.tool!r} carries an error and is not recorded as failed; "
                 "one of the two is wrong, and which one decides whether the tool-call error "
-                "rate is being measured or hidden"
+                "rate is being measured or hidden",
+                subject="failed and error",
+                source=_TRANSCRIPT_SOURCE,
             )
         return self
 
@@ -148,17 +175,27 @@ class AgentTask(RevalidatedModel):
     @model_validator(mode="after")
     def _has_something_to_reach(self) -> AgentTask:
         if not self.task_id.strip():
-            raise ValueError("an agent task must have an id")
+            raise _agenteval_refusal(
+                "an agent task must have an id", subject="task_id", source=_TASK_SET_SOURCE
+            )
         if not self.prompt.strip():
-            raise ValueError(f"task {self.task_id!r} has no prompt")
+            raise _agenteval_refusal(
+                f"task {self.task_id!r} has no prompt", subject="prompt", source=_TASK_SET_SOURCE
+            )
         if not self.required_tools:
-            raise ValueError(
+            raise _agenteval_refusal(
                 f"task {self.task_id!r} requires no operation, so an empty transcript "
-                "completes it — including one from a model that made no call at all"
+                "completes it — including one from a model that made no call at all",
+                subject="required_tools",
+                source=_TASK_SET_SOURCE,
             )
         blank = [name for name in self.operations if not name.strip()]
         if blank:
-            raise ValueError(f"task {self.task_id!r} names an empty operation")
+            raise _agenteval_refusal(
+                f"task {self.task_id!r} names an empty operation",
+                subject="prelude and required_tools",
+                source=_TASK_SET_SOURCE,
+            )
         return self
 
 
@@ -174,13 +211,21 @@ class AgentTaskSet(RevalidatedModel):
     @classmethod
     def _version_is_semantic(cls, value: str) -> str:
         if _SEMVER.fullmatch(value) is None:
-            raise ValueError("agent task-set version must be semantic (X.Y.Z)")
+            raise _agenteval_refusal(
+                "agent task-set version must be semantic (X.Y.Z)",
+                subject="version",
+                source=_TASK_SET_SOURCE,
+            )
         return value
 
     @model_validator(mode="after")
     def _covers_the_surface(self) -> AgentTaskSet:
         if issues := task_set_issues(self.tasks):
-            raise ValueError("invalid agent task set: " + "; ".join(issues))
+            raise _agenteval_refusal(
+                "invalid agent task set: " + "; ".join(issues),
+                subject="tasks",
+                source=_TASK_SET_SOURCE,
+            )
         return self
 
 
@@ -237,11 +282,17 @@ class AgentRunOutcome(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> AgentRunOutcome:
         if not self.task_id.strip():
-            raise ValueError("an agent run outcome must name the task it came from")
+            raise _agenteval_refusal(
+                "an agent run outcome must name the task it came from",
+                subject="task_id",
+                source=_TASK_SET_SOURCE,
+            )
         if not self.required_tools:
-            raise ValueError(
+            raise _agenteval_refusal(
                 f"the run of task {self.task_id!r} carries no required operations, so it "
-                "completes on an empty transcript"
+                "completes on an empty transcript",
+                subject="required_tools",
+                source=_TASK_SET_SOURCE,
             )
         return self
 
@@ -307,9 +358,11 @@ class AgentEvalReport(RevalidatedModel):
     @model_validator(mode="after")
     def _measures_something(self) -> AgentEvalReport:
         if not self.outcomes:
-            raise ValueError(
+            raise _agenteval_refusal(
                 "an eval report over no tasks has no numbers in it; an empty run is "
-                "reported as not run, not as a clean sheet"
+                "reported as not run, not as a clean sheet",
+                subject="outcomes",
+                source=_TRANSCRIPT_SOURCE,
             )
         for field, value in (
             ("model_name", self.model_name),
@@ -317,15 +370,21 @@ class AgentEvalReport(RevalidatedModel):
             ("harness", self.harness),
         ):
             if not value.strip():
-                raise ValueError(
+                raise _agenteval_refusal(
                     f"an eval report must state its {field}. Completion and iteration counts "
                     "move with the harness — the system prompt, the retry policy, the "
                     "context window — as much as with the model, so a number recorded "
-                    "without them cannot be compared with another one"
+                    "without them cannot be compared with another one",
+                    subject="model_name, client, and harness",
+                    source=_RUN_SOURCE,
                 )
         seen = [outcome.task_id for outcome in self.outcomes]
         if len(set(seen)) != len(seen):
-            raise ValueError(f"the report scores a task twice: {sorted(seen)}")
+            raise _agenteval_refusal(
+                f"the report scores a task twice: {sorted(seen)}",
+                subject="outcomes",
+                source=_TRANSCRIPT_SOURCE,
+            )
         return self
 
     @property
@@ -397,16 +456,22 @@ class AgentEvaluation(RevalidatedModel):
     @classmethod
     def _version_is_semantic(cls, value: str) -> str:
         if _SEMVER.fullmatch(value) is None:
-            raise ValueError("agent evaluation task-set version must be semantic (X.Y.Z)")
+            raise _agenteval_refusal(
+                "agent evaluation task-set version must be semantic (X.Y.Z)",
+                subject="task_set_version",
+                source=_TASK_SET_SOURCE,
+            )
         return value
 
     @model_validator(mode="after")
     def _report_covers_the_task_set(self) -> AgentEvaluation:
         reported = tuple(outcome.task_id for outcome in self.report.outcomes)
         if reported != self.task_ids:
-            raise ValueError(
+            raise _agenteval_refusal(
                 "agent evaluation task set and report outcomes differ: "
-                f"expected {self.task_ids}, reported {reported}"
+                f"expected {self.task_ids}, reported {reported}",
+                subject="task_ids and report",
+                source=_TASK_SET_SOURCE,
             )
         return self
 
@@ -426,7 +491,11 @@ class AgentRecommendationPolicy(RevalidatedModel):
     @classmethod
     def _version_is_semantic(cls, value: str) -> str:
         if _SEMVER.fullmatch(value) is None:
-            raise ValueError("agent recommendation task-set version must be semantic (X.Y.Z)")
+            raise _agenteval_refusal(
+                "agent recommendation task-set version must be semantic (X.Y.Z)",
+                subject="task_set_version",
+                source=_POLICY_SOURCE,
+            )
         return value
 
 
@@ -444,12 +513,22 @@ class LocalModelRecommendation(RevalidatedModel):
     @model_validator(mode="after")
     def _decision_matches_its_reasons(self) -> LocalModelRecommendation:
         if self.agent_evaluation.task_set_version != self.agent_policy.task_set_version:
-            raise ValueError("agent evidence and recommendation policy name different task sets")
+            raise _agenteval_refusal(
+                "agent evidence and recommendation policy name different task sets",
+                subject="agent_evaluation and agent_policy",
+                source=_POLICY_SOURCE,
+            )
         if self.agent_evaluation.report.model_name != self.compilation.configuration.model:
-            raise ValueError("compilation and agent evidence name different models")
+            raise _agenteval_refusal(
+                "compilation and agent evidence name different models",
+                subject="compilation and agent_evaluation",
+                source=_COMPILATION_SOURCE,
+            )
         if self.recommended == bool(self.reasons):
-            raise ValueError(
-                "a recommended model has no failing gates; a refusal names at least one"
+            raise _agenteval_refusal(
+                "a recommended model has no failing gates; a refusal names at least one",
+                subject="recommended and reasons",
+                source=_POLICY_SOURCE,
             )
         return self
 
@@ -503,15 +582,19 @@ def assess_local_model_recommendation(
 ) -> LocalModelRecommendation:
     """Join current compilation and agent evidence, applying every gate independently."""
     if agent_evaluation.task_set_version != policy.task_set_version:
-        raise ValueError(
+        raise _agenteval_refusal(
             "agent evidence is stale for this recommendation policy: "
-            f"run {agent_evaluation.task_set_version}, policy {policy.task_set_version}"
+            f"run {agent_evaluation.task_set_version}, policy {policy.task_set_version}",
+            subject="agent_evaluation and policy",
+            source=_POLICY_SOURCE,
         )
     report = agent_evaluation.report
     if report.model_name != compilation.configuration.model:
-        raise ValueError(
+        raise _agenteval_refusal(
             "compilation and agent evidence name different models: "
-            f"{compilation.configuration.model!r} and {report.model_name!r}"
+            f"{compilation.configuration.model!r} and {report.model_name!r}",
+            subject="compilation and agent_evaluation",
+            source=_COMPILATION_SOURCE,
         )
 
     reasons = [f"compilation: {reason}" for reason in compilation.reasons]
@@ -571,10 +654,12 @@ def score_run_set(
     """
     missing = [task.task_id for task in tasks if task.task_id not in transcripts]
     if missing:
-        raise ValueError(
+        raise _agenteval_refusal(
             f"{len(missing)} task(s) have no transcript: {missing}. A skipped task is not a "
             "task that scored zero, and dropping it silently reports the remaining tasks' "
-            "completion rate as the run's"
+            "completion rate as the run's",
+            subject="tasks and transcripts",
+            source=_TRANSCRIPT_SOURCE,
         )
     return AgentEvalReport(
         model_name=model_name,

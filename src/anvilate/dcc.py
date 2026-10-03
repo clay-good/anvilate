@@ -62,8 +62,25 @@ from .ingest import (
     SourceLocation,
     UnparsedLine,
 )
+from .refusal import RefusalError, Remedy
 from .uncertainty import InputDistribution, Normal, Symmetric
 from .units import Quantity, UnitError
+
+_CERTIFICATE_SOURCE = "the calibration laboratory's issued DCC XML file, unedited"
+_DOCUMENT_SOURCE = "the file name the certificate was received under from the laboratory"
+_VALUE_SOURCE = "the certificate's measured value and its stated uncertainty, in one unit"
+
+
+class _DccInputError(RefusalError, ValueError):
+    """A calibration-certificate input that cannot be used without correction."""
+
+
+def _dcc_refusal(message: str, *, subject: str, source: str) -> _DccInputError:
+    return _DccInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "DCC_NAMESPACE",
@@ -567,25 +584,31 @@ class CalibratedValue(RevalidatedModel):
         # tenfold error — and accepted one centred on zero. Zero is handled as its own case
         # because a relative tolerance against zero admits nothing else.
         if self.distribution_unit is None:
-            raise ValueError(
+            raise _dcc_refusal(
                 f"the uncertainty distribution for {self.label!r} does not say what unit its "
                 "numbers are in; a distribution is bare floats, so the unit has to be stated "
-                "or it is not recoverable"
+                "or it is not recoverable",
+                subject="distribution_unit",
+                source=_VALUE_SOURCE,
             )
         if self.distribution_unit != self.quantity.unit:
-            raise ValueError(
+            raise _dcc_refusal(
                 f"the uncertainty distribution for {self.label!r} is in "
                 f"{self.distribution_unit!r} but the measured value is in "
                 f"{self.quantity.unit!r}; a distribution in a different unit from its own "
-                "quantity is a factor nothing downstream can see"
+                "quantity is a factor nothing downstream can see",
+                subject="distribution_unit and quantity",
+                source=_VALUE_SOURCE,
             )
         magnitude = self.quantity.magnitude
         exact_zero = magnitude == 0.0 and centre == 0.0
         if not exact_zero and not isclose(centre, magnitude, rel_tol=1e-9):
-            raise ValueError(
+            raise _dcc_refusal(
                 f"the uncertainty distribution for {self.label!r} is centred on {centre} "
                 f"but the measured value is {self.quantity}; a distribution in a different "
-                "unit from its own quantity is a factor nothing downstream can see"
+                "unit from its own quantity is a factor nothing downstream can see",
+                subject="distribution and quantity",
+                source=_VALUE_SOURCE,
             )
         return self
 
@@ -781,11 +804,19 @@ def _quantities(node: ET.Element) -> Iterator[ET.Element]:
 def _provenance(root: ET.Element) -> CertificateProvenance:
     administrative = root.find("dcc:administrativeData", _NS)
     if administrative is None:
-        raise ValueError("this is not a usable DCC: it carries no administrativeData block")
+        raise _dcc_refusal(
+            "this is not a usable DCC: it carries no administrativeData block",
+            subject="text",
+            source=_CERTIFICATE_SOURCE,
+        )
     core = administrative.find("dcc:coreData", _NS)
     laboratory = administrative.find("dcc:calibrationLaboratory", _NS)
     if core is None:
-        raise ValueError("this is not a usable DCC: its administrativeData carries no coreData")
+        raise _dcc_refusal(
+            "this is not a usable DCC: its administrativeData carries no coreData",
+            subject="text",
+            source=_CERTIFICATE_SOURCE,
+        )
 
     identifier = _text(None if core is None else core.find("dcc:uniqueIdentifier", _NS))
     lab_name = _content(
@@ -833,7 +864,11 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
     weaker certificate, it is not one.
     """
     if not document.strip():
-        raise ValueError("a parsed certificate must name the document it came from")
+        raise _dcc_refusal(
+            "a parsed certificate must name the document it came from",
+            subject="document",
+            source=_DOCUMENT_SOURCE,
+        )
     try:
         root = ET.fromstring(text)
     except ET.ParseError as malformed:
@@ -844,13 +879,17 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
         # laboratory by email or portal; malformed is the ordinary case, not the exotic one.
         # `qif_schema_issues` already treats a document it cannot parse as a complaint about
         # the document; this is the same rule at the other reader.
-        raise ValueError(
-            f"{document} is not well-formed XML and cannot be a DCC: {malformed}"
+        raise _dcc_refusal(
+            f"{document} is not well-formed XML and cannot be a DCC: {malformed}",
+            subject="text",
+            source=_CERTIFICATE_SOURCE,
         ) from malformed
     if root.tag != f"{{{DCC_NAMESPACE}}}digitalCalibrationCertificate":
-        raise ValueError(
+        raise _dcc_refusal(
             f"root element is {root.tag!r}, not a DCC "
-            f"({{{DCC_NAMESPACE}}}digitalCalibrationCertificate)"
+            f"({{{DCC_NAMESPACE}}}digitalCalibrationCertificate)",
+            subject="text",
+            source=_CERTIFICATE_SOURCE,
         )
     provenance = _provenance(root)
 

@@ -40,8 +40,25 @@ from pydantic import ConfigDict, Field, model_validator
 from ._models import Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
 from .margin import MarginAction, MarginEntry, MarginKind, MarginLedger
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Comparison, LimitSense, Scorecard, ScorecardEntry
 from .units import Quantity, spoken
+
+_ALLOCATION_SOURCE = "the requirement flowdown that allocates the budget's limit and rule"
+_CONTRIBUTOR_SOURCE = "the contributor's test record, calculation, or estimate"
+_GROWTH_SOURCE = "the program's growth-allowance policy for each contributor basis"
+
+
+class _BudgetInputError(RefusalError, ValueError):
+    """A performance-budget input that cannot be used without correction."""
+
+
+def _budget_refusal(message: str, *, subject: str, source: str) -> _BudgetInputError:
+    return _BudgetInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "CombinationRule",
@@ -97,10 +114,12 @@ class GrowthAllowance(StatableModel):
     @model_validator(mode="after")
     def _an_allowance(self) -> Self:
         if not isfinite(self.factor) or self.factor < 1.0:
-            raise ValueError(
+            raise _budget_refusal(
                 f"the {self.basis.value} growth allowance is {self.factor}; an allowance is a "
                 "finite factor of at least 1, and one below 1 shrinks the term it is meant to "
-                "protect"
+                "protect",
+                subject="factor",
+                source=_GROWTH_SOURCE,
             )
         return self
 
@@ -143,38 +162,48 @@ class Contributor(StatableModel):
             if value is not None
         ]
         if len(stated) != 1:
-            raise ValueError(
+            raise _budget_refusal(
                 f"contributor '{self.name}' states a value, the reason it has none, or a "
                 f"sub-budget — exactly one, and this one states {stated or ['nothing']}: a "
                 "missing value with no reason reads as an oversight, and two of the three "
-                "contradict each other"
+                "contradict each other",
+                subject="value, unresolved, and sub_budget",
+                source=_CONTRIBUTOR_SOURCE,
             )
         if self.sub_budget is not None:
             if self.compensating:
-                raise ValueError(
+                raise _budget_refusal(
                     f"contributor '{self.name}' is a sub-budget declared compensating; a "
                     "budget's total is what it spends, and a sub-budget cannot hand back "
-                    "allocation to its parent"
+                    "allocation to its parent",
+                    subject="sub_budget and compensating",
+                    source=_ALLOCATION_SOURCE,
                 )
             return self
         if self.value is None:
             return self
         if not self.value.pint._is_multiplicative:
-            raise ValueError(
+            raise _budget_refusal(
                 f"contributor '{self.name}' is in {self.value.unit}, an offset temperature "
                 "scale; a budget adds its terms, so state a temperature difference "
-                "(delta_degC, K) instead"
+                "(delta_degC, K) instead",
+                subject="value",
+                source=_CONTRIBUTOR_SOURCE,
             )
         if self.value.magnitude < 0 and not self.compensating:
-            raise ValueError(
+            raise _budget_refusal(
                 f"contributor '{self.name}' is negative ({self.value}) and not declared "
                 "compensating; a term that reduces the total is declared as one, so the budget "
-                "can report the total with and without it"
+                "can report the total with and without it",
+                subject="value and compensating",
+                source=_CONTRIBUTOR_SOURCE,
             )
         if self.compensating and self.value.magnitude > 0:
-            raise ValueError(
+            raise _budget_refusal(
                 f"contributor '{self.name}' is declared compensating with a positive value "
-                f"({self.value}); a compensating term reduces the total and is negative"
+                f"({self.value}); a compensating term reduces the total and is negative",
+                subject="value and compensating",
+                source=_CONTRIBUTOR_SOURCE,
             )
         return self
 
@@ -198,20 +227,28 @@ class Budget(StatableModel):
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if not self.limit.pint._is_multiplicative:
-            raise ValueError(
+            raise _budget_refusal(
                 f"budget '{self.name}' is allocated in {self.limit.unit}, an offset "
-                "temperature scale; allocate a temperature difference (delta_degC, K) instead"
+                "temperature scale; allocate a temperature difference (delta_degC, K) instead",
+                subject="limit",
+                source=_ALLOCATION_SOURCE,
             )
         if self.limit.magnitude <= 0:
-            raise ValueError(f"budget '{self.name}' allocates {self.limit}; a limit is positive")
+            raise _budget_refusal(
+                f"budget '{self.name}' allocates {self.limit}; a limit is positive",
+                subject="limit",
+                source=_ALLOCATION_SOURCE,
+            )
         expected = self.limit.pint.dimensionality
         for term in self.contributors:
             declared = term.value if term.sub_budget is None else term.sub_budget.limit
             if declared is not None and declared.pint.dimensionality != expected:
-                raise ValueError(
+                raise _budget_refusal(
                     f"budget '{self.name}' is allocated in {self.limit.dimensionality} and "
                     f"contributor '{term.name}' is {declared.dimensionality}; a total "
-                    "across two dimensions is not a quantity"
+                    "across two dimensions is not a quantity",
+                    subject="limit and contributors",
+                    source=_ALLOCATION_SOURCE,
                 )
         _refuse_unbounded_nesting(self, ())
         bound: dict[str, str] = {}
@@ -219,37 +256,49 @@ class Budget(StatableModel):
             if term.check is None:
                 continue
             if term.check in bound:
-                raise ValueError(
+                raise _budget_refusal(
                     f"budget '{self.name}' binds contributors '{bound[term.check]}' and "
                     f"'{term.name}' to the same check '{term.check}'; one quantity counted "
-                    "twice under two names"
+                    "twice under two names",
+                    subject="contributors",
+                    source=_CONTRIBUTOR_SOURCE,
                 )
             bound[term.check] = term.name
         names = [term.name for term in self.contributors]
         if len(set(names)) != len(names):
-            raise ValueError(f"budget '{self.name}' names a contributor twice: {names}")
+            raise _budget_refusal(
+                f"budget '{self.name}' names a contributor twice: {names}",
+                subject="contributors",
+                source=_ALLOCATION_SOURCE,
+            )
         bases = [allowance.basis for allowance in self.growth]
         if len(set(bases)) != len(bases):
-            raise ValueError(
+            raise _budget_refusal(
                 f"budget '{self.name}' declares two growth allowances for one basis: "
-                f"{[b.value for b in bases]}"
+                f"{[b.value for b in bases]}",
+                subject="growth",
+                source=_GROWTH_SOURCE,
             )
         if self.rule in (CombinationRule.RSS, CombinationRule.HYBRID):
             compensating = [t.name for t in self.contributors if t.compensating]
             if compensating:
-                raise ValueError(
+                raise _budget_refusal(
                     f"budget '{self.name}' combines in quadrature and declares compensating "
                     f"{compensating}; squaring a term discards its sign, so compensation only "
-                    "nets under worst_case"
+                    "nets under worst_case",
+                    subject="rule and contributors",
+                    source=_ALLOCATION_SOURCE,
                 )
         if self.rule is CombinationRule.RSS:
             for group, members in _groups(self.contributors).items():
                 if len(members) > 1:
-                    raise ValueError(
+                    raise _budget_refusal(
                         f"budget '{self.name}' combines by rss and contributors "
                         f"{[m.name for m in members]} share correlation group '{group}'; "
                         "quadrature understates correlated terms — declare the hybrid rule, "
-                        "which sums each group before combining"
+                        "which sums each group before combining",
+                        subject="rule and contributors",
+                        source=_ALLOCATION_SOURCE,
                     )
         return self
 
@@ -397,15 +446,19 @@ def _refuse_unbounded_nesting(budget: Budget, ancestors: tuple[str, ...]) -> Non
     """
     if budget.name in ancestors:
         chain = " -> ".join((*ancestors, budget.name))
-        raise ValueError(
+        raise _budget_refusal(
             f"budget '{budget.name}' reaches itself through its contributors: {chain}; an "
-            "allocation cannot be one of the terms that spend it"
+            "allocation cannot be one of the terms that spend it",
+            subject="name and sub_budget",
+            source=_ALLOCATION_SOURCE,
         )
     path = (*ancestors, budget.name)
     if len(path) > _MAX_NESTING:
-        raise ValueError(
+        raise _budget_refusal(
             f"budget '{budget.name}' nests {len(path)} deep and {_MAX_NESTING} is the bound: "
-            f"{' -> '.join(path)}"
+            f"{' -> '.join(path)}",
+            subject="sub_budget",
+            source=_ALLOCATION_SOURCE,
         )
     for term in budget.contributors:
         if term.sub_budget is not None:

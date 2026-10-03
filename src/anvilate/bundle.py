@@ -70,6 +70,7 @@ from .explore import StudyResult
 from .export.gate import ExportRecord
 from .gdt import FeatureControlFrame
 from .loads import CombinationEvidence
+from .refusal import RefusalError, Remedy
 from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -77,6 +78,24 @@ from .spec import DesignSpec, dump_spec_yaml
 from .standards.effectivity import DesignBasis, design_basis_scorecard
 from .units import Quantity, UnitSystem
 from .verification import VerificationPlan
+
+_SCORECARD_SOURCE = "the part's scorecard as its screens produced it"
+_BASIS_SOURCE = "the project's design basis and its stated modelling assumptions"
+_MATERIAL_SOURCE = "the part drawing's material callout or the mill certificate"
+_REVIEW_SOURCE = "the reviewer dossier and the digest it was signed over"
+_ARTIFACT_SOURCE = "the files the bundle attests, given once as subjects or artifacts"
+
+
+class _BundleInputError(RefusalError, ValueError):
+    """An evidence-bundle input that cannot be used without correction."""
+
+
+def _bundle_refusal(message: str, *, subject: str, source: str) -> _BundleInputError:
+    return _BundleInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "SectionStatus",
@@ -353,15 +372,19 @@ class BundleSections(RevalidatedModel):
     @model_validator(mode="after")
     def _an_order_of_checks_the_card_carries(self) -> BundleSections:
         if len(set(self.evaluation_order)) != len(self.evaluation_order):
-            raise ValueError(
-                f"the evaluation order names one check twice: {list(self.evaluation_order)}"
+            raise _bundle_refusal(
+                f"the evaluation order names one check twice: {list(self.evaluation_order)}",
+                subject="evaluation_order",
+                source=_SCORECARD_SOURCE,
             )
         carried = {entry.name for entry in self.scorecard.entries}
         stray = [name for name in self.evaluation_order if name not in carried]
         if stray:
-            raise ValueError(
+            raise _bundle_refusal(
                 f"the evaluation order names {stray}, which the scorecard does not carry; an "
-                "order of checks nobody can read the result of is an order of nothing"
+                "order of checks nobody can read the result of is an order of nothing",
+                subject="evaluation_order and scorecard",
+                source=_SCORECARD_SOURCE,
             )
         return self
 
@@ -369,37 +392,49 @@ class BundleSections(RevalidatedModel):
     def _an_assumption_says_something(self) -> BundleSections:
         for assumption in self.assumptions:
             if not assumption.strip():
-                raise ValueError(
+                raise _bundle_refusal(
                     "a blank modelling assumption is a line that reads as a declared one; "
-                    "state the assumption or leave the line out"
+                    "state the assumption or leave the line out",
+                    subject="assumptions",
+                    source=_BASIS_SOURCE,
                 )
         # The same rule, two fields along, where it was missing. `design_basis` and
         # `assumptions` refuse a blank and these did not — a bundle naming its base material
         # as three spaces renders a material line nobody can follow, which is worse than the
         # `None` that means "this bundle does not say".
         if self.base_material is not None and not self.base_material.strip():
-            raise ValueError(
+            raise _bundle_refusal(
                 "a blank base material reads as a declared one; name the material or leave "
                 "base_material None, "
-                "which is what 'this bundle does not say' looks like"
+                "which is what 'this bundle does not say' looks like",
+                subject="base_material",
+                source=_MATERIAL_SOURCE,
             )
         for material in self.known_materials:
             if not material.strip():
-                raise ValueError(
+                raise _bundle_refusal(
                     "a blank entry in known_materials is an identifier nothing can resolve; "
-                    "it would be counted as a material this bundle knows"
+                    "it would be counted as a material this bundle knows",
+                    subject="known_materials",
+                    source=_MATERIAL_SOURCE,
                 )
         return self
 
     @model_validator(mode="after")
     def _the_scorecard_is_the_floor(self) -> BundleSections:
         if not self.scorecard.entries:
-            raise ValueError(
+            raise _bundle_refusal(
                 "an evidence bundle needs at least one check; a bundle over an empty "
-                "scorecard has nothing to be evidence of"
+                "scorecard has nothing to be evidence of",
+                subject="scorecard",
+                source=_SCORECARD_SOURCE,
             )
         if self.review is not None and self.review.digest.strip() == "":
-            raise ValueError("a reviewer dossier in a bundle must carry the digest it covers")
+            raise _bundle_refusal(
+                "a reviewer dossier in a bundle must carry the digest it covers",
+                subject="review",
+                source=_REVIEW_SOURCE,
+            )
         return self
 
     def callout_card(self) -> Scorecard | None:
@@ -903,9 +938,11 @@ def assemble_evidence_bundle(
     named = tuple(subjects)
     if artifacts is not None:
         if named:
-            raise ValueError(
+            raise _bundle_refusal(
                 "supply either `subjects` or `artifacts`, not both; two sources for one "
-                "subject list is two chances for them to disagree"
+                "subject list is two chances for them to disagree",
+                subject="subjects and artifacts",
+                source=_ARTIFACT_SOURCE,
             )
         named = tuple(Subject.over(name, data) for name, data in sorted(artifacts.items()))
     predicate = AnvilatePredicate(

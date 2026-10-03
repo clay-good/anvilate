@@ -58,6 +58,20 @@ from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
 
+_REQUEST_SOURCE = "the MCP client's JSON-RPC request as sent over stdio"
+
+
+class _McpRequestInputError(RefusalError, ValueError):
+    """An MCP request input that cannot be used without correction."""
+
+
+def _mcp_request_refusal(message: str, *, subject: str, source: str) -> _McpRequestInputError:
+    return _McpRequestInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "Cost",
     "Dispatch",

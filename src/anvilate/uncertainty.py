@@ -28,6 +28,24 @@ from typing import Literal, get_args
 from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, RevalidatedModel, StatableModel
+from .refusal import RefusalError, Remedy
+
+_SCATTER_SOURCE = "the measured scatter or drawing tolerance each input is characterized from"
+_REQUIREMENT_SOURCE = "the design basis's required margin or safety factor"
+_RUN_SOURCE = "the analysis plan's Monte Carlo sample count, seed, and coverage"
+_RESPONSE_SOURCE = "the screening model the response wraps, valid over the sampled range"
+
+
+class _UncertaintyInputError(RefusalError, ValueError):
+    """An uncertainty input that cannot be used without correction."""
+
+
+def _uncertainty_refusal(message: str, *, subject: str, source: str) -> _UncertaintyInputError:
+    return _UncertaintyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "Normal",
@@ -57,7 +75,9 @@ class Normal(RevalidatedModel):
     @model_validator(mode="after")
     def _non_negative_std(self) -> Normal:
         if self.std < 0:
-            raise ValueError(f"std must be non-negative; got {self.std}")
+            raise _uncertainty_refusal(
+                f"std must be non-negative; got {self.std}", subject="std", source=_SCATTER_SOURCE
+            )
         return self
 
     def sample(self, rng: Random) -> float:
@@ -75,7 +95,11 @@ class Uniform(RevalidatedModel):
     @model_validator(mode="after")
     def _ordered(self) -> Uniform:
         if self.low > self.high:
-            raise ValueError(f"low ({self.low}) must not exceed high ({self.high})")
+            raise _uncertainty_refusal(
+                f"low ({self.low}) must not exceed high ({self.high})",
+                subject="low and high",
+                source=_SCATTER_SOURCE,
+            )
         return self
 
     @property
@@ -110,9 +134,17 @@ class Symmetric(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> Symmetric:
         if self.half_width < 0:
-            raise ValueError(f"half_width must be non-negative; got {self.half_width}")
+            raise _uncertainty_refusal(
+                f"half_width must be non-negative; got {self.half_width}",
+                subject="half_width",
+                source=_SCATTER_SOURCE,
+            )
         if self.sigma_level <= 0:
-            raise ValueError(f"sigma_level must be positive; got {self.sigma_level}")
+            raise _uncertainty_refusal(
+                f"sigma_level must be positive; got {self.sigma_level}",
+                subject="sigma_level",
+                source=_SCATTER_SOURCE,
+            )
         return self
 
     @property
@@ -264,11 +296,23 @@ def sample_margin(
     samples alone while ``mean`` and the coverage band come back NaN.
     """
     if samples < 2:
-        raise ValueError(f"a Monte Carlo run needs at least 2 samples; got {samples}")
+        raise _uncertainty_refusal(
+            f"a Monte Carlo run needs at least 2 samples; got {samples}",
+            subject="samples",
+            source=_RUN_SOURCE,
+        )
     if not 0.0 < coverage < 1.0:
-        raise ValueError(f"coverage must be between 0 and 1 exclusive; got {coverage}")
+        raise _uncertainty_refusal(
+            f"coverage must be between 0 and 1 exclusive; got {coverage}",
+            subject="coverage",
+            source=_RUN_SOURCE,
+        )
     if not inputs:
-        raise ValueError("sample_margin needs at least one input distribution")
+        raise _uncertainty_refusal(
+            "sample_margin needs at least one input distribution",
+            subject="inputs",
+            source=_SCATTER_SOURCE,
+        )
 
     dists = dict(inputs)
     # A value that is not a distribution answered with `'str' object has no attribute
@@ -278,10 +322,12 @@ def sample_margin(
     # above. The mapping is the argument most likely to be assembled from somewhere else.
     for name, distribution in dists.items():
         if not isinstance(distribution, get_args(InputDistribution)):
-            raise ValueError(
+            raise _uncertainty_refusal(
                 f"inputs maps a name to an input distribution and {name!r} is "
                 f"{type(distribution).__name__}; the distributions are "
-                f"{', '.join(kind.__name__ for kind in get_args(InputDistribution))}"
+                f"{', '.join(kind.__name__ for kind in get_args(InputDistribution))}",
+                subject="inputs",
+                source=_SCATTER_SOURCE,
             )
     names = sorted(dists)
     rng = Random(seed)
@@ -289,21 +335,25 @@ def sample_margin(
     drawn = [response({name: dists[name].sample(rng) for name in names}) for _ in range(samples)]
     nonfinite = sum(1 for r in drawn if not isfinite(r))
     if nonfinite:
-        raise ValueError(
+        raise _uncertainty_refusal(
             f"the response returned a non-finite value on {nonfinite} of {samples} samples; "
             "a NaN sorts as neither above nor below `required` and would be counted as a pass. "
             "Restrict the input distributions to the response's valid domain, or have the "
-            "response raise on inputs it cannot evaluate."
+            "response raise on inputs it cannot evaluate.",
+            subject="response and inputs",
+            source=_RESPONSE_SOURCE,
         )
     # Guard the OTHER operand of the same comparison. A NaN `required` makes every
     # `r < required` False, so the shortfall probability comes back a confident 0.0% and
     # `is_fragile()` reports False — the silent green this function's response guard above
     # exists to prevent, arriving through the door it left open.
     if not isfinite(required):
-        raise ValueError(
+        raise _uncertainty_refusal(
             f"required must be a finite number; got {required}. A non-finite requirement "
             "makes every `r < required` comparison False, which reads as a 0% chance of "
-            "falling short rather than as a comparison that was never made."
+            "falling short rather than as a comparison that was never made.",
+            subject="required",
+            source=_REQUIREMENT_SOURCE,
         )
     responses = sorted(drawn)
     mean = sum(responses) / samples

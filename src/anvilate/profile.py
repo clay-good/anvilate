@@ -35,6 +35,22 @@ from .refusal import RefusalError, Remedy
 from .spec.provenance import Origin, Provenanced
 from .units import Quantity
 
+_DECLARATION_SOURCE = "the profile's cited record of the declarations it supplies"
+_APPLICABILITY_SOURCE = "the cited source's stated range of validity for the profile"
+_DOCUMENT_SOURCE = "the design spec document the profile's declarations fill"
+
+
+class _ProfileInputError(RefusalError, ValueError):
+    """A profile input that cannot be used without correction."""
+
+
+def _profile_refusal(message: str, *, subject: str, source: str) -> _ProfileInputError:
+    return _ProfileInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 if TYPE_CHECKING:
     from .scorecard import ScorecardEntry
     from .spec.ir import DesignSpec
@@ -63,30 +79,38 @@ def _filled(
     """``model`` with the provenanced field at ``path`` set to ``stated``, or a refusal."""
     name, rest = path[0], path[1:]
     if name not in type(model).model_fields:
-        raise ValueError(
+        raise _profile_refusal(
             f"a profile supplies '{declaration}', and {type(model).__name__} has no field "
             f"'{name}'; "
-            f"it has {sorted(type(model).model_fields)}"
+            f"it has {sorted(type(model).model_fields)}",
+            subject="declaration",
+            source=_DOCUMENT_SOURCE,
         )
     current = getattr(model, name)
     if rest:
         if not isinstance(current, BaseModel):
-            raise ValueError(
+            raise _profile_refusal(
                 f"a profile supplies '{declaration}', and '{name}' is not a section of the "
-                "document a value can be put into"
+                "document a value can be put into",
+                subject="declaration",
+                source=_DOCUMENT_SOURCE,
             )
         return model.model_copy(update={name: _filled(current, rest, stated, declaration)})
     kind = _provenanced_type(model, name)
     if kind is None:
-        raise ValueError(
+        raise _profile_refusal(
             f"'{declaration}' cannot record where its value came from, so a profile cannot "
-            "supply it: it would read as a value the engineer stated"
+            "supply it: it would read as a value the engineer stated",
+            subject="declaration",
+            source=_DOCUMENT_SOURCE,
         )
     if current is not None:
-        raise ValueError(
+        raise _profile_refusal(
             f"the document already states '{declaration}' as {current.value} "
             f"({current.origin.value}); a profile fills what is missing and never replaces "
-            "what the engineer wrote — override the binding instead"
+            "what the engineer wrote — override the binding instead",
+            subject="spec and declaration",
+            source=_DOCUMENT_SOURCE,
         )
     return model.model_copy(update={name: kind(**stated)})
 
@@ -124,21 +148,27 @@ class Applicability(StatableModel):
     @model_validator(mode="after")
     def _a_bound(self) -> Applicability:
         if self.minimum is None and self.maximum is None:
-            raise ValueError(
+            raise _profile_refusal(
                 f"the applicability bound on '{self.context}' states neither a minimum nor a "
-                "maximum; a range with no end covers everything and says nothing"
+                "maximum; a range with no end covers everything and says nothing",
+                subject="minimum and maximum",
+                source=_APPLICABILITY_SOURCE,
             )
         if self.minimum is not None and self.maximum is not None:
             if self.minimum.pint.dimensionality != self.maximum.pint.dimensionality:
-                raise ValueError(
+                raise _profile_refusal(
                     f"the applicability bound on '{self.context}' runs from "
                     f"{self.minimum.dimensionality} to {self.maximum.dimensionality}; a range "
-                    "has one dimension"
+                    "has one dimension",
+                    subject="minimum and maximum",
+                    source=_APPLICABILITY_SOURCE,
                 )
             if self.maximum.to(self.minimum.unit).magnitude < self.minimum.magnitude:
-                raise ValueError(
+                raise _profile_refusal(
                     f"the applicability bound on '{self.context}' has its maximum "
-                    f"({self.maximum}) below its minimum ({self.minimum})"
+                    f"({self.maximum}) below its minimum ({self.minimum})",
+                    subject="minimum and maximum",
+                    source=_APPLICABILITY_SOURCE,
                 )
         return self
 
@@ -208,16 +238,24 @@ class Profile(StatableModel):
     def _well_formed(self) -> Profile:
         contexts = [bound.context for bound in self.applicability]
         if len(set(contexts)) != len(contexts):
-            raise ValueError(f"profile {self.id} bounds one context twice: {sorted(contexts)}")
+            raise _profile_refusal(
+                f"profile {self.id} bounds one context twice: {sorted(contexts)}",
+                subject="applicability",
+                source=_APPLICABILITY_SOURCE,
+            )
         declarations = [supplied.declaration for supplied in self.supplies]
         if len(set(declarations)) != len(declarations):
-            raise ValueError(
-                f"profile {self.id} supplies one declaration twice: {sorted(declarations)}"
+            raise _profile_refusal(
+                f"profile {self.id} supplies one declaration twice: {sorted(declarations)}",
+                subject="supplies",
+                source=_DECLARATION_SOURCE,
             )
         if any(supplied.overridden is not None for supplied in self.supplies):
-            raise ValueError(
+            raise _profile_refusal(
                 f"profile {self.id} carries an override in its own record; an override is "
-                "something a user does to a binding, not part of the profile that was cited"
+                "something a user does to a binding, not part of the profile that was cited",
+                subject="supplies",
+                source=_DECLARATION_SOURCE,
             )
         return self
 
@@ -281,11 +319,13 @@ class ProfileBinding(StatableModel):
     def override(self, declaration: str, value: Quantity | float | str) -> ProfileBinding:
         """This binding with ``declaration`` set by the user instead of by the profile."""
         if declaration not in {supplied.declaration for supplied in self.values}:
-            raise ValueError(
+            raise _profile_refusal(
                 f"profile {self.profile.id} supplies "
                 f"{sorted(supplied.declaration for supplied in self.values)} and not "
                 f"'{declaration}'; overriding a declaration it never supplied would record "
-                "the profile as the source of a value it did not give"
+                "the profile as the source of a value it did not give",
+                subject="declaration",
+                source=_DECLARATION_SOURCE,
             )
         return ProfileBinding(
             profile=self.profile,
@@ -309,11 +349,17 @@ class ProfileBinding(StatableModel):
         supplied = {value.declaration: value for value in self.values}
         unknown = [name for name in used if name not in supplied]
         if unknown:
-            raise ValueError(
-                f"profile {self.profile.id} supplies {sorted(supplied)} and not {unknown}"
+            raise _profile_refusal(
+                f"profile {self.profile.id} supplies {sorted(supplied)} and not {unknown}",
+                subject="used",
+                source=_DECLARATION_SOURCE,
             )
         if not used:
-            raise ValueError("name the declarations the entry used; marking none marks nothing")
+            raise _profile_refusal(
+                "name the declarations the entry used; marking none marks nothing",
+                subject="used",
+                source=_DECLARATION_SOURCE,
+            )
         notes = []
         for name in used:
             value = supplied[name]

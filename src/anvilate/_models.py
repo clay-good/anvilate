@@ -136,14 +136,20 @@ def cited(states: str) -> Any:
 
     def refuse_a_blank(value: str) -> str:
         if not value.strip():
-            raise ValueError(f"this field must state {states}")
+            raise _input_refusal(
+                f"this field must state {states}",
+                subject="the field at this error's location",
+                source=f"text that states {states}, within the length limit",
+            )
         if len(value) > _LONGEST_CITED:
             # The blank refusal's sentence, from the other end. `cited` states BOTH rules for
             # a citation and for a name, so a message hard-coding "a citation" told a reader
             # whose spec has a 5,000-character `name` that their name was a citation.
-            raise ValueError(
+            raise _input_refusal(
                 f"this field is {len(value):,} characters, and nothing longer than "
-                f"{_LONGEST_CITED:,} is one a reader can follow; it must state {states}"
+                f"{_LONGEST_CITED:,} is one a reader can follow; it must state {states}",
+                subject="the field at this error's location",
+                source=f"text that states {states}, within the length limit",
             )
         return value
 
@@ -213,7 +219,14 @@ def rebuilt_quantities(value: Any) -> Any:
 
 
 def _sequence_refusal(message: str, *, named: str, kind: type) -> ValueError:
-    """A structured refusal for a sequence argument, built where it is raised.
+    """A structured refusal for a sequence argument, built where it is raised."""
+    return _input_refusal(
+        message, subject=named, source=f"a list or tuple of {kind.__name__}, one entry per item"
+    )
+
+
+def _input_refusal(message: str, *, subject: str, source: str) -> ValueError:
+    """A structured refusal raised from this module.
 
     `refusal` imports this module, so the error class is made on first use rather than at
     import; it is still a `RefusalError` and still a `ValueError`.
@@ -228,14 +241,7 @@ def _sequence_refusal(message: str, *, named: str, kind: type) -> ValueError:
             {"__doc__": "A sequence argument that cannot be read without correction."},
         )
     return _SequenceInputError(
-        message,
-        remedies=(
-            Remedy(
-                action="replace",
-                subject=named,
-                source=f"a list or tuple of {kind.__name__}, one entry per item",
-            ),
-        ),
+        message, remedies=(Remedy(action="replace", subject=subject, source=source),)
     )
 
 
@@ -666,13 +672,17 @@ class StatableModel(RevalidatedModel):
             except _TooDeep:
                 # The field, not the path it got to: thirty-two `[0]`s is not something a
                 # reader acts on, and the field is where they have to look.
-                raise ValueError(
+                raise _input_refusal(
                     f"{name} nests more than {_MAX_DOCUMENT_DEPTH} levels deep, and a "
                     f"document that nests past what any consumer can serialise is refused "
-                    f"here rather than at the far end of the call"
+                    f"here rather than at the far end of the call",
+                    subject=name,
+                    source="the field's value with its nesting flattened",
                 ) from None
             if problem is not None:
-                raise ValueError(problem)
+                raise _input_refusal(
+                    problem, subject=name, source="a value a JSON or YAML document can state"
+                )
         return self
 
 

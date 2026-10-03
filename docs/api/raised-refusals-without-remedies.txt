@@ -1,49 +1,26 @@
-# Bare `raise ValueError` sites per file: refusals whose remedy is prose only.
+# Bare `ValueError` constructions per file: refusals whose remedy is prose only.
 # interaction-quality 2.1; tests/test_raised_refusal_ledger.py holds this exact.
 # Migrating a module lowers or deletes its line. Nothing may be added.
+#
+# What remains is not a refusal of a caller's input. Each site below is reached only
+# by the library's own data or its own computation, so no remedy can name an input:
+#   bundle.py          a roll-up with no verdict section, which BundleSections never builds
+#   export/fcf.py      a glyph with no geometry; glyphs come from the bundled symbol set
+#   export/qif.py      a non-finite decimal; every caller filters non-finite values first
+#   keepouts.py        two STEP-writer self-checks on the kernel's own output
+#   mcp.py             five ToolDefinition rules over the library's own tool catalogue
+#   refusal.py         the two guards on building a remedy, which cannot carry one
+#   standards/pipe.py  the bundled pipe-schedule table naming an NPS it has no OD for
+#   standards/profiles.py  seven checks on the bundled profile tables and the pinned
+#                      (sha256-verified) AISC workbook
+#   uncertainty.py     a quantile of no samples, after the caller already needs two
 
-src/anvilate/_assembly_declarations.py 6
-src/anvilate/_models.py 4
-src/anvilate/agenteval.py 23
-src/anvilate/assembly.py 8
-src/anvilate/attestation.py 22
-src/anvilate/budget.py 16
-src/anvilate/bundle.py 9
-src/anvilate/callouts.py 22
-src/anvilate/compilation.py 36
-src/anvilate/dcc.py 8
-src/anvilate/dependency.py 13
-src/anvilate/explore.py 16
-src/anvilate/export/dxf.py 27
-src/anvilate/export/fcf.py 6
-src/anvilate/export/gate.py 5
-src/anvilate/export/qif.py 6
-src/anvilate/export/threemf.py 8
-src/anvilate/failure_modes.py 3
-src/anvilate/fetch.py 5
-src/anvilate/gdt.py 19
-src/anvilate/geometry.py 34
-src/anvilate/ingest.py 37
-src/anvilate/interop.py 27
-src/anvilate/keepouts.py 3
-src/anvilate/limit_states.py 4
-src/anvilate/loads.py 6
-src/anvilate/margin.py 6
+src/anvilate/bundle.py 1
+src/anvilate/export/fcf.py 1
+src/anvilate/export/qif.py 1
+src/anvilate/keepouts.py 2
 src/anvilate/mcp.py 5
-src/anvilate/modules.py 10
-src/anvilate/optical_tolerances.py 5
-src/anvilate/packs/_guarded.py 6
-src/anvilate/packs/industrial.py 11
-src/anvilate/packs/structural.py 62
-src/anvilate/profile.py 13
 src/anvilate/refusal.py 2
-src/anvilate/scorecard.py 11
-src/anvilate/spec/ir.py 41
-src/anvilate/specbench.py 5
-src/anvilate/standards/fatigue.py 31
-src/anvilate/standards/pipe.py 5
+src/anvilate/standards/pipe.py 1
 src/anvilate/standards/profiles.py 7
-src/anvilate/tolerance/iso286.py 5
-src/anvilate/tolerance/stackup.py 5
-src/anvilate/topology.py 4
-src/anvilate/uncertainty.py 11
+src/anvilate/uncertainty.py 1

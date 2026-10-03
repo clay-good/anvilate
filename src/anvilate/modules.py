@@ -33,8 +33,27 @@ from collections.abc import Iterable
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
+from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
 from .units import UnitSystem
+
+_MANIFEST_SOURCE = "the discipline module's own manifest declaration"
+_REGISTRY_SOURCE = "the module registry: one manifest per shipped or added module"
+_RUN_SOURCE = "the run's enabled-module list, by the ids the registry ships"
+
+
+class _ModuleManifestInputError(RefusalError, ValueError):
+    """A discipline-module input that cannot be used without correction."""
+
+
+def _module_manifest_refusal(
+    message: str, *, subject: str, source: str
+) -> _ModuleManifestInputError:
+    return _ModuleManifestInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "Deprecation",
@@ -96,14 +115,26 @@ class ModuleManifest(StatableModel):
         ):
             listed = [str(value) for value in values]
             if len(set(listed)) != len(listed):
-                raise ValueError(f"module '{self.id}' names one {field} twice: {sorted(listed)}")
+                raise _module_manifest_refusal(
+                    f"module '{self.id}' names one {field} twice: {sorted(listed)}",
+                    subject=(
+                        "standards, material_properties, tiers, depends_on, screens, and covers"
+                    ),
+                    source=_MANIFEST_SOURCE,
+                )
         if self.id in self.depends_on:
-            raise ValueError(f"module '{self.id}' depends on itself")
+            raise _module_manifest_refusal(
+                f"module '{self.id}' depends on itself",
+                subject="id and depends_on",
+                source=_MANIFEST_SOURCE,
+            )
         if not all(screen.startswith("screen_") for screen in self.screens):
-            raise ValueError(
+            raise _module_manifest_refusal(
                 f"module '{self.id}' names screens {sorted(self.screens)}; a pack's screens are "
                 "the `screen_*` functions the element registry selects, and a name outside that "
-                "shape is one no document can reach"
+                "shape is one no document can reach",
+                subject="screens",
+                source=_MANIFEST_SOURCE,
             )
         return self
 
@@ -132,9 +163,11 @@ class ModuleRegistry(ItemCollection, StatableModel):
             claimed = [getattr(manifest, field) for manifest in self.manifests]
             if len(set(claimed)) != len(claimed):
                 doubled = sorted({name for name in claimed if claimed.count(name) > 1})
-                raise ValueError(
+                raise _module_manifest_refusal(
                     f"two modules claim the same {field}: {doubled}; an identity that two "
-                    "modules could own is one no reader can attribute"
+                    "modules could own is one no reader can attribute",
+                    subject="manifests",
+                    source=_REGISTRY_SOURCE,
                 )
         namespaces = sorted(str(manifest.namespace) for manifest in self.manifests)
         for index, namespace in enumerate(namespaces):
@@ -143,17 +176,21 @@ class ModuleRegistry(ItemCollection, StatableModel):
                 None,
             )
             if overlap is not None:
-                raise ValueError(
+                raise _module_manifest_refusal(
                     f"module namespaces {namespace!r} and {overlap!r} overlap; one check id "
-                    "could belong to both modules"
+                    "could belong to both modules",
+                    subject="manifests",
+                    source=_REGISTRY_SOURCE,
                 )
         known = {manifest.id for manifest in self.manifests}
         for manifest in self.manifests:
             missing = sorted(set(manifest.depends_on) - known)
             if missing:
-                raise ValueError(
+                raise _module_manifest_refusal(
                     f"module '{manifest.id}' depends on {missing}, which this build does not "
-                    "carry; a dependency nobody loads is a screen that cannot run"
+                    "carry; a dependency nobody loads is a screen that cannot run",
+                    subject="manifests",
+                    source=_REGISTRY_SOURCE,
                 )
         return self
 
@@ -366,10 +403,12 @@ class LoadedModules(StatableModel):
         import importlib
 
         if module not in self.enabled:
-            raise ValueError(
+            raise _module_manifest_refusal(
                 f"module '{module}' is not enabled in this run; enabled are "
                 f"{sorted(self.enabled)}. A screen from a module nobody enabled would be a "
-                "verdict the run cannot account for"
+                "verdict the run cannot account for",
+                subject="module",
+                source=_RUN_SOURCE,
             )
         return importlib.import_module(f"anvilate.packs.{module}")
 
@@ -403,7 +442,11 @@ def load_modules(
     chosen = list(shipped) if enabled is None else list(dict.fromkeys(enabled))
     unknown = sorted(set(chosen) - set(shipped))
     if unknown:
-        raise ValueError(f"no discipline module {unknown}; this build ships {sorted(shipped)}")
+        raise _module_manifest_refusal(
+            f"no discipline module {unknown}; this build ships {sorted(shipped)}",
+            subject="enabled",
+            source=_RUN_SOURCE,
+        )
     missing = {
         identifier: sorted(set(shipped[identifier].depends_on) - set(chosen))
         for identifier in chosen
@@ -411,9 +454,11 @@ def load_modules(
     }
     if missing:
         named = "; ".join(f"'{module}' needs {needs}" for module, needs in sorted(missing.items()))
-        raise ValueError(
+        raise _module_manifest_refusal(
             f"these enabled modules depend on modules this run disabled: {named}. A module "
-            "composing with another and running without it screens less than it says it does"
+            "composing with another and running without it screens less than it says it does",
+            subject="enabled",
+            source=_RUN_SOURCE,
         )
     return LoadedModules(enabled=tuple(chosen), disabled=tuple(sorted(set(shipped) - set(chosen))))
 
@@ -424,4 +469,8 @@ def manifest_for(module: str) -> ModuleManifest:
         if manifest.id == module:
             return manifest
     shipped = sorted(entry.id for entry in MODULE_MANIFESTS.manifests)
-    raise ValueError(f"no discipline module '{module}'; this build ships {shipped}")
+    raise _module_manifest_refusal(
+        f"no discipline module '{module}'; this build ships {shipped}",
+        subject="module",
+        source=_RUN_SOURCE,
+    )

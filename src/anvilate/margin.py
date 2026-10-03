@@ -29,6 +29,24 @@ from typing import Any, Self
 from pydantic import ConfigDict, model_validator
 
 from ._models import ItemCollection, Named, StatableModel, cited
+from .refusal import RefusalError, Remedy
+
+_FACTOR_SOURCE = "the code clause or design election that applies the conservatism"
+_STOCK_SOURCE = "the calculated size and the stock size the drawing delivers"
+_ALLOWABLE_SOURCE = "the material datasheet's typical value and its basis allowable"
+_CHECK_SOURCE = "the check's utilization computed at the delivered size"
+
+
+class _MarginInputError(RefusalError, ValueError):
+    """A margin-ledger input that cannot be used without correction."""
+
+
+def _margin_refusal(message: str, *, subject: str, source: str) -> _MarginInputError:
+    return _MarginInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "MarginKind",
@@ -116,10 +134,12 @@ class MarginEntry(StatableModel):
     @model_validator(mode="after")
     def _a_margin(self) -> Self:
         if not isfinite(self.value) or self.value < 1.0:
-            raise ValueError(
+            raise _margin_refusal(
                 f"margin '{self.label}' has value {self.value}; a conservatism factor is a "
                 "finite number of at least 1 (1.5 raises a demand or lowers a capacity by "
-                "1.5), and anything below 1 makes the result less conservative, not more"
+                "1.5), and anything below 1 makes the result less conservative, not more",
+                subject="value",
+                source=_FACTOR_SOURCE,
             )
         return self
 
@@ -140,14 +160,18 @@ class MarginEntry(StatableModel):
         (as t², or t³) is the check's business and is not guessed here.
         """
         if not (isfinite(nominal) and nominal > 0 and isfinite(delivered)):
-            raise ValueError(
+            raise _margin_refusal(
                 f"rounding '{label}' needs a positive finite nominal and a finite delivered "
-                f"value; got nominal {nominal}, delivered {delivered}"
+                f"value; got nominal {nominal}, delivered {delivered}",
+                subject="nominal and delivered",
+                source=_STOCK_SOURCE,
             )
         if delivered < nominal:
-            raise ValueError(
+            raise _margin_refusal(
                 f"rounding '{label}' snapped {nominal:g} down to {delivered:g}; rounding in the "
-                "unsafe direction is not a margin and must not be recorded as one"
+                "unsafe direction is not a margin and must not be recorded as one",
+                subject="nominal and delivered",
+                source=_STOCK_SOURCE,
             )
         return cls(
             label=f"{label} ({nominal:g} -> {delivered:g})",
@@ -181,14 +205,18 @@ class MarginEntry(StatableModel):
         as one would hide the unsafe direction.
         """
         if not (isfinite(typical) and isfinite(allowable) and allowable > 0 and typical > 0):
-            raise ValueError(
+            raise _margin_refusal(
                 f"statistical basis '{label}' needs positive finite typical and allowable "
-                f"values; got typical {typical}, allowable {allowable}"
+                f"values; got typical {typical}, allowable {allowable}",
+                subject="typical and allowable",
+                source=_ALLOWABLE_SOURCE,
             )
         if allowable > typical:
-            raise ValueError(
+            raise _margin_refusal(
                 f"statistical basis '{label}' puts the {basis} allowable {allowable:g} above the "
-                f"typical {typical:g}; a floor above the middle of the scatter is not a margin"
+                f"typical {typical:g}; a floor above the middle of the scatter is not a margin",
+                subject="typical and allowable",
+                source=_ALLOWABLE_SOURCE,
             )
         return cls(
             label=f"{label} ({basis}: {typical:g} typical, {allowable:g} allowable)",
@@ -277,8 +305,10 @@ class MarginStack(StatableModel):
         only: the delivered verdict is the one that stands.
         """
         if not isfinite(delivered) or delivered < 0:
-            raise ValueError(
-                f"delivered utilization must be a finite non-negative number; got {delivered}"
+            raise _margin_refusal(
+                f"delivered utilization must be a finite non-negative number; got {delivered}",
+                subject="delivered",
+                source=_CHECK_SOURCE,
             )
         return delivered / prod(
             e.value for e in self.entries if not e.code_required and _KINDS[e.kind][2]

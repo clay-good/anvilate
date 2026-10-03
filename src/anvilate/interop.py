@@ -37,7 +37,26 @@ from pydantic import ConfigDict, model_validator
 from ._models import FrozenMap, Named, RevalidatedModel, cited
 from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
+from .refusal import RefusalError, Remedy
 from .units import Quantity, require_finite, unit_label
+
+_FORCES_SOURCE = "the external analysis tool's member-force export for the load case"
+_AXES_SOURCE = "the exporting tool's documented axis labels and sign convention"
+_SECTION_SOURCE = "the section-property tool's output for the meshed section geometry"
+_DRAWING_UNITS_SOURCE = "the length unit the section geometry was drawn in, from the CAD file"
+_FSM_SOURCE = "the finite-strip run's signature curve and the reference load it applied"
+
+
+class _InteropInputError(RefusalError, ValueError):
+    """An interop input that cannot be used without correction."""
+
+
+def _interop_refusal(message: str, *, subject: str, source: str) -> _InteropInputError:
+    return _InteropInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ForceComponent",
@@ -123,18 +142,26 @@ class AxisMapping(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> AxisMapping:
         if not self.labels:
-            raise ValueError(
+            raise _interop_refusal(
                 "an axis mapping with no labels declares nothing; name at least the "
-                "component the screen will run on"
+                "component the screen will run on",
+                subject="labels",
+                source=_AXES_SOURCE,
             )
         used = list(self.labels.values())
         if len(set(used)) != len(used):
-            raise ValueError(
-                f"one exported label is mapped to two Anvilate components: {sorted(used)}"
+            raise _interop_refusal(
+                f"one exported label is mapped to two Anvilate components: {sorted(used)}",
+                subject="labels",
+                source=_AXES_SOURCE,
             )
         collision = set(used) & set(self.ignored)
         if collision:
-            raise ValueError(f"{sorted(collision)} is both mapped and ignored; it cannot be both")
+            raise _interop_refusal(
+                f"{sorted(collision)} is both mapped and ignored; it cannot be both",
+                subject="labels and ignored",
+                source=_AXES_SOURCE,
+            )
         return self
 
 
@@ -149,9 +176,17 @@ class ForceStation(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> ForceStation:
         if not self.position.has_dimension("[length]"):
-            raise ValueError(f"position must be a [length] quantity; got {self.position}")
+            raise _interop_refusal(
+                f"position must be a [length] quantity; got {self.position}",
+                subject="position",
+                source=_FORCES_SOURCE,
+            )
         if not self.components:
-            raise ValueError("a station with no components carries no information")
+            raise _interop_refusal(
+                "a station with no components carries no information",
+                subject="components",
+                source=_FORCES_SOURCE,
+            )
         return self
 
 
@@ -181,17 +216,27 @@ class MemberForceRecord(RevalidatedModel):
             (self.load_case, "load_case"),
         ):
             if not value.strip():
-                raise ValueError(f"an imported member-force record needs a {name}")
+                raise _interop_refusal(
+                    f"an imported member-force record needs a {name}",
+                    subject="member, tool, tool_version, and load_case",
+                    source=_FORCES_SOURCE,
+                )
         if not self.stations:
-            raise ValueError(f"{self.member}: a record with no stations has nothing to screen")
+            raise _interop_refusal(
+                f"{self.member}: a record with no stations has nothing to screen",
+                subject="stations",
+                source=_FORCES_SOURCE,
+            )
         first = set(self.stations[0].components)
         for station in self.stations[1:]:
             if set(station.components) != first:
-                raise ValueError(
+                raise _interop_refusal(
                     f"{self.member}: stations report different components "
                     f"({sorted(first)} against {sorted(station.components)}); a component "
                     f"that appears at some stations and not others would be read as zero "
-                    f"at the rest"
+                    f"at the rest",
+                    subject="stations",
+                    source=_FORCES_SOURCE,
                 )
         return self
 
@@ -271,7 +316,11 @@ class ExternalSectionProperties(RevalidatedModel):
             (self.method, "method"),
         ):
             if not value.strip():
-                raise ValueError(f"imported section properties need a {name}")
+                raise _interop_refusal(
+                    f"imported section properties need a {name}",
+                    subject="name, source_version, and method",
+                    source=_SECTION_SOURCE,
+                )
         checks: list[tuple[Quantity | None, str, str]] = [
             (self.area, "area", "[length]**2"),
             (self.second_moment, "second_moment", "[length]**4"),
@@ -283,22 +332,36 @@ class ExternalSectionProperties(RevalidatedModel):
             if value is None:
                 continue
             if not value.has_dimension(dimension):
-                raise ValueError(
-                    f"{self.name}: {label} must be a {dimension} quantity; got {value}"
+                raise _interop_refusal(
+                    f"{self.name}: {label} must be a {dimension} quantity; got {value}",
+                    subject=(
+                        "area, second_moment, extreme_fibre, second_moment_transverse, and "
+                        "torsion_constant"
+                    ),
+                    source=_SECTION_SOURCE,
                 )
             if value.magnitude <= 0:
-                raise ValueError(f"{self.name}: {label} must be positive; got {value}")
+                raise _interop_refusal(
+                    f"{self.name}: {label} must be positive; got {value}",
+                    subject=(
+                        "area, second_moment, extreme_fibre, second_moment_transverse, and "
+                        "torsion_constant"
+                    ),
+                    source=_SECTION_SOURCE,
+                )
         if (
             self.second_moment_transverse is not None
             and self.second_moment_transverse.to("mm**4").magnitude
             > self.second_moment.to("mm**4").magnitude
         ):
-            raise ValueError(
+            raise _interop_refusal(
                 f"{self.name}: second_moment_transverse "
                 f"({self.second_moment_transverse}) exceeds second_moment "
                 f"({self.second_moment}), so the axes are swapped — the major axis is the "
                 f"one with the larger I, and screening bending about the minor axis as "
-                f"though it were major overstates the capacity"
+                f"though it were major overstates the capacity",
+                subject="second_moment and second_moment_transverse",
+                source=_SECTION_SOURCE,
             )
         return self
 
@@ -334,17 +397,21 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
     mapped = set(mapping.labels.values())
     missing = sorted(mapped - exported)
     if missing:
-        raise ValueError(
+        raise _interop_refusal(
             f"{record.member}: the mapping names {missing}, which {record.tool} did not "
-            f"export; it carries {sorted(exported)}"
+            f"export; it carries {sorted(exported)}",
+            subject="record and mapping",
+            source=_AXES_SOURCE,
         )
     unaccounted = sorted(exported - mapped - set(mapping.ignored))
     if unaccounted:
-        raise ValueError(
+        raise _interop_refusal(
             f"{record.member}: {unaccounted} was exported but is neither mapped nor "
             f"ignored. Dropping a component silently is how a member gets screened "
             f"without its minor-axis moment; name each of {unaccounted} in the mapping or "
-            "in `ignored`"
+            "in `ignored`",
+            subject="record and mapping",
+            source=_AXES_SOURCE,
         )
     components: dict[ForceComponent, Quantity] = {}
     stations: dict[ForceComponent, Quantity] = {}
@@ -359,9 +426,11 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
         for station in record.stations:
             value = station.components[label]
             if not value.has_dimension(expected):
-                raise ValueError(
+                raise _interop_refusal(
                     f"{record.member}: {label} is mapped to {component.value}, which must "
-                    f"be {expected}; got {value.dimensionality} ({value})"
+                    f"be {expected}; got {value.dimensionality} ({value})",
+                    subject="record and mapping",
+                    source=_AXES_SOURCE,
                 )
             # Compare in ONE unit. A Quantity keeps the magnitude as entered, and stations
             # are only validated to share component NAMES — so a member reporting 500 kN*m
@@ -391,12 +460,14 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
     # carries no capacity consequence, so only the axial case is refused — and it is
     # refused rather than resolved, because which sense governs is the caller's judgement.
     if reversals:
-        raise ValueError(
+        raise _interop_refusal(
             f"{record.member}: the axial load ({reversals[0]}) changes sign along the "
             f"member, so it has two governing cases and not one — and the larger "
             f"magnitude is not necessarily the worse, since a member bound as pure "
             f"tension is never screened for buckling. Split the record into the stations "
-            f"for each sense and bind them separately"
+            f"for each sense and bind them separately",
+            subject="record",
+            source=_FORCES_SOURCE,
         )
     return MemberDemand(
         member=record.member,
@@ -482,10 +553,12 @@ _NO_WARPING = "geometric analysis only (no warping analysis; torsion constant no
 
 def _positive(value: float, label: str, name: str) -> float:
     if not isfinite(value) or value <= 0:
-        raise ValueError(
+        raise _interop_refusal(
             f"{name}: sectionproperties returned {label} = {value!r}, which is not a "
             "positive finite number. Screening a section on it would produce a margin "
-            "that means nothing"
+            "that means nothing",
+            subject="section",
+            source=_SECTION_SOURCE,
         )
     return value
 
@@ -534,13 +607,19 @@ def from_sectionproperties(
     it comes back ``None`` and ``method`` says so in words.
     """
     if not length_unit.strip():
-        raise ValueError("length_unit is required: sectionproperties returns bare numbers")
+        raise _interop_refusal(
+            "length_unit is required: sectionproperties returns bare numbers",
+            subject="length_unit",
+            source=_DRAWING_UNITS_SOURCE,
+        )
     if section.is_composite():
-        raise ValueError(
+        raise _interop_refusal(
             f"{name}: this section has materials assigned, so sectionproperties reports "
             "modulus-weighted constants (EI, EA). Anvilate's screens apply their own "
             "material to a geometric section, so importing EI as I would be wrong by a "
-            "factor of the modulus with nothing downstream able to see it"
+            "factor of the modulus with nothing downstream able to see it",
+            subject="section",
+            source=_SECTION_SOURCE,
         )
 
     area = _positive(section.get_area(), "area", name)
@@ -638,11 +717,13 @@ class ModeIdentification(StrEnum):
 
 def _load_factor(value: float, name: str) -> float:
     if not isfinite(value) or value <= 0:
-        raise ValueError(
+        raise _interop_refusal(
             f"the {name} load factor must be positive and finite; got {value!r}. A "
             "non-finite factor produces a buckling load that min() drops from the "
             "governing set rather than propagating, so the nominal comes back "
-            "complete-looking and too high"
+            "complete-looking and too high",
+            subject="local_factor, global_factor, and distortional_factor",
+            source=_FSM_SOURCE,
         )
     return value
 
@@ -686,13 +767,19 @@ def from_pycufsm(
     if not reference_load.has_dimension("[force]") and not reference_load.has_dimension(
         "[force]*[length]"
     ):
-        raise ValueError(
+        raise _interop_refusal(
             f"reference_load must be a force (compression) or a moment (flexure); got "
-            f"{reference_load}"
+            f"{reference_load}",
+            subject="reference_load",
+            source=_FSM_SOURCE,
         )
     require_finite(reference_load, name="reference_load")
     if reference_load.magnitude <= 0:
-        raise ValueError(f"reference_load must be positive; got {reference_load}")
+        raise _interop_refusal(
+            f"reference_load must be positive; got {reference_load}",
+            subject="reference_load",
+            source=_FSM_SOURCE,
+        )
 
     # (mode, factor, half-wavelength). The global mode is a column curve rather than a
     # signature-curve minimum, so it carries no half-wavelength and the reading check
@@ -720,35 +807,51 @@ def from_pycufsm(
         if mode == "global" or half_wavelength is None:
             continue
         if not isinstance(half_wavelength, Quantity):
-            raise ValueError(
-                f"half_wavelength must be a [length] quantity; got {half_wavelength!r}"
+            raise _interop_refusal(
+                f"half_wavelength must be a [length] quantity; got {half_wavelength!r}",
+                subject="local_half_wavelength and distortional_half_wavelength",
+                source=_FSM_SOURCE,
             )
         if not half_wavelength.has_dimension("[length]"):
-            raise ValueError(f"the {mode} half-wavelength must be a length; got {half_wavelength}")
+            raise _interop_refusal(
+                f"the {mode} half-wavelength must be a length; got {half_wavelength}",
+                subject="local_half_wavelength and distortional_half_wavelength",
+                source=_FSM_SOURCE,
+            )
         require_finite(half_wavelength, name=f"{mode} half-wavelength")
         if half_wavelength.magnitude <= 0:
-            raise ValueError(f"the {mode} half-wavelength must be positive; got {half_wavelength}")
+            raise _interop_refusal(
+                f"the {mode} half-wavelength must be positive; got {half_wavelength}",
+                subject="local_half_wavelength and distortional_half_wavelength",
+                source=_FSM_SOURCE,
+            )
 
     if identification is ModeIdentification.SIGNATURE_MINIMUM:
         for mode, _factor, half_wavelength in modes:
             if mode != "global" and half_wavelength is None:
-                raise ValueError(
+                raise _interop_refusal(
                     f"the {mode} mode was read as a signature-curve minimum but carries no "
                     "half-wavelength. A minimum nobody can locate is a minimum nobody can "
-                    "check — record where on the curve it was read"
+                    "check — record where on the curve it was read",
+                    subject=(
+                        "identification, local_half_wavelength, and distortional_half_wavelength"
+                    ),
+                    source=_FSM_SOURCE,
                 )
 
     if local_half_wavelength is not None and distortional_half_wavelength is not None:
         local_mm = local_half_wavelength.to("mm").magnitude
         distortional_mm = distortional_half_wavelength.to("mm").magnitude
         if local_mm >= distortional_mm:
-            raise ValueError(
+            raise _interop_refusal(
                 f"the local minimum is given at {local_half_wavelength} and the "
                 f"distortional at {distortional_half_wavelength}, which is the wrong way "
                 "round: local buckling waves at about the width of the widest plate "
                 "element and the distortional mode waves at several times that. Swapping "
                 "them moves strength between a curve anchored on P_ne and one anchored on "
-                "P_y. If this section genuinely inverts, build ElasticBuckling directly"
+                "P_y. If this section genuinely inverts, build ElasticBuckling directly",
+                subject="local_half_wavelength and distortional_half_wavelength",
+                source=_FSM_SOURCE,
             )
 
     where = ", ".join(

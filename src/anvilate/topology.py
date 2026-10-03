@@ -40,7 +40,23 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
+
+_DRAWING_SOURCE = "the fixture or mounting drawing's constraint features"
+_INTENT_SOURCE = "the design intent's list of freedoms meant to stay free"
+
+
+class _TopologyInputError(RefusalError, ValueError):
+    """A constraint-topology input that cannot be used without correction."""
+
+
+def _topology_refusal(message: str, *, subject: str, source: str) -> _TopologyInputError:
+    return _TopologyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 _NEEDS_CONSTRAINTS = Need(
     declaration="constraint_topology.constraints",
@@ -221,15 +237,19 @@ class Constraint(StatableModel):
     @model_validator(mode="after")
     def _counts_what_its_kind_removes(self) -> Constraint:
         if len(set(self.removes)) != len(self.removes):
-            raise ValueError(
-                f"{self.name} names one freedom twice: {[f.value for f in self.removes]}"
+            raise _topology_refusal(
+                f"{self.name} names one freedom twice: {[f.value for f in self.removes]}",
+                subject="removes",
+                source=_DRAWING_SOURCE,
             )
         allowed, description = _REMOVES[self.kind]
         if len(self.removes) not in allowed:
             counts = " or ".join(str(n) for n in sorted(allowed))
-            raise ValueError(
+            raise _topology_refusal(
                 f"{self.name} declares {len(self.removes)} freedoms, and {description} removes "
-                f"{counts}; a count that does not match the interface is a tally of nothing"
+                f"{counts}; a count that does not match the interface is a tally of nothing",
+                subject="kind and removes",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -467,12 +487,18 @@ def tally(
     kept: dict[Freedom, IntendedFreedom] = {}
     for declared in intended:
         if declared.freedom in kept:
-            raise ValueError(f"{body} declares {declared.freedom.value} intended twice")
+            raise _topology_refusal(
+                f"{body} declares {declared.freedom.value} intended twice",
+                subject="intended",
+                source=_INTENT_SOURCE,
+            )
         if by_freedom[declared.freedom]:
             removers = ", ".join(c.name for c in by_freedom[declared.freedom])
-            raise ValueError(
+            raise _topology_refusal(
                 f"{body} declares {frame.names(declared.freedom)} intended free, and {removers} "
-                "removes it; the declaration and the constraints disagree"
+                "removes it; the declaration and the constraints disagree",
+                subject="intended and constraints",
+                source=_INTENT_SOURCE,
             )
         kept[declared.freedom] = declared
     return ConstraintTally(

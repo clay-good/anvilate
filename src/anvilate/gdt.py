@@ -31,7 +31,23 @@ from math import isfinite
 from pydantic import ConfigDict, model_validator
 
 from ._models import RevalidatedModel
+from .refusal import RefusalError, Remedy
 from .units import Quantity
+
+_DRAWING_SOURCE = "the drawing's feature control frame as the designer called it out"
+_INSPECTION_SOURCE = "the inspection record's measured mating size of the feature"
+
+
+class _GdtInputError(RefusalError, ValueError):
+    """A GD&T input that cannot be used without correction."""
+
+
+def _gdt_refusal(message: str, *, subject: str, source: str) -> _GdtInputError:
+    return _GdtInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "Y14Edition",
@@ -234,14 +250,18 @@ class DatumReference(RevalidatedModel):
     def _well_formed(self) -> DatumReference:
         letter = self.letter.strip()
         if not letter or not letter.isalpha() or not letter.isupper():
-            raise ValueError(
-                f"a datum letter is one or more upper-case letters; got {self.letter!r}"
+            raise _gdt_refusal(
+                f"a datum letter is one or more upper-case letters; got {self.letter!r}",
+                subject="letter",
+                source=_DRAWING_SOURCE,
             )
         if self.boundary is not DatumBoundary.RMB and not self.is_feature_of_size:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"datum {letter} carries {self.boundary.value}, but a material boundary "
                 f"can only shift on a datum that is a feature of size; a datum plane has "
-                f"no boundary to shift"
+                f"no boundary to shift",
+                subject="boundary and is_feature_of_size",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -285,75 +305,105 @@ class FeatureControlFrame(RevalidatedModel):
     @model_validator(mode="after")
     def _legal(self) -> FeatureControlFrame:
         if not self.tolerance.has_dimension("[length]"):
-            raise ValueError(f"the tolerance must be a [length] quantity; got {self.tolerance}")
+            raise _gdt_refusal(
+                f"the tolerance must be a [length] quantity; got {self.tolerance}",
+                subject="tolerance",
+                source=_DRAWING_SOURCE,
+            )
         # `<= 0` is False for NaN, so a NaN tolerance walked past the positivity guard and
         # built a frame whose every downstream comparison then silently failed safe.
         if not isfinite(self.tolerance.magnitude) or self.tolerance.magnitude <= 0:
-            raise ValueError(
-                f"the tolerance must be a positive, finite length; got {self.tolerance}"
+            raise _gdt_refusal(
+                f"the tolerance must be a positive, finite length; got {self.tolerance}",
+                subject="tolerance",
+                source=_DRAWING_SOURCE,
             )
         family = self.characteristic.characteristic_class
         if self.edition is Y14Edition.Y14_5_2018 and self.characteristic in _REMOVED_IN_2018:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"{self.characteristic.value} was eliminated in {self.edition.value}; it "
                 f"exists only in {Y14Edition.Y14_5_2009.value}. Declare the earlier "
                 f"edition for a legacy drawing, or use position or runout, which is what "
-                f"the removal intended"
+                f"the removal intended",
+                subject="characteristic and edition",
+                source=_DRAWING_SOURCE,
             )
         required = _DATUMS_REQUIRED[family]
         if required is False and self.datums:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"{self.characteristic.value} is a form control — the surface against "
                 f"itself — and takes no datum reference; "
                 f"{[str(d) for d in self.datums]} was given. A form callout that needs a "
-                f"datum is an orientation callout"
+                f"datum is an orientation callout",
+                subject="characteristic and datums",
+                source=_DRAWING_SOURCE,
             )
         if required is True and not self.datums:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"{self.characteristic.value} is a relationship to a datum reference "
                 f"frame and none was given; a control of {family.value} without a datum "
-                f"does not say what it is relative to"
+                f"does not say what it is relative to",
+                subject="characteristic and datums",
+                source=_DRAWING_SOURCE,
             )
         if len(self.datums) > 3:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"a datum reference frame holds at most three references — three is what "
-                f"constrains six degrees of freedom — and {len(self.datums)} were given"
+                f"constrains six degrees of freedom — and {len(self.datums)} were given",
+                subject="datums",
+                source=_DRAWING_SOURCE,
             )
         letters = [d.letter for d in self.datums]
         if len(set(letters)) != len(letters):
-            raise ValueError(f"a datum letter appears twice in the frame: {letters}")
+            raise _gdt_refusal(
+                f"a datum letter appears twice in the frame: {letters}",
+                subject="datums",
+                source=_DRAWING_SOURCE,
+            )
         if (
             self.material_condition is not MaterialCondition.RFS
             and self.feature_type is not FeatureType.FEATURE_OF_SIZE
         ):
-            raise ValueError(
+            raise _gdt_refusal(
                 f"{self.material_condition.value} applies to a feature of size; this "
                 f"frame is applied to a {self.feature_type.value}, which has no material "
                 f"condition, so the modifier does not tighten the control — it fails to "
-                f"parse"
+                f"parse",
+                subject="material_condition and feature_type",
+                source=_DRAWING_SOURCE,
             )
         if FrameModifier.PROJECTED in self.modifiers:
             if family not in (CharacteristicClass.LOCATION, CharacteristicClass.ORIENTATION):
-                raise ValueError(
+                raise _gdt_refusal(
                     f"a projected tolerance zone controls a fastener's attitude above the "
                     f"surface, so it belongs on a position or orientation callout, not on "
-                    f"{self.characteristic.value}"
+                    f"{self.characteristic.value}",
+                    subject="characteristic and modifiers",
+                    source=_DRAWING_SOURCE,
                 )
             if self.feature_type is not FeatureType.FEATURE_OF_SIZE:
-                raise ValueError(
+                raise _gdt_refusal(
                     "a projected tolerance zone projects the axis of a feature of size; "
-                    "a surface has no axis to project"
+                    "a surface has no axis to project",
+                    subject="modifiers and feature_type",
+                    source=_DRAWING_SOURCE,
                 )
         if (
             FrameModifier.DIAMETER in self.modifiers
             and self.feature_type is not FeatureType.FEATURE_OF_SIZE
         ):
-            raise ValueError(
+            raise _gdt_refusal(
                 "a diametral tolerance zone is the zone of an axis, and a surface has no "
-                "axis; drop the Ø or apply the frame to a feature of size"
+                "axis; drop the Ø or apply the frame to a feature of size",
+                subject="modifiers and feature_type",
+                source=_DRAWING_SOURCE,
             )
         if len(set(self.modifiers)) != len(self.modifiers):
-            raise ValueError(f"a modifier appears twice: {[m.value for m in self.modifiers]}")
+            raise _gdt_refusal(
+                f"a modifier appears twice: {[m.value for m in self.modifiers]}",
+                subject="modifiers",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     @property
@@ -408,24 +458,40 @@ def position_stack_contribution(
     of anything; it is tolerance the drawing did not grant.
     """
     if frame.characteristic is not Characteristic.POSITION:
-        raise ValueError(
+        raise _gdt_refusal(
             f"this conversion is defined for a position tolerance; got "
             f"{frame.characteristic.value}. An orientation or form zone does not locate "
-            f"a feature and does not enter a location stack"
+            f"a feature and does not enter a location stack",
+            subject="frame",
+            source=_DRAWING_SOURCE,
         )
     total = frame.tolerance.to("mm").magnitude
     if bonus is not None:
         if frame.material_condition is not MaterialCondition.MMC:
-            raise ValueError(
+            raise _gdt_refusal(
                 f"a bonus tolerance is earned by departure from maximum material "
                 f"condition, and this frame is {frame.material_condition.value}; adding "
-                f"one would be tolerance the drawing did not grant"
+                f"one would be tolerance the drawing did not grant",
+                subject="frame and bonus",
+                source=_DRAWING_SOURCE,
             )
         if not isinstance(bonus, Quantity):
-            raise ValueError(f"bonus must be a [length] quantity; got {bonus!r}")
+            raise _gdt_refusal(
+                f"bonus must be a [length] quantity; got {bonus!r}",
+                subject="bonus",
+                source=_INSPECTION_SOURCE,
+            )
         if not bonus.has_dimension("[length]"):
-            raise ValueError(f"bonus must be a [length] quantity; got {bonus}")
+            raise _gdt_refusal(
+                f"bonus must be a [length] quantity; got {bonus}",
+                subject="bonus",
+                source=_INSPECTION_SOURCE,
+            )
         if bonus.magnitude < 0:
-            raise ValueError(f"bonus must be non-negative; got {bonus}")
+            raise _gdt_refusal(
+                f"bonus must be non-negative; got {bonus}",
+                subject="bonus",
+                source=_INSPECTION_SOURCE,
+            )
         total += bonus.to("mm").magnitude
     return Quantity(magnitude=total / 2.0, unit="mm")

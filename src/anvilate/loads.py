@@ -27,7 +27,27 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 from ._models import Named, Provenance, RevalidatedModel, cited, each_one
 from .derivation import Derivation, SymbolValue
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+
+_LOAD_CASE_SOURCE = "the structure's load cases, keyed by ASCE 7 load symbol"
+_COMBINATION_SOURCE = "the governing code's load-combination clauses, such as ASCE 7 2.3"
+_SEISMIC_SOURCE = "the site's seismic design parameters from the geotechnical report"
+_CAPACITY_SOURCE = "the member's design capacity and the project's required safety factor"
+
+
+class _LoadCombinationInputError(RefusalError, ValueError):
+    """A load-combination input that cannot be used without correction."""
+
+
+def _load_combination_refusal(
+    message: str, *, subject: str, source: str
+) -> _LoadCombinationInputError:
+    return _LoadCombinationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 # What the combination screen waits on when a force enters no combination. The same need the
 # screening module states for a document, spelled as the document's path.
@@ -97,11 +117,13 @@ def _every_key_is_a_nature(loads: Mapping[Any, float]) -> None:
             continue
         if isinstance(key, str) and key in _NATURE_SYMBOLS:
             continue  # the symbol itself: a StrEnum member and its value are one key
-        raise ValueError(
+        raise _load_combination_refusal(
             f"loads is keyed by load nature and {key!r} is not one. The keys are the ASCE "
             f"symbols — {', '.join(_NATURE_SYMBOLS)} — not the names beside them, so "
             f"{{'dead': ...}} supplies a load no combination factors and the demand comes "
-            f"back zero, which reads as a design with nothing on it"
+            f"back zero, which reads as a design with nothing on it",
+            subject="loads",
+            source=_LOAD_CASE_SOURCE,
         )
 
 
@@ -151,15 +173,19 @@ class LoadCombination(RevalidatedModel):
         for nature, factor in self.factors.items():
             value = loads.get(nature, 0.0)
             if not isfinite(value):
-                raise ValueError(
+                raise _load_combination_refusal(
                     f"the {nature.value} load is {value}, which is not a finite number; "
                     f"combination {self.name} cannot be evaluated. A non-finite load "
                     f"would be dropped from the envelope by max/min rather than "
-                    f"reported, so it is refused here"
+                    f"reported, so it is refused here",
+                    subject="loads",
+                    source=_LOAD_CASE_SOURCE,
                 )
             if not isfinite(factor):
-                raise ValueError(
-                    f"combination {self.name} has a non-finite factor on {nature.value}"
+                raise _load_combination_refusal(
+                    f"combination {self.name} has a non-finite factor on {nature.value}",
+                    subject="factors",
+                    source=_COMBINATION_SOURCE,
                 )
         return sum(factor * loads.get(nature, 0.0) for nature, factor in self.factors.items())
 
@@ -213,7 +239,11 @@ class CombinationSet(BaseModel):
         signed either way, so the caller still sees which direction governs.
         """
         if not self.combinations:
-            raise ValueError("an empty combination set has no governing combination")
+            raise _load_combination_refusal(
+                "an empty combination set has no governing combination",
+                subject="combinations",
+                source=_COMBINATION_SOURCE,
+            )
 
         def key(combination: LoadCombination) -> float:
             value = combination.evaluate(loads)
@@ -551,11 +581,17 @@ class CombinationEvidence(RevalidatedModel):
             ("governing", self.governing),
         ):
             if not value.strip():
-                raise ValueError(f"combination evidence must state its {field}")
+                raise _load_combination_refusal(
+                    f"combination evidence must state its {field}",
+                    subject="basis and governing",
+                    source=_COMBINATION_SOURCE,
+                )
         if not isfinite(self.demand_newtons):
-            raise ValueError(
+            raise _load_combination_refusal(
                 f"the governing demand is {self.demand_newtons}, which is not a finite "
-                "number; a non-finite demand is refused rather than recorded"
+                "number; a non-finite demand is refused rather than recorded",
+                subject="demand_newtons",
+                source=_LOAD_CASE_SOURCE,
             )
         return self
 

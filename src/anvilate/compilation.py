@@ -67,6 +67,26 @@ from .refusal import RefusalError, Remedy
 from .spec import SCHEMA_VERSION, DesignSpec, SpecValidationError, parse_spec
 from .units import Quantity, UnitError
 
+_BACKEND_SOURCE = "the local model server's configuration: model, loopback endpoint, timeout"
+_PROMPT_SOURCE = "the design intent statement for the part being compiled"
+_TASK_SET_SOURCE = "the versioned compilation task-set file and its reference fields"
+_RUN_SOURCE = "the evaluation run record: attempts, provenance, and scored outcomes"
+_POLICY_SOURCE = "the release policy's thresholds for this task-set version"
+
+
+class _CompilationInputError(RefusalError, ValueError):
+    """An intent-compilation input that cannot be used without correction."""
+
+
+def _compilation_input_refusal(
+    message: str, *, subject: str, source: str
+) -> _CompilationInputError:
+    return _CompilationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "CONSTRAINT_TAX_CITATION",
     "CompilationBackend",
@@ -208,13 +228,25 @@ def _validate_local_backend(
     *, model: object, endpoint: object, timeout: object, transport: object, backend: str
 ) -> None:
     if not isinstance(model, str) or not model.strip():
-        raise ValueError(f"{backend} model must be a nonblank local model name")
+        raise _compilation_input_refusal(
+            f"{backend} model must be a nonblank local model name",
+            subject="model",
+            source=_BACKEND_SOURCE,
+        )
     if len(model) > 1_024:
-        raise ValueError(f"{backend} model must be no longer than 1,024 characters")
+        raise _compilation_input_refusal(
+            f"{backend} model must be no longer than 1,024 characters",
+            subject="model",
+            source=_BACKEND_SOURCE,
+        )
     if not isinstance(timeout, int | float) or isinstance(timeout, bool):
         raise TypeError(f"{backend} timeout must be a number of seconds")
     if not 0 < timeout <= 600:
-        raise ValueError(f"{backend} timeout must be greater than 0 and at most 600 seconds")
+        raise _compilation_input_refusal(
+            f"{backend} timeout must be greater than 0 and at most 600 seconds",
+            subject="timeout",
+            source=_BACKEND_SOURCE,
+        )
     if not callable(transport):
         raise TypeError(f"{backend} transport must be callable")
     if not isinstance(endpoint, str):
@@ -230,13 +262,19 @@ def _validate_local_backend(
         or parsed.fragment
         or parsed.path not in {"", "/"}
     ):
-        raise ValueError(
-            f"{backend} endpoint must be an http(s) loopback origin such as http://127.0.0.1:8080"
+        raise _compilation_input_refusal(
+            f"{backend} endpoint must be an http(s) loopback origin such as http://127.0.0.1:8080",
+            subject="endpoint",
+            source=_BACKEND_SOURCE,
         )
     try:
         _ = parsed.port
     except ValueError as error:
-        raise ValueError(f"{backend} endpoint has an invalid port: {error}") from None
+        raise _compilation_input_refusal(
+            f"{backend} endpoint has an invalid port: {error}",
+            subject="endpoint",
+            source=_BACKEND_SOURCE,
+        ) from None
 
 
 def _reasoning_messages(prompt: str) -> list[dict[str, str]]:
@@ -530,14 +568,24 @@ class CompilationProvenance(StatableModel):
     def _reasoning_matches_the_pass_shape(self) -> CompilationProvenance:
         if self.configuration.mode is CompilationMode.TWO_PASS:
             if self.reasoning is None or not self.reasoning.strip():
-                raise ValueError("a two-pass compilation must retain its reasoning output")
+                raise _compilation_input_refusal(
+                    "a two-pass compilation must retain its reasoning output",
+                    subject="configuration and reasoning",
+                    source=_RUN_SOURCE,
+                )
         elif self.reasoning is not None:
-            raise ValueError("a single-pass fallback did not run a reasoning pass")
+            raise _compilation_input_refusal(
+                "a single-pass fallback did not run a reasoning pass",
+                subject="configuration and reasoning",
+                source=_RUN_SOURCE,
+            )
         expected_errors = self.attempts - 1 if self.succeeded else self.attempts
         if len(self.validation_errors) != expected_errors:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 "compilation provenance has one validation error per rejected attempt; "
-                f"got {len(self.validation_errors)} errors across {self.attempts} attempts"
+                f"got {len(self.validation_errors)} errors across {self.attempts} attempts",
+                subject="attempts, validation_errors, and succeeded",
+                source=_RUN_SOURCE,
             )
         return self
 
@@ -589,7 +637,9 @@ def compile_intent(
     it is never exposed as a candidate spec.
     """
     if not isinstance(prompt, str) or not prompt.strip():
-        raise ValueError("prompt must state the part to compile")
+        raise _compilation_input_refusal(
+            "prompt must state the part to compile", subject="prompt", source=_PROMPT_SOURCE
+        )
     mode = (
         CompilationMode.TWO_PASS
         if backend.supports_two_pass
@@ -603,7 +653,11 @@ def compile_intent(
     )
     reasoning = backend.reason(prompt) if mode is CompilationMode.TWO_PASS else None
     if reasoning is not None and not reasoning.strip():
-        raise ValueError("the two-pass backend returned no reasoning output to retain")
+        raise _compilation_input_refusal(
+            "the two-pass backend returned no reasoning output to retain",
+            subject="backend",
+            source=_BACKEND_SOURCE,
+        )
 
     schema = spec_json_schema()
     failures: list[str] = []
@@ -620,9 +674,11 @@ def compile_intent(
             continue
         try:
             if not isinstance(candidate, Mapping):
-                raise ValueError(
+                raise _compilation_input_refusal(
                     "constrained packaging must return a mapping for Spec IR; "
-                    f"got {type(candidate).__name__}"
+                    f"got {type(candidate).__name__}",
+                    subject="backend",
+                    source=_BACKEND_SOURCE,
                 )
             spec = parse_spec(dict(candidate))
         except (SpecValidationError, TypeError, ValueError) as invalid:
@@ -704,23 +760,33 @@ class CompilationOutcome(StatableModel):
     @model_validator(mode="after")
     def _valid_and_error_disagree(self) -> CompilationOutcome:
         if not self.task_id.strip():
-            raise ValueError("a compilation outcome must name the task it came from")
+            raise _compilation_input_refusal(
+                "a compilation outcome must name the task it came from",
+                subject="task_id",
+                source=_RUN_SOURCE,
+            )
         if self.schema_valid and self.parse_error is not None:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 f"task {self.task_id!r} is recorded as schema-valid and also carries a parse "
                 f"error ({self.parse_error!r}); one of the two is wrong, and which one "
-                "decides whether the constraint tax is being measured or hidden"
+                "decides whether the constraint tax is being measured or hidden",
+                subject="schema_valid and parse_error",
+                source=_RUN_SOURCE,
             )
         if not self.schema_valid and self.parse_error is None:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 f"task {self.task_id!r} is recorded as schema-invalid with no reason. The "
                 "reason is what tells a reader whether the compiler produced nothing or "
-                "produced something the schema refused"
+                "produced something the schema refused",
+                subject="schema_valid and parse_error",
+                source=_RUN_SOURCE,
             )
         if not self.fields:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 f"task {self.task_id!r} compared no fields; a task whose reference names "
-                "nothing cannot distinguish a right answer from a wrong one"
+                "nothing cannot distinguish a right answer from a wrong one",
+                subject="fields",
+                source=_RUN_SOURCE,
             )
         return self
 
@@ -789,13 +855,19 @@ class CompilationTask(RevalidatedModel):
     @model_validator(mode="after")
     def _has_something_to_check(self) -> CompilationTask:
         if not self.task_id.strip():
-            raise ValueError("a compilation task must have an id")
+            raise _compilation_input_refusal(
+                "a compilation task must have an id", subject="task_id", source=_TASK_SET_SOURCE
+            )
         if not self.prompt.strip():
-            raise ValueError(f"task {self.task_id!r} has no prompt")
+            raise _compilation_input_refusal(
+                f"task {self.task_id!r} has no prompt", subject="prompt", source=_TASK_SET_SOURCE
+            )
         if not self.reference:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 f"task {self.task_id!r} states no reference fields, so every output would "
-                "score as fully correct — including an empty one"
+                "score as fully correct — including an empty one",
+                subject="reference",
+                source=_TASK_SET_SOURCE,
             )
         return self
 
@@ -811,12 +883,24 @@ class CompilationTaskSet(RevalidatedModel):
     @model_validator(mode="after")
     def _is_a_named_nonempty_corpus(self) -> CompilationTaskSet:
         if _SEMVER.fullmatch(self.version) is None:
-            raise ValueError(f"compilation task-set version must be semantic; got {self.version!r}")
+            raise _compilation_input_refusal(
+                f"compilation task-set version must be semantic; got {self.version!r}",
+                subject="version",
+                source=_TASK_SET_SOURCE,
+            )
         if not self.tasks:
-            raise ValueError("a compilation task set with no tasks measures nothing")
+            raise _compilation_input_refusal(
+                "a compilation task set with no tasks measures nothing",
+                subject="tasks",
+                source=_TASK_SET_SOURCE,
+            )
         task_ids = [task.task_id for task in self.tasks]
         if len(set(task_ids)) != len(task_ids):
-            raise ValueError(f"the compilation task set repeats task ids: {sorted(task_ids)}")
+            raise _compilation_input_refusal(
+                f"the compilation task set repeats task ids: {sorted(task_ids)}",
+                subject="tasks",
+                source=_TASK_SET_SOURCE,
+            )
         return self
 
 
@@ -1138,19 +1222,27 @@ class CompilationReport(StatableModel):
     @model_validator(mode="after")
     def _measures_something(self) -> CompilationReport:
         if not self.outcomes:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 "a compilation report over no tasks has no numbers in it; an empty run is "
-                "reported as not run, not as a clean sheet"
+                "reported as not run, not as a clean sheet",
+                subject="outcomes",
+                source=_RUN_SOURCE,
             )
         if not self.configuration.strip():
-            raise ValueError(
+            raise _compilation_input_refusal(
                 "a compilation report must state how it was decoded. Validity and accuracy "
                 "both move with the pass structure, so a number without its configuration "
-                "cannot be compared with another one"
+                "cannot be compared with another one",
+                subject="configuration",
+                source=_RUN_SOURCE,
             )
         seen = [outcome.task_id for outcome in self.outcomes]
         if len(set(seen)) != len(seen):
-            raise ValueError(f"the report scores a task twice: {sorted(seen)}")
+            raise _compilation_input_refusal(
+                f"the report scores a task twice: {sorted(seen)}",
+                subject="outcomes",
+                source=_RUN_SOURCE,
+            )
         return self
 
     @property
@@ -1230,10 +1322,12 @@ def score_task_set(
         if task.task_id not in candidates and task.task_id not in errors
     ]
     if missing:
-        raise ValueError(
+        raise _compilation_input_refusal(
             f"{len(missing)} task(s) have neither a candidate nor a parse error: {missing}. "
             "A skipped task is not a task that scored zero, and dropping it silently "
-            "reports the remaining tasks' numbers as the run's"
+            "reports the remaining tasks' numbers as the run's",
+            subject="tasks, candidates, and parse_errors",
+            source=_RUN_SOURCE,
         )
     return CompilationReport(
         outcomes=tuple(
@@ -1261,18 +1355,24 @@ class CompilationAttempt(StatableModel):
     @model_validator(mode="after")
     def _is_exactly_one_outcome(self) -> CompilationAttempt:
         if (self.result is None) == (self.failure is None):
-            raise ValueError(
-                f"compilation attempt {self.task_id!r} must carry exactly one of result or failure"
+            raise _compilation_input_refusal(
+                f"compilation attempt {self.task_id!r} must carry exactly one of result or failure",
+                subject="result and failure",
+                source=_RUN_SOURCE,
             )
         if self.result is not None:
             if self.error is not None or not self.result.provenance.succeeded:
-                raise ValueError(
-                    f"successful compilation attempt {self.task_id!r} cannot carry a failure"
+                raise _compilation_input_refusal(
+                    f"successful compilation attempt {self.task_id!r} cannot carry a failure",
+                    subject="result and error",
+                    source=_RUN_SOURCE,
                 )
         elif self.error is None or self.failure is None or self.failure.succeeded:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 f"failed compilation attempt {self.task_id!r} needs an unsuccessful "
-                "provenance record and its error"
+                "provenance record and its error",
+                subject="failure and error",
+                source=_RUN_SOURCE,
             )
         return self
 
@@ -1291,9 +1391,11 @@ class CompilationEvaluation(StatableModel):
         attempted = tuple(attempt.task_id for attempt in self.attempts)
         reported = tuple(outcome.task_id for outcome in self.report.outcomes)
         if attempted != reported:
-            raise ValueError(
+            raise _compilation_input_refusal(
                 "compilation evaluation attempts and report outcomes differ: "
-                f"attempted {attempted}, reported {reported}"
+                f"attempted {attempted}, reported {reported}",
+                subject="attempts and report",
+                source=_RUN_SOURCE,
             )
         return self
 
@@ -1313,7 +1415,11 @@ class CompilationRecommendationPolicy(StatableModel):
     @classmethod
     def _version_is_semantic(cls, value: str) -> str:
         if _SEMVER.fullmatch(value) is None:
-            raise ValueError("recommendation policy task-set version must be semantic (X.Y.Z)")
+            raise _compilation_input_refusal(
+                "recommendation policy task-set version must be semantic (X.Y.Z)",
+                subject="task_set_version",
+                source=_POLICY_SOURCE,
+            )
         return value
 
 
@@ -1334,8 +1440,10 @@ class CompilationRecommendation(StatableModel):
     @model_validator(mode="after")
     def _decision_matches_its_reasons(self) -> CompilationRecommendation:
         if self.recommended == bool(self.reasons):
-            raise ValueError(
-                "a recommended model has no failing gates; a refusal names at least one"
+            raise _compilation_input_refusal(
+                "a recommended model has no failing gates; a refusal names at least one",
+                subject="recommended and reasons",
+                source=_RUN_SOURCE,
             )
         return self
 
@@ -1374,9 +1482,11 @@ def assess_compilation_recommendation(
 ) -> CompilationRecommendation:
     """Apply every declared gate to complete, current evidence for one model configuration."""
     if evaluation.task_set_version != policy.task_set_version:
-        raise ValueError(
+        raise _compilation_input_refusal(
             "compilation evidence is stale for this recommendation policy: "
-            f"run {evaluation.task_set_version}, policy {policy.task_set_version}"
+            f"run {evaluation.task_set_version}, policy {policy.task_set_version}",
+            subject="evaluation and policy",
+            source=_POLICY_SOURCE,
         )
 
     configurations = tuple(
@@ -1387,11 +1497,17 @@ def assess_compilation_recommendation(
     )
     configuration = configurations[0]
     if any(candidate != configuration for candidate in configurations[1:]):
-        raise ValueError("recommendation evidence contains more than one decoding configuration")
+        raise _compilation_input_refusal(
+            "recommendation evidence contains more than one decoding configuration",
+            subject="evaluation",
+            source=_RUN_SOURCE,
+        )
     if configuration.schema_version != SCHEMA_VERSION:
-        raise ValueError(
+        raise _compilation_input_refusal(
             "compilation evidence uses stale Spec IR schema "
-            f"{configuration.schema_version}; current schema is {SCHEMA_VERSION}"
+            f"{configuration.schema_version}; current schema is {SCHEMA_VERSION}",
+            subject="evaluation",
+            source=_RUN_SOURCE,
         )
 
     report = evaluation.report
@@ -1438,7 +1554,11 @@ def evaluate_task_set(
     """
     issues = task_set_issues(task_set)
     if issues:
-        raise ValueError("the compilation task set is stale: " + "; ".join(issues))
+        raise _compilation_input_refusal(
+            "the compilation task set is stale: " + "; ".join(issues),
+            subject="task_set",
+            source=_TASK_SET_SOURCE,
+        )
 
     attempts: list[CompilationAttempt] = []
     candidates: dict[str, DesignSpec] = {}
@@ -1465,7 +1585,11 @@ def evaluate_task_set(
 
     first = configurations[0]
     if any(configuration != first for configuration in configurations[1:]):
-        raise ValueError("one evaluation run produced more than one decoding configuration")
+        raise _compilation_input_refusal(
+            "one evaluation run produced more than one decoding configuration",
+            subject="backend",
+            source=_BACKEND_SOURCE,
+        )
     label = (
         f"task set {task_set.version}; backend {first.backend}; model {first.model}; "
         f"{first.mode.value}; schema {first.schema_version}; retry budget {first.retry_budget}"

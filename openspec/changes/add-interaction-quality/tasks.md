@@ -21,7 +21,7 @@
 
 ## 2. Message quality
 
-- [ ] 2.1 Remedy field on every refusal: the action, its concrete subject, and where a
+- [x] 2.1 Remedy field on every refusal: the action, its concrete subject, and where a
       value may come from — progress: every gap the library builds through
       `ScorecardEntry.from_safety_factor` states its reason and the field to declare
       (`unavailable=`, 34 call sites, held by a gate in tests/conftest.py). Raised
@@ -170,6 +170,14 @@
       `Quantity._unsupported` built its error in one place and raised it in another. That
       leaves 618 sites in 45 core files (packs, spec IR, ingest, CLI-facing exporters),
       some of them internal invariants rather than refusals of input.
+      **Closed 2026-10-03:** the core modules followed (packs, spec IR, ingest, compilation,
+      geometry, exporters, attestation, callouts, GD&T, budgets, exploration, profiles,
+      the dependency graph, interop, evals, and fifteen smaller modules). Every refusal a
+      caller's input can reach now raises a `RefusalError` that is still a `ValueError`. The
+      ledger keeps 21 sites in 9 files, each named in its header with the reason no input
+      reaches it: checks on the library's own bundled tables and pinned workbook, its own
+      tool catalogue, STEP-writer and glyph self-checks, and refusal.py's two guards on
+      building a remedy. A new bare refusal anywhere fails the ledger test.
       refusal.py's own two refusals (a blank rendered remedy, a refusal with no remedies) stay:
       they guard the construction of a remedy, so they cannot carry one.
       tests/test_refusal_remedies_analysis.py pins one or two exact remedies per module and

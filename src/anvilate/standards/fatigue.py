@@ -38,7 +38,57 @@ from typing import TYPE_CHECKING
 from pydantic import ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel, cited
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_DATASET_SOURCE = "the fatigue dataset's citation: publisher, version, license, and DOI or URL"
+_SPECIMEN_SOURCE = "the fatigue test report's specimen and test-condition description"
+_CURVE_SOURCE = "the dataset's published S-N curve fit (slopes, reference points, cutoff)"
+_DETAIL_SOURCE = "the cited standard's detail category table, e.g. EN 1993-1-9 Tables 8.1-8.10"
+
+
+class _FatigueRecordInputError(RefusalError, ValueError):
+    """A fatigue record input that cannot be used without correction."""
+
+
+def _fatigue_record_refusal(message: str, *, subject: str, source: str) -> _FatigueRecordInputError:
+    return _FatigueRecordInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fatigue_record_input_source(name: str) -> str:
+    if name in {
+        "dataset",
+        "doi",
+        "license",
+        "name",
+        "provenance",
+        "retrieved",
+        "specimen_count",
+        "url",
+        "version",
+    }:
+        return _DATASET_SOURCE
+    if name in {
+        "environment",
+        "geometry",
+        "loading_mode",
+        "material",
+        "specimen",
+        "stress_concentration_factor",
+        "stress_ratio",
+        "stress_ratio_independent",
+        "surface_finish",
+        "temperature",
+        "thickness",
+    }:
+        return _SPECIMEN_SOURCE
+    if name in {"description", "detail_category", "edition", "standard", "stress_kind", "table"}:
+        return _DETAIL_SOURCE
+    return _CURVE_SOURCE
+
 
 __all__ = [
     "CurveSurvival",
@@ -128,14 +178,24 @@ class DatasetProvenance(RevalidatedModel):
             (self.retrieved, "retrieved"),
         ):
             if not value.strip():
-                raise ValueError(f"a fatigue dataset record needs a {name}")
+                raise _fatigue_record_refusal(
+                    f"a fatigue dataset record needs a {name}",
+                    subject="dataset, version, license, and retrieved",
+                    source=_DATASET_SOURCE,
+                )
         if not (self.doi or self.url):
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"{self.dataset}: a fatigue curve needs a doi or a url. A curve nobody can "
-                "retrieve is a number somebody typed"
+                "retrieve is a number somebody typed",
+                subject="doi and url",
+                source=_DATASET_SOURCE,
             )
         if self.specimen_count is not None and self.specimen_count <= 0:
-            raise ValueError(f"{self.dataset}: specimen_count must be positive")
+            raise _fatigue_record_refusal(
+                f"{self.dataset}: specimen_count must be positive",
+                subject="specimen_count",
+                source=_DATASET_SOURCE,
+            )
         return self
 
 
@@ -166,38 +226,60 @@ class SpecimenMetadata(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> SpecimenMetadata:
         if not self.material.strip():
-            raise ValueError("a fatigue specimen record needs a material")
+            raise _fatigue_record_refusal(
+                "a fatigue specimen record needs a material",
+                subject="material",
+                source=_SPECIMEN_SOURCE,
+            )
         if not self.environment.strip():
-            raise ValueError(f"{self.material}: a fatigue specimen record needs an environment")
+            raise _fatigue_record_refusal(
+                f"{self.material}: a fatigue specimen record needs an environment",
+                subject="environment",
+                source=_SPECIMEN_SOURCE,
+            )
         if not self.temperature.has_dimension("[temperature]"):
-            raise ValueError(
-                f"{self.material}: temperature must be a temperature; got {self.temperature}"
+            raise _fatigue_record_refusal(
+                f"{self.material}: temperature must be a temperature; got {self.temperature}",
+                subject="temperature",
+                source=_SPECIMEN_SOURCE,
             )
         if self.stress_ratio_independent and self.stress_ratio is not None:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"{self.material}: the curve is declared stress-ratio independent and also "
                 "carries an R. One of the two is wrong, and guessing which would put a "
-                "mean-stress correction on a curve that already includes one"
+                "mean-stress correction on a curve that already includes one",
+                subject="stress_ratio and stress_ratio_independent",
+                source=_SPECIMEN_SOURCE,
             )
         if not self.stress_ratio_independent and self.stress_ratio is None:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"{self.material}: a fatigue curve needs its stress ratio R. The difference "
                 "between an R = 0 and an R = −1 curve is the whole subject of mean-stress "
-                "correction, and a curve that does not say which it is cannot be corrected"
+                "correction, and a curve that does not say which it is cannot be corrected",
+                subject="stress_ratio and stress_ratio_independent",
+                source=_SPECIMEN_SOURCE,
             )
         if self.stress_ratio is not None and not isfinite(self.stress_ratio):
             # R = −inf is a real cycle (peak at zero), but it is not a value this record
             # can carry through arithmetic, so it is declined rather than stored.
-            raise ValueError(
-                f"{self.material}: stress_ratio must be finite; got {self.stress_ratio}"
+            raise _fatigue_record_refusal(
+                f"{self.material}: stress_ratio must be finite; got {self.stress_ratio}",
+                subject="stress_ratio",
+                source=_SPECIMEN_SOURCE,
             )
         if self.stress_concentration_factor is not None and self.stress_concentration_factor < 1:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"{self.material}: a stress concentration factor is at least 1; got "
-                f"{self.stress_concentration_factor}"
+                f"{self.stress_concentration_factor}",
+                subject="stress_concentration_factor",
+                source=_SPECIMEN_SOURCE,
             )
         if self.thickness is not None and not self.thickness.has_dimension("[length]"):
-            raise ValueError(f"{self.material}: thickness must be a length; got {self.thickness}")
+            raise _fatigue_record_refusal(
+                f"{self.material}: thickness must be a length; got {self.thickness}",
+                subject="thickness",
+                source=_SPECIMEN_SOURCE,
+            )
         return self
 
 
@@ -219,23 +301,35 @@ class FatigueSegment(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> FatigueSegment:
         if not isfinite(self.slope) or self.slope <= 0:
-            raise ValueError(f"the S-N slope m must be positive and finite; got {self.slope}")
+            raise _fatigue_record_refusal(
+                f"the S-N slope m must be positive and finite; got {self.slope}",
+                subject="slope",
+                source=_CURVE_SOURCE,
+            )
         if not self.reference_stress_range.has_dimension("[pressure]"):
-            raise ValueError(
-                f"reference_stress_range must be a stress; got {self.reference_stress_range}"
+            raise _fatigue_record_refusal(
+                f"reference_stress_range must be a stress; got {self.reference_stress_range}",
+                subject="reference_stress_range",
+                source=_CURVE_SOURCE,
             )
         magnitude = self.reference_stress_range.to("MPa").magnitude
         if not isfinite(magnitude) or magnitude <= 0:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"reference_stress_range must be positive and finite; got "
-                f"{self.reference_stress_range}"
+                f"{self.reference_stress_range}",
+                subject="reference_stress_range",
+                source=_CURVE_SOURCE,
             )
         for value, name in (
             (self.reference_cycles, "reference_cycles"),
             (self.max_cycles, "max_cycles"),
         ):
             if not isfinite(value) or value <= 0:
-                raise ValueError(f"{name} must be positive and finite; got {value}")
+                raise _fatigue_record_refusal(
+                    f"{name} must be positive and finite; got {value}",
+                    subject=name,
+                    source=_fatigue_record_input_source(name),
+                )
         return self
 
     def stress_range_at(self, cycles: float) -> Quantity:
@@ -269,16 +363,26 @@ class FatigueCurve(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> FatigueCurve:
         if not self.segments:
-            raise ValueError("a fatigue curve needs at least one segment")
+            raise _fatigue_record_refusal(
+                "a fatigue curve needs at least one segment",
+                subject="segments",
+                source=_CURVE_SOURCE,
+            )
         if not isfinite(self.min_cycles) or self.min_cycles <= 0:
-            raise ValueError(f"min_cycles must be positive and finite; got {self.min_cycles}")
+            raise _fatigue_record_refusal(
+                f"min_cycles must be positive and finite; got {self.min_cycles}",
+                subject="min_cycles",
+                source=_CURVE_SOURCE,
+            )
         previous = self.min_cycles
         for index, segment in enumerate(self.segments):
             if segment.max_cycles <= previous:
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"segment {index} ends at {segment.max_cycles:g} cycles, which is not "
                     f"beyond where the previous branch ended ({previous:g}). Segments run "
-                    "in ascending order and each one has to cover ground"
+                    "in ascending order and each one has to cover ground",
+                    subject="segments and min_cycles",
+                    source=_CURVE_SOURCE,
                 )
             previous = segment.max_cycles
         for index in range(len(self.segments) - 1):
@@ -288,16 +392,20 @@ class FatigueCurve(RevalidatedModel):
             # A relative tolerance, because the two branches are computed through different
             # fractional powers and will not agree to the last bit.
             if abs(here - there) > 1e-9 * max(here, there):
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"the curve jumps at {breakpoint_cycles:g} cycles: branch {index} ends at "
                     f"{here:.6g} MPa and branch {index + 1} starts at {there:.6g} MPa. A "
                     "discontinuous curve answers a query by which side of a float comparison "
-                    "it lands on"
+                    "it lands on",
+                    subject="segments",
+                    source=_CURVE_SOURCE,
                 )
         if self.cutoff_stress_range is not None:
             if not self.cutoff_stress_range.has_dimension("[pressure]"):
-                raise ValueError(
-                    f"cutoff_stress_range must be a stress; got {self.cutoff_stress_range}"
+                raise _fatigue_record_refusal(
+                    f"cutoff_stress_range must be a stress; got {self.cutoff_stress_range}",
+                    subject="cutoff_stress_range",
+                    source=_CURVE_SOURCE,
                 )
             cutoff = self.cutoff_stress_range.to("MPa").magnitude
             if not isfinite(cutoff) or cutoff <= 0:
@@ -306,17 +414,21 @@ class FatigueCurve(RevalidatedModel):
                 # range that compares False against every limit it meets. Zero and negative
                 # are worse for being plausible-looking: a cutoff of zero says every stress
                 # range survives forever.
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"the cutoff must be a positive finite stress; got "
                     f"{self.cutoff_stress_range}. A cutoff of zero says every stress range "
                     "survives forever, and a NaN one compares False against every limit it "
-                    "is checked against"
+                    "is checked against",
+                    subject="cutoff_stress_range",
+                    source=_CURVE_SOURCE,
                 )
             last = self.segments[-1].stress_range_at(self.segments[-1].max_cycles)
             if cutoff > last.to("MPa").magnitude * (1 + 1e-9):
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"the cutoff ({self.cutoff_stress_range}) sits above where the curve ends "
-                    f"({last}). A cutoff is the floor the curve runs down to, not a step up"
+                    f"({last}). A cutoff is the floor the curve runs down to, not a step up",
+                    subject="segments and cutoff_stress_range",
+                    source=_CURVE_SOURCE,
                 )
         return self
 
@@ -359,7 +471,9 @@ class FatigueRecord(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> FatigueRecord:
         if not self.name.strip():
-            raise ValueError("a fatigue record needs a name")
+            raise _fatigue_record_refusal(
+                "a fatigue record needs a name", subject="name", source=_DATASET_SOURCE
+            )
         return self
 
     def allowable_stress_range(
@@ -490,17 +604,25 @@ class WeldDetailCategory(RevalidatedModel):
             ("description", self.description),
         ):
             if not value.strip():
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"a weld detail category must state its {field}; a bare number is a "
-                    "curve label, not a detail"
+                    "curve label, not a detail",
+                    subject="table and description",
+                    source=_DETAIL_SOURCE,
                 )
         if not self.detail_category.has_dimension("[pressure]"):
-            raise ValueError(f"detail_category must be a stress range; got {self.detail_category}")
+            raise _fatigue_record_refusal(
+                f"detail_category must be a stress range; got {self.detail_category}",
+                subject="detail_category",
+                source=_DETAIL_SOURCE,
+            )
         value = self.detail_category.to("MPa").magnitude
         if not isfinite(value) or value <= 0:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"detail_category must be a positive, finite stress range; got "
-                f"{self.detail_category}"
+                f"{self.detail_category}",
+                subject="detail_category",
+                source=_DETAIL_SOURCE,
             )
         if (
             self.standard.startswith(_EN1993_STANDARD_PREFIX)
@@ -509,12 +631,14 @@ class WeldDetailCategory(RevalidatedModel):
             ladder = EN1993_NORMAL_DETAIL_CATEGORIES
             if not any(abs(value - c) < 1e-9 for c in ladder):
                 near = sorted(ladder, key=lambda c: abs(c - value))[:2]
-                raise ValueError(
+                raise _fatigue_record_refusal(
                     f"{value:g} MPa is not an {_EN1993_STANDARD_PREFIX} direct-stress "
                     f"detail category. The standard tabulates details into a fixed ladder "
                     f"and defines no curve between the rungs; the nearest are "
                     f"{sorted(near)}. If this came from a National Annex or another "
-                    f"standard, declare that standard instead of interpolating this one"
+                    f"standard, declare that standard instead of interpolating this one",
+                    subject="standard, detail_category, and stress_kind",
+                    source=_DETAIL_SOURCE,
                 )
         return self
 
@@ -527,11 +651,13 @@ class WeldDetailCategory(RevalidatedModel):
         unconservative direction at every range above the knee.
         """
         if self.stress_kind is not WeldStressKind.NORMAL:
-            raise ValueError(
+            raise _fatigue_record_refusal(
                 f"{self.description!r} is a {self.stress_kind.value}-stress category, and "
                 "this module builds the direct-stress curve only. The shear family runs at "
                 "a single slope of m = 5 with no knee at 5 million cycles, so the "
-                "direct-stress construction would over-state its life"
+                "direct-stress construction would over-state its life",
+                subject="stress_kind",
+                source=_DETAIL_SOURCE,
             )
         return en1993_detail_category_curve(self.detail_category)
 
@@ -555,12 +681,24 @@ def en1993_detail_category_curve(detail_category: Quantity) -> FatigueCurve:
     from the standard directly, and the two are compared in the test suite.
     """
     if not isinstance(detail_category, Quantity):
-        raise ValueError(f"detail_category must be a [pressure] quantity; got {detail_category!r}")
+        raise _fatigue_record_refusal(
+            f"detail_category must be a [pressure] quantity; got {detail_category!r}",
+            subject="detail_category",
+            source=_DETAIL_SOURCE,
+        )
     if not detail_category.has_dimension("[pressure]"):
-        raise ValueError(f"detail_category must be a stress; got {detail_category}")
+        raise _fatigue_record_refusal(
+            f"detail_category must be a stress; got {detail_category}",
+            subject="detail_category",
+            source=_DETAIL_SOURCE,
+        )
     reference = detail_category.to("MPa").magnitude
     if not isfinite(reference) or reference <= 0:
-        raise ValueError(f"detail_category must be positive and finite; got {detail_category}")
+        raise _fatigue_record_refusal(
+            f"detail_category must be positive and finite; got {detail_category}",
+            subject="detail_category",
+            source=_DETAIL_SOURCE,
+        )
     high = FatigueSegment(
         slope=_EN1993_SLOPE_HIGH,
         reference_stress_range=Quantity(magnitude=reference, unit="MPa"),

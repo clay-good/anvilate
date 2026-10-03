@@ -16,8 +16,23 @@ from typing import Literal
 from pydantic import ConfigDict
 
 from .._models import Provenance, RevalidatedModel, parse_yaml
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .general import ToleranceRangeError
+
+_DRAWING_SOURCE = "the drawing's nominal size and its ISO 286 tolerance callout"
+
+
+class _Iso286InputError(RefusalError, ValueError):
+    """An ISO 286 fit input that cannot be used without correction."""
+
+
+def _iso286_refusal(message: str, *, subject: str, source: str) -> _Iso286InputError:
+    return _Iso286InputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "StandardTolerance",
@@ -59,7 +74,11 @@ def _parse_grade(grade: int | str) -> int:
     try:
         return int(token)
     except ValueError:
-        raise ValueError(f"unrecognized IT grade {grade!r}; expected e.g. 7 or 'IT7'") from None
+        raise _iso286_refusal(
+            f"unrecognized IT grade {grade!r}; expected e.g. 7 or 'IT7'",
+            subject="grade",
+            source=_DRAWING_SOURCE,
+        ) from None
 
 
 _TABLE: dict | None = None
@@ -92,7 +111,11 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
     grade string.
     """
     if not isinstance(nominal, Quantity):
-        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
+        raise _iso286_refusal(
+            f"nominal must be a [length] quantity; got {nominal!r}",
+            subject="nominal",
+            source=_DRAWING_SOURCE,
+        )
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"standard tolerance needs a length; got {nominal.dimensionality} ({nominal})",
@@ -315,8 +338,10 @@ def _parse_designation(designation: str) -> tuple[str, str]:
         cut += 1
     letter, grade = token[:cut], token[cut:]
     if not letter or not grade:
-        raise ValueError(
-            f"malformed ISO 286 zone {designation!r}; expected a letter and grade, e.g. 'H7'"
+        raise _iso286_refusal(
+            f"malformed ISO 286 zone {designation!r}; expected a letter and grade, e.g. 'H7'",
+            subject="designation",
+            source=_DRAWING_SOURCE,
         )
     return letter, grade
 
@@ -488,14 +513,18 @@ def fit(designation: str, nominal: Quantity) -> Fit:
     """
     parts = [p for p in designation.split("/") if p.strip()]
     if len(parts) != 2:
-        raise ValueError(
-            f"malformed fit {designation!r}; expected a hole and shaft zone, e.g. 'H7/h6'"
+        raise _iso286_refusal(
+            f"malformed fit {designation!r}; expected a hole and shaft zone, e.g. 'H7/h6'",
+            subject="designation",
+            source=_DRAWING_SOURCE,
         )
     hole = zone_limits(parts[0].strip(), nominal)
     shaft = zone_limits(parts[1].strip(), nominal)
     if not hole.hole or shaft.hole:
-        raise ValueError(
-            f"fit {designation!r} must be hole/shaft (uppercase then lowercase), e.g. 'H7/h6'"
+        raise _iso286_refusal(
+            f"fit {designation!r} must be hole/shaft (uppercase then lowercase), e.g. 'H7/h6'",
+            subject="designation",
+            source=_DRAWING_SOURCE,
         )
     min_clearance = _clearance(hole.lower, shaft.upper)
     max_clearance = _clearance(hole.upper, shaft.lower)

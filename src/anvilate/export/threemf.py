@@ -31,7 +31,24 @@ from math import isfinite
 from xml.sax.saxutils import escape, quoteattr
 
 from .. import __version__
+from ..refusal import RefusalError, Remedy
 from .gate import ExportAuthorization
+
+_MESH_SOURCE = "the part's tessellated CAD model (vertices and triangles in mm)"
+_PART_MARK_SOURCE = "the part number on the part's drawing"
+_EXPORT_GATE_SOURCE = "the authorization authorize_export issued for this part's scorecard"
+
+
+class _ThreemfInputError(RefusalError, ValueError):
+    """A 3MF export input that cannot be used without correction."""
+
+
+def _threemf_refusal(message: str, *, subject: str, source: str) -> _ThreemfInputError:
+    return _ThreemfInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = ["THREEMF_STANDARD", "render_mesh_3mf"]
 
@@ -74,18 +91,22 @@ def _closed_and_oriented(triangles: Sequence[tuple[int, int, int]]) -> None:
     for index, (a, b, c) in enumerate(triangles):
         for edge in ((a, b), (b, c), (c, a)):
             if edge in directed:
-                raise ValueError(
+                raise _threemf_refusal(
                     f"triangles {directed[edge]} and {index} both run edge {edge[0]}->"
                     f"{edge[1]} the same way, so one of them faces inward or the surface "
-                    "folds; a 3MF mesh has to be consistently oriented"
+                    "folds; a 3MF mesh has to be consistently oriented",
+                    subject="triangles",
+                    source=_MESH_SOURCE,
                 )
             directed[edge] = index
     for (a, b), index in directed.items():
         if (b, a) not in directed:
-            raise ValueError(
+            raise _threemf_refusal(
                 f"edge {a}-{b} of triangle {index} has no triangle on its other side, so the "
                 "mesh is open there; a 3MF mesh has to be closed for a printer to know what "
-                "is inside it"
+                "is inside it",
+                subject="triangles",
+                source=_MESH_SOURCE,
             )
 
 
@@ -107,30 +128,50 @@ def render_mesh_3mf(
     consistently oriented.
     """
     if not isinstance(authorization, ExportAuthorization):
-        raise ValueError(f"authorization must be an ExportAuthorization; got {authorization!r}")
+        raise _threemf_refusal(
+            f"authorization must be an ExportAuthorization; got {authorization!r}",
+            subject="authorization",
+            source=_EXPORT_GATE_SOURCE,
+        )
     if not isinstance(name, str) or not name.strip():
-        raise ValueError("name must label the object; got an empty name")
+        raise _threemf_refusal(
+            "name must label the object; got an empty name",
+            subject="name",
+            source=_PART_MARK_SOURCE,
+        )
     points = [tuple(vertex) for vertex in vertices]
     faces = [tuple(triangle) for triangle in triangles]
     if len(points) < 4 or len(faces) < 4:
-        raise ValueError(
+        raise _threemf_refusal(
             f"a closed mesh needs at least 4 vertices and 4 triangles; got {len(points)} "
-            f"and {len(faces)}"
+            f"and {len(faces)}",
+            subject="vertices and triangles",
+            source=_MESH_SOURCE,
         )
     for index, point in enumerate(points):
         if len(point) != 3 or not all(
             isinstance(c, int | float) and not isinstance(c, bool) and isfinite(c) for c in point
         ):
-            raise ValueError(f"vertex {index} must be three finite numbers in mm; got {point}")
+            raise _threemf_refusal(
+                f"vertex {index} must be three finite numbers in mm; got {point}",
+                subject="vertices",
+                source=_MESH_SOURCE,
+            )
     for index, face in enumerate(faces):
         if len(face) != 3 or not all(
             isinstance(v, int) and not isinstance(v, bool) and 0 <= v < len(points) for v in face
         ):
-            raise ValueError(
-                f"triangle {index} must name three of the {len(points)} vertices; got {face}"
+            raise _threemf_refusal(
+                f"triangle {index} must name three of the {len(points)} vertices; got {face}",
+                subject="triangles",
+                source=_MESH_SOURCE,
             )
         if len(set(face)) != 3:
-            raise ValueError(f"triangle {index} repeats a vertex {face}, so it has no area")
+            raise _threemf_refusal(
+                f"triangle {index} repeats a vertex {face}, so it has no area",
+                subject="triangles",
+                source=_MESH_SOURCE,
+            )
     _closed_and_oriented(faces)  # type: ignore[arg-type]
 
     writer = f"anvilate {__version__} (anvilate.export.threemf)"

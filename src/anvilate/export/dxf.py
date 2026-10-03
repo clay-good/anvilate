@@ -30,8 +30,58 @@ from pydantic import ConfigDict, field_validator
 
 from .._models import RevalidatedModel, each_one
 from ..gdt import FeatureControlFrame
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .gate import ExportAuthorization
+
+_PLATE_DRAWING_SOURCE = "the plate's fabrication drawing (outline, corner radius, holes, slots)"
+_HOLE_PATTERN_SOURCE = "the hole-pattern drawing (bolt circle, pitch, counts, hole size)"
+_GEAR_DESIGN_SOURCE = "the gear's design record (outside, pitch, root, and bore diameters)"
+_PLATE_MATERIAL_SOURCE = "the plate material's datasheet (thickness and density)"
+_BUILT_PART_SOURCE = "the part's built geometry from its audited design spec"
+_FRAME_SOURCE = "the drawing's feature control frame and its text style"
+
+
+class _DxfInputError(RefusalError, ValueError):
+    """A DXF export input that cannot be used without correction."""
+
+
+def _dxf_refusal(message: str, *, subject: str, source: str) -> _DxfInputError:
+    return _DxfInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _dxf_input_source(name: str) -> str:
+    if name in {"authorization", "geometry", "keepouts"}:
+        return _BUILT_PART_SOURCE
+    if name in {
+        "angle",
+        "bolt_circle_diameter",
+        "center_x",
+        "center_y",
+        "columns",
+        "count",
+        "hole_diameter",
+        "origin_x",
+        "origin_y",
+        "pitch",
+        "rows",
+        "start_angle",
+        "start_x",
+        "start_y",
+        "x_pitch",
+        "y_pitch",
+    }:
+        return _HOLE_PATTERN_SOURCE
+    if name in {"density", "thickness"}:
+        return _PLATE_MATERIAL_SOURCE
+    if name in {"bore_diameter", "outside_diameter", "pitch_diameter", "root_diameter"}:
+        return _GEAR_DESIGN_SOURCE
+    if name in {"frame", "origin", "text_height"}:
+        return _FRAME_SOURCE
+    return _PLATE_DRAWING_SOURCE
 
 
 @contextmanager
@@ -104,11 +154,17 @@ def _corner_radius_mm(corner_radius: Quantity | None, w: float, h: float) -> flo
         return 0.0
     r = _mm(corner_radius, "corner_radius")
     if r < 0:
-        raise ValueError(f"corner_radius must be non-negative; got {corner_radius}")
+        raise _dxf_refusal(
+            f"corner_radius must be non-negative; got {corner_radius}",
+            subject="corner_radius",
+            source=_PLATE_DRAWING_SOURCE,
+        )
     if 2 * r >= min(w, h):
-        raise ValueError(
+        raise _dxf_refusal(
             f"corner_radius ({corner_radius}) must be under half the shorter plate side "
-            f"({w} x {h} mm)"
+            f"({w} x {h} mm)",
+            subject="corner_radius, width, and height",
+            source=_PLATE_DRAWING_SOURCE,
         )
     return r
 
@@ -179,7 +235,11 @@ def render_geometry_dxf(
     from ..geometry import BASE_PLATE_PATTERN, COVER_PLATE_PATTERN
 
     if not geometry.is_valid:
-        raise ValueError("DXF export needs one valid positive-volume built solid")
+        raise _dxf_refusal(
+            "DXF export needs one valid positive-volume built solid",
+            subject="geometry",
+            source=_BUILT_PART_SOURCE,
+        )
 
     ezdxf = _require_ezdxf()
     doc = ezdxf.new()
@@ -221,7 +281,11 @@ def render_geometry_dxf(
             doc.layers.add(_HOLE_LAYER, color=1)
             msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
     else:
-        raise ValueError(f"DXF export does not support geometry pattern {geometry.pattern!r}")
+        raise _dxf_refusal(
+            f"DXF export does not support geometry pattern {geometry.pattern!r}",
+            subject="geometry",
+            source=_BUILT_PART_SOURCE,
+        )
 
     if keepouts:
         from ..keepouts import keepout_label
@@ -254,12 +318,18 @@ def _positive_length(value: Quantity, field: str) -> Quantity:
     :func:`export_plate_dxf`. Here it covers all of them at once.
     """
     if not isinstance(value, Quantity) or not value.has_dimension("[length]"):
-        raise ValueError(f"{field} must be a [length] quantity; got {value!r}")
+        raise _dxf_refusal(
+            f"{field} must be a [length] quantity; got {value!r}",
+            subject=field,
+            source=_dxf_input_source(field),
+        )
     if value.to("mm").magnitude <= 0:
-        raise ValueError(
+        raise _dxf_refusal(
             f"{field} must be positive; got {value}. A feature with no size is not a feature, "
             f"and a negative one is written into the DXF as a negative radius — an entity no "
-            f"reader is required to accept, on a file a shop cuts from."
+            f"reader is required to accept, on a file a shop cuts from.",
+            subject=field,
+            source=_dxf_input_source(field),
         )
     return value
 
@@ -314,9 +384,17 @@ class Slot(RevalidatedModel):
 
 def _mm(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _dxf_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_dxf_input_source(name),
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+        raise _dxf_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality}",
+            subject=name,
+            source=_dxf_input_source(name),
+        )
     return value.to("mm").magnitude
 
 
@@ -339,14 +417,24 @@ def bolt_circle_holes(
     and the diameters positive. Returns the holes in angular order.
     """
     if count < 1:
-        raise ValueError(f"count must be at least 1; got {count}")
+        raise _dxf_refusal(
+            f"count must be at least 1; got {count}", subject="count", source=_HOLE_PATTERN_SOURCE
+        )
     cx = _mm(center_x, "center_x")
     cy = _mm(center_y, "center_y")
     bcd = _mm(bolt_circle_diameter, "bolt_circle_diameter")
     if bcd <= 0:
-        raise ValueError(f"bolt_circle_diameter must be positive; got {bolt_circle_diameter}")
+        raise _dxf_refusal(
+            f"bolt_circle_diameter must be positive; got {bolt_circle_diameter}",
+            subject="bolt_circle_diameter",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     if _mm(hole_diameter, "hole_diameter") <= 0:
-        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+        raise _dxf_refusal(
+            f"hole_diameter must be positive; got {hole_diameter}",
+            subject="hole_diameter",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     pitch_radius = bcd / 2.0
     holes: list[Hole] = []
     for i in range(count):
@@ -378,14 +466,22 @@ def linear_hole_pattern(
     and pitch positive. Returns the holes in order from the start point.
     """
     if count < 1:
-        raise ValueError(f"count must be at least 1; got {count}")
+        raise _dxf_refusal(
+            f"count must be at least 1; got {count}", subject="count", source=_HOLE_PATTERN_SOURCE
+        )
     sx = _mm(start_x, "start_x")
     sy = _mm(start_y, "start_y")
     step = _mm(pitch, "pitch")
     if step <= 0:
-        raise ValueError(f"pitch must be positive; got {pitch}")
+        raise _dxf_refusal(
+            f"pitch must be positive; got {pitch}", subject="pitch", source=_HOLE_PATTERN_SOURCE
+        )
     if _mm(hole_diameter, "hole_diameter") <= 0:
-        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+        raise _dxf_refusal(
+            f"hole_diameter must be positive; got {hole_diameter}",
+            subject="hole_diameter",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     theta = radians(angle)
     dx, dy = step * cos(theta), step * sin(theta)
     return [
@@ -416,15 +512,27 @@ def grid_hole_pattern(
     and pitches positive. Returns the holes row by row (bottom row first, left to right).
     """
     if columns < 1 or rows < 1:
-        raise ValueError(f"columns and rows must be at least 1; got {columns} x {rows}")
+        raise _dxf_refusal(
+            f"columns and rows must be at least 1; got {columns} x {rows}",
+            subject="columns and rows",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     ox = _mm(origin_x, "origin_x")
     oy = _mm(origin_y, "origin_y")
     xp = _mm(x_pitch, "x_pitch")
     yp = _mm(y_pitch, "y_pitch")
     if xp <= 0 or yp <= 0:
-        raise ValueError(f"x_pitch and y_pitch must be positive; got {x_pitch}, {y_pitch}")
+        raise _dxf_refusal(
+            f"x_pitch and y_pitch must be positive; got {x_pitch}, {y_pitch}",
+            subject="x_pitch and y_pitch",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     if _mm(hole_diameter, "hole_diameter") <= 0:
-        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+        raise _dxf_refusal(
+            f"hole_diameter must be positive; got {hole_diameter}",
+            subject="hole_diameter",
+            source=_HOLE_PATTERN_SOURCE,
+        )
     return [
         Hole(
             x=Quantity(magnitude=ox + col * xp, unit="mm"),
@@ -459,8 +567,13 @@ def plate_cut_length(
     slots = each_one(slots or (), Slot, named="slots")
     w = _mm(width, "width")
     h = _mm(height, "height")
-    if w <= 0 or h <= 0:
-        raise ValueError(f"plate width and height must be positive; got {width} x {height}")
+    for subject, magnitude in (("width", w), ("height", h)):
+        if magnitude <= 0:
+            raise _dxf_refusal(
+                f"plate width and height must be positive; got {width} x {height}",
+                subject=subject,
+                source=_PLATE_DRAWING_SOURCE,
+            )
     r = _corner_radius_mm(corner_radius, w, h)
     total = 2.0 * (w + h) - (8.0 - 2.0 * pi) * r
     for i, hole in enumerate(holes or []):
@@ -497,12 +610,25 @@ def plate_mass(
     w = _mm(width, "width")
     h = _mm(height, "height")
     t = _mm(thickness, "thickness")
-    if w <= 0 or h <= 0 or t <= 0:
-        raise ValueError("plate width, height, and thickness must be positive")
+    for subject, magnitude in (("width", w), ("height", h), ("thickness", t)):
+        if magnitude <= 0:
+            raise _dxf_refusal(
+                "plate width, height, and thickness must be positive",
+                subject=subject,
+                source=_dxf_input_source(subject),
+            )
     if not isinstance(density, Quantity):
-        raise ValueError(f"density must be a [mass] / [length]**3 quantity; got {density!r}")
+        raise _dxf_refusal(
+            f"density must be a [mass] / [length]**3 quantity; got {density!r}",
+            subject="density",
+            source=_PLATE_MATERIAL_SOURCE,
+        )
     if not density.has_dimension("[mass] / [length]**3"):
-        raise ValueError(f"density must be a mass/volume quantity; got {density.dimensionality}")
+        raise _dxf_refusal(
+            f"density must be a mass/volume quantity; got {density.dimensionality}",
+            subject="density",
+            source=_PLATE_MATERIAL_SOURCE,
+        )
     r = _corner_radius_mm(corner_radius, w, h)
     net_area = w * h - (4.0 - pi) * r**2
     for i, hole in enumerate(holes or []):
@@ -513,7 +639,11 @@ def plate_mass(
         slot_width = _mm(slot.width, f"slots[{i}].width")
         net_area -= (slot_length - slot_width) * slot_width + pi * slot_width**2 / 4.0
     if net_area <= 0:
-        raise ValueError("holes and slots remove the whole plate; net area is not positive")
+        raise _dxf_refusal(
+            "holes and slots remove the whole plate; net area is not positive",
+            subject="width, height, holes, slots, and corner_radius",
+            source=_PLATE_DRAWING_SOURCE,
+        )
     volume_m3 = net_area * t * 1e-9  # mm^3 -> m^3
     mass_kg = volume_m3 * density.to("kg/m**3").magnitude
     return Quantity(magnitude=mass_kg, unit="kg")
@@ -593,8 +723,13 @@ def export_plate_dxf(
 
     w = _mm(width, "width")
     h = _mm(height, "height")
-    if w <= 0 or h <= 0:
-        raise ValueError(f"plate width and height must be positive; got {width} x {height}")
+    for subject, magnitude in (("width", w), ("height", h)):
+        if magnitude <= 0:
+            raise _dxf_refusal(
+                f"plate width and height must be positive; got {width} x {height}",
+                subject=subject,
+                source=_PLATE_DRAWING_SOURCE,
+            )
     r = _corner_radius_mm(corner_radius, w, h)
 
     doc = ezdxf.new()
@@ -631,9 +766,11 @@ def export_plate_dxf(
         cy = _mm(hole.y, "hole y")
         radius = _mm(hole.diameter, "hole diameter") / 2
         if not (0 <= cx - radius and cx + radius <= w and 0 <= cy - radius and cy + radius <= h):
-            raise ValueError(
+            raise _dxf_refusal(
                 f"hole at ({hole.x}, {hole.y}) d={hole.diameter} falls outside the "
-                f"{width} x {height} plate"
+                f"{width} x {height} plate",
+                subject="holes, width, and height",
+                source=_PLATE_DRAWING_SOURCE,
             )
         msp.add_circle((cx, cy), radius, dxfattribs={"layer": _HOLE_LAYER})
 
@@ -643,18 +780,22 @@ def export_plate_dxf(
         length = _mm(slot.length, "slot length")
         slot_width = _mm(slot.width, "slot width")
         if slot_width <= 0 or length <= slot_width:
-            raise ValueError(
+            raise _dxf_refusal(
                 f"slot at ({slot.x}, {slot.y}) needs length > width > 0; "
-                f"got length={slot.length}, width={slot.width}"
+                f"got length={slot.length}, width={slot.width}",
+                subject="slots",
+                source=_PLATE_DRAWING_SOURCE,
             )
         half_len = length / 2
         half_wid = slot_width / 2
         ax = half_wid if slot.vertical else half_len  # half extent along X
         ay = half_len if slot.vertical else half_wid  # half extent along Y
         if not (0 <= cx - ax and cx + ax <= w and 0 <= cy - ay and cy + ay <= h):
-            raise ValueError(
+            raise _dxf_refusal(
                 f"slot at ({slot.x}, {slot.y}) {slot.length}x{slot.width} falls outside "
-                f"the {width} x {height} plate"
+                f"the {width} x {height} plate",
+                subject="slots, width, and height",
+                source=_PLATE_DRAWING_SOURCE,
             )
         msp.add_lwpolyline(
             _slot_vertices(cx, cy, length, slot_width, slot.vertical),
@@ -702,9 +843,11 @@ def export_gear_blank_dxf(
     rd = _mm(root_diameter, "root_diameter")
     bore = _mm(bore_diameter, "bore_diameter")
     if not (od > pd > rd > bore > 0):
-        raise ValueError(
+        raise _dxf_refusal(
             "gear diameters must satisfy outside > pitch > root > bore > 0; got "
-            f"{outside_diameter}, {pitch_diameter}, {root_diameter}, {bore_diameter}"
+            f"{outside_diameter}, {pitch_diameter}, {root_diameter}, {bore_diameter}",
+            subject="outside_diameter, pitch_diameter, root_diameter, and bore_diameter",
+            source=_GEAR_DESIGN_SOURCE,
         )
 
     doc = ezdxf.new()

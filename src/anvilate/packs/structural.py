@@ -79,6 +79,7 @@ from ..analysis import (
     von_mises_plane_stress,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
     Direction,
@@ -102,6 +103,65 @@ from ._guarded import (
     design_allowable,
     disclosed,
 )
+
+_GEOMETRY_SOURCE = "the member's or connection's fabrication drawing"
+_SECTION_SOURCE = "the rolled-section table or the section drawing (properties, mass per length)"
+_LOAD_SOURCE = "the governing load case from the structural analysis"
+_SUPPORT_SOURCE = "the structural model's support and end conditions for the member"
+_MATERIAL_SOURCE = "the material datasheet, mill certificate, or concrete mix specification"
+_CRITERIA_SOURCE = "the project's design basis (safety factor, deflection and frequency limits)"
+
+
+class _StructuralPackInputError(RefusalError, ValueError):
+    """A structural element input that cannot be used without correction."""
+
+
+def _structural_pack_refusal(
+    message: str, *, subject: str, source: str
+) -> _StructuralPackInputError:
+    return _StructuralPackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _structural_pack_input_source(name: str) -> str:
+    if name in {"mass_per_length", "section"}:
+        return _SECTION_SOURCE
+    if name in {"end_condition", "support"}:
+        return _SUPPORT_SOURCE
+    if name in {
+        "axial_load",
+        "load",
+        "load_position",
+        "load_type",
+        "loaded_length",
+        "moment",
+        "pair_offset",
+        "patch_centered",
+        "tension",
+        "triangle_mirrored",
+    }:
+        return _LOAD_SOURCE
+    if name in {
+        "bolt_material",
+        "concrete_strength",
+        "electrode_strength",
+        "material",
+        "materials",
+        "plate_material",
+    }:
+        return _MATERIAL_SOURCE
+    if name in {
+        "deflection_limit",
+        "max_deflection",
+        "min_frequency",
+        "required_basis",
+        "required_safety_factor",
+        "target_safety_factor",
+    }:
+        return _CRITERIA_SOURCE
+    return _GEOMETRY_SOURCE
 
 
 def _material_need(field: str, prop: str) -> Need:
@@ -197,7 +257,9 @@ def _named_section(value: object) -> object:
         try:
             return resolve_profile(value).section()
         except LookupError as unknown:
-            raise ValueError(str(unknown.args[0])) from None
+            raise _structural_pack_refusal(
+                str(unknown.args[0]), subject="section", source=_SECTION_SOURCE
+            ) from None
     return value
 
 
@@ -435,12 +497,18 @@ class BeamMember(GuardedInputs):
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
         if not self.length.has_dimension("[length]"):
-            raise ValueError(f"length must be a [length] quantity; got {self.length}")
+            raise _structural_pack_refusal(
+                f"length must be a [length] quantity; got {self.length}",
+                subject="length",
+                source=_GEOMETRY_SOURCE,
+            )
         if self.deflection_limit is not None and not self.deflection_limit.has_dimension(
             "[length]"
         ):
-            raise ValueError(
-                f"deflection_limit must be a [length] quantity; got {self.deflection_limit}"
+            raise _structural_pack_refusal(
+                f"deflection_limit must be a [length] quantity; got {self.deflection_limit}",
+                subject="deflection_limit",
+                source=_CRITERIA_SOURCE,
             )
         if self.load_type is LoadType.POINT:
             expected = "[force]"
@@ -449,118 +517,168 @@ class BeamMember(GuardedInputs):
         else:
             expected = "[force] / [length]"
         if not self.load.has_dimension(expected):
-            raise ValueError(
+            raise _structural_pack_refusal(
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
-                f"{self.load.dimensionality} ({self.load})"
+                f"{self.load.dimensionality} ({self.load})",
+                subject="load and load_type",
+                source=_LOAD_SOURCE,
             )
         if self.load_type is LoadType.MOMENT and self.support not in _MOMENT_CHECKS:
-            raise ValueError(
+            raise _structural_pack_refusal(
                 "a moment load is only encoded for a member with an end free to "
                 "receive a couple (cantilever, simply-supported, or fixed-pinned); "
-                f"got {self.support.value}/{self.load_type.value}"
+                f"got {self.support.value}/{self.load_type.value}",
+                subject="load_type and support",
+                source=_SUPPORT_SOURCE,
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
-                raise ValueError(
-                    f"load_position must be a [length] quantity; got {self.load_position}"
+                raise _structural_pack_refusal(
+                    f"load_position must be a [length] quantity; got {self.load_position}",
+                    subject="load_position",
+                    source=_LOAD_SOURCE,
                 )
             if self.load_type is LoadType.MOMENT:
                 if self.support not in _OFFSET_MOMENT_CHECKS:
-                    raise ValueError(
+                    raise _structural_pack_refusal(
                         "an off-end couple is only encoded on a cantilever or "
                         "simply-supported member; got "
-                        f"{self.support.value}/{self.load_type.value}"
+                        f"{self.support.value}/{self.load_type.value}",
+                        subject="load_position, load_type, and support",
+                        source=_SUPPORT_SOURCE,
                     )
             elif self.load_type is not LoadType.POINT:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "load_position is only supported for a point load; got "
-                    f"{self.support.value}/{self.load_type.value}"
+                    f"{self.support.value}/{self.load_type.value}",
+                    subject="load_position and load_type",
+                    source=_LOAD_SOURCE,
                 )
         if self.pair_offset is not None:
             if not self.pair_offset.has_dimension("[length]"):
-                raise ValueError(f"pair_offset must be a [length] quantity; got {self.pair_offset}")
+                raise _structural_pack_refusal(
+                    f"pair_offset must be a [length] quantity; got {self.pair_offset}",
+                    subject="pair_offset",
+                    source=_LOAD_SOURCE,
+                )
             if self.load_type is not LoadType.POINT or self.support is not Support.SIMPLY_SUPPORTED:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "pair_offset is only encoded for a simply-supported point load; "
-                    f"got {self.support.value}/{self.load_type.value}"
+                    f"got {self.support.value}/{self.load_type.value}",
+                    subject="pair_offset, load_type, and support",
+                    source=_LOAD_SOURCE,
                 )
             if self.load_position is not None:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "pair_offset and load_position are mutually exclusive — a pair "
-                    "sits at pair_offset from each support"
+                    "sits at pair_offset from each support",
+                    subject="pair_offset and load_position",
+                    source=_LOAD_SOURCE,
                 )
             half = self.length.to("mm").magnitude / 2
             if half > 0 and not 0 < self.pair_offset.to("mm").magnitude <= half:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     f"pair_offset must lie within the half-span (0, {half:g} mm], since each "
-                    f"load sits that far from its own support; got {self.pair_offset}"
+                    f"load sits that far from its own support; got {self.pair_offset}",
+                    subject="pair_offset and length",
+                    source=_LOAD_SOURCE,
                 )
         if self.loaded_length is not None:
             if not self.loaded_length.has_dimension("[length]"):
-                raise ValueError(
-                    f"loaded_length must be a [length] quantity; got {self.loaded_length}"
+                raise _structural_pack_refusal(
+                    f"loaded_length must be a [length] quantity; got {self.loaded_length}",
+                    subject="loaded_length",
+                    source=_LOAD_SOURCE,
                 )
             if self.load_type is not LoadType.DISTRIBUTED:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "loaded_length is only encoded for a distributed load; got "
-                    f"{self.support.value}/{self.load_type.value}"
+                    f"{self.support.value}/{self.load_type.value}",
+                    subject="loaded_length and load_type",
+                    source=_LOAD_SOURCE,
                 )
         if self.patch_centered and self.loaded_length is None:
-            raise ValueError("patch_centered requires a loaded_length")
+            raise _structural_pack_refusal(
+                "patch_centered requires a loaded_length",
+                subject="patch_centered and loaded_length",
+                source=_LOAD_SOURCE,
+            )
         if self.support is Support.OVERHANG:
             if self.overhang_length is None:
-                raise ValueError("an overhang member requires an overhang_length")
+                raise _structural_pack_refusal(
+                    "an overhang member requires an overhang_length",
+                    subject="support and overhang_length",
+                    source=_GEOMETRY_SOURCE,
+                )
             if not self.overhang_length.has_dimension("[length]"):
-                raise ValueError(
-                    f"overhang_length must be a [length] quantity; got {self.overhang_length}"
+                raise _structural_pack_refusal(
+                    f"overhang_length must be a [length] quantity; got {self.overhang_length}",
+                    subject="overhang_length",
+                    source=_GEOMETRY_SOURCE,
                 )
             if self.load_type not in (LoadType.POINT, LoadType.DISTRIBUTED):
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "an overhang member is only encoded for a tip point load or a "
-                    f"distributed load on the overhang; got {self.load_type.value}"
+                    f"distributed load on the overhang; got {self.load_type.value}",
+                    subject="load_type and support",
+                    source=_LOAD_SOURCE,
                 )
             if (
                 self.load_position is not None
                 or self.pair_offset is not None
                 or self.loaded_length is not None
             ):
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "load_position, pair_offset, and loaded_length are not encoded "
-                    "for an overhang member"
+                    "for an overhang member",
+                    subject="load_position, pair_offset, loaded_length, and support",
+                    source=_LOAD_SOURCE,
                 )
             if self.mass_per_length is not None:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "the resonance screen is not encoded for an overhang member "
-                    "(no distributed-mass eigenvalue)"
+                    "(no distributed-mass eigenvalue)",
+                    subject="mass_per_length and support",
+                    source=_SUPPORT_SOURCE,
                 )
         elif self.overhang_length is not None:
-            raise ValueError(
+            raise _structural_pack_refusal(
                 f"overhang_length is only meaningful for an overhang member; got "
-                f"{self.support.value}"
+                f"{self.support.value}",
+                subject="overhang_length and support",
+                source=_SUPPORT_SOURCE,
             )
         if self.mass_per_length is not None and not self.mass_per_length.has_dimension(
             "[mass] / [length]"
         ):
-            raise ValueError(
-                f"mass_per_length must be a [mass] / [length] quantity; got {self.mass_per_length}"
+            raise _structural_pack_refusal(
+                f"mass_per_length must be a [mass] / [length] quantity; got {self.mass_per_length}",
+                subject="mass_per_length",
+                source=_SECTION_SOURCE,
             )
         if self.min_frequency is not None:
             if not self.min_frequency.has_dimension("[frequency]"):
-                raise ValueError(
-                    f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
+                raise _structural_pack_refusal(
+                    f"min_frequency must be a [frequency] quantity; got {self.min_frequency}",
+                    subject="min_frequency",
+                    source=_CRITERIA_SOURCE,
                 )
             if self.mass_per_length is None:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     "min_frequency requires a mass_per_length — the fundamental "
-                    "cannot be computed without the member's distributed mass"
+                    "cannot be computed without the member's distributed mass",
+                    subject="min_frequency and mass_per_length",
+                    source=_SECTION_SOURCE,
                 )
         if self.triangle_mirrored and (
             self.load_type is not LoadType.TRIANGULAR
             or self.support not in _MIRRORED_TRIANGULAR_CHECKS
         ):
-            raise ValueError(
+            raise _structural_pack_refusal(
                 "triangle_mirrored is only encoded for a cantilever or fixed-pinned "
-                f"triangular load; got {self.support.value}/{self.load_type.value}"
+                f"triangular load; got {self.support.value}/{self.load_type.value}",
+                subject="triangle_mirrored, load_type, and support",
+                source=_LOAD_SOURCE,
             )
         return self
 
@@ -953,9 +1071,17 @@ class ColumnMember(GuardedInputs):
     @model_validator(mode="after")
     def _well_formed(self) -> ColumnMember:
         if not self.length.has_dimension("[length]"):
-            raise ValueError(f"length must be a [length] quantity; got {self.length}")
+            raise _structural_pack_refusal(
+                f"length must be a [length] quantity; got {self.length}",
+                subject="length",
+                source=_GEOMETRY_SOURCE,
+            )
         if not self.axial_load.has_dimension("[force]"):
-            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+            raise _structural_pack_refusal(
+                f"axial_load must be a [force] quantity; got {self.axial_load}",
+                subject="axial_load",
+                source=_LOAD_SOURCE,
+            )
         return self
 
 
@@ -1137,25 +1263,49 @@ class BoltedConnection(GuardedInputs):
             (self.plate_thickness, "plate_thickness"),
         ):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if self.tension is not None:
             if not self.tension.has_dimension("[force]"):
-                raise ValueError(f"tension must be a [force] quantity; got {self.tension}")
+                raise _structural_pack_refusal(
+                    f"tension must be a [force] quantity; got {self.tension}",
+                    subject="tension",
+                    source=_LOAD_SOURCE,
+                )
             if self.tension.to("N").magnitude < 0:
-                raise ValueError(f"tension must be non-negative; got {self.tension}")
+                raise _structural_pack_refusal(
+                    f"tension must be non-negative; got {self.tension}",
+                    subject="tension",
+                    source=_LOAD_SOURCE,
+                )
         if self.shear_planes < 1:
-            raise ValueError(f"shear_planes must be a positive integer; got {self.shear_planes}")
+            raise _structural_pack_refusal(
+                f"shear_planes must be a positive integer; got {self.shear_planes}",
+                subject="shear_planes",
+                source=_GEOMETRY_SOURCE,
+            )
         if self.edge_distance is not None:
             if not self.edge_distance.has_dimension("[length]"):
-                raise ValueError(
-                    f"edge_distance must be a [length] quantity; got {self.edge_distance}"
+                raise _structural_pack_refusal(
+                    f"edge_distance must be a [length] quantity; got {self.edge_distance}",
+                    subject="edge_distance",
+                    source=_GEOMETRY_SOURCE,
                 )
             if self.edge_distance.to("mm").magnitude <= self.bolt_diameter.to("mm").magnitude / 2:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     f"edge_distance ({self.edge_distance}) must exceed half the bolt "
-                    f"diameter ({self.bolt_diameter}) — the hole would break the edge"
+                    f"diameter ({self.bolt_diameter}) — the hole would break the edge",
+                    subject="edge_distance and bolt_diameter",
+                    source=_GEOMETRY_SOURCE,
                 )
         return self
 
@@ -1511,12 +1661,22 @@ class WeldedConnection(GuardedInputs):
     def _well_formed(self) -> WeldedConnection:
         for value, name in ((self.leg_size, "leg_size"), (self.weld_length, "weld_length")):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if not self.electrode_strength.has_dimension("[pressure]"):
-            raise ValueError(
-                f"electrode_strength must be a [pressure] quantity; got {self.electrode_strength}"
+            raise _structural_pack_refusal(
+                f"electrode_strength must be a [pressure] quantity; got {self.electrode_strength}",
+                subject="electrode_strength",
+                source=_MATERIAL_SOURCE,
             )
         return self
 
@@ -1619,27 +1779,43 @@ class BasePlate(GuardedInputs):
     def _well_formed(self) -> BasePlate:
         for value, name in ((self.width, "width"), (self.depth, "depth")):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.axial_load.has_dimension("[force]"):
-            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+            raise _structural_pack_refusal(
+                f"axial_load must be a [force] quantity; got {self.axial_load}",
+                subject="axial_load",
+                source=_LOAD_SOURCE,
+            )
         if not self.concrete_strength.has_dimension("[pressure]"):
-            raise ValueError(
-                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}"
+            raise _structural_pack_refusal(
+                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}",
+                subject="concrete_strength",
+                source=_MATERIAL_SOURCE,
             )
         bending_fields = (self.plate_thickness, self.cantilever, self.plate_material)
         if any(f is not None for f in bending_fields) and not all(
             f is not None for f in bending_fields
         ):
-            raise ValueError(
+            raise _structural_pack_refusal(
                 "the plate-bending check needs plate_thickness, cantilever, and "
-                "plate_material together, or none of them"
+                "plate_material together, or none of them",
+                subject="plate_thickness, cantilever, and plate_material",
+                source=_GEOMETRY_SOURCE,
             )
         for value, name in (
             (self.plate_thickness, "plate_thickness"),
             (self.cantilever, "cantilever"),
         ):
             if value is not None and not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if self.cantilever is not None:
             # AISC Design Guide 1 measures the cantilevers from the column to the plate edge,
             # (N − 0.95·d)/2 and (B − 0.8·b_f)/2, so one at or past half the larger plan
@@ -1647,10 +1823,12 @@ class BasePlate(GuardedInputs):
             # FAIL with a repair hint to thicken a plate that cannot exist.
             half = max(self.width.to("mm").magnitude, self.depth.to("mm").magnitude) / 2
             if not self.cantilever.to("mm").magnitude < half:
-                raise ValueError(
+                raise _structural_pack_refusal(
                     f"cantilever ({self.cantilever}) must be less than half the plate's larger "
                     f"plan dimension ({half:g} mm), since it runs from the column face to the "
-                    "plate edge"
+                    "plate edge",
+                    subject="cantilever, width, and depth",
+                    source=_GEOMETRY_SOURCE,
                 )
         return self
 
@@ -1830,12 +2008,22 @@ class LiftingLug(GuardedInputs):
             (self.thickness, "thickness"),
         ):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if self.hole_diameter.to("mm").magnitude >= self.width.to("mm").magnitude:
-            raise ValueError(
-                f"hole_diameter ({self.hole_diameter}) must be below the lug width ({self.width})"
+            raise _structural_pack_refusal(
+                f"hole_diameter ({self.hole_diameter}) must be below the lug width ({self.width})",
+                subject="hole_diameter and width",
+                source=_GEOMETRY_SOURCE,
             )
         return self
 
@@ -2059,9 +2247,17 @@ class GussetPlate(GuardedInputs):
             (self.net_tension_area, "net_tension_area"),
         ):
             if not value.has_dimension("[length]**2"):
-                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be an area ([length]**2); got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         return self
 
 
@@ -2194,15 +2390,29 @@ class TensionMember(GuardedInputs):
             (self.net_area, "net_area"),
         ):
             if not value.has_dimension("[length]**2"):
-                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be an area ([length]**2); got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if self.net_area.to("mm**2").magnitude > self.gross_area.to("mm**2").magnitude:
-            raise ValueError(
-                f"net_area ({self.net_area}) cannot exceed gross_area ({self.gross_area})"
+            raise _structural_pack_refusal(
+                f"net_area ({self.net_area}) cannot exceed gross_area ({self.gross_area})",
+                subject="net_area and gross_area",
+                source=_GEOMETRY_SOURCE,
             )
         if not 0.0 < self.shear_lag_factor <= 1.0:
-            raise ValueError(f"shear_lag_factor must be in (0, 1]; got {self.shear_lag_factor}")
+            raise _structural_pack_refusal(
+                f"shear_lag_factor must be in (0, 1]; got {self.shear_lag_factor}",
+                subject="shear_lag_factor",
+                source=_GEOMETRY_SOURCE,
+            )
         return self
 
 
@@ -2360,12 +2570,22 @@ class BeamColumnMember(GuardedInputs):
     @model_validator(mode="after")
     def _well_formed(self) -> BeamColumnMember:
         if not self.length.has_dimension("[length]"):
-            raise ValueError(f"length must be a [length] quantity; got {self.length}")
+            raise _structural_pack_refusal(
+                f"length must be a [length] quantity; got {self.length}",
+                subject="length",
+                source=_GEOMETRY_SOURCE,
+            )
         if not self.axial_load.has_dimension("[force]"):
-            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+            raise _structural_pack_refusal(
+                f"axial_load must be a [force] quantity; got {self.axial_load}",
+                subject="axial_load",
+                source=_LOAD_SOURCE,
+            )
         if not self.moment.has_dimension("[force] * [length]"):
-            raise ValueError(
-                f"moment must be a [force]*[length] quantity; got {self.moment.dimensionality}"
+            raise _structural_pack_refusal(
+                f"moment must be a [force]*[length] quantity; got {self.moment.dimensionality}",
+                subject="moment",
+                source=_LOAD_SOURCE,
             )
         return self
 
@@ -2685,17 +2905,29 @@ class ConcreteBearing(GuardedInputs):
             (self.support_area, "support_area"),
         ):
             if not value.has_dimension("[length]**2"):
-                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be an area ([length]**2); got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.concrete_strength.has_dimension("[pressure]"):
-            raise ValueError(
-                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}"
+            raise _structural_pack_refusal(
+                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}",
+                subject="concrete_strength",
+                source=_MATERIAL_SOURCE,
             )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if self.support_area.to("mm**2").magnitude < self.bearing_area.to("mm**2").magnitude:
-            raise ValueError(
+            raise _structural_pack_refusal(
                 f"support_area ({self.support_area}) cannot be smaller than the "
-                f"bearing_area ({self.bearing_area})"
+                f"bearing_area ({self.bearing_area})",
+                subject="support_area and bearing_area",
+                source=_GEOMETRY_SOURCE,
             )
         return self
 
@@ -2809,13 +3041,23 @@ class ShearPlate(GuardedInputs):
             (self.net_shear_area, "net_shear_area"),
         ):
             if not value.has_dimension("[length]**2"):
-                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+                raise _structural_pack_refusal(
+                    f"{name} must be an area ([length]**2); got {value}",
+                    subject=name,
+                    source=_structural_pack_input_source(name),
+                )
         if not self.load.has_dimension("[force]"):
-            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+            raise _structural_pack_refusal(
+                f"load must be a [force] quantity; got {self.load}",
+                subject="load",
+                source=_LOAD_SOURCE,
+            )
         if self.net_shear_area.to("mm**2").magnitude > self.gross_shear_area.to("mm**2").magnitude:
-            raise ValueError(
+            raise _structural_pack_refusal(
                 f"net_shear_area ({self.net_shear_area}) cannot exceed the "
-                f"gross_shear_area ({self.gross_shear_area})"
+                f"gross_shear_area ({self.gross_shear_area})",
+                subject="net_shear_area and gross_shear_area",
+                source=_GEOMETRY_SOURCE,
             )
         return self
 

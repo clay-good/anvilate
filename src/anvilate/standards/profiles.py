@@ -30,8 +30,24 @@ from pydantic import ConfigDict
 from .._models import Named, RevalidatedModel, parse_yaml
 from ..analysis.section import CrossSection
 from ..fetch import DatasetRecipe, FetchProvenance, cached_dataset, fetch_dataset
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
+
+_DESIGNATION_SOURCE = "the structural drawing's member schedule designation"
+_AISC_SOURCE = "the pinned AISC Shapes Database v16.0 workbook, fetched with consent"
+
+
+class _ProfileInputError(RefusalError, ValueError):
+    """A rolled-profile input that cannot be used without correction."""
+
+
+def _profile_refusal(message: str, *, subject: str, source: str) -> _ProfileInputError:
+    return _ProfileInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "RolledProfile",

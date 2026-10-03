@@ -35,6 +35,7 @@ from ._assembly_declarations import (
 )
 from ._models import Named, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
+from .refusal import RefusalError, Remedy
 from .scorecard import (
     CheckStatus,
     Direction,
@@ -45,6 +46,22 @@ from .scorecard import (
     ValueSource,
 )
 from .spec import DesignSpec
+
+_BUILD_SOURCE = "the assembly drawing's build sequence: its parts and the states installing them"
+_PROCEDURE_SOURCE = "the assembly procedure's tool and adjustment steps, each naming its state"
+_GEOMETRY_SOURCE = "the part's CAD geometry and its design spec"
+
+
+class _AssemblyInputError(RefusalError, ValueError):
+    """An assembly-order input that cannot be used without correction."""
+
+
+def _assembly_refusal(message: str, *, subject: str, source: str) -> _AssemblyInputError:
+    return _AssemblyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 # What each refusal here was waiting on, for the report in `anvilate.needs`. The first three
 # are what a Design Spec's `assembly` block writes, spelled as its path; the rest are
@@ -199,7 +216,11 @@ def assembly_order(parts: Sequence[Part]) -> AssemblyOrder:
     names = [part.name for part in parts]
     if len(set(names)) != len(names):
         doubled = sorted({n for n in names if names.count(n) > 1})
-        raise ValueError(f"two parts share a name: {doubled}; an order of them is ambiguous")
+        raise _assembly_refusal(
+            f"two parts share a name: {doubled}; an order of them is ambiguous",
+            subject="parts",
+            source=_BUILD_SOURCE,
+        )
     owner: dict[str, str] = {}
     interferences = []
     for part in parts:
@@ -299,26 +320,34 @@ def screen_adjustment_access(
     adjustments = each_one(adjustments, Adjustment, named="adjustments")
     order = [state.name for state in states]
     if len(set(order)) != len(order):
-        raise ValueError(f"two assembly states share a name: {order}")
+        raise _assembly_refusal(
+            f"two assembly states share a name: {order}", subject="states", source=_BUILD_SOURCE
+        )
     by_name = {part.name: part for part in parts}
     installed_in: dict[str, str] = {}
     for state in states:
         for part in state.installs:
             if part not in by_name:
-                raise ValueError(
-                    f"state '{state.name}' installs '{part}', which is no declared part"
+                raise _assembly_refusal(
+                    f"state '{state.name}' installs '{part}', which is no declared part",
+                    subject="states and parts",
+                    source=_BUILD_SOURCE,
                 )
             if part in installed_in:
-                raise ValueError(
-                    f"'{part}' is installed in both '{installed_in[part]}' and '{state.name}'"
+                raise _assembly_refusal(
+                    f"'{part}' is installed in both '{installed_in[part]}' and '{state.name}'",
+                    subject="states",
+                    source=_BUILD_SOURCE,
                 )
             installed_in[part] = state.name
     entries = []
     for adjustment in adjustments:
         if adjustment.performed_in not in order:
-            raise ValueError(
+            raise _assembly_refusal(
                 f"{adjustment} names the state '{adjustment.performed_in}', which the build "
-                f"does not define; its states are {order}"
+                f"does not define; its states are {order}",
+                subject="adjustments and states",
+                source=_PROCEDURE_SOURCE,
             )
         name = f"access: {adjustment.feature} in {adjustment.performed_in}"
         if not adjustment.access:
@@ -427,10 +456,12 @@ def screen_tool_access(
             )
             continue
         if requirement.performed_in not in order:
-            raise ValueError(
+            raise _assembly_refusal(
                 f"the access to {requirement.feature} names the state "
                 f"'{requirement.performed_in}', which the build does not define; its states "
-                f"are {order}"
+                f"are {order}",
+                subject="requirements and states",
+                source=_PROCEDURE_SOURCE,
             )
         installed = [
             installed_part
@@ -513,7 +544,11 @@ def screen_swing_arc(
 
     b = _kernel()
     if not isinstance(requirement, SwingRequirement):
-        raise ValueError(f"requirement must be a SwingRequirement; got {requirement!r}")
+        raise _assembly_refusal(
+            f"requirement must be a SwingRequirement; got {requirement!r}",
+            subject="requirement",
+            source=_PROCEDURE_SOURCE,
+        )
     states = each_one(states, AssemblyState, named="states")
     order = [state.name for state in states]
     name = f"swing arc: {requirement.feature}" + (
@@ -527,9 +562,11 @@ def screen_swing_arc(
             needs=(_NEEDS_A_STATE,),
         )
     if requirement.performed_in not in order:
-        raise ValueError(
+        raise _assembly_refusal(
             f"the swing on {requirement.feature} names the state '{requirement.performed_in}', "
-            f"which the build does not define; its states are {order}"
+            f"which the build does not define; its states are {order}",
+            subject="requirement and states",
+            source=_PROCEDURE_SOURCE,
         )
     installed = [
         installed_part

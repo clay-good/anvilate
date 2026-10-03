@@ -49,8 +49,36 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._models import EMPTY_MAP, FrozenMap, ItemCollection, RevalidatedModel
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .units import Quantity, require_finite, spoken
+
+_DRAWING_SOURCE = "the part drawing's or model's callout notes (finish, coating, heat treat)"
+_GEOMETRY_SOURCE = "the part drawing's dimension for the plated feature"
+_MATERIAL_SOURCE = "the base material's certificate or materials-database record"
+_TAG_SOURCE = "the model's semantic tag graph (its named faces and features)"
+
+
+class _CalloutsInputError(RefusalError, ValueError):
+    """A drawing-callout input that cannot be used without correction."""
+
+
+def _callouts_refusal(message: str, *, subject: str, source: str) -> _CalloutsInputError:
+    return _CalloutsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _callouts_input_source(name: str) -> str:
+    if name in {"base_material", "known_materials", "ultimate_strength"}:
+        return _MATERIAL_SOURCE
+    if name == "nominal":
+        return _GEOMETRY_SOURCE
+    if name == "known_tags":
+        return _TAG_SOURCE
+    return _DRAWING_SOURCE
+
 
 __all__ = [
     "MARIN_SURFACE_CITATION",
@@ -174,12 +202,18 @@ class _Callout(RevalidatedModel):
         if self.scope is None:
             return self
         if not self.scope.strip():
-            raise ValueError(
+            raise _callouts_refusal(
                 "a callout's scope is a semantic tag or None for the whole part; an empty "
-                "string is neither"
+                "string is neither",
+                subject="scope",
+                source=_DRAWING_SOURCE,
             )
         if "\x00" in self.scope:
-            raise ValueError("a semantic tag cannot contain a NUL character")
+            raise _callouts_refusal(
+                "a semantic tag cannot contain a NUL character",
+                subject="scope",
+                source=_DRAWING_SOURCE,
+            )
         # Normalized, so `"  journal "` and `"journal"` are one characteristic rather than
         # two — otherwise a trailing space walks straight past the one-value-per-
         # characteristic rule the set enforces.
@@ -223,12 +257,18 @@ class SurfaceFinish(_Callout):
     @model_validator(mode="after")
     def _roughness_is_a_positive_length(self) -> SurfaceFinish:
         if not self.roughness.has_dimension("[length]"):
-            raise ValueError(
+            raise _callouts_refusal(
                 f"roughness must be a [length] quantity (µm, µin); got "
-                f"{self.roughness.dimensionality} ({self.roughness})"
+                f"{self.roughness.dimensionality} ({self.roughness})",
+                subject="roughness",
+                source=_DRAWING_SOURCE,
             )
         if self.roughness.to("um").magnitude <= 0:
-            raise ValueError(f"roughness must be positive; got {self.roughness}")
+            raise _callouts_refusal(
+                f"roughness must be positive; got {self.roughness}",
+                subject="roughness",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     def value_signature(self) -> str:
@@ -263,20 +303,32 @@ class Coating(_Callout):
             ("maximum_thickness", self.maximum_thickness),
         ):
             if not value.has_dimension("[length]"):
-                raise ValueError(
-                    f"{field} must be a [length] quantity; got {value.dimensionality} ({value})"
+                raise _callouts_refusal(
+                    f"{field} must be a [length] quantity; got {value.dimensionality} ({value})",
+                    subject=field,
+                    source=_callouts_input_source(field),
                 )
             if value.to("um").magnitude < 0:
-                raise ValueError(f"{field} must not be negative; got {value}")
+                raise _callouts_refusal(
+                    f"{field} must not be negative; got {value}",
+                    subject=field,
+                    source=_callouts_input_source(field),
+                )
         low = self.minimum_thickness.to("um").magnitude
         high = self.maximum_thickness.to("um").magnitude
         if low > high:
-            raise ValueError(
+            raise _callouts_refusal(
                 f"the coating thickness range runs backwards: minimum {self.minimum_thickness} "
-                f"exceeds maximum {self.maximum_thickness}"
+                f"exceeds maximum {self.maximum_thickness}",
+                subject="minimum_thickness and maximum_thickness",
+                source=_DRAWING_SOURCE,
             )
         if not self.specification.strip():
-            raise ValueError("a coating callout must name its specification")
+            raise _callouts_refusal(
+                "a coating callout must name its specification",
+                subject="specification",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     def value_signature(self) -> str:
@@ -313,12 +365,18 @@ class HeatTreatment(_Callout):
     @model_validator(mode="after")
     def _named(self) -> HeatTreatment:
         if not self.specification.strip():
-            raise ValueError("a heat-treatment callout must name its specification")
+            raise _callouts_refusal(
+                "a heat-treatment callout must name its specification",
+                subject="specification",
+                source=_DRAWING_SOURCE,
+            )
         if not self.condition.strip():
-            raise ValueError(
+            raise _callouts_refusal(
                 "a heat-treatment callout must name the condition it produces; the "
                 "condition is what selects the material record, and a treatment with no "
-                "named condition cannot select one"
+                "named condition cannot select one",
+                subject="condition",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -346,9 +404,11 @@ class ProcessNote(_Callout):
     @model_validator(mode="after")
     def _categorized(self) -> ProcessNote:
         if not self.category.strip():
-            raise ValueError(
+            raise _callouts_refusal(
                 "a structured process note must name its category; a note with no "
-                "category is free text and belongs in a FreeTextNote"
+                "category is free text and belongs in a FreeTextNote",
+                subject="category",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -379,9 +439,17 @@ class FreeTextNote(_Callout):
     @model_validator(mode="after")
     def _has_text(self) -> FreeTextNote:
         if not self.text.strip():
-            raise ValueError("a free-text note with no text is not a note")
+            raise _callouts_refusal(
+                "a free-text note with no text is not a note",
+                subject="text",
+                source=_DRAWING_SOURCE,
+            )
         if self.sequence < 1:
-            raise ValueError(f"a note's sequence starts at 1; got {self.sequence}")
+            raise _callouts_refusal(
+                f"a note's sequence starts at 1; got {self.sequence}",
+                subject="sequence",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     @property
@@ -411,11 +479,13 @@ class CalloutSet(ItemCollection, RevalidatedModel):
         for callout in self.callouts:
             key = callout.characteristic_id
             if key in seen:
-                raise ValueError(
+                raise _callouts_refusal(
                     f"two {callout.kind} callouts declare the same characteristic at "
                     f"{callout.where!r}: {seen[key]} and {callout}. One characteristic "
                     "carries one declared value; a second one is a contradiction, not a "
-                    "refinement"
+                    "refinement",
+                    subject="callouts",
+                    source=_DRAWING_SOURCE,
                 )
             seen[key] = callout
         return self
@@ -433,9 +503,11 @@ class CalloutSet(ItemCollection, RevalidatedModel):
             {c.scope for c in self.callouts if c.scope is not None and c.scope not in tags}
         )
         if missing:
-            raise ValueError(
+            raise _callouts_refusal(
                 f"callouts reference semantic tags that do not exist: {missing}. A callout "
-                "scoped to a tag nothing defines is never consumed by any check"
+                "scoped to a tag nothing defines is never consumed by any check",
+                subject="scope and known_tags",
+                source=_TAG_SOURCE,
             )
         return self
 
@@ -546,13 +618,17 @@ def marin_surface_factor(finish: SurfaceFinish, *, ultimate_strength: Quantity) 
     Screening only — see :data:`MARIN_SURFACE_CITATION`.
     """
     if not isinstance(ultimate_strength, Quantity):
-        raise ValueError(
-            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}"
+        raise _callouts_refusal(
+            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
         )
     if not ultimate_strength.has_dimension("[pressure]"):
-        raise ValueError(
+        raise _callouts_refusal(
             f"ultimate_strength must be a [pressure] quantity; got "
-            f"{ultimate_strength.dimensionality} ({ultimate_strength})"
+            f"{ultimate_strength.dimensionality} ({ultimate_strength})",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
         )
     # `min(1.0, a*Su**b)` with a NaN strength returns 1.0 — the value reserved for a
     # mirror-polished specimen — so a missing ultimate strength read as the *best possible*
@@ -560,7 +636,11 @@ def marin_surface_factor(finish: SurfaceFinish, *, ultimate_strength: Quantity) 
     # limit.
     su = require_finite(ultimate_strength, name="ultimate_strength")
     if su <= 0:
-        raise ValueError(f"ultimate_strength must be positive; got {ultimate_strength}")
+        raise _callouts_refusal(
+            f"ultimate_strength must be positive; got {ultimate_strength}",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
+        )
     su = ultimate_strength.to("MPa").magnitude
     if finish.method is ProductionMethod.POLISHED:
         return 1.0
@@ -676,23 +756,35 @@ def plated_inner_dimension(nominal: Quantity, coating: Coating) -> tuple[Quantit
 
 def _plated(nominal: Quantity, coating: Coating, *, sign: float) -> tuple[Quantity, Quantity]:
     if not isinstance(nominal, Quantity):
-        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
+        raise _callouts_refusal(
+            f"nominal must be a [length] quantity; got {nominal!r}",
+            subject="nominal",
+            source=_GEOMETRY_SOURCE,
+        )
     if not nominal.has_dimension("[length]"):
-        raise ValueError(
+        raise _callouts_refusal(
             f"the nominal dimension must be a [length] quantity; got "
-            f"{nominal.dimensionality} ({nominal})"
+            f"{nominal.dimensionality} ({nominal})",
+            subject="nominal",
+            source=_GEOMETRY_SOURCE,
         )
     unit = nominal.unit
     base = nominal.to("mm").magnitude
     if base <= 0:
-        raise ValueError(f"the nominal dimension must be positive; got {nominal}")
+        raise _callouts_refusal(
+            f"the nominal dimension must be positive; got {nominal}",
+            subject="nominal",
+            source=_GEOMETRY_SOURCE,
+        )
     out = []
     for thickness in (coating.minimum_thickness, coating.maximum_thickness):
         plated = base + sign * 2.0 * thickness.to("mm").magnitude
         if plated <= 0:
-            raise ValueError(
+            raise _callouts_refusal(
                 f"a coating {thickness} thick closes a {nominal} feature entirely "
-                f"(plated size {plated:.4g} mm); the callout and the geometry disagree"
+                f"(plated size {plated:.4g} mm); the callout and the geometry disagree",
+                subject="nominal and coating",
+                source=_GEOMETRY_SOURCE,
             )
         out.append(Quantity(magnitude=plated, unit="mm").to(unit))
     return out[0], out[1]

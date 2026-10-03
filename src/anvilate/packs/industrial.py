@@ -35,10 +35,40 @@ from ..analysis import (
     strength_scorecard,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard
 from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
 from ._guarded import DESIGN_BASIS, GuardedInputs, design_allowable, disclosed
+
+_PLATE_DRAWING_SOURCE = "the cover plate's fabrication drawing (plan, thickness, hole, rim)"
+_PRESSURE_SOURCE = "the load case's design pressure and its loaded footprint"
+_MATERIAL_SOURCE = "the material's datasheet or mill certificate"
+_CRITERIA_SOURCE = "the project's design basis (safety factor, deflection and frequency limits)"
+
+
+class _IndustrialPackInputError(RefusalError, ValueError):
+    """An industrial fixture input that cannot be used without correction."""
+
+
+def _industrial_pack_refusal(
+    message: str, *, subject: str, source: str
+) -> _IndustrialPackInputError:
+    return _IndustrialPackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _industrial_pack_input_source(name: str) -> str:
+    if name in {"patch_length", "patch_width", "pressure"}:
+        return _PRESSURE_SOURCE
+    if name in {"material", "materials"}:
+        return _MATERIAL_SOURCE
+    if name in {"deflection_limit", "min_frequency", "required_basis", "required_safety_factor"}:
+        return _CRITERIA_SOURCE
+    return _PLATE_DRAWING_SOURCE
+
 
 __all__ = [
     "PlateEdge",
@@ -127,16 +157,36 @@ class CoverPlate(GuardedInputs):
     @model_validator(mode="after")
     def _well_formed(self) -> CoverPlate:
         if not self.pressure.has_dimension("[pressure]"):
-            raise ValueError(f"pressure must be a [pressure] quantity; got {self.pressure}")
+            raise _industrial_pack_refusal(
+                f"pressure must be a [pressure] quantity; got {self.pressure}",
+                subject="pressure",
+                source=_PRESSURE_SOURCE,
+            )
         if not self.thickness.has_dimension("[length]"):
-            raise ValueError(f"thickness must be a [length] quantity; got {self.thickness}")
+            raise _industrial_pack_refusal(
+                f"thickness must be a [length] quantity; got {self.thickness}",
+                subject="thickness",
+                source=_PLATE_DRAWING_SOURCE,
+            )
         rectangular = self.length is not None or self.width is not None
         if rectangular and self.diameter is not None:
-            raise ValueError("declare length/width for a rectangle OR diameter for a circle")
+            raise _industrial_pack_refusal(
+                "declare length/width for a rectangle OR diameter for a circle",
+                subject="length, width, and diameter",
+                source=_PLATE_DRAWING_SOURCE,
+            )
         if rectangular and (self.length is None or self.width is None):
-            raise ValueError("a rectangular cover needs both length and width")
+            raise _industrial_pack_refusal(
+                "a rectangular cover needs both length and width",
+                subject="length and width",
+                source=_PLATE_DRAWING_SOURCE,
+            )
         if not rectangular and self.diameter is None:
-            raise ValueError("declare the plan geometry: length and width, or diameter")
+            raise _industrial_pack_refusal(
+                "declare the plan geometry: length and width, or diameter",
+                subject="length, width, and diameter",
+                source=_PLATE_DRAWING_SOURCE,
+            )
         for value, name in (
             (self.length, "length"),
             (self.width, "width"),
@@ -147,30 +197,48 @@ class CoverPlate(GuardedInputs):
             (self.deflection_limit, "deflection_limit"),
         ):
             if value is not None and not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _industrial_pack_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_industrial_pack_input_source(name),
+                )
         if self.min_frequency is not None and not self.min_frequency.has_dimension("[frequency]"):
-            raise ValueError(
-                f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
+            raise _industrial_pack_refusal(
+                f"min_frequency must be a [frequency] quantity; got {self.min_frequency}",
+                subject="min_frequency",
+                source=_CRITERIA_SOURCE,
             )
         if self.hole_diameter is not None and self.diameter is None:
-            raise ValueError("a hole is only encoded for a circular cover — declare a diameter")
+            raise _industrial_pack_refusal(
+                "a hole is only encoded for a circular cover — declare a diameter",
+                subject="hole_diameter and diameter",
+                source=_PLATE_DRAWING_SOURCE,
+            )
         if (
             self.hole_diameter is not None
             and self.diameter is not None
             and not self.hole_diameter.to("mm").magnitude < self.diameter.to("mm").magnitude
         ):
-            raise ValueError(
+            raise _industrial_pack_refusal(
                 f"hole_diameter ({self.hole_diameter}) must be smaller than the cover's "
-                f"diameter ({self.diameter})"
+                f"diameter ({self.diameter})",
+                subject="hole_diameter and diameter",
+                source=_PLATE_DRAWING_SOURCE,
             )
         patched = self.patch_length is not None or self.patch_width is not None
         if patched:
             if self.patch_length is None or self.patch_width is None:
-                raise ValueError("a patch footprint needs both patch_length and patch_width")
+                raise _industrial_pack_refusal(
+                    "a patch footprint needs both patch_length and patch_width",
+                    subject="patch_length and patch_width",
+                    source=_PRESSURE_SOURCE,
+                )
             if self.diameter is not None or self.edge is not PlateEdge.SIMPLY_SUPPORTED:
-                raise ValueError(
+                raise _industrial_pack_refusal(
                     "a patch footprint is only encoded for a simply-supported "
-                    "rectangular cover — the one plate with an exact patch solution"
+                    "rectangular cover — the one plate with an exact patch solution",
+                    subject="patch_length, patch_width, diameter, and edge",
+                    source=_PLATE_DRAWING_SOURCE,
                 )
         return self
 

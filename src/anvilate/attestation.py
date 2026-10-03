@@ -62,8 +62,28 @@ from pydantic import (
 
 from ._models import RevalidatedModel, _refusal_line, parse_json
 from .evidence import SourceRecord
+from .refusal import RefusalError, Remedy
 from .review import DecisionOrigin
 from .scorecard import CheckStatus, Scorecard
+
+_ARTIFACT_SOURCE = "the artifact files the screening covered, hashed as written to disk"
+_ENVIRONMENT_SOURCE = "the installed package metadata of the environment that ran the screen"
+_DISCLOSURE_SOURCE = "the session log of the model calls made while drafting the spec"
+_SCREEN_SOURCE = "the screening run's scorecard and the spec file it read"
+_KEY_SOURCE = "the signing key held in the team's key store"
+_ENVELOPE_SOURCE = "the DSSE envelope file as received from its producer"
+
+
+class _AttestationInputError(RefusalError, ValueError):
+    """An attestation input that cannot be used without correction."""
+
+
+def _attestation_refusal(message: str, *, subject: str, source: str) -> _AttestationInputError:
+    return _AttestationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 #: The `dev` extra's marker, as `importlib.metadata.requires` writes it. Reading the extra's
 #: name is not guessing: it is this project's own declaration in its own pyproject.
@@ -162,10 +182,12 @@ def canonical_json(value: object) -> str:
             allow_nan=False,
         )
     except ValueError as exc:  # pragma: no cover - message varies by Python build
-        raise ValueError(
+        raise _attestation_refusal(
             "a bundle payload contains a non-finite number (NaN or infinity), which "
             "cannot be represented in JSON; the check that produced it should report "
-            f"NOT_EVALUATED rather than a number no reader can parse ({exc})"
+            f"NOT_EVALUATED rather than a number no reader can parse ({exc})",
+            subject="value",
+            source=_SCREEN_SOURCE,
         ) from exc
 
 
@@ -213,11 +235,17 @@ class Subject(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> Subject:
         if not self.name.strip():
-            raise ValueError("a subject needs a name; a digest with nothing to find is not one")
+            raise _attestation_refusal(
+                "a subject needs a name; a digest with nothing to find is not one",
+                subject="name",
+                source=_ARTIFACT_SOURCE,
+            )
         if len(self.sha256) != 64 or any(c not in "0123456789abcdef" for c in self.sha256):
-            raise ValueError(
+            raise _attestation_refusal(
                 f"subject {self.name!r} carries {self.sha256!r}, which is not a lowercase "
-                "64-character hex SHA-256 digest"
+                "64-character hex SHA-256 digest",
+                subject="sha256",
+                source=_ARTIFACT_SOURCE,
             )
         return self
 
@@ -256,11 +284,15 @@ class Component(RevalidatedModel):
     @model_validator(mode="after")
     def _named_and_versioned(self) -> Component:
         if not self.name.strip():
-            raise ValueError("a BOM component needs a name")
+            raise _attestation_refusal(
+                "a BOM component needs a name", subject="name", source=_ENVIRONMENT_SOURCE
+            )
         if not self.version.strip():
-            raise ValueError(
+            raise _attestation_refusal(
                 f"BOM component {self.name!r} has no version; an unversioned inventory "
-                "cannot tell two builds apart, which is the only thing it is for"
+                "cannot tell two builds apart, which is the only thing it is for",
+                subject="version",
+                source=_ENVIRONMENT_SOURCE,
             )
         return self
 
@@ -285,13 +317,19 @@ class EnvironmentBOM(RevalidatedModel):
     @model_validator(mode="after")
     def _application_is_one(self) -> EnvironmentBOM:
         if self.application.kind is not ComponentKind.APPLICATION:
-            raise ValueError(
+            raise _attestation_refusal(
                 "the BOM's application entry must be declared as an application, not "
-                f"{self.application.kind.value!r}"
+                f"{self.application.kind.value!r}",
+                subject="application",
+                source=_ENVIRONMENT_SOURCE,
             )
         names = [c.name for c in self.components]
         if len(set(names)) != len(names):
-            raise ValueError(f"the BOM lists a component twice: {sorted(names)}")
+            raise _attestation_refusal(
+                f"the BOM lists a component twice: {sorted(names)}",
+                subject="components",
+                source=_ENVIRONMENT_SOURCE,
+            )
         return self
 
     @classmethod
@@ -390,9 +428,11 @@ class AIEvent(RevalidatedModel):
             ("backend", self.backend),
         ):
             if not value.strip():
-                raise ValueError(
+                raise _attestation_refusal(
                     f"an AI-involvement event needs a non-empty {field}; "
-                    "'a model was involved somewhere' is not a disclosure"
+                    "'a model was involved somewhere' is not a disclosure",
+                    subject="stage, model, and backend",
+                    source=_DISCLOSURE_SOURCE,
                 )
         return self
 
@@ -413,7 +453,11 @@ class ValueOrigin(RevalidatedModel):
     @model_validator(mode="after")
     def _named(self) -> ValueOrigin:
         if not self.field.strip():
-            raise ValueError("a value origin must name the field it attributes")
+            raise _attestation_refusal(
+                "a value origin must name the field it attributes",
+                subject="field",
+                source=_DISCLOSURE_SOURCE,
+            )
         return self
 
 
@@ -467,23 +511,33 @@ class AIDisclosure(RevalidatedModel):
             object.__setattr__(self, "origins", ordered)
         seen = [o.field for o in self.origins]
         if len(set(seen)) != len(seen):
-            raise ValueError(f"a field is attributed twice in the origin map: {sorted(seen)}")
+            raise _attestation_refusal(
+                f"a field is attributed twice in the origin map: {sorted(seen)}",
+                subject="origins",
+                source=_DISCLOSURE_SOURCE,
+            )
         model_drafted = sorted(o.field for o in self.origins if o.origin is DecisionOrigin.MODEL)
         if not self.participated:
             if self.events:
-                raise ValueError(
+                raise _attestation_refusal(
                     "the disclosure says no model participated but lists "
-                    f"{len(self.events)} model event(s)"
+                    f"{len(self.events)} model event(s)",
+                    subject="participated and events",
+                    source=_DISCLOSURE_SOURCE,
                 )
             if model_drafted:
-                raise ValueError(
+                raise _attestation_refusal(
                     "the disclosure says no model participated, but these values are "
-                    f"attributed to a model: {model_drafted}"
+                    f"attributed to a model: {model_drafted}",
+                    subject="participated and origins",
+                    source=_DISCLOSURE_SOURCE,
                 )
         elif not self.events:
-            raise ValueError(
+            raise _attestation_refusal(
                 "a disclosure that a model participated must say where: name at least "
-                "one event (stage, model, backend)"
+                "one event (stage, model, backend)",
+                subject="participated and events",
+                source=_DISCLOSURE_SOURCE,
             )
         return self
 
@@ -561,26 +615,36 @@ class AnvilatePredicate(RevalidatedModel):
             try:
                 parsed = parse_json(self.sections_json)
             except ValueError as exc:
-                raise ValueError(f"sections_json is not readable JSON: {exc}") from exc
+                raise _attestation_refusal(
+                    f"sections_json is not readable JSON: {exc}",
+                    subject="sections_json",
+                    source=_SCREEN_SOURCE,
+                ) from exc
             if not isinstance(parsed, dict):
-                raise ValueError(
-                    f"sections_json must encode an object; got a JSON {type(parsed).__name__}"
+                raise _attestation_refusal(
+                    f"sections_json must encode an object; got a JSON {type(parsed).__name__}",
+                    subject="sections_json",
+                    source=_SCREEN_SOURCE,
                 )
             rolled = parsed.get("status")
             if rolled is not None and rolled not in set(CheckStatus):
-                raise ValueError(
+                raise _attestation_refusal(
                     f"sections_json carries status {rolled!r}, which is not one of "
                     f"{sorted(s.value for s in CheckStatus)}. The statement's headline "
-                    f"verdict is read from it, so it cannot be an arbitrary string"
+                    f"verdict is read from it, so it cannot be an arbitrary string",
+                    subject="sections_json",
+                    source=_SCREEN_SOURCE,
                 )
         return self
 
     @model_validator(mode="after")
     def _identifies_what_was_screened(self) -> AnvilatePredicate:
         if not self.spec_digest.strip():
-            raise ValueError(
+            raise _attestation_refusal(
                 "a predicate must name the digest of the spec it screened; a scorecard "
-                "with no bound input is a result nobody can reproduce"
+                "with no bound input is a result nobody can reproduce",
+                subject="spec_digest",
+                source=_SCREEN_SOURCE,
             )
         return self
 
@@ -636,13 +700,19 @@ class EvidenceBundle(RevalidatedModel):
     @model_validator(mode="after")
     def _has_subjects(self) -> EvidenceBundle:
         if not self.subjects:
-            raise ValueError(
+            raise _attestation_refusal(
                 "an attestation with no subject attests to nothing; name at least the "
-                "artifact the screening covers"
+                "artifact the screening covers",
+                subject="subjects",
+                source=_ARTIFACT_SOURCE,
             )
         names = [s.name for s in self.subjects]
         if len(set(names)) != len(names):
-            raise ValueError(f"two subjects share a name: {sorted(names)}")
+            raise _attestation_refusal(
+                f"two subjects share a name: {sorted(names)}",
+                subject="subjects",
+                source=_ARTIFACT_SOURCE,
+            )
         return self
 
     def statement(self) -> dict[str, object]:
@@ -708,9 +778,11 @@ class LocalHmacSigner:
 
     def __init__(self, secret: bytes) -> None:
         if len(secret) < 16:
-            raise ValueError(
+            raise _attestation_refusal(
                 f"a signing secret of {len(secret)} bytes is too short to be one; use at "
-                "least 16 bytes of unguessable material"
+                "least 16 bytes of unguessable material",
+                subject="secret",
+                source=_KEY_SOURCE,
             )
         self._secret = bytes(secret)
         self.keyid = hmac.new(self._secret, self._KEYID_LABEL, hashlib.sha256).hexdigest()[:32]
@@ -738,8 +810,10 @@ class Signature(RevalidatedModel):
         try:
             base64.b64decode(self.sig, validate=True)
         except (ValueError, binascii.Error) as exc:
-            raise ValueError(
-                f"signature for key {self.keyid!r} is not valid base64: {exc}"
+            raise _attestation_refusal(
+                f"signature for key {self.keyid!r} is not valid base64: {exc}",
+                subject="sig",
+                source=_ENVELOPE_SOURCE,
             ) from exc
         return self
 
@@ -824,7 +898,11 @@ class Attestation(RevalidatedModel):
         try:
             base64.b64decode(self.payload, validate=True)
         except (ValueError, binascii.Error) as exc:
-            raise ValueError(f"the envelope payload is not valid base64: {exc}") from exc
+            raise _attestation_refusal(
+                f"the envelope payload is not valid base64: {exc}",
+                subject="payload",
+                source=_ENVELOPE_SOURCE,
+            ) from exc
         return self
 
     def payload_bytes(self) -> bytes:

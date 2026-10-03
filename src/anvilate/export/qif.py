@@ -74,9 +74,27 @@ from ..gdt import (
     FrameModifier,
     MaterialCondition,
 )
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..verification import VerificationOutcome
 from .gate import ExportAuthorization
+
+_DESIGN_RECORD_SOURCE = "the part number and spec revision digest from the design record"
+_BUNDLE_SOURCE = "the screening bundle and the authorization issued from its own scorecard"
+_DRAWING_FRAME_SOURCE = "the part drawing's feature control frame (characteristic, modifiers)"
+_QIF_DOCUMENT_SOURCE = "the QIF Results document as written by the exporter"
+
+
+class _QifInputError(RefusalError, ValueError):
+    """A QIF export input that cannot be used without correction."""
+
+
+def _qif_refusal(message: str, *, subject: str, source: str) -> _QifInputError:
+    return _QifInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "QIF_NAMESPACE",
@@ -575,18 +593,26 @@ def export_qif_results(
     same bytes.
     """
     if not part_name.strip():
-        raise ValueError("a QIF document needs the part it is about; part_name is empty")
+        raise _qif_refusal(
+            "a QIF document needs the part it is about; part_name is empty",
+            subject="part_name",
+            source=_DESIGN_RECORD_SOURCE,
+        )
     if not spec_digest.strip():
-        raise ValueError(
+        raise _qif_refusal(
             "a QIF export needs the digest of the spec revision it screened; without it "
-            "the document says what passed but not what was checked"
+            "the document says what passed but not what was checked",
+            subject="spec_digest",
+            source=_DESIGN_RECORD_SOURCE,
         )
 
     if authorization.validated and not sections.scorecard.passed:
-        raise ValueError(
+        raise _qif_refusal(
             "the authorization says VALIDATED and this bundle's scorecard reads "
             f"{sections.scorecard.status.value}; authorize the export from the card that "
-            "is being exported, not from another one"
+            "is being exported, not from another one",
+            subject="authorization and sections",
+            source=_BUNDLE_SOURCE,
         )
 
     layered: list[tuple[ScorecardEntry, str]] = [
@@ -1037,16 +1063,20 @@ def qif_characteristic_mapping(frame: FeatureControlFrame) -> QifCharacteristicM
     characteristic = frame.characteristic
     condition = frame.material_condition
     if condition is not MaterialCondition.RFS and characteristic not in _CARRIES_MATERIAL_CONDITION:
-        raise ValueError(
+        raise _qif_refusal(
             f"{_QIF_DEFINITION_TYPE[characteristic]} has no MaterialCondition element, so "
             f"{condition.value} on a {characteristic.value} callout cannot cross into QIF. "
-            "Dropping it would export a tighter requirement than the drawing states"
+            "Dropping it would export a tighter requirement than the drawing states",
+            subject="frame.material_condition",
+            source=_DRAWING_FRAME_SOURCE,
         )
     tangent_plane = FrameModifier.TANGENT_PLANE in frame.modifiers
     if tangent_plane and characteristic not in _CARRIES_TANGENT_PLANE:
-        raise ValueError(
+        raise _qif_refusal(
             f"{_QIF_DEFINITION_TYPE[characteristic]} has no TangentPlane element; QIF "
-            "carries the tangent-plane modifier on the orientation characteristics only"
+            "carries the tangent-plane modifier on the orientation characteristics only",
+            subject="frame.modifiers",
+            source=_DRAWING_FRAME_SOURCE,
         )
 
     shapes = _ZONE_SHAPE.get(characteristic)

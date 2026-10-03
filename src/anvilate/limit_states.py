@@ -25,6 +25,22 @@ from __future__ import annotations
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
+from .refusal import RefusalError, Remedy
+
+_STATE_SOURCE = "the limit state's declaration: the screens and the one shared implementation"
+_REGISTRY_SOURCE = "the limit-state registry, one entry per limit state"
+
+
+class _LimitStateInputError(RefusalError, ValueError):
+    """A limit-state declaration that cannot be used without correction."""
+
+
+def _limit_state_refusal(message: str, *, subject: str, source: str) -> _LimitStateInputError:
+    return _LimitStateInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ScreenCheck",
@@ -73,14 +89,20 @@ class LimitState(StatableModel):
     def _one_implementation(self) -> LimitState:
         screens = sorted({binding.screen for binding in self.evaluated_by})
         if len(screens) > 1 and self.implementation is None:
-            raise ValueError(
+            raise _limit_state_refusal(
                 f"limit state '{self.id}' is evaluated by {screens} and names no implementation; "
                 "name the one symbol they all call in `implementation`, or they are two "
-                "implementations of one limit state"
+                "implementations of one limit state",
+                subject="evaluated_by and implementation",
+                source=_STATE_SOURCE,
             )
         listed = [str(binding) for binding in self.evaluated_by]
         if len(set(listed)) != len(listed):
-            raise ValueError(f"limit state '{self.id}' lists one check twice: {sorted(listed)}")
+            raise _limit_state_refusal(
+                f"limit state '{self.id}' lists one check twice: {sorted(listed)}",
+                subject="evaluated_by",
+                source=_STATE_SOURCE,
+            )
         return self
 
     def implemented_by(self) -> str:
@@ -104,11 +126,13 @@ class LimitStateRegistry(ItemCollection, StatableModel):
         by_id: dict[str, LimitState] = {}
         for state in self.limit_states:
             if state.id in by_id:
-                raise ValueError(
+                raise _limit_state_refusal(
                     f"limit state '{state.id}' is registered twice, implemented by "
                     f"{by_id[state.id].implemented_by()} and by {state.implemented_by()}; "
                     f"a second implementation composes {by_id[state.id].implemented_by()} "
-                    "and adds its check to the existing entry instead"
+                    "and adds its check to the existing entry instead",
+                    subject="limit_states",
+                    source=_REGISTRY_SOURCE,
                 )
             by_id[state.id] = state
         claimed: dict[str, str] = {}
@@ -116,9 +140,11 @@ class LimitStateRegistry(ItemCollection, StatableModel):
             for binding in state.evaluated_by:
                 key = str(binding)
                 if key in claimed:
-                    raise ValueError(
+                    raise _limit_state_refusal(
                         f"check '{key}' is bound to both '{claimed[key]}' and '{state.id}'; "
-                        "one check evaluates one limit state"
+                        "one check evaluates one limit state",
+                        subject="limit_states",
+                        source=_REGISTRY_SOURCE,
                     )
                 claimed[key] = state.id
         return self

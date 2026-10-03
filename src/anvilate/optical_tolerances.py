@@ -29,7 +29,25 @@ from enum import StrEnum
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, StatableModel
+from .refusal import RefusalError, Remedy
 from .units import Quantity
+
+_DRAWING_SOURCE = "the optical element drawing's ISO 10110 tolerance callouts"
+_SURFACE_SOURCE = "the element drawing's list of optical surfaces"
+
+
+class _OpticalToleranceInputError(RefusalError, ValueError):
+    """An optical-tolerance input that cannot be used without correction."""
+
+
+def _optical_tolerance_refusal(
+    message: str, *, subject: str, source: str
+) -> _OpticalToleranceInputError:
+    return _OpticalToleranceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ImperfectionConvention",
@@ -110,11 +128,17 @@ class Centring(StatableModel):
     @model_validator(mode="after")
     def _an_angle(self) -> Centring:
         if str(self.tilt.unit).strip() not in {"arcmin", "arcminute", "arcsec", "arcsecond"}:
-            raise ValueError(
-                f"a centring tolerance is written in arcminutes or arcseconds; got {self.tilt}"
+            raise _optical_tolerance_refusal(
+                f"a centring tolerance is written in arcminutes or arcseconds; got {self.tilt}",
+                subject="tilt",
+                source=_DRAWING_SOURCE,
             )
         if self.tilt.magnitude <= 0:
-            raise ValueError(f"a centring tolerance must be positive; got {self.tilt}")
+            raise _optical_tolerance_refusal(
+                f"a centring tolerance must be positive; got {self.tilt}",
+                subject="tilt",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     def indication(self) -> str:
@@ -153,12 +177,16 @@ class SurfaceImperfections(StatableModel):
         mil = self.scratch is not None and self.dig is not None
         if self.convention is ImperfectionConvention.ISO_10110_7:
             if not iso or self.scratch is not None or self.dig is not None:
-                raise ValueError(
-                    "an ISO 10110-7 tolerance states a count and a grade, and no scratch-dig"
+                raise _optical_tolerance_refusal(
+                    "an ISO 10110-7 tolerance states a count and a grade, and no scratch-dig",
+                    subject="convention, count, grade, scratch, and dig",
+                    source=_DRAWING_SOURCE,
                 )
         elif not mil or self.count is not None or self.grade is not None:
-            raise ValueError(
-                "a MIL-PRF-13830B tolerance states a scratch and a dig, and no ISO count or grade"
+            raise _optical_tolerance_refusal(
+                "a MIL-PRF-13830B tolerance states a scratch and a dig, and no ISO count or grade",
+                subject="convention, count, grade, scratch, and dig",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -191,10 +219,12 @@ class OpticalElementTolerances(StatableModel):
         ):
             for tolerance in tolerances:
                 if tolerance.surface not in self.optical_surfaces:
-                    raise ValueError(
+                    raise _optical_tolerance_refusal(
                         f"a {characteristic} tolerance is attached to '{tolerance.surface}', "
                         f"which {self.element} does not declare as an optical surface; its "
-                        f"optical surfaces are {list(self.optical_surfaces)}"
+                        f"optical surfaces are {list(self.optical_surfaces)}",
+                        subject="optical_surfaces, surface_form, centring, and imperfections",
+                        source=_SURFACE_SOURCE,
                     )
         return self
 

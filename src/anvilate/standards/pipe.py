@@ -27,8 +27,25 @@ from typing import Annotated
 from pydantic import ConfigDict
 
 from .._models import RevalidatedModel, parse_yaml
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, dimensioned
+
+_MILL_SOURCE = "the pipe purchase specification's mill under-tolerance (B36.10M: 12.5%)"
+_CORROSION_SOURCE = "the piping class's corrosion allowance in the line's design basis"
+_SIZE_SOURCE = "the piping line list's nominal size and schedule"
+
+
+class _PipeInputError(RefusalError, ValueError):
+    """A pipe-wall input that cannot be used without correction."""
+
+
+def _pipe_refusal(message: str, *, subject: str, source: str) -> _PipeInputError:
+    return _PipeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "PipeDimensions",
@@ -115,22 +132,32 @@ class PipeDimensions(RevalidatedModel):
         thickness would flow on into a pressure rating as a plausible number.
         """
         if not 0.0 <= mill_tolerance_fraction < 1.0:
-            raise ValueError(
-                f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}"
+            raise _pipe_refusal(
+                f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}",
+                subject="mill_tolerance_fraction",
+                source=_MILL_SOURCE,
             )
         left = self.wall_thickness.quantity.to("mm").magnitude * (1.0 - mill_tolerance_fraction)
         if corrosion_allowance is not None:
             if not isinstance(corrosion_allowance, Quantity):
-                raise ValueError(
-                    f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance!r}"
+                raise _pipe_refusal(
+                    f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance!r}",
+                    subject="corrosion_allowance",
+                    source=_CORROSION_SOURCE,
                 )
             if not corrosion_allowance.has_dimension("[length]"):
-                raise ValueError(
-                    f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance}"
+                raise _pipe_refusal(
+                    f"corrosion_allowance must be a [length] quantity; got {corrosion_allowance}",
+                    subject="corrosion_allowance",
+                    source=_CORROSION_SOURCE,
                 )
             allowance = corrosion_allowance.to("mm").magnitude
             if allowance < 0:
-                raise ValueError(f"corrosion_allowance must not be negative; got {allowance} mm")
+                raise _pipe_refusal(
+                    f"corrosion_allowance must not be negative; got {allowance} mm",
+                    subject="corrosion_allowance",
+                    source=_CORROSION_SOURCE,
+                )
             left -= allowance
         return Quantity(magnitude=max(left, 0.0), unit="mm")
 

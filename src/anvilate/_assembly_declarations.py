@@ -12,7 +12,34 @@ from typing import TYPE_CHECKING
 from pydantic import ConfigDict, model_validator
 
 from ._models import Named, Provenance, StatableModel
+from .refusal import RefusalError, Remedy
 from .units import Quantity
+
+_DRAWING_SOURCE = "the assembly drawing's part, feature and state declarations"
+_TOOL_SOURCE = "the tool maker's catalogue dimensions for the tool body and reach"
+_WRENCH_SOURCE = "the wrench's catalogue handle dimensions and the procedure's swing arc"
+
+
+class _AssemblyDeclarationInputError(RefusalError, ValueError):
+    """An assembly declaration that cannot be used without correction."""
+
+
+def _assembly_declaration_refusal(
+    message: str, *, subject: str, source: str
+) -> _AssemblyDeclarationInputError:
+    return _AssemblyDeclarationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _assembly_declaration_input_source(name: str) -> str:
+    if name in {"body_diameter", "clearance_margin", "reach", "source", "tool"}:
+        return _TOOL_SOURCE
+    if name in {"handle_length", "handle_thickness", "handle_width", "height", "required_arc"}:
+        return _WRENCH_SOURCE
+    return _DRAWING_SOURCE
+
 
 if TYPE_CHECKING:
     from .spec import Keepout
@@ -45,7 +72,11 @@ class Part(StatableModel):
     def _distinct(self) -> Part:
         for field, values in (("occupies", self.occupies), ("sweeps", self.sweeps)):
             if len(set(values)) != len(values):
-                raise ValueError(f"part '{self.name}' names one feature twice in {field}")
+                raise _assembly_declaration_refusal(
+                    f"part '{self.name}' names one feature twice in {field}",
+                    subject="occupies and sweeps",
+                    source=_DRAWING_SOURCE,
+                )
         return self
 
     def __str__(self) -> str:
@@ -101,9 +132,17 @@ class ToolEnvelope(StatableModel):
     def _an_envelope(self) -> ToolEnvelope:
         for label, value in (("body_diameter", self.body_diameter), ("reach", self.reach)):
             if not value.has_dimension("[length]"):
-                raise ValueError(f"'{self.tool}': {label} must be a length; got {value}")
+                raise _assembly_declaration_refusal(
+                    f"'{self.tool}': {label} must be a length; got {value}",
+                    subject="body_diameter and reach",
+                    source=_TOOL_SOURCE,
+                )
             if not value.to("mm").magnitude > 0:
-                raise ValueError(f"'{self.tool}': {label} must be positive; got {value}")
+                raise _assembly_declaration_refusal(
+                    f"'{self.tool}': {label} must be positive; got {value}",
+                    subject="body_diameter and reach",
+                    source=_TOOL_SOURCE,
+                )
         return self
 
 
@@ -174,12 +213,18 @@ class SwingRequirement(StatableModel):
             ("height", self.height),
         ):
             if not value.has_dimension("[length]") or value.to("mm").magnitude <= 0:
-                raise ValueError(
-                    f"'{self.feature}': {label} must be a positive length; got {value}"
+                raise _assembly_declaration_refusal(
+                    f"'{self.feature}': {label} must be a positive length; got {value}",
+                    subject="handle_length, handle_width, handle_thickness, and height",
+                    source=_WRENCH_SOURCE,
                 )
         arc = _degrees(self.required_arc, "required_arc")
         if not 0 < arc <= 360:
-            raise ValueError(f"'{self.feature}': required_arc must lie in (0, 360]°; got {arc}")
+            raise _assembly_declaration_refusal(
+                f"'{self.feature}': required_arc must lie in (0, 360]°; got {arc}",
+                subject="required_arc",
+                source=_WRENCH_SOURCE,
+            )
         return self
 
 
@@ -193,7 +238,11 @@ def _degrees(value: Quantity, name: str) -> float:
         "arcmin",
         "arcminute",
     }:
-        raise ValueError(f"{name} must be an angle; got {value}")
+        raise _assembly_declaration_refusal(
+            f"{name} must be an angle; got {value}",
+            subject=name,
+            source=_assembly_declaration_input_source(name),
+        )
     return value.to("degree").magnitude
 
 

@@ -30,6 +30,23 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from ._models import RevalidatedModel, each_one
 from .fetch import DatasetRecipe
+from .refusal import RefusalError, Remedy
+
+_CASE_SOURCE = "the suite case's Markdown specification, with every required heading"
+_VERDICT_SOURCE = "the scope verdict for the case and the sentence saying why it was refused"
+_MATERIALS_SOURCE = "the bundled materials database's names for the known materials"
+
+
+class _SpecbenchInputError(RefusalError, ValueError):
+    """A spec-benchmark input that cannot be used without correction."""
+
+
+def _specbench_refusal(message: str, *, subject: str, source: str) -> _SpecbenchInputError:
+    return _SpecbenchInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "MUSE_CASE_INDEX",
@@ -100,9 +117,11 @@ class CaseSpecification(RevalidatedModel):
     @classmethod
     def _at_least_one_part(cls, value: int) -> int:
         if value < 1:
-            raise ValueError(
+            raise _specbench_refusal(
                 f"a case declares {value} components; a design with no parts is not a "
-                "case this can be read as."
+                "case this can be read as.",
+                subject="component_count",
+                source=_CASE_SOURCE,
             )
         return value
 
@@ -129,11 +148,17 @@ class ScopeVerdict(RevalidatedModel):
     def _reason_or_nothing(cls, value: str, info) -> str:
         in_scope = info.data.get("in_scope")
         if in_scope is True and value:
-            raise ValueError("an in-scope case carries no reason; it was not refused")
+            raise _specbench_refusal(
+                "an in-scope case carries no reason; it was not refused",
+                subject="in_scope and reason",
+                source=_VERDICT_SOURCE,
+            )
         if in_scope is False and not value.strip():
-            raise ValueError(
+            raise _specbench_refusal(
                 "a refusal without a reason is the shape this module exists to avoid: "
-                "say what could not be expressed"
+                "say what could not be expressed",
+                subject="in_scope and reason",
+                source=_VERDICT_SOURCE,
             )
         return value
 
@@ -168,16 +193,20 @@ def parse_case_specification(case_id: str, markdown: str) -> CaseSpecification:
     }
     missing = [heading for heading in _REQUIRED_HEADINGS if heading not in sections]
     if missing:
-        raise ValueError(
+        raise _specbench_refusal(
             f"{case_id} is missing the heading(s) {missing}; the suite's format carries "
-            "them in every case, so this is a different document."
+            "them in every case, so this is a different document.",
+            subject="markdown",
+            source=_CASE_SOURCE,
         )
 
     quantity = sections["Planned Component Quantity"].splitlines()[0].strip()
     digits = re.search(r"\d+", quantity)
     if digits is None:
-        raise ValueError(
-            f"{case_id} states its component quantity as {quantity!r}, which has no number in it."
+        raise _specbench_refusal(
+            f"{case_id} states its component quantity as {quantity!r}, which has no number in it.",
+            subject="markdown",
+            source=_CASE_SOURCE,
         )
 
     names = tuple(

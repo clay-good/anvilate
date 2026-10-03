@@ -41,6 +41,22 @@ from pydantic import ConfigDict, field_validator
 from ._models import Named, Provenance, RevalidatedModel, StatableModel
 from .refusal import RefusalError, Remedy
 
+_PUBLISHER_SOURCE = "the dataset publisher's download page and published checksum"
+_CALLER_SOURCE = "the caller's own record of the retrieval date"
+_CACHE_SOURCE = "a cache directory path, or None for $ANVILATE_DATA_HOME"
+
+
+class _DatasetRecipeInputError(RefusalError, ValueError):
+    """A dataset-fetch input that cannot be used without correction."""
+
+
+def _dataset_recipe_refusal(message: str, *, subject: str, source: str) -> _DatasetRecipeInputError:
+    return _DatasetRecipeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "ConsentRequired",
     "attribution",
@@ -100,9 +116,11 @@ class DatasetRecipe(RevalidatedModel):
     @classmethod
     def _lowercase_hex(cls, value: str) -> str:
         if not _SHA256.match(value):
-            raise ValueError(
+            raise _dataset_recipe_refusal(
                 f"sha256 must be 64 lowercase hex characters; got {value!r}. A recipe "
-                "without a real digest cannot verify anything."
+                "without a real digest cannot verify anything.",
+                subject="sha256",
+                source=_PUBLISHER_SOURCE,
             )
         return value
 
@@ -110,9 +128,11 @@ class DatasetRecipe(RevalidatedModel):
     @classmethod
     def _safe_name(cls, value: str) -> str:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
-            raise ValueError(
+            raise _dataset_recipe_refusal(
                 f"name must be a plain file-safe token; got {value!r}. It becomes a path "
-                "in the cache, so a separator or a traversal in it is a write outside it."
+                "in the cache, so a separator or a traversal in it is a write outside it.",
+                subject="name",
+                source=_PUBLISHER_SOURCE,
             )
         return value
 
@@ -120,9 +140,11 @@ class DatasetRecipe(RevalidatedModel):
     @classmethod
     def _https_only(cls, value: str) -> str:
         if not value.startswith("https://"):
-            raise ValueError(
+            raise _dataset_recipe_refusal(
                 f"the source URL must be https; got {value!r}. A checksum proves the "
-                "bytes, and the transport should not be the weak half."
+                "bytes, and the transport should not be the weak half.",
+                subject="url",
+                source=_PUBLISHER_SOURCE,
             )
         return value
 
@@ -149,9 +171,11 @@ class FetchProvenance(StatableModel):
     @classmethod
     def _iso_date(cls, value: str) -> str:
         if not _ISO_DATE.match(value):
-            raise ValueError(
+            raise _dataset_recipe_refusal(
                 f"retrieved must be an ISO date the caller states; got {value!r}. This "
-                "module never reads the clock — a bundle's digest has to be reproducible."
+                "module never reads the clock — a bundle's digest has to be reproducible.",
+                subject="retrieved",
+                source=_CALLER_SOURCE,
             )
         return value
 
@@ -187,9 +211,11 @@ def cache_root(explicit: str | Path | None = None) -> Path:
     """
     if explicit is not None:
         if str(explicit) == "":
-            raise ValueError(
+            raise _dataset_recipe_refusal(
                 "an empty cache path is not the current directory: pass a real path, or "
-                "None to use $ANVILATE_DATA_HOME or the default cache."
+                "None to use $ANVILATE_DATA_HOME or the default cache.",
+                subject="explicit",
+                source=_CACHE_SOURCE,
             )
         return Path(explicit)
     from_env = os.environ.get("ANVILATE_DATA_HOME")

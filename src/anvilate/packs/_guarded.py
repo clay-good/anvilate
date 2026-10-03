@@ -33,9 +33,39 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel
+from ..refusal import RefusalError, Remedy
 from ..scorecard import Scorecard
 from ..standards import AllowableBasis, InsufficientBasis, require_basis
 from ..units import Quantity
+
+_DECLARED_VALUE_SOURCE = "the drawing, datasheet, or load case the declared value was taken from"
+_ALLOWABLE_SOURCE = "the materials database record for the material and property"
+
+
+class _GuardedPackInputError(RefusalError, ValueError):
+    """A pack element input that cannot be used without correction."""
+
+
+def _guarded_pack_refusal(message: str, *, subject: str, source: str) -> _GuardedPackInputError:
+    return _GuardedPackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _guarded_pack_input_source(name: str) -> str:
+    if name in {
+        "basis",
+        "disclosure",
+        "material_id",
+        "note",
+        "property_name",
+        "quantity",
+        "record",
+    }:
+        return _ALLOWABLE_SOURCE
+    return _DECLARED_VALUE_SOURCE
+
 
 __all__ = [
     "DESIGN_BASIS",
@@ -62,13 +92,19 @@ def _check_nested(model: BaseModel, prefix: str, _depth: int = 0) -> None:
         # this whole guard silently inert once already.
         if isinstance(value, Quantity):
             if not isfinite(value.magnitude):
-                raise ValueError(f"{prefix}.{name} must be a finite quantity; got {value}")
+                raise _guarded_pack_refusal(
+                    f"{prefix}.{name} must be a finite quantity; got {value}",
+                    subject=f"{prefix}.{name}",
+                    source=_DECLARED_VALUE_SOURCE,
+                )
             if value.magnitude < 0:
-                raise ValueError(
+                raise _guarded_pack_refusal(
                     f"{prefix}.{name} must not be negative; got {value}. Nested input "
                     f"models describe geometry, which is positive-definite — a negative "
                     f"value here produces a negative section property that reads as extra "
-                    f"capacity downstream."
+                    f"capacity downstream.",
+                    subject=f"{prefix}.{name}",
+                    source=_DECLARED_VALUE_SOURCE,
                 )
         elif isinstance(value, BaseModel):
             _check_nested(value, f"{prefix}.{name}", _depth + 1)
@@ -109,9 +145,11 @@ class GuardedInputs(RevalidatedModel):
                 and not isinstance(value, bool)
                 and not value > 0
             ):
-                raise ValueError(
+                raise _guarded_pack_refusal(
                     f"{name} must be greater than zero; got {value}. The screen has no answer "
-                    f"to give for a zero or negative {name.replace('_', ' ')}"
+                    f"to give for a zero or negative {name.replace('_', ' ')}",
+                    subject=name,
+                    source=_guarded_pack_input_source(name),
                 )
             # Quantity is ITSELF a pydantic model, so the nested-model branch has to come
             # second or it swallows every quantity field and the guard checks nothing.
@@ -126,20 +164,26 @@ class GuardedInputs(RevalidatedModel):
                     _check_nested(value, name)
                 continue
             if not isfinite(value.magnitude):
-                raise ValueError(
+                raise _guarded_pack_refusal(
                     f"{name} must be a finite quantity; got {value}. A NaN or an infinity "
                     f"here is an arithmetic accident upstream, and carrying it into a "
-                    f"screen produces a verdict nobody can read."
+                    f"screen produces a verdict nobody can read.",
+                    subject=name,
+                    source=_guarded_pack_input_source(name),
                 )
             if name not in signed and value.magnitude < 0:
-                raise ValueError(
+                raise _guarded_pack_refusal(
                     f"{name} must not be negative; got {value}. If the sign is meant to "
-                    f"carry information, declare the field in this model's signed_fields."
+                    f"carry information, declare the field in this model's signed_fields.",
+                    subject=name,
+                    source=_guarded_pack_input_source(name),
                 )
             if name in type(self).positive_fields and value.magnitude == 0:
-                raise ValueError(
+                raise _guarded_pack_refusal(
                     f"{name} must be greater than zero; got {value}. The screen has no answer "
-                    f"to give for a zero {name.replace('_', ' ')}"
+                    f"to give for a zero {name.replace('_', ' ')}",
+                    subject=name,
+                    source=_guarded_pack_input_source(name),
                 )
         return self
 

@@ -60,8 +60,26 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import RevalidatedModel, _reason, cited
+from .refusal import RefusalError, Remedy
 from .spec.ir import Environment
 from .units import Quantity, UnitError, render, spoken
+
+_SHEET_SOURCE = "the requirement sheet itself, at the line the value was read from"
+_SIGNOFF_SOURCE = "the reviewing engineer's per-value confirmation or rejection"
+_CERTIFICATE_SOURCE = "the calibration certificate as issued by the laboratory"
+_PDF_SOURCE = "the requirement sheet's PDF file, passed as the bytes read from disk"
+
+
+class _IngestInputError(RefusalError, ValueError):
+    """A requirements-ingestion input that cannot be used without correction."""
+
+
+def _ingest_refusal(message: str, *, subject: str, source: str) -> _IngestInputError:
+    return _IngestInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "Bound",
@@ -222,16 +240,26 @@ class SourceLocation(RevalidatedModel):
     @model_validator(mode="after")
     def _locatable(self) -> SourceLocation:
         if not self.document.strip():
-            raise ValueError("a source location must name its document")
+            raise _ingest_refusal(
+                "a source location must name its document", subject="document", source=_SHEET_SOURCE
+            )
         if self.line_number < 1:
-            raise ValueError(f"line numbers start at 1; got {self.line_number}")
+            raise _ingest_refusal(
+                f"line numbers start at 1; got {self.line_number}",
+                subject="line_number",
+                source=_SHEET_SOURCE,
+            )
         if not self.excerpt.strip():
-            raise ValueError(
+            raise _ingest_refusal(
                 "a source location must carry the text it read; the excerpt is what makes "
-                "the extraction checkable instead of merely plausible"
+                "the extraction checkable instead of merely plausible",
+                subject="excerpt",
+                source=_SHEET_SOURCE,
             )
         if self.page is not None and self.page < 1:
-            raise ValueError(f"page numbers start at 1; got {self.page}")
+            raise _ingest_refusal(
+                f"page numbers start at 1; got {self.page}", subject="page", source=_SHEET_SOURCE
+            )
         return self
 
     def __str__(self) -> str:
@@ -293,7 +321,11 @@ class CertificateProvenance(RevalidatedModel):
     @model_validator(mode="after")
     def _identified(self) -> CertificateProvenance:
         if not self.laboratory.strip():
-            raise ValueError("a calibration certificate must name the laboratory that issued it")
+            raise _ingest_refusal(
+                "a calibration certificate must name the laboratory that issued it",
+                subject="laboratory",
+                source=_CERTIFICATE_SOURCE,
+            )
         return self
 
     def signature_line(self) -> str:
@@ -378,18 +410,26 @@ class ExtractedValue(RevalidatedModel):
     @model_validator(mode="after")
     def _state_and_signer_agree(self) -> ExtractedValue:
         if not self.field.strip():
-            raise ValueError("an extracted value must name the field it fills")
+            raise _ingest_refusal(
+                "an extracted value must name the field it fills",
+                subject="field",
+                source=_SHEET_SOURCE,
+            )
         signed = bool(self.confirmed_by and self.confirmed_by.strip())
         if self.state is ConfirmationState.DRAFT and signed:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{self.field!r} is a draft but names {self.confirmed_by!r} as having "
-                "confirmed it; a confirmation is a state change, not an annotation"
+                "confirmed it; a confirmation is a state change, not an annotation",
+                subject="state and confirmed_by",
+                source=_SIGNOFF_SOURCE,
             )
         if self.state is not ConfirmationState.DRAFT and not signed:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{self.field!r} is marked {self.state.value} with nobody named. "
                 "Confirmation is per value and names a person, because 'the values were "
-                "reviewed' is not a claim anybody can act on"
+                "reviewed' is not a claim anybody can act on",
+                subject="state and confirmed_by",
+                source=_SIGNOFF_SOURCE,
             )
         return self
 
@@ -407,10 +447,12 @@ class ExtractedValue(RevalidatedModel):
         "confirmed by " with an empty name. The check has to live on this path too.
         """
         if not by.strip():
-            raise ValueError(
+            raise _ingest_refusal(
                 f"marking {self.field!r} {state.value} names the person making the "
                 f"decision; confirmation is per value and per person, and an unsigned one "
-                f"is the state this model exists to refuse"
+                f"is the state this model exists to refuse",
+                subject="by",
+                source=_SIGNOFF_SOURCE,
             )
         return self.model_copy(update={"state": state, "confirmed_by": by.strip()})
 
@@ -471,21 +513,29 @@ class ExtractedEnvironment(RevalidatedModel):
     @model_validator(mode="after")
     def _state_and_signer_agree(self) -> ExtractedEnvironment:
         if not self.field.strip():
-            raise ValueError("an extracted environment must name the field it fills")
+            raise _ingest_refusal(
+                "an extracted environment must name the field it fills",
+                subject="field",
+                source=_SHEET_SOURCE,
+            )
         signed = bool(self.confirmed_by and self.confirmed_by.strip())
         if (self.state is ConfirmationState.DRAFT) == signed:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{self.field!r} ({self.environment.value}) is {self.state.value} and "
                 f"{'names' if signed else 'names nobody as'} its signer; a confirmation is a "
-                "state change that names a person"
+                "state change that names a person",
+                subject="state and confirmed_by",
+                source=_SIGNOFF_SOURCE,
             )
         return self
 
     def _decided(self, state: ConfirmationState, by: str) -> ExtractedEnvironment:
         if not by.strip():
-            raise ValueError(
+            raise _ingest_refusal(
                 f"marking {self.field!r} ({self.environment.value}) {state.value} names the "
-                "person making the decision"
+                "person making the decision",
+                subject="by",
+                source=_SIGNOFF_SOURCE,
             )
         return self.model_copy(update={"state": state, "confirmed_by": by.strip()})
 
@@ -514,7 +564,9 @@ class FieldConflict(RevalidatedModel):
     @model_validator(mode="after")
     def _actually_conflicting(self) -> FieldConflict:
         if len(self.values) < 2:
-            raise ValueError("a conflict needs at least two values")
+            raise _ingest_refusal(
+                "a conflict needs at least two values", subject="values", source=_SHEET_SOURCE
+            )
         return self
 
     def __str__(self) -> str:
@@ -544,18 +596,22 @@ class DraftSpec(BaseModel):
         """
         undecided = [e for e in self.environments if e.state is ConfirmationState.DRAFT]
         if undecided:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{len(undecided)} extracted environment(s) are still drafts: "
-                f"{', '.join(_said(e.environment) for e in undecided)}. Confirm or reject each"
+                f"{', '.join(_said(e.environment) for e in undecided)}. Confirm or reject each",
+                subject="environments",
+                source=_SIGNOFF_SOURCE,
             )
         chosen = sorted(
             {e.environment for e in self.environments if e.state is ConfirmationState.CONFIRMED}
         )
         if len(chosen) > 1:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{len(chosen)} environments are confirmed "
                 f"({', '.join(_said(e) for e in chosen)}) and a Design Spec states one; "
-                "reject the ones the part is not screened for"
+                "reject the ones the part is not screened for",
+                subject="environments",
+                source=_SIGNOFF_SOURCE,
             )
         return chosen[0] if chosen else None
 
@@ -638,11 +694,15 @@ class DraftSpec(BaseModel):
         unconfirmed value reaches a check.
         """
         if not by.strip():
-            raise ValueError("a confirmation names the person making it")
+            raise _ingest_refusal(
+                "a confirmation names the person making it", subject="by", source=_SIGNOFF_SOURCE
+            )
         carried = {v.field for v in self.values} | {e.field for e in self.environments}
         if field not in carried:
-            raise ValueError(
-                f"no extracted value for {field!r}; the draft carries {sorted(carried)}"
+            raise _ingest_refusal(
+                f"no extracted value for {field!r}; the draft carries {sorted(carried)}",
+                subject="field",
+                source=_SHEET_SOURCE,
             )
         already = [
             v
@@ -650,11 +710,13 @@ class DraftSpec(BaseModel):
             if v.field == field and v.state is not ConfirmationState.DRAFT and v.state is not state
         ]
         if already and not reconsider:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{field!r} already carries a decision "
                 f"({already[0].state.value} by {already[0].confirmed_by}) and this would "
                 f"overwrite it in place, leaving no trace that it was ever made. Reversing a "
-                f"decision is a new decision: pass reconsider=True to say so deliberately"
+                f"decision is a new decision: pass reconsider=True to say so deliberately",
+                subject="field and reconsider",
+                source=_SIGNOFF_SOURCE,
             )
 
         def _moved(value: ExtractedValue) -> ExtractedValue:
@@ -691,16 +753,20 @@ class DraftSpec(BaseModel):
         """
         outstanding = self.unconfirmed_load_bearing()
         if outstanding:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{len(outstanding)} load-bearing value(s) are still drafts and nobody has "
                 f"confirmed them: {sorted({v.field for v in outstanding})}. An extracted value "
-                f"is a draft, and a draft is not an input"
+                f"is a draft, and a draft is not an input",
+                subject="values",
+                source=_SIGNOFF_SOURCE,
             )
         conflicts = self.conflicts()
         if conflicts:
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{len(conflicts)} field(s) carry disagreeing values and no one has resolved "
-                f"them: {'; '.join(str(c) for c in conflicts)}"
+                f"them: {'; '.join(str(c) for c in conflicts)}",
+                subject="values",
+                source=_SIGNOFF_SOURCE,
             )
         # An environment is load-bearing — the failure modes a part is screened for turn on
         # it — so an undecided or doubled one blocks the quantities too, with its own reason.
@@ -715,7 +781,7 @@ class DraftSpec(BaseModel):
             bounds: dict[str, set[Bound]] = {}
             for value in self.confirmed():
                 bounds.setdefault(value.field, set()).add(value.bound)
-            raise ValueError(
+            raise _ingest_refusal(
                 f"{len(split)} field(s) carry more than one bound and this mapping has one "
                 f"slot per field: "
                 + "; ".join(
@@ -724,17 +790,21 @@ class DraftSpec(BaseModel):
                 )
                 + ". Both readings are true, so nothing here can choose between them — "
                 "reject the end the check does not consume, or extract them under separate "
-                "field names"
+                "field names",
+                subject="values",
+                source=_SIGNOFF_SOURCE,
             )
         released = {v.field: v.quantity for v in self.confirmed()}
         if not released:
             # Every value rejected, or every one informational and none confirmed. The two
             # gates above both pass, and handing the pipeline an empty mapping makes "there
             # is nothing here" indistinguishable from "everything checked out".
-            raise ValueError(
+            raise _ingest_refusal(
                 "nothing to release: the draft carries no confirmed value. That is not a "
                 "clean sheet, it is an empty one — a pipeline handed {} cannot tell the "
-                "difference"
+                "difference",
+                subject="values",
+                source=_SIGNOFF_SOURCE,
             )
         return released
 
@@ -918,10 +988,12 @@ def _bound_from_label(field: str) -> Bound:
         if any(tuple(tokens[i : i + len(phrase)]) == phrase for i in range(len(tokens)))
     }
     if len(found) > 1:
-        raise ValueError(
+        raise _ingest_refusal(
             f"the label {field!r} states both a maximum and a minimum, so it names two "
             f"requirements in one field. Split them into two lines — which end this value "
-            f"is is not something the pass may choose"
+            f"is is not something the pass may choose",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     return found.pop() if found else Bound.UNSTATED
 
@@ -952,10 +1024,12 @@ def _magnitude(text: str) -> str:
         return text
     if re.fullmatch(r"[-+]?\d{1,3}(,\d{3})+", text):
         return text.replace(",", "")
-    raise ValueError(
+    raise _ingest_refusal(
         f"the comma in {text!r} is ambiguous — it is a decimal point in most of Europe and "
         f"a thousands separator elsewhere, and the two readings differ by a factor of ten. "
-        f"Write it with a point, or group thousands in threes"
+        f"Write it with a point, or group thousands in threes",
+        subject="text",
+        source=_SHEET_SOURCE,
     )
 
 
@@ -970,10 +1044,12 @@ def _unit(text: str) -> tuple[str, Bound]:
     """
     unit = text.strip()
     if _RANGE_START.match(unit) or "±" in unit:
-        raise ValueError(
+        raise _ingest_refusal(
             f"{text!r} looks like a range or a tolerance, not a single value. State which "
             f"end of it the requirement means — a range multiplied out is not a number "
-            f"anybody wrote down"
+            f"anybody wrote down",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     tokens = unit.split()
     bound = Bound.UNSTATED
@@ -985,12 +1061,18 @@ def _unit(text: str) -> tuple[str, Bound]:
         tokens = tokens[:-1]
         unit = " ".join(tokens)
     if len(tokens) > 1 and tokens[-1].lower().strip(".") in _QUALIFIERS:
-        raise ValueError(
+        raise _ingest_refusal(
             f"{tokens[-1]!r} in {text!r} is a qualifier, not part of the unit. pint reads "
-            f"several of them as units and returns the wrong dimension without complaint"
+            f"several of them as units and returns the wrong dimension without complaint",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     if unit in _AMBIGUOUS_UNITS:
-        raise ValueError(f"{unit!r} is ambiguous: it reads as {_AMBIGUOUS_UNITS[unit]}")
+        raise _ingest_refusal(
+            f"{unit!r} is ambiguous: it reads as {_AMBIGUOUS_UNITS[unit]}",
+            subject="text",
+            source=_SHEET_SOURCE,
+        )
     return unit, bound
 
 
@@ -1036,10 +1118,12 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     bare = unit.strip()
     if bare in _AMBIGUOUS_UNIT_TOKENS:
         reads_as, meant = _AMBIGUOUS_UNIT_TOKENS[bare]
-        raise ValueError(
+        raise _ingest_refusal(
             f"{bare!r} is {reads_as} to the unit registry, not a temperature, and this line "
             f"gives no way to tell which was meant. Write {meant!r} or '°{bare.upper()}' for "
-            f"the temperature, or the unit's full name for the electrical quantity"
+            f"the temperature, or the unit's full name for the electrical quantity",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     try:
         quantity = Quantity.parse(f"{magnitude} {unit}")
@@ -1063,10 +1147,12 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     # the answer is not what the document says.
     stated = float(magnitude)
     if quantity.magnitude != stated:
-        raise ValueError(
+        raise _ingest_refusal(
             f"{magnitude!r} in {unit!r} parsed to a magnitude of {quantity.magnitude:g}, so "
             f"the unit half carries a number of its own — a range, a tolerance, or a second "
-            f"value. This is not one quantity"
+            f"value. This is not one quantity",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     # The two ways a written number stops being the number written. `inf kN` is refused by
     # the value pattern above, and `1e400 kN` walked straight past it: `float` overflows to
@@ -1074,14 +1160,18 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     # infinite load as a confirmable draft value. `1e-400 mm` is the mirror — a dimension
     # the author wrote as positive, extracted as exactly zero.
     if not isfinite(stated):
-        raise ValueError(
+        raise _ingest_refusal(
             f"{magnitude!r} overflows to {stated}; a value a float cannot hold is not the "
-            f"value the document states, and an infinite one is refused however it is spelt"
+            f"value the document states, and an infinite one is refused however it is spelt",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     if stated == 0.0 and any(digit in magnitude for digit in "123456789"):
-        raise ValueError(
+        raise _ingest_refusal(
             f"{magnitude!r} underflows to zero; the document states a value that is not "
-            f"zero and this pass will not record it as one"
+            f"zero and this pass will not record it as one",
+            subject="text",
+            source=_SHEET_SOURCE,
         )
     return quantity
 
@@ -1094,10 +1184,12 @@ def _combined_bound(field: str, from_label: Bound, from_qualifier: Bound) -> Bou
     """
     if from_label is from_qualifier or Bound.UNSTATED in (from_label, from_qualifier):
         return from_label if from_qualifier is Bound.UNSTATED else from_qualifier
-    raise ValueError(
+    raise _ingest_refusal(
         f"the label {field!r} states {from_label.phrase()} and the value states "
         f"{from_qualifier.phrase()}; one line cannot be both ends of a range, and choosing "
-        f"between them is a decision about the design"
+        f"between them is a decision about the design",
+        subject="text",
+        source=_SHEET_SOURCE,
     )
 
 
@@ -1159,7 +1251,9 @@ def extract_requirements(
     making the decision this module exists to hand to a person.
     """
     if not document.strip():
-        raise ValueError("extraction must name the document it read")
+        raise _ingest_refusal(
+            "extraction must name the document it read", subject="document", source=_SHEET_SOURCE
+        )
     informational = {_normalize(name) for name in informational_fields}
     values: list[ExtractedValue] = []
     unparsed: list[UnparsedLine] = []
@@ -1249,12 +1343,20 @@ def extract_requirements_from_pdf(
     and one with no loads read the same otherwise.
     """
     if not isinstance(document, str) or not document.strip():
-        raise ValueError("extraction must name the document it read")
+        raise _ingest_refusal(
+            "extraction must name the document it read", subject="document", source=_SHEET_SOURCE
+        )
     if not isinstance(data, bytes | bytearray):
-        raise ValueError(f"data must be the PDF's bytes; got {type(data).__name__}")
+        raise _ingest_refusal(
+            f"data must be the PDF's bytes; got {type(data).__name__}",
+            subject="data",
+            source=_PDF_SOURCE,
+        )
     if not bytes(data[:1024]).lstrip().startswith(b"%PDF-"):
-        raise ValueError(
-            f"{document!r} does not start with a PDF header; pass the file's bytes as read"
+        raise _ingest_refusal(
+            f"{document!r} does not start with a PDF header; pass the file's bytes as read",
+            subject="data",
+            source=_PDF_SOURCE,
         )
     try:
         import io
@@ -1309,7 +1411,11 @@ def extract_requirements_from_pdf(
         # and, deeper in, through whatever built-in its parser trips on, an AssertionError
         # included: 2,000 random corruptions of a valid sheet raised six types. To a caller
         # they are one fact, the refusal a malformed document gets everywhere else.
-        raise ValueError(f"{document!r} is not a readable PDF: {_reason(broken)}") from broken
+        raise _ingest_refusal(
+            f"{document!r} is not a readable PDF: {_reason(broken)}",
+            subject="data",
+            source=_PDF_SOURCE,
+        ) from broken
     return DraftSpec(
         values=tuple(value for draft in drafts for value in draft.values),
         unparsed=tuple(line for draft in drafts for line in draft.unparsed) + tuple(unparsed),

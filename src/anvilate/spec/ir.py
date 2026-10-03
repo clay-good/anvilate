@@ -36,6 +36,7 @@ from ..loads import (
     combination_evidence,
 )
 from ..margin import MarginEntry
+from ..refusal import RefusalError, Remedy
 from ..tolerance import (
     AchievabilityCheck,
     ResolvedTolerance,
@@ -53,6 +54,25 @@ from ..tolerance import (
 from ..topology import Constraint, Frame, IntendedFreedom, tally
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
+
+_DRAWING_SOURCE = "the part drawing and the mating interface's published geometry"
+_LOAD_SOURCE = "the design basis load cases and the site's seismic parameters"
+_REQUIREMENTS_SOURCE = "the requirements document's bounds and acceptance criteria"
+_KEEPOUT_SOURCE = "the layout drawing of the space the part must leave empty"
+_CARBON_SOURCE = "each material's EPD and the bill of materials masses"
+_ASSEMBLY_SOURCE = "the assembly procedure's build order and parts list"
+
+
+class _IrInputError(RefusalError, ValueError):
+    """A Design Spec document input that cannot be used without correction."""
+
+
+def _ir_refusal(message: str, *, subject: str, source: str) -> _IrInputError:
+    return _IrInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "DesignSpec",
@@ -170,11 +190,17 @@ class HolePattern(_Base):
         for field in ("diameter", "hole_size"):
             value: Quantity = getattr(self, field)
             if value.to("mm").magnitude <= 0:
-                raise ValueError(f"hole-pattern {field} must be positive; got {value}")
+                raise _ir_refusal(
+                    f"hole-pattern {field} must be positive; got {value}",
+                    subject="diameter and hole_size",
+                    source=_DRAWING_SOURCE,
+                )
         if self.hole_centers is not None and len(self.hole_centers) != self.hole_count:
-            raise ValueError(
+            raise _ir_refusal(
                 f"hole-pattern has {self.hole_count} holes but "
-                f"{len(self.hole_centers)} in-plane centers"
+                f"{len(self.hole_centers)} in-plane centers",
+                subject="hole_count and hole_centers",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -191,7 +217,11 @@ class InterfaceFrame(_Base):
     def _orthonormal_and_right_handed(self) -> InterfaceFrame:
         vectors = (self.x_axis, self.y_axis, self.normal)
         if any(abs(sqrt(sum(value * value for value in vector)) - 1) > 1e-9 for vector in vectors):
-            raise ValueError("interface-frame axes must be unit vectors")
+            raise _ir_refusal(
+                "interface-frame axes must be unit vectors",
+                subject="x_axis, y_axis, and normal",
+                source=_DRAWING_SOURCE,
+            )
         if any(
             abs(sum(a * b for a, b in zip(left, right, strict=True))) > 1e-9
             for left, right in (
@@ -200,7 +230,11 @@ class InterfaceFrame(_Base):
                 (self.y_axis, self.normal),
             )
         ):
-            raise ValueError("interface-frame axes must be mutually perpendicular")
+            raise _ir_refusal(
+                "interface-frame axes must be mutually perpendicular",
+                subject="x_axis, y_axis, and normal",
+                source=_DRAWING_SOURCE,
+            )
         cross = (
             self.x_axis[1] * self.y_axis[2] - self.x_axis[2] * self.y_axis[1],
             self.x_axis[2] * self.y_axis[0] - self.x_axis[0] * self.y_axis[2],
@@ -210,7 +244,11 @@ class InterfaceFrame(_Base):
             abs(actual - expected) > 1e-9
             for actual, expected in zip(cross, self.normal, strict=True)
         ):
-            raise ValueError("interface-frame x_axis cross y_axis must equal normal")
+            raise _ir_refusal(
+                "interface-frame x_axis cross y_axis must equal normal",
+                subject="x_axis, y_axis, and normal",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
 
@@ -227,14 +265,24 @@ class CircularLocator(_Base):
         for field in ("diameter", "axial_extent"):
             value: Quantity = getattr(self, field)
             if value.to("mm").magnitude <= 0:
-                raise ValueError(f"circular-locator {field} must be positive; got {value}")
+                raise _ir_refusal(
+                    f"circular-locator {field} must be positive; got {value}",
+                    subject="diameter and axial_extent",
+                    source=_DRAWING_SOURCE,
+                )
         if (self.kind == "counterbore") != (self.through_diameter is not None):
-            raise ValueError("only a counterbore locator carries through_diameter")
+            raise _ir_refusal(
+                "only a counterbore locator carries through_diameter",
+                subject="kind and through_diameter",
+                source=_DRAWING_SOURCE,
+            )
         if self.through_diameter is not None:
             through = self.through_diameter.to("mm").magnitude
             if through <= 0 or through >= self.diameter.to("mm").magnitude:
-                raise ValueError(
-                    "a counterbore through diameter must be positive and smaller than its recess"
+                raise _ir_refusal(
+                    "a counterbore through diameter must be positive and smaller than its recess",
+                    subject="through_diameter and diameter",
+                    source=_DRAWING_SOURCE,
                 )
         return self
 
@@ -340,9 +388,14 @@ class ConstraintDeclaration(_Base):
 def _positive(owner: str, **extents: Quantity) -> None:
     for field, value in extents.items():
         if value.to("mm").magnitude <= 0:
-            raise ValueError(
+            raise _ir_refusal(
                 f"{owner} {field} must be positive; got {value}. A keepout with no volume is a "
-                "constraint nothing can violate, and it would pass forever"
+                "constraint nothing can violate, and it would pass forever",
+                subject=(
+                    "width, depth, height, diameter, base_diameter, profile_width, "
+                    "profile_height, and path_length"
+                ),
+                source=_KEEPOUT_SOURCE,
             )
 
 
@@ -389,8 +442,10 @@ class FrustumKeepout(_Base):
     def _a_volume(self) -> FrustumKeepout:
         _positive("a frustum keepout's", base_diameter=self.base_diameter, height=self.height)
         if self.top_diameter.to("mm").magnitude < 0:
-            raise ValueError(
-                f"a frustum keepout's top_diameter cannot be negative; got {self.top_diameter}"
+            raise _ir_refusal(
+                f"a frustum keepout's top_diameter cannot be negative; got {self.top_diameter}",
+                subject="top_diameter",
+                source=_KEEPOUT_SOURCE,
             )
         return self
 
@@ -429,9 +484,11 @@ class ImportedBodyKeepout(_Base):
     @model_validator(mode="after")
     def _a_volume(self) -> ImportedBodyKeepout:
         if self.volume.to("mm**3").magnitude <= 0:
-            raise ValueError(
+            raise _ir_refusal(
                 f"an imported keepout's volume must be positive; got {self.volume}. A keepout "
-                "with no volume is a constraint nothing can violate, and it would pass forever"
+                "with no volume is a constraint nothing can violate, and it would pass forever",
+                subject="volume",
+                source=_KEEPOUT_SOURCE,
             )
         return self
 
@@ -469,9 +526,11 @@ class Keepout(_Base):
     @model_validator(mode="after")
     def _a_margin(self) -> Keepout:
         if self.clearance_margin.to("mm").magnitude < 0:
-            raise ValueError(
+            raise _ir_refusal(
                 f"keepout '{self.tag}': clearance_margin cannot be negative; got "
-                f"{self.clearance_margin}"
+                f"{self.clearance_margin}",
+                subject="clearance_margin",
+                source=_KEEPOUT_SOURCE,
             )
         return self
 
@@ -495,7 +554,11 @@ class CarbonLine(_Base):
     @model_validator(mode="after")
     def _a_mass(self) -> CarbonLine:
         if not self.mass.magnitude > 0:
-            raise ValueError(f"carbon line '{self.label}': mass must be positive; got {self.mass}")
+            raise _ir_refusal(
+                f"carbon line '{self.label}': mass must be positive; got {self.mass}",
+                subject="mass",
+                source=_CARBON_SOURCE,
+            )
         return self
 
 
@@ -515,10 +578,18 @@ class CarbonDeclaration(_Base):
         labels = [line.label for line in self.lines]
         doubled = sorted({label for label in labels if labels.count(label) > 1})
         if doubled:
-            raise ValueError(f"the carbon lines name {', '.join(doubled)} more than once")
+            raise _ir_refusal(
+                f"the carbon lines name {', '.join(doubled)} more than once",
+                subject="lines",
+                source=_CARBON_SOURCE,
+            )
         if self.budget is not None:
             if not self.budget.magnitude > 0:
-                raise ValueError(f"the carbon budget must be positive; got {self.budget}")
+                raise _ir_refusal(
+                    f"the carbon budget must be positive; got {self.budget}",
+                    subject="budget",
+                    source=_CARBON_SOURCE,
+                )
         return self
 
 
@@ -549,26 +620,36 @@ class AssemblyDeclaration(_Base):
         for label, values in (("state", order), ("part", names)):
             repeated = sorted({value for value in values if values.count(value) > 1})
             if repeated:
-                raise ValueError(f"the assembly declares the {label} {repeated} more than once")
+                raise _ir_refusal(
+                    f"the assembly declares the {label} {repeated} more than once",
+                    subject="states and parts",
+                    source=_ASSEMBLY_SOURCE,
+                )
         installed: dict[str, str] = {}
         for state in self.states:
             for part in state.installs:
                 if part not in names:
-                    raise ValueError(
+                    raise _ir_refusal(
                         f"state '{state.name}' installs '{part}', which the assembly does not "
-                        f"declare; its parts are {names}"
+                        f"declare; its parts are {names}",
+                        subject="states and parts",
+                        source=_ASSEMBLY_SOURCE,
                     )
                 if part in installed:
-                    raise ValueError(
-                        f"'{part}' is installed in both '{installed[part]}' and '{state.name}'"
+                    raise _ir_refusal(
+                        f"'{part}' is installed in both '{installed[part]}' and '{state.name}'",
+                        subject="states",
+                        source=_ASSEMBLY_SOURCE,
                     )
                 installed[part] = state.name
         for adjustment in self.adjustments:
             if adjustment.performed_in not in order:
-                raise ValueError(
+                raise _ir_refusal(
                     f"the adjustment of {adjustment.feature} is performed in "
                     f"'{adjustment.performed_in}', which the assembly does not define; its "
-                    f"states are {order}"
+                    f"states are {order}",
+                    subject="adjustments and states",
+                    source=_ASSEMBLY_SOURCE,
                 )
         return self
 
@@ -625,9 +706,11 @@ class DimensionChain(_Base):
         lo = self.required_min.to("mm").magnitude
         hi = self.required_max.to("mm").magnitude
         if hi < lo:
-            raise ValueError(
+            raise _ir_refusal(
                 f"chain {self.name!r} requires a clearance band with required_max "
-                f"({self.required_max}) below required_min ({self.required_min})"
+                f"({self.required_max}) below required_min ({self.required_min})",
+                subject="required_min and required_max",
+                source=_REQUIREMENTS_SOURCE,
             )
         return self
 
@@ -792,20 +875,30 @@ class GeometricTolerance(_Base):
     @model_validator(mode="after")
     def _well_formed(self) -> GeometricTolerance:
         if self.tolerance.to("mm").magnitude <= 0:
-            raise ValueError(
-                f"{self.characteristic.value} tolerance must be positive; got {self.tolerance}"
+            raise _ir_refusal(
+                f"{self.characteristic.value} tolerance must be positive; got {self.tolerance}",
+                subject="tolerance",
+                source=_DRAWING_SOURCE,
             )
         if self.characteristic in _FORM_CHARACTERISTICS and self.datums:
-            raise ValueError(
+            raise _ir_refusal(
                 f"{self.characteristic.value} is a form control and references no datum; "
-                f"got {self.datums}"
+                f"got {self.datums}",
+                subject="characteristic and datums",
+                source=_DRAWING_SOURCE,
             )
         if self.characteristic in _DATUM_REQUIRED and not self.datums:
-            raise ValueError(f"{self.characteristic.value} requires at least one datum reference")
+            raise _ir_refusal(
+                f"{self.characteristic.value} requires at least one datum reference",
+                subject="characteristic and datums",
+                source=_DRAWING_SOURCE,
+            )
         if len(set(self.datums)) != len(self.datums):
-            raise ValueError(
+            raise _ir_refusal(
                 f"a datum reference repeats in the frame {self.datums}; each datum is "
-                "referenced at most once (primary, secondary, tertiary)"
+                "referenced at most once (primary, secondary, tertiary)",
+                subject="datums",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -852,16 +945,23 @@ class LoadCase(_Base):
     @model_validator(mode="after")
     def _kind_carries_its_magnitude(self) -> LoadCase:
         if self.kind in (LoadKind.STATIC, LoadKind.QUASI_STATIC) and self.force is None:
-            raise ValueError(
-                f"a {self.kind.value} load case needs a force; none given on {self.name!r}"
+            raise _ir_refusal(
+                f"a {self.kind.value} load case needs a force; none given on {self.name!r}",
+                subject="kind and force",
+                source=_LOAD_SOURCE,
             )
         if self.kind is LoadKind.QUASI_STATIC and self.quasi_static_factor is None:
-            raise ValueError(
-                f"a quasi_static load case needs a quasi_static_factor; none given on {self.name!r}"
+            raise _ir_refusal(
+                f"a quasi_static load case needs a quasi_static_factor; none given on "
+                f"{self.name!r}",
+                subject="kind and quasi_static_factor",
+                source=_LOAD_SOURCE,
             )
         if self.kind is LoadKind.REMOTE_MASS and self.remote_mass is None:
-            raise ValueError(
-                f"a remote_mass load case needs a remote_mass; none given on {self.name!r}"
+            raise _ir_refusal(
+                f"a remote_mass load case needs a remote_mass; none given on {self.name!r}",
+                subject="kind and remote_mass",
+                source=_LOAD_SOURCE,
             )
         return self
 
@@ -881,7 +981,11 @@ class Envelope(_Base):
         for axis in ("x", "y", "z"):
             value: Quantity = getattr(self, axis)
             if value.to("mm").magnitude <= 0:
-                raise ValueError(f"envelope {axis} extent must be positive; got {value}")
+                raise _ir_refusal(
+                    f"envelope {axis} extent must be positive; got {value}",
+                    subject="x, y, and z",
+                    source=_REQUIREMENTS_SOURCE,
+                )
         return self
 
 
@@ -908,27 +1012,41 @@ class Constraints(_Base):
     @model_validator(mode="after")
     def _positive_bounds(self) -> Constraints:
         if self.max_mass is not None and self.max_mass.value.to("kg").magnitude <= 0:
-            raise ValueError(f"max_mass must be positive; got {self.max_mass.value}")
+            raise _ir_refusal(
+                f"max_mass must be positive; got {self.max_mass.value}",
+                subject="max_mass",
+                source=_REQUIREMENTS_SOURCE,
+            )
         if self.min_safety_factor is not None and self.min_safety_factor.value <= 0:
-            raise ValueError(
-                f"min_safety_factor must be positive; got {self.min_safety_factor.value}"
+            raise _ir_refusal(
+                f"min_safety_factor must be positive; got {self.min_safety_factor.value}",
+                subject="min_safety_factor",
+                source=_REQUIREMENTS_SOURCE,
             )
         if self.max_safety_factor is not None and self.max_safety_factor.value <= 0:
-            raise ValueError(
-                f"max_safety_factor must be positive; got {self.max_safety_factor.value}"
+            raise _ir_refusal(
+                f"max_safety_factor must be positive; got {self.max_safety_factor.value}",
+                subject="max_safety_factor",
+                source=_REQUIREMENTS_SOURCE,
             )
         if (
             self.min_safety_factor is not None
             and self.max_safety_factor is not None
             and self.max_safety_factor.value <= self.min_safety_factor.value
         ):
-            raise ValueError(
+            raise _ir_refusal(
                 f"max_safety_factor {self.max_safety_factor.value:g} is not above "
                 f"min_safety_factor {self.min_safety_factor.value:g}; a band whose top is at "
-                "or below its floor asks for a check to pass and be over-engineered at once"
+                "or below its floor asks for a check to pass and be over-engineered at once",
+                subject="min_safety_factor and max_safety_factor",
+                source=_REQUIREMENTS_SOURCE,
             )
         if self.max_cost is not None and self.max_cost.value <= 0:
-            raise ValueError(f"max_cost must be positive; got {self.max_cost.value}")
+            raise _ir_refusal(
+                f"max_cost must be positive; got {self.max_cost.value}",
+                subject="max_cost",
+                source=_REQUIREMENTS_SOURCE,
+            )
         return self
 
 
@@ -973,11 +1091,17 @@ class AcceptanceCriteria(_Base):
     @model_validator(mode="after")
     def _well_formed(self) -> AcceptanceCriteria:
         if len(set(self.tiers)) != len(self.tiers):
-            raise ValueError(
-                f"validation tiers must be unique; got {[t.value for t in self.tiers]}"
+            raise _ir_refusal(
+                f"validation tiers must be unique; got {[t.value for t in self.tiers]}",
+                subject="tiers",
+                source=_REQUIREMENTS_SOURCE,
             )
         if self.max_displacement is not None and self.max_displacement.to("mm").magnitude <= 0:
-            raise ValueError(f"max_displacement must be positive; got {self.max_displacement}")
+            raise _ir_refusal(
+                f"max_displacement must be positive; got {self.max_displacement}",
+                subject="max_displacement",
+                source=_REQUIREMENTS_SOURCE,
+            )
         return self
 
 
@@ -1093,7 +1217,11 @@ class DesignSpec(_Base):
         tags = [keepout.tag for keepout in self.keepouts]
         repeated = sorted({tag for tag in tags if tags.count(tag) > 1})
         if repeated:
-            raise ValueError(f"keepouts declare the tag {repeated} more than once")
+            raise _ir_refusal(
+                f"keepouts declare the tag {repeated} more than once",
+                subject="keepouts",
+                source=_KEEPOUT_SOURCE,
+            )
         return self
 
     @model_validator(mode="after")
@@ -1107,9 +1235,11 @@ class DesignSpec(_Base):
         }
         for constraint in self.constraint_topology.constraints:
             if constraint.feature not in tags:
-                raise ValueError(
+                raise _ir_refusal(
                     f"constraint_topology names the feature '{constraint.feature}', which this "
-                    f"document does not tag; its tags are {sorted(tags) or 'none'}"
+                    f"document does not tag; its tags are {sorted(tags) or 'none'}",
+                    subject="constraint_topology, interfaces, dimensions, and geometric_tolerances",
+                    source=_DRAWING_SOURCE,
                 )
         return self
 
@@ -1118,17 +1248,25 @@ class DesignSpec(_Base):
         """Neither half of an element declaration means anything without the other."""
         if self.element_type is None:
             if self.element_params:
-                raise ValueError(
+                raise _ir_refusal(
                     "element_params were given with no element_type, so nothing says which "
-                    "pack element they belong to; declare the type or drop the parameters"
+                    "pack element they belong to; declare the type or drop the parameters",
+                    subject="element_type and element_params",
+                    source=_DRAWING_SOURCE,
                 )
             return self
         if not self.element_type.strip():
-            raise ValueError("element_type is a pack element's tag; an empty string is not one")
+            raise _ir_refusal(
+                "element_type is a pack element's tag; an empty string is not one",
+                subject="element_type",
+                source=_DRAWING_SOURCE,
+            )
         if not self.element_params:
-            raise ValueError(
+            raise _ir_refusal(
                 f"element_type {self.element_type!r} is declared with no element_params, and "
-                "no pack element screens on its name alone; state the element's fields"
+                "no pack element screens on its name alone; state the element's fields",
+                subject="element_type and element_params",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -1152,9 +1290,11 @@ class DesignSpec(_Base):
         if self.combination_basis == "asce7_asd":
             return asce7_asd_basic()
         if self.seismic_design_acceleration is None:
-            raise ValueError(
+            raise _ir_refusal(
                 f"combination_basis {self.combination_basis!r} needs "
-                "seismic_design_acceleration (S_DS) to be declared"
+                "seismic_design_acceleration (S_DS) to be declared",
+                subject="combination_basis and seismic_design_acceleration",
+                source=_LOAD_SOURCE,
             )
         if self.combination_basis == "asce7_lrfd_seismic":
             return asce7_lrfd_seismic(

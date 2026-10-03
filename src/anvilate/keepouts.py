@@ -32,6 +32,7 @@ from .derivation import DerivationAbsence, Underived
 from .export.dxf import _atomic_path
 from .export.gate import ExportAuthorization
 from .geometry import BuiltGeometry, GeometryUnavailable
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from .spec import (
     CylinderKeepout,
@@ -41,6 +42,23 @@ from .spec import (
     PrismKeepout,
     SweptProfileKeepout,
 )
+
+_KEEPOUT_DECLARATION_SOURCE = "the keepouts declared in the part's design spec"
+_NEIGHBOUR_SOURCE = "the assembly drawing's neighbouring parts and their clearances"
+_BUILT_PART_SOURCE = "the part's built geometry from its audited design spec"
+_EXPORT_GATE_SOURCE = "the authorization authorize_export issued for this part's scorecard"
+
+
+class _KeepoutsInputError(RefusalError, ValueError):
+    """A keepout input that cannot be used without correction."""
+
+
+def _keepouts_refusal(message: str, *, subject: str, source: str) -> _KeepoutsInputError:
+    return _KeepoutsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "KeepoutArchetype",
@@ -411,7 +429,11 @@ def write_keepout_step(
     the same bodies write the same bytes.
     """
     if not bodies:
-        raise ValueError("there are no keepout bodies to write; screen_keepouts built none")
+        raise _keepouts_refusal(
+            "there are no keepout bodies to write; screen_keepouts built none",
+            subject="bodies",
+            source=_KEEPOUT_DECLARATION_SOURCE,
+        )
     b = _kernel()
     from .geometry import _GVP_RECOMMENDED_PRACTICE, _step_string
 

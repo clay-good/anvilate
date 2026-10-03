@@ -30,8 +30,25 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._models import EMPTY_MAP, FrozenMap, ItemCollection, Named, StatableModel, each_one
 from .margin import MarginEntry
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
+
+_REGISTRY_SOURCE = "the check registry declaring each check's id, outputs, and consumptions"
+_DIMENSION_SOURCE = "the upstream check's declared output dimension in the check registry"
+_RESULT_SOURCE = "the check's own scorecard entry and outputs from its evaluation"
+
+
+class _DependencyInputError(RefusalError, ValueError):
+    """A check-dependency input that cannot be used without correction."""
+
+
+def _dependency_refusal(message: str, *, subject: str, source: str) -> _DependencyInputError:
+    return _DependencyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "Output",
@@ -86,18 +103,26 @@ class CheckNode(StatableModel):
     def _well_formed(self) -> CheckNode:
         produced = [output.name for output in self.produces]
         if len(set(produced)) != len(produced):
-            raise ValueError(f"check '{self.id}' produces one output twice: {sorted(produced)}")
+            raise _dependency_refusal(
+                f"check '{self.id}' produces one output twice: {sorted(produced)}",
+                subject="produces",
+                source=_REGISTRY_SOURCE,
+            )
         parameters = [consumed.parameter for consumed in self.consumes]
         if len(set(parameters)) != len(parameters):
-            raise ValueError(
+            raise _dependency_refusal(
                 f"check '{self.id}' binds one parameter twice: {sorted(parameters)}; a "
-                "parameter fed from two upstream outputs is a question about which wins"
+                "parameter fed from two upstream outputs is a question about which wins",
+                subject="consumes",
+                source=_REGISTRY_SOURCE,
             )
         for consumed in self.consumes:
             if consumed.upstream == self.id:
-                raise ValueError(
+                raise _dependency_refusal(
                     f"check '{self.id}' consumes its own output '{consumed.output}'; a check "
-                    "cannot be upstream of itself"
+                    "cannot be upstream of itself",
+                    subject="consumes",
+                    source=_REGISTRY_SOURCE,
                 )
         return self
 
@@ -113,41 +138,53 @@ class DependencyGraph(ItemCollection, StatableModel):
     def _resolvable_and_acyclic(self) -> DependencyGraph:
         ids = [node.id for node in self.nodes]
         if len(set(ids)) != len(ids):
-            raise ValueError(f"the graph carries one check id twice: {sorted(ids)}")
+            raise _dependency_refusal(
+                f"the graph carries one check id twice: {sorted(ids)}",
+                subject="nodes",
+                source=_REGISTRY_SOURCE,
+            )
         by_id = {node.id: node for node in self.nodes}
         for node in self.nodes:
             for consumed in node.consumes:
                 upstream = by_id.get(consumed.upstream)
                 if upstream is None:
-                    raise ValueError(
+                    raise _dependency_refusal(
                         f"check '{node.id}' consumes '{consumed.output}' from "
                         f"'{consumed.upstream}', which this graph does not carry; a "
                         "dependency on a check nobody registered cannot be ordered or "
-                        "propagated along"
+                        "propagated along",
+                        subject="upstream",
+                        source=_REGISTRY_SOURCE,
                     )
                 produced = {output.name: output for output in upstream.produces}
                 output = produced.get(consumed.output)
                 if output is None:
-                    raise ValueError(
+                    raise _dependency_refusal(
                         f"check '{node.id}' consumes '{consumed.output}' from "
                         f"'{consumed.upstream}', which produces "
-                        f"{sorted(produced) or 'nothing'}"
+                        f"{sorted(produced) or 'nothing'}",
+                        subject="upstream and output",
+                        source=_REGISTRY_SOURCE,
                     )
                 if output.dimension != consumed.dimension:
-                    raise ValueError(
+                    raise _dependency_refusal(
                         f"check '{node.id}' takes '{consumed.parameter}' in "
                         f"{consumed.dimension} and '{consumed.upstream}.{consumed.output}' is "
                         f"{output.dimension}; a chain across two dimensions is caught here, "
-                        "at registration, rather than on the first spec that runs it"
+                        "at registration, rather than on the first spec that runs it",
+                        subject="dimension",
+                        source=_DIMENSION_SOURCE,
                     )
         cycles = find_cycles(self.nodes)
         if cycles:
             described = "; ".join(" -> ".join(cycle) for cycle in cycles)
-            raise ValueError(
+            raise _dependency_refusal(
                 f"declared consumptions form {len(cycles)} cycle(s): {described}. Every member "
                 "is named because the edge that closed the loop is an artifact of declaration "
                 "order, and breaking a cycle by choosing a starting point would make the "
-                "result depend on it"
+                "result depend on it",
+                subject="consumes",
+                source=_REGISTRY_SOURCE,
             )
         return self
 
@@ -183,7 +220,9 @@ class DependencyGraph(ItemCollection, StatableModel):
         number resting on a value nobody produced.
         """
         if check not in {node.id for node in self.nodes}:
-            raise ValueError(f"this graph carries no check '{check}'")
+            raise _dependency_refusal(
+                f"this graph carries no check '{check}'", subject="check", source=_REGISTRY_SOURCE
+            )
         reached: set[str] = set()
         frontier = {check}
         while frontier:
@@ -205,7 +244,9 @@ class DependencyGraph(ItemCollection, StatableModel):
         """
         by_id = {node.id: node for node in self.nodes}
         if check not in by_id:
-            raise ValueError(f"this graph carries no check '{check}'")
+            raise _dependency_refusal(
+                f"this graph carries no check '{check}'", subject="check", source=_REGISTRY_SOURCE
+            )
         reached: set[str] = set()
         frontier = {check}
         while frontier:
@@ -313,10 +354,12 @@ class ChainResult(StatableModel):
     @model_validator(mode="after")
     def _a_result(self) -> ChainResult:
         if self.outputs and not self.entry.evaluated:
-            raise ValueError(
+            raise _dependency_refusal(
                 f"check '{self.check}' is {self.entry.status.value} and hands "
                 f"{sorted(self.outputs)} downstream; a check that did not run produced no "
-                "value, and passing one on is how a number nobody computed reaches a verdict"
+                "value, and passing one on is how a number nobody computed reaches a verdict",
+                subject="entry and outputs",
+                source=_RESULT_SOURCE,
             )
         return self
 
@@ -403,7 +446,9 @@ class ChainRun(StatableModel):
         for result in self.results:
             if result.check == check:
                 return result
-        raise ValueError(f"this run carries no check '{check}'")
+        raise _dependency_refusal(
+            f"this run carries no check '{check}'", subject="check", source=_RESULT_SOURCE
+        )
 
     def inherited_margins(self, check: str) -> tuple[MarginEntry, ...]:
         """Every margin in force on ``check``: its own and every upstream one, upstream first.
@@ -491,10 +536,12 @@ def run_chain(
         }
         result = run_check(name, inputs)
         if result.check != name:
-            raise ValueError(
+            raise _dependency_refusal(
                 f"run_check was asked for '{name}' and returned a result for "
                 f"'{result.check}'; a chain assembled from mislabelled results would record "
-                "an order it did not run in"
+                "an order it did not run in",
+                subject="run_check",
+                source=_RESULT_SOURCE,
             )
         if not result.entry.evaluated:
             blocked[name] = name

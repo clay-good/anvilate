@@ -39,6 +39,25 @@ from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import CircularLocator, DesignSpec, HolePattern, InterfaceContract, InterfaceFrame
 from .units import Quantity
 
+_STEP_SOURCE = "the imported STEP file's measured solids, faces, and mates"
+_REQUIREMENT_SOURCE = "the cited interface requirement: minimum area, gap band, or engagement"
+_FIT_SOURCE = "the ISO 286 limits for the cited fit designation and basic size"
+_CHECK_RECORD_SOURCE = "the record written by the matching check_* function, unedited"
+_IMAGE_SOURCE = "the rendered viewport image bytes and their recorded sha256"
+_SPEC_SOURCE = "the audited Design Spec and its export authorization"
+
+
+class _GeometryInputError(RefusalError, ValueError):
+    """A geometry input that cannot be used without correction."""
+
+
+def _geometry_input_refusal(message: str, *, subject: str, source: str) -> _GeometryInputError:
+    return _GeometryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "BASE_PLATE_PATTERN",
     "COVER_PLATE_PATTERN",
@@ -182,10 +201,16 @@ class ViewportImage(StatableModel):
         try:
             data = base64.b64decode(self.image, validate=True)
         except ValueError as failure:
-            raise ValueError("image must be valid base64") from failure
+            raise _geometry_input_refusal(
+                "image must be valid base64", subject="image", source=_IMAGE_SOURCE
+            ) from failure
         actual = sha256(data).hexdigest()
         if actual != self.sha256:
-            raise ValueError(f"sha256 does not match image bytes: computed {actual}")
+            raise _geometry_input_refusal(
+                f"sha256 does not match image bytes: computed {actual}",
+                subject="image and sha256",
+                source=_IMAGE_SOURCE,
+            )
         return self
 
 
@@ -279,9 +304,11 @@ class HolePatternCandidate(StatableModel):
     @model_validator(mode="after")
     def _count_matches_centers(self) -> HolePatternCandidate:
         if self.hole_count != len(self.hole_centers_mm):
-            raise ValueError(
+            raise _geometry_input_refusal(
                 f"hole_count is {self.hole_count}, but "
-                f"{len(self.hole_centers_mm)} centers are listed"
+                f"{len(self.hole_centers_mm)} centers are listed",
+                subject="hole_count and hole_centers_mm",
+                source=_STEP_SOURCE,
             )
         return self
 
@@ -299,9 +326,17 @@ class CircularFeatureCandidate(StatableModel):
     @model_validator(mode="after")
     def _counterbore_has_its_through_diameter(self) -> CircularFeatureCandidate:
         if (self.kind == "counterbore") != (self.through_diameter_mm is not None):
-            raise ValueError("only a counterbore candidate carries through_diameter_mm")
+            raise _geometry_input_refusal(
+                "only a counterbore candidate carries through_diameter_mm",
+                subject="kind and through_diameter_mm",
+                source=_STEP_SOURCE,
+            )
         if self.through_diameter_mm is not None and self.through_diameter_mm >= self.diameter_mm:
-            raise ValueError("a counterbore through diameter must be smaller than its recess")
+            raise _geometry_input_refusal(
+                "a counterbore through diameter must be smaller than its recess",
+                subject="through_diameter_mm and diameter_mm",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -330,7 +365,11 @@ class PlanarContactCandidate(StatableModel):
     @model_validator(mode="after")
     def _joins_two_different_solids(self) -> PlanarContactCandidate:
         if self.first_solid_id == self.second_solid_id:
-            raise ValueError("a planar contact candidate must join two different solids")
+            raise _geometry_input_refusal(
+                "a planar contact candidate must join two different solids",
+                subject="first_solid_id and second_solid_id",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -349,10 +388,18 @@ class PlanarGapCandidate(StatableModel):
     @model_validator(mode="after")
     def _is_one_directed_pair(self) -> PlanarGapCandidate:
         if self.first_solid_id == self.second_solid_id:
-            raise ValueError("a planar gap candidate must join two different solids")
+            raise _geometry_input_refusal(
+                "a planar gap candidate must join two different solids",
+                subject="first_solid_id and second_solid_id",
+                source=_STEP_SOURCE,
+            )
         direction_length = sqrt(sum(component**2 for component in self.direction))
         if abs(direction_length - 1) > 1e-9:
-            raise ValueError("planar gap direction must be a unit vector")
+            raise _geometry_input_refusal(
+                "planar gap direction must be a unit vector",
+                subject="direction",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -370,18 +417,30 @@ class SolidInterferenceCandidate(StatableModel):
     @model_validator(mode="after")
     def _is_one_bounded_pair(self) -> SolidInterferenceCandidate:
         if self.first_solid_id == self.second_solid_id:
-            raise ValueError("a solid interference must join two different solids")
+            raise _geometry_input_refusal(
+                "a solid interference must join two different solids",
+                subject="first_solid_id and second_solid_id",
+                source=_STEP_SOURCE,
+            )
         if any(
             low > high for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
         ):
-            raise ValueError("interference bounds minimum must not exceed its maximum")
+            raise _geometry_input_refusal(
+                "interference bounds minimum must not exceed its maximum",
+                subject="bounds_min_mm and bounds_max_mm",
+                source=_STEP_SOURCE,
+            )
         if any(
             center < low or center > high
             for center, low, high in zip(
                 self.center_mm, self.bounds_min_mm, self.bounds_max_mm, strict=True
             )
         ):
-            raise ValueError("interference bounds must contain its center")
+            raise _geometry_input_refusal(
+                "interference bounds must contain its center",
+                subject="center_mm, bounds_min_mm, and bounds_max_mm",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -403,13 +462,25 @@ class CylindricalMatingCandidate(StatableModel):
     @model_validator(mode="after")
     def _is_one_consistent_pair(self) -> CylindricalMatingCandidate:
         if self.bore_solid_id == self.shaft_solid_id:
-            raise ValueError("a cylindrical mating candidate must join two different solids")
+            raise _geometry_input_refusal(
+                "a cylindrical mating candidate must join two different solids",
+                subject="bore_solid_id and shaft_solid_id",
+                source=_STEP_SOURCE,
+            )
         expected = self.bore_diameter_mm - self.shaft_diameter_mm
         if abs(self.diametral_clearance_mm - expected) > 1e-9:
-            raise ValueError("diametral clearance must equal bore diameter minus shaft diameter")
+            raise _geometry_input_refusal(
+                "diametral clearance must equal bore diameter minus shaft diameter",
+                subject="bore_diameter_mm, shaft_diameter_mm, and diametral_clearance_mm",
+                source=_STEP_SOURCE,
+            )
         axis_length = sqrt(sum(component**2 for component in self.axis_direction))
         if abs(axis_length - 1) > 1e-9:
-            raise ValueError("cylindrical mating axis_direction must be a unit vector")
+            raise _geometry_input_refusal(
+                "cylindrical mating axis_direction must be a unit vector",
+                subject="axis_direction",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -427,14 +498,22 @@ class StepSolidCandidate(StatableModel):
         if any(
             low > high for low, high in zip(self.bounds_min_mm, self.bounds_max_mm, strict=True)
         ):
-            raise ValueError("solid bounds minimum must not exceed its maximum")
+            raise _geometry_input_refusal(
+                "solid bounds minimum must not exceed its maximum",
+                subject="bounds_min_mm and bounds_max_mm",
+                source=_STEP_SOURCE,
+            )
         if any(
             center < low or center > high
             for center, low, high in zip(
                 self.center_mm, self.bounds_min_mm, self.bounds_max_mm, strict=True
             )
         ):
-            raise ValueError("solid bounds must contain its center")
+            raise _geometry_input_refusal(
+                "solid bounds must contain its center",
+                subject="center_mm, bounds_min_mm, and bounds_max_mm",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -493,10 +572,18 @@ class PlanarContactAreaCheck(StatableModel):
     def _matches_its_minimum(self) -> PlanarContactAreaCheck:
         expected_margin = self.confirmed_contact.overlap_area_mm2 - self.minimum_overlap_area_mm2
         if abs(self.margin_above_minimum_mm2 - expected_margin) > 1e-9:
-            raise ValueError("contact-area margin must match the measured overlap")
+            raise _geometry_input_refusal(
+                "contact-area margin must match the measured overlap",
+                subject="confirmed_contact, minimum_overlap_area_mm2, and margin_above_minimum_mm2",
+                source=_CHECK_RECORD_SOURCE,
+            )
         expected_status = "pass" if expected_margin >= 0 else "fail"
         if self.status != expected_status:
-            raise ValueError("contact-area status must match the measured overlap and minimum")
+            raise _geometry_input_refusal(
+                "contact-area status must match the measured overlap and minimum",
+                subject="confirmed_contact, minimum_overlap_area_mm2, and status",
+                source=_CHECK_RECORD_SOURCE,
+            )
         return self
 
 
@@ -519,10 +606,18 @@ class ConfirmedPlanarGap(StatableModel):
     @model_validator(mode="after")
     def _preserves_one_directed_pair(self) -> ConfirmedPlanarGap:
         if self.first_solid_id == self.second_solid_id:
-            raise ValueError("a confirmed planar gap must join two different solids")
+            raise _geometry_input_refusal(
+                "a confirmed planar gap must join two different solids",
+                subject="first_solid_id and second_solid_id",
+                source=_STEP_SOURCE,
+            )
         direction_length = sqrt(sum(component**2 for component in self.direction))
         if abs(direction_length - 1) > 1e-9:
-            raise ValueError("confirmed planar gap direction must be a unit vector")
+            raise _geometry_input_refusal(
+                "confirmed planar gap direction must be a unit vector",
+                subject="direction",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -540,17 +635,33 @@ class PlanarGapClearanceCheck(StatableModel):
     @model_validator(mode="after")
     def _matches_its_band(self) -> PlanarGapClearanceCheck:
         if self.minimum_gap_mm > self.maximum_gap_mm:
-            raise ValueError("minimum gap must not exceed maximum gap")
+            raise _geometry_input_refusal(
+                "minimum gap must not exceed maximum gap",
+                subject="minimum_gap_mm and maximum_gap_mm",
+                source=_REQUIREMENT_SOURCE,
+            )
         separation = self.confirmed_gap.separation_mm
         expected_lower = separation - self.minimum_gap_mm
         expected_upper = self.maximum_gap_mm - separation
         if abs(self.margin_above_minimum_mm - expected_lower) > 1e-9:
-            raise ValueError("minimum-gap margin must match the measured separation")
+            raise _geometry_input_refusal(
+                "minimum-gap margin must match the measured separation",
+                subject="confirmed_gap, minimum_gap_mm, and margin_above_minimum_mm",
+                source=_CHECK_RECORD_SOURCE,
+            )
         if abs(self.margin_below_maximum_mm - expected_upper) > 1e-9:
-            raise ValueError("maximum-gap margin must match the measured separation")
+            raise _geometry_input_refusal(
+                "maximum-gap margin must match the measured separation",
+                subject="confirmed_gap, maximum_gap_mm, and margin_below_maximum_mm",
+                source=_CHECK_RECORD_SOURCE,
+            )
         expected_status = "pass" if expected_lower >= 0 and expected_upper >= 0 else "fail"
         if self.status != expected_status:
-            raise ValueError("gap-check status must match the measured separation and band")
+            raise _geometry_input_refusal(
+                "gap-check status must match the measured separation and band",
+                subject="confirmed_gap, minimum_gap_mm, maximum_gap_mm, and status",
+                source=_CHECK_RECORD_SOURCE,
+            )
         return self
 
 
@@ -576,13 +687,25 @@ class ConfirmedCylindricalMate(StatableModel):
     @model_validator(mode="after")
     def _preserves_consistent_geometry(self) -> ConfirmedCylindricalMate:
         if self.bore_solid_id == self.shaft_solid_id:
-            raise ValueError("a confirmed cylindrical mate must join two different solids")
+            raise _geometry_input_refusal(
+                "a confirmed cylindrical mate must join two different solids",
+                subject="bore_solid_id and shaft_solid_id",
+                source=_STEP_SOURCE,
+            )
         expected = self.bore_diameter_mm - self.shaft_diameter_mm
         if abs(self.diametral_clearance_mm - expected) > 1e-9:
-            raise ValueError("diametral clearance must equal bore diameter minus shaft diameter")
+            raise _geometry_input_refusal(
+                "diametral clearance must equal bore diameter minus shaft diameter",
+                subject="bore_diameter_mm, shaft_diameter_mm, and diametral_clearance_mm",
+                source=_STEP_SOURCE,
+            )
         axis_length = sqrt(sum(component**2 for component in self.axis_direction))
         if abs(axis_length - 1) > 1e-9:
-            raise ValueError("confirmed cylindrical mate axis_direction must be a unit vector")
+            raise _geometry_input_refusal(
+                "confirmed cylindrical mate axis_direction must be a unit vector",
+                subject="axis_direction",
+                source=_STEP_SOURCE,
+            )
         return self
 
 
@@ -599,10 +722,18 @@ class CylindricalMateEngagementCheck(StatableModel):
     def _matches_its_minimum(self) -> CylindricalMateEngagementCheck:
         expected_margin = self.confirmed_mate.axial_engagement_mm - self.minimum_axial_engagement_mm
         if abs(self.margin_above_minimum_mm - expected_margin) > 1e-9:
-            raise ValueError("engagement margin must match the measured axial engagement")
+            raise _geometry_input_refusal(
+                "engagement margin must match the measured axial engagement",
+                subject="confirmed_mate, minimum_axial_engagement_mm, and margin_above_minimum_mm",
+                source=_CHECK_RECORD_SOURCE,
+            )
         expected_status = "pass" if expected_margin >= 0 else "fail"
         if self.status != expected_status:
-            raise ValueError("engagement status must match the measured engagement and minimum")
+            raise _geometry_input_refusal(
+                "engagement status must match the measured engagement and minimum",
+                subject="confirmed_mate, minimum_axial_engagement_mm, and status",
+                source=_CHECK_RECORD_SOURCE,
+            )
         return self
 
 
@@ -618,10 +749,18 @@ class FitFeatureCheck(StatableModel):
     @model_validator(mode="after")
     def _matches_its_limits(self) -> FitFeatureCheck:
         if self.minimum_diameter_mm > self.maximum_diameter_mm:
-            raise ValueError("fit feature minimum diameter must not exceed its maximum")
+            raise _geometry_input_refusal(
+                "fit feature minimum diameter must not exceed its maximum",
+                subject="minimum_diameter_mm and maximum_diameter_mm",
+                source=_FIT_SOURCE,
+            )
         expected = self.minimum_diameter_mm <= self.measured_diameter_mm <= self.maximum_diameter_mm
         if self.within_zone is not expected:
-            raise ValueError("within_zone must match the measured diameter and limits")
+            raise _geometry_input_refusal(
+                "within_zone must match the measured diameter and limits",
+                subject="within_zone",
+                source=_CHECK_RECORD_SOURCE,
+            )
         return self
 
 
@@ -643,16 +782,31 @@ class CylindricalMateFitCheck(StatableModel):
     @model_validator(mode="after")
     def _matches_its_checks(self) -> CylindricalMateFitCheck:
         if self.minimum_design_clearance_mm > self.maximum_design_clearance_mm:
-            raise ValueError("minimum design clearance must not exceed maximum design clearance")
+            raise _geometry_input_refusal(
+                "minimum design clearance must not exceed maximum design clearance",
+                subject="minimum_design_clearance_mm and maximum_design_clearance_mm",
+                source=_FIT_SOURCE,
+            )
         measured = self.confirmed_mate.diametral_clearance_mm
         clearance_ok = (
             self.minimum_design_clearance_mm <= measured <= self.maximum_design_clearance_mm
         )
         if self.measured_clearance_within_design_range is not clearance_ok:
-            raise ValueError("measured clearance result must match the design clearance range")
+            raise _geometry_input_refusal(
+                "measured clearance result must match the design clearance range",
+                subject=(
+                    "confirmed_mate, minimum_design_clearance_mm, maximum_design_clearance_mm, "
+                    "and measured_clearance_within_design_range"
+                ),
+                source=_CHECK_RECORD_SOURCE,
+            )
         expected_status = "pass" if self.hole.within_zone and self.shaft.within_zone else "fail"
         if self.status != expected_status:
-            raise ValueError("fit-check status must match the hole and shaft checks")
+            raise _geometry_input_refusal(
+                "fit-check status must match the hole and shaft checks",
+                subject="hole, shaft, and status",
+                source=_CHECK_RECORD_SOURCE,
+            )
         return self
 
 

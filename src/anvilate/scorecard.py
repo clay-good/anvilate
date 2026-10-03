@@ -21,8 +21,27 @@ from pydantic import ConfigDict, Field, computed_field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
 from .derivation import Derivation, DerivationAbsence, Underived
+from .refusal import RefusalError, Remedy
 from .uncertainty import MarginUncertainty
 from .units import Quantity, UnitSystem, decimals_distinguishing, render, unit_label
+
+_REQUIREMENT_SOURCE = "the design code clause or project basis that sets the factor"
+_CALCULATION_SOURCE = "the check's own calculation and its derivation record"
+_CATALOGUE_SOURCE = "the failure-mode catalogue's ids for the modes the check covers"
+_NEED_SOURCE = "the design-spec declaration the check needs, with its unit and dimension"
+_INVERSE_SOURCE = "the design inverse's solved value for the failing check's parameter"
+
+
+class _ScorecardInputError(RefusalError, ValueError):
+    """A scorecard input that cannot be used without correction."""
+
+
+def _scorecard_refusal(message: str, *, subject: str, source: str) -> _ScorecardInputError:
+    return _ScorecardInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "CheckStatus",
@@ -172,7 +191,11 @@ class RepairHint(StatableModel):
         """
         if whole:
             if value != int(value):
-                raise ValueError(f"a whole corrective value must be integral; got {value}")
+                raise _scorecard_refusal(
+                    f"a whole corrective value must be integral; got {value}",
+                    subject="value",
+                    source=_INVERSE_SOURCE,
+                )
             return cls(
                 parameter=parameter,
                 direction=direction,
@@ -289,11 +312,13 @@ class Comparison(StatableModel):
     @model_validator(mode="after")
     def _the_two_are_comparable(self) -> Comparison:
         if self.measured.pint.dimensionality != self.limit.pint.dimensionality:
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"a comparison needs two quantities of the same dimension; got "
                 f"{self.measured.dimensionality} against {self.limit.dimensionality}. A "
                 f"length judged against a frequency is not a comparison, and a rendered "
-                f"sentence would give it the appearance of one"
+                f"sentence would give it the appearance of one",
+                subject="measured and limit",
+                source=_CALCULATION_SOURCE,
             )
         return self
 
@@ -358,15 +383,19 @@ class Need(StatableModel):
     @model_validator(mode="after")
     def _a_need(self) -> Need:
         if len(set(self.sources)) != len(self.sources):
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"the need for '{self.declaration}' names a source twice: "
-                f"{[s.value for s in self.sources]}"
+                f"{[s.value for s in self.sources]}",
+                subject="sources",
+                source=_NEED_SOURCE,
             )
         if self.dimension is None and self.units:
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"the need for '{self.declaration}' names units {list(self.units)} and no "
                 "dimension; a value with units is a quantity, and its dimension is what a "
-                "screen checks"
+                "screen checks",
+                subject="dimension and units",
+                source=_NEED_SOURCE,
             )
         return self
 
@@ -399,9 +428,11 @@ class AppliedFactor(StatableModel):
     @model_validator(mode="after")
     def _a_factor(self) -> AppliedFactor:
         if isnan(self.value) or self.value in (float("inf"), float("-inf")) or self.value < 1.0:
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"applied factor '{self.label}' is {self.value}; a factor applied inside a "
-                "capacity is a finite conservatism of at least 1"
+                "capacity is a finite conservatism of at least 1",
+                subject="value",
+                source=_REQUIREMENT_SOURCE,
             )
         return self
 
@@ -471,15 +502,19 @@ class ScorecardEntry(StatableModel):
     def _check_derivation_declaration(self) -> ScorecardEntry:
         _refuse_contradictions(self)
         if len(set(self.addresses)) != len(self.addresses):
-            raise ValueError(
-                f"check '{self.name}' names one failure mode twice in {list(self.addresses)}"
+            raise _scorecard_refusal(
+                f"check '{self.name}' names one failure mode twice in {list(self.addresses)}",
+                subject="addresses",
+                source=_CATALOGUE_SOURCE,
             )
         if self.needs and self.status is not CheckStatus.NOT_EVALUATED:
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"check '{self.name}' is {self.status.value} and names "
                 f"{[need.declaration for need in self.needs]} as declarations it needs; a "
                 "check that ran had what it needed, and a needs report built from this "
-                "would send a reader to supply a value that changed nothing"
+                "would send a reader to supply a value that changed nothing",
+                subject="status and needs",
+                source=_CALCULATION_SOURCE,
             )
         return self
 
@@ -578,12 +613,18 @@ class ScorecardEntry(StatableModel):
         # positive"); this is the same invariant on the screening side, where the silent
         # green actually lands.
         if required <= 0:
-            raise ValueError(
+            raise _scorecard_refusal(
                 f"required_safety_factor must be positive; got {required}. A "
-                f"non-positive requirement passes every check, including a failing one"
+                f"non-positive requirement passes every check, including a failing one",
+                subject="required",
+                source=_REQUIREMENT_SOURCE,
             )
         if upper is not None and upper <= 0:
-            raise ValueError(f"the upper safety-factor band must be positive; got {upper}")
+            raise _scorecard_refusal(
+                f"the upper safety-factor band must be positive; got {upper}",
+                subject="upper",
+                source=_REQUIREMENT_SOURCE,
+            )
         if computed is None:
             # The requirement is still known even though the factor is not, and the three
             # NaN branches below already keep what they know. This one used to drop both
@@ -745,9 +786,11 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
     construction path walks straight past.
     """
     if entry.derivation is not None and entry.underived is not None:
-        raise ValueError(
+        raise _scorecard_refusal(
             f"'{entry.name}' declares both a derivation and a reason it has none. "
-            f"One of them is wrong, and a reader cannot tell which"
+            f"One of them is wrong, and a reader cannot tell which",
+            subject="derivation and underived",
+            source=_CALCULATION_SOURCE,
         )
     # A LOOKUP claims there is no arithmetic between its two numbers. A computed safety
     # factor disproves that claim on its face, so this is the anti-relabelling rule and it
@@ -766,11 +809,13 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
         and entry.underived.kind is DerivationAbsence.LOOKUP
         and entry.safety_factor is not None
     ):
-        raise ValueError(
+        raise _scorecard_refusal(
             f"'{entry.name}' declares itself a lookup — {entry.underived.reason} — but "
             f"carries a computed safety factor of {entry.safety_factor:.4g}. A lookup has "
             f"no arithmetic between its two numbers, and this one has a factor between "
-            f"them. Debt is not retired by describing it"
+            f"them. Debt is not retired by describing it",
+            subject="underived and safety_factor",
+            source=_CALCULATION_SOURCE,
         )
 
 
