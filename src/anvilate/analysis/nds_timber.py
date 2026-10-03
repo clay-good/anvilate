@@ -414,6 +414,9 @@ def nds_shear_stress(
     the grain reaches F'_v before the bending stress reaches F'_b. Returns the shear stress in the
     force/area kind (a stress in psi or MPa).
     """
+    require_finite(depth, name="depth")
+    require_finite(shear_force, name="shear_force")
+    require_finite(width, name="width")
     if not isinstance(shear_force, Quantity):
         raise _timber_refusal(
             f"shear_force must be a [force] quantity; got {shear_force!r}",
@@ -534,6 +537,7 @@ def nds_bearing_area_factor(
     bearing — so a support *at* a member end must pass its own end distance to be screened
     correctly. Returns the dimensionless factor.
     """
+    require_finite(bearing_length, name="bearing_length")
     if not isinstance(bearing_length, Quantity):
         raise _timber_refusal(
             f"bearing_length must be a [length] quantity; got {bearing_length!r}",
@@ -598,6 +602,9 @@ def nds_bearing_stress(
     a few hundred psi perpendicular — so a member that passes bending and shear can still crush at
     its support. Returns the bearing stress in the force/area kind (a stress in psi or MPa).
     """
+    require_finite(bearing_force, name="bearing_force")
+    require_finite(bearing_length, name="bearing_length")
+    require_finite(width, name="width")
     if not isinstance(bearing_force, Quantity):
         raise _timber_refusal(
             f"bearing_force must be a [force] quantity; got {bearing_force!r}",
@@ -723,6 +730,7 @@ def nds_euler_buckling_stress(
     formula would give: a column that slender is outside the standard, and the number is
     not a design value.
     """
+    require_finite(min_modulus, name="min_modulus")
     require_finite(slenderness_ratio, name="slenderness_ratio")
     require_flag(
         during_construction,
@@ -1030,6 +1038,8 @@ def nds_column_stability_factor(
     penalty); a slender one drives it toward zero. Multiply F*_c by C_P for the
     adjusted compression value F'_c. ``c`` must lie in (0, 1]. Returns C_P in (0, 1].
     """
+    require_finite(euler_buckling_stress, name="euler_buckling_stress")
+    require_finite(reference_compression, name="reference_compression")
     require_finite(c, name="c")
     if not isinstance(euler_buckling_stress, Quantity):
         raise _timber_refusal(

@@ -169,6 +169,7 @@ def rossby_number(
     rotation dominates (synoptic weather, ocean gyres); Ro much above 1 means it is negligible
     (a bathtub vortex). Returns the Rossby number as a plain float.
     """
+    require_finite(coriolis_parameter, name="coriolis_parameter")
     _check(velocity, "[length]/[time]", "velocity")
     if not isinstance(coriolis_parameter, Quantity):
         raise _coriolis_refusal(
@@ -215,6 +216,7 @@ def ekman_number(
 
     Source: Cushman-Roisin & Beckers, *Introduction to Geophysical Fluid Dynamics*.
     """
+    require_finite(coriolis_parameter, name="coriolis_parameter")
     _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
     if not isinstance(coriolis_parameter, Quantity):
         raise _coriolis_refusal(

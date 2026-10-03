@@ -133,11 +133,11 @@ def _bend_geometry(
     return r, t
 
 
-def _check_bend_angle(bend_angle: float) -> float:
+def _check_bend_angle(bend_angle: float, name: str = "bend_angle") -> float:
     if not 0 < bend_angle < 180:
         raise _sheetmetal_refusal(
-            f"bend_angle must be in (0, 180) degrees; got {bend_angle}",
-            subject="bend_angle",
+            f"{name} must be in (0, 180) degrees; got {bend_angle}",
+            subject=name,
             source=_SHEETMETAL_GEOMETRY_SOURCE,
         )
     return bend_angle
@@ -605,7 +605,7 @@ def sprung_bend_angle(
     Returns the sprung included angle in degrees.
     """
     require_finite(initial_bend_angle, name="initial_bend_angle")
-    theta_i = _check_bend_angle(initial_bend_angle)
+    theta_i = _check_bend_angle(initial_bend_angle, "initial_bend_angle")
     r_i, t = _bend_geometry(initial_bend_radius, thickness, "initial_bend_radius")
     _require(sprung_bend_radius, "[length]", "sprung_bend_radius")
     r_f = sprung_bend_radius.to("mm").magnitude

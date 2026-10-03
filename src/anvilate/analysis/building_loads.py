@@ -807,6 +807,8 @@ def seismic_load_effect(
     uplift cases), giving E = ρ·Q_E − 0.2·SDS·D. Feed the result as the seismic effect to
     :func:`~anvilate.analysis.asce7_lrfd_factored_load`. Returns E in the horizontal effect's units.
     """
+    require_finite(dead_load_effect, name="dead_load_effect")
+    require_finite(horizontal_effect, name="horizontal_effect")
     require_finite(design_spectral_acceleration, name="design_spectral_acceleration")
     require_finite(redundancy_factor, name="redundancy_factor")
     require_flag(

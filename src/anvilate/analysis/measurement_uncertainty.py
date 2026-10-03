@@ -56,6 +56,7 @@ def standard_uncertainty_of_mean(*, standard_deviation: Quantity, sample_size: i
     sample size must be at least 1. Returns the standard uncertainty in the units of
     ``standard_deviation``.
     """
+    require_finite(standard_deviation, name="standard_deviation")
     if not isinstance(sample_size, int) or sample_size < 1:
         raise _measurement_uncertainty_refusal(
             "sample_size must be an integer of at least 1",
@@ -128,6 +129,7 @@ def expanded_uncertainty(
     reported as its value ± U. The coverage factor must be positive. Returns the expanded
     uncertainty in the units of ``combined_standard_uncertainty``.
     """
+    require_finite(combined_standard_uncertainty, name="combined_standard_uncertainty")
     require_finite(coverage_factor, name="coverage_factor")
     if not isinstance(combined_standard_uncertainty, Quantity):
         raise _measurement_uncertainty_refusal(

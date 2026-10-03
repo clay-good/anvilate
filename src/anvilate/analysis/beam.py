@@ -1113,6 +1113,7 @@ def aisc_rectangular_hss_flexural_strength(
     which depend on the full section geometry — this raises rather than guess. Returns
     M_n in kN·m.
     """
+    require_finite(plastic_section_modulus, name="plastic_section_modulus")
     _require(flange_flat_width, "[length]", "flange_flat_width")
     _require(web_flat_height, "[length]", "web_flat_height")
     _require(wall_thickness, "[length]", "wall_thickness")
@@ -1285,6 +1286,7 @@ def aisc_tension_field_shear_strength(
     is not permitted for end panels or when the flanges are too small to anchor it (§G2.2(b));
     check those limits before relying on this. Returns V_n in kN.
     """
+    require_finite(web_area, name="web_area")
     if not isinstance(web_area, Quantity):
         raise _beam_refusal(
             f"web_area must be a [length]**2 quantity; got {web_area!r}",
@@ -1434,6 +1436,7 @@ def aisc_minor_axis_flexural_strength(
     ``yield_strength`` F_y, ``elastic_modulus`` E, ``plastic_section_modulus`` Z_y, and
     ``elastic_section_modulus`` S_y are all about the minor axis. Returns M_n in kN·m.
     """
+    require_finite(plastic_section_modulus, name="plastic_section_modulus")
     _require(flange_width, "[length]", "flange_width")
     _require(flange_thickness, "[length]", "flange_thickness")
     _require(yield_strength, "[pressure]", "yield_strength")
@@ -1513,6 +1516,7 @@ def aisc_round_hss_shear_strength(
     ``elastic_modulus`` E. A stocky wall yields (F_cr clamps to 0.6·F_y); a thin, long
     tube buckles below yield. Returns V_n in kN.
     """
+    require_finite(gross_area, name="gross_area")
     if not isinstance(gross_area, Quantity):
         raise _beam_refusal(
             f"gross_area must be a [length]**2 quantity; got {gross_area!r}",
@@ -1701,6 +1705,8 @@ def two_span_continuous_middle_moment(
     goes. For equal spans and loads it reduces to the classic −w·L²/8, larger in magnitude
     than either span's own w·L²/8 sagging peak. Returns the moment in kN·m.
     """
+    require_finite(udl_1, name="udl_1")
+    require_finite(udl_2, name="udl_2")
     _require(span_1, "[length]", "span_1")
     _require(span_2, "[length]", "span_2")
     if not isinstance(udl_1, Quantity):
@@ -1758,6 +1764,8 @@ def two_span_continuous_interior_reaction(
     than the w·L a simple span puts on the support — which is why the interior column or
     bearing of a continuous beam is the one that governs. Returns the reaction in kN.
     """
+    require_finite(udl_1, name="udl_1")
+    require_finite(udl_2, name="udl_2")
     moment = (
         two_span_continuous_middle_moment(span_1=span_1, span_2=span_2, udl_1=udl_1, udl_2=udl_2)
         .to("kN*m")
@@ -1791,6 +1799,8 @@ def shear_flow(
     force, Q a length³, and I a length⁴ (both positive). Returns the shear flow in
     N/mm.
     """
+    require_finite(first_moment_of_area, name="first_moment_of_area")
+    require_finite(second_moment_of_area, name="second_moment_of_area")
     _require(shear_force, "[force]", "shear_force")
     if not isinstance(first_moment_of_area, Quantity):
         raise _beam_refusal(
@@ -1842,6 +1852,7 @@ def fastener_spacing_for_shear_flow(
     F must be a force and q a force-per-length (positive). Returns the spacing in
     mm.
     """
+    require_finite(shear_flow, name="shear_flow")
     _require(fastener_capacity, "[force]", "fastener_capacity")
     if not isinstance(shear_flow, Quantity):
         raise _beam_refusal(

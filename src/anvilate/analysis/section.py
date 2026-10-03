@@ -76,6 +76,8 @@ def bending_stress(*, moment: Quantity, section_modulus: Quantity) -> Quantity:
     volume (length³); ``Z`` must be positive. Returns the extreme-fibre bending
     stress in MPa.
     """
+    require_finite(moment, name="moment")
+    require_finite(section_modulus, name="section_modulus")
     if not isinstance(moment, Quantity):
         raise _section_refusal(
             f"moment must be a [force] * [length] quantity; got {moment!r}",
@@ -181,6 +183,8 @@ def required_section_modulus(
     ``allowable_stress`` must be
     positive.
     """
+    require_finite(allowable_stress, name="allowable_stress")
+    require_finite(bending_moment, name="bending_moment")
     require_finite(required_safety_factor, name="required_safety_factor")
     if not isinstance(bending_moment, Quantity):
         raise _section_refusal(
@@ -553,6 +557,13 @@ def composite_beam_bending_stresses(
     :class:`CompositeBeamStresses` with the neutral axis, transformed I, and both fibre
     stresses.
     """
+    require_finite(bottom_height, name="bottom_height")
+    require_finite(bottom_modulus, name="bottom_modulus")
+    require_finite(bottom_width, name="bottom_width")
+    require_finite(moment, name="moment")
+    require_finite(top_height, name="top_height")
+    require_finite(top_modulus, name="top_modulus")
+    require_finite(top_width, name="top_width")
     if not isinstance(moment, Quantity):
         raise _section_refusal(
             f"moment must be a [force] * [length] quantity; got {moment!r}",
@@ -674,6 +685,7 @@ def warping_constant_doubly_symmetric(
     lateral-torsional buckling resistance and its response to non-uniform torsion — a deep,
     wide-flange section warps far more stiffly than a shallow one. Returns C_w as a length⁶ value.
     """
+    require_finite(weak_axis_moment_of_inertia, name="weak_axis_moment_of_inertia")
     if not isinstance(weak_axis_moment_of_inertia, Quantity):
         raise _section_refusal(
             f"weak_axis_moment_of_inertia must be a [length]**4 quantity; "

@@ -167,6 +167,8 @@ def elliptical_hole_stress_concentration(
     ellipse stretched across the load, and *below* 3 (down toward 1) for one
     elongated along it — a hole aligned with the load concentrates less, not more.
     """
+    require_finite(semi_axis_across_load, name="semi_axis_across_load")
+    require_finite(semi_axis_along_load, name="semi_axis_along_load")
     if not isinstance(semi_axis_across_load, Quantity):
         raise _stress_refusal(
             f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load!r}",

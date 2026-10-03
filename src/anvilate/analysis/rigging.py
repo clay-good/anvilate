@@ -225,6 +225,7 @@ def _check_lead_sheaves(lead_sheaves: int) -> int:
 
 
 def _require_force(load: Quantity) -> None:
+    require_finite(load, name="load")
     if not isinstance(load, Quantity):
         raise _LiftingInputError(
             f"load must be a [force] quantity; got {load!r}",

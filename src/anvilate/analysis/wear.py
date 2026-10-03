@@ -208,6 +208,7 @@ def sliding_contact_pv(*, contact_pressure: Quantity, sliding_velocity: Quantity
     wear-limited; a fast, lightly-loaded one is PV-limited. Both inputs must be positive.
     Returns the PV factor in MPa·m/s.
     """
+    require_finite(sliding_velocity, name="sliding_velocity")
     _require(contact_pressure, "[pressure]", "contact_pressure")
     if not isinstance(sliding_velocity, Quantity):
         raise _wear_refusal(

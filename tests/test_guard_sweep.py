@@ -13,7 +13,11 @@ Whatever the function does with that is allowed except three things:
 - refusing with a remedy whose subject names none of the function's parameters;
 - accepting a NaN or an infinity, or refusing one without naming the argument.
 
-Its first run found sixteen crashes and 164 NaN arguments answered with a NaN result.
+Its first run found sixteen crashes and 164 NaN arguments answered with a NaN result. A
+second, once :func:`_discovered` let the sweep reach functions whose Quantities go through a
+helper, found 69 more non-finite arguments accepted (Quantities this time, checked for
+dimension by helpers that never called `require_finite`), three zero divisions and five
+remedies naming a shared helper's own parameter instead of the caller's.
 """
 
 from __future__ import annotations
@@ -156,9 +160,101 @@ def _succeeding(function, kwargs: dict[str, object], dimensions: dict[str, str])
     return None
 
 
+_CANDIDATE_UNITS = (
+    "m",
+    "Pa",
+    "N",
+    "kg",
+    "s",
+    "K",
+    "W",
+    "J",
+    "m**2",
+    "m**3",
+    "m/s",
+    "Hz",
+    "N*m",
+    "kg/m**3",
+    "Pa*s",
+    "m**2/s",
+    "V",
+    "A",
+    "ohm",
+    "m**4",
+    "N/m",
+    "kg/s",
+    "m**3/s",
+    "mol",
+    "J/(kg*K)",
+    "W/(m*K)",
+    "W/(m**2*K)",
+    "F",
+    "H",
+    "T",
+    "C",
+    "lm",
+    "cd",
+    "mol/m**3",
+    "J/mol",
+    "rad/s",
+    "m/s**2",
+    "kg*m**2",
+    "W/m**2",
+    "1/m",
+    "1/s",
+    "Pa/m",
+    "dimensionless",
+)
+
+
+def _discovered(function) -> dict[str, object] | None:
+    """A succeeding call found by asking the function what each Quantity should be.
+
+    Many functions hand a Quantity to a helper (or to another public function) rather than
+    naming its dimension in a `_check` call the AST can read. Every refusal now names its
+    parameter, so the function answers the question itself: bind each Quantity to a metre,
+    and while a refusal names exactly one parameter as the wrong kind of quantity, try that
+    parameter's next candidate unit.
+    """
+    kwargs: dict[str, object] = {}
+    quantities: list[str] = []
+    for parameter in inspect.signature(function).parameters.values():
+        if parameter.default is not inspect.Parameter.empty:
+            continue
+        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
+            return None
+        if parameter.annotation == "Quantity":
+            quantities.append(parameter.name)
+            kwargs[parameter.name] = Quantity(magnitude=1.0, unit="m")
+        elif parameter.annotation in _PLAIN:
+            kwargs[parameter.name] = _PLAIN[parameter.annotation]
+        else:
+            return None
+    tried = dict.fromkeys(quantities, 0)
+    for _ in range(len(quantities) * len(_CANDIDATE_UNITS) + 1):
+        try:
+            function(**kwargs)
+        except RefusalError as refusal:
+            named = re.findall(r"\w+", " ".join(r.subject for r in refusal.remedies))
+            if len(named) != 1 or named[0] not in tried:
+                return None
+            if not re.search(r"quantity|dimension|\[", str(refusal)):
+                return None
+            tried[named[0]] += 1
+            if tried[named[0]] >= len(_CANDIDATE_UNITS):
+                return None
+            unit = _CANDIDATE_UNITS[tried[named[0]]]
+            kwargs[named[0]] = Quantity(magnitude=1.0, unit=unit)
+        except Exception:  # noqa: BLE001 - a function this cannot satisfy is left unswept
+            return None
+        else:
+            return kwargs
+    return None
+
+
 def _moved(value: object, dimension: str | None, magnitude: float) -> object | None:
-    if dimension is not None:
-        return _quantity(dimension, magnitude)
+    if isinstance(value, Quantity):
+        return Quantity(magnitude=magnitude, unit=value.unit)
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -175,10 +271,10 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
         if not inspect.isfunction(function) or name not in dimensions:
             continue
         kwargs = _baseline(function, dimensions[name])
+        if kwargs is not None:
+            kwargs = _succeeding(function, kwargs, dimensions[name])
         if kwargs is None:
-            tally["unbuildable"] += 1
-            continue
-        kwargs = _succeeding(function, kwargs, dimensions[name])
+            kwargs = _discovered(function)
         if kwargs is None:
             tally["baseline refused"] += 1
             continue
@@ -204,9 +300,9 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
                 else:
                     tally["accepted"] += 1
                     if not math.isfinite(magnitude):
-                        failures.append(f"{label}: NaN accepted, returned {result!r:.80}")
+                        failures.append(f"{label}: non-finite accepted, gave {result!r:.70}")
 
     # The floor goes first: a binder that stopped building calls would pass with nothing swept.
-    assert tally["swept"] > 1_100, tally
-    assert tally["refused"] > 8_500, tally
+    assert tally["swept"] > 1_400, tally
+    assert tally["refused"] > 10_000, tally
     assert not failures, f"{len(failures)} of {sum(tally.values())}:\n" + "\n".join(failures)

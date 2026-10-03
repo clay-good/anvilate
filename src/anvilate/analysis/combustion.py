@@ -322,6 +322,7 @@ def wobbe_index(*, higher_heating_value: Quantity, gas_specific_gravity: float) 
     appliances run safely on gas from any source (pipeline, LNG, biogas). Returns the Wobbe index in
     the same volumetric-energy units as the heating value.
     """
+    require_finite(higher_heating_value, name="higher_heating_value")
     require_finite(gas_specific_gravity, name="gas_specific_gravity")
     if not isinstance(higher_heating_value, Quantity):
         raise _combustion_refusal(

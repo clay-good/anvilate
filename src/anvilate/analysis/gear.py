@@ -395,6 +395,7 @@ def barth_velocity_factor(*, pitch_line_velocity: Quantity, quality: str = "cut"
     Multiply the transmitted load by K_v before the :func:`lewis_bending_stress`
     screen. Returns the dimensionless K_v (≥ 1).
     """
+    require_finite(pitch_line_velocity, name="pitch_line_velocity")
     if not isinstance(pitch_line_velocity, Quantity):
         raise _drive_refusal(
             f"pitch_line_velocity must be a [velocity] quantity; got {pitch_line_velocity!r}",
@@ -1494,6 +1495,7 @@ def planetary_can_assemble(*, sun_teeth: int, ring_teeth: int, planet_count: int
 
 
 def _check_speed(value: Quantity, name: str) -> float:
+    require_finite(value, name=name)
     if not isinstance(value, Quantity):
         raise _drive_refusal(
             f"{name} must be a [frequency] quantity; got {value!r}",

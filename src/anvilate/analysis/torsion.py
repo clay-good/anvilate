@@ -995,6 +995,12 @@ def rectangular_bar_twist_angle(
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    if shear_modulus.magnitude <= 0:
+        raise _torsion_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     a, b = _rectangular_bar_sides(width, thickness)
     j = Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
@@ -1090,6 +1096,12 @@ def elliptical_bar_twist_angle(
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    if shear_modulus.magnitude <= 0:
+        raise _torsion_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     a, b = _elliptical_axes(semi_major_axis, semi_minor_axis)
     jt = Quantity(magnitude=pi * a**3 * b**3 / (a**2 + b**2), unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * jt)
@@ -1145,6 +1157,12 @@ def triangular_bar_twist_angle(
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    if shear_modulus.magnitude <= 0:
+        raise _torsion_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_SHAFT_MATERIAL_SOURCE,
+        )
     s = _triangle_side(side_length)
     jt = Quantity(magnitude=sqrt(3.0) * s**4 / 80.0, unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * jt)

@@ -66,6 +66,8 @@ class CompactnessClass(StrEnum):
 
 
 def _slenderness_root(elastic_modulus: Quantity, yield_strength: Quantity) -> float:
+    require_finite(elastic_modulus, name="elastic_modulus")
+    require_finite(yield_strength, name="yield_strength")
     if not isinstance(elastic_modulus, Quantity):
         raise _aisc_compactness_refusal(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",

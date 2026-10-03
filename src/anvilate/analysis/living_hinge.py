@@ -54,6 +54,7 @@ __all__ = [
 
 
 def _positive_mm(value: Quantity, name: str) -> float:
+    require_finite(value, name=name)
     if not isinstance(value, Quantity):
         raise _living_hinge_refusal(
             f"{name} must be a [length] quantity; got {value!r}",

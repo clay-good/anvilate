@@ -533,6 +533,7 @@ def asme_ellipsoidal_head_thickness(
         denom_leading=2.0,
         pressure=pressure,
         length=diameter,
+        length_name="diameter",
         allowable_stress=allowable_stress,
         joint_efficiency=joint_efficiency,
     )
@@ -564,6 +565,7 @@ def asme_torispherical_head_thickness(
         denom_leading=1.0,
         pressure=pressure,
         length=crown_radius,
+        length_name="crown_radius",
         allowable_stress=allowable_stress,
         joint_efficiency=joint_efficiency,
     )
@@ -576,12 +578,13 @@ def _asme_head_thickness(
     denom_leading: float,
     pressure: Quantity,
     length: Quantity,
+    length_name: str,
     allowable_stress: Quantity,
     joint_efficiency: float,
 ) -> Quantity:
     """Shared UG-32 head form t = K·P·L/(m·S·E − f·P)."""
     _require(pressure, "[pressure]", "pressure")
-    _require(length, "[length]", "length")
+    _require(length, "[length]", length_name)
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
         raise _pressure_vessel_refusal(
@@ -629,6 +632,7 @@ def asme_ellipsoidal_head_mawp(
         numer_leading=2.0,
         thickness=thickness,
         length=diameter,
+        length_name="diameter",
         allowable_stress=allowable_stress,
         joint_efficiency=joint_efficiency,
     )
@@ -656,6 +660,7 @@ def asme_torispherical_head_mawp(
         numer_leading=1.0,
         thickness=thickness,
         length=crown_radius,
+        length_name="crown_radius",
         allowable_stress=allowable_stress,
         joint_efficiency=joint_efficiency,
         length_coefficient=0.885,
@@ -668,13 +673,14 @@ def _asme_head_mawp(
     numer_leading: float,
     thickness: Quantity,
     length: Quantity,
+    length_name: str,
     allowable_stress: Quantity,
     joint_efficiency: float,
     length_coefficient: float = 1.0,
 ) -> Quantity:
     """Shared UG-32 head rating P = m·S·E·t/(K·L + f·t)."""
     _require(thickness, "[length]", "thickness")
-    _require(length, "[length]", "length")
+    _require(length, "[length]", length_name)
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
         raise _pressure_vessel_refusal(
@@ -1533,6 +1539,7 @@ def asme_b313_displacement_stress(
     (1.0 for straight pipe). Compare the result against the allowable range
     (:func:`asme_b313_allowable_displacement_stress_range`). Returns S_E in MPa.
     """
+    require_finite(section_modulus, name="section_modulus")
     require_finite(in_plane_sif, name="in_plane_sif")
     require_finite(out_of_plane_sif, name="out_of_plane_sif")
     _require(in_plane_moment, "[force] * [length]", "in_plane_moment")

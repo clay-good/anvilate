@@ -26,7 +26,7 @@ from __future__ import annotations
 from math import pi
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _O_RING_SIZE_SOURCE = "the O-ring manufacturer catalogue or verified seal size record"
 _O_RING_GLAND_SOURCE = "the seal gland drawing or approved gland-design table"
@@ -57,6 +57,7 @@ __all__ = [
 
 
 def _positive_mm(value: Quantity, name: str) -> float:
+    require_finite(value, name=name)
     if not isinstance(value, Quantity):
         raise _o_ring_refusal(
             f"{name} must be a [length] quantity; got {value!r}",

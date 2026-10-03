@@ -84,6 +84,7 @@ def _crank_radius_mm(crank_radius: Quantity) -> float:
 
 
 def _speed_rad_s(crank_speed: Quantity) -> float:
+    require_finite(crank_speed, name="crank_speed")
     if not isinstance(crank_speed, Quantity):
         raise _scotch_yoke_refusal(
             f"crank_speed must be a [frequency] quantity; got {crank_speed!r}",

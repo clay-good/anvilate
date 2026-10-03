@@ -57,6 +57,7 @@ _PULLEY_GEOMETRY_SOURCE = "the pulley and shaft-center drawing"
 
 
 def _require_force(value: Quantity, name: str) -> None:
+    require_finite(value, name=name)
     if not isinstance(value, Quantity):
         raise _drive_refusal(
             f"{name} must be a [force] quantity; got {value!r}",
@@ -159,6 +160,7 @@ def belt_max_transmissible_force(
 
 
 def _linear_density_kg_per_m(linear_density: Quantity) -> float:
+    require_finite(linear_density, name="linear_density")
     if not isinstance(linear_density, Quantity):
         raise _drive_refusal(
             f"linear_density must be a [mass] / [length] quantity; got {linear_density!r}",
@@ -183,6 +185,7 @@ def _linear_density_kg_per_m(linear_density: Quantity) -> float:
 
 
 def _speed_m_per_s(belt_speed: Quantity) -> float:
+    require_finite(belt_speed, name="belt_speed")
     if not isinstance(belt_speed, Quantity):
         raise _drive_refusal(
             f"belt_speed must be a [velocity] quantity; got {belt_speed!r}",
@@ -308,6 +311,9 @@ def _pulley_geometry(
     large_pulley_diameter: Quantity, small_pulley_diameter: Quantity, center_distance: Quantity
 ) -> tuple[float, float, float]:
     """Validate and return (D, d, C) in mm for an open two-pulley belt drive."""
+    require_finite(large_pulley_diameter, name="large_pulley_diameter")
+    require_finite(small_pulley_diameter, name="small_pulley_diameter")
+    require_finite(center_distance, name="center_distance")
     for value, name in (
         (large_pulley_diameter, "large_pulley_diameter"),
         (small_pulley_diameter, "small_pulley_diameter"),

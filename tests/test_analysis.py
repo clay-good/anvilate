@@ -45296,7 +45296,7 @@ def test_every_torsion_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 40
+    assert len(structured) == 43
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno

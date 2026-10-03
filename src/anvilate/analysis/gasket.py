@@ -95,6 +95,7 @@ def gasket_seating_load(
     gasket's ``seating_stress`` y (ASME Table 2-5.1). All must be positive. Returns the
     load in N.
     """
+    require_finite(seating_stress, name="seating_stress")
     g = _positive_mm(gasket_mean_diameter, "gasket_mean_diameter")
     b = _positive_mm(effective_seating_width, "effective_seating_width")
     if not isinstance(seating_stress, Quantity):

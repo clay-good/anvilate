@@ -169,6 +169,7 @@ def cylinder_extend_speed(*, flow_rate: Quantity, bore_diameter: Quantity) -> Qu
     The rod extends as fast as the pump fills the full bore area: ``flow_rate`` Q over
     (π/4)·``bore_diameter``². Both must be positive. Returns the speed in mm/s.
     """
+    require_finite(flow_rate, name="flow_rate")
     if not isinstance(flow_rate, Quantity):
         raise _hydraulic_cylinder_refusal(
             f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}",

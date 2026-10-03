@@ -379,6 +379,7 @@ def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quan
     compression. Returns the energy in joules; both quantities are
     dimension-checked and ``deflection`` must be non-negative.
     """
+    require_finite(spring_rate, name="spring_rate")
     if not isinstance(spring_rate, Quantity):
         raise _spring_refusal(
             f"spring_rate must be a [force] / [length] quantity; got {spring_rate!r}",

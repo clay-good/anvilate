@@ -76,6 +76,7 @@ def exergy_of_heat(
     put to work. Both temperatures must be absolute and T ≥ T₀. Returns the exergy in the units of
     ``heat`` (energy or power).
     """
+    require_finite(heat, name="heat")
     _check(source_temperature, "[temperature]", "source_temperature")
     _check(dead_state_temperature, "[temperature]", "dead_state_temperature")
     t = source_temperature.to("K").magnitude

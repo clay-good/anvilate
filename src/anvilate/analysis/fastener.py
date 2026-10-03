@@ -995,6 +995,7 @@ def bolt_proof_load(*, tensile_stress_area: Quantity, proof_strength: Quantity) 
     and it is the reference every preload target is a fraction of. A_t must be an area
     and S_p a stress, both positive. Returns the proof load in newtons.
     """
+    require_finite(tensile_stress_area, name="tensile_stress_area")
     if not isinstance(tensile_stress_area, Quantity):
         raise _fastener_refusal(
             f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}",

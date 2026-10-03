@@ -705,6 +705,7 @@ def aluminum_elastic_local_buckling_stress(
     Notice F_cy does not appear. Elastic buckling is a stiffness event, not a strength
     one — a stronger temper does not delay it at all.
     """
+    require_finite(elastic_modulus, name="elastic_modulus")
     if not isinstance(flat_width, Quantity):
         raise _aluminum_refusal(
             f"flat_width must be a [length] quantity; got {flat_width!r}",

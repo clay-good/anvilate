@@ -429,6 +429,8 @@ def aisc_effective_radius_of_gyration(
     r_ts sits a little above the flange's own radius of gyration; it is what turns the
     section geometry into the L_r brace-spacing limit. Returns r_ts in mm.
     """
+    require_finite(elastic_section_modulus, name="elastic_section_modulus")
+    require_finite(minor_second_moment, name="minor_second_moment")
     if not isinstance(minor_second_moment, Quantity):
         raise _column_refusal(
             f"minor_second_moment must be a [length]**4 quantity; got {minor_second_moment!r}",
@@ -557,6 +559,8 @@ def aisc_elastic_ltb_stress(
     I). The √ term is the warping contribution — it makes a compact, stocky-flanged beam
     noticeably stronger than the pure-torsion estimate. Returns F_cr in MPa.
     """
+    require_finite(elastic_section_modulus, name="elastic_section_modulus")
+    require_finite(torsion_constant, name="torsion_constant")
     require_finite(section_coefficient, name="section_coefficient")
     _require(unbraced_length, "[length]", "unbraced_length")
     _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")

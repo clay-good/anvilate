@@ -98,6 +98,11 @@ def _petroff_torque_nm(
     radial_clearance: Quantity,
 ) -> float:
     """The Petroff friction torque in N·m — the shared core (validates inputs)."""
+    require_finite(viscosity, name="viscosity")
+    require_finite(speed, name="speed")
+    require_finite(journal_radius, name="journal_radius")
+    require_finite(bearing_length, name="bearing_length")
+    require_finite(radial_clearance, name="radial_clearance")
     _require(viscosity, "[pressure] * [time]", "viscosity")
     _require(journal_radius, "[length]", "journal_radius")
     _require(bearing_length, "[length]", "bearing_length")

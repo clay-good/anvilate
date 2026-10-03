@@ -928,6 +928,7 @@ def isolator_natural_frequency_for_transmissibility(
     A smaller TR (better isolation) demands a lower f_n (a softer mount). TR must be in
     (0, 1); f_n always comes out below f/√2, the onset of isolation. Returns f_n in hertz.
     """
+    require_finite(forcing_frequency, name="forcing_frequency")
     require_finite(transmissibility, name="transmissibility")
     if not isinstance(forcing_frequency, Quantity):
         raise _dynamics_refusal(
@@ -974,6 +975,7 @@ def isolator_static_deflection_for_transmissibility(
     gives δ = g/(2π·f_n)². Softer mounts (larger δ) isolate better; a stiff mount cannot.
     ``gravity`` defaults to standard g. Returns the static deflection in mm.
     """
+    require_finite(forcing_frequency, name="forcing_frequency")
     require_finite(transmissibility, name="transmissibility")
     natural_frequency = isolator_natural_frequency_for_transmissibility(
         forcing_frequency=forcing_frequency, transmissibility=transmissibility

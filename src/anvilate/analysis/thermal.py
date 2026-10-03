@@ -1045,6 +1045,9 @@ def _bimetal_layer_check(
     alpha: Quantity, elastic_modulus: Quantity, thickness: Quantity, layer: int
 ) -> tuple[float, float, float]:
     """Validate one bimetal layer -> (alpha 1/K, E MPa, t mm), all positive."""
+    require_finite(alpha, name="alpha")
+    require_finite(elastic_modulus, name="elastic_modulus")
+    require_finite(thickness, name="thickness")
     if not isinstance(alpha, Quantity):
         raise _thermal_refusal(
             f"alpha_{layer} must be a 1 / [temperature] quantity; got {alpha!r}",
@@ -3592,6 +3595,7 @@ def semi_infinite_solid_temperature_rise(
     the result to the initial temperature for the actual temperature. Returns the temperature
     rise at that point (a difference in kelvin).
     """
+    require_finite(thermal_diffusivity, name="thermal_diffusivity")
     _require(surface_step_change, "[temperature]", "surface_step_change")
     _require(depth, "[length]", "depth")
     _require(time, "[time]", "time")
@@ -3645,6 +3649,8 @@ def semi_infinite_solid_surface_flux(
     and decays as 1/√t as the thermal layer thickens — the reason a quench pulls the most
     heat in the first instants. Returns the surface heat flux in W/m² (its magnitude).
     """
+    require_finite(thermal_conductivity, name="thermal_conductivity")
+    require_finite(thermal_diffusivity, name="thermal_diffusivity")
     _require(surface_step_change, "[temperature]", "surface_step_change")
     _require(time, "[time]", "time")
     if not isinstance(thermal_conductivity, Quantity):

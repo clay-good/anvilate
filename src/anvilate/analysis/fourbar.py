@@ -71,29 +71,31 @@ def _lengths_mm(
         "output": output_link,
     }
     out: dict[str, float] = {}
+    parameters = {"input": "input_link", "output": "output_link"}
     for name, value in named.items():
+        parameter = parameters.get(name, name)
         if not isinstance(value, Quantity):
             raise _fourbar_refusal(
                 f"{name} must be a [length] quantity; got {value!r}",
-                subject=name,
-                source=_fourbar_input_source(name),
+                subject=parameter,
+                source=_fourbar_input_source(parameter),
             )
         if not value.has_dimension("[length]"):
             raise _fourbar_refusal(
                 f"{name} link must be a [length] quantity; got {value.dimensionality} ({value})",
-                subject=name,
-                source=_fourbar_input_source(name),
+                subject=parameter,
+                source=_fourbar_input_source(parameter),
             )
         # `require_finite` first: a NaN length passes `mm <= 0`, fails every subsequent
         # comparison too, and `is_grashof` comes back False — a definite "triple-rocker"
         # about a linkage one of whose links is not a number.
-        require_finite(value, name=f"{name} link length")
+        require_finite(value, name=parameter)
         mm = value.to("mm").magnitude
         if mm <= 0:
             raise _fourbar_refusal(
                 f"{name} link length must be positive; got {value}",
-                subject=name,
-                source=_fourbar_input_source(name),
+                subject=parameter,
+                source=_fourbar_input_source(parameter),
             )
         out[name] = mm
     longest = max(out.values())

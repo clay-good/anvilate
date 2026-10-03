@@ -303,6 +303,7 @@ def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
     positive stress; the result feeds :func:`goodman_safety_factor` and its
     siblings. Returns the estimate in MPa.
     """
+    require_finite(ultimate_strength, name="ultimate_strength")
     if not isinstance(ultimate_strength, Quantity):
         raise _fatigue_refusal(
             f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}",
