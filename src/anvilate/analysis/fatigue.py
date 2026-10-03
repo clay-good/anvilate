@@ -29,9 +29,59 @@ from math import inf, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
+
+_LOAD_SOURCE = "the component's stress history (cycle extremes and counts) from the load case"
+_MATERIAL_SOURCE = "the material's fatigue-property datasheet or test record"
+_GEOMETRY_SOURCE = "the part drawing (notch radius and section thickness)"
+_CODE_SOURCE = "the weld detail-category table of the governing fatigue code"
+_DESIGN_SOURCE = "the project's design basis (required factor and design life)"
+
+
+class _FatigueInputError(RefusalError, ValueError):
+    """A fatigue-screening input that cannot be used without correction."""
+
+
+def _fatigue_refusal(message: str, *, subject: str, source: str) -> _FatigueInputError:
+    return _FatigueInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fatigue_input_source(name: str) -> str:
+    if name in {"kt", "notch_radius", "size_factor", "thickness"}:
+        return _GEOMETRY_SOURCE
+    if name in {
+        "alternating_stress",
+        "applied_cycles",
+        "load_factor",
+        "max_stress",
+        "mean_stress",
+        "min_stress",
+        "plastic_strain_amplitude",
+        "reversals",
+        "stress_amplitude",
+        "stress_range",
+        "stress_ranges",
+        "variable_amplitude",
+    }:
+        return _LOAD_SOURCE
+    if name in {"life_cycles", "name", "reliability_factor", "required"}:
+        return _DESIGN_SOURCE
+    if name in {
+        "compression_factor",
+        "detail_category",
+        "reference_thickness",
+        "shear",
+        "stress_relieved",
+    }:
+        return _CODE_SOURCE
+    return _MATERIAL_SOURCE
+
 
 __all__ = [
     "CyclicStress",
@@ -86,10 +136,16 @@ _ENDURANCE_CAP_MPA = 700.0  # ~100 ksi (steels with S_u above ~1400 MPa)
 
 def _require_stress(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+        raise _fatigue_refusal(
+            f"{name} must be a [pressure] quantity; got {value!r}",
+            subject=name,
+            source=_fatigue_input_source(name),
+        )
     if not value.has_dimension("[pressure]"):
-        raise ValueError(
-            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
+        raise _fatigue_refusal(
+            f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fatigue_input_source(name),
         )
     # Dimension is the easy half. A NaN stress used to travel all the way to a NaN safety
     # factor, which the scorecard does catch — but the elastic-range limit below is a
@@ -102,10 +158,16 @@ def _require_stress(value: Quantity, name: str) -> float:
 
 def _require_length(value: Quantity, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _fatigue_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_fatigue_input_source(name),
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(
-            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+        raise _fatigue_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fatigue_input_source(name),
         )
     require_finite(value, name=name)
 
@@ -139,9 +201,17 @@ def fatigue_notch_factor(*, kt: float, notch_sensitivity: float) -> float:
     raiser never reduces stress) and ``notch_sensitivity`` must lie in [0, 1].
     """
     if kt < 1:
-        raise ValueError(f"kt must be at least 1 (a stress raiser); got {kt}")
+        raise _fatigue_refusal(
+            f"kt must be at least 1 (a stress raiser); got {kt}",
+            subject="kt",
+            source=_GEOMETRY_SOURCE,
+        )
     if not 0 <= notch_sensitivity <= 1:
-        raise ValueError(f"notch_sensitivity must lie in [0, 1]; got {notch_sensitivity}")
+        raise _fatigue_refusal(
+            f"notch_sensitivity must lie in [0, 1]; got {notch_sensitivity}",
+            subject="notch_sensitivity",
+            source=_MATERIAL_SOURCE,
+        )
     return 1.0 + notch_sensitivity * (kt - 1.0)
 
 
@@ -160,20 +230,32 @@ def neuber_notch_sensitivity(*, notch_radius: Quantity, neuber_constant: Quantit
     """
     _require_length(notch_radius, "notch_radius")
     if not isinstance(neuber_constant, Quantity):
-        raise ValueError(
-            f"neuber_constant must be a [length]**0.5 quantity; got {neuber_constant!r}"
+        raise _fatigue_refusal(
+            f"neuber_constant must be a [length]**0.5 quantity; got {neuber_constant!r}",
+            subject="neuber_constant",
+            source=_MATERIAL_SOURCE,
         )
     if not neuber_constant.has_dimension("[length]**0.5"):
-        raise ValueError(
+        raise _fatigue_refusal(
             f"neuber_constant must be a [length]**0.5 quantity (√a); got "
-            f"{neuber_constant.dimensionality} ({neuber_constant})"
+            f"{neuber_constant.dimensionality} ({neuber_constant})",
+            subject="neuber_constant",
+            source=_MATERIAL_SOURCE,
         )
     r = notch_radius.to("mm").magnitude
     if r <= 0:
-        raise ValueError(f"notch_radius must be positive; got {notch_radius}")
+        raise _fatigue_refusal(
+            f"notch_radius must be positive; got {notch_radius}",
+            subject="notch_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     sqrt_a = neuber_constant.to("mm**0.5").magnitude
     if sqrt_a < 0:
-        raise ValueError(f"neuber_constant must be non-negative; got {neuber_constant}")
+        raise _fatigue_refusal(
+            f"neuber_constant must be non-negative; got {neuber_constant}",
+            subject="neuber_constant",
+            source=_MATERIAL_SOURCE,
+        )
     return 1.0 / (1.0 + sqrt_a / sqrt(r))
 
 
@@ -193,9 +275,17 @@ def peterson_notch_sensitivity(*, notch_radius: Quantity, peterson_constant: Qua
     r = notch_radius.to("mm").magnitude
     a = peterson_constant.to("mm").magnitude
     if r <= 0:
-        raise ValueError(f"notch_radius must be positive; got {notch_radius}")
+        raise _fatigue_refusal(
+            f"notch_radius must be positive; got {notch_radius}",
+            subject="notch_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if a < 0:
-        raise ValueError(f"peterson_constant must be non-negative; got {peterson_constant}")
+        raise _fatigue_refusal(
+            f"peterson_constant must be non-negative; got {peterson_constant}",
+            subject="peterson_constant",
+            source=_MATERIAL_SOURCE,
+        )
     return 1.0 / (1.0 + a / r)
 
 
@@ -212,17 +302,25 @@ def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
     siblings. Returns the estimate in MPa.
     """
     if not isinstance(ultimate_strength, Quantity):
-        raise ValueError(
-            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}"
+        raise _fatigue_refusal(
+            f"ultimate_strength must be a [pressure] quantity; got {ultimate_strength!r}",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
         )
     if not ultimate_strength.has_dimension("[pressure]"):
-        raise ValueError(
+        raise _fatigue_refusal(
             f"ultimate_strength must be a [pressure] quantity; got "
-            f"{ultimate_strength.dimensionality} ({ultimate_strength})"
+            f"{ultimate_strength.dimensionality} ({ultimate_strength})",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
         )
     su = ultimate_strength.to("MPa").magnitude
     if su <= 0:
-        raise ValueError(f"ultimate_strength must be positive; got {ultimate_strength}")
+        raise _fatigue_refusal(
+            f"ultimate_strength must be positive; got {ultimate_strength}",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=min(_ENDURANCE_FRACTION * su, _ENDURANCE_CAP_MPA), unit="MPa")
 
 
@@ -254,7 +352,11 @@ def marin_endurance_limit(
     """
     se_prime = _require_stress(base_endurance_limit, "base_endurance_limit")
     if se_prime <= 0:
-        raise ValueError(f"base_endurance_limit must be positive; got {base_endurance_limit}")
+        raise _fatigue_refusal(
+            f"base_endurance_limit must be positive; got {base_endurance_limit}",
+            subject="base_endurance_limit",
+            source=_MATERIAL_SOURCE,
+        )
     factors = {
         "surface_factor": surface_factor,
         "size_factor": size_factor,
@@ -266,7 +368,11 @@ def marin_endurance_limit(
     product = 1.0
     for name, factor in factors.items():
         if factor <= 0:
-            raise ValueError(f"{name} must be positive; got {factor}")
+            raise _fatigue_refusal(
+                f"{name} must be positive; got {factor}",
+                subject=name,
+                source=_fatigue_input_source(name),
+            )
         product *= factor
     return Quantity(magnitude=product * se_prime, unit="MPa")
 
@@ -285,8 +391,10 @@ def cyclic_stress_components(*, max_stress: Quantity, min_stress: Quantity) -> C
     smax = _require_stress(max_stress, "max_stress")
     smin = _require_stress(min_stress, "min_stress")
     if smax <= smin:
-        raise ValueError(
-            f"max_stress ({max_stress}) must exceed min_stress ({min_stress}) for a cycle"
+        raise _fatigue_refusal(
+            f"max_stress ({max_stress}) must exceed min_stress ({min_stress}) for a cycle",
+            subject="max_stress and min_stress",
+            source=_LOAD_SOURCE,
         )
     if smax == 0:
         ratio = -inf  # cycle peaks at zero (fully compressive)
@@ -316,10 +424,16 @@ def smith_watson_topper_stress(*, max_stress: Quantity, alternating_stress: Quan
     smax = _require_stress(max_stress, "max_stress")
     sa = _require_stress(alternating_stress, "alternating_stress")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
     if smax <= 0:
-        raise ValueError(
-            f"max_stress must be positive for the SWT tensile-fatigue model; got {smax} MPa"
+        raise _fatigue_refusal(
+            f"max_stress must be positive for the SWT tensile-fatigue model; got {smax} MPa",
+            subject="max_stress",
+            source=_LOAD_SOURCE,
         )
     # σ_max < σ_a is a COMPRESSIVE mean (σ_m = σ_max − σ_a < 0), and SWT is a tensile-mean
     # model: the sign of the peak was checked and the mean never was, so the whole region
@@ -329,12 +443,14 @@ def smith_watson_topper_stress(*, max_stress: Quantity, alternating_stress: Quan
     # looks up on an S-N curve. This module's own Gerber check gives no credit for a
     # non-positive mean; refusing here says the same thing without silently changing it.
     if smax < sa:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"max_stress {smax:.4g} MPa is below alternating_stress {sa:.4g} MPa, so the mean "
             f"stress is {smax - sa:.4g} MPa — compressive. SWT is a tensile-mean model and "
             f"returns a *lower* equivalent stress for a compressive mean, which is unconservative "
             f"by {sa / sqrt(smax * sa):.3g}x here. For a non-positive mean the amplitude governs: "
-            f"use σ_a directly, as goodman_safety_factor does."
+            f"use σ_a directly, as goodman_safety_factor does.",
+            subject="max_stress and alternating_stress",
+            source=_LOAD_SOURCE,
         )
     return Quantity(magnitude=sqrt(smax * sa), unit="MPa")
 
@@ -359,13 +475,23 @@ def goodman_equivalent_reversed_stress(
     sm = _require_stress(mean_stress, "mean_stress")
     su = _require_stress(ultimate_strength, "ultimate_strength")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
     if su <= 0:
-        raise ValueError(f"ultimate_strength must be positive; got {su} MPa")
+        raise _fatigue_refusal(
+            f"ultimate_strength must be positive; got {su} MPa",
+            subject="ultimate_strength",
+            source=_MATERIAL_SOURCE,
+        )
     if sm >= su:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"mean_stress ({sm} MPa) must be below ultimate_strength ({su} MPa) "
-            "for a finite equivalent stress"
+            "for a finite equivalent stress",
+            subject="mean_stress and ultimate_strength",
+            source=_LOAD_SOURCE,
         )
     return Quantity(magnitude=sa / (1.0 - sm / su), unit="MPa")
 
@@ -389,13 +515,23 @@ def morrow_equivalent_reversed_stress(
     sm = _require_stress(mean_stress, "mean_stress")
     sf = _require_stress(true_fracture_strength, "true_fracture_strength")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
     if sf <= 0:
-        raise ValueError(f"true_fracture_strength must be positive; got {sf} MPa")
+        raise _fatigue_refusal(
+            f"true_fracture_strength must be positive; got {sf} MPa",
+            subject="true_fracture_strength",
+            source=_MATERIAL_SOURCE,
+        )
     if sm >= sf:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"mean_stress ({sm} MPa) must be below true_fracture_strength ({sf} MPa) "
-            "for a finite equivalent stress"
+            "for a finite equivalent stress",
+            subject="mean_stress and true_fracture_strength",
+            source=_LOAD_SOURCE,
         )
     return Quantity(magnitude=sa / (1.0 - sm / sf), unit="MPa")
 
@@ -420,9 +556,18 @@ def goodman_safety_factor(
     se = _require_stress(endurance_limit, "endurance_limit")
     su = _require_stress(ultimate_strength, "ultimate_strength")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
-    if se <= 0 or su <= 0:
-        raise ValueError("endurance_limit and ultimate_strength must be positive")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
+    for subject, magnitude in (("endurance_limit", se), ("ultimate_strength", su)):
+        if magnitude <= 0:
+            raise _fatigue_refusal(
+                "endurance_limit and ultimate_strength must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     goodman_sum = sa / se + sm / su
     return inf if goodman_sum <= 0 else 1.0 / goodman_sum
 
@@ -504,9 +649,18 @@ def soderberg_safety_factor(
     se = _require_stress(endurance_limit, "endurance_limit")
     sy = _require_stress(yield_strength, "yield_strength")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
-    if se <= 0 or sy <= 0:
-        raise ValueError("endurance_limit and yield_strength must be positive")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
+    for subject, magnitude in (("endurance_limit", se), ("yield_strength", sy)):
+        if magnitude <= 0:
+            raise _fatigue_refusal(
+                "endurance_limit and yield_strength must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     soderberg_sum = sa / se + sm / sy
     return inf if soderberg_sum <= 0 else 1.0 / soderberg_sum
 
@@ -574,9 +728,18 @@ def gerber_safety_factor(
     se = _require_stress(endurance_limit, "endurance_limit")
     su = _require_stress(ultimate_strength, "ultimate_strength")
     if sa < 0:
-        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
-    if se <= 0 or su <= 0:
-        raise ValueError("endurance_limit and ultimate_strength must be positive")
+        raise _fatigue_refusal(
+            f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa",
+            subject="alternating_stress",
+            source=_LOAD_SOURCE,
+        )
+    for subject, magnitude in (("endurance_limit", se), ("ultimate_strength", su)):
+        if magnitude <= 0:
+            raise _fatigue_refusal(
+                "endurance_limit and ultimate_strength must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     if sm <= 0:
         # No credit for a compressive/zero mean: amplitude governs.
         return inf if sa == 0 else se / sa
@@ -633,18 +796,32 @@ def gerber_scorecard(
 
 def _validate_spectrum(applied_cycles: Sequence[float], cycles_to_failure: Sequence[float]) -> None:
     if len(applied_cycles) != len(cycles_to_failure):
-        raise ValueError(
+        raise _fatigue_refusal(
             f"applied_cycles and cycles_to_failure must be the same length; got "
-            f"{len(applied_cycles)} and {len(cycles_to_failure)}"
+            f"{len(applied_cycles)} and {len(cycles_to_failure)}",
+            subject="applied_cycles and cycles_to_failure",
+            source=_LOAD_SOURCE,
         )
     if not applied_cycles:
-        raise ValueError("the load spectrum must have at least one stress level")
+        raise _fatigue_refusal(
+            "the load spectrum must have at least one stress level",
+            subject="applied_cycles and cycles_to_failure",
+            source=_LOAD_SOURCE,
+        )
     for n in applied_cycles:
         if n < 0:
-            raise ValueError(f"applied_cycles must be non-negative; got {n}")
+            raise _fatigue_refusal(
+                f"applied_cycles must be non-negative; got {n}",
+                subject="applied_cycles",
+                source=_LOAD_SOURCE,
+            )
     for big_n in cycles_to_failure:
         if big_n <= 0:
-            raise ValueError(f"cycles_to_failure must be positive; got {big_n}")
+            raise _fatigue_refusal(
+                f"cycles_to_failure must be positive; got {big_n}",
+                subject="cycles_to_failure",
+                source=_MATERIAL_SOURCE,
+            )
 
 
 def miner_cumulative_damage(
@@ -665,12 +842,16 @@ def miner_cumulative_damage(
     ``cycles_to_failure`` positive. Returns the dimensionless damage D.
     """
     if not isinstance(applied_cycles, Sequence):
-        raise ValueError(
-            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        raise _fatigue_refusal(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}",
+            subject="applied_cycles",
+            source=_LOAD_SOURCE,
         )
     if not isinstance(cycles_to_failure, Sequence):
-        raise ValueError(
-            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}"
+        raise _fatigue_refusal(
+            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}",
+            subject="cycles_to_failure",
+            source=_MATERIAL_SOURCE,
         )
     _validate_spectrum(applied_cycles, cycles_to_failure)
     return sum(n / big_n for n, big_n in zip(applied_cycles, cycles_to_failure, strict=True))
@@ -692,12 +873,16 @@ def miner_spectrum_repeats_to_failure(
     :func:`miner_cumulative_damage`.
     """
     if not isinstance(applied_cycles, Sequence):
-        raise ValueError(
-            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        raise _fatigue_refusal(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}",
+            subject="applied_cycles",
+            source=_LOAD_SOURCE,
         )
     if not isinstance(cycles_to_failure, Sequence):
-        raise ValueError(
-            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}"
+        raise _fatigue_refusal(
+            f"cycles_to_failure must be a sequence, not a single value; got {cycles_to_failure!r}",
+            subject="cycles_to_failure",
+            source=_MATERIAL_SOURCE,
         )
     damage = miner_cumulative_damage(
         applied_cycles=applied_cycles, cycles_to_failure=cycles_to_failure
@@ -730,11 +915,23 @@ def basquin_cycles_to_failure(
     sa = _require_stress(stress_amplitude, "stress_amplitude")
     a = _require_stress(coefficient, "coefficient")
     if sa <= 0:
-        raise ValueError(f"stress_amplitude must be positive; got {stress_amplitude}")
+        raise _fatigue_refusal(
+            f"stress_amplitude must be positive; got {stress_amplitude}",
+            subject="stress_amplitude",
+            source=_LOAD_SOURCE,
+        )
     if a <= 0:
-        raise ValueError(f"coefficient must be positive; got {coefficient}")
+        raise _fatigue_refusal(
+            f"coefficient must be positive; got {coefficient}",
+            subject="coefficient",
+            source=_MATERIAL_SOURCE,
+        )
     if exponent >= 0:
-        raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
+        raise _fatigue_refusal(
+            f"exponent (Basquin's b) must be negative; got {exponent}",
+            subject="exponent",
+            source=_MATERIAL_SOURCE,
+        )
     return (sa / a) ** (1.0 / exponent)
 
 
@@ -755,14 +952,26 @@ def basquin_stress_for_life(
     require_finite(exponent, name="exponent")
     a = _require_stress(coefficient, "coefficient")
     if a <= 0:
-        raise ValueError(f"coefficient must be positive; got {coefficient}")
+        raise _fatigue_refusal(
+            f"coefficient must be positive; got {coefficient}",
+            subject="coefficient",
+            source=_MATERIAL_SOURCE,
+        )
     # A NaN passes this and is then dropped by the max() against the threshold stress, so
     # the allowable range comes back as an invented near-zero rather than as a refusal.
     require_finite(life_cycles, name="life_cycles")
     if life_cycles <= 0:
-        raise ValueError(f"life_cycles must be positive; got {life_cycles}")
+        raise _fatigue_refusal(
+            f"life_cycles must be positive; got {life_cycles}",
+            subject="life_cycles",
+            source=_DESIGN_SOURCE,
+        )
     if exponent >= 0:
-        raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
+        raise _fatigue_refusal(
+            f"exponent (Basquin's b) must be negative; got {exponent}",
+            subject="exponent",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=a * life_cycles**exponent, unit="MPa")
 
 
@@ -785,11 +994,23 @@ def coffin_manson_reversals(
     require_finite(plastic_strain_amplitude, name="plastic_strain_amplitude")
     require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
     if plastic_strain_amplitude <= 0:
-        raise ValueError("plastic_strain_amplitude must be positive")
+        raise _fatigue_refusal(
+            "plastic_strain_amplitude must be positive",
+            subject="plastic_strain_amplitude",
+            source=_LOAD_SOURCE,
+        )
     if fatigue_ductility_coefficient <= 0:
-        raise ValueError("fatigue_ductility_coefficient must be positive")
+        raise _fatigue_refusal(
+            "fatigue_ductility_coefficient must be positive",
+            subject="fatigue_ductility_coefficient",
+            source=_MATERIAL_SOURCE,
+        )
     if fatigue_ductility_exponent >= 0:
-        raise ValueError("fatigue_ductility_exponent (c) must be negative")
+        raise _fatigue_refusal(
+            "fatigue_ductility_exponent (c) must be negative",
+            subject="fatigue_ductility_exponent",
+            source=_MATERIAL_SOURCE,
+        )
     return (plastic_strain_amplitude / fatigue_ductility_coefficient) ** (
         1.0 / fatigue_ductility_exponent
     )
@@ -820,15 +1041,34 @@ def strain_life_total_amplitude(
     sigma_f = _require_stress(fatigue_strength_coefficient, "fatigue_strength_coefficient")
     e = _require_stress(elastic_modulus, "elastic_modulus")
     if reversals <= 0:
-        raise ValueError("reversals must be positive")
-    if sigma_f <= 0 or e <= 0:
-        raise ValueError("fatigue_strength_coefficient and elastic_modulus must be positive")
+        raise _fatigue_refusal(
+            "reversals must be positive", subject="reversals", source=_LOAD_SOURCE
+        )
+    for subject, magnitude in (("fatigue_strength_coefficient", sigma_f), ("elastic_modulus", e)):
+        if magnitude <= 0:
+            raise _fatigue_refusal(
+                "fatigue_strength_coefficient and elastic_modulus must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     if fatigue_strength_exponent >= 0:
-        raise ValueError("fatigue_strength_exponent (b) must be negative")
+        raise _fatigue_refusal(
+            "fatigue_strength_exponent (b) must be negative",
+            subject="fatigue_strength_exponent",
+            source=_MATERIAL_SOURCE,
+        )
     if fatigue_ductility_coefficient <= 0:
-        raise ValueError("fatigue_ductility_coefficient must be positive")
+        raise _fatigue_refusal(
+            "fatigue_ductility_coefficient must be positive",
+            subject="fatigue_ductility_coefficient",
+            source=_MATERIAL_SOURCE,
+        )
     if fatigue_ductility_exponent >= 0:
-        raise ValueError("fatigue_ductility_exponent (c) must be negative")
+        raise _fatigue_refusal(
+            "fatigue_ductility_exponent (c) must be negative",
+            subject="fatigue_ductility_exponent",
+            source=_MATERIAL_SOURCE,
+        )
     elastic = (sigma_f / e) * reversals**fatigue_strength_exponent
     plastic = fatigue_ductility_coefficient * reversals**fatigue_ductility_exponent
     return elastic + plastic
@@ -845,7 +1085,11 @@ def weld_constant_amplitude_fatigue_limit(*, detail_category: Quantity) -> Quant
     """
     dsc = _require_stress(detail_category, "detail_category")
     if dsc <= 0:
-        raise ValueError(f"detail_category must be positive; got {detail_category}")
+        raise _fatigue_refusal(
+            f"detail_category must be positive; got {detail_category}",
+            subject="detail_category",
+            source=_CODE_SOURCE,
+        )
     return Quantity(magnitude=dsc * (_WELD_N_C / _WELD_N_D) ** (1.0 / _WELD_SLOPE_HIGH), unit="MPa")
 
 
@@ -889,9 +1133,17 @@ def weld_detail_endurance_cycles(
     ds = _require_stress(stress_range, "stress_range")
     dsc = _require_stress(detail_category, "detail_category")
     if ds <= 0:
-        raise ValueError(f"stress_range must be positive; got {stress_range}")
+        raise _fatigue_refusal(
+            f"stress_range must be positive; got {stress_range}",
+            subject="stress_range",
+            source=_LOAD_SOURCE,
+        )
     if dsc <= 0:
-        raise ValueError(f"detail_category must be positive; got {detail_category}")
+        raise _fatigue_refusal(
+            f"detail_category must be positive; got {detail_category}",
+            subject="detail_category",
+            source=_CODE_SOURCE,
+        )
     dsd = weld_constant_amplitude_fatigue_limit(detail_category=detail_category).magnitude
     if ds >= dsd:
         return _WELD_N_C * (dsc / ds) ** _WELD_SLOPE_HIGH
@@ -919,12 +1171,20 @@ def weld_detail_allowable_stress_range(
     """
     dsc = _require_stress(detail_category, "detail_category")
     if dsc <= 0:
-        raise ValueError(f"detail_category must be positive; got {detail_category}")
+        raise _fatigue_refusal(
+            f"detail_category must be positive; got {detail_category}",
+            subject="detail_category",
+            source=_CODE_SOURCE,
+        )
     # A NaN passes this and is then dropped by the max() against the threshold stress, so
     # the allowable range comes back as an invented near-zero rather than as a refusal.
     require_finite(life_cycles, name="life_cycles")
     if life_cycles <= 0:
-        raise ValueError(f"life_cycles must be positive; got {life_cycles}")
+        raise _fatigue_refusal(
+            f"life_cycles must be positive; got {life_cycles}",
+            subject="life_cycles",
+            source=_DESIGN_SOURCE,
+        )
     if life_cycles <= _WELD_N_D:
         return Quantity(
             magnitude=dsc * (_WELD_N_C / life_cycles) ** (1.0 / _WELD_SLOPE_HIGH), unit="MPa"
@@ -963,13 +1223,19 @@ def weld_size_effect_factor(
     _require_length(thickness, "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _fatigue_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     # A negative exponent inverts the penalty: (t_ref/t)^n rises above 1 and the thick plate
     # comes out STRONGER than the reference, against this function's own k_s <= 1 contract.
     if exponent < 0:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"exponent must be non-negative; got {exponent}, which turns the thickness "
-            f"penalty into a bonus (k_s > 1)"
+            f"penalty into a bonus (k_s > 1)",
+            subject="exponent",
+            source=_MATERIAL_SOURCE,
         )
     t_ref = (
         _WELD_SIZE_REFERENCE_MM
@@ -977,7 +1243,11 @@ def weld_size_effect_factor(
         else reference_thickness.to("mm").magnitude
     )
     if t_ref <= 0:
-        raise ValueError(f"reference_thickness must be positive; got {reference_thickness}")
+        raise _fatigue_refusal(
+            f"reference_thickness must be positive; got {reference_thickness}",
+            subject="reference_thickness",
+            source=_CODE_SOURCE,
+        )
     if t <= t_ref:
         return 1.0
     return (t_ref / t) ** exponent
@@ -999,7 +1269,11 @@ def weld_size_corrected_detail_category(
     """
     dsc = _require_stress(detail_category, "detail_category")
     if dsc <= 0:
-        raise ValueError(f"detail_category must be positive; got {detail_category}")
+        raise _fatigue_refusal(
+            f"detail_category must be positive; got {detail_category}",
+            subject="detail_category",
+            source=_CODE_SOURCE,
+        )
     factor = weld_size_effect_factor(
         thickness=thickness, reference_thickness=reference_thickness, exponent=exponent
     )
@@ -1045,14 +1319,18 @@ def weld_effective_stress_range(
     smax = _require_stress(max_stress, "max_stress")
     smin = _require_stress(min_stress, "min_stress")
     if smin > smax:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"min_stress ({min_stress}) exceeds max_stress ({max_stress}): the algebraic "
-            f"extremes of the cycle are swapped"
+            f"extremes of the cycle are swapped",
+            subject="max_stress and min_stress",
+            source=_LOAD_SOURCE,
         )
     if not 0 < compression_factor <= 1:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"compression_factor must lie in (0, 1]; got {compression_factor}. Above 1 the "
-            f"compressive part would be more damaging than the tensile part"
+            f"compressive part would be more damaging than the tensile part",
+            subject="compression_factor",
+            source=_CODE_SOURCE,
         )
     if not stress_relieved or smin >= 0:
         return Quantity(magnitude=smax - smin, unit="MPa")
@@ -1080,9 +1358,11 @@ def weld_mean_stress_factor(
     smin = _require_stress(min_stress, "min_stress")
     full_range = smax - smin
     if full_range <= 0:
-        raise ValueError(
+        raise _fatigue_refusal(
             f"max_stress ({max_stress}) and min_stress ({min_stress}) give a stress range of "
-            f"{full_range:.4g} MPa: there is no cycle to correct"
+            f"{full_range:.4g} MPa: there is no cycle to correct",
+            subject="max_stress and min_stress",
+            source=_LOAD_SOURCE,
         )
     effective = weld_effective_stress_range(
         max_stress=max_stress,
@@ -1119,7 +1399,11 @@ def weld_nominal_stress_range_limit(*, yield_strength: Quantity, shear: bool = F
     )
     stress = _require_stress(yield_strength, "yield_strength")
     if stress <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _fatigue_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     limit = _WELD_ELASTIC_RANGE_FACTOR * stress
     if shear:
         limit /= sqrt(3.0)
@@ -1181,17 +1465,23 @@ def weld_fatigue_scorecard(
     about it either way.
     """
     if not isinstance(applied_cycles, Sequence):
-        raise ValueError(
-            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}"
+        raise _fatigue_refusal(
+            f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}",
+            subject="applied_cycles",
+            source=_LOAD_SOURCE,
         )
     if not isinstance(stress_ranges, Sequence):
-        raise ValueError(
-            f"stress_ranges must be a sequence, not a single value; got {stress_ranges!r}"
+        raise _fatigue_refusal(
+            f"stress_ranges must be a sequence, not a single value; got {stress_ranges!r}",
+            subject="stress_ranges",
+            source=_LOAD_SOURCE,
         )
     if len(applied_cycles) != len(stress_ranges):
-        raise ValueError(
+        raise _fatigue_refusal(
             f"applied_cycles ({len(applied_cycles)}) and stress_ranges "
-            f"({len(stress_ranges)}) must have the same length"
+            f"({len(stress_ranges)}) must have the same length",
+            subject="applied_cycles and stress_ranges",
+            source=_LOAD_SOURCE,
         )
     if detail_category is None:
         return ScorecardEntry(

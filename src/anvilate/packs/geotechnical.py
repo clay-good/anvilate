@@ -31,6 +31,7 @@ from ..analysis import (
     terzaghi_bearing_capacity,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     AppliedFactor,
     CheckStatus,
@@ -43,6 +44,23 @@ from ..scorecard import (
 )
 from ..units import Quantity
 from ._guarded import GuardedInputs
+
+_FOOTING_SOURCE = "the foundation drawing (footing width and length, width the shorter side)"
+_SOIL_SOURCE = "the geotechnical report's backfill friction angle"
+
+
+class _GeotechnicalPackInputError(RefusalError, ValueError):
+    """A geotechnical element input that cannot be used without correction."""
+
+
+def _geotechnical_pack_refusal(
+    message: str, *, subject: str, source: str
+) -> _GeotechnicalPackInputError:
+    return _GeotechnicalPackInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "DrivenPile",
@@ -100,9 +118,17 @@ class ShallowFooting(GuardedInputs):
         b = self.width.to("m").magnitude
         lo = self.length.to("m").magnitude
         if b <= 0 or lo <= 0:
-            raise ValueError("width and length must be positive")
+            raise _geotechnical_pack_refusal(
+                "width and length must be positive",
+                subject="width and length",
+                source=_FOOTING_SOURCE,
+            )
         if b > lo:
-            raise ValueError("width must be the shorter side (B <= L)")
+            raise _geotechnical_pack_refusal(
+                "width must be the shorter side (B <= L)",
+                subject="width and length",
+                source=_FOOTING_SOURCE,
+            )
         return self
 
 
@@ -262,9 +288,11 @@ class RetainingWall(GuardedInputs):
     @model_validator(mode="after")
     def _a_friction_angle(self) -> RetainingWall:
         if not 0 <= self.backfill_friction_angle < 90:
-            raise ValueError(
+            raise _geotechnical_pack_refusal(
                 "backfill_friction_angle must lie in [0, 90) degrees; got "
-                f"{self.backfill_friction_angle}"
+                f"{self.backfill_friction_angle}",
+                subject="backfill_friction_angle",
+                source=_SOIL_SOURCE,
             )
         return self
 

@@ -41,7 +41,29 @@ from pydantic import ConfigDict, Field, model_validator
 
 from .._models import EMPTY_MAP, FrozenMap, Provenance, RevalidatedModel, each_one
 from ..derivation import DerivationAbsence, Underived
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+
+_EDITIONS_SOURCE = "the editions of the standard the design actually mixes"
+_ACCEPTANCE_SOURCE = "the engineer accepting the mixed-edition risk and their stated reason"
+
+
+class _WaiverInputError(RefusalError, ValueError):
+    """A mixed-edition waiver that cannot be used without correction."""
+
+
+def _effectivity_refusal(message: str, *, subject: str, source: str) -> _WaiverInputError:
+    return _WaiverInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _effectivity_input_source(name: str) -> str:
+    if name == "editions":
+        return _EDITIONS_SOURCE
+    return _ACCEPTANCE_SOURCE
+
 
 _NEEDS_REFERENCES = Need(
     declaration="references",
@@ -305,15 +327,19 @@ class MixedEditionWaiver(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> MixedEditionWaiver:
         if len(set(self.editions)) < 2:
-            raise ValueError(
+            raise _effectivity_refusal(
                 f"a mixed-edition waiver covers at least two editions of {self.standard}; "
-                f"got {self.editions}. One edition needs no waiver."
+                f"got {self.editions}. One edition needs no waiver.",
+                subject="editions",
+                source=_EDITIONS_SOURCE,
             )
         for value, name in ((self.accepted_by, "accepted_by"), (self.rationale, "rationale")):
             if not value.strip():
-                raise ValueError(
+                raise _effectivity_refusal(
                     f"{name} may not be blank — a waiver with nobody's name on it and no "
-                    f"reason is a suppressed warning, not an accepted risk"
+                    f"reason is a suppressed warning, not an accepted risk",
+                    subject=name,
+                    source=_effectivity_input_source(name),
                 )
         return self
 

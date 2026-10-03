@@ -128,10 +128,28 @@ def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 19
+    assert len(sites) == 26
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
+
+
+def test_finiteness_and_operator_refusals_carry_structured_remedies():
+    from anvilate.units import require_finite
+
+    with pytest.raises(UnitError) as infinite:
+        require_finite(Quantity(magnitude=float("nan"), unit="m"), name="span")
+    assert infinite.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": "span",
+        "source": "a finite measured or specified value for the input",
+    }
+
+    for operation in (float, abs, lambda q: q < 1.0, lambda q: round(q)):
+        with pytest.raises(UnitError) as refused:
+            operation(Quantity(magnitude=2.0, unit="m"))
+        assert refused.value.remedies[0].action == "replace"
+        assert refused.value.remedies[0].subject == "2 m"
 
 
 def test_plausible_units_offered_for_bare_load():

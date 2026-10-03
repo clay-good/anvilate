@@ -17,6 +17,22 @@ from .._models import Provenance, RevalidatedModel, parse_yaml
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 
+_DIMENSION_SOURCE = "the drawing's nominal dimension, as a length"
+
+
+class _GeneralToleranceInputError(RefusalError, ValueError):
+    """A general-tolerance input that cannot be used without correction."""
+
+
+def _general_tolerance_input_refusal(
+    message: str, *, subject: str, source: str
+) -> _GeneralToleranceInputError:
+    return _GeneralToleranceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
 __all__ = [
     "ToleranceClass",
     "GeneralTolerance",
@@ -169,7 +185,11 @@ def general_tolerance(
     its maximum, or if the class is undefined for the matched range.
     """
     if not isinstance(nominal, Quantity):
-        raise ValueError(f"nominal must be a [length] quantity; got {nominal!r}")
+        raise _general_tolerance_input_refusal(
+            f"nominal must be a [length] quantity; got {nominal!r}",
+            subject="nominal",
+            source=_DIMENSION_SOURCE,
+        )
     if not nominal.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"general tolerance needs a length; got {nominal.dimensionality} ({nominal})",
@@ -296,7 +316,11 @@ def general_angular_tolerance(
     resolve to the tightest class instead of being refused.
     """
     if not isinstance(shorter_leg, Quantity):
-        raise ValueError(f"shorter_leg must be a [length] quantity; got {shorter_leg!r}")
+        raise _general_tolerance_input_refusal(
+            f"shorter_leg must be a [length] quantity; got {shorter_leg!r}",
+            subject="shorter_leg",
+            source=_DIMENSION_SOURCE,
+        )
     if not shorter_leg.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"angular tolerance is keyed by the shorter leg length; "

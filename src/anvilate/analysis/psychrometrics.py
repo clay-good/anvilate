@@ -22,8 +22,47 @@ from __future__ import annotations
 
 from math import atan, exp, log, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_STATE_SOURCE = "the HVAC design conditions' air states (dry bulb, humidity, pressure)"
+_AIRFLOW_SOURCE = "the air handler schedule's design dry-air mass flows"
+_COIL_SOURCE = "the coil or evaporative cooler manufacturer's performance selection"
+_LOAD_SOURCE = "the building load calculation's sensible and latent loads"
+
+
+class _PsychrometricsInputError(RefusalError, ValueError):
+    """A psychrometric input that cannot be used without correction."""
+
+
+def _psychrometrics_refusal(
+    message: str, *, subject: str, source: str
+) -> _PsychrometricsInputError:
+    return _PsychrometricsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _psychrometrics_input_source(name: str) -> str:
+    if name in {"dry_air_mass_flow", "mass_flow_1", "mass_flow_2"}:
+        return _AIRFLOW_SOURCE
+    if name in {
+        "apparent_dew_point",
+        "entering_dry_bulb",
+        "entering_temperature",
+        "entering_wet_bulb",
+        "enthalpy_in",
+        "enthalpy_out",
+        "leaving_dry_bulb",
+        "leaving_temperature",
+    }:
+        return _COIL_SOURCE
+    if name in {"humidity_ratio_change", "latent_load", "sensible_load", "temperature_change"}:
+        return _LOAD_SOURCE
+    return _STATE_SOURCE
+
 
 __all__ = [
     "wet_bulb_temperature",
@@ -70,10 +109,16 @@ def saturation_vapor_pressure(*, temperature: Quantity) -> Quantity:
     """
     _check(temperature, "[temperature]", "temperature")
     if temperature.to("K").magnitude <= 0:
-        raise ValueError("temperature must be above absolute zero")
+        raise _psychrometrics_refusal(
+            "temperature must be above absolute zero", subject="temperature", source=_STATE_SOURCE
+        )
     t = temperature.to("degC").magnitude
     if t <= -_MAGNUS_C:
-        raise ValueError("temperature is below the valid range of the Magnus formula")
+        raise _psychrometrics_refusal(
+            "temperature is below the valid range of the Magnus formula",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=_MAGNUS_A * exp(_MAGNUS_B * t / (t + _MAGNUS_C)), unit="Pa")
 
 
@@ -91,9 +136,17 @@ def humidity_ratio(*, vapor_pressure: Quantity, total_pressure: Quantity) -> flo
     p_w = vapor_pressure.to("Pa").magnitude
     p = total_pressure.to("Pa").magnitude
     if p_w < 0 or p <= 0:
-        raise ValueError("vapor_pressure must be non-negative and total_pressure positive")
+        raise _psychrometrics_refusal(
+            "vapor_pressure must be non-negative and total_pressure positive",
+            subject="vapor_pressure and total_pressure",
+            source=_STATE_SOURCE,
+        )
     if p_w >= p:
-        raise ValueError("vapor_pressure must be less than total_pressure")
+        raise _psychrometrics_refusal(
+            "vapor_pressure must be less than total_pressure",
+            subject="vapor_pressure and total_pressure",
+            source=_STATE_SOURCE,
+        )
     return _MASS_RATIO * p_w / (p - p_w)
 
 
@@ -116,12 +169,18 @@ def relative_humidity(*, vapor_pressure: Quantity, saturation_pressure: Quantity
     p_w = vapor_pressure.to("Pa").magnitude
     p_ws = saturation_pressure.to("Pa").magnitude
     if p_w < 0 or p_ws <= 0:
-        raise ValueError("vapor_pressure must be non-negative and saturation_pressure positive")
+        raise _psychrometrics_refusal(
+            "vapor_pressure must be non-negative and saturation_pressure positive",
+            subject="vapor_pressure and saturation_pressure",
+            source=_STATE_SOURCE,
+        )
     if p_w > p_ws:
-        raise ValueError(
+        raise _psychrometrics_refusal(
             f"vapor_pressure ({p_w:g} Pa) exceeds saturation_pressure ({p_ws:g} Pa), which would "
             f"make the relative humidity {p_w / p_ws:g} — above saturation. Check that both "
-            "pressures are stated at the same temperature"
+            "pressures are stated at the same temperature",
+            subject="vapor_pressure and saturation_pressure",
+            source=_STATE_SOURCE,
         )
     return p_w / p_ws
 
@@ -138,10 +197,16 @@ def dew_point_temperature(*, vapor_pressure: Quantity) -> Quantity:
     _check(vapor_pressure, "[pressure]", "vapor_pressure")
     p_w = vapor_pressure.to("Pa").magnitude
     if p_w <= 0:
-        raise ValueError("vapor_pressure must be positive")
+        raise _psychrometrics_refusal(
+            "vapor_pressure must be positive", subject="vapor_pressure", source=_STATE_SOURCE
+        )
     gamma = log(p_w / _MAGNUS_A)
     if gamma >= _MAGNUS_B:
-        raise ValueError("vapor_pressure is above the valid range of the Magnus inverse")
+        raise _psychrometrics_refusal(
+            "vapor_pressure is above the valid range of the Magnus inverse",
+            subject="vapor_pressure",
+            source=_STATE_SOURCE,
+        )
     t_dp_celsius = _MAGNUS_C * gamma / (_MAGNUS_B - gamma)
     return Quantity(magnitude=t_dp_celsius + 273.15, unit="K")
 
@@ -159,7 +224,9 @@ def moist_air_enthalpy(*, temperature: Quantity, humidity_ratio: float) -> Quant
     """
     _check(temperature, "[temperature]", "temperature")
     if humidity_ratio < 0:
-        raise ValueError("humidity_ratio must be non-negative")
+        raise _psychrometrics_refusal(
+            "humidity_ratio must be non-negative", subject="humidity_ratio", source=_STATE_SOURCE
+        )
     t = temperature.to("degC").magnitude
     h = _CP_DRY_AIR * t + humidity_ratio * (_LATENT_HEAT_0C + _CP_WATER_VAPOR * t)
     return Quantity(magnitude=h, unit="kJ/kg")
@@ -188,11 +255,17 @@ def moist_air_specific_volume(
     t = temperature.to("K").magnitude
     p = pressure.to("Pa").magnitude
     if t <= 0:
-        raise ValueError("temperature must be above absolute zero")
+        raise _psychrometrics_refusal(
+            "temperature must be above absolute zero", subject="temperature", source=_STATE_SOURCE
+        )
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _psychrometrics_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if humidity_ratio < 0:
-        raise ValueError("humidity_ratio must be non-negative")
+        raise _psychrometrics_refusal(
+            "humidity_ratio must be non-negative", subject="humidity_ratio", source=_STATE_SOURCE
+        )
     return Quantity(
         magnitude=_R_DRY_AIR * t * (1.0 + humidity_ratio / _MASS_RATIO) / p, unit="m^3/kg"
     )
@@ -222,8 +295,11 @@ def adiabatic_mixing_temperature(
     m2 = mass_flow_2.to("kg/s").magnitude
     t1 = temperature_1.to("degC").magnitude
     t2 = temperature_2.to("degC").magnitude
-    if m1 <= 0 or m2 <= 0:
-        raise ValueError("mass flows must be positive")
+    for subject, magnitude in (("mass_flow_1", m1), ("mass_flow_2", m2)):
+        if magnitude <= 0:
+            raise _psychrometrics_refusal(
+                "mass flows must be positive", subject=subject, source=_AIRFLOW_SOURCE
+            )
     return Quantity(magnitude=(m1 * t1 + m2 * t2) / (m1 + m2), unit="degC")
 
 
@@ -247,10 +323,19 @@ def adiabatic_mixing_humidity_ratio(
     _check(mass_flow_2, "[mass]/[time]", "mass_flow_2")
     m1 = mass_flow_1.to("kg/s").magnitude
     m2 = mass_flow_2.to("kg/s").magnitude
-    if m1 <= 0 or m2 <= 0:
-        raise ValueError("mass flows must be positive")
-    if humidity_ratio_1 < 0 or humidity_ratio_2 < 0:
-        raise ValueError("humidity ratios must be non-negative")
+    for subject, magnitude in (("mass_flow_1", m1), ("mass_flow_2", m2)):
+        if magnitude <= 0:
+            raise _psychrometrics_refusal(
+                "mass flows must be positive", subject=subject, source=_AIRFLOW_SOURCE
+            )
+    for subject, magnitude in (
+        ("humidity_ratio_1", humidity_ratio_1),
+        ("humidity_ratio_2", humidity_ratio_2),
+    ):
+        if magnitude < 0:
+            raise _psychrometrics_refusal(
+                "humidity ratios must be non-negative", subject=subject, source=_STATE_SOURCE
+            )
     return (m1 * humidity_ratio_1 + m2 * humidity_ratio_2) / (m1 + m2)
 
 
@@ -279,11 +364,17 @@ def evaporative_cooler_effectiveness(
     t_db2 = leaving_dry_bulb.to("degC").magnitude
     t_wb1 = entering_wet_bulb.to("degC").magnitude
     if not t_wb1 <= t_db2 <= t_db1:
-        raise ValueError(
-            "temperatures must satisfy entering_wet_bulb <= leaving_dry_bulb <= entering_dry_bulb"
+        raise _psychrometrics_refusal(
+            "temperatures must satisfy entering_wet_bulb <= leaving_dry_bulb <= entering_dry_bulb",
+            subject="entering_dry_bulb, leaving_dry_bulb, and entering_wet_bulb",
+            source=_COIL_SOURCE,
         )
     if t_db1 == t_wb1:
-        raise ValueError("entering air is already saturated (no wet-bulb depression to work with)")
+        raise _psychrometrics_refusal(
+            "entering air is already saturated (no wet-bulb depression to work with)",
+            subject="entering_dry_bulb and entering_wet_bulb",
+            source=_COIL_SOURCE,
+        )
     return (t_db1 - t_db2) / (t_db1 - t_wb1)
 
 
@@ -311,7 +402,11 @@ def coil_bypass_factor(
     t_out = leaving_temperature.to("degC").magnitude
     t_adp = apparent_dew_point.to("degC").magnitude
     if not t_adp < t_out < t_in:
-        raise ValueError("temperatures must satisfy apparent_dew_point < leaving < entering")
+        raise _psychrometrics_refusal(
+            "temperatures must satisfy apparent_dew_point < leaving < entering",
+            subject="entering_temperature, leaving_temperature, and apparent_dew_point",
+            source=_COIL_SOURCE,
+        )
     return (t_out - t_adp) / (t_in - t_adp)
 
 
@@ -336,7 +431,11 @@ def cooling_coil_load(
     h_in = enthalpy_in.to("kJ/kg").magnitude
     h_out = enthalpy_out.to("kJ/kg").magnitude
     if m_dot <= 0:
-        raise ValueError("dry_air_mass_flow must be positive")
+        raise _psychrometrics_refusal(
+            "dry_air_mass_flow must be positive",
+            subject="dry_air_mass_flow",
+            source=_AIRFLOW_SOURCE,
+        )
     return Quantity(magnitude=m_dot * (h_in - h_out), unit="kW")
 
 
@@ -360,9 +459,15 @@ def sensible_heat_load(
     m = dry_air_mass_flow.to("kg/s").magnitude
     dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
     if m <= 0:
-        raise ValueError("dry_air_mass_flow must be positive")
+        raise _psychrometrics_refusal(
+            "dry_air_mass_flow must be positive",
+            subject="dry_air_mass_flow",
+            source=_AIRFLOW_SOURCE,
+        )
     if humidity_ratio < 0:
-        raise ValueError("humidity_ratio must be non-negative")
+        raise _psychrometrics_refusal(
+            "humidity_ratio must be non-negative", subject="humidity_ratio", source=_STATE_SOURCE
+        )
     cp = _CP_DRY_AIR + _CP_WATER_VAPOR * humidity_ratio
     return Quantity(magnitude=m * cp * dt, unit="kW")
 
@@ -384,9 +489,17 @@ def latent_heat_load(
     _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
     m = dry_air_mass_flow.to("kg/s").magnitude
     if m <= 0:
-        raise ValueError("dry_air_mass_flow must be positive")
+        raise _psychrometrics_refusal(
+            "dry_air_mass_flow must be positive",
+            subject="dry_air_mass_flow",
+            source=_AIRFLOW_SOURCE,
+        )
     if humidity_ratio_change < 0:
-        raise ValueError("humidity_ratio_change must be non-negative")
+        raise _psychrometrics_refusal(
+            "humidity_ratio_change must be non-negative",
+            subject="humidity_ratio_change",
+            source=_LOAD_SOURCE,
+        )
     return Quantity(magnitude=m * _LATENT_HEAT_0C * humidity_ratio_change, unit="kW")
 
 
@@ -403,20 +516,35 @@ def sensible_heat_ratio(*, sensible_load: Quantity, latent_load: Quantity) -> fl
     _check(latent_load, "[power]", "latent_load")
     q_s = sensible_load.to("kW").magnitude
     q_l = latent_load.to("kW").magnitude
-    if q_s < 0 or q_l < 0:
-        raise ValueError("sensible_load and latent_load must be non-negative")
+    for subject, magnitude in (("sensible_load", q_s), ("latent_load", q_l)):
+        if magnitude < 0:
+            raise _psychrometrics_refusal(
+                "sensible_load and latent_load must be non-negative",
+                subject=subject,
+                source=_LOAD_SOURCE,
+            )
     total = q_s + q_l
     if total <= 0:
-        raise ValueError("the total load must be positive")
+        raise _psychrometrics_refusal(
+            "the total load must be positive",
+            subject="sensible_load and latent_load",
+            source=_LOAD_SOURCE,
+        )
     return q_s / total
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _psychrometrics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_psychrometrics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _psychrometrics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_psychrometrics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -462,7 +590,11 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
     """
     _check(dry_bulb_temperature, "[temperature]", "dry_bulb_temperature")
     if not 0.0 < relative_humidity <= 1.0:
-        raise ValueError(f"relative_humidity must be a fraction in (0, 1]; got {relative_humidity}")
+        raise _psychrometrics_refusal(
+            f"relative_humidity must be a fraction in (0, 1]; got {relative_humidity}",
+            subject="relative_humidity",
+            source=_STATE_SOURCE,
+        )
     t_c = dry_bulb_temperature.to("K").magnitude - 273.15
     rh = 100.0 * relative_humidity
     t_wb = (
@@ -481,10 +613,12 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
     # 0.22 K, under a flat allowance but still impossible.
     allowance = 0.25 if relative_humidity > 0.95 else 0.0
     if t_wb > t_c + allowance:
-        raise ValueError(
+        raise _psychrometrics_refusal(
             f"the Stull wet-bulb fit is out of range at {t_c:.1f} degC and "
             f"{100.0 * relative_humidity:.0f}% RH: it returns a wet bulb of {t_wb:.2f} degC, above "
             f"the dry bulb, which evaporation cannot reach. The fit is not valid for air that is "
-            f"both cold and dry; use a psychrometric chart or table there."
+            f"both cold and dry; use a psychrometric chart or table there.",
+            subject="dry_bulb_temperature and relative_humidity",
+            source=_STATE_SOURCE,
         )
     return Quantity(magnitude=t_wb + 273.15, unit="K")

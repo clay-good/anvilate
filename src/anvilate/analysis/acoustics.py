@@ -23,8 +23,75 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import asin, degrees, log, log10, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_MEASUREMENT_SOURCE = "the sound survey's measurement record (levels, distances, areas, times)"
+_DRAWING_SOURCE = "the room or device drawings and finish schedule (dimensions, absorption)"
+_MATERIAL_SOURCE = "the material or medium datasheet (density, modulus, sound speed, loss)"
+_CRITERION_SOURCE = "the noise-exposure regulation's criterion level and exchange rate"
+_EQUIPMENT_SOURCE = "the equipment manufacturer's sound power and directivity data"
+_OPERATING_SOURCE = "the operating case's source frequency and velocities"
+
+
+class _AcousticsInputError(RefusalError, ValueError):
+    """An acoustics input that cannot be used without correction."""
+
+
+def _acoustics_refusal(message: str, *, subject: str, source: str) -> _AcousticsInputError:
+    return _AcousticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _acoustics_input_source(name: str) -> str:
+    if name in {
+        "areas",
+        "average_absorption_coefficient",
+        "cavity_volume",
+        "mode",
+        "neck_area",
+        "neck_length",
+        "pipe_length",
+        "reverberation_time",
+        "room_constant",
+        "room_volume",
+        "total_absorption",
+        "total_surface_area",
+        "volume",
+    }:
+        return _DRAWING_SOURCE
+    if name in {
+        "density",
+        "impedance_1",
+        "impedance_2",
+        "poissons_ratio",
+        "sound_speed",
+        "speed_of_sound",
+        "surface_density",
+        "thickness",
+        "transmission_losses",
+        "wave_speed",
+        "youngs_modulus",
+    }:
+        return _MATERIAL_SOURCE
+    if name in {"criterion_duration", "criterion_level", "exchange_rate", "permissible_time"}:
+        return _CRITERION_SOURCE
+    if name in {"directivity_factor", "sound_power_level"}:
+        return _EQUIPMENT_SOURCE
+    if name in {
+        "frequency",
+        "mach_number",
+        "observed_frequency",
+        "observer_velocity",
+        "source_frequency",
+        "source_velocity",
+    }:
+        return _OPERATING_SOURCE
+    return _MEASUREMENT_SOURCE
+
 
 __all__ = [
     "eyring_reverberation_time",
@@ -65,9 +132,17 @@ def sound_level_sum(*, levels: Sequence[float]) -> float:
     noise. Returns the combined level in dB.
     """
     if not isinstance(levels, Sequence):
-        raise ValueError(f"levels must be a sequence, not a single value; got {levels!r}")
+        raise _acoustics_refusal(
+            f"levels must be a sequence, not a single value; got {levels!r}",
+            subject="levels",
+            source=_MEASUREMENT_SOURCE,
+        )
     if not levels:
-        raise ValueError("levels must contain at least one sound level")
+        raise _acoustics_refusal(
+            "levels must contain at least one sound level",
+            subject="levels",
+            source=_MEASUREMENT_SOURCE,
+        )
     total = sum(10.0 ** (level / 10.0) for level in levels)
     return 10.0 * log10(total)
 
@@ -91,8 +166,13 @@ def inverse_square_attenuation(
     _check(distance, "[length]", "distance")
     r1 = reference_distance.to("m").magnitude
     r2 = distance.to("m").magnitude
-    if r1 <= 0 or r2 <= 0:
-        raise ValueError("reference_distance and distance must be positive")
+    for subject, magnitude in (("reference_distance", r1), ("distance", r2)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "reference_distance and distance must be positive",
+                subject=subject,
+                source=_MEASUREMENT_SOURCE,
+            )
     return reference_level - 20.0 * log10(r2 / r1)
 
 
@@ -122,28 +202,44 @@ def composite_transmission_loss(
     float.
     """
     if not isinstance(areas, Sequence):
-        raise ValueError(f"areas must be a sequence, not a single value; got {areas!r}")
+        raise _acoustics_refusal(
+            f"areas must be a sequence, not a single value; got {areas!r}",
+            subject="areas",
+            source=_DRAWING_SOURCE,
+        )
     if not isinstance(transmission_losses, Sequence):
-        raise ValueError(
+        raise _acoustics_refusal(
             f"transmission_losses must be a sequence, not a single value; "
-            f"got {transmission_losses!r}"
+            f"got {transmission_losses!r}",
+            subject="transmission_losses",
+            source=_MATERIAL_SOURCE,
         )
     if len(areas) != len(transmission_losses):
-        raise ValueError(
+        raise _acoustics_refusal(
             f"areas and transmission_losses must be the same length; got {len(areas)} and "
-            f"{len(transmission_losses)}"
+            f"{len(transmission_losses)}",
+            subject="areas and transmission_losses",
+            source=_DRAWING_SOURCE,
         )
     if len(areas) == 0:
-        raise ValueError("areas must contain at least one element")
+        raise _acoustics_refusal(
+            "areas must contain at least one element", subject="areas", source=_DRAWING_SOURCE
+        )
     total_area = 0.0
     transmitted = 0.0
     for area, loss in zip(areas, transmission_losses, strict=True):
         _check(area, "[area]", "areas entry")
         square_metres = area.to("m**2").magnitude
         if square_metres <= 0:
-            raise ValueError(f"each area must be positive; got {area}")
+            raise _acoustics_refusal(
+                f"each area must be positive; got {area}", subject="areas", source=_DRAWING_SOURCE
+            )
         if loss < 0:
-            raise ValueError(f"each transmission loss must be non-negative; got {loss} dB")
+            raise _acoustics_refusal(
+                f"each transmission loss must be non-negative; got {loss} dB",
+                subject="transmission_losses",
+                source=_MATERIAL_SOURCE,
+            )
         total_area += square_metres
         transmitted += square_metres * 10.0 ** (-loss / 10.0)
     return 10.0 * log10(total_area / transmitted)
@@ -183,20 +279,38 @@ def coincidence_critical_frequency(
     rho = density.to("kg/m**3").magnitude
     e_pa = youngs_modulus.to("Pa").magnitude
     if t_m <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _acoustics_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_MATERIAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _acoustics_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     if e_pa <= 0:
-        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+        raise _acoustics_refusal(
+            f"youngs_modulus must be positive; got {youngs_modulus}",
+            subject="youngs_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not -1.0 < poissons_ratio < 0.5:
-        raise ValueError(f"poissons_ratio must lie in (-1, 0.5); got {poissons_ratio}")
+        raise _acoustics_refusal(
+            f"poissons_ratio must lie in (-1, 0.5); got {poissons_ratio}",
+            subject="poissons_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     if sound_speed is None:
         c = 343.0
     else:
         _check(sound_speed, "[length]/[time]", "sound_speed")
         c = sound_speed.to("m/s").magnitude
         if c <= 0:
-            raise ValueError(f"sound_speed must be positive; got {sound_speed}")
+            raise _acoustics_refusal(
+                f"sound_speed must be positive; got {sound_speed}",
+                subject="sound_speed",
+                source=_MATERIAL_SOURCE,
+            )
     surface_density = rho * t_m
     bending_stiffness = e_pa * t_m**3 / (12.0 * (1.0 - poissons_ratio**2))
     return Quantity(
@@ -219,8 +333,13 @@ def mass_law_transmission_loss(*, frequency: Quantity, surface_density: Quantity
     _check(surface_density, "[mass]/[length]**2", "surface_density")
     f = count_rate_per_second(frequency, name="frequency")
     m_s = surface_density.to("kg/m**2").magnitude
-    if f <= 0 or m_s <= 0:
-        raise ValueError("frequency and surface_density must be positive")
+    for subject, magnitude in (("frequency", f), ("surface_density", m_s)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "frequency and surface_density must be positive",
+                subject=subject,
+                source=_acoustics_input_source(subject),
+            )
     return 20.0 * log10(f * m_s) - 47.0
 
 
@@ -239,8 +358,13 @@ def sabine_reverberation_time(*, volume: Quantity, total_absorption: Quantity) -
     _check(total_absorption, "[length]**2", "total_absorption")
     v = volume.to("m**3").magnitude
     a = total_absorption.to("m**2").magnitude
-    if v <= 0 or a <= 0:
-        raise ValueError("volume and total_absorption must be positive")
+    for subject, magnitude in (("volume", v), ("total_absorption", a)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "volume and total_absorption must be positive",
+                subject=subject,
+                source=_DRAWING_SOURCE,
+            )
     return Quantity(magnitude=0.161 * v / a, unit="s")
 
 
@@ -262,9 +386,15 @@ def schroeder_frequency(*, reverberation_time: Quantity, room_volume: Quantity) 
     t60 = reverberation_time.to("s").magnitude
     v = room_volume.to("m**3").magnitude
     if t60 <= 0:
-        raise ValueError("reverberation_time must be positive")
+        raise _acoustics_refusal(
+            "reverberation_time must be positive",
+            subject="reverberation_time",
+            source=_DRAWING_SOURCE,
+        )
     if v <= 0:
-        raise ValueError("room_volume must be positive")
+        raise _acoustics_refusal(
+            "room_volume must be positive", subject="room_volume", source=_DRAWING_SOURCE
+        )
     return Quantity(magnitude=2000.0 * sqrt(t60 / v), unit="Hz")
 
 
@@ -282,9 +412,17 @@ def room_constant(
     _check(total_surface_area, "[length]**2", "total_surface_area")
     s = total_surface_area.to("m**2").magnitude
     if s <= 0:
-        raise ValueError("total_surface_area must be positive")
+        raise _acoustics_refusal(
+            "total_surface_area must be positive",
+            subject="total_surface_area",
+            source=_DRAWING_SOURCE,
+        )
     if not 0.0 < average_absorption_coefficient < 1.0:
-        raise ValueError("average_absorption_coefficient must be in (0, 1)")
+        raise _acoustics_refusal(
+            "average_absorption_coefficient must be in (0, 1)",
+            subject="average_absorption_coefficient",
+            source=_DRAWING_SOURCE,
+        )
     a_bar = average_absorption_coefficient
     return Quantity(magnitude=s * a_bar / (1.0 - a_bar), unit="m**2")
 
@@ -302,9 +440,15 @@ def critical_distance(*, room_constant: Quantity, directivity_factor: float = 1.
     _check(room_constant, "[length]**2", "room_constant")
     r = room_constant.to("m**2").magnitude
     if r <= 0:
-        raise ValueError("room_constant must be positive")
+        raise _acoustics_refusal(
+            "room_constant must be positive", subject="room_constant", source=_DRAWING_SOURCE
+        )
     if directivity_factor <= 0:
-        raise ValueError("directivity_factor must be positive")
+        raise _acoustics_refusal(
+            "directivity_factor must be positive",
+            subject="directivity_factor",
+            source=_EQUIPMENT_SOURCE,
+        )
     return Quantity(magnitude=0.141 * (directivity_factor * r) ** 0.5, unit="m")
 
 
@@ -331,11 +475,19 @@ def room_sound_pressure_level(
     r_const = room_constant.to("m**2").magnitude
     r = distance.to("m").magnitude
     if r_const <= 0:
-        raise ValueError("room_constant must be positive")
+        raise _acoustics_refusal(
+            "room_constant must be positive", subject="room_constant", source=_DRAWING_SOURCE
+        )
     if r <= 0:
-        raise ValueError("distance must be positive")
+        raise _acoustics_refusal(
+            "distance must be positive", subject="distance", source=_MEASUREMENT_SOURCE
+        )
     if directivity_factor <= 0:
-        raise ValueError("directivity_factor must be positive")
+        raise _acoustics_refusal(
+            "directivity_factor must be positive",
+            subject="directivity_factor",
+            source=_EQUIPMENT_SOURCE,
+        )
     field = directivity_factor / (4.0 * pi * r**2) + 4.0 / r_const
     return sound_power_level + 10.0 * log10(field)
 
@@ -365,10 +517,16 @@ def permissible_exposure_time(
     require_finite(sound_level, name="sound_level")
     require_finite(criterion_level, name="criterion_level")
     if exchange_rate <= 0:
-        raise ValueError("exchange_rate (dB) must be positive")
+        raise _acoustics_refusal(
+            "exchange_rate (dB) must be positive", subject="exchange_rate", source=_CRITERION_SOURCE
+        )
     t0 = criterion_duration.to("hour").magnitude
     if t0 <= 0:
-        raise ValueError("criterion_duration must be positive")
+        raise _acoustics_refusal(
+            "criterion_duration must be positive",
+            subject="criterion_duration",
+            source=_CRITERION_SOURCE,
+        )
     t = t0 / 2.0 ** ((sound_level - criterion_level) / exchange_rate)
     return Quantity(magnitude=t, unit="hour")
 
@@ -388,9 +546,17 @@ def noise_dose_fraction(*, exposure_time: Quantity, permissible_time: Quantity) 
     c = exposure_time.to("hour").magnitude
     t = permissible_time.to("hour").magnitude
     if c < 0:
-        raise ValueError("exposure_time must be non-negative")
+        raise _acoustics_refusal(
+            "exposure_time must be non-negative",
+            subject="exposure_time",
+            source=_MEASUREMENT_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("permissible_time must be positive")
+        raise _acoustics_refusal(
+            "permissible_time must be positive",
+            subject="permissible_time",
+            source=_CRITERION_SOURCE,
+        )
     return c / t
 
 
@@ -411,7 +577,11 @@ def sound_power_level_from_intensity(
     _check(measurement_area, "[length]**2", "measurement_area")
     s = measurement_area.to("m**2").magnitude
     if s <= 0:
-        raise ValueError("measurement_area must be positive")
+        raise _acoustics_refusal(
+            "measurement_area must be positive",
+            subject="measurement_area",
+            source=_MEASUREMENT_SOURCE,
+        )
     return intensity_level + 10.0 * log10(s)
 
 
@@ -434,9 +604,15 @@ def sound_pressure_from_power_level(
     _check(distance, "[length]", "distance")
     r = distance.to("m").magnitude
     if r <= 0:
-        raise ValueError("distance must be positive")
+        raise _acoustics_refusal(
+            "distance must be positive", subject="distance", source=_MEASUREMENT_SOURCE
+        )
     if directivity_factor <= 0:
-        raise ValueError("directivity_factor must be positive")
+        raise _acoustics_refusal(
+            "directivity_factor must be positive",
+            subject="directivity_factor",
+            source=_EQUIPMENT_SOURCE,
+        )
     return sound_power_level + 10.0 * log10(directivity_factor / (4.0 * pi * r**2))
 
 
@@ -464,13 +640,21 @@ def helmholtz_resonator_frequency(
     v = cavity_volume.to("m**3").magnitude
     length = neck_length.to("m").magnitude
     if c <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _acoustics_refusal(
+            "speed_of_sound must be positive", subject="speed_of_sound", source=_MATERIAL_SOURCE
+        )
     if a <= 0:
-        raise ValueError("neck_area must be positive")
+        raise _acoustics_refusal(
+            "neck_area must be positive", subject="neck_area", source=_DRAWING_SOURCE
+        )
     if v <= 0:
-        raise ValueError("cavity_volume must be positive")
+        raise _acoustics_refusal(
+            "cavity_volume must be positive", subject="cavity_volume", source=_DRAWING_SOURCE
+        )
     if length <= 0:
-        raise ValueError("neck_length must be positive")
+        raise _acoustics_refusal(
+            "neck_length must be positive", subject="neck_length", source=_DRAWING_SOURCE
+        )
     return Quantity(magnitude=c / (2.0 * pi) * sqrt(a / (v * length)), unit="Hz")
 
 
@@ -490,11 +674,17 @@ def open_pipe_resonance_frequency(
     c = speed_of_sound.to("m/s").magnitude
     length = pipe_length.to("m").magnitude
     if c <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _acoustics_refusal(
+            "speed_of_sound must be positive", subject="speed_of_sound", source=_MATERIAL_SOURCE
+        )
     if length <= 0:
-        raise ValueError("pipe_length must be positive")
+        raise _acoustics_refusal(
+            "pipe_length must be positive", subject="pipe_length", source=_DRAWING_SOURCE
+        )
     if not isinstance(mode, int) or mode < 1:
-        raise ValueError("mode must be an integer of at least 1")
+        raise _acoustics_refusal(
+            "mode must be an integer of at least 1", subject="mode", source=_DRAWING_SOURCE
+        )
     return Quantity(magnitude=mode * c / (2.0 * length), unit="Hz")
 
 
@@ -514,11 +704,17 @@ def closed_pipe_resonance_frequency(
     c = speed_of_sound.to("m/s").magnitude
     length = pipe_length.to("m").magnitude
     if c <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _acoustics_refusal(
+            "speed_of_sound must be positive", subject="speed_of_sound", source=_MATERIAL_SOURCE
+        )
     if length <= 0:
-        raise ValueError("pipe_length must be positive")
+        raise _acoustics_refusal(
+            "pipe_length must be positive", subject="pipe_length", source=_DRAWING_SOURCE
+        )
     if not isinstance(mode, int) or mode < 1:
-        raise ValueError("mode must be an integer of at least 1")
+        raise _acoustics_refusal(
+            "mode must be an integer of at least 1", subject="mode", source=_DRAWING_SOURCE
+        )
     return Quantity(magnitude=(2 * mode - 1) * c / (4.0 * length), unit="Hz")
 
 
@@ -546,13 +742,27 @@ def doppler_shifted_frequency(
     v_s = source_velocity.to("m/s").magnitude
     v_o = observer_velocity.to("m/s").magnitude
     if f <= 0:
-        raise ValueError("source_frequency must be positive")
+        raise _acoustics_refusal(
+            "source_frequency must be positive",
+            subject="source_frequency",
+            source=_OPERATING_SOURCE,
+        )
     if c <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _acoustics_refusal(
+            "speed_of_sound must be positive", subject="speed_of_sound", source=_MATERIAL_SOURCE
+        )
     if v_s >= c:
-        raise ValueError("source_velocity must be below the speed of sound")
+        raise _acoustics_refusal(
+            "source_velocity must be below the speed of sound",
+            subject="source_velocity and speed_of_sound",
+            source=_OPERATING_SOURCE,
+        )
     if v_o <= -c:
-        raise ValueError("observer_velocity must exceed minus the speed of sound")
+        raise _acoustics_refusal(
+            "observer_velocity must exceed minus the speed of sound",
+            subject="observer_velocity and speed_of_sound",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=f * (c + v_o) / (c - v_s), unit="Hz")
 
 
@@ -575,11 +785,21 @@ def doppler_velocity_from_shift(
     f_obs = count_rate_per_second(observed_frequency, name="observed_frequency")
     c = speed_of_sound.to("m/s").magnitude
     if f <= 0:
-        raise ValueError("source_frequency must be positive")
+        raise _acoustics_refusal(
+            "source_frequency must be positive",
+            subject="source_frequency",
+            source=_OPERATING_SOURCE,
+        )
     if f_obs <= 0:
-        raise ValueError("observed_frequency must be positive")
+        raise _acoustics_refusal(
+            "observed_frequency must be positive",
+            subject="observed_frequency",
+            source=_OPERATING_SOURCE,
+        )
     if c <= 0:
-        raise ValueError("speed_of_sound must be positive")
+        raise _acoustics_refusal(
+            "speed_of_sound must be positive", subject="speed_of_sound", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=c * (f_obs - f) / f_obs, unit="m/s")
 
 
@@ -596,8 +816,11 @@ def beat_frequency(*, frequency_1: Quantity, frequency_2: Quantity) -> Quantity:
     _check(frequency_2, "1/[time]", "frequency_2")
     f1 = count_rate_per_second(frequency_1, name="frequency_1")
     f2 = count_rate_per_second(frequency_2, name="frequency_2")
-    if f1 <= 0 or f2 <= 0:
-        raise ValueError("frequencies must be positive")
+    for subject, magnitude in (("frequency_1", f1), ("frequency_2", f2)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "frequencies must be positive", subject=subject, source=_MEASUREMENT_SOURCE
+            )
     return Quantity(magnitude=abs(f1 - f2), unit="Hz")
 
 
@@ -611,7 +834,11 @@ def mach_cone_angle(*, mach_number: float) -> float:
     Returns the cone half-angle in degrees.
     """
     if mach_number <= 1.0:
-        raise ValueError(f"mach_number must exceed 1 (a Mach cone needs M > 1); got {mach_number}")
+        raise _acoustics_refusal(
+            f"mach_number must exceed 1 (a Mach cone needs M > 1); got {mach_number}",
+            subject="mach_number",
+            source=_OPERATING_SOURCE,
+        )
     return degrees(asin(1.0 / mach_number))
 
 
@@ -629,9 +856,13 @@ def acoustic_impedance(*, density: Quantity, wave_speed: Quantity) -> Quantity:
     rho = density.to("kg/m**3").magnitude
     c = wave_speed.to("m/s").magnitude
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _acoustics_refusal(
+            "density must be positive", subject="density", source=_MATERIAL_SOURCE
+        )
     if c <= 0:
-        raise ValueError("wave_speed must be positive")
+        raise _acoustics_refusal(
+            "wave_speed must be positive", subject="wave_speed", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=rho * c, unit="kg/(m**2*s)")
 
 
@@ -649,8 +880,11 @@ def acoustic_reflection_coefficient(*, impedance_1: Quantity, impedance_2: Quant
     _check(impedance_2, "[mass]/([length]**2*[time])", "impedance_2")
     z1 = impedance_1.to("kg/(m**2*s)").magnitude
     z2 = impedance_2.to("kg/(m**2*s)").magnitude
-    if z1 <= 0 or z2 <= 0:
-        raise ValueError("acoustic impedances must be positive")
+    for subject, magnitude in (("impedance_1", z1), ("impedance_2", z2)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "acoustic impedances must be positive", subject=subject, source=_MATERIAL_SOURCE
+            )
     return ((z2 - z1) / (z2 + z1)) ** 2
 
 
@@ -669,17 +903,26 @@ def acoustic_transmission_coefficient(*, impedance_1: Quantity, impedance_2: Qua
     _check(impedance_2, "[mass]/([length]**2*[time])", "impedance_2")
     z1 = impedance_1.to("kg/(m**2*s)").magnitude
     z2 = impedance_2.to("kg/(m**2*s)").magnitude
-    if z1 <= 0 or z2 <= 0:
-        raise ValueError("acoustic impedances must be positive")
+    for subject, magnitude in (("impedance_1", z1), ("impedance_2", z2)):
+        if magnitude <= 0:
+            raise _acoustics_refusal(
+                "acoustic impedances must be positive", subject=subject, source=_MATERIAL_SOURCE
+            )
     return 4.0 * z1 * z2 / (z1 + z2) ** 2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _acoustics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_acoustics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _acoustics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_acoustics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -714,16 +957,24 @@ def eyring_reverberation_time(
     _check(volume, "[volume]", "volume")
     _check(total_surface_area, "[area]", "total_surface_area")
     if not 0.0 < average_absorption_coefficient < 1.0:
-        raise ValueError(
+        raise _acoustics_refusal(
             "average_absorption_coefficient must lie in (0, 1); got "
-            f"{average_absorption_coefficient}"
+            f"{average_absorption_coefficient}",
+            subject="average_absorption_coefficient",
+            source=_DRAWING_SOURCE,
         )
     v = volume.to("m**3").magnitude
     s = total_surface_area.to("m**2").magnitude
     if v <= 0:
-        raise ValueError("volume must be positive")
+        raise _acoustics_refusal(
+            "volume must be positive", subject="volume", source=_DRAWING_SOURCE
+        )
     if s <= 0:
-        raise ValueError("total_surface_area must be positive")
+        raise _acoustics_refusal(
+            "total_surface_area must be positive",
+            subject="total_surface_area",
+            source=_DRAWING_SOURCE,
+        )
     return Quantity(
         magnitude=0.161 * v / (-s * log(1.0 - average_absorption_coefficient)), unit="s"
     )

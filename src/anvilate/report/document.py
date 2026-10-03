@@ -34,10 +34,26 @@ from ..dependency import COMPUTED_FROM
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..failure_modes import CoverageReport
 from ..margin import MarginEntry, MarginLedger
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..spec.provenance import Origin, Provenanced
 from ..units import Quantity, UnitSystem, render, spoken
 from .mathml import formula_to_mathml
+
+_RECORD_SOURCE = "the calculation record as written by CalculationReport.to_record()"
+_RELEASE_SOURCE = "a calc record written by a release with the same schema major version"
+
+
+class _CalcRecordInputError(RefusalError, ValueError):
+    """A calculation record that cannot be used without correction."""
+
+
+def _calc_record_refusal(message: str, *, subject: str, source: str) -> _CalcRecordInputError:
+    return _CalcRecordInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "CALC_RECORD_SCHEMA_VERSION",
@@ -900,21 +916,33 @@ def report_from_record(record: dict) -> CalculationReport:
         # object has no attribute 'get'`, and one whose `report` key had not been written
         # answered with a bare `KeyError: 'report'`. A record exists to be reloaded, from a
         # file somebody may have truncated, hand-edited or confused with another.
-        raise ValueError(f"a calc record is a mapping; got {type(record).__name__}")
+        raise _calc_record_refusal(
+            f"a calc record is a mapping; got {type(record).__name__}",
+            subject="record",
+            source=_RECORD_SOURCE,
+        )
     version = record.get("schema_version")
     if not isinstance(version, str):
-        raise ValueError("calc record has no schema_version")
+        raise _calc_record_refusal(
+            "calc record has no schema_version",
+            subject="record.schema_version",
+            source=_RECORD_SOURCE,
+        )
     major = version.split(".", 1)[0]
     expected_major = CALC_RECORD_SCHEMA_VERSION.split(".", 1)[0]
     if major != expected_major:
-        raise ValueError(
+        raise _calc_record_refusal(
             f"calc record schema version {version} is not readable by this build "
-            f"(expects {expected_major}.x)"
+            f"(expects {expected_major}.x)",
+            subject="record.schema_version",
+            source=_RELEASE_SOURCE,
         )
     if "report" not in record:
-        raise ValueError(
+        raise _calc_record_refusal(
             "calc record has no report; a record carries the document under a `report` key "
-            "and this one states its schema version and nothing else"
+            "and this one states its schema version and nothing else",
+            subject="record.report",
+            source=_RECORD_SOURCE,
         )
     return CalculationReport.model_validate(_json_revive(record["report"]))
 

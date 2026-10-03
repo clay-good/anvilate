@@ -13,8 +13,25 @@ from __future__ import annotations
 from pydantic import ConfigDict
 
 from .._models import Provenance, RevalidatedModel, parse_yaml
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, spoken
 from .general import ToleranceRangeError
+
+_DIMENSION_SOURCE = "the drawing's tolerance band width, as a length"
+
+
+class _ProcessToleranceInputError(RefusalError, ValueError):
+    """A process-capability input that cannot be used without correction."""
+
+
+def _process_tolerance_input_refusal(
+    message: str, *, subject: str, source: str
+) -> _ProcessToleranceInputError:
+    return _ProcessToleranceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ProcessCapability",
@@ -124,7 +141,11 @@ def tolerance_is_achievable(process: str, demanded_width: Quantity) -> Achievabi
     least the process's finest achievable band.
     """
     if not isinstance(demanded_width, Quantity):
-        raise ValueError(f"demanded_width must be a [length] quantity; got {demanded_width!r}")
+        raise _process_tolerance_input_refusal(
+            f"demanded_width must be a [length] quantity; got {demanded_width!r}",
+            subject="demanded_width",
+            source=_DIMENSION_SOURCE,
+        )
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "
@@ -157,7 +178,11 @@ def processes_that_can_hold(demanded_width: Quantity) -> list[str]:
     :class:`ToleranceRangeError`.
     """
     if not isinstance(demanded_width, Quantity):
-        raise ValueError(f"demanded_width must be a [length] quantity; got {demanded_width!r}")
+        raise _process_tolerance_input_refusal(
+            f"demanded_width must be a [length] quantity; got {demanded_width!r}",
+            subject="demanded_width",
+            source=_DIMENSION_SOURCE,
+        )
     if not demanded_width.has_dimension("[length]"):
         raise ToleranceRangeError(
             f"a tolerance band must be a length; got {demanded_width.dimensionality} "

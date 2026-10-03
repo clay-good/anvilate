@@ -15,6 +15,21 @@ from typing import Any, Generic, TypeVar
 from pydantic import model_validator
 
 from .._models import StatableModel
+from ..refusal import RefusalError, Remedy
+
+_RATIONALE_SOURCE = "why the value was defaulted, naming the profile that supplied it if any"
+
+
+class _ProvenanceInputError(RefusalError, ValueError):
+    """A provenance record that cannot be used without correction."""
+
+
+def _provenance_refusal(message: str, *, subject: str, source: str) -> _ProvenanceInputError:
+    return _ProvenanceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = ["Origin", "Provenanced"]
 
@@ -81,10 +96,16 @@ class Provenanced(StatableModel, Generic[T]):
     @model_validator(mode="after")
     def _default_needs_rationale(self) -> Provenanced[T]:
         if self.origin is Origin.DEFAULT and not self.rationale:
-            raise ValueError("a defaulted value must carry a human-readable rationale")
+            raise _provenance_refusal(
+                "a defaulted value must carry a human-readable rationale",
+                subject="rationale",
+                source=_RATIONALE_SOURCE,
+            )
         if self.origin is Origin.PROFILE_SUPPLIED and not self.rationale:
-            raise ValueError(
-                "a profile-supplied value must name the profile it came from in its rationale"
+            raise _provenance_refusal(
+                "a profile-supplied value must name the profile it came from in its rationale",
+                subject="rationale",
+                source=_RATIONALE_SOURCE,
             )
         return self
 

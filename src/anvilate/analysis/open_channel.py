@@ -22,7 +22,46 @@ from __future__ import annotations
 
 from math import acos, radians, sin, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SECTION_SOURCE = "the channel's surveyed cross-section and profile drawing"
+_ROUGHNESS_SOURCE = "the cited Manning roughness table for the channel lining"
+_FLOW_SOURCE = "the design flow case (discharge, depth, velocity)"
+_WEIR_SOURCE = "the weir's drawing and rating calibration record"
+_HYDROLOGY_SOURCE = "the catchment hydrology study (runoff coefficient, IDF curve, area)"
+
+
+class _OpenChannelInputError(RefusalError, ValueError):
+    """An open-channel-flow input that cannot be used without correction."""
+
+
+def _open_channel_refusal(message: str, *, subject: str, source: str) -> _OpenChannelInputError:
+    return _OpenChannelInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _open_channel_input_source(name: str) -> str:
+    if name == "roughness_coefficient":
+        return _ROUGHNESS_SOURCE
+    if name in {
+        "depth",
+        "downstream_depth",
+        "flow_rate",
+        "head",
+        "upstream_depth",
+        "upstream_froude_number",
+        "velocity",
+    }:
+        return _FLOW_SOURCE
+    if name in {"crest_length", "discharge_coefficient", "notch_angle"}:
+        return _WEIR_SOURCE
+    if name in {"drainage_area", "rainfall_intensity", "runoff_coefficient"}:
+        return _HYDROLOGY_SOURCE
+    return _SECTION_SOURCE
+
 
 __all__ = [
     "circular_channel_properties",
@@ -58,8 +97,13 @@ def hydraulic_radius(*, flow_area: Quantity, wetted_perimeter: Quantity) -> Quan
     _check(wetted_perimeter, "[length]", "wetted_perimeter")
     a = flow_area.to("m**2").magnitude
     p = wetted_perimeter.to("m").magnitude
-    if a <= 0 or p <= 0:
-        raise ValueError("flow_area and wetted_perimeter must be positive")
+    for subject, magnitude in (("flow_area", a), ("wetted_perimeter", p)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "flow_area and wetted_perimeter must be positive",
+                subject=subject,
+                source=_SECTION_SOURCE,
+            )
     return Quantity(magnitude=a / p, unit="m")
 
 
@@ -80,11 +124,19 @@ def manning_flow_velocity(
     _check(hydraulic_radius, "[length]", "hydraulic_radius")
     r = hydraulic_radius.to("m").magnitude
     if roughness_coefficient <= 0:
-        raise ValueError("roughness_coefficient must be positive")
+        raise _open_channel_refusal(
+            "roughness_coefficient must be positive",
+            subject="roughness_coefficient",
+            source=_ROUGHNESS_SOURCE,
+        )
     if channel_slope <= 0:
-        raise ValueError("channel_slope must be positive")
+        raise _open_channel_refusal(
+            "channel_slope must be positive", subject="channel_slope", source=_SECTION_SOURCE
+        )
     if r <= 0:
-        raise ValueError("hydraulic_radius must be positive")
+        raise _open_channel_refusal(
+            "hydraulic_radius must be positive", subject="hydraulic_radius", source=_SECTION_SOURCE
+        )
     return Quantity(
         magnitude=(1.0 / roughness_coefficient) * r ** (2.0 / 3.0) * sqrt(channel_slope), unit="m/s"
     )
@@ -109,11 +161,22 @@ def manning_flow_rate(
     a = flow_area.to("m**2").magnitude
     r = hydraulic_radius.to("m").magnitude
     if roughness_coefficient <= 0:
-        raise ValueError("roughness_coefficient must be positive")
+        raise _open_channel_refusal(
+            "roughness_coefficient must be positive",
+            subject="roughness_coefficient",
+            source=_ROUGHNESS_SOURCE,
+        )
     if channel_slope <= 0:
-        raise ValueError("channel_slope must be positive")
-    if a <= 0 or r <= 0:
-        raise ValueError("flow_area and hydraulic_radius must be positive")
+        raise _open_channel_refusal(
+            "channel_slope must be positive", subject="channel_slope", source=_SECTION_SOURCE
+        )
+    for subject, magnitude in (("flow_area", a), ("hydraulic_radius", r)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "flow_area and hydraulic_radius must be positive",
+                subject=subject,
+                source=_SECTION_SOURCE,
+            )
     v = (1.0 / roughness_coefficient) * r ** (2.0 / 3.0) * sqrt(channel_slope)
     return Quantity(magnitude=v * a, unit="m**3/s")
 
@@ -131,8 +194,13 @@ def froude_number(*, velocity: Quantity, hydraulic_depth: Quantity) -> float:
     _check(hydraulic_depth, "[length]", "hydraulic_depth")
     v = velocity.to("m/s").magnitude
     y = hydraulic_depth.to("m").magnitude
-    if v <= 0 or y <= 0:
-        raise ValueError("velocity and hydraulic_depth must be positive")
+    for subject, magnitude in (("velocity", v), ("hydraulic_depth", y)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "velocity and hydraulic_depth must be positive",
+                subject=subject,
+                source=_open_channel_input_source(subject),
+            )
     return v / sqrt(_GRAVITY * y)
 
 
@@ -151,7 +219,11 @@ def specific_energy(*, depth: Quantity, velocity: Quantity) -> Quantity:
     y = depth.to("m").magnitude
     v = velocity.to("m/s").magnitude
     if y <= 0 or v < 0:
-        raise ValueError("depth must be positive and velocity non-negative")
+        raise _open_channel_refusal(
+            "depth must be positive and velocity non-negative",
+            subject="depth and velocity",
+            source=_FLOW_SOURCE,
+        )
     return Quantity(magnitude=y + v**2 / (2.0 * _GRAVITY), unit="m")
 
 
@@ -185,8 +257,13 @@ def critical_depth_rectangular(*, flow_rate: Quantity, channel_width: Quantity) 
     _check(channel_width, "[length]", "channel_width")
     q_total = flow_rate.to("m**3/s").magnitude
     b = channel_width.to("m").magnitude
-    if q_total <= 0 or b <= 0:
-        raise ValueError("flow_rate and channel_width must be positive")
+    for subject, magnitude in (("flow_rate", q_total), ("channel_width", b)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "flow_rate and channel_width must be positive",
+                subject=subject,
+                source=_open_channel_input_source(subject),
+            )
     unit_discharge = q_total / b
     return Quantity(magnitude=(unit_discharge**2 / _GRAVITY) ** (1.0 / 3.0), unit="m")
 
@@ -208,11 +285,15 @@ def hydraulic_jump_downstream_depth(
     _check(upstream_depth, "[length]", "upstream_depth")
     y1 = upstream_depth.to("m").magnitude
     if y1 <= 0:
-        raise ValueError("upstream_depth must be positive")
+        raise _open_channel_refusal(
+            "upstream_depth must be positive", subject="upstream_depth", source=_FLOW_SOURCE
+        )
     if upstream_froude_number <= 1.0:
-        raise ValueError(
+        raise _open_channel_refusal(
             f"upstream_froude_number must exceed 1 (supercritical) for a jump; "
-            f"got {upstream_froude_number}"
+            f"got {upstream_froude_number}",
+            subject="upstream_froude_number",
+            source=_FLOW_SOURCE,
         )
     y2 = (y1 / 2.0) * (sqrt(1.0 + 8.0 * upstream_froude_number**2) - 1.0)
     return Quantity(magnitude=y2, unit="m")
@@ -235,10 +316,19 @@ def hydraulic_jump_energy_loss(
     _check(downstream_depth, "[length]", "downstream_depth")
     y1 = upstream_depth.to("m").magnitude
     y2 = downstream_depth.to("m").magnitude
-    if y1 <= 0 or y2 <= 0:
-        raise ValueError("upstream_depth and downstream_depth must be positive")
+    for subject, magnitude in (("upstream_depth", y1), ("downstream_depth", y2)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "upstream_depth and downstream_depth must be positive",
+                subject=subject,
+                source=_FLOW_SOURCE,
+            )
     if y2 < y1:
-        raise ValueError("downstream_depth must be at least the upstream depth (a jump raises it)")
+        raise _open_channel_refusal(
+            "downstream_depth must be at least the upstream depth (a jump raises it)",
+            subject="upstream_depth and downstream_depth",
+            source=_FLOW_SOURCE,
+        )
     return Quantity(magnitude=(y2 - y1) ** 3 / (4.0 * y1 * y2), unit="m")
 
 
@@ -263,13 +353,23 @@ def trapezoidal_channel_properties(
     b = bottom_width.to("m").magnitude
     y = depth.to("m").magnitude
     if b < 0 or y <= 0:
-        raise ValueError("bottom_width must be non-negative and depth positive")
+        raise _open_channel_refusal(
+            "bottom_width must be non-negative and depth positive",
+            subject="bottom_width and depth",
+            source=_SECTION_SOURCE,
+        )
     if side_slope < 0:
-        raise ValueError("side_slope must be non-negative")
+        raise _open_channel_refusal(
+            "side_slope must be non-negative", subject="side_slope", source=_SECTION_SOURCE
+        )
     area = (b + side_slope * y) * y
     perimeter = b + 2.0 * y * sqrt(1.0 + side_slope**2)
     if area <= 0 or perimeter <= 0:
-        raise ValueError("a trapezoidal channel needs a positive bottom width or side slope")
+        raise _open_channel_refusal(
+            "a trapezoidal channel needs a positive bottom width or side slope",
+            subject="bottom_width and side_slope",
+            source=_SECTION_SOURCE,
+        )
     top_width = b + 2.0 * side_slope * y
     return {
         "area": Quantity(magnitude=area, unit="m**2"),
@@ -299,9 +399,15 @@ def circular_channel_properties(
     d = diameter.to("m").magnitude
     y = depth.to("m").magnitude
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _open_channel_refusal(
+            "diameter must be positive", subject="diameter", source=_SECTION_SOURCE
+        )
     if not 0.0 < y < d:
-        raise ValueError("depth must be between 0 and the diameter (a free surface)")
+        raise _open_channel_refusal(
+            "depth must be between 0 and the diameter (a free surface)",
+            subject="depth and diameter",
+            source=_FLOW_SOURCE,
+        )
     r = d / 2.0
     theta = 2.0 * acos(1.0 - 2.0 * y / d)
     area = (r**2 / 2.0) * (theta - sin(theta))
@@ -335,9 +441,18 @@ def rectangular_weir_flow(
     b = crest_length.to("m").magnitude
     h = head.to("m").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
-    if b <= 0 or h <= 0:
-        raise ValueError("crest_length and head must be positive")
+        raise _open_channel_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_WEIR_SOURCE,
+        )
+    for subject, magnitude in (("crest_length", b), ("head", h)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "crest_length and head must be positive",
+                subject=subject,
+                source=_open_channel_input_source(subject),
+            )
     q = discharge_coefficient * (2.0 / 3.0) * b * sqrt(2.0 * _GRAVITY) * h**1.5
     return Quantity(magnitude=q, unit="m**3/s")
 
@@ -363,9 +478,18 @@ def broad_crested_weir_flow(
     b = crest_length.to("m").magnitude
     h = head.to("m").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
-    if b <= 0 or h <= 0:
-        raise ValueError("crest_length and head must be positive")
+        raise _open_channel_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_WEIR_SOURCE,
+        )
+    for subject, magnitude in (("crest_length", b), ("head", h)):
+        if magnitude <= 0:
+            raise _open_channel_refusal(
+                "crest_length and head must be positive",
+                subject=subject,
+                source=_open_channel_input_source(subject),
+            )
     q = discharge_coefficient * (2.0 / 3.0) ** 1.5 * sqrt(_GRAVITY) * b * h**1.5
     return Quantity(magnitude=q, unit="m**3/s")
 
@@ -387,11 +511,19 @@ def triangular_weir_flow(
     _check(head, "[length]", "head")
     h = head.to("m").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+        raise _open_channel_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_WEIR_SOURCE,
+        )
     if not 0.0 < notch_angle < 180.0:
-        raise ValueError(f"notch_angle must be in (0, 180) degrees; got {notch_angle}")
+        raise _open_channel_refusal(
+            f"notch_angle must be in (0, 180) degrees; got {notch_angle}",
+            subject="notch_angle",
+            source=_WEIR_SOURCE,
+        )
     if h <= 0:
-        raise ValueError("head must be positive")
+        raise _open_channel_refusal("head must be positive", subject="head", source=_FLOW_SOURCE)
     q = (
         discharge_coefficient
         * (8.0 / 15.0)
@@ -420,22 +552,38 @@ def rational_method_peak_runoff(
     _check(rainfall_intensity, "[length]/[time]", "rainfall_intensity")
     _check(drainage_area, "[length]**2", "drainage_area")
     if not 0.0 < runoff_coefficient <= 1.0:
-        raise ValueError(f"runoff_coefficient must be in (0, 1]; got {runoff_coefficient}")
+        raise _open_channel_refusal(
+            f"runoff_coefficient must be in (0, 1]; got {runoff_coefficient}",
+            subject="runoff_coefficient",
+            source=_HYDROLOGY_SOURCE,
+        )
     i = rainfall_intensity.to("m/s").magnitude
     a = drainage_area.to("m**2").magnitude
     if i < 0:
-        raise ValueError("rainfall_intensity must be non-negative")
+        raise _open_channel_refusal(
+            "rainfall_intensity must be non-negative",
+            subject="rainfall_intensity",
+            source=_HYDROLOGY_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("drainage_area must be positive")
+        raise _open_channel_refusal(
+            "drainage_area must be positive", subject="drainage_area", source=_HYDROLOGY_SOURCE
+        )
     return Quantity(magnitude=runoff_coefficient * i * a, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _open_channel_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_open_channel_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _open_channel_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_open_channel_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

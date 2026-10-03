@@ -20,8 +20,42 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_FLUID_SOURCE = "the saturated fluid property table at the system pressure"
+_CORRELATION_SOURCE = "the cited Rohsenow C_sf and n table for the surface-fluid pair"
+_OPERATING_SOURCE = "the operating case heat flux and surface and saturation temperatures"
+_HEATER_SOURCE = "the heater drawing and surface emissivity datasheet"
+
+
+class _BoilingInputError(RefusalError, ValueError):
+    """A pool-boiling input that cannot be used without correction."""
+
+
+def _boiling_refusal(message: str, *, subject: str, source: str) -> _BoilingInputError:
+    return _BoilingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _boiling_input_source(name: str) -> str:
+    if name in {
+        "convection_coefficient",
+        "excess_temperature",
+        "heat_flux",
+        "saturation_temperature",
+        "surface_temperature",
+    }:
+        return _OPERATING_SOURCE
+    if name in {"fluid_exponent", "surface_fluid_coefficient"}:
+        return _CORRELATION_SOURCE
+    if name in {"cylinder_diameter", "emissivity"}:
+        return _HEATER_SOURCE
+    return _FLUID_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -56,17 +90,31 @@ def _rohsenow_prefactor(
     rho_v = vapor_density.to("kg/m**3").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if mu <= 0:
-        raise ValueError("liquid_viscosity must be positive")
+        raise _boiling_refusal(
+            "liquid_viscosity must be positive", subject="liquid_viscosity", source=_FLUID_SOURCE
+        )
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _boiling_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_SOURCE
+        )
     if rho_l <= 0:
-        raise ValueError("liquid_density must be positive")
+        raise _boiling_refusal(
+            "liquid_density must be positive", subject="liquid_density", source=_FLUID_SOURCE
+        )
     if rho_v < 0:
-        raise ValueError("vapor_density must be non-negative")
+        raise _boiling_refusal(
+            "vapor_density must be non-negative", subject="vapor_density", source=_FLUID_SOURCE
+        )
     if rho_v >= rho_l:
-        raise ValueError("vapor_density must be less than liquid_density")
+        raise _boiling_refusal(
+            "vapor_density must be less than liquid_density",
+            subject="vapor_density",
+            source=_FLUID_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _boiling_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     prefactor = mu * h_fg * sqrt(STANDARD_GRAVITY_M_PER_S2 * (rho_l - rho_v) / sigma)
     return prefactor, h_fg
 
@@ -91,12 +139,14 @@ def _check_below_critical_flux(
         .magnitude
     )
     if flux_w_m2 > maximum:
-        raise ValueError(
+        raise _boiling_refusal(
             f"{label} puts the nucleate-boiling flux at {flux_w_m2:.4g} W/m², "
             f"{flux_w_m2 / maximum:.3g}x Zuber's critical heat flux of {maximum:.4g} W/m² for "
             f"these fluid properties. Past the boiling crisis the surface is in transition or "
             f"film boiling and the Rohsenow correlation does not apply — the real flux collapses "
-            f"rather than climbing. See critical_heat_flux and film_boiling_coefficient."
+            f"rather than climbing. See critical_heat_flux and film_boiling_coefficient.",
+            subject="excess_temperature and heat_flux",
+            source=_OPERATING_SOURCE,
         )
 
 
@@ -133,15 +183,31 @@ def nucleate_boiling_heat_flux(
     c_pl = liquid_specific_heat.to("J/(kg*K)").magnitude
     dte = temperature_difference_kelvin(excess_temperature, name="excess_temperature")
     if c_pl <= 0:
-        raise ValueError("liquid_specific_heat must be positive")
+        raise _boiling_refusal(
+            "liquid_specific_heat must be positive",
+            subject="liquid_specific_heat",
+            source=_FLUID_SOURCE,
+        )
     if dte <= 0:
-        raise ValueError("excess_temperature must be positive")
+        raise _boiling_refusal(
+            "excess_temperature must be positive",
+            subject="excess_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if surface_fluid_coefficient <= 0:
-        raise ValueError("surface_fluid_coefficient must be positive")
+        raise _boiling_refusal(
+            "surface_fluid_coefficient must be positive",
+            subject="surface_fluid_coefficient",
+            source=_CORRELATION_SOURCE,
+        )
     if prandtl_number <= 0:
-        raise ValueError("prandtl_number must be positive")
+        raise _boiling_refusal(
+            "prandtl_number must be positive", subject="prandtl_number", source=_FLUID_SOURCE
+        )
     if fluid_exponent <= 0:
-        raise ValueError("fluid_exponent must be positive")
+        raise _boiling_refusal(
+            "fluid_exponent must be positive", subject="fluid_exponent", source=_CORRELATION_SOURCE
+        )
     bracket = c_pl * dte / (surface_fluid_coefficient * h_fg * prandtl_number**fluid_exponent)
     flux = prefactor * bracket**3
     # Rohsenow's cube in ΔT_e climbs without limit, and the boiling curve does not: past the
@@ -189,15 +255,29 @@ def nucleate_boiling_excess_temperature(
     q = heat_flux.to("W/m**2").magnitude
     c_pl = liquid_specific_heat.to("J/(kg*K)").magnitude
     if q <= 0:
-        raise ValueError("heat_flux must be positive")
+        raise _boiling_refusal(
+            "heat_flux must be positive", subject="heat_flux", source=_OPERATING_SOURCE
+        )
     if c_pl <= 0:
-        raise ValueError("liquid_specific_heat must be positive")
+        raise _boiling_refusal(
+            "liquid_specific_heat must be positive",
+            subject="liquid_specific_heat",
+            source=_FLUID_SOURCE,
+        )
     if surface_fluid_coefficient <= 0:
-        raise ValueError("surface_fluid_coefficient must be positive")
+        raise _boiling_refusal(
+            "surface_fluid_coefficient must be positive",
+            subject="surface_fluid_coefficient",
+            source=_CORRELATION_SOURCE,
+        )
     if prandtl_number <= 0:
-        raise ValueError("prandtl_number must be positive")
+        raise _boiling_refusal(
+            "prandtl_number must be positive", subject="prandtl_number", source=_FLUID_SOURCE
+        )
     if fluid_exponent <= 0:
-        raise ValueError("fluid_exponent must be positive")
+        raise _boiling_refusal(
+            "fluid_exponent must be positive", subject="fluid_exponent", source=_CORRELATION_SOURCE
+        )
     # The same ceiling on the inverse. A duty above q″_max is not achievable at all, and the
     # unguarded inversion answered it with a benign-looking 33 K of superheat.
     _check_below_critical_flux(
@@ -233,15 +313,27 @@ def critical_heat_flux(
     rho_v = vapor_density.to("kg/m**3").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _boiling_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_SOURCE
+        )
     if rho_l <= 0:
-        raise ValueError("liquid_density must be positive")
+        raise _boiling_refusal(
+            "liquid_density must be positive", subject="liquid_density", source=_FLUID_SOURCE
+        )
     if rho_v <= 0:
-        raise ValueError("vapor_density must be positive")
+        raise _boiling_refusal(
+            "vapor_density must be positive", subject="vapor_density", source=_FLUID_SOURCE
+        )
     if rho_v >= rho_l:
-        raise ValueError("vapor_density must be less than liquid_density")
+        raise _boiling_refusal(
+            "vapor_density must be less than liquid_density",
+            subject="vapor_density",
+            source=_FLUID_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _boiling_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     q_max = (
         0.149 * h_fg * sqrt(rho_v) * (sigma * STANDARD_GRAVITY_M_PER_S2 * (rho_l - rho_v)) ** 0.25
     )
@@ -275,15 +367,27 @@ def minimum_film_boiling_heat_flux(
     rho_v = vapor_density.to("kg/m**3").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _boiling_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_SOURCE
+        )
     if rho_l <= 0:
-        raise ValueError("liquid_density must be positive")
+        raise _boiling_refusal(
+            "liquid_density must be positive", subject="liquid_density", source=_FLUID_SOURCE
+        )
     if rho_v <= 0:
-        raise ValueError("vapor_density must be positive")
+        raise _boiling_refusal(
+            "vapor_density must be positive", subject="vapor_density", source=_FLUID_SOURCE
+        )
     if rho_v >= rho_l:
-        raise ValueError("vapor_density must be less than liquid_density")
+        raise _boiling_refusal(
+            "vapor_density must be less than liquid_density",
+            subject="vapor_density",
+            source=_FLUID_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _boiling_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     bracket = STANDARD_GRAVITY_M_PER_S2 * sigma * (rho_l - rho_v) / (rho_l + rho_v) ** 2
     return Quantity(magnitude=0.09 * rho_v * h_fg * bracket**0.25, unit="W/m**2")
 
@@ -332,21 +436,45 @@ def film_boiling_coefficient(
     d = cylinder_diameter.to("m").magnitude
     dte = temperature_difference_kelvin(excess_temperature, name="excess_temperature")
     if k_v <= 0:
-        raise ValueError("vapor_conductivity must be positive")
+        raise _boiling_refusal(
+            "vapor_conductivity must be positive",
+            subject="vapor_conductivity",
+            source=_FLUID_SOURCE,
+        )
     if rho_v <= 0:
-        raise ValueError("vapor_density must be positive")
+        raise _boiling_refusal(
+            "vapor_density must be positive", subject="vapor_density", source=_FLUID_SOURCE
+        )
     if rho_l <= rho_v:
-        raise ValueError("liquid_density must exceed vapor_density")
+        raise _boiling_refusal(
+            "liquid_density must exceed vapor_density",
+            subject="liquid_density",
+            source=_FLUID_SOURCE,
+        )
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _boiling_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_SOURCE
+        )
     if c_pv <= 0:
-        raise ValueError("vapor_specific_heat must be positive")
+        raise _boiling_refusal(
+            "vapor_specific_heat must be positive",
+            subject="vapor_specific_heat",
+            source=_FLUID_SOURCE,
+        )
     if mu_v <= 0:
-        raise ValueError("vapor_viscosity must be positive")
+        raise _boiling_refusal(
+            "vapor_viscosity must be positive", subject="vapor_viscosity", source=_FLUID_SOURCE
+        )
     if d <= 0:
-        raise ValueError("cylinder_diameter must be positive")
+        raise _boiling_refusal(
+            "cylinder_diameter must be positive", subject="cylinder_diameter", source=_HEATER_SOURCE
+        )
     if dte <= 0:
-        raise ValueError("excess_temperature must be positive")
+        raise _boiling_refusal(
+            "excess_temperature must be positive",
+            subject="excess_temperature",
+            source=_OPERATING_SOURCE,
+        )
     h_fg_corrected = h_fg + 0.8 * c_pv * dte
     bracket = (k_v**3 * rho_v * (rho_l - rho_v) * STANDARD_GRAVITY_M_PER_S2 * h_fg_corrected) / (
         mu_v * d * dte
@@ -356,10 +484,16 @@ def film_boiling_coefficient(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _boiling_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_boiling_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _boiling_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_boiling_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -401,18 +535,32 @@ def film_boiling_total_coefficient(
     _check(surface_temperature, "[temperature]", "surface_temperature")
     _check(saturation_temperature, "[temperature]", "saturation_temperature")
     if not 0.0 <= emissivity <= 1.0:
-        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+        raise _boiling_refusal(
+            f"emissivity must lie in [0, 1]; got {emissivity}",
+            subject="emissivity",
+            source=_HEATER_SOURCE,
+        )
     h_conv = convection_coefficient.to("W/(m**2*K)").magnitude
     t_s = surface_temperature.to("K").magnitude
     t_sat = saturation_temperature.to("K").magnitude
     if h_conv <= 0:
-        raise ValueError("convection_coefficient must be positive")
+        raise _boiling_refusal(
+            "convection_coefficient must be positive",
+            subject="convection_coefficient",
+            source=_OPERATING_SOURCE,
+        )
     if t_sat <= 0:
-        raise ValueError("saturation_temperature must be a positive absolute temperature")
+        raise _boiling_refusal(
+            "saturation_temperature must be a positive absolute temperature",
+            subject="saturation_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if t_s <= t_sat:
-        raise ValueError(
+        raise _boiling_refusal(
             f"surface_temperature {surface_temperature} must exceed saturation_temperature "
-            f"{saturation_temperature} for film boiling"
+            f"{saturation_temperature} for film boiling",
+            subject="surface_temperature and saturation_temperature",
+            source=_OPERATING_SOURCE,
         )
     h_rad = _STEFAN_BOLTZMANN * emissivity * (t_s**4 - t_sat**4) / (t_s - t_sat)
     return Quantity(magnitude=h_conv + 0.75 * h_rad, unit="W/(m**2*K)")

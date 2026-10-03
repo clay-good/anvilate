@@ -45,9 +45,57 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import DerivationAbsence, Underived
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ._flags import require_flag
+
+_MATERIAL_SOURCE = "the material test certificate (yield, tensile strength, and modulus)"
+_TOUGHNESS_SOURCE = "the fracture toughness or Charpy test record (ASTM E399, E1820, E23)"
+_GROWTH_SOURCE = "the fatigue crack growth rate test record (ASTM E647)"
+_FLAW_SOURCE = "the NDE inspection report sizing the flaw and the component drawing"
+_STRESS_SOURCE = "the stress analysis load case at the flaw location"
+_PROCEDURE_SOURCE = "the fitness-for-service procedure in use (BS 7910 or API 579-1)"
+
+
+class _FractureInputError(RefusalError, ValueError):
+    """A fracture-mechanics input that cannot be used without correction."""
+
+
+def _fracture_refusal(message: str, *, subject: str, source: str) -> _FractureInputError:
+    return _FractureInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fracture_input_source(name: str) -> str:
+    if name in {
+        "bending_stress",
+        "load_ratio",
+        "membrane_stress",
+        "reference_stress",
+        "remote_stress",
+        "stress_intensity",
+        "stress_range",
+    }:
+        return _STRESS_SOURCE
+    if name in {"assessment", "geometry_factor", "missing", "name", "parametric_angle", "required"}:
+        return _PROCEDURE_SOURCE
+    if name in {"charpy_energy", "fracture_toughness", "surface_energy", "toughness_is_estimate"}:
+        return _TOUGHNESS_SOURCE
+    if name in {
+        "elastic_modulus",
+        "poisson_ratio",
+        "ultimate_strength",
+        "yield_strength",
+        "youngs_modulus",
+    }:
+        return _MATERIAL_SOURCE
+    if name in {"paris_coefficient", "paris_exponent"}:
+        return _GROWTH_SOURCE
+    return _FLAW_SOURCE
+
 
 __all__ = [
     "crack_tip_opening_displacement",
@@ -74,10 +122,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fracture_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fracture_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fracture_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fracture_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -102,11 +156,19 @@ def stress_intensity_factor(
     _require(remote_stress, "[pressure]", "remote_stress")
     _require(crack_length, "[length]", "crack_length")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+        raise _fracture_refusal(
+            f"geometry_factor must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_PROCEDURE_SOURCE,
+        )
     sigma = remote_stress.to("MPa").magnitude
     a = crack_length.to("m").magnitude
     if a <= 0:
-        raise ValueError(f"crack_length must be positive; got {crack_length}")
+        raise _fracture_refusal(
+            f"crack_length must be positive; got {crack_length}",
+            subject="crack_length",
+            source=_FLAW_SOURCE,
+        )
     return Quantity(magnitude=geometry_factor * sigma * sqrt(pi * a), unit="MPa*m**0.5")
 
 
@@ -127,11 +189,19 @@ def critical_crack_length(
     _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
     _require(remote_stress, "[pressure]", "remote_stress")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+        raise _fracture_refusal(
+            f"geometry_factor must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_PROCEDURE_SOURCE,
+        )
     kic = fracture_toughness.to("MPa*m**0.5").magnitude
     sigma = remote_stress.to("MPa").magnitude
     if sigma <= 0:
-        raise ValueError(f"remote_stress must be positive; got {remote_stress}")
+        raise _fracture_refusal(
+            f"remote_stress must be positive; got {remote_stress}",
+            subject="remote_stress",
+            source=_STRESS_SOURCE,
+        )
     a_c = (kic / (geometry_factor * sigma)) ** 2 / pi  # metres
     return Quantity(magnitude=a_c * 1000.0, unit="mm")
 
@@ -153,11 +223,19 @@ def critical_fracture_stress(
     _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
     _require(crack_length, "[length]", "crack_length")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+        raise _fracture_refusal(
+            f"geometry_factor must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_PROCEDURE_SOURCE,
+        )
     kic = fracture_toughness.to("MPa*m**0.5").magnitude
     a = crack_length.to("m").magnitude
     if a <= 0:
-        raise ValueError(f"crack_length must be positive; got {crack_length}")
+        raise _fracture_refusal(
+            f"crack_length must be positive; got {crack_length}",
+            subject="crack_length",
+            source=_FLAW_SOURCE,
+        )
     return Quantity(magnitude=kic / (geometry_factor * sqrt(pi * a)), unit="MPa")
 
 
@@ -182,11 +260,23 @@ def griffith_fracture_stress(
     gamma = surface_energy.to("J/m**2").magnitude
     a = crack_length.to("m").magnitude
     if e <= 0:
-        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+        raise _fracture_refusal(
+            f"youngs_modulus must be positive; got {youngs_modulus}",
+            subject="youngs_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if gamma <= 0:
-        raise ValueError(f"surface_energy must be positive; got {surface_energy}")
+        raise _fracture_refusal(
+            f"surface_energy must be positive; got {surface_energy}",
+            subject="surface_energy",
+            source=_TOUGHNESS_SOURCE,
+        )
     if a <= 0:
-        raise ValueError(f"crack_length must be positive; got {crack_length}")
+        raise _fracture_refusal(
+            f"crack_length must be positive; got {crack_length}",
+            subject="crack_length",
+            source=_FLAW_SOURCE,
+        )
     sigma = sqrt(2.0 * e * gamma / (pi * a))  # Pa
     return Quantity(magnitude=sigma / 1.0e6, unit="MPa")
 
@@ -221,9 +311,17 @@ def strain_energy_release_rate(
     k = stress_intensity.to("Pa*m**0.5").magnitude
     e = youngs_modulus.to("Pa").magnitude
     if e <= 0:
-        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+        raise _fracture_refusal(
+            f"youngs_modulus must be positive; got {youngs_modulus}",
+            subject="youngs_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if plane_strain and not -1.0 < poisson_ratio < 0.5:
-        raise ValueError("poisson_ratio must be in (-1, 0.5) for plane strain")
+        raise _fracture_refusal(
+            "poisson_ratio must be in (-1, 0.5) for plane strain",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     e_effective = e / (1.0 - poisson_ratio**2) if plane_strain else e
     return Quantity(magnitude=k * k / e_effective, unit="J/m**2")
 
@@ -253,17 +351,37 @@ def paris_law_crack_growth_rate(
     _require(stress_range, "[pressure]", "stress_range")
     _require(crack_length, "[length]", "crack_length")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+        raise _fracture_refusal(
+            f"geometry_factor must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_PROCEDURE_SOURCE,
+        )
     if paris_coefficient <= 0:
-        raise ValueError(f"paris_coefficient must be positive; got {paris_coefficient}")
+        raise _fracture_refusal(
+            f"paris_coefficient must be positive; got {paris_coefficient}",
+            subject="paris_coefficient",
+            source=_GROWTH_SOURCE,
+        )
     if paris_exponent <= 0:
-        raise ValueError(f"paris_exponent must be positive; got {paris_exponent}")
+        raise _fracture_refusal(
+            f"paris_exponent must be positive; got {paris_exponent}",
+            subject="paris_exponent",
+            source=_GROWTH_SOURCE,
+        )
     delta_sigma = stress_range.to("MPa").magnitude
     a = crack_length.to("m").magnitude
     if delta_sigma <= 0:
-        raise ValueError(f"stress_range must be positive; got {stress_range}")
+        raise _fracture_refusal(
+            f"stress_range must be positive; got {stress_range}",
+            subject="stress_range",
+            source=_STRESS_SOURCE,
+        )
     if a <= 0:
-        raise ValueError(f"crack_length must be positive; got {crack_length}")
+        raise _fracture_refusal(
+            f"crack_length must be positive; got {crack_length}",
+            subject="crack_length",
+            source=_FLAW_SOURCE,
+        )
     delta_k = geometry_factor * delta_sigma * sqrt(pi * a)
     return Quantity(magnitude=paris_coefficient * delta_k**paris_exponent, unit="m")
 
@@ -298,13 +416,29 @@ def paris_law_cycles_to_failure(
     _require(initial_crack_length, "[length]", "initial_crack_length")
     _require(final_crack_length, "[length]", "final_crack_length")
     if geometry_factor <= 0:
-        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+        raise _fracture_refusal(
+            f"geometry_factor must be positive; got {geometry_factor}",
+            subject="geometry_factor",
+            source=_PROCEDURE_SOURCE,
+        )
     if paris_coefficient <= 0:
-        raise ValueError(f"paris_coefficient must be positive; got {paris_coefficient}")
+        raise _fracture_refusal(
+            f"paris_coefficient must be positive; got {paris_coefficient}",
+            subject="paris_coefficient",
+            source=_GROWTH_SOURCE,
+        )
     if paris_exponent <= 0:
-        raise ValueError(f"paris_exponent must be positive; got {paris_exponent}")
+        raise _fracture_refusal(
+            f"paris_exponent must be positive; got {paris_exponent}",
+            subject="paris_exponent",
+            source=_GROWTH_SOURCE,
+        )
     if paris_exponent == 2:
-        raise ValueError("paris_exponent must differ from 2 (the m = 2 case is not covered)")
+        raise _fracture_refusal(
+            "paris_exponent must differ from 2 (the m = 2 case is not covered)",
+            subject="paris_exponent",
+            source=_GROWTH_SOURCE,
+        )
     delta_sigma = stress_range.to("MPa").magnitude
     # The sibling `paris_law_crack_growth_rate` rejects a non-positive stress range; this
     # one validated five other arguments and not the one sitting in the denominator under
@@ -313,17 +447,27 @@ def paris_law_cycles_to_failure(
     # and m = 2.5 — inside this docstring's own "typically 2.5–4 for steels" — returned a
     # complex number from a function annotated `-> float`.
     if delta_sigma <= 0:
-        raise ValueError(
+        raise _fracture_refusal(
             f"stress_range must be positive; got {stress_range}. A crack grows under a "
             f"tensile stress range, and a non-positive one raised to the Paris exponent "
-            f"is not a life."
+            f"is not a life.",
+            subject="stress_range",
+            source=_STRESS_SOURCE,
         )
     a_i = initial_crack_length.to("m").magnitude
     a_f = final_crack_length.to("m").magnitude
     if a_i <= 0 or a_f <= 0:
-        raise ValueError("crack lengths must be positive")
+        raise _fracture_refusal(
+            "crack lengths must be positive",
+            subject="initial_crack_length and final_crack_length",
+            source=_FLAW_SOURCE,
+        )
     if a_f <= a_i:
-        raise ValueError("final_crack_length must exceed initial_crack_length")
+        raise _fracture_refusal(
+            "final_crack_length must exceed initial_crack_length",
+            subject="final_crack_length",
+            source=_FLAW_SOURCE,
+        )
     exponent = 1.0 - paris_exponent / 2.0
     numerator = a_f**exponent - a_i**exponent
     denominator = (
@@ -360,9 +504,17 @@ def crack_tip_plastic_zone_size(
     k = stress_intensity.to("MPa*m**0.5").magnitude
     sy = yield_strength.to("MPa").magnitude
     if k < 0:
-        raise ValueError(f"stress_intensity must be non-negative; got {stress_intensity}")
+        raise _fracture_refusal(
+            f"stress_intensity must be non-negative; got {stress_intensity}",
+            subject="stress_intensity",
+            source=_STRESS_SOURCE,
+        )
     if sy <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _fracture_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     coefficient = 1.0 / (6.0 * pi) if plane_strain else 1.0 / (2.0 * pi)
     r_p_m = coefficient * (k / sy) ** 2  # metres
     return Quantity(magnitude=r_p_m * 1000.0, unit="mm")
@@ -389,9 +541,17 @@ def plane_strain_thickness_requirement(
     kic = fracture_toughness.to("MPa*m**0.5").magnitude
     sy = yield_strength.to("MPa").magnitude
     if kic <= 0:
-        raise ValueError(f"fracture_toughness must be positive; got {fracture_toughness}")
+        raise _fracture_refusal(
+            f"fracture_toughness must be positive; got {fracture_toughness}",
+            subject="fracture_toughness",
+            source=_TOUGHNESS_SOURCE,
+        )
     if sy <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _fracture_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     b_m = 2.5 * (kic / sy) ** 2  # metres
     return Quantity(magnitude=b_m * 1000.0, unit="mm")
 
@@ -438,7 +598,9 @@ def crack_tip_opening_displacement(
     require_finite(poisson_ratio, name="poisson_ratio")
     sigma_y = yield_strength.to("Pa").magnitude
     if sigma_y <= 0:
-        raise ValueError("yield_strength must be positive")
+        raise _fracture_refusal(
+            "yield_strength must be positive", subject="yield_strength", source=_MATERIAL_SOURCE
+        )
     release_rate = strain_energy_release_rate(
         stress_intensity=stress_intensity,
         youngs_modulus=youngs_modulus,
@@ -518,9 +680,17 @@ class SurfaceFlaw(RevalidatedModel):
             if value is None:
                 continue
             if not value.has_dimension("[length]"):
-                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+                raise _fracture_refusal(
+                    f"{name} must be a [length] quantity; got {value}",
+                    subject=name,
+                    source=_fracture_input_source(name),
+                )
             if value.magnitude <= 0:
-                raise ValueError(f"{name} must be positive; got {value}")
+                raise _fracture_refusal(
+                    f"{name} must be positive; got {value}",
+                    subject=name,
+                    source=_fracture_input_source(name),
+                )
         return self
 
     @property
@@ -580,19 +750,26 @@ def newman_raju_surface_flaw_sif(
     would be wrong rather than approximate.
     """
     if not isinstance(flaw, SurfaceFlaw):
-        raise ValueError(f"flaw must be a SurfaceFlaw; got {flaw!r}")
+        raise _fracture_refusal(
+            f"flaw must be a SurfaceFlaw; got {flaw!r}", subject="flaw", source=_FLAW_SOURCE
+        )
     outside = flaw.outside_validity()
     if outside:
-        raise ValueError(
+        raise _fracture_refusal(
             "the flaw geometry is outside the Newman-Raju validity range, where these "
-            "equations do not extrapolate: " + "; ".join(outside)
+            "equations do not extrapolate: " + "; ".join(outside),
+            subject="flaw",
+            source=_FLAW_SOURCE,
         )
     _require(membrane_stress, "[pressure]", "membrane_stress")
     if bending_stress is not None:
         _require(bending_stress, "[pressure]", "bending_stress")
     if not 0.0 <= parametric_angle <= pi:
-        raise ValueError(
-            f"parametric_angle must be between 0 (the surface point) and pi; got {parametric_angle}"
+        raise _fracture_refusal(
+            f"parametric_angle must be between 0 (the surface point) and pi; got "
+            f"{parametric_angle}",
+            subject="parametric_angle",
+            source=_PROCEDURE_SOURCE,
         )
     sigma_m = membrane_stress.to("MPa").magnitude
     sigma_b = 0.0 if bending_stress is None else bending_stress.to("MPa").magnitude
@@ -654,18 +831,22 @@ def surface_flaw_reference_stress(
     sigma_m = membrane_stress.to("MPa").magnitude
     sigma_b = 0.0 if bending_stress is None else bending_stress.to("MPa").magnitude
     if sigma_m < 0 or sigma_b < 0:
-        raise ValueError(
+        raise _fracture_refusal(
             "membrane_stress and bending_stress must be non-negative; a compressive "
             "primary stress does not drive this collapse mode and cannot be netted off "
-            "against a tensile one"
+            "against a tensile one",
+            subject="membrane_stress and bending_stress",
+            source=_STRESS_SOURCE,
         )
     t = flaw.thickness.to("mm").magnitude
     c = flaw.half_length.to("mm").magnitude
     alpha = flaw.depth_ratio / (1.0 + t / c)
     if alpha >= 1.0:
-        raise ValueError(
+        raise _fracture_refusal(
             f"the flaw has consumed the whole ligament (alpha = {alpha:.4g}); there is "
-            f"no collapse load left to compare against"
+            f"no collapse load left to compare against",
+            subject="flaw",
+            source=_FLAW_SOURCE,
         )
     ligament = (1.0 - alpha) ** 2
     numerator = sigma_b + sqrt(sigma_b**2 + 9.0 * sigma_m**2 * ligament)
@@ -685,11 +866,17 @@ def fad_limit_load_ratio(*, yield_strength: Quantity, ultimate_strength: Quantit
     sy = yield_strength.to("MPa").magnitude
     su = ultimate_strength.to("MPa").magnitude
     if sy <= 0 or su <= 0:
-        raise ValueError("yield_strength and ultimate_strength must be positive")
+        raise _fracture_refusal(
+            "yield_strength and ultimate_strength must be positive",
+            subject="yield_strength and ultimate_strength",
+            source=_MATERIAL_SOURCE,
+        )
     if su < sy:
-        raise ValueError(
+        raise _fracture_refusal(
             f"ultimate_strength ({ultimate_strength}) is below yield_strength "
-            f"({yield_strength}); check they are not swapped"
+            f"({yield_strength}); check they are not swapped",
+            subject="ultimate_strength and yield_strength",
+            source=_MATERIAL_SOURCE,
         )
     return (sy + su) / (2.0 * sy)
 
@@ -716,11 +903,19 @@ def fad_option1_curve(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if load_ratio < 0:
-        raise ValueError(f"load_ratio L_r must be non-negative; got {load_ratio}")
+        raise _fracture_refusal(
+            f"load_ratio L_r must be non-negative; got {load_ratio}",
+            subject="load_ratio",
+            source=_STRESS_SOURCE,
+        )
     sy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if sy <= 0 or e <= 0:
-        raise ValueError("yield_strength and elastic_modulus must be positive")
+        raise _fracture_refusal(
+            "yield_strength and elastic_modulus must be positive",
+            subject="yield_strength and elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     mu = min(_FAD_MU_COEFFICIENT * e / sy, _FAD_MU_CAP)
     return (1.0 + 0.5 * load_ratio**2) ** -0.5 * (0.3 + 0.7 * exp(-mu * load_ratio**6))
 
@@ -743,13 +938,19 @@ def charpy_toughness_estimate(*, charpy_energy: Quantity, yield_strength: Quanti
     cvn = charpy_energy.to("foot_pound").magnitude
     sy = yield_strength.to("ksi").magnitude
     if cvn <= 0 or sy <= 0:
-        raise ValueError("charpy_energy and yield_strength must be positive")
+        raise _fracture_refusal(
+            "charpy_energy and yield_strength must be positive",
+            subject="charpy_energy and yield_strength",
+            source=_TOUGHNESS_SOURCE,
+        )
     bracket = 5.0 * (cvn / sy - 0.05)
     if bracket <= 0:
-        raise ValueError(
+        raise _fracture_refusal(
             f"the correlation gives a non-positive toughness for CVN = {charpy_energy} at "
             f"a yield of {yield_strength}: the energy is below the 0.05·σ_y floor the fit "
-            f"is defined above, which means the steel is not on its upper shelf here"
+            f"is defined above, which means the steel is not on its upper shelf here",
+            subject="charpy_energy and yield_strength",
+            source=_TOUGHNESS_SOURCE,
         )
     kic_ksi_in = sy * sqrt(bracket)
     return Quantity(magnitude=kic_ksi_in, unit="ksi*inch**0.5").to("MPa*m**0.5")
@@ -846,11 +1047,23 @@ def fad_assessment(
     sigma_ref = reference_stress.to("MPa").magnitude
     sy = yield_strength.to("MPa").magnitude
     if kmat <= 0:
-        raise ValueError(f"fracture_toughness must be positive; got {fracture_toughness}")
+        raise _fracture_refusal(
+            f"fracture_toughness must be positive; got {fracture_toughness}",
+            subject="fracture_toughness",
+            source=_TOUGHNESS_SOURCE,
+        )
     if k < 0 or sigma_ref < 0:
-        raise ValueError("stress_intensity and reference_stress must be non-negative")
+        raise _fracture_refusal(
+            "stress_intensity and reference_stress must be non-negative",
+            subject="stress_intensity and reference_stress",
+            source=_STRESS_SOURCE,
+        )
     if sy <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _fracture_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     kr = k / kmat
     lr = sigma_ref / sy
     lr_max = fad_limit_load_ratio(
@@ -950,7 +1163,11 @@ def fad_scorecard(
     a pass — it is a reason to commission a toughness test.
     """
     if assessment is not None and not isinstance(assessment, FADAssessment):
-        raise ValueError(f"assessment must be a FADAssessment; got {assessment!r}")
+        raise _fracture_refusal(
+            f"assessment must be a FADAssessment; got {assessment!r}",
+            subject="assessment",
+            source=_PROCEDURE_SOURCE,
+        )
     if assessment is None:
         detail = "not evaluated"
         if missing.strip():

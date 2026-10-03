@@ -162,6 +162,14 @@
       survey, report pagination, a Design Spec that is not a mapping, an estimated property
       without its method, a verification outcome missing a field, an Underived declaration
       without a reason, and a negative pipe-run fitting coefficient. That leaves 2,399 in 88.
+      **Every analysis module is now migrated** (the last 32, thermal through engineering
+      economics, about 1,780 sites), and so are the quantity type's own refusals: a
+      non-finite value from `require_finite` names the parameter, and the numeric-protocol
+      operators refusing a Quantity name the value. The ledger census counts every
+      `ValueError(...)` construction, not only those written after `raise`, because
+      `Quantity._unsupported` built its error in one place and raised it in another. That
+      leaves 618 sites in 45 core files (packs, spec IR, ingest, CLI-facing exporters),
+      some of them internal invariants rather than refusals of input.
       refusal.py's own two refusals (a blank rendered remedy, a refusal with no remedies) stay:
       they guard the construction of a remedy, so they cannot carry one.
       tests/test_refusal_remedies_analysis.py pins one or two exact remedies per module and

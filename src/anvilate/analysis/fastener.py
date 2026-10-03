@@ -26,9 +26,73 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._flags import require_flag
 from .fatigue import CyclicStress, cyclic_stress_components
+
+_GEOMETRY_SOURCE = "the joint detail drawing (plies, holes, edge distances, and bolt layout)"
+_MATERIAL_SOURCE = "the connected material's mill certificate or specified grade"
+_LOAD_SOURCE = "the joint's applied loads from the load case"
+_FASTENER_SOURCE = "the fastener's grade standard or datasheet (size, pitch, and strength)"
+_DESIGN_SOURCE = "the project's design basis (safety factors and joint class)"
+_CODE_SOURCE = "the governing connection code's tabulated factors (e.g. AISC 360 ch. J)"
+
+
+class _FastenerInputError(RefusalError, ValueError):
+    """A fastener-joint input that cannot be used without correction."""
+
+
+def _fastener_refusal(message: str, *, subject: str, source: str) -> _FastenerInputError:
+    return _FastenerInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fastener_input_source(name: str) -> str:
+    if name in {
+        "external_load",
+        "force",
+        "load",
+        "max_external_load",
+        "min_external_load",
+        "preload",
+        "shear_load",
+        "tension",
+        "torque",
+    }:
+        return _LOAD_SOURCE
+    if name in {
+        "allowable_shear",
+        "bolt_diameter",
+        "bolt_pretension",
+        "diameter",
+        "member",
+        "nominal_diameter",
+        "nominal_shear_stress",
+        "nut_factor",
+        "pitch",
+        "proof_load",
+        "proof_strength",
+        "tensile_stress_area",
+    }:
+        return _FASTENER_SOURCE
+    if name in {
+        "filler_factor",
+        "mean_pretension_ratio",
+        "rupture_resistance_factor",
+        "slip_coefficient",
+        "tension_uniformity_factor",
+        "yield_resistance_factor",
+    }:
+        return _CODE_SOURCE
+    if name in {"elastic_modulus", "ultimate_strength", "yield_strength"}:
+        return _MATERIAL_SOURCE
+    if name in {"deformation_at_service_considered", "permanent", "required_safety_factor"}:
+        return _DESIGN_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 # ISO 898 tensile-stress-area factor: A_t = (pi/4)(d - 0.9382*P)^2, where the
 # effective diameter is the mean of the pitch and rounded-root minor diameters.
@@ -90,10 +154,16 @@ NUT_FACTOR_AS_RECEIVED = 0.2
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fastener_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fastener_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fastener_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fastener_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -104,7 +174,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 def _positive_factor(nut_factor: float) -> None:
     if nut_factor <= 0:
-        raise ValueError(f"nut_factor must be positive; got {nut_factor}")
+        raise _fastener_refusal(
+            f"nut_factor must be positive; got {nut_factor}",
+            subject="nut_factor",
+            source=_FASTENER_SOURCE,
+        )
 
 
 def bolt_preload_from_torque(
@@ -123,7 +197,11 @@ def bolt_preload_from_torque(
     _require(torque, "[force] * [length]", "torque")
     _require(nominal_diameter, "[length]", "nominal_diameter")
     if nominal_diameter.magnitude <= 0:
-        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
+        raise _fastener_refusal(
+            f"nominal_diameter must be positive; got {nominal_diameter}",
+            subject="nominal_diameter",
+            source=_FASTENER_SOURCE,
+        )
     _positive_factor(nut_factor)
     preload = torque.pint / (nut_factor * nominal_diameter.pint)
     converted = preload.to("N")
@@ -145,7 +223,11 @@ def torque_for_preload(
     _require(preload, "[force]", "preload")
     _require(nominal_diameter, "[length]", "nominal_diameter")
     if nominal_diameter.magnitude <= 0:
-        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
+        raise _fastener_refusal(
+            f"nominal_diameter must be positive; got {nominal_diameter}",
+            subject="nominal_diameter",
+            source=_FASTENER_SOURCE,
+        )
     _positive_factor(nut_factor)
     torque = nut_factor * preload.pint * nominal_diameter.pint
     converted = torque.to("N*m")
@@ -170,7 +252,11 @@ def bearing_stress(
     _require(thickness, "[length]", "thickness")
     for value, name in ((diameter, "diameter"), (thickness, "thickness")):
         if value.to("mm").magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _fastener_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_fastener_input_source(name),
+            )
     stress = force.pint / (diameter.pint * thickness.pint)
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
@@ -192,9 +278,17 @@ def bolt_shear_stress(
     _require(force, "[force]", "force")
     _require(diameter, "[length]", "diameter")
     if diameter.magnitude <= 0:
-        raise ValueError(f"diameter must be positive; got {diameter}")
+        raise _fastener_refusal(
+            f"diameter must be positive; got {diameter}",
+            subject="diameter",
+            source=_FASTENER_SOURCE,
+        )
     if shear_planes < 1:
-        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+        raise _fastener_refusal(
+            f"shear_planes must be a positive integer; got {shear_planes}",
+            subject="shear_planes",
+            source=_GEOMETRY_SOURCE,
+        )
     area = pi * diameter.pint**2 / 4
     stress = force.pint / (shear_planes * area)
     converted = stress.to("MPa")
@@ -223,14 +317,34 @@ def slip_critical_resistance(
     """
     _require(bolt_pretension, "[force]", "bolt_pretension")
     if slip_coefficient <= 0:
-        raise ValueError(f"slip_coefficient must be positive; got {slip_coefficient}")
+        raise _fastener_refusal(
+            f"slip_coefficient must be positive; got {slip_coefficient}",
+            subject="slip_coefficient",
+            source=_CODE_SOURCE,
+        )
     if slip_planes < 1:
-        raise ValueError(f"slip_planes must be a positive integer; got {slip_planes}")
-    if filler_factor <= 0 or mean_pretension_ratio <= 0:
-        raise ValueError("filler_factor and mean_pretension_ratio must be positive")
+        raise _fastener_refusal(
+            f"slip_planes must be a positive integer; got {slip_planes}",
+            subject="slip_planes",
+            source=_GEOMETRY_SOURCE,
+        )
+    for subject, magnitude in (
+        ("filler_factor", filler_factor),
+        ("mean_pretension_ratio", mean_pretension_ratio),
+    ):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "filler_factor and mean_pretension_ratio must be positive",
+                subject=subject,
+                source=_CODE_SOURCE,
+            )
     tb = bolt_pretension.to("kN").magnitude
     if tb <= 0:
-        raise ValueError(f"bolt_pretension must be positive; got {bolt_pretension}")
+        raise _fastener_refusal(
+            f"bolt_pretension must be positive; got {bolt_pretension}",
+            subject="bolt_pretension",
+            source=_FASTENER_SOURCE,
+        )
     resistance = slip_coefficient * mean_pretension_ratio * filler_factor * tb * slip_planes
     return Quantity(magnitude=resistance, unit="kN")
 
@@ -268,13 +382,30 @@ def block_shear_strength(
     ant = net_tension_area.to("mm**2").magnitude
     fy = yield_strength.to("MPa").magnitude
     fu = ultimate_strength.to("MPa").magnitude
-    if agv <= 0 or anv <= 0 or ant <= 0 or fy <= 0 or fu <= 0:
-        raise ValueError("all areas and strengths must be positive")
+    for subject, magnitude in (
+        ("gross_shear_area", agv),
+        ("net_shear_area", anv),
+        ("net_tension_area", ant),
+        ("yield_strength", fy),
+        ("ultimate_strength", fu),
+    ):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "all areas and strengths must be positive",
+                subject=subject,
+                source=_fastener_input_source(subject),
+            )
     if anv > agv:
-        raise ValueError("net_shear_area cannot exceed gross_shear_area")
+        raise _fastener_refusal(
+            "net_shear_area cannot exceed gross_shear_area",
+            subject="gross_shear_area and net_shear_area",
+            source=_GEOMETRY_SOURCE,
+        )
     if not 0 < tension_uniformity_factor <= 1.0:
-        raise ValueError(
-            f"tension_uniformity_factor must be in (0, 1]; got {tension_uniformity_factor}"
+        raise _fastener_refusal(
+            f"tension_uniformity_factor must be in (0, 1]; got {tension_uniformity_factor}",
+            subject="tension_uniformity_factor",
+            source=_CODE_SOURCE,
         )
     shear_term = min(0.6 * fu * anv, 0.6 * fy * agv)
     tension_term = tension_uniformity_factor * fu * ant
@@ -303,16 +434,24 @@ def shear_lag_factor(
     x_bar = connection_eccentricity.to("mm").magnitude
     length = connection_length.to("mm").magnitude
     if x_bar < 0:
-        raise ValueError(
-            f"connection_eccentricity must be non-negative; got {connection_eccentricity}"
+        raise _fastener_refusal(
+            f"connection_eccentricity must be non-negative; got {connection_eccentricity}",
+            subject="connection_eccentricity",
+            source=_GEOMETRY_SOURCE,
         )
     if length <= 0:
-        raise ValueError(f"connection_length must be positive; got {connection_length}")
+        raise _fastener_refusal(
+            f"connection_length must be positive; got {connection_length}",
+            subject="connection_length",
+            source=_GEOMETRY_SOURCE,
+        )
     u = 1.0 - x_bar / length
     if u <= 0:
-        raise ValueError(
+        raise _fastener_refusal(
             "connection_eccentricity must be less than connection_length "
-            f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
+            f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)",
+            subject="connection_eccentricity",
+            source=_GEOMETRY_SOURCE,
         )
     return u
 
@@ -341,15 +480,29 @@ def aisc_tension_member_design_strength(
     strength in kN.
     """
     if not isinstance(gross_area, Quantity):
-        raise ValueError(f"gross_area must be a [length]**2 quantity; got {gross_area!r}")
+        raise _fastener_refusal(
+            f"gross_area must be a [length]**2 quantity; got {gross_area!r}",
+            subject="gross_area",
+            source=_GEOMETRY_SOURCE,
+        )
     if not gross_area.has_dimension("[length]**2"):
-        raise ValueError("gross_area must be a [length]**2 quantity")
+        raise _fastener_refusal(
+            "gross_area must be a [length]**2 quantity",
+            subject="gross_area",
+            source=_GEOMETRY_SOURCE,
+        )
     if not isinstance(effective_net_area, Quantity):
-        raise ValueError(
-            f"effective_net_area must be a [length]**2 quantity; got {effective_net_area!r}"
+        raise _fastener_refusal(
+            f"effective_net_area must be a [length]**2 quantity; got {effective_net_area!r}",
+            subject="effective_net_area",
+            source=_GEOMETRY_SOURCE,
         )
     if not effective_net_area.has_dimension("[length]**2"):
-        raise ValueError("effective_net_area must be a [length]**2 quantity")
+        raise _fastener_refusal(
+            "effective_net_area must be a [length]**2 quantity",
+            subject="effective_net_area",
+            source=_GEOMETRY_SOURCE,
+        )
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(ultimate_strength, "[pressure]", "ultimate_strength")
     require_finite(gross_area, name="gross_area")
@@ -358,18 +511,38 @@ def aisc_tension_member_design_strength(
     ae = effective_net_area.to("mm**2").magnitude
     fy = yield_strength.to("MPa").magnitude
     fu = ultimate_strength.to("MPa").magnitude
-    if ag <= 0 or ae <= 0 or fy <= 0 or fu <= 0:
-        raise ValueError("the areas and strengths must be positive")
+    for subject, magnitude in (
+        ("gross_area", ag),
+        ("effective_net_area", ae),
+        ("yield_strength", fy),
+        ("ultimate_strength", fu),
+    ):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "the areas and strengths must be positive",
+                subject=subject,
+                source=_fastener_input_source(subject),
+            )
     if ae > ag:
-        raise ValueError("effective_net_area cannot exceed gross_area")
+        raise _fastener_refusal(
+            "effective_net_area cannot exceed gross_area",
+            subject="gross_area and effective_net_area",
+            source=_GEOMETRY_SOURCE,
+        )
     # Through `require_finite` rather than a bare comparison: a NaN resistance factor walks
     # past `<= 0` and then `min(yielding, rupture)` *deletes* the poisoned limit state
     # instead of propagating it. With a NaN rupture factor the rupture check vanished and
     # the capacity came back 53% higher, from a function that had raised on 0.0.
     require_finite(yield_resistance_factor, name="yield_resistance_factor")
     require_finite(rupture_resistance_factor, name="rupture_resistance_factor")
-    if yield_resistance_factor <= 0 or rupture_resistance_factor <= 0:
-        raise ValueError("the resistance factors must be positive")
+    for subject, magnitude in (
+        ("yield_resistance_factor", yield_resistance_factor),
+        ("rupture_resistance_factor", rupture_resistance_factor),
+    ):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "the resistance factors must be positive", subject=subject, source=_CODE_SOURCE
+            )
     yielding = yield_resistance_factor * fy * ag
     rupture = rupture_resistance_factor * fu * ae
     return Quantity(magnitude=min(yielding, rupture) / 1000.0, unit="kN")
@@ -397,10 +570,19 @@ def bolt_shear_strength(
     _require(bolt_diameter, "[length]", "bolt_diameter")
     fnv = nominal_shear_stress.to("MPa").magnitude
     d = bolt_diameter.to("mm").magnitude
-    if fnv <= 0 or d <= 0:
-        raise ValueError("nominal_shear_stress and bolt_diameter must be positive")
+    for subject, magnitude in (("nominal_shear_stress", fnv), ("bolt_diameter", d)):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "nominal_shear_stress and bolt_diameter must be positive",
+                subject=subject,
+                source=_FASTENER_SOURCE,
+            )
     if shear_planes < 1:
-        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+        raise _fastener_refusal(
+            f"shear_planes must be a positive integer; got {shear_planes}",
+            subject="shear_planes",
+            source=_GEOMETRY_SOURCE,
+        )
     area = pi * d**2 / 4.0
     return Quantity(magnitude=fnv * area * shear_planes / 1000.0, unit="kN")
 
@@ -439,10 +621,19 @@ def bolt_bearing_strength(
     t = plate_thickness.to("mm").magnitude
     d = bolt_diameter.to("mm").magnitude
     fu = ultimate_strength.to("MPa").magnitude
-    if lc <= 0 or t <= 0 or d <= 0 or fu <= 0:
-        raise ValueError(
-            "clear_distance, plate_thickness, bolt_diameter, and ultimate_strength must be positive"
-        )
+    for subject, magnitude in (
+        ("clear_distance", lc),
+        ("plate_thickness", t),
+        ("bolt_diameter", d),
+        ("ultimate_strength", fu),
+    ):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "clear_distance, plate_thickness, bolt_diameter, and ultimate_strength must be "
+                "positive",
+                subject=subject,
+                source=_fastener_input_source(subject),
+            )
     tearout_coeff, bearing_coeff = (1.2, 2.4) if deformation_at_service_considered else (1.5, 3.0)
     tearout = tearout_coeff * lc * t * fu
     bearing = bearing_coeff * d * t * fu
@@ -477,27 +668,46 @@ def net_width_staggered_holes(
     _require(hole_diameter, "[length]", "hole_diameter")
     w = gross_width.to("mm").magnitude
     d = hole_diameter.to("mm").magnitude
-    if w <= 0 or d <= 0:
-        raise ValueError("gross_width and hole_diameter must be positive")
+    for subject, magnitude in (("gross_width", w), ("hole_diameter", d)):
+        if magnitude <= 0:
+            raise _fastener_refusal(
+                "gross_width and hole_diameter must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if hole_count < 1:
-        raise ValueError(f"hole_count must be a positive integer; got {hole_count}")
+        raise _fastener_refusal(
+            f"hole_count must be a positive integer; got {hole_count}",
+            subject="hole_count",
+            source=_GEOMETRY_SOURCE,
+        )
     stagger = 0.0
     for i, pair in enumerate(stagger_pitch_gauge):
         if not isinstance(pair, Sequence) or len(pair) != 2:
-            raise ValueError(f"stagger_pitch_gauge[{i}] must be an (s, g) pair; got {pair!r}")
+            raise _fastener_refusal(
+                f"stagger_pitch_gauge[{i}] must be an (s, g) pair; got {pair!r}",
+                subject="stagger_pitch_gauge",
+                source=_GEOMETRY_SOURCE,
+            )
         s_q, g_q = pair
         _require(s_q, "[length]", f"stagger_pitch_gauge[{i}].s")
         _require(g_q, "[length]", f"stagger_pitch_gauge[{i}].g")
         s = s_q.to("mm").magnitude
         g = g_q.to("mm").magnitude
         if s <= 0 or g <= 0:
-            raise ValueError(f"stagger_pitch_gauge[{i}] pitch and gauge must be positive")
+            raise _fastener_refusal(
+                f"stagger_pitch_gauge[{i}] pitch and gauge must be positive",
+                subject="stagger_pitch_gauge",
+                source=_GEOMETRY_SOURCE,
+            )
         stagger += s * s / (4.0 * g)
     net = w - hole_count * d + stagger
     if net <= 0:
-        raise ValueError(
+        raise _fastener_refusal(
             f"the holes remove the whole section (net width {net:.1f} mm <= 0); "
-            "check hole_count and gross_width"
+            "check hole_count and gross_width",
+            subject="gross_width, hole_diameter, hole_count, and stagger_pitch_gauge",
+            source=_GEOMETRY_SOURCE,
         )
     # A net section cannot exceed the gross section. The s²/4g credit outruns the hole
     # deduction as soon as s > 2*sqrt(g*d) — for a 22 mm hole on a 50 mm gauge that is a
@@ -531,19 +741,33 @@ def bolt_diameter_for_shear(
     _require(shear_load, "[force]", "shear_load")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if shear_planes < 1:
-        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+        raise _fastener_refusal(
+            f"shear_planes must be a positive integer; got {shear_planes}",
+            subject="shear_planes",
+            source=_GEOMETRY_SOURCE,
+        )
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _fastener_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_DESIGN_SOURCE,
+        )
     f = shear_load.to("N").magnitude
     tau = allowable_shear.to("MPa").magnitude
     if tau <= 0:
-        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+        raise _fastener_refusal(
+            f"allowable_shear must be positive; got {allowable_shear}",
+            subject="allowable_shear",
+            source=_FASTENER_SOURCE,
+        )
     if f <= 0:
-        raise ValueError(
+        raise _fastener_refusal(
             f"shear_load must be positive to size a fastener; got {shear_load}. Every "
             f"other operand here was checked and this one, the value under the square "
             f"root, was not — a sign-reversed load reached math.sqrt and came back as a "
-            f"bare domain error."
+            f"bare domain error.",
+            subject="shear_load",
+            source=_LOAD_SOURCE,
         )
     d_min = sqrt(4 * required_safety_factor * f / (pi * shear_planes * tau))
     return Quantity(magnitude=d_min, unit="mm")
@@ -565,12 +789,16 @@ def bolt_tensile_stress_area(*, nominal_diameter: Quantity, pitch: Quantity) -> 
     d = nominal_diameter.to("mm").magnitude
     p = pitch.to("mm").magnitude
     if p <= 0:
-        raise ValueError(f"pitch must be positive; got {pitch}")
+        raise _fastener_refusal(
+            f"pitch must be positive; got {pitch}", subject="pitch", source=_FASTENER_SOURCE
+        )
     effective = d - _TENSILE_AREA_PITCH_FACTOR * p
     if effective <= 0:
-        raise ValueError(
+        raise _fastener_refusal(
             f"nominal_diameter ({nominal_diameter}) must exceed 0.9382·pitch "
-            f"({pitch}) for a valid thread"
+            f"({pitch}) for a valid thread",
+            subject="nominal_diameter and pitch",
+            source=_FASTENER_SOURCE,
         )
     return Quantity(magnitude=pi * effective**2 / 4, unit="mm**2")
 
@@ -587,18 +815,26 @@ def _strip_geometry(
     d = nominal_diameter.to("mm").magnitude
     p = pitch.to("mm").magnitude
     if p <= 0:
-        raise ValueError(f"pitch must be positive; got {p} mm")
+        raise _fastener_refusal(
+            f"pitch must be positive; got {p} mm", subject="pitch", source=_FASTENER_SOURCE
+        )
     minor = d - _INTERNAL_MINOR_DIA_FACTOR * p
     if minor <= 0:
-        raise ValueError(
+        raise _fastener_refusal(
             f"nominal_diameter ({nominal_diameter}) must exceed 1.0825·pitch "
-            f"({pitch}) for a valid thread"
+            f"({pitch}) for a valid thread",
+            subject="nominal_diameter and pitch",
+            source=_FASTENER_SOURCE,
         )
     if member == "external":
         return _EXTERNAL_STRIP_COEFFICIENT, minor
     if member == "internal":
         return _INTERNAL_STRIP_COEFFICIENT, d
-    raise ValueError(f"member must be 'external' (bolt) or 'internal' (nut); got {member!r}")
+    raise _fastener_refusal(
+        f"member must be 'external' (bolt) or 'internal' (nut); got {member!r}",
+        subject="member",
+        source=_FASTENER_SOURCE,
+    )
 
 
 def thread_stripping_shear_area(
@@ -633,7 +869,11 @@ def thread_stripping_shear_area(
     _require(engagement_length, "[length]", "engagement_length")
     le = engagement_length.to("mm").magnitude
     if le <= 0:
-        raise ValueError(f"engagement_length must be positive; got {le} mm")
+        raise _fastener_refusal(
+            f"engagement_length must be positive; got {le} mm",
+            subject="engagement_length",
+            source=_GEOMETRY_SOURCE,
+        )
     coefficient, diameter = _strip_geometry(nominal_diameter, pitch, member)
     area = coefficient * pi * diameter * le
     return Quantity(magnitude=area, unit="mm**2")
@@ -695,10 +935,18 @@ def thread_engagement_for_load(
     _require(load, "[force]", "load")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _fastener_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_DESIGN_SOURCE,
+        )
     tau = allowable_shear.to("MPa").magnitude
     if tau <= 0:
-        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+        raise _fastener_refusal(
+            f"allowable_shear must be positive; got {allowable_shear}",
+            subject="allowable_shear",
+            source=_FASTENER_SOURCE,
+        )
     coefficient, diameter = _strip_geometry(nominal_diameter, pitch, member)
     f = load.to("N").magnitude
     le_min = required_safety_factor * f / (coefficient * pi * diameter * tau)
@@ -740,21 +988,33 @@ def bolt_proof_load(*, tensile_stress_area: Quantity, proof_strength: Quantity) 
     and S_p a stress, both positive. Returns the proof load in newtons.
     """
     if not isinstance(tensile_stress_area, Quantity):
-        raise ValueError(
-            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}"
+        raise _fastener_refusal(
+            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
         )
     if not tensile_stress_area.has_dimension("[length]**2"):
-        raise ValueError(
+        raise _fastener_refusal(
             f"tensile_stress_area must be a [length]**2 quantity; got "
-            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})"
+            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
         )
     _require(proof_strength, "[pressure]", "proof_strength")
     area = tensile_stress_area.to("mm**2").magnitude
     sp = proof_strength.to("MPa").magnitude
     if area <= 0:
-        raise ValueError(f"tensile_stress_area must be positive; got {tensile_stress_area}")
+        raise _fastener_refusal(
+            f"tensile_stress_area must be positive; got {tensile_stress_area}",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
+        )
     if sp <= 0:
-        raise ValueError(f"proof_strength must be positive; got {proof_strength}")
+        raise _fastener_refusal(
+            f"proof_strength must be positive; got {proof_strength}",
+            subject="proof_strength",
+            source=_FASTENER_SOURCE,
+        )
     return Quantity(magnitude=area * sp, unit="N")
 
 
@@ -777,7 +1037,11 @@ def recommended_bolt_preload(*, proof_load: Quantity, permanent: bool = False) -
     _require(proof_load, "[force]", "proof_load")
     fp = proof_load.to("N").magnitude
     if fp <= 0:
-        raise ValueError(f"proof_load must be positive; got {proof_load}")
+        raise _fastener_refusal(
+            f"proof_load must be positive; got {proof_load}",
+            subject="proof_load",
+            source=_FASTENER_SOURCE,
+        )
     fraction = PERMANENT_PRELOAD_FRACTION if permanent else REUSED_PRELOAD_FRACTION
     return Quantity(magnitude=fraction * fp, unit="N")
 
@@ -809,9 +1073,17 @@ def bolt_axial_stiffness(
     length = grip_length.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if length <= 0:
-        raise ValueError(f"grip_length must be positive; got {grip_length}")
+        raise _fastener_refusal(
+            f"grip_length must be positive; got {grip_length}",
+            subject="grip_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _fastener_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=at * e / length, unit="N/mm")
 
 
@@ -843,11 +1115,23 @@ def member_stiffness_frustum(
     length = grip_length.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if d <= 0:
-        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
+        raise _fastener_refusal(
+            f"nominal_diameter must be positive; got {nominal_diameter}",
+            subject="nominal_diameter",
+            source=_FASTENER_SOURCE,
+        )
     if length <= 0:
-        raise ValueError(f"grip_length must be positive; got {grip_length}")
+        raise _fastener_refusal(
+            f"grip_length must be positive; got {grip_length}",
+            subject="grip_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _fastener_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     tan30 = 0.5774
     numerator = tan30 * pi * e * d
     denominator = 2.0 * log(5.0 * (tan30 * length + 0.5 * d) / (tan30 * length + 2.5 * d))
@@ -871,9 +1155,17 @@ def joint_stiffness_factor(*, bolt_stiffness: Quantity, member_stiffness: Quanti
     kb = bolt_stiffness.to("N/mm").magnitude
     km = member_stiffness.to("N/mm").magnitude
     if kb <= 0:
-        raise ValueError(f"bolt_stiffness must be positive; got {bolt_stiffness}")
+        raise _fastener_refusal(
+            f"bolt_stiffness must be positive; got {bolt_stiffness}",
+            subject="bolt_stiffness",
+            source=_GEOMETRY_SOURCE,
+        )
     if km <= 0:
-        raise ValueError(f"member_stiffness must be positive; got {member_stiffness}")
+        raise _fastener_refusal(
+            f"member_stiffness must be positive; got {member_stiffness}",
+            subject="member_stiffness",
+            source=_GEOMETRY_SOURCE,
+        )
     return kb / (kb + km)
 
 
@@ -943,8 +1235,10 @@ def joint_separation_load(*, preload: Quantity, stiffness_factor: float) -> Quan
 
 def _check_factor(stiffness_factor: float) -> None:
     if not 0.0 < stiffness_factor < 1.0:
-        raise ValueError(
-            f"stiffness_factor (joint constant C) must lie in (0, 1); got {stiffness_factor}"
+        raise _fastener_refusal(
+            f"stiffness_factor (joint constant C) must lie in (0, 1); got {stiffness_factor}",
+            subject="stiffness_factor",
+            source=_GEOMETRY_SOURCE,
         )
 
 
@@ -962,12 +1256,14 @@ def _check_joint_not_separated(
     """
     separation = preload_n / (1.0 - stiffness_factor)
     if external_load_n > separation:
-        raise ValueError(
+        raise _fastener_refusal(
             f"{label} is {external_load_n:.6g} N, past the joint separation load "
             f"P₀ = F_i/(1 − C) = {separation:.6g} N. Beyond separation the members' clamp is "
             f"gone and the bolt carries the whole external load, not the fraction C of it — "
             f"so the load-sharing forms here understate the bolt load and the fatigue "
-            f"amplitude. Raise the preload or reduce the load; see joint_separation_load."
+            f"amplitude. Raise the preload or reduce the load; see joint_separation_load.",
+            subject=label,
+            source=_fastener_input_source(label),
         )
 
 
@@ -1000,25 +1296,35 @@ def preloaded_bolt_cyclic_stress(
     _require(max_external_load, "[force]", "max_external_load")
     _check_factor(stiffness_factor)
     if not isinstance(tensile_stress_area, Quantity):
-        raise ValueError(
-            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}"
+        raise _fastener_refusal(
+            f"tensile_stress_area must be a [length]**2 quantity; got {tensile_stress_area!r}",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
         )
     if not tensile_stress_area.has_dimension("[length]**2"):
-        raise ValueError(
+        raise _fastener_refusal(
             f"tensile_stress_area must be a [length]**2 quantity; got "
-            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})"
+            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
         )
     fi = preload.to("N").magnitude
     p_min = min_external_load.to("N").magnitude
     p_max = max_external_load.to("N").magnitude
     if p_max < p_min:
-        raise ValueError(
+        raise _fastener_refusal(
             f"max_external_load ({max_external_load}) must be at least "
-            f"min_external_load ({min_external_load})"
+            f"min_external_load ({min_external_load})",
+            subject="min_external_load and max_external_load",
+            source=_LOAD_SOURCE,
         )
     area = tensile_stress_area.to("mm**2").magnitude
     if area <= 0:
-        raise ValueError(f"tensile_stress_area must be positive; got {tensile_stress_area}")
+        raise _fastener_refusal(
+            f"tensile_stress_area must be positive; got {tensile_stress_area}",
+            subject="tensile_stress_area",
+            source=_FASTENER_SOURCE,
+        )
     _check_joint_not_separated(fi, p_max, stiffness_factor, "max_external_load")
     stress_max = (fi + stiffness_factor * p_max) / area
     stress_min = (fi + stiffness_factor * p_min) / area
@@ -1056,12 +1362,20 @@ def eccentric_shear_group_peak_force(
     _require(eccentricity, "[length]", "eccentricity")
     n = len(positions)
     if n < 2:
-        raise ValueError(f"positions must list at least two fasteners; got {n}")
+        raise _fastener_refusal(
+            f"positions must list at least two fasteners; got {n}",
+            subject="positions",
+            source=_GEOMETRY_SOURCE,
+        )
     xs = []
     ys = []
     for i, pair in enumerate(positions):
         if not isinstance(pair, Sequence) or len(pair) != 2:
-            raise ValueError(f"positions[{i}] must be an (x, y) pair; got {pair!r}")
+            raise _fastener_refusal(
+                f"positions[{i}] must be an (x, y) pair; got {pair!r}",
+                subject="positions",
+                source=_GEOMETRY_SOURCE,
+            )
         x_q, y_q = pair
         _require(x_q, "[length]", f"positions[{i}].x")
         _require(y_q, "[length]", f"positions[{i}].y")
@@ -1069,7 +1383,11 @@ def eccentric_shear_group_peak_force(
         ys.append(y_q.to("mm").magnitude)
     polar_moment = sum(x * x + y * y for x, y in zip(xs, ys, strict=True))  # mm^2 (unit areas)
     if polar_moment <= 0:
-        raise ValueError("fasteners must not all coincide at the centroid")
+        raise _fastener_refusal(
+            "fasteners must not all coincide at the centroid",
+            subject="positions",
+            source=_GEOMETRY_SOURCE,
+        )
     p = load.to("N").magnitude
     torque = p * eccentricity.to("mm").magnitude  # N*mm
     direct = p / n  # N, along +y

@@ -46,7 +46,32 @@ from enum import IntEnum, StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import RevalidatedModel
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+_TOOLCHAIN_SOURCE = "the name and version of the tool that produced the artifact"
+_ORIGINS_SOURCE = "a mapping from each check name to its DecisionOrigin"
+_REVIEWER_SOURCE = "the reviewer, the decision, and the reason recorded for it"
+
+
+class _ReviewInputError(RefusalError, ValueError):
+    """A review input that cannot be used without correction."""
+
+
+def _review_refusal(message: str, *, subject: str, source: str) -> _ReviewInputError:
+    return _ReviewInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _review_input_source(name: str) -> str:
+    if name == "toolchain":
+        return _TOOLCHAIN_SOURCE
+    if name == "origins":
+        return _ORIGINS_SOURCE
+    return _REVIEWER_SOURCE
+
 
 __all__ = [
     "DecisionOrigin",
@@ -157,11 +182,13 @@ def _an_origin(value: object) -> DecisionOrigin:
     try:
         return DecisionOrigin(value)
     except ValueError:
-        raise ValueError(
+        raise _review_refusal(
             f"{value!r} is not a decision origin; the origins are "
             f"{', '.join(repr(o.value) for o in DecisionOrigin)}. An origin this library "
             f"does not recognise would sort as routine, which is the one answer an "
-            f"unrecorded origin must never get"
+            f"unrecorded origin must never get",
+            subject="origins",
+            source=_ORIGINS_SOURCE,
         ) from None
 
 
@@ -282,10 +309,12 @@ def artifact_digest(scorecard: Scorecard, *, toolchain: str) -> str:
     be assurance nobody actually gave.
     """
     if not toolchain.strip():
-        raise ValueError(
+        raise _review_refusal(
             "toolchain must identify what produced this artifact — the same inputs "
             "through a different version are a different piece of work, and a digest "
-            "that ignores it would let a review survive an upgrade it never saw"
+            "that ignores it would let a review survive an upgrade it never saw",
+            subject="toolchain",
+            source=_TOOLCHAIN_SOURCE,
         )
     payload = scorecard.model_dump_json() + "\x00" + toolchain.strip()
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -323,9 +352,11 @@ class ReviewRecord(RevalidatedModel):
             (self.covers_digest, "covers_digest"),
         ):
             if not value.strip():
-                raise ValueError(
+                raise _review_refusal(
                     f"{name} may not be blank — a review record with no {name} is not a "
-                    f"record of anything"
+                    f"record of anything",
+                    subject=name,
+                    source=_review_input_source(name),
                 )
         return self
 
@@ -411,8 +442,11 @@ def build_dossier(
     from "there was never a review".
     """
     if origins is not None and not isinstance(origins, Mapping):
-        raise ValueError(
-            f"origins maps a check name to where its inputs came from; got {type(origins).__name__}"
+        raise _review_refusal(
+            f"origins maps a check name to where its inputs came from; got "
+            f"{type(origins).__name__}",
+            subject="origins",
+            source=_ORIGINS_SOURCE,
         )
     # Not coerced here: `review_priority` below is where the value is read, and it is
     # the public entry point a caller can reach without coming through this one.

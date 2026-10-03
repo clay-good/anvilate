@@ -30,8 +30,85 @@ from __future__ import annotations
 
 from math import atan, cos, degrees, exp, log10, pi, radians, sin, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._flags import require_flag
+
+_SOIL_SOURCE = "the site investigation report's laboratory and in-situ soil parameters"
+_GROUNDWATER_SOURCE = "the site investigation's piezometer and groundwater records"
+_GEOMETRY_SOURCE = "the foundation, wall, or pile drawing's dimensions and embedment"
+_LOAD_SOURCE = "the structural load case delivered to the foundation or wall"
+_FACTOR_SOURCE = "the cited bearing-capacity or pile factor table for the soil"
+_CRITERION_SOURCE = "the geotechnical design basis's factors of safety and allowable bearing"
+
+
+class _GeotechnicalInputError(RefusalError, ValueError):
+    """A geotechnical input that cannot be used without correction."""
+
+
+def _geotechnical_refusal(message: str, *, subject: str, source: str) -> _GeotechnicalInputError:
+    return _GeotechnicalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _geotechnical_input_source(name: str) -> str:
+    if name in {
+        "base_friction_coefficient",
+        "coefficient_of_consolidation",
+        "cohesion",
+        "compression_index",
+        "friction_angle",
+        "initial_effective_stress",
+        "initial_void_ratio",
+        "overburden_pressure",
+        "overconsolidation_ratio",
+        "permeability",
+        "porosity",
+        "preconsolidation_stress",
+        "recompression_index",
+        "specific_gravity",
+        "undrained_shear_strength",
+        "unit_weight",
+        "void_ratio",
+        "wall_friction_angle",
+    }:
+        return _SOIL_SOURCE
+    if name in {
+        "applied_pressure",
+        "end_bearing",
+        "horizontal_load",
+        "lateral_thrust",
+        "passive_resistance",
+        "point_load",
+        "service_load",
+        "skin_friction",
+        "stress_increment",
+        "surcharge",
+        "ultimate_bearing_capacity",
+        "vertical_load",
+    }:
+        return _LOAD_SOURCE
+    if name in {
+        "adhesion_factor",
+        "bearing_factor",
+        "bearing_factor_c",
+        "bearing_factor_gamma",
+        "bearing_factor_nc",
+        "bearing_factor_nq",
+        "bearing_factor_q",
+        "lateral_pressure_ratio",
+        "time_factor",
+        "wall_friction_coefficient",
+    }:
+        return _FACTOR_SOURCE
+    if name in {"allowable_bearing_pressure", "degree_of_consolidation", "factor_of_safety"}:
+        return _CRITERION_SOURCE
+    if name in {"critical_gradient", "exit_gradient", "hydraulic_gradient", "pore_pressure"}:
+        return _GROUNDWATER_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "allowable_bearing_from_ultimate",
@@ -73,10 +150,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _geotechnical_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_geotechnical_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _geotechnical_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_geotechnical_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -87,7 +170,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 def _check_friction_angle(friction_angle: float) -> None:
     if not 0.0 <= friction_angle < 90.0:
-        raise ValueError(f"friction_angle must be in [0, 90) degrees; got {friction_angle}")
+        raise _geotechnical_refusal(
+            f"friction_angle must be in [0, 90) degrees; got {friction_angle}",
+            subject="friction_angle",
+            source=_SOIL_SOURCE,
+        )
 
 
 def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool = False) -> float:
@@ -149,23 +236,33 @@ def coulomb_active_earth_pressure_coefficient(
     theta = radians(wall_batter_angle)
     beta = radians(backfill_slope_angle)
     if not 0.0 <= wall_friction_angle <= friction_angle:
-        raise ValueError(
+        raise _geotechnical_refusal(
             f"wall_friction_angle must lie in [0, friction_angle]; got {wall_friction_angle} "
-            f"against a friction angle of {friction_angle}"
+            f"against a friction angle of {friction_angle}",
+            subject="wall_friction_angle and friction_angle",
+            source=_SOIL_SOURCE,
         )
     if not -45.0 < wall_batter_angle < 45.0:
-        raise ValueError(
-            f"wall_batter_angle must lie in (-45, 45) degrees; got {wall_batter_angle}"
+        raise _geotechnical_refusal(
+            f"wall_batter_angle must lie in (-45, 45) degrees; got {wall_batter_angle}",
+            subject="wall_batter_angle",
+            source=_GEOMETRY_SOURCE,
         )
     # The wedge cannot form if the backfill stands steeper than the soil can hold itself, which is
     # exactly where the sin(phi - beta) term goes negative and the square root fails.
     if backfill_slope_angle >= friction_angle:
-        raise ValueError(
+        raise _geotechnical_refusal(
             f"backfill_slope_angle must be below friction_angle for an active wedge to form; "
-            f"got {backfill_slope_angle} against {friction_angle}"
+            f"got {backfill_slope_angle} against {friction_angle}",
+            subject="backfill_slope_angle and friction_angle",
+            source=_GEOMETRY_SOURCE,
         )
     if backfill_slope_angle < 0.0:
-        raise ValueError(f"backfill_slope_angle must be non-negative; got {backfill_slope_angle}")
+        raise _geotechnical_refusal(
+            f"backfill_slope_angle must be non-negative; got {backfill_slope_angle}",
+            subject="backfill_slope_angle",
+            source=_GEOMETRY_SOURCE,
+        )
     root = sqrt(sin(phi + delta) * sin(phi - beta) / (cos(delta + theta) * cos(theta - beta)))
     denominator = cos(theta) ** 2 * cos(delta + theta) * (1.0 + root) ** 2
     return cos(phi - theta) ** 2 / denominator
@@ -205,8 +302,10 @@ def overconsolidated_at_rest_coefficient(
     require_finite(friction_angle, name="friction_angle")
     _check_friction_angle(friction_angle)
     if overconsolidation_ratio < 1.0:
-        raise ValueError(
-            f"overconsolidation_ratio must be at least 1; got {overconsolidation_ratio}"
+        raise _geotechnical_refusal(
+            f"overconsolidation_ratio must be at least 1; got {overconsolidation_ratio}",
+            subject="overconsolidation_ratio",
+            source=_SOIL_SOURCE,
         )
     return (1.0 - sin(radians(friction_angle))) * overconsolidation_ratio ** sin(
         radians(friction_angle)
@@ -226,9 +325,11 @@ def rankine_sloped_backfill_coefficient(*, friction_angle: float, backfill_slope
     """
     _check_friction_angle(friction_angle)
     if not 0.0 <= backfill_slope < friction_angle:
-        raise ValueError(
+        raise _geotechnical_refusal(
             f"backfill_slope must be in [0, φ) — it cannot exceed the friction angle "
-            f"{friction_angle}; got {backfill_slope}"
+            f"{friction_angle}; got {backfill_slope}",
+            subject="backfill_slope and friction_angle",
+            source=_GEOMETRY_SOURCE,
         )
     beta = radians(backfill_slope)
     phi = radians(friction_angle)
@@ -261,7 +362,11 @@ def rankine_active_pressure_cohesive(
     gamma = unit_weight.to("kN/m**3").magnitude
     c = cohesion.to("kPa").magnitude
     if z < 0 or gamma <= 0 or c < 0:
-        raise ValueError("depth non-negative, unit_weight positive, cohesion non-negative")
+        raise _geotechnical_refusal(
+            "depth non-negative, unit_weight positive, cohesion non-negative",
+            subject="depth, unit_weight, and cohesion",
+            source=_SOIL_SOURCE,
+        )
     k_a = rankine_earth_pressure_coefficient(friction_angle=friction_angle)
     sigma_a = k_a * gamma * z - 2.0 * c * sqrt(k_a)
     return Quantity(magnitude=sigma_a, unit="kPa")
@@ -292,7 +397,11 @@ def rankine_passive_pressure_cohesive(
     gamma = unit_weight.to("kN/m**3").magnitude
     c = cohesion.to("kPa").magnitude
     if z < 0 or gamma <= 0 or c < 0:
-        raise ValueError("depth non-negative, unit_weight positive, cohesion non-negative")
+        raise _geotechnical_refusal(
+            "depth non-negative, unit_weight positive, cohesion non-negative",
+            subject="depth, unit_weight, and cohesion",
+            source=_SOIL_SOURCE,
+        )
     k_p = rankine_earth_pressure_coefficient(friction_angle=friction_angle, passive=True)
     sigma_p = k_p * gamma * z + 2.0 * c * sqrt(k_p)
     return Quantity(magnitude=sigma_p, unit="kPa")
@@ -317,8 +426,11 @@ def tension_crack_depth(
     _check_friction_angle(friction_angle)
     c = cohesion.to("kPa").magnitude
     gamma = unit_weight.to("kN/m**3").magnitude
-    if c <= 0 or gamma <= 0:
-        raise ValueError("cohesion and unit_weight must be positive")
+    for subject, magnitude in (("cohesion", c), ("unit_weight", gamma)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "cohesion and unit_weight must be positive", subject=subject, source=_SOIL_SOURCE
+            )
     k_a = rankine_earth_pressure_coefficient(friction_angle=friction_angle)
     return Quantity(magnitude=2.0 * c / (gamma * sqrt(k_a)), unit="m")
 
@@ -350,15 +462,22 @@ def rankine_lateral_thrust(
     _require(height, "[length]", "height")
     gamma = unit_weight.to("kN/m**3").magnitude
     h = height.to("m").magnitude
-    if gamma <= 0 or h <= 0:
-        raise ValueError("unit_weight and height must be positive")
+    for subject, magnitude in (("unit_weight", gamma), ("height", h)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "unit_weight and height must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     k = rankine_earth_pressure_coefficient(friction_angle=friction_angle, passive=passive)
     thrust = 0.5 * k * gamma * h**2
     if surcharge is not None:
         _require(surcharge, "[pressure]", "surcharge")
         q = surcharge.to("kPa").magnitude
         if q < 0:
-            raise ValueError("surcharge must be non-negative")
+            raise _geotechnical_refusal(
+                "surcharge must be non-negative", subject="surcharge", source=_LOAD_SOURCE
+            )
         thrust += k * q * h
     return Quantity(magnitude=thrust, unit="kN/m")
 
@@ -407,12 +526,29 @@ def bearing_shape_factors(
     _check_friction_angle(friction_angle)
     b = footing_width.to("m").magnitude
     lo = footing_length.to("m").magnitude
-    if b <= 0 or lo <= 0:
-        raise ValueError("footing_width and footing_length must be positive")
+    for subject, magnitude in (("footing_width", b), ("footing_length", lo)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "footing_width and footing_length must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if b > lo:
-        raise ValueError("footing_width must be the shorter side (B <= L)")
-    if bearing_factor_nq <= 0 or bearing_factor_nc <= 0:
-        raise ValueError("bearing_factor_nq and bearing_factor_nc must be positive")
+        raise _geotechnical_refusal(
+            "footing_width must be the shorter side (B <= L)",
+            subject="footing_width and footing_length",
+            source=_GEOMETRY_SOURCE,
+        )
+    for subject, magnitude in (
+        ("bearing_factor_nq", bearing_factor_nq),
+        ("bearing_factor_nc", bearing_factor_nc),
+    ):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "bearing_factor_nq and bearing_factor_nc must be positive",
+                subject=subject,
+                source=_FACTOR_SOURCE,
+            )
     ratio = b / lo
     s_c = 1.0 + ratio * (bearing_factor_nq / bearing_factor_nc)
     s_q = 1.0 + ratio * tan(radians(friction_angle))
@@ -445,7 +581,11 @@ def bearing_depth_factors(
     b = footing_width.to("m").magnitude
     d = embedment_depth.to("m").magnitude
     if b <= 0 or d < 0:
-        raise ValueError("footing_width must be positive and embedment_depth non-negative")
+        raise _geotechnical_refusal(
+            "footing_width must be positive and embedment_depth non-negative",
+            subject="footing_width",
+            source=_GEOMETRY_SOURCE,
+        )
     # This linear form is the SHALLOW branch only and grows without bound: at D/B = 5, phi = 30
     # it reaches d_q = 2.443, a 69% optimistic q_ult straight into the allowable pressure.
     # Hansen's deep form replaces D/B with arctan(D/B) beyond D = B, but it is discontinuous
@@ -453,12 +593,14 @@ def bearing_depth_factors(
     # trade an unconservative extrapolation for a step change in the answer. The function is
     # scoped to what it can actually support and refuses the rest.
     if d > b:
-        raise ValueError(
+        raise _geotechnical_refusal(
             f"these depth factors are the shallow-footing form and require embedment_depth <= "
             f"footing_width; got {embedment_depth} against {footing_width} (D/B = {d / b:.2f}). "
             f"Extrapolating gives an unconservative bearing capacity -- at D/B = 5 the depth "
             f"bonus is 75% too large. A deep foundation needs Hansen's arctan(D/B) form or a "
-            f"pile analysis."
+            f"pile analysis.",
+            subject="embedment_depth and footing_width",
+            source=_GEOMETRY_SOURCE,
         )
     ratio = d / b
     phi = radians(friction_angle)
@@ -500,9 +642,13 @@ def bearing_inclination_factors(
     v = vertical_load.to("kN").magnitude
     h = horizontal_load.to("kN").magnitude
     if v <= 0:
-        raise ValueError("vertical_load must be positive")
+        raise _geotechnical_refusal(
+            "vertical_load must be positive", subject="vertical_load", source=_LOAD_SOURCE
+        )
     if h < 0:
-        raise ValueError("horizontal_load must be non-negative")
+        raise _geotechnical_refusal(
+            "horizontal_load must be non-negative", subject="horizontal_load", source=_LOAD_SOURCE
+        )
     from math import atan, degrees
 
     alpha = degrees(atan(h / v))
@@ -544,10 +690,20 @@ def terzaghi_bearing_capacity(
     q = surcharge.to("kPa").magnitude
     gamma = unit_weight.to("kN/m**3").magnitude
     b = width.to("m").magnitude
-    if c < 0 or q < 0:
-        raise ValueError("cohesion and surcharge must be non-negative")
-    if gamma <= 0 or b <= 0:
-        raise ValueError("unit_weight and width must be positive")
+    for subject, magnitude in (("cohesion", c), ("surcharge", q)):
+        if magnitude < 0:
+            raise _geotechnical_refusal(
+                "cohesion and surcharge must be non-negative",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
+    for subject, magnitude in (("unit_weight", gamma), ("width", b)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "unit_weight and width must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     # The three N factors were taken on trust. They come from bearing_capacity_factors, where
     # every one is >= 1, but nothing stopped a hand-typed negative from producing a NEGATIVE
     # ultimate bearing pressure -- soil that pulls a footing down.
@@ -557,7 +713,11 @@ def terzaghi_bearing_capacity(
         ("bearing_factor_gamma", bearing_factor_gamma),
     ):
         if factor < 0:
-            raise ValueError(f"{factor_name} must be non-negative; got {factor}")
+            raise _geotechnical_refusal(
+                f"{factor_name} must be non-negative; got {factor}",
+                subject=factor_name,
+                source=_geotechnical_input_source(factor_name),
+            )
     q_ult = c * bearing_factor_c + q * bearing_factor_q + 0.5 * gamma * b * bearing_factor_gamma
     return Quantity(magnitude=q_ult, unit="kPa")
 
@@ -578,9 +738,17 @@ def allowable_bearing_from_ultimate(
     _require(ultimate_bearing_capacity, "[pressure]", "ultimate_bearing_capacity")
     q_ult = ultimate_bearing_capacity.to("kPa").magnitude
     if q_ult <= 0:
-        raise ValueError("ultimate_bearing_capacity must be positive")
+        raise _geotechnical_refusal(
+            "ultimate_bearing_capacity must be positive",
+            subject="ultimate_bearing_capacity",
+            source=_LOAD_SOURCE,
+        )
     if factor_of_safety <= 0:
-        raise ValueError("factor_of_safety must be positive")
+        raise _geotechnical_refusal(
+            "factor_of_safety must be positive",
+            subject="factor_of_safety",
+            source=_CRITERION_SOURCE,
+        )
     return Quantity(magnitude=q_ult / factor_of_safety, unit="kPa")
 
 
@@ -605,18 +773,32 @@ def required_spread_footing_area(
     p = service_load.to("kN").magnitude
     q_all = allowable_bearing_pressure.to("kPa").magnitude
     if p <= 0:
-        raise ValueError("service_load must be positive")
+        raise _geotechnical_refusal(
+            "service_load must be positive", subject="service_load", source=_LOAD_SOURCE
+        )
     if q_all <= 0:
-        raise ValueError("allowable_bearing_pressure must be positive")
+        raise _geotechnical_refusal(
+            "allowable_bearing_pressure must be positive",
+            subject="allowable_bearing_pressure",
+            source=_CRITERION_SOURCE,
+        )
     q_o = 0.0
     if overburden_pressure is not None:
         _require(overburden_pressure, "[pressure]", "overburden_pressure")
         q_o = overburden_pressure.to("kPa").magnitude
         if q_o < 0:
-            raise ValueError("overburden_pressure must be non-negative")
+            raise _geotechnical_refusal(
+                "overburden_pressure must be non-negative",
+                subject="overburden_pressure",
+                source=_SOIL_SOURCE,
+            )
     net = q_all - q_o
     if net <= 0:
-        raise ValueError("overburden_pressure must be less than the allowable bearing pressure")
+        raise _geotechnical_refusal(
+            "overburden_pressure must be less than the allowable bearing pressure",
+            subject="overburden_pressure and allowable_bearing_pressure",
+            source=_CRITERION_SOURCE,
+        )
     return Quantity(magnitude=p / net, unit="m**2")
 
 
@@ -649,10 +831,22 @@ def consolidation_settlement(
     h = layer_thickness.to("m").magnitude
     s0 = initial_effective_stress.to("kPa").magnitude
     ds = stress_increment.to("kPa").magnitude
-    if compression_index <= 0 or initial_void_ratio <= 0:
-        raise ValueError("compression_index and initial_void_ratio must be positive")
+    for subject, magnitude in (
+        ("compression_index", compression_index),
+        ("initial_void_ratio", initial_void_ratio),
+    ):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "compression_index and initial_void_ratio must be positive",
+                subject=subject,
+                source=_SOIL_SOURCE,
+            )
     if h <= 0 or s0 <= 0 or ds < 0:
-        raise ValueError("layer_thickness and stresses must be positive (increment non-negative)")
+        raise _geotechnical_refusal(
+            "layer_thickness and stresses must be positive (increment non-negative)",
+            subject="layer_thickness, initial_effective_stress, and stress_increment",
+            source=_SOIL_SOURCE,
+        )
     sf = s0 + ds
     coeff = h / (1.0 + initial_void_ratio)
 
@@ -663,11 +857,17 @@ def consolidation_settlement(
     _require(preconsolidation_stress, "[pressure]", "preconsolidation_stress")
     sc = preconsolidation_stress.to("kPa").magnitude
     if recompression_index is None or recompression_index <= 0:
-        raise ValueError(
-            "recompression_index must be given and positive when preconsolidation_stress is set"
+        raise _geotechnical_refusal(
+            "recompression_index must be given and positive when preconsolidation_stress is set",
+            subject="recompression_index",
+            source=_SOIL_SOURCE,
         )
     if sc < s0:
-        raise ValueError("preconsolidation_stress must be at least the initial effective stress")
+        raise _geotechnical_refusal(
+            "preconsolidation_stress must be at least the initial effective stress",
+            subject="preconsolidation_stress and initial_effective_stress",
+            source=_SOIL_SOURCE,
+        )
 
     if sf <= sc:
         # Wholly on the recompression curve.
@@ -691,7 +891,11 @@ def consolidation_time_factor(*, degree_of_consolidation: float) -> float:
     """
     u = degree_of_consolidation
     if not 0.0 <= u < 100.0:
-        raise ValueError(f"degree_of_consolidation must be in [0, 100) percent; got {u}")
+        raise _geotechnical_refusal(
+            f"degree_of_consolidation must be in [0, 100) percent; got {u}",
+            subject="degree_of_consolidation",
+            source=_CRITERION_SOURCE,
+        )
     if u <= 60.0:
         return (pi / 4.0) * (u / 100.0) ** 2
     return 1.781 - 0.933 * log10(100.0 - u)
@@ -716,9 +920,19 @@ def consolidation_time(
     h_dr = drainage_path_length.to("m").magnitude
     c_v = coefficient_of_consolidation.to("m**2/year").magnitude
     if time_factor < 0:
-        raise ValueError("time_factor must be non-negative")
-    if h_dr <= 0 or c_v <= 0:
-        raise ValueError("drainage_path_length and coefficient_of_consolidation must be positive")
+        raise _geotechnical_refusal(
+            "time_factor must be non-negative", subject="time_factor", source=_FACTOR_SOURCE
+        )
+    for subject, magnitude in (
+        ("drainage_path_length", h_dr),
+        ("coefficient_of_consolidation", c_v),
+    ):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "drainage_path_length and coefficient_of_consolidation must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     return Quantity(magnitude=time_factor * h_dr**2 / c_v, unit="year")
 
 
@@ -747,10 +961,20 @@ def retaining_wall_overturning_factor(
     y = thrust_height.to("m").magnitude
     v = vertical_load.to("kN/m").magnitude
     a = load_arm.to("m").magnitude
-    if p <= 0 or y <= 0:
-        raise ValueError("lateral_thrust and thrust_height must be positive")
-    if v <= 0 or a <= 0:
-        raise ValueError("vertical_load and load_arm must be positive")
+    for subject, magnitude in (("lateral_thrust", p), ("thrust_height", y)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "lateral_thrust and thrust_height must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
+    for subject, magnitude in (("vertical_load", v), ("load_arm", a)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "vertical_load and load_arm must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     return (v * a) / (p * y)
 
 
@@ -775,16 +999,29 @@ def retaining_wall_sliding_factor(
     _require(vertical_load, "[force]/[length]", "vertical_load")
     p = lateral_thrust.to("kN/m").magnitude
     v = vertical_load.to("kN/m").magnitude
-    if p <= 0 or v <= 0:
-        raise ValueError("lateral_thrust and vertical_load must be positive")
+    for subject, magnitude in (("lateral_thrust", p), ("vertical_load", v)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "lateral_thrust and vertical_load must be positive",
+                subject=subject,
+                source=_LOAD_SOURCE,
+            )
     if base_friction_coefficient <= 0:
-        raise ValueError("base_friction_coefficient must be positive")
+        raise _geotechnical_refusal(
+            "base_friction_coefficient must be positive",
+            subject="base_friction_coefficient",
+            source=_SOIL_SOURCE,
+        )
     resisting = base_friction_coefficient * v
     if passive_resistance is not None:
         _require(passive_resistance, "[force]/[length]", "passive_resistance")
         p_p = passive_resistance.to("kN/m").magnitude
         if p_p < 0:
-            raise ValueError("passive_resistance must be non-negative")
+            raise _geotechnical_refusal(
+                "passive_resistance must be non-negative",
+                subject="passive_resistance",
+                source=_LOAD_SOURCE,
+            )
         resisting += p_p
     return resisting / p
 
@@ -812,12 +1049,23 @@ def eccentric_base_pressure(
     v = vertical_load.to("kN/m").magnitude
     b = base_width.to("m").magnitude
     e = eccentricity.to("m").magnitude
-    if v <= 0 or b <= 0:
-        raise ValueError("vertical_load and base_width must be positive")
+    for subject, magnitude in (("vertical_load", v), ("base_width", b)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "vertical_load and base_width must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     if e < 0:
-        raise ValueError("eccentricity must be non-negative")
+        raise _geotechnical_refusal(
+            "eccentricity must be non-negative", subject="eccentricity", source=_GEOMETRY_SOURCE
+        )
     if e >= b / 2.0:
-        raise ValueError("eccentricity must be less than half the base width (resultant off base)")
+        raise _geotechnical_refusal(
+            "eccentricity must be less than half the base width (resultant off base)",
+            subject="eccentricity and base_width",
+            source=_GEOMETRY_SOURCE,
+        )
     if e <= b / 6.0:
         q_max = (v / b) * (1.0 + 6.0 * e / b)
         q_min = (v / b) * (1.0 - 6.0 * e / b)
@@ -854,12 +1102,20 @@ def infinite_slope_factor_of_safety(
     _require(depth, "[length]", "depth")
     _check_friction_angle(friction_angle)
     if not 0.0 < slope_angle < 90.0:
-        raise ValueError(f"slope_angle must be in (0, 90) degrees; got {slope_angle}")
+        raise _geotechnical_refusal(
+            f"slope_angle must be in (0, 90) degrees; got {slope_angle}",
+            subject="slope_angle",
+            source=_GEOMETRY_SOURCE,
+        )
     c = cohesion.to("kPa").magnitude
     gamma = unit_weight.to("kN/m**3").magnitude
     z = depth.to("m").magnitude
     if c < 0 or gamma <= 0 or z <= 0:
-        raise ValueError("cohesion non-negative, unit_weight and depth positive")
+        raise _geotechnical_refusal(
+            "cohesion non-negative, unit_weight and depth positive",
+            subject="cohesion, unit_weight, and depth",
+            source=_SOIL_SOURCE,
+        )
     beta = radians(slope_angle)
     phi = radians(friction_angle)
     u = 0.0
@@ -867,7 +1123,11 @@ def infinite_slope_factor_of_safety(
         _require(pore_pressure, "[pressure]", "pore_pressure")
         u = pore_pressure.to("kPa").magnitude
         if u < 0:
-            raise ValueError("pore_pressure must be non-negative")
+            raise _geotechnical_refusal(
+                "pore_pressure must be non-negative",
+                subject="pore_pressure",
+                source=_GROUNDWATER_SOURCE,
+            )
     # A pore pressure above the total normal stress floats the grains apart: the
     # effective stress is zero, not negative. Left unclamped this returns a NEGATIVE
     # factor of safety (-0.41 for an ordinary 18 kN/m^3 sand at 3 m under a 60 kPa
@@ -904,10 +1164,21 @@ def vertical_stress_increase_2to1(
     b = footing_width.to("m").magnitude
     lo = footing_length.to("m").magnitude
     z = depth.to("m").magnitude
-    if q0 <= 0 or b <= 0 or lo <= 0:
-        raise ValueError("applied_pressure, footing_width, and footing_length must be positive")
+    for subject, magnitude in (
+        ("applied_pressure", q0),
+        ("footing_width", b),
+        ("footing_length", lo),
+    ):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "applied_pressure, footing_width, and footing_length must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     if z < 0:
-        raise ValueError("depth must be non-negative")
+        raise _geotechnical_refusal(
+            "depth must be non-negative", subject="depth", source=_GEOMETRY_SOURCE
+        )
     delta_sigma = q0 * b * lo / ((b + z) * (lo + z))
     return Quantity(magnitude=delta_sigma, unit="kPa")
 
@@ -933,14 +1204,22 @@ def boussinesq_point_load_stress(
     q = point_load.to("kN").magnitude
     z = depth.to("m").magnitude
     if q <= 0:
-        raise ValueError("point_load must be positive")
+        raise _geotechnical_refusal(
+            "point_load must be positive", subject="point_load", source=_LOAD_SOURCE
+        )
     if z <= 0:
-        raise ValueError("depth must be positive")
+        raise _geotechnical_refusal(
+            "depth must be positive", subject="depth", source=_GEOMETRY_SOURCE
+        )
     r = 0.0 if radial_offset is None else radial_offset.to("m").magnitude
     if radial_offset is not None:
         _require(radial_offset, "[length]", "radial_offset")
         if r < 0:
-            raise ValueError("radial_offset must be non-negative")
+            raise _geotechnical_refusal(
+                "radial_offset must be non-negative",
+                subject="radial_offset",
+                source=_GEOMETRY_SOURCE,
+            )
     influence = (1.0 + (r / z) ** 2) ** (-2.5)
     delta_sigma = 3.0 * q / (2.0 * pi * z**2) * influence
     return Quantity(magnitude=delta_sigma, unit="kPa")
@@ -964,10 +1243,19 @@ def darcy_seepage_flow(
     _require(area, "[area]", "area")
     k = permeability.to("m/s").magnitude
     a = area.to("m**2").magnitude
-    if k <= 0 or a <= 0:
-        raise ValueError("permeability and area must be positive")
+    for subject, magnitude in (("permeability", k), ("area", a)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "permeability and area must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     if hydraulic_gradient < 0:
-        raise ValueError("hydraulic_gradient must be non-negative")
+        raise _geotechnical_refusal(
+            "hydraulic_gradient must be non-negative",
+            subject="hydraulic_gradient",
+            source=_GROUNDWATER_SOURCE,
+        )
     return Quantity(magnitude=k * hydraulic_gradient * a, unit="m**3/s")
 
 
@@ -988,11 +1276,19 @@ def seepage_velocity(
     _require(permeability, "[length]/[time]", "permeability")
     k = permeability.to("m/s").magnitude
     if k <= 0:
-        raise ValueError("permeability must be positive")
+        raise _geotechnical_refusal(
+            "permeability must be positive", subject="permeability", source=_SOIL_SOURCE
+        )
     if hydraulic_gradient < 0:
-        raise ValueError("hydraulic_gradient must be non-negative")
+        raise _geotechnical_refusal(
+            "hydraulic_gradient must be non-negative",
+            subject="hydraulic_gradient",
+            source=_GROUNDWATER_SOURCE,
+        )
     if not 0.0 < porosity < 1.0:
-        raise ValueError(f"porosity must be in (0, 1); got {porosity}")
+        raise _geotechnical_refusal(
+            f"porosity must be in (0, 1); got {porosity}", subject="porosity", source=_SOIL_SOURCE
+        )
     return Quantity(magnitude=k * hydraulic_gradient / porosity, unit="m/s")
 
 
@@ -1007,9 +1303,17 @@ def critical_hydraulic_gradient(*, specific_gravity: float, void_ratio: float) -
     gradient.
     """
     if specific_gravity <= 1.0:
-        raise ValueError(f"specific_gravity must exceed 1; got {specific_gravity}")
+        raise _geotechnical_refusal(
+            f"specific_gravity must exceed 1; got {specific_gravity}",
+            subject="specific_gravity",
+            source=_SOIL_SOURCE,
+        )
     if void_ratio <= 0:
-        raise ValueError(f"void_ratio must be positive; got {void_ratio}")
+        raise _geotechnical_refusal(
+            f"void_ratio must be positive; got {void_ratio}",
+            subject="void_ratio",
+            source=_SOIL_SOURCE,
+        )
     return (specific_gravity - 1.0) / (1.0 + void_ratio)
 
 
@@ -1023,9 +1327,17 @@ def piping_factor_of_safety(*, critical_gradient: float, exit_gradient: float) -
     cofferdam, a dam foundation) are severe. Returns the dimensionless factor of safety.
     """
     if critical_gradient <= 0:
-        raise ValueError(f"critical_gradient must be positive; got {critical_gradient}")
+        raise _geotechnical_refusal(
+            f"critical_gradient must be positive; got {critical_gradient}",
+            subject="critical_gradient",
+            source=_GROUNDWATER_SOURCE,
+        )
     if exit_gradient <= 0:
-        raise ValueError(f"exit_gradient must be positive; got {exit_gradient}")
+        raise _geotechnical_refusal(
+            f"exit_gradient must be positive; got {exit_gradient}",
+            subject="exit_gradient",
+            source=_GROUNDWATER_SOURCE,
+        )
     return critical_gradient / exit_gradient
 
 
@@ -1055,12 +1367,27 @@ def janssen_silo_pressure(
     gamma = unit_weight.to("kN/m**3").magnitude
     r = hydraulic_radius.to("m").magnitude
     z = depth.to("m").magnitude
-    if gamma <= 0 or r <= 0:
-        raise ValueError("unit_weight and hydraulic_radius must be positive")
+    for subject, magnitude in (("unit_weight", gamma), ("hydraulic_radius", r)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "unit_weight and hydraulic_radius must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     if z < 0:
-        raise ValueError("depth must be non-negative")
-    if wall_friction_coefficient <= 0 or lateral_pressure_ratio <= 0:
-        raise ValueError("wall_friction_coefficient and lateral_pressure_ratio must be positive")
+        raise _geotechnical_refusal(
+            "depth must be non-negative", subject="depth", source=_GEOMETRY_SOURCE
+        )
+    for subject, magnitude in (
+        ("wall_friction_coefficient", wall_friction_coefficient),
+        ("lateral_pressure_ratio", lateral_pressure_ratio),
+    ):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "wall_friction_coefficient and lateral_pressure_ratio must be positive",
+                subject=subject,
+                source=_FACTOR_SOURCE,
+            )
     factor = 2.0 * wall_friction_coefficient * lateral_pressure_ratio / r
     sigma_v = (gamma / factor) * (1.0 - exp(-factor * z))
     return Quantity(magnitude=sigma_v, unit="kPa")
@@ -1089,9 +1416,18 @@ def pile_skin_friction_capacity(
     d = diameter.to("m").magnitude
     lo = length.to("m").magnitude
     if not 0.0 < adhesion_factor <= 1.0:
-        raise ValueError(f"adhesion_factor must be in (0, 1]; got {adhesion_factor}")
-    if cu <= 0 or d <= 0 or lo <= 0:
-        raise ValueError("undrained_shear_strength, diameter, and length must be positive")
+        raise _geotechnical_refusal(
+            f"adhesion_factor must be in (0, 1]; got {adhesion_factor}",
+            subject="adhesion_factor",
+            source=_FACTOR_SOURCE,
+        )
+    for subject, magnitude in (("undrained_shear_strength", cu), ("diameter", d), ("length", lo)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "undrained_shear_strength, diameter, and length must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     q_s = adhesion_factor * cu * pi * d * lo
     return Quantity(magnitude=q_s, unit="kN")
 
@@ -1114,10 +1450,17 @@ def pile_end_bearing_capacity(
     _require(diameter, "[length]", "diameter")
     cu = undrained_shear_strength.to("kPa").magnitude
     d = diameter.to("m").magnitude
-    if cu <= 0 or d <= 0:
-        raise ValueError("undrained_shear_strength and diameter must be positive")
+    for subject, magnitude in (("undrained_shear_strength", cu), ("diameter", d)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "undrained_shear_strength and diameter must be positive",
+                subject=subject,
+                source=_geotechnical_input_source(subject),
+            )
     if bearing_factor <= 0:
-        raise ValueError("bearing_factor must be positive")
+        raise _geotechnical_refusal(
+            "bearing_factor must be positive", subject="bearing_factor", source=_FACTOR_SOURCE
+        )
     area = pi * d**2 / 4.0
     q_p = bearing_factor * cu * area
     return Quantity(magnitude=q_p, unit="kN")
@@ -1141,10 +1484,19 @@ def pile_allowable_capacity(
     _require(end_bearing, "[force]", "end_bearing")
     q_s = skin_friction.to("kN").magnitude
     q_p = end_bearing.to("kN").magnitude
-    if q_s <= 0 or q_p <= 0:
-        raise ValueError("skin_friction and end_bearing must be positive")
+    for subject, magnitude in (("skin_friction", q_s), ("end_bearing", q_p)):
+        if magnitude <= 0:
+            raise _geotechnical_refusal(
+                "skin_friction and end_bearing must be positive",
+                subject=subject,
+                source=_LOAD_SOURCE,
+            )
     if factor_of_safety <= 0:
-        raise ValueError("factor_of_safety must be positive")
+        raise _geotechnical_refusal(
+            "factor_of_safety must be positive",
+            subject="factor_of_safety",
+            source=_CRITERION_SOURCE,
+        )
     return Quantity(magnitude=(q_s + q_p) / factor_of_safety, unit="kN")
 
 
@@ -1170,13 +1522,26 @@ def pile_group_efficiency(
     d = pile_diameter.to("m").magnitude
     s = spacing.to("m").magnitude
     if d <= 0:
-        raise ValueError("pile_diameter must be positive")
+        raise _geotechnical_refusal(
+            "pile_diameter must be positive", subject="pile_diameter", source=_GEOMETRY_SOURCE
+        )
     if s <= 0:
-        raise ValueError("spacing must be positive")
-    if rows < 1 or columns < 1:
-        raise ValueError("rows and columns must be positive integers")
+        raise _geotechnical_refusal(
+            "spacing must be positive", subject="spacing", source=_GEOMETRY_SOURCE
+        )
+    for subject, magnitude in (("rows", rows), ("columns", columns)):
+        if magnitude < 1:
+            raise _geotechnical_refusal(
+                "rows and columns must be positive integers",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if rows == 1 and columns == 1:
-        raise ValueError("a group needs more than one pile (rows and columns not both 1)")
+        raise _geotechnical_refusal(
+            "a group needs more than one pile (rows and columns not both 1)",
+            subject="rows and columns",
+            source=_GEOMETRY_SOURCE,
+        )
     theta = degrees(atan(d / s))
     m = rows
     n = columns

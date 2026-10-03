@@ -29,8 +29,44 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_DUTY_SOURCE = "the machine duty cycle (speed range and energy fluctuation per cycle)"
+_GEOMETRY_SOURCE = "the flywheel drawing and its mass properties (radii and inertia)"
+_MATERIAL_SOURCE = "the rim material datasheet (density, modulus, and Poisson's ratio)"
+_ALLOWABLE_SOURCE = "the design code allowable hoop stress for the rim material"
+
+
+class _FlywheelInputError(RefusalError, ValueError):
+    """A flywheel input that cannot be used without correction."""
+
+
+def _flywheel_refusal(message: str, *, subject: str, source: str) -> _FlywheelInputError:
+    return _FlywheelInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _flywheel_input_source(name: str) -> str:
+    if name in {
+        "coefficient_of_fluctuation",
+        "energy_fluctuation",
+        "max_speed",
+        "mean_speed",
+        "min_speed",
+        "rotational_speed",
+        "speed",
+    }:
+        return _DUTY_SOURCE
+    if name in {"density", "elastic_modulus", "poisson"}:
+        return _MATERIAL_SOURCE
+    if name == "allowable_stress":
+        return _ALLOWABLE_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "coefficient_of_fluctuation",
@@ -52,10 +88,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _flywheel_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_flywheel_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _flywheel_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_flywheel_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -79,10 +121,14 @@ def coefficient_of_fluctuation(*, max_speed: Quantity, min_speed: Quantity) -> f
     wmax = angular_speed_rad_per_s(max_speed, name="max_speed")
     wmin = angular_speed_rad_per_s(min_speed, name="min_speed")
     if wmin <= 0:
-        raise ValueError(f"min_speed must be positive; got {min_speed}")
+        raise _flywheel_refusal(
+            f"min_speed must be positive; got {min_speed}", subject="min_speed", source=_DUTY_SOURCE
+        )
     if wmax <= wmin:
-        raise ValueError(
-            f"max_speed ({max_speed}) must exceed min_speed ({min_speed}) for a speed ripple"
+        raise _flywheel_refusal(
+            f"max_speed ({max_speed}) must exceed min_speed ({min_speed}) for a speed ripple",
+            subject="max_speed and min_speed",
+            source=_DUTY_SOURCE,
         )
     return (wmax - wmin) / ((wmax + wmin) / 2.0)
 
@@ -103,7 +149,9 @@ def flywheel_stored_energy(*, inertia: Quantity, speed: Quantity) -> Quantity:
     i = inertia.to("kg*m**2").magnitude
     omega = angular_speed_rad_per_s(speed, name="speed")
     if omega <= 0:
-        raise ValueError(f"speed must be positive; got {speed}")
+        raise _flywheel_refusal(
+            f"speed must be positive; got {speed}", subject="speed", source=_DUTY_SOURCE
+        )
     return Quantity(magnitude=0.5 * i * omega**2, unit="J")
 
 
@@ -125,13 +173,19 @@ def flywheel_energy_fluctuation(
     _require(inertia, "[mass] * [length]**2", "inertia")
     _require(mean_speed, "[frequency]", "mean_speed")
     if coefficient_of_fluctuation <= 0:
-        raise ValueError(
-            f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}"
+        raise _flywheel_refusal(
+            f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}",
+            subject="coefficient_of_fluctuation",
+            source=_DUTY_SOURCE,
         )
     i = inertia.to("kg*m**2").magnitude
     omega = angular_speed_rad_per_s(mean_speed, name="mean_speed")
     if omega <= 0:
-        raise ValueError(f"mean_speed must be positive; got {mean_speed}")
+        raise _flywheel_refusal(
+            f"mean_speed must be positive; got {mean_speed}",
+            subject="mean_speed",
+            source=_DUTY_SOURCE,
+        )
     return Quantity(magnitude=i * omega**2 * coefficient_of_fluctuation, unit="J")
 
 
@@ -154,13 +208,19 @@ def flywheel_inertia_for_fluctuation(
     _require(energy_fluctuation, "[energy]", "energy_fluctuation")
     _require(mean_speed, "[frequency]", "mean_speed")
     if coefficient_of_fluctuation <= 0:
-        raise ValueError(
-            f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}"
+        raise _flywheel_refusal(
+            f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}",
+            subject="coefficient_of_fluctuation",
+            source=_DUTY_SOURCE,
         )
     de = energy_fluctuation.to("J").magnitude
     omega = angular_speed_rad_per_s(mean_speed, name="mean_speed")
     if omega <= 0:
-        raise ValueError(f"mean_speed must be positive; got {mean_speed}")
+        raise _flywheel_refusal(
+            f"mean_speed must be positive; got {mean_speed}",
+            subject="mean_speed",
+            source=_DUTY_SOURCE,
+        )
     inertia = de / (omega**2 * coefficient_of_fluctuation)
     return Quantity(magnitude=inertia, unit="kg*m**2")
 
@@ -182,10 +242,16 @@ def rim_flywheel_mass(*, inertia: Quantity, mean_radius: Quantity) -> Quantity:
     _require(mean_radius, "[length]", "mean_radius")
     r = mean_radius.to("m").magnitude
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _flywheel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     i = inertia.to("kg*m**2").magnitude
     if i <= 0:
-        raise ValueError(f"inertia must be positive; got {inertia}")
+        raise _flywheel_refusal(
+            f"inertia must be positive; got {inertia}", subject="inertia", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=i / r**2, unit="kg")
 
 
@@ -205,16 +271,26 @@ def rotating_rim_hoop_stress(
     """
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(mean_radius, "[length]", "mean_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     rho = density.to("kg/m**3").magnitude
     r = mean_radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _flywheel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     v = omega * r
     return Quantity(magnitude=rho * v**2 / 1e6, unit="MPa")
 
@@ -239,9 +315,17 @@ def rotating_rim_burst_speed(
     rho = density.to("kg/m**3").magnitude
     r = mean_radius.to("m").magnitude
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _flywheel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _flywheel_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_ALLOWABLE_SOURCE,
+        )
     omega = sqrt(sigma / rho) / r  # rad/s
     return Quantity(magnitude=omega, unit="rad/s").to("rpm")
 
@@ -266,7 +350,9 @@ def rotating_rim_radial_growth(
     """
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(mean_radius, "[length]", "mean_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
@@ -275,11 +361,23 @@ def rotating_rim_radial_growth(
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     e = elastic_modulus.to("Pa").magnitude
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _flywheel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _flywheel_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     growth = rho * omega**2 * r**3 / e  # metres
     return Quantity(magnitude=growth * 1000.0, unit="mm")
 
@@ -306,18 +404,32 @@ def rotating_solid_disc_max_stress(
     """
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(outer_radius, "[length]", "outer_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _flywheel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     rho = density.to("kg/m**3").magnitude
     r = outer_radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if r <= 0:
-        raise ValueError(f"outer_radius must be positive; got {outer_radius}")
+        raise _flywheel_refusal(
+            f"outer_radius must be positive; got {outer_radius}",
+            subject="outer_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     sigma = (3.0 + poisson) / 8.0 * rho * (omega * r) ** 2
     return Quantity(magnitude=sigma / 1e6, unit="MPa")
 
@@ -332,23 +444,39 @@ def _rotating_disc_inputs(
     """Validate a rotating solid disc and return (rho, R, r, omega) in SI."""
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(outer_radius, "[length]", "outer_radius")
     _require(radius, "[length]", "radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _flywheel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     rho = density.to("kg/m**3").magnitude
     big_r = outer_radius.to("m").magnitude
     r = radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if big_r <= 0:
-        raise ValueError(f"outer_radius must be positive; got {outer_radius}")
+        raise _flywheel_refusal(
+            f"outer_radius must be positive; got {outer_radius}",
+            subject="outer_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     if not 0 <= r <= big_r:
-        raise ValueError(
-            f"radius ({radius}) must be between 0 and the outer_radius ({outer_radius})"
+        raise _flywheel_refusal(
+            f"radius ({radius}) must be between 0 and the outer_radius ({outer_radius})",
+            subject="radius and outer_radius",
+            source=_GEOMETRY_SOURCE,
         )
     return rho, big_r, r, omega
 
@@ -432,22 +560,40 @@ def rotating_annular_disc_bore_stress(
     """
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(outer_radius, "[length]", "outer_radius")
     _require(inner_radius, "[length]", "inner_radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _flywheel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     rho = density.to("kg/m**3").magnitude
     ro = outer_radius.to("m").magnitude
     ri = inner_radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if ri <= 0:
-        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+        raise _flywheel_refusal(
+            f"inner_radius must be positive; got {inner_radius}",
+            subject="inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if ro <= ri:
-        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+        raise _flywheel_refusal(
+            f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})",
+            subject="outer_radius and inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     sigma = rho * omega**2 / 4.0 * ((3.0 + poisson) * ro**2 + (1.0 - poisson) * ri**2)
     return Quantity(magnitude=sigma / 1e6, unit="MPa")
 
@@ -463,28 +609,48 @@ def _annular_disc_inputs(
     """Validate a rotating annular disc and return (rho, ro, ri, r, omega) in SI."""
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     _require(outer_radius, "[length]", "outer_radius")
     _require(inner_radius, "[length]", "inner_radius")
     _require(radius, "[length]", "radius")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _flywheel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     rho = density.to("kg/m**3").magnitude
     ro = outer_radius.to("m").magnitude
     ri = inner_radius.to("m").magnitude
     r = radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if ri <= 0:
-        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+        raise _flywheel_refusal(
+            f"inner_radius must be positive; got {inner_radius}",
+            subject="inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if ro <= ri:
-        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+        raise _flywheel_refusal(
+            f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})",
+            subject="outer_radius and inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _flywheel_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_DUTY_SOURCE,
+        )
     if not ri <= r <= ro:
-        raise ValueError(
+        raise _flywheel_refusal(
             f"radius ({radius}) must lie between the inner and outer radii "
-            f"({inner_radius}, {outer_radius})"
+            f"({inner_radius}, {outer_radius})",
+            subject="radius, inner_radius, and outer_radius",
+            source=_GEOMETRY_SOURCE,
         )
     return rho, ro, ri, r, omega
 

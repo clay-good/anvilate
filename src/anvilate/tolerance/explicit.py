@@ -19,8 +19,25 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from .._models import Provenance, StatableModel
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_dimension
 from .iso286 import zone_limits
+
+_DRAWING_SOURCE = "the drawing's tolerance callout for the dimension"
+
+
+class _ExplicitToleranceError(RefusalError, ValueError):
+    """An explicit tolerance that cannot be used without correction."""
+
+
+def _explicit_tolerance_refusal(
+    message: str, *, subject: str, source: str
+) -> _ExplicitToleranceError:
+    return _ExplicitToleranceError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "ResolvedTolerance",
@@ -97,7 +114,11 @@ class SymmetricTolerance(_Base):
     @model_validator(mode="after")
     def _non_negative(self) -> SymmetricTolerance:
         if self.plus_minus.to("mm").magnitude < 0:
-            raise ValueError(f"a symmetric ± tolerance must be non-negative; got {self.plus_minus}")
+            raise _explicit_tolerance_refusal(
+                f"a symmetric ± tolerance must be non-negative; got {self.plus_minus}",
+                subject="plus_minus",
+                source=_DRAWING_SOURCE,
+            )
         return self
 
     def resolve(self, nominal: Quantity) -> ResolvedTolerance:
@@ -121,8 +142,10 @@ class LimitTolerance(_Base):
     @model_validator(mode="after")
     def _ordered(self) -> LimitTolerance:
         if self.upper.to("mm").magnitude < self.lower.to("mm").magnitude:
-            raise ValueError(
-                f"upper deviation {self.upper} must be at least the lower deviation {self.lower}"
+            raise _explicit_tolerance_refusal(
+                f"upper deviation {self.upper} must be at least the lower deviation {self.lower}",
+                subject="upper and lower",
+                source=_DRAWING_SOURCE,
             )
         return self
 

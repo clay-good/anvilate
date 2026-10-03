@@ -26,8 +26,35 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_MODULE_SOURCE = "the thermoelectric module manufacturer's datasheet properties"
+_OPERATING_SOURCE = "the module's hot- and cold-side temperatures from the operating case"
+_DRIVE_SOURCE = "the drive current from the power supply operating case"
+
+
+class _ThermoelectricInputError(RefusalError, ValueError):
+    """A thermoelectric input that cannot be used without correction."""
+
+
+def _thermoelectric_refusal(
+    message: str, *, subject: str, source: str
+) -> _ThermoelectricInputError:
+    return _ThermoelectricInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _thermoelectric_input_source(name: str) -> str:
+    if name in {"cold_temperature", "hot_temperature", "temperature", "temperature_difference"}:
+        return _OPERATING_SOURCE
+    if name == "current":
+        return _DRIVE_SOURCE
+    return _MODULE_SOURCE
+
 
 __all__ = [
     "peltier_cooling_rate",
@@ -53,9 +80,17 @@ def seebeck_voltage(*, seebeck_coefficient: Quantity, temperature_difference: Qu
     alpha = seebeck_coefficient.to("V/K").magnitude
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if alpha <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _thermoelectric_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_MODULE_SOURCE,
+        )
     if dt <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _thermoelectric_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=alpha * dt, unit="V")
 
 
@@ -91,17 +126,39 @@ def peltier_cooling_rate(
     k = thermal_conductance.to("W/K").magnitude
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if alpha <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _thermoelectric_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_MODULE_SOURCE,
+        )
     if i <= 0:
-        raise ValueError("current must be positive")
+        raise _thermoelectric_refusal(
+            "current must be positive", subject="current", source=_DRIVE_SOURCE
+        )
     if t_c <= 0:
-        raise ValueError("cold_temperature must be positive (absolute, in K)")
+        raise _thermoelectric_refusal(
+            "cold_temperature must be positive (absolute, in K)",
+            subject="cold_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("electrical_resistance must be positive")
+        raise _thermoelectric_refusal(
+            "electrical_resistance must be positive",
+            subject="electrical_resistance",
+            source=_MODULE_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("thermal_conductance must be positive")
+        raise _thermoelectric_refusal(
+            "thermal_conductance must be positive",
+            subject="thermal_conductance",
+            source=_MODULE_SOURCE,
+        )
     if dt < 0:
-        raise ValueError("temperature_difference must be non-negative")
+        raise _thermoelectric_refusal(
+            "temperature_difference must be non-negative",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     q_c = alpha * i * t_c - 0.5 * i * i * r - k * dt
     return Quantity(magnitude=q_c, unit="W")
 
@@ -129,11 +186,23 @@ def thermoelectric_figure_of_merit(
     r = electrical_resistance.to("ohm").magnitude
     k = thermal_conductance.to("W/K").magnitude
     if alpha <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _thermoelectric_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_MODULE_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("electrical_resistance must be positive")
+        raise _thermoelectric_refusal(
+            "electrical_resistance must be positive",
+            subject="electrical_resistance",
+            source=_MODULE_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("thermal_conductance must be positive")
+        raise _thermoelectric_refusal(
+            "thermal_conductance must be positive",
+            subject="thermal_conductance",
+            source=_MODULE_SOURCE,
+        )
     return Quantity(magnitude=alpha * alpha / (r * k), unit="1/K")
 
 
@@ -152,9 +221,15 @@ def thermoelectric_zt(*, figure_of_merit: Quantity, temperature: Quantity) -> fl
     z = figure_of_merit.to("1/K").magnitude
     t = temperature.to("K").magnitude
     if z < 0:
-        raise ValueError("figure_of_merit must be non-negative")
+        raise _thermoelectric_refusal(
+            "figure_of_merit must be non-negative", subject="figure_of_merit", source=_MODULE_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute, in K)")
+        raise _thermoelectric_refusal(
+            "temperature must be positive (absolute, in K)",
+            subject="temperature",
+            source=_OPERATING_SOURCE,
+        )
     return z * t
 
 
@@ -183,13 +258,29 @@ def thermoelectric_max_temperature_difference(
     k = thermal_conductance.to("W/K").magnitude
     t_c = cold_temperature.to("K").magnitude
     if alpha <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _thermoelectric_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_MODULE_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("electrical_resistance must be positive")
+        raise _thermoelectric_refusal(
+            "electrical_resistance must be positive",
+            subject="electrical_resistance",
+            source=_MODULE_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("thermal_conductance must be positive")
+        raise _thermoelectric_refusal(
+            "thermal_conductance must be positive",
+            subject="thermal_conductance",
+            source=_MODULE_SOURCE,
+        )
     if t_c <= 0:
-        raise ValueError("cold_temperature must be positive (absolute, in K)")
+        raise _thermoelectric_refusal(
+            "cold_temperature must be positive (absolute, in K)",
+            subject="cold_temperature",
+            source=_OPERATING_SOURCE,
+        )
     z = alpha * alpha / (r * k)
     return Quantity(magnitude=0.5 * z * t_c * t_c, unit="K")
 
@@ -221,11 +312,21 @@ def thermoelectric_max_efficiency(
     t_c = cold_temperature.to("K").magnitude
     t_h = hot_temperature.to("K").magnitude
     if z < 0:
-        raise ValueError("figure_of_merit must be non-negative")
+        raise _thermoelectric_refusal(
+            "figure_of_merit must be non-negative", subject="figure_of_merit", source=_MODULE_SOURCE
+        )
     if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive (absolute, in K)")
+        raise _thermoelectric_refusal(
+            "temperatures must be positive (absolute, in K)",
+            subject="cold_temperature and hot_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature to generate power")
+        raise _thermoelectric_refusal(
+            "hot_temperature must exceed cold_temperature to generate power",
+            subject="cold_temperature and hot_temperature",
+            source=_OPERATING_SOURCE,
+        )
     m = sqrt(1.0 + z * 0.5 * (t_h + t_c))
     return (t_h - t_c) / t_h * (m - 1.0) / (m + t_c / t_h)
 
@@ -253,27 +354,45 @@ def thermoelectric_max_cop(
     t_c = cold_temperature.to("K").magnitude
     t_h = hot_temperature.to("K").magnitude
     if z < 0:
-        raise ValueError("figure_of_merit must be non-negative")
+        raise _thermoelectric_refusal(
+            "figure_of_merit must be non-negative", subject="figure_of_merit", source=_MODULE_SOURCE
+        )
     if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive (absolute, in K)")
+        raise _thermoelectric_refusal(
+            "temperatures must be positive (absolute, in K)",
+            subject="cold_temperature and hot_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature for cooling")
+        raise _thermoelectric_refusal(
+            "hot_temperature must exceed cold_temperature for cooling",
+            subject="cold_temperature and hot_temperature",
+            source=_OPERATING_SOURCE,
+        )
     t_m = 0.5 * (t_h + t_c)
     m = sqrt(1.0 + z * t_m)
     if m <= t_h / t_c:
-        raise ValueError(
+        raise _thermoelectric_refusal(
             "figure_of_merit is too low to pump heat across this temperature difference "
-            "(COP would be non-positive)"
+            "(COP would be non-positive)",
+            subject="figure_of_merit, cold_temperature, and hot_temperature",
+            source=_MODULE_SOURCE,
         )
     return (t_c / (t_h - t_c)) * (m - t_h / t_c) / (m + 1.0)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _thermoelectric_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_thermoelectric_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _thermoelectric_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_thermoelectric_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

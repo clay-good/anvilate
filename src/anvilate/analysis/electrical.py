@@ -25,8 +25,71 @@ from __future__ import annotations
 
 from math import acos, log, pi, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second, revolutions_per_minute
+
+_SYSTEM_SOURCE = "the one-line diagram's system voltage, frequency, and load schedule"
+_NAMEPLATE_SOURCE = "the motor or transformer nameplate and factory test report"
+_CABLE_SOURCE = "the cable schedule and the conductor manufacturer's datasheet"
+_CODE_SOURCE = "the NEC article or table that sets the sizing factor"
+_GROUND_SOURCE = "the site soil resistivity test record and the grounding plan drawing"
+
+
+class _ElectricalInputError(RefusalError, ValueError):
+    """An electrical power-distribution input that cannot be used without correction."""
+
+
+def _electrical_refusal(message: str, *, subject: str, source: str) -> _ElectricalInputError:
+    return _ElectricalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _electrical_input_source(name: str) -> str:
+    if name in {
+        "apparent_power",
+        "code_kva_per_hp",
+        "copper_loss",
+        "core_loss",
+        "efficiency",
+        "full_load_current",
+        "full_load_voltage",
+        "impedance_percent",
+        "no_load_voltage",
+        "output_power",
+        "poles",
+        "rated_copper_loss",
+        "rated_power",
+        "rotor_speed",
+        "slip",
+        "synchronous_speed",
+        "turns_ratio",
+    }:
+        return _NAMEPLATE_SOURCE
+    if name in {
+        "cross_section_area",
+        "length",
+        "reactance",
+        "relative_permeability",
+        "resistance",
+        "resistivity",
+    }:
+        return _CABLE_SOURCE
+    if name == "sizing_factor":
+        return _CODE_SOURCE
+    if name in {
+        "arrangement_efficiency",
+        "rod_count",
+        "rod_length",
+        "rod_radius",
+        "single_rod_resistance",
+        "soil_resistivity",
+    }:
+        return _GROUND_SOURCE
+    return _SYSTEM_SOURCE
+
 
 __all__ = [
     "apparent_power_three_phase",
@@ -76,10 +139,19 @@ def three_phase_power(
     _check(line_current, "[current]", "line_current")
     v = line_voltage.to("V").magnitude
     i = line_current.to("A").magnitude
-    if v <= 0 or i <= 0:
-        raise ValueError("line_voltage and line_current must be positive")
+    for subject, magnitude in (("line_voltage", v), ("line_current", i)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "line_voltage and line_current must be positive",
+                subject=subject,
+                source=_SYSTEM_SOURCE,
+            )
     if not 0.0 < power_factor <= 1.0:
-        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+        raise _electrical_refusal(
+            f"power_factor must be in (0, 1]; got {power_factor}",
+            subject="power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     return Quantity(magnitude=_SQRT3 * v * i * power_factor / 1000.0, unit="kW")
 
 
@@ -100,10 +172,19 @@ def line_current_for_power(
     _check(line_voltage, "[electric_potential]", "line_voltage")
     p = real_power.to("W").magnitude
     v = line_voltage.to("V").magnitude
-    if p <= 0 or v <= 0:
-        raise ValueError("real_power and line_voltage must be positive")
+    for subject, magnitude in (("real_power", p), ("line_voltage", v)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "real_power and line_voltage must be positive",
+                subject=subject,
+                source=_SYSTEM_SOURCE,
+            )
     if not 0.0 < power_factor <= 1.0:
-        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+        raise _electrical_refusal(
+            f"power_factor must be in (0, 1]; got {power_factor}",
+            subject="power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     return Quantity(magnitude=p / (_SQRT3 * v * power_factor), unit="A")
 
 
@@ -129,12 +210,25 @@ def motor_full_load_current(
     _check(line_voltage, "[electric_potential]", "line_voltage")
     p = output_power.to("W").magnitude
     v = line_voltage.to("V").magnitude
-    if p <= 0 or v <= 0:
-        raise ValueError("output_power and line_voltage must be positive")
+    for subject, magnitude in (("output_power", p), ("line_voltage", v)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "output_power and line_voltage must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     if not 0.0 < power_factor <= 1.0:
-        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+        raise _electrical_refusal(
+            f"power_factor must be in (0, 1]; got {power_factor}",
+            subject="power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+        raise _electrical_refusal(
+            f"efficiency must be in (0, 1]; got {efficiency}",
+            subject="efficiency",
+            source=_NAMEPLATE_SOURCE,
+        )
     return Quantity(magnitude=p / (_SQRT3 * v * power_factor * efficiency), unit="A")
 
 
@@ -150,9 +244,15 @@ def motor_synchronous_speed(*, line_frequency: Quantity, poles: int) -> Quantity
     _check(line_frequency, "1/[time]", "line_frequency")
     f = count_rate_per_second(line_frequency, name="line_frequency")
     if f <= 0:
-        raise ValueError("line_frequency must be positive")
+        raise _electrical_refusal(
+            "line_frequency must be positive", subject="line_frequency", source=_SYSTEM_SOURCE
+        )
     if poles <= 0 or poles % 2 != 0:
-        raise ValueError(f"poles must be a positive even integer; got {poles}")
+        raise _electrical_refusal(
+            f"poles must be a positive even integer; got {poles}",
+            subject="poles",
+            source=_NAMEPLATE_SOURCE,
+        )
     return Quantity(magnitude=120.0 * f / poles, unit="rpm")
 
 
@@ -170,11 +270,21 @@ def motor_slip(*, synchronous_speed: Quantity, rotor_speed: Quantity) -> float:
     ns = revolutions_per_minute(synchronous_speed, name="synchronous_speed")
     n = revolutions_per_minute(rotor_speed, name="rotor_speed")
     if ns <= 0:
-        raise ValueError("synchronous_speed must be positive")
+        raise _electrical_refusal(
+            "synchronous_speed must be positive",
+            subject="synchronous_speed",
+            source=_NAMEPLATE_SOURCE,
+        )
     if n < 0:
-        raise ValueError("rotor_speed must be non-negative")
+        raise _electrical_refusal(
+            "rotor_speed must be non-negative", subject="rotor_speed", source=_NAMEPLATE_SOURCE
+        )
     if n > ns:
-        raise ValueError("rotor_speed cannot exceed synchronous_speed for a motor")
+        raise _electrical_refusal(
+            "rotor_speed cannot exceed synchronous_speed for a motor",
+            subject="synchronous_speed and rotor_speed",
+            source=_NAMEPLATE_SOURCE,
+        )
     return (ns - n) / ns
 
 
@@ -190,10 +300,14 @@ def motor_slip_frequency(*, slip: float, line_frequency: Quantity) -> Quantity:
     """
     _check(line_frequency, "1/[time]", "line_frequency")
     if not 0.0 <= slip <= 1.0:
-        raise ValueError(f"slip must be in [0, 1]; got {slip}")
+        raise _electrical_refusal(
+            f"slip must be in [0, 1]; got {slip}", subject="slip", source=_NAMEPLATE_SOURCE
+        )
     f = count_rate_per_second(line_frequency, name="line_frequency")
     if f <= 0:
-        raise ValueError("line_frequency must be positive")
+        raise _electrical_refusal(
+            "line_frequency must be positive", subject="line_frequency", source=_SYSTEM_SOURCE
+        )
     return Quantity(magnitude=slip * f, unit="Hz")
 
 
@@ -218,10 +332,17 @@ def motor_locked_rotor_current(
     _check(line_voltage, "[electric_potential]", "line_voltage")
     hp = rated_power.to("hp").magnitude
     v = line_voltage.to("V").magnitude
-    if hp <= 0 or v <= 0:
-        raise ValueError("rated_power and line_voltage must be positive")
+    for subject, magnitude in (("rated_power", hp), ("line_voltage", v)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "rated_power and line_voltage must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     if code_kva_per_hp <= 0:
-        raise ValueError("code_kva_per_hp must be positive")
+        raise _electrical_refusal(
+            "code_kva_per_hp must be positive", subject="code_kva_per_hp", source=_NAMEPLATE_SOURCE
+        )
     return Quantity(magnitude=code_kva_per_hp * hp * 1000.0 / (_SQRT3 * v), unit="A")
 
 
@@ -240,9 +361,15 @@ def motor_branch_circuit_ampacity(
     _check(full_load_current, "[current]", "full_load_current")
     i = full_load_current.to("A").magnitude
     if i <= 0:
-        raise ValueError("full_load_current must be positive")
+        raise _electrical_refusal(
+            "full_load_current must be positive",
+            subject="full_load_current",
+            source=_NAMEPLATE_SOURCE,
+        )
     if sizing_factor < 1.0:
-        raise ValueError("sizing_factor must be at least 1.0")
+        raise _electrical_refusal(
+            "sizing_factor must be at least 1.0", subject="sizing_factor", source=_CODE_SOURCE
+        )
     return Quantity(magnitude=i * sizing_factor, unit="A")
 
 
@@ -265,8 +392,13 @@ def conductor_resistance(
     rho = resistivity.to("ohm*m").magnitude
     lo = length.to("m").magnitude
     a = cross_section_area.to("m**2").magnitude
-    if rho <= 0 or lo <= 0 or a <= 0:
-        raise ValueError("resistivity, length, and cross_section_area must be positive")
+    for subject, magnitude in (("resistivity", rho), ("length", lo), ("cross_section_area", a)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "resistivity, length, and cross_section_area must be positive",
+                subject=subject,
+                source=_CABLE_SOURCE,
+            )
     return Quantity(magnitude=rho * lo / a, unit="ohm")
 
 
@@ -289,16 +421,27 @@ def voltage_drop_three_phase(
     _check(resistance, "[resistance]", "resistance")
     i = line_current.to("A").magnitude
     r = resistance.to("ohm").magnitude
-    if i <= 0 or r <= 0:
-        raise ValueError("line_current and resistance must be positive")
+    for subject, magnitude in (("line_current", i), ("resistance", r)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "line_current and resistance must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     if not 0.0 < power_factor <= 1.0:
-        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+        raise _electrical_refusal(
+            f"power_factor must be in (0, 1]; got {power_factor}",
+            subject="power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     x = 0.0
     if reactance is not None:
         _check(reactance, "[resistance]", "reactance")
         x = reactance.to("ohm").magnitude
         if x < 0:
-            raise ValueError("reactance must be non-negative")
+            raise _electrical_refusal(
+                "reactance must be non-negative", subject="reactance", source=_CABLE_SOURCE
+            )
     cos_phi = power_factor
     sin_phi = sqrt(max(0.0, 1.0 - power_factor**2))
     return Quantity(magnitude=_SQRT3 * i * (r * cos_phi + x * sin_phi), unit="V")
@@ -325,16 +468,27 @@ def voltage_drop_single_phase(
     _check(resistance, "[resistance]", "resistance")
     i = load_current.to("A").magnitude
     r = resistance.to("ohm").magnitude
-    if i <= 0 or r <= 0:
-        raise ValueError("load_current and resistance must be positive")
+    for subject, magnitude in (("load_current", i), ("resistance", r)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "load_current and resistance must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     if not 0.0 < power_factor <= 1.0:
-        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+        raise _electrical_refusal(
+            f"power_factor must be in (0, 1]; got {power_factor}",
+            subject="power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     x = 0.0
     if reactance is not None:
         _check(reactance, "[resistance]", "reactance")
         x = reactance.to("ohm").magnitude
         if x < 0:
-            raise ValueError("reactance must be non-negative")
+            raise _electrical_refusal(
+                "reactance must be non-negative", subject="reactance", source=_CABLE_SOURCE
+            )
     cos_phi = power_factor
     sin_phi = sqrt(max(0.0, 1.0 - power_factor**2))
     return Quantity(magnitude=2.0 * i * (r * cos_phi + x * sin_phi), unit="V")
@@ -353,8 +507,13 @@ def apparent_power_three_phase(*, line_voltage: Quantity, line_current: Quantity
     _check(line_current, "[current]", "line_current")
     v = line_voltage.to("V").magnitude
     i = line_current.to("A").magnitude
-    if v <= 0 or i <= 0:
-        raise ValueError("line_voltage and line_current must be positive")
+    for subject, magnitude in (("line_voltage", v), ("line_current", i)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "line_voltage and line_current must be positive",
+                subject=subject,
+                source=_SYSTEM_SOURCE,
+            )
     return Quantity(magnitude=_SQRT3 * v * i / 1000.0, unit="kVA")
 
 
@@ -376,13 +535,27 @@ def power_factor_correction_kvar(
     _check(real_power, "[power]", "real_power")
     p = real_power.to("kW").magnitude
     if p <= 0:
-        raise ValueError("real_power must be positive")
+        raise _electrical_refusal(
+            "real_power must be positive", subject="real_power", source=_SYSTEM_SOURCE
+        )
     if not 0.0 < initial_power_factor <= 1.0:
-        raise ValueError(f"initial_power_factor must be in (0, 1]; got {initial_power_factor}")
+        raise _electrical_refusal(
+            f"initial_power_factor must be in (0, 1]; got {initial_power_factor}",
+            subject="initial_power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     if not 0.0 < target_power_factor <= 1.0:
-        raise ValueError(f"target_power_factor must be in (0, 1]; got {target_power_factor}")
+        raise _electrical_refusal(
+            f"target_power_factor must be in (0, 1]; got {target_power_factor}",
+            subject="target_power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     if target_power_factor <= initial_power_factor:
-        raise ValueError("target_power_factor must exceed initial_power_factor (correcting upward)")
+        raise _electrical_refusal(
+            "target_power_factor must exceed initial_power_factor (correcting upward)",
+            subject="initial_power_factor and target_power_factor",
+            source=_SYSTEM_SOURCE,
+        )
     q_c = p * (tan(acos(initial_power_factor)) - tan(acos(target_power_factor)))
     return Quantity(magnitude=q_c, unit="kVA")
 
@@ -409,11 +582,17 @@ def capacitance_for_reactive_power(
     v = voltage.to("V").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if q_c <= 0:
-        raise ValueError("reactive_power must be positive")
+        raise _electrical_refusal(
+            "reactive_power must be positive", subject="reactive_power", source=_SYSTEM_SOURCE
+        )
     if v <= 0:
-        raise ValueError("voltage must be positive")
+        raise _electrical_refusal(
+            "voltage must be positive", subject="voltage", source=_SYSTEM_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _electrical_refusal(
+            "frequency must be positive", subject="frequency", source=_SYSTEM_SOURCE
+        )
     return Quantity(magnitude=q_c / (2.0 * pi * f * v**2), unit="F")
 
 
@@ -429,8 +608,13 @@ def transformer_full_load_current(*, apparent_power: Quantity, line_voltage: Qua
     _check(line_voltage, "[electric_potential]", "line_voltage")
     s = apparent_power.to("VA").magnitude
     v = line_voltage.to("V").magnitude
-    if s <= 0 or v <= 0:
-        raise ValueError("apparent_power and line_voltage must be positive")
+    for subject, magnitude in (("apparent_power", s), ("line_voltage", v)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "apparent_power and line_voltage must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     return Quantity(magnitude=s / (_SQRT3 * v), unit="A")
 
 
@@ -449,9 +633,17 @@ def transformer_available_fault_current(
     _check(full_load_current, "[current]", "full_load_current")
     i_fla = full_load_current.to("A").magnitude
     if i_fla <= 0:
-        raise ValueError("full_load_current must be positive")
+        raise _electrical_refusal(
+            "full_load_current must be positive",
+            subject="full_load_current",
+            source=_NAMEPLATE_SOURCE,
+        )
     if impedance_percent <= 0:
-        raise ValueError("impedance_percent must be positive")
+        raise _electrical_refusal(
+            "impedance_percent must be positive",
+            subject="impedance_percent",
+            source=_NAMEPLATE_SOURCE,
+        )
     return Quantity(magnitude=i_fla * 100.0 / impedance_percent, unit="A")
 
 
@@ -467,7 +659,9 @@ def transformer_secondary_voltage(*, primary_voltage: Quantity, turns_ratio: flo
     _check(primary_voltage, "[electric_potential]", "primary_voltage")
     v_p = primary_voltage.to("V").magnitude
     if turns_ratio <= 0:
-        raise ValueError("turns_ratio must be positive")
+        raise _electrical_refusal(
+            "turns_ratio must be positive", subject="turns_ratio", source=_NAMEPLATE_SOURCE
+        )
     return Quantity(magnitude=v_p / turns_ratio, unit="V")
 
 
@@ -482,7 +676,9 @@ def transformer_secondary_current(*, primary_current: Quantity, turns_ratio: flo
     _check(primary_current, "[current]", "primary_current")
     i_p = primary_current.to("A").magnitude
     if turns_ratio <= 0:
-        raise ValueError("turns_ratio must be positive")
+        raise _electrical_refusal(
+            "turns_ratio must be positive", subject="turns_ratio", source=_NAMEPLATE_SOURCE
+        )
     return Quantity(magnitude=i_p * turns_ratio, unit="A")
 
 
@@ -499,9 +695,15 @@ def transformer_reflected_impedance(
     _check(secondary_impedance, "[electric_potential]/[current]", "secondary_impedance")
     z_s = secondary_impedance.to("ohm").magnitude
     if z_s <= 0:
-        raise ValueError("secondary_impedance must be positive")
+        raise _electrical_refusal(
+            "secondary_impedance must be positive",
+            subject="secondary_impedance",
+            source=_SYSTEM_SOURCE,
+        )
     if turns_ratio <= 0:
-        raise ValueError("turns_ratio must be positive")
+        raise _electrical_refusal(
+            "turns_ratio must be positive", subject="turns_ratio", source=_NAMEPLATE_SOURCE
+        )
     return Quantity(magnitude=turns_ratio * turns_ratio * z_s, unit="ohm")
 
 
@@ -526,9 +728,16 @@ def transformer_efficiency(
     p_cu = copper_loss.to("W").magnitude
     p_fe = core_loss.to("W").magnitude
     if p_out <= 0:
-        raise ValueError("output_power must be positive")
-    if p_cu < 0 or p_fe < 0:
-        raise ValueError("copper_loss and core_loss must be non-negative")
+        raise _electrical_refusal(
+            "output_power must be positive", subject="output_power", source=_NAMEPLATE_SOURCE
+        )
+    for subject, magnitude in (("copper_loss", p_cu), ("core_loss", p_fe)):
+        if magnitude < 0:
+            raise _electrical_refusal(
+                "copper_loss and core_loss must be non-negative",
+                subject=subject,
+                source=_NAMEPLATE_SOURCE,
+            )
     return p_out / (p_out + p_cu + p_fe)
 
 
@@ -551,19 +760,27 @@ def transformer_maximum_efficiency_load_fraction(
     p_fe = core_loss.to("W").magnitude
     p_cu = rated_copper_loss.to("W").magnitude
     if p_fe < 0:
-        raise ValueError("core_loss must be non-negative")
+        raise _electrical_refusal(
+            "core_loss must be non-negative", subject="core_loss", source=_NAMEPLATE_SOURCE
+        )
     if p_cu <= 0:
-        raise ValueError("rated_copper_loss must be positive")
+        raise _electrical_refusal(
+            "rated_copper_loss must be positive",
+            subject="rated_copper_loss",
+            source=_NAMEPLATE_SOURCE,
+        )
     # sqrt(P_fe/P_cu) is a load FRACTION, and the docstring's own return range says 0-1
     # "for a transformer whose core loss is below its rated copper loss". Above it the
     # answer is a load past nameplate — 1.41 for a 2:1 loss ratio — handed back as "the
     # load at which this transformer is most efficient".
     if p_fe > p_cu:
-        raise ValueError(
+        raise _electrical_refusal(
             f"core_loss ({p_fe:.4g} W) exceeds rated_copper_loss ({p_cu:.4g} W), so the "
             f"maximum-efficiency load fraction comes out at {(p_fe / p_cu) ** 0.5:.4g} — past "
             f"nameplate, which is not a load fraction. Such a transformer is most efficient "
-            f"at full load; check whether the two losses are the right way round"
+            f"at full load; check whether the two losses are the right way round",
+            subject="core_loss and rated_copper_loss",
+            source=_NAMEPLATE_SOURCE,
         )
     return (p_fe / p_cu) ** 0.5
 
@@ -585,8 +802,13 @@ def transformer_voltage_regulation(
     _check(full_load_voltage, "[electric_potential]", "full_load_voltage")
     v_nl = no_load_voltage.to("V").magnitude
     v_fl = full_load_voltage.to("V").magnitude
-    if v_nl <= 0 or v_fl <= 0:
-        raise ValueError("no_load_voltage and full_load_voltage must be positive")
+    for subject, magnitude in (("no_load_voltage", v_nl), ("full_load_voltage", v_fl)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "no_load_voltage and full_load_voltage must be positive",
+                subject=subject,
+                source=_NAMEPLATE_SOURCE,
+            )
     return (v_nl - v_fl) / v_fl
 
 
@@ -611,10 +833,19 @@ def ground_rod_resistance(
     rho = soil_resistivity.to("ohm*m").magnitude
     length = rod_length.to("m").magnitude
     a = rod_radius.to("m").magnitude
-    if rho <= 0 or length <= 0 or a <= 0:
-        raise ValueError("soil_resistivity, rod_length, and rod_radius must be positive")
+    for subject, magnitude in (("soil_resistivity", rho), ("length", length), ("rod_radius", a)):
+        if magnitude <= 0:
+            raise _electrical_refusal(
+                "soil_resistivity, rod_length, and rod_radius must be positive",
+                subject=subject,
+                source=_electrical_input_source(subject),
+            )
     if length <= a:
-        raise ValueError("rod_length must exceed rod_radius")
+        raise _electrical_refusal(
+            "rod_length must exceed rod_radius",
+            subject="rod_length and rod_radius",
+            source=_GROUND_SOURCE,
+        )
     return Quantity(magnitude=rho / (2.0 * pi * length) * (log(4.0 * length / a) - 1.0), unit="ohm")
 
 
@@ -636,12 +867,22 @@ def parallel_ground_electrodes_resistance(
     """
     _check(single_rod_resistance, "[resistance]", "single_rod_resistance")
     if rod_count <= 0:
-        raise ValueError("rod_count must be positive")
+        raise _electrical_refusal(
+            "rod_count must be positive", subject="rod_count", source=_GROUND_SOURCE
+        )
     if not 0.0 < arrangement_efficiency <= 1.0:
-        raise ValueError(f"arrangement_efficiency must be in (0, 1]; got {arrangement_efficiency}")
+        raise _electrical_refusal(
+            f"arrangement_efficiency must be in (0, 1]; got {arrangement_efficiency}",
+            subject="arrangement_efficiency",
+            source=_GROUND_SOURCE,
+        )
     r1 = single_rod_resistance.to("ohm").magnitude
     if r1 <= 0:
-        raise ValueError("single_rod_resistance must be positive")
+        raise _electrical_refusal(
+            "single_rod_resistance must be positive",
+            subject="single_rod_resistance",
+            source=_GROUND_SOURCE,
+        )
     return Quantity(magnitude=r1 / (rod_count * arrangement_efficiency), unit="ohm")
 
 
@@ -666,21 +907,35 @@ def skin_depth(
     rho = resistivity.to("ohm*m").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if rho <= 0:
-        raise ValueError("resistivity must be positive")
+        raise _electrical_refusal(
+            "resistivity must be positive", subject="resistivity", source=_CABLE_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _electrical_refusal(
+            "frequency must be positive", subject="frequency", source=_SYSTEM_SOURCE
+        )
     if relative_permeability <= 0:
-        raise ValueError("relative_permeability must be positive")
+        raise _electrical_refusal(
+            "relative_permeability must be positive",
+            subject="relative_permeability",
+            source=_CABLE_SOURCE,
+        )
     mu = relative_permeability * _VACUUM_PERMEABILITY
     return Quantity(magnitude=sqrt(rho / (pi * f * mu)), unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _electrical_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_electrical_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _electrical_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_electrical_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

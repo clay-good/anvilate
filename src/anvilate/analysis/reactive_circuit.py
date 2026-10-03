@@ -27,8 +27,47 @@ from __future__ import annotations
 
 from math import exp, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_COMPONENT_SOURCE = "the component datasheet (capacitance, inductance, resistance)"
+_OPERATING_SOURCE = "the circuit's operating case (voltage, current, frequency)"
+_GEOMETRY_SOURCE = "the capacitor's construction drawing (plate area and gap)"
+_DIELECTRIC_SOURCE = "the dielectric material's datasheet permittivity"
+_DESIGN_SOURCE = "the filter or resonator design specification"
+
+
+class _ReactiveCircuitInputError(RefusalError, ValueError):
+    """A reactive-circuit input that cannot be used without correction."""
+
+
+def _reactive_circuit_refusal(
+    message: str, *, subject: str, source: str
+) -> _ReactiveCircuitInputError:
+    return _ReactiveCircuitInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _reactive_circuit_input_source(name: str) -> str:
+    if name in {"current", "frequency", "supply_voltage", "time", "voltage"}:
+        return _OPERATING_SOURCE
+    if name in {
+        "cutoff_frequency",
+        "quality_factor",
+        "reactance",
+        "resonant_frequency",
+        "time_constant",
+    }:
+        return _DESIGN_SOURCE
+    if name in {"plate_area", "separation"}:
+        return _GEOMETRY_SOURCE
+    if name == "relative_permittivity":
+        return _DIELECTRIC_SOURCE
+    return _COMPONENT_SOURCE
+
 
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
 
@@ -68,7 +107,9 @@ def capacitor_stored_energy(*, capacitance: Quantity, voltage: Quantity) -> Quan
     c = capacitance.to("F").magnitude
     v = voltage.to("V").magnitude
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _reactive_circuit_refusal(
+            "capacitance must be positive", subject="capacitance", source=_COMPONENT_SOURCE
+        )
     return Quantity(magnitude=0.5 * c * v**2, unit="J")
 
 
@@ -86,7 +127,9 @@ def inductor_stored_energy(*, inductance: Quantity, current: Quantity) -> Quanti
     length = inductance.to("H").magnitude
     i = current.to("A").magnitude
     if length <= 0:
-        raise ValueError("inductance must be positive")
+        raise _reactive_circuit_refusal(
+            "inductance must be positive", subject="inductance", source=_COMPONENT_SOURCE
+        )
     return Quantity(magnitude=0.5 * length * i**2, unit="J")
 
 
@@ -102,8 +145,13 @@ def lc_resonant_frequency(*, inductance: Quantity, capacitance: Quantity) -> Qua
     _check(capacitance, "[capacitance]", "capacitance")
     length = inductance.to("H").magnitude
     c = capacitance.to("F").magnitude
-    if length <= 0 or c <= 0:
-        raise ValueError("inductance and capacitance must be positive")
+    for subject, magnitude in (("inductance", length), ("capacitance", c)):
+        if magnitude <= 0:
+            raise _reactive_circuit_refusal(
+                "inductance and capacitance must be positive",
+                subject=subject,
+                source=_COMPONENT_SOURCE,
+            )
     return Quantity(magnitude=1.0 / (2.0 * pi * sqrt(length * c)), unit="Hz")
 
 
@@ -127,9 +175,16 @@ def series_rlc_quality_factor(
     length = inductance.to("H").magnitude
     c = capacitance.to("F").magnitude
     if r <= 0:
-        raise ValueError("resistance must be positive")
-    if length <= 0 or c <= 0:
-        raise ValueError("inductance and capacitance must be positive")
+        raise _reactive_circuit_refusal(
+            "resistance must be positive", subject="resistance", source=_COMPONENT_SOURCE
+        )
+    for subject, magnitude in (("inductance", length), ("capacitance", c)):
+        if magnitude <= 0:
+            raise _reactive_circuit_refusal(
+                "inductance and capacitance must be positive",
+                subject=subject,
+                source=_COMPONENT_SOURCE,
+            )
     return sqrt(length / c) / r
 
 
@@ -146,9 +201,15 @@ def resonator_bandwidth(*, resonant_frequency: Quantity, quality_factor: float) 
     _check(resonant_frequency, "1/[time]", "resonant_frequency")
     f0 = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     if f0 <= 0:
-        raise ValueError("resonant_frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "resonant_frequency must be positive",
+            subject="resonant_frequency",
+            source=_DESIGN_SOURCE,
+        )
     if quality_factor <= 0:
-        raise ValueError("quality_factor must be positive")
+        raise _reactive_circuit_refusal(
+            "quality_factor must be positive", subject="quality_factor", source=_DESIGN_SOURCE
+        )
     return Quantity(magnitude=f0 / quality_factor, unit="Hz")
 
 
@@ -165,9 +226,13 @@ def capacitive_reactance(*, capacitance: Quantity, frequency: Quantity) -> Quant
     c = capacitance.to("F").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _reactive_circuit_refusal(
+            "capacitance must be positive", subject="capacitance", source=_COMPONENT_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "frequency must be positive", subject="frequency", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=1.0 / (2.0 * pi * f * c), unit="ohm")
 
 
@@ -184,9 +249,13 @@ def inductive_reactance(*, inductance: Quantity, frequency: Quantity) -> Quantit
     length = inductance.to("H").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if length <= 0:
-        raise ValueError("inductance must be positive")
+        raise _reactive_circuit_refusal(
+            "inductance must be positive", subject="inductance", source=_COMPONENT_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "frequency must be positive", subject="frequency", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=2.0 * pi * f * length, unit="ohm")
 
 
@@ -204,9 +273,13 @@ def capacitance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Qu
     x = reactance.to("ohm").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if x <= 0:
-        raise ValueError("reactance must be positive")
+        raise _reactive_circuit_refusal(
+            "reactance must be positive", subject="reactance", source=_DESIGN_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "frequency must be positive", subject="frequency", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=1.0 / (2.0 * pi * f * x), unit="F")
 
 
@@ -223,9 +296,13 @@ def inductance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Qua
     x = reactance.to("ohm").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if x <= 0:
-        raise ValueError("reactance must be positive")
+        raise _reactive_circuit_refusal(
+            "reactance must be positive", subject="reactance", source=_DESIGN_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "frequency must be positive", subject="frequency", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=x / (2.0 * pi * f), unit="H")
 
 
@@ -242,8 +319,13 @@ def rc_time_constant(*, resistance: Quantity, capacitance: Quantity) -> Quantity
     _check(capacitance, "[capacitance]", "capacitance")
     r = resistance.to("ohm").magnitude
     c = capacitance.to("F").magnitude
-    if r <= 0 or c <= 0:
-        raise ValueError("resistance and capacitance must be positive")
+    for subject, magnitude in (("resistance", r), ("capacitance", c)):
+        if magnitude <= 0:
+            raise _reactive_circuit_refusal(
+                "resistance and capacitance must be positive",
+                subject=subject,
+                source=_COMPONENT_SOURCE,
+            )
     return Quantity(magnitude=r * c, unit="s")
 
 
@@ -267,11 +349,17 @@ def rc_charging_voltage(
     t = time.to("s").magnitude
     tau = time_constant.to("s").magnitude
     if v_s <= 0:
-        raise ValueError("supply_voltage must be positive")
+        raise _reactive_circuit_refusal(
+            "supply_voltage must be positive", subject="supply_voltage", source=_OPERATING_SOURCE
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _reactive_circuit_refusal(
+            "time must be non-negative", subject="time", source=_OPERATING_SOURCE
+        )
     if tau <= 0:
-        raise ValueError("time_constant must be positive")
+        raise _reactive_circuit_refusal(
+            "time_constant must be positive", subject="time_constant", source=_DESIGN_SOURCE
+        )
     return Quantity(magnitude=v_s * (1.0 - exp(-t / tau)), unit="V")
 
 
@@ -288,8 +376,13 @@ def rl_time_constant(*, inductance: Quantity, resistance: Quantity) -> Quantity:
     _check(resistance, "[resistance]", "resistance")
     length = inductance.to("H").magnitude
     r = resistance.to("ohm").magnitude
-    if length <= 0 or r <= 0:
-        raise ValueError("inductance and resistance must be positive")
+    for subject, magnitude in (("inductance", length), ("resistance", r)):
+        if magnitude <= 0:
+            raise _reactive_circuit_refusal(
+                "inductance and resistance must be positive",
+                subject=subject,
+                source=_COMPONENT_SOURCE,
+            )
     return Quantity(magnitude=length / r, unit="s")
 
 
@@ -306,8 +399,13 @@ def rc_cutoff_frequency(*, resistance: Quantity, capacitance: Quantity) -> Quant
     _check(capacitance, "[capacitance]", "capacitance")
     r = resistance.to("ohm").magnitude
     c = capacitance.to("F").magnitude
-    if r <= 0 or c <= 0:
-        raise ValueError("resistance and capacitance must be positive")
+    for subject, magnitude in (("resistance", r), ("capacitance", c)):
+        if magnitude <= 0:
+            raise _reactive_circuit_refusal(
+                "resistance and capacitance must be positive",
+                subject=subject,
+                source=_COMPONENT_SOURCE,
+            )
     return Quantity(magnitude=1.0 / (2.0 * pi * r * c), unit="Hz")
 
 
@@ -327,9 +425,13 @@ def first_order_lowpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity)
     f = count_rate_per_second(frequency, name="frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f < 0:
-        raise ValueError("frequency must be non-negative")
+        raise _reactive_circuit_refusal(
+            "frequency must be non-negative", subject="frequency", source=_OPERATING_SOURCE
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_DESIGN_SOURCE
+        )
     return 1.0 / (1.0 + (f / f_c) ** 2) ** 0.5
 
 
@@ -348,9 +450,13 @@ def first_order_highpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity
     f = count_rate_per_second(frequency, name="frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f < 0:
-        raise ValueError("frequency must be non-negative")
+        raise _reactive_circuit_refusal(
+            "frequency must be non-negative", subject="frequency", source=_OPERATING_SOURCE
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _reactive_circuit_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_DESIGN_SOURCE
+        )
     if f == 0.0:
         return 0.0
     return 1.0 / (1.0 + (f_c / f) ** 2) ** 0.5
@@ -371,11 +477,19 @@ def parallel_plate_capacitance(
     a = plate_area.to("m**2").magnitude
     d = separation.to("m").magnitude
     if a <= 0:
-        raise ValueError("plate_area must be positive")
+        raise _reactive_circuit_refusal(
+            "plate_area must be positive", subject="plate_area", source=_GEOMETRY_SOURCE
+        )
     if d <= 0:
-        raise ValueError("separation must be positive")
+        raise _reactive_circuit_refusal(
+            "separation must be positive", subject="separation", source=_GEOMETRY_SOURCE
+        )
     if relative_permittivity < 1.0:
-        raise ValueError("relative_permittivity must be at least 1")
+        raise _reactive_circuit_refusal(
+            "relative_permittivity must be at least 1",
+            subject="relative_permittivity",
+            source=_DIELECTRIC_SOURCE,
+        )
     return Quantity(magnitude=_VACUUM_PERMITTIVITY * relative_permittivity * a / d, unit="F")
 
 
@@ -391,7 +505,9 @@ def capacitor_charge(*, capacitance: Quantity, voltage: Quantity) -> Quantity:
     c = capacitance.to("F").magnitude
     v = voltage.to("V").magnitude
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _reactive_circuit_refusal(
+            "capacitance must be positive", subject="capacitance", source=_COMPONENT_SOURCE
+        )
     return Quantity(magnitude=c * v, unit="C")
 
 
@@ -407,16 +523,24 @@ def parallel_plate_field(*, voltage: Quantity, separation: Quantity) -> Quantity
     v = voltage.to("V").magnitude
     d = separation.to("m").magnitude
     if d <= 0:
-        raise ValueError("separation must be positive")
+        raise _reactive_circuit_refusal(
+            "separation must be positive", subject="separation", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=v / d, unit="V/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _reactive_circuit_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_reactive_circuit_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _reactive_circuit_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_reactive_circuit_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

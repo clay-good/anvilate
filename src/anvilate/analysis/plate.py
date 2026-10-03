@@ -33,7 +33,45 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_GEOMETRY_SOURCE = "the plate drawing (plan dimensions, hole, and thickness)"
+_MATERIAL_SOURCE = "the plate material's datasheet or certificate"
+_LOAD_SOURCE = "the pressure or force from the plate's load case"
+_DESIGN_BASIS_SOURCE = "the project's design basis (allowables and safety factors)"
+_DERIVATION_SOURCE = "the cited Roark/Timoshenko case the formulas come from"
+
+
+class _PlateInputError(RefusalError, ValueError):
+    """A flat-plate input that cannot be used without correction."""
+
+
+def _plate_refusal(message: str, *, subject: str, source: str) -> _PlateInputError:
+    return _PlateInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _plate_input_source(name: str) -> str:
+    if name in {"bearing_pressure", "force", "patch_length", "patch_width", "pressure"}:
+        return _LOAD_SOURCE
+    if name in {"elastic_modulus", "poisson_ratio"}:
+        return _MATERIAL_SOURCE
+    if name in {"allowable_stress", "required_safety_factor"}:
+        return _DESIGN_BASIS_SOURCE
+    if name in {
+        "buckling_coefficient",
+        "deflection_formula",
+        "deflection_inputs",
+        "stress_formula",
+        "stress_inputs",
+        "underived",
+    }:
+        return _DERIVATION_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "DEFAULT_POISSON_RATIO",
@@ -84,10 +122,16 @@ _CLAMPED_COEFFICIENTS = (
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _plate_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_plate_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _plate_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_plate_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -152,15 +196,19 @@ class PlateBendingResult(RevalidatedModel):
             bool(self.deflection_inputs),
         ]
         if any(declared) and not all(declared):
-            raise ValueError(
+            raise _plate_refusal(
                 "a plate case states the stress formula, the deflection formula and the "
-                f"symbols of both, or none of them; got {declared}"
+                f"symbols of both, or none of them; got {declared}",
+                subject="stress_formula, stress_inputs, deflection_formula, and deflection_inputs",
+                source=_DERIVATION_SOURCE,
             )
         if all(declared) == (self.underived is not None):
-            raise ValueError(
+            raise _plate_refusal(
                 "a plate case states its formulas or states why it has none, never both "
                 f"and never neither; got formulas={all(declared)}, "
-                f"underived={self.underived!r}"
+                f"underived={self.underived!r}",
+                subject="stress_formula, deflection_formula, and underived",
+                source=_DERIVATION_SOURCE,
             )
         return self
 
@@ -268,7 +316,11 @@ def simply_supported_plate_center_patch_load(
     _require(thickness, "[length]", "thickness")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _plate_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
 
     q = pressure.to("MPa").magnitude
     a = length.to("mm").magnitude
@@ -278,11 +330,17 @@ def simply_supported_plate_center_patch_load(
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(q, a, b, t, e) <= 0:
-        raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
+        raise _plate_refusal(
+            "pressure, plan dimensions, thickness, and E must be positive",
+            subject="pressure, length, width, thickness, and elastic_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     if not 0 < u <= a or not 0 < v <= b:
-        raise ValueError(
+        raise _plate_refusal(
             f"the patch ({patch_length} x {patch_width}) must fit inside the "
-            f"plate ({length} x {width})"
+            f"plate ({length} x {width})",
+            subject="patch_length, patch_width, length, and width",
+            source=_GEOMETRY_SOURCE,
         )
 
     rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
@@ -356,7 +414,11 @@ def clamped_plate_uniform_load(
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(q, a, b, t, e) <= 0:
-        raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
+        raise _plate_refusal(
+            "pressure, plan dimensions, thickness, and E must be positive",
+            subject="pressure, length, width, thickness, and elastic_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     if b > a:
         a, b = b, a  # b is the short side; the result is orientation-blind
     short_side = Quantity(magnitude=b, unit="mm")
@@ -429,13 +491,21 @@ def _circular_plate_inputs(
     _require(thickness, "[length]", "thickness")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _plate_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     q = pressure.to("MPa").magnitude
     radius = diameter.to("mm").magnitude / 2
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(q, radius, t, e) <= 0:
-        raise ValueError("pressure, diameter, thickness, and E must be positive")
+        raise _plate_refusal(
+            "pressure, diameter, thickness, and E must be positive",
+            subject="pressure, diameter, thickness, and elastic_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
     return q, radius, t, rigidity
 
@@ -565,13 +635,21 @@ def _circular_plate_point_inputs(
     _require(thickness, "[length]", "thickness")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _plate_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     p = force.to("N").magnitude
     radius = diameter.to("mm").magnitude / 2
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(p, radius, t, e) <= 0:
-        raise ValueError("force, diameter, thickness, and E must be positive")
+        raise _plate_refusal(
+            "force, diameter, thickness, and E must be positive",
+            subject="force, diameter, thickness, and elastic_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
     return p, radius, rigidity
 
@@ -665,14 +743,26 @@ def clamped_circular_plate_thickness_for_pressure(
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _plate_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     q = pressure.to("MPa").magnitude
     radius = diameter.to("mm").magnitude / 2
     sigma = allowable_stress.to("MPa").magnitude
     if radius <= 0:
-        raise ValueError(f"diameter must be positive; got {diameter}")
+        raise _plate_refusal(
+            f"diameter must be positive; got {diameter}",
+            subject="diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _plate_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     t_min = radius * sqrt(3 * required_safety_factor * q / (4 * sigma))
     return Quantity(magnitude=t_min, unit="mm")
 
@@ -702,16 +792,32 @@ def base_plate_thickness_for_bearing(
     _require(cantilever_length, "[length]", "cantilever_length")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _plate_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     f_p = bearing_pressure.to("MPa").magnitude
     length = cantilever_length.to("mm").magnitude
     sigma = allowable_stress.to("MPa").magnitude
     if f_p <= 0:
-        raise ValueError(f"bearing_pressure must be positive; got {bearing_pressure}")
+        raise _plate_refusal(
+            f"bearing_pressure must be positive; got {bearing_pressure}",
+            subject="bearing_pressure",
+            source=_LOAD_SOURCE,
+        )
     if length <= 0:
-        raise ValueError(f"cantilever_length must be positive; got {cantilever_length}")
+        raise _plate_refusal(
+            f"cantilever_length must be positive; got {cantilever_length}",
+            subject="cantilever_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if sigma <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _plate_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     t_min = length * sqrt(3 * required_safety_factor * f_p / sigma)
     return Quantity(magnitude=t_min, unit="mm")
 
@@ -740,7 +846,11 @@ def _annular_plate_uniform_load(
     _require(hole_diameter, "[length]", "hole_diameter")
     b = hole_diameter.to("mm").magnitude / 2
     if not 0 < b < a:
-        raise ValueError(f"the hole ({hole_diameter}) must be smaller than the plate ({diameter})")
+        raise _plate_refusal(
+            f"the hole ({hole_diameter}) must be smaller than the plate ({diameter})",
+            subject="hole_diameter and diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     nu = poisson_ratio
     c4 = -q * b**2 / (8 * rigidity)
 
@@ -892,7 +1002,11 @@ def simply_supported_plate_uniform_load(
     _require(thickness, "[length]", "thickness")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _plate_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
 
     q = pressure.to("MPa").magnitude
     a = length.to("mm").magnitude
@@ -900,7 +1014,11 @@ def simply_supported_plate_uniform_load(
     t = thickness.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(q, a, b, t, e) <= 0:
-        raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
+        raise _plate_refusal(
+            "pressure, plan dimensions, thickness, and E must be positive",
+            subject="pressure, length, width, thickness, and elastic_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
 
     rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
 
@@ -960,14 +1078,26 @@ def plate_buckling_stress(
     _require(thickness, "[length]", "thickness")
     _require(width, "[length]", "width")
     if buckling_coefficient <= 0:
-        raise ValueError(f"buckling_coefficient must be positive; got {buckling_coefficient}")
+        raise _plate_refusal(
+            f"buckling_coefficient must be positive; got {buckling_coefficient}",
+            subject="buckling_coefficient",
+            source=_DERIVATION_SOURCE,
+        )
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _plate_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     t = thickness.to("mm").magnitude
     b = width.to("mm").magnitude
     if t <= 0 or b <= 0:
-        raise ValueError("thickness and width must be positive")
+        raise _plate_refusal(
+            "thickness and width must be positive",
+            subject="thickness and width",
+            source=_GEOMETRY_SOURCE,
+        )
     sigma = buckling_coefficient * pi**2 * e / (12.0 * (1.0 - poisson_ratio**2)) * (t / b) ** 2
     return Quantity(magnitude=sigma, unit="MPa")
 
@@ -990,8 +1120,10 @@ def plate_shear_buckling_coefficient(*, aspect_ratio: float) -> float:
     the dimensionless k_s.
     """
     if aspect_ratio < 1:
-        raise ValueError(
-            f"aspect_ratio (long side / short side) must be at least 1; got {aspect_ratio}"
+        raise _plate_refusal(
+            f"aspect_ratio (long side / short side) must be at least 1; got {aspect_ratio}",
+            subject="aspect_ratio",
+            source=_GEOMETRY_SOURCE,
         )
     return 5.34 + 4.0 / aspect_ratio**2
 
@@ -1011,7 +1143,11 @@ def plate_compression_buckling_coefficient(*, aspect_ratio: float) -> float:
     """
     require_finite(aspect_ratio, name="aspect_ratio")
     if aspect_ratio <= 0:
-        raise ValueError(f"aspect_ratio must be positive; got {aspect_ratio}")
+        raise _plate_refusal(
+            f"aspect_ratio must be positive; got {aspect_ratio}",
+            subject="aspect_ratio",
+            source=_GEOMETRY_SOURCE,
+        )
     gamma = aspect_ratio
     # k(m) = (m/gamma + gamma/m)^2 is minimised near m = gamma; scan the integers
     # bracketing it (one below, one above) and take the least.

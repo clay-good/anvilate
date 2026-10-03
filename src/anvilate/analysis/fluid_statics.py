@@ -21,7 +21,54 @@ and buoyancy relations.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FLUID_SOURCE = "the fluid's property datasheet at the operating temperature"
+_GEOMETRY_SOURCE = "the tank, gate, or structure drawing (depths, areas, and dimensions)"
+_OPERATING_SOURCE = "the operating case (flow velocity, heel angle, and site conditions)"
+_STABILITY_SOURCE = "the vessel's hydrostatic and mass-properties report (weight, KG, GM)"
+
+
+class _FluidStaticsInputError(RefusalError, ValueError):
+    """A fluid-statics input that cannot be used without correction."""
+
+
+def _fluid_statics_refusal(message: str, *, subject: str, source: str) -> _FluidStaticsInputError:
+    return _FluidStaticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fluid_statics_input_source(name: str) -> str:
+    if name in {
+        "contact_angle",
+        "density",
+        "density_difference",
+        "dynamic_viscosity",
+        "fluid_density",
+        "surface_tension",
+    }:
+        return _FLUID_SOURCE
+    if name in {
+        "buoyancy_to_gravity_distance",
+        "displaced_volume",
+        "metacentric_height",
+        "waterplane_second_moment",
+        "weight",
+    }:
+        return _STABILITY_SOURCE
+    if name in {
+        "atmospheric_pressure",
+        "heel_angle",
+        "indoor_temperature",
+        "outdoor_temperature",
+        "velocity",
+    }:
+        return _OPERATING_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "buoyant_force",
@@ -56,7 +103,11 @@ def hydrostatic_pressure(*, depth: Quantity, density: Quantity) -> Quantity:
     h = depth.to("m").magnitude
     rho = density.to("kg/m**3").magnitude
     if h < 0 or rho <= 0:
-        raise ValueError("depth must be non-negative and density positive")
+        raise _fluid_statics_refusal(
+            "depth must be non-negative and density positive",
+            subject="depth and density",
+            source=_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=rho * _GRAVITY * h / 1000.0, unit="kPa")
 
 
@@ -81,10 +132,17 @@ def hydrostatic_force_on_plane(
     rho = density.to("kg/m**3").magnitude
     h_c = centroid_depth.to("m").magnitude
     a = area.to("m**2").magnitude
-    if rho <= 0 or a <= 0:
-        raise ValueError("density and area must be positive")
+    for subject, magnitude in (("density", rho), ("area", a)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "density and area must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     if h_c <= 0:
-        raise ValueError("centroid_depth must be positive")
+        raise _fluid_statics_refusal(
+            "centroid_depth must be positive", subject="centroid_depth", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=rho * _GRAVITY * h_c * a / 1000.0, unit="kN")
 
 
@@ -109,8 +167,13 @@ def center_of_pressure_depth(
     h_c = centroid_depth.to("m").magnitude
     a = area.to("m**2").magnitude
     i_c = second_moment.to("m**4").magnitude
-    if h_c <= 0 or a <= 0 or i_c <= 0:
-        raise ValueError("centroid_depth, area, and second_moment must be positive")
+    for subject, magnitude in (("centroid_depth", h_c), ("area", a), ("second_moment", i_c)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "centroid_depth, area, and second_moment must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     return Quantity(magnitude=h_c + i_c / (h_c * a), unit="m")
 
 
@@ -126,8 +189,13 @@ def buoyant_force(*, displaced_volume: Quantity, fluid_density: Quantity) -> Qua
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     v = displaced_volume.to("m**3").magnitude
     rho = fluid_density.to("kg/m**3").magnitude
-    if v <= 0 or rho <= 0:
-        raise ValueError("displaced_volume and fluid_density must be positive")
+    for subject, magnitude in (("displaced_volume", v), ("fluid_density", rho)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "displaced_volume and fluid_density must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     return Quantity(magnitude=rho * _GRAVITY * v / 1000.0, unit="kN")
 
 
@@ -155,8 +223,13 @@ def metacentric_height(
     i = waterplane_second_moment.to("m**4").magnitude
     v = displaced_volume.to("m**3").magnitude
     bg = buoyancy_to_gravity_distance.to("m").magnitude
-    if i <= 0 or v <= 0:
-        raise ValueError("waterplane_second_moment and displaced_volume must be positive")
+    for subject, magnitude in (("waterplane_second_moment", i), ("displaced_volume", v)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "waterplane_second_moment and displaced_volume must be positive",
+                subject=subject,
+                source=_STABILITY_SOURCE,
+            )
     return Quantity(magnitude=i / v - bg, unit="m")
 
 
@@ -181,11 +254,21 @@ def righting_moment(
     w = weight.to("kN").magnitude
     gm = metacentric_height.to("m").magnitude
     if w <= 0:
-        raise ValueError("weight must be positive")
+        raise _fluid_statics_refusal(
+            "weight must be positive", subject="weight", source=_STABILITY_SOURCE
+        )
     if gm <= 0:
-        raise ValueError("metacentric_height must be positive for a stable, righting body")
+        raise _fluid_statics_refusal(
+            "metacentric_height must be positive for a stable, righting body",
+            subject="metacentric_height",
+            source=_STABILITY_SOURCE,
+        )
     if not 0.0 <= heel_angle < 90.0:
-        raise ValueError(f"heel_angle must be in [0, 90) degrees; got {heel_angle}")
+        raise _fluid_statics_refusal(
+            f"heel_angle must be in [0, 90) degrees; got {heel_angle}",
+            subject="heel_angle",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=w * gm * sin(radians(heel_angle)), unit="kN*m")
 
 
@@ -214,10 +297,19 @@ def capillary_rise(
     sigma = surface_tension.to("N/m").magnitude
     rho = density.to("kg/m**3").magnitude
     r = tube_radius.to("m").magnitude
-    if sigma <= 0 or rho <= 0 or r <= 0:
-        raise ValueError("surface_tension, density, and tube_radius must be positive")
+    for subject, magnitude in (("surface_tension", sigma), ("density", rho), ("tube_radius", r)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "surface_tension, density, and tube_radius must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     if not 0.0 <= contact_angle <= 180.0:
-        raise ValueError(f"contact_angle must be in [0, 180] degrees; got {contact_angle}")
+        raise _fluid_statics_refusal(
+            f"contact_angle must be in [0, 180] degrees; got {contact_angle}",
+            subject="contact_angle",
+            source=_FLUID_SOURCE,
+        )
     h = 2.0 * sigma * cos(radians(contact_angle)) / (rho * _GRAVITY * r)
     return Quantity(magnitude=h * 1000.0, unit="mm")
 
@@ -249,8 +341,18 @@ def stack_effect_pressure(
     t_i = indoor_temperature.to("K").magnitude
     t_o = outdoor_temperature.to("K").magnitude
     p = atmospheric_pressure.to("Pa").magnitude
-    if h <= 0 or t_i <= 0 or t_o <= 0 or p <= 0:
-        raise ValueError("height, temperatures, and atmospheric_pressure must be positive")
+    for subject, magnitude in (
+        ("height", h),
+        ("indoor_temperature", t_i),
+        ("outdoor_temperature", t_o),
+        ("atmospheric_pressure", p),
+    ):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "height, temperatures, and atmospheric_pressure must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     delta_p = _GRAVITY * h * (p / _AIR_GAS_CONSTANT) * (1.0 / t_o - 1.0 / t_i)
     return Quantity(magnitude=delta_p, unit="Pa")
 
@@ -279,12 +381,21 @@ def weber_number(
     v = velocity.to("m/s").magnitude
     length = characteristic_length.to("m").magnitude
     sigma = surface_tension.to("N/m").magnitude
-    if rho <= 0 or length <= 0:
-        raise ValueError("density and characteristic_length must be positive")
+    for subject, magnitude in (("density", rho), ("characteristic_length", length)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "density and characteristic_length must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _fluid_statics_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _fluid_statics_refusal(
+            "velocity must be non-negative", subject="velocity", source=_OPERATING_SOURCE
+        )
     return rho * v**2 * length / sigma
 
 
@@ -310,10 +421,17 @@ def bond_number(
     d_rho = density_difference.to("kg/m**3").magnitude
     length = characteristic_length.to("m").magnitude
     sigma = surface_tension.to("N/m").magnitude
-    if d_rho <= 0 or length <= 0:
-        raise ValueError("density_difference and characteristic_length must be positive")
+    for subject, magnitude in (("density_difference", d_rho), ("characteristic_length", length)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "density_difference and characteristic_length must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _fluid_statics_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     return d_rho * _GRAVITY * length**2 / sigma
 
 
@@ -339,11 +457,17 @@ def capillary_number(
     v = velocity.to("m/s").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
+        raise _fluid_statics_refusal(
+            "dynamic_viscosity must be positive", subject="dynamic_viscosity", source=_FLUID_SOURCE
+        )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _fluid_statics_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _fluid_statics_refusal(
+            "velocity must be non-negative", subject="velocity", source=_OPERATING_SOURCE
+        )
     return mu * v / sigma
 
 
@@ -373,11 +497,20 @@ def ohnesorge_number(
     length = characteristic_length.to("m").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
-    if rho <= 0 or length <= 0:
-        raise ValueError("density and characteristic_length must be positive")
+        raise _fluid_statics_refusal(
+            "dynamic_viscosity must be positive", subject="dynamic_viscosity", source=_FLUID_SOURCE
+        )
+    for subject, magnitude in (("density", rho), ("characteristic_length", length)):
+        if magnitude <= 0:
+            raise _fluid_statics_refusal(
+                "density and characteristic_length must be positive",
+                subject=subject,
+                source=_fluid_statics_input_source(subject),
+            )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _fluid_statics_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     return mu / (rho * sigma * length) ** 0.5
 
 
@@ -409,22 +542,38 @@ def morton_number(
     rho = density.to("kg/m**3").magnitude
     sigma = surface_tension.to("N/m").magnitude
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
+        raise _fluid_statics_refusal(
+            "dynamic_viscosity must be positive", subject="dynamic_viscosity", source=_FLUID_SOURCE
+        )
     if d_rho <= 0:
-        raise ValueError("density_difference must be positive")
+        raise _fluid_statics_refusal(
+            "density_difference must be positive",
+            subject="density_difference",
+            source=_FLUID_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _fluid_statics_refusal(
+            "density must be positive", subject="density", source=_FLUID_SOURCE
+        )
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _fluid_statics_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_FLUID_SOURCE
+        )
     return _GRAVITY * mu**4 * d_rho / (rho**2 * sigma**3)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fluid_statics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fluid_statics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fluid_statics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fluid_statics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

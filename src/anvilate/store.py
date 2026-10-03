@@ -61,6 +61,22 @@ from typing import Any
 from ._models import parse_json
 from .attestation import canonical_json, sha256_hex
 from .fetch import cache_root
+from .refusal import RefusalError, Remedy
+
+_STORE_PATH_SOURCE = "a subject-store directory, or None for the default store"
+_KIND_SOURCE = "the record's kind, such as design_spec or scorecard"
+
+
+class _SubjectStoreInputError(RefusalError, ValueError):
+    """A subject-store input that cannot be used without correction."""
+
+
+def _store_refusal(message: str, *, subject: str, source: str) -> _SubjectStoreInputError:
+    return _SubjectStoreInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "SUBJECT_PATTERN",
@@ -88,9 +104,11 @@ def subject_store_root(explicit: str | Path | None = None) -> Path:
     """
     if explicit is not None:
         if str(explicit) == "":
-            raise ValueError(
+            raise _store_refusal(
                 "an empty store path is not the current directory: pass a real path, or "
-                "None to use $ANVILATE_SUBJECT_STORE or the default cache"
+                "None to use $ANVILATE_SUBJECT_STORE or the default cache",
+                subject="explicit",
+                source=_STORE_PATH_SOURCE,
             )
         return Path(explicit)
     named = os.environ.get("ANVILATE_SUBJECT_STORE")
@@ -118,7 +136,11 @@ class SubjectStore:
         files change under a handle is not content-addressed.
         """
         if not kind.strip():
-            raise ValueError("a stored record must name its kind; a handle to 'something' is")
+            raise _store_refusal(
+                "a stored record must name its kind; a handle to 'something' is",
+                subject="kind",
+                source=_KIND_SOURCE,
+            )
         payload = canonical_json({"kind": kind, "document": document})
         handle = f"sha256:{sha256_hex(payload.encode('utf-8'))}"
         path = self._path(handle)

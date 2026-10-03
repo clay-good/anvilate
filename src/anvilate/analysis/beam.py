@@ -19,9 +19,72 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Comparison, LimitSense, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ._flags import require_flag
+
+_SECTION_SOURCE = "the section property table or drawing for the member's cross-section"
+_MATERIAL_SOURCE = "the steel mill certificate or material specification (F_y, E)"
+_LOAD_SOURCE = "the factored or service load case applied to the beam"
+_LAYOUT_SOURCE = "the framing plan's spans, supports, and bearing details"
+_FASTENER_SOURCE = "the fastener manufacturer's rated shear capacity"
+_CRITERION_SOURCE = "the project design basis's serviceability deflection limits"
+_DERIVATION_SOURCE = "the cited beam-formula table entry for the load case"
+
+
+class _BeamInputError(RefusalError, ValueError):
+    """A beam input that cannot be used without correction."""
+
+
+def _beam_refusal(message: str, *, subject: str, source: str) -> _BeamInputError:
+    return _BeamInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _beam_input_source(name: str) -> str:
+    if name in {"elastic_modulus", "web_yield", "yield_strength"}:
+        return _MATERIAL_SOURCE
+    if name in {
+        "at_member_end",
+        "back_span",
+        "bearing_length",
+        "length",
+        "overhang",
+        "shear_length",
+        "span",
+        "span_1",
+        "span_2",
+        "stiffener_spacing",
+    }:
+        return _LAYOUT_SOURCE
+    if name in {
+        "deflection",
+        "distributed_load",
+        "force",
+        "load_offset",
+        "load_per_length",
+        "load_position",
+        "loaded_length",
+        "moment",
+        "peak_distributed_load",
+        "required_reaction",
+        "shear_flow",
+        "shear_force",
+        "udl_1",
+        "udl_2",
+    }:
+        return _LOAD_SOURCE
+    if name == "fastener_capacity":
+        return _FASTENER_SOURCE
+    if name in {"limit", "name", "ratio"}:
+        return _CRITERION_SOURCE
+    if name in {"deflection_formula", "deflection_inputs", "deflection_underived"}:
+        return _DERIVATION_SOURCE
+    return _SECTION_SOURCE
+
 
 __all__ = [
     "BeamBendingResult",
@@ -144,10 +207,16 @@ _POSITIVE_DEFINITE = frozenset(
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _beam_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_beam_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _beam_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_beam_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -155,7 +224,9 @@ def _require(value: Quantity, expected: str, name: str) -> None:
     # green. See units.require_finite.
     require_finite(value, name=name)
     if name in _POSITIVE_DEFINITE and value.magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _beam_refusal(
+            f"{name} must be positive; got {value}", subject=name, source=_beam_input_source(name)
+        )
 
 
 def _as_quantity(pint_value, unit: str) -> Quantity:
@@ -189,9 +260,11 @@ def hollow_circular_second_moment(
     do = outer_diameter.to("mm").magnitude
     di = inner_diameter.to("mm").magnitude
     if not 0 <= di < do:
-        raise ValueError(
+        raise _beam_refusal(
             f"inner_diameter ({inner_diameter}) must be non-negative and below "
-            f"outer_diameter ({outer_diameter})"
+            f"outer_diameter ({outer_diameter})",
+            subject="inner_diameter and outer_diameter",
+            source=_SECTION_SOURCE,
         )
     return _as_quantity(pi * (outer_diameter.pint**4 - inner_diameter.pint**4) / 64, "mm**4")
 
@@ -215,10 +288,17 @@ def rectangular_tube_second_moment(
     h = height.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _beam_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_SECTION_SOURCE,
+        )
     if 2 * t >= b or 2 * t >= h:
-        raise ValueError(
-            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, {height})"
+        raise _beam_refusal(
+            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, "
+            f"{height})",
+            subject="wall_thickness, width, and height",
+            source=_SECTION_SOURCE,
         )
     inner = (b - 2 * t) * (h - 2 * t) ** 3
     return Quantity(magnitude=(b * h**3 - inner) / 12.0, unit="mm**4")
@@ -248,12 +328,25 @@ def i_section_second_moment(
     h = total_height.to("mm").magnitude
     tf = flange_thickness.to("mm").magnitude
     tw = web_thickness.to("mm").magnitude
-    if tf <= 0 or tw <= 0:
-        raise ValueError("flange_thickness and web_thickness must be positive")
+    for subject, magnitude in (("flange_thickness", tf), ("web_thickness", tw)):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "flange_thickness and web_thickness must be positive",
+                subject=subject,
+                source=_SECTION_SOURCE,
+            )
     if 2 * tf >= h:
-        raise ValueError(f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)")
+        raise _beam_refusal(
+            f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)",
+            subject="flange_thickness and total_height",
+            source=_SECTION_SOURCE,
+        )
     if tw >= b:
-        raise ValueError(f"web_thickness ({tw} mm) must be below flange_width ({b} mm)")
+        raise _beam_refusal(
+            f"web_thickness ({tw} mm) must be below flange_width ({b} mm)",
+            subject="web_thickness and flange_width",
+            source=_SECTION_SOURCE,
+        )
     return Quantity(magnitude=(b * h**3 - (b - tw) * (h - 2 * tf) ** 3) / 12.0, unit="mm**4")
 
 
@@ -300,9 +393,11 @@ def hollow_circular_plastic_section_modulus(
     do = outer_diameter.to("mm").magnitude
     di = inner_diameter.to("mm").magnitude
     if not 0 <= di < do:
-        raise ValueError(
+        raise _beam_refusal(
             f"inner_diameter ({inner_diameter}) must be non-negative and below "
-            f"outer_diameter ({outer_diameter})"
+            f"outer_diameter ({outer_diameter})",
+            subject="inner_diameter and outer_diameter",
+            source=_SECTION_SOURCE,
         )
     return _as_quantity((outer_diameter.pint**3 - inner_diameter.pint**3) / 6, "mm**3")
 
@@ -326,10 +421,17 @@ def rectangular_tube_plastic_section_modulus(
     h = height.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _beam_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_SECTION_SOURCE,
+        )
     if 2 * t >= b or 2 * t >= h:
-        raise ValueError(
-            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, {height})"
+        raise _beam_refusal(
+            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, "
+            f"{height})",
+            subject="wall_thickness, width, and height",
+            source=_SECTION_SOURCE,
         )
     inner = (b - 2 * t) * (h - 2 * t) ** 2
     return Quantity(magnitude=(b * h**2 - inner) / 4.0, unit="mm**3")
@@ -364,12 +466,25 @@ def i_section_plastic_section_modulus(
     h = total_height.to("mm").magnitude
     tf = flange_thickness.to("mm").magnitude
     tw = web_thickness.to("mm").magnitude
-    if tf <= 0 or tw <= 0:
-        raise ValueError("flange_thickness and web_thickness must be positive")
+    for subject, magnitude in (("flange_thickness", tf), ("web_thickness", tw)):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "flange_thickness and web_thickness must be positive",
+                subject=subject,
+                source=_SECTION_SOURCE,
+            )
     if 2 * tf >= h:
-        raise ValueError(f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)")
+        raise _beam_refusal(
+            f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)",
+            subject="flange_thickness and total_height",
+            source=_SECTION_SOURCE,
+        )
     if tw >= b:
-        raise ValueError(f"web_thickness ({tw} mm) must be below flange_width ({b} mm)")
+        raise _beam_refusal(
+            f"web_thickness ({tw} mm) must be below flange_width ({b} mm)",
+            subject="web_thickness and flange_width",
+            source=_SECTION_SOURCE,
+        )
     z_p = b * tf * (h - tf) + tw * (h - 2 * tf) ** 2 / 4.0
     return Quantity(magnitude=z_p, unit="mm**3")
 
@@ -387,9 +502,17 @@ def plastic_moment(*, plastic_section_modulus: Quantity, yield_strength: Quantit
     _require(plastic_section_modulus, "[length]**3", "plastic_section_modulus")
     _require(yield_strength, "[pressure]", "yield_strength")
     if plastic_section_modulus.to("mm**3").magnitude <= 0:
-        raise ValueError(f"plastic_section_modulus must be positive; got {plastic_section_modulus}")
+        raise _beam_refusal(
+            f"plastic_section_modulus must be positive; got {plastic_section_modulus}",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     if yield_strength.to("MPa").magnitude <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _beam_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     return _as_quantity(plastic_section_modulus.pint * yield_strength.pint, "N*m")
 
 
@@ -399,9 +522,15 @@ def _collapse_inputs(
     _require(plastic_moment_capacity, "[force] * [length]", "plastic_moment_capacity")
     _require(span, "[length]", "span")
     if plastic_moment_capacity.to("N*m").magnitude <= 0:
-        raise ValueError(f"plastic_moment_capacity must be positive; got {plastic_moment_capacity}")
+        raise _beam_refusal(
+            f"plastic_moment_capacity must be positive; got {plastic_moment_capacity}",
+            subject="plastic_moment_capacity",
+            source=_SECTION_SOURCE,
+        )
     if span.to("mm").magnitude <= 0:
-        raise ValueError(f"span must be positive; got {span}")
+        raise _beam_refusal(
+            f"span must be positive; got {span}", subject="span", source=_LAYOUT_SOURCE
+        )
     return plastic_moment_capacity, span
 
 
@@ -469,8 +598,13 @@ def _slope_inputs(
     ell = length.to("mm").magnitude
     i = second_moment.to("mm**4").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if ell <= 0 or i <= 0 or e <= 0:
-        raise ValueError("length, second_moment, and elastic_modulus must be positive")
+    for subject, magnitude in (("length", ell), ("second_moment", i), ("elastic_modulus", e)):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "length, second_moment, and elastic_modulus must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     return ell, i, e
 
 
@@ -635,9 +769,15 @@ def max_transverse_shear_stress(
     _require(shear_force, "[force]", "shear_force")
     _require(area, "[length]**2", "area")
     if area.magnitude <= 0:
-        raise ValueError(f"area must be positive; got {area}")
+        raise _beam_refusal(
+            f"area must be positive; got {area}", subject="area", source=_SECTION_SOURCE
+        )
     if form_factor <= 0:
-        raise ValueError(f"form_factor must be positive; got {form_factor}")
+        raise _beam_refusal(
+            f"form_factor must be positive; got {form_factor}",
+            subject="form_factor",
+            source=_SECTION_SOURCE,
+        )
     stress = form_factor * shear_force.pint / area.pint
     return _as_quantity(stress, "MPa")
 
@@ -677,9 +817,11 @@ def aisc_web_local_yielding_strength(
     k = fillet_distance.to("mm").magnitude
     n = bearing_length.to("mm").magnitude
     if fyw <= 0 or tw <= 0 or k <= 0 or n < 0:
-        raise ValueError(
+        raise _beam_refusal(
             "web_yield, web_thickness, and fillet_distance must be positive and "
-            "bearing_length non-negative"
+            "bearing_length non-negative",
+            subject="web_yield, web_thickness, fillet_distance, and bearing_length",
+            source=_SECTION_SOURCE,
         )
     coefficient = 2.5 if at_member_end else 5.0
     rn_n = fyw * tw * (coefficient * k + n)
@@ -719,10 +861,18 @@ def aisc_bearing_length_for_web_yielding(
     fyw = web_yield.to("MPa").magnitude
     tw = web_thickness.to("mm").magnitude
     k = fillet_distance.to("mm").magnitude
-    if r <= 0 or fyw <= 0 or tw <= 0 or k <= 0:
-        raise ValueError(
-            "required_reaction, web_yield, web_thickness, and fillet_distance must be positive"
-        )
+    for subject, magnitude in (
+        ("required_reaction", r),
+        ("web_yield", fyw),
+        ("web_thickness", tw),
+        ("fillet_distance", k),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "required_reaction, web_yield, web_thickness, and fillet_distance must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     coefficient = 2.5 if at_member_end else 5.0
     n_mm = r / (fyw * tw) - coefficient * k
     return Quantity(magnitude=max(0.0, n_mm), unit="mm")
@@ -769,9 +919,14 @@ def aisc_web_crippling_strength(
     fyw = web_yield.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if tw <= 0 or tf <= 0 or d <= 0 or n < 0 or fyw <= 0 or e <= 0:
-        raise ValueError(
+        raise _beam_refusal(
             "web_thickness, flange_thickness, member_depth, web_yield, and "
-            "elastic_modulus must be positive and bearing_length non-negative"
+            "elastic_modulus must be positive and bearing_length non-negative",
+            subject=(
+                "web_thickness, flange_thickness, member_depth, bearing_length, web_yield, and "
+                "elastic_modulus"
+            ),
+            source=_SECTION_SOURCE,
         )
     n_over_d = n / d
     ratio = (tw / tf) ** 1.5
@@ -821,10 +976,18 @@ def aisc_web_compression_buckling_strength(
     h = clear_web_depth.to("mm").magnitude
     fyw = web_yield.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if tw <= 0 or h <= 0 or fyw <= 0 or e <= 0:
-        raise ValueError(
-            "web_thickness, clear_web_depth, web_yield, and elastic_modulus must be positive"
-        )
+    for subject, magnitude in (
+        ("web_thickness", tw),
+        ("clear_web_depth", h),
+        ("web_yield", fyw),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "web_thickness, clear_web_depth, web_yield, and elastic_modulus must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     rn_n = 24.0 * tw**3 * (e * fyw) ** 0.5 / h
     if at_member_end:
         rn_n *= 0.5
@@ -857,12 +1020,18 @@ def aisc_round_hss_flexural_strength(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not isinstance(plastic_section_modulus, Quantity):
-        raise ValueError(
+        raise _beam_refusal(
             f"plastic_section_modulus must be a [length]**3 quantity; "
-            f"got {plastic_section_modulus!r}"
+            f"got {plastic_section_modulus!r}",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
         )
     if not plastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+        raise _beam_refusal(
+            "plastic_section_modulus must be a [length]**3 quantity",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     # Through the module's own `_require`, which checks finiteness. Written as a raw
     # `has_dimension` these three functions let a NaN elastic modulus past, and
     # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
@@ -876,11 +1045,21 @@ def aisc_round_hss_flexural_strength(
     e = elastic_modulus.to("MPa").magnitude
     z = plastic_section_modulus.to("mm**3").magnitude
     s = elastic_section_modulus.to("mm**3").magnitude
-    if d <= 0 or t <= 0 or fy <= 0 or e <= 0 or z <= 0 or s <= 0:
-        raise ValueError(
-            "diameter, thickness, yield_strength, elastic_modulus, and the section "
-            "moduli must all be positive"
-        )
+    for subject, magnitude in (
+        ("diameter", d),
+        ("thickness", t),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+        ("plastic_section_modulus", z),
+        ("elastic_section_modulus", s),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "diameter, thickness, yield_strength, elastic_modulus, and the section "
+                "moduli must all be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     dt = d / t
     limit = 0.45 * e / fy
     if dt > limit:
@@ -888,9 +1067,11 @@ def aisc_round_hss_flexural_strength(
         # against a limit of 90.0 read "90.0 exceeds the limit 90.0" — a refusal whose own
         # numbers say there is nothing to refuse.
         places = decimals_distinguishing(dt, limit, minimum=1)
-        raise ValueError(
+        raise _beam_refusal(
             f"D/t = {dt:.{places}f} exceeds the §F8 applicability limit "
-            f"0.45E/F_y = {limit:.{places}f}"
+            f"0.45E/F_y = {limit:.{places}f}",
+            subject="diameter, thickness, yield_strength, and elastic_modulus",
+            source=_SECTION_SOURCE,
         )
     lambda_p = 0.07 * e / fy
     lambda_r = 0.31 * e / fy
@@ -937,12 +1118,18 @@ def aisc_rectangular_hss_flexural_strength(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not isinstance(plastic_section_modulus, Quantity):
-        raise ValueError(
+        raise _beam_refusal(
             f"plastic_section_modulus must be a [length]**3 quantity; "
-            f"got {plastic_section_modulus!r}"
+            f"got {plastic_section_modulus!r}",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
         )
     if not plastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+        raise _beam_refusal(
+            "plastic_section_modulus must be a [length]**3 quantity",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     # Through the module's own `_require`, which checks finiteness. Written as a raw
     # `has_dimension` these three functions let a NaN elastic modulus past, and
     # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
@@ -957,25 +1144,40 @@ def aisc_rectangular_hss_flexural_strength(
     e = elastic_modulus.to("MPa").magnitude
     z = plastic_section_modulus.to("mm**3").magnitude
     s = elastic_section_modulus.to("mm**3").magnitude
-    if b <= 0 or h <= 0 or t <= 0 or fy <= 0 or e <= 0 or z <= 0 or s <= 0:
-        raise ValueError(
-            "flange_flat_width, web_flat_height, wall_thickness, yield_strength, "
-            "elastic_modulus, and the section moduli must all be positive"
-        )
+    for subject, magnitude in (
+        ("flange_flat_width", b),
+        ("web_flat_height", h),
+        ("wall_thickness", t),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+        ("plastic_section_modulus", z),
+        ("elastic_section_modulus", s),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "flange_flat_width, web_flat_height, wall_thickness, yield_strength, "
+                "elastic_modulus, and the section moduli must all be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     root = (e / fy) ** 0.5
     b_t = b / t
     h_t = h / t
     lambda_rf = 1.40 * root
     lambda_rw = 5.70 * root
     if b_t > lambda_rf:
-        raise ValueError(
+        raise _beam_refusal(
             f"slender flange (b/t = {b_t:.1f} > lambda_rf = {lambda_rf:.1f}); §F7 "
-            "effective-section modulus is required and is not implemented"
+            "effective-section modulus is required and is not implemented",
+            subject="flange_flat_width, wall_thickness, yield_strength, and elastic_modulus",
+            source=_SECTION_SOURCE,
         )
     if h_t > lambda_rw:
-        raise ValueError(
+        raise _beam_refusal(
             f"slender web (h/t = {h_t:.1f} > lambda_rw = {lambda_rw:.1f}); §F7 "
-            "effective-section modulus is required and is not implemented"
+            "effective-section modulus is required and is not implemented",
+            subject="web_flat_height, wall_thickness, yield_strength, and elastic_modulus",
+            source=_SECTION_SOURCE,
         )
     lambda_pf = 1.12 * root
     lambda_pw = 2.42 * root
@@ -1027,16 +1229,33 @@ def aisc_plate_girder_bending_factor(
     tfc = compression_flange_thickness.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if hc <= 0 or tw <= 0 or bfc <= 0 or tfc <= 0 or fy <= 0 or e <= 0:
-        raise ValueError("all dimensions and material properties must be positive")
+    for subject, magnitude in (
+        ("web_clear_depth", hc),
+        ("web_thickness", tw),
+        ("compression_flange_width", bfc),
+        ("compression_flange_thickness", tfc),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "all dimensions and material properties must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     a_w = min(hc * tw / (bfc * tfc), 10.0)
     limit = 5.7 * (e / fy) ** 0.5
     r_pg = 1.0 - (a_w / (1200.0 + 300.0 * a_w)) * (hc / tw - limit)
     if r_pg <= 0.0:
-        raise ValueError(
+        raise _beam_refusal(
             f"web slenderness h_c/t_w = {hc / tw:.0f} drives the F5 reduction factor to "
             f"{r_pg:.3f}, at or below zero — the girder is far outside the range the §F5 "
-            "linear reduction covers (AISC caps web slenderness separately in §F13.2)"
+            "linear reduction covers (AISC caps web slenderness separately in §F13.2)",
+            subject=(
+                "web_clear_depth, web_thickness, compression_flange_width, "
+                "compression_flange_thickness, yield_strength, and elastic_modulus"
+            ),
+            source=_SECTION_SOURCE,
         )
     return min(r_pg, 1.0)
 
@@ -1066,9 +1285,15 @@ def aisc_tension_field_shear_strength(
     check those limits before relying on this. Returns V_n in kN.
     """
     if not isinstance(web_area, Quantity):
-        raise ValueError(f"web_area must be a [length]**2 quantity; got {web_area!r}")
+        raise _beam_refusal(
+            f"web_area must be a [length]**2 quantity; got {web_area!r}",
+            subject="web_area",
+            source=_SECTION_SOURCE,
+        )
     if not web_area.has_dimension("[length]**2"):
-        raise ValueError("web_area must be a [length]**2 quantity")
+        raise _beam_refusal(
+            "web_area must be a [length]**2 quantity", subject="web_area", source=_SECTION_SOURCE
+        )
     _require(web_depth, "[length]", "web_depth")
     _require(web_thickness, "[length]", "web_thickness")
     _require(stiffener_spacing, "[length]", "stiffener_spacing")
@@ -1080,8 +1305,18 @@ def aisc_tension_field_shear_strength(
     a = stiffener_spacing.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if a_w <= 0 or h <= 0 or tw <= 0 or a <= 0 or fy <= 0 or e <= 0:
-        raise ValueError("all inputs must be positive")
+    for subject, magnitude in (
+        ("web_area", a_w),
+        ("web_depth", h),
+        ("web_thickness", tw),
+        ("stiffener_spacing", a),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "all inputs must be positive", subject=subject, source=_beam_input_source(subject)
+            )
     aspect = a / h
     h_tw = h / tw
     # AISC 360 §G2.2(b) does not permit tension-field action when the panel is too long to
@@ -1091,11 +1326,13 @@ def aisc_tension_field_shear_strength(
     # a/h = 5 and still 1.22x at a/h = 20.
     aspect_limit = min(3.0, (260.0 / h_tw) ** 2)
     if aspect > aspect_limit:
-        raise ValueError(
+        raise _beam_refusal(
             f"a/h = {aspect:.4g} exceeds the AISC 360 §G2.2(b) limit of {aspect_limit:.4g} "
             f"(the smaller of 3.0 and [260/(h/t_w)]² = {(260.0 / h_tw) ** 2:.4g}), so tension-"
             f"field action is not permitted for this panel. Use the §G2.1 shear strength, "
-            f"which takes no tension-field bonus"
+            f"which takes no tension-field bonus",
+            subject="stiffener_spacing, web_depth, and web_thickness",
+            source=_LAYOUT_SOURCE,
         )
     kv = 5.0 + 5.0 / aspect**2
     limit_1 = 1.10 * (kv * e / fy) ** 0.5
@@ -1146,8 +1383,20 @@ def aisc_plate_girder_flange_stress(
     tw = web_thickness.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if bf <= 0 or tf <= 0 or h <= 0 or tw <= 0 or fy <= 0 or e <= 0:
-        raise ValueError("all dimensions and material properties must be positive")
+    for subject, magnitude in (
+        ("flange_width", bf),
+        ("flange_thickness", tf),
+        ("web_depth", h),
+        ("web_thickness", tw),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "all dimensions and material properties must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     k_c = min(max(4.0 / (h / tw) ** 0.5, 0.35), 0.76)
     lam = bf / (2.0 * tf)
     f_l = 0.7 * fy
@@ -1189,12 +1438,18 @@ def aisc_minor_axis_flexural_strength(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not isinstance(plastic_section_modulus, Quantity):
-        raise ValueError(
+        raise _beam_refusal(
             f"plastic_section_modulus must be a [length]**3 quantity; "
-            f"got {plastic_section_modulus!r}"
+            f"got {plastic_section_modulus!r}",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
         )
     if not plastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+        raise _beam_refusal(
+            "plastic_section_modulus must be a [length]**3 quantity",
+            subject="plastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     # Through the module's own `_require`, which checks finiteness. Written as a raw
     # `has_dimension` these three functions let a NaN elastic modulus past, and
     # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
@@ -1208,11 +1463,21 @@ def aisc_minor_axis_flexural_strength(
     e = elastic_modulus.to("MPa").magnitude
     zy = plastic_section_modulus.to("mm**3").magnitude
     sy = elastic_section_modulus.to("mm**3").magnitude
-    if bf <= 0 or tf <= 0 or fy <= 0 or e <= 0 or zy <= 0 or sy <= 0:
-        raise ValueError(
-            "flange_width, flange_thickness, yield_strength, elastic_modulus, and "
-            "the section moduli must all be positive"
-        )
+    for subject, magnitude in (
+        ("flange_width", bf),
+        ("flange_thickness", tf),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+        ("plastic_section_modulus", zy),
+        ("elastic_section_modulus", sy),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "flange_width, flange_thickness, yield_strength, elastic_modulus, and "
+                "the section moduli must all be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     lam = bf / (2.0 * tf)
     root = (e / fy) ** 0.5
     lambda_pf = 0.38 * root
@@ -1248,9 +1513,17 @@ def aisc_round_hss_shear_strength(
     tube buckles below yield. Returns V_n in kN.
     """
     if not isinstance(gross_area, Quantity):
-        raise ValueError(f"gross_area must be a [length]**2 quantity; got {gross_area!r}")
+        raise _beam_refusal(
+            f"gross_area must be a [length]**2 quantity; got {gross_area!r}",
+            subject="gross_area",
+            source=_SECTION_SOURCE,
+        )
     if not gross_area.has_dimension("[length]**2"):
-        raise ValueError("gross_area must be a [length]**2 quantity")
+        raise _beam_refusal(
+            "gross_area must be a [length]**2 quantity",
+            subject="gross_area",
+            source=_SECTION_SOURCE,
+        )
     _require(diameter, "[length]", "diameter")
     _require(thickness, "[length]", "thickness")
     _require(shear_length, "[length]", "shear_length")
@@ -1262,11 +1535,21 @@ def aisc_round_hss_shear_strength(
     lv = shear_length.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if ag <= 0 or d <= 0 or t <= 0 or lv <= 0 or fy <= 0 or e <= 0:
-        raise ValueError(
-            "gross_area, diameter, thickness, shear_length, yield_strength, and "
-            "elastic_modulus must be positive"
-        )
+    for subject, magnitude in (
+        ("gross_area", ag),
+        ("diameter", d),
+        ("thickness", t),
+        ("shear_length", lv),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "gross_area, diameter, thickness, shear_length, yield_strength, and "
+                "elastic_modulus must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     dt = d / t
     f_cr_a = 1.60 * e / ((lv / d) ** 0.5 * dt**1.25)
     f_cr_b = 0.78 * e / dt**1.5
@@ -1303,12 +1586,24 @@ def aisc_rectangular_hss_shear_strength(
     t = thickness.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if h <= 0 or t <= 0 or fy <= 0 or e <= 0:
-        raise ValueError(
-            "web_height, thickness, yield_strength, and elastic_modulus must be positive"
-        )
+    for subject, magnitude in (
+        ("web_height", h),
+        ("thickness", t),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "web_height, thickness, yield_strength, and elastic_modulus must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     if shear_buckling_coefficient <= 0:
-        raise ValueError("shear_buckling_coefficient must be positive")
+        raise _beam_refusal(
+            "shear_buckling_coefficient must be positive",
+            subject="shear_buckling_coefficient",
+            source=_SECTION_SOURCE,
+        )
     h_t = h / t
     kv = shear_buckling_coefficient
     limit_1 = 1.10 * (kv * e / fy) ** 0.5
@@ -1356,13 +1651,26 @@ def aisc_web_shear_strength(
     h = clear_web_depth.to("mm").magnitude
     fy = web_yield.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if d <= 0 or tw <= 0 or h <= 0 or fy <= 0 or e <= 0:
-        raise ValueError(
-            "overall_depth, web_thickness, clear_web_depth, web_yield, and "
-            "elastic_modulus must be positive"
-        )
+    for subject, magnitude in (
+        ("overall_depth", d),
+        ("web_thickness", tw),
+        ("clear_web_depth", h),
+        ("web_yield", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "overall_depth, web_thickness, clear_web_depth, web_yield, and "
+                "elastic_modulus must be positive",
+                subject=subject,
+                source=_beam_input_source(subject),
+            )
     if shear_buckling_coefficient <= 0:
-        raise ValueError("shear_buckling_coefficient must be positive")
+        raise _beam_refusal(
+            "shear_buckling_coefficient must be positive",
+            subject="shear_buckling_coefficient",
+            source=_SECTION_SOURCE,
+        )
     h_tw = h / tw
     threshold = 1.10 * (shear_buckling_coefficient * e / fy) ** 0.5
     c_v1 = 1.0 if h_tw <= threshold else threshold / h_tw
@@ -1393,19 +1701,38 @@ def two_span_continuous_middle_moment(
     _require(span_1, "[length]", "span_1")
     _require(span_2, "[length]", "span_2")
     if not isinstance(udl_1, Quantity):
-        raise ValueError(f"udl_1 must be a [force] / [length] quantity; got {udl_1!r}")
+        raise _beam_refusal(
+            f"udl_1 must be a [force] / [length] quantity; got {udl_1!r}",
+            subject="udl_1",
+            source=_LOAD_SOURCE,
+        )
     if not udl_1.has_dimension("[force] / [length]"):
-        raise ValueError(f"udl_1 must be a force-per-length quantity; got {udl_1.dimensionality}")
+        raise _beam_refusal(
+            f"udl_1 must be a force-per-length quantity; got {udl_1.dimensionality}",
+            subject="udl_1",
+            source=_LOAD_SOURCE,
+        )
     if not isinstance(udl_2, Quantity):
-        raise ValueError(f"udl_2 must be a [force] / [length] quantity; got {udl_2!r}")
+        raise _beam_refusal(
+            f"udl_2 must be a [force] / [length] quantity; got {udl_2!r}",
+            subject="udl_2",
+            source=_LOAD_SOURCE,
+        )
     if not udl_2.has_dimension("[force] / [length]"):
-        raise ValueError(f"udl_2 must be a force-per-length quantity; got {udl_2.dimensionality}")
+        raise _beam_refusal(
+            f"udl_2 must be a force-per-length quantity; got {udl_2.dimensionality}",
+            subject="udl_2",
+            source=_LOAD_SOURCE,
+        )
     l1 = span_1.to("m").magnitude
     l2 = span_2.to("m").magnitude
     w1 = udl_1.to("kN/m").magnitude
     w2 = udl_2.to("kN/m").magnitude
-    if l1 <= 0 or l2 <= 0:
-        raise ValueError("span_1 and span_2 must be positive")
+    for subject, magnitude in (("span_1", l1), ("span_2", l2)):
+        if magnitude <= 0:
+            raise _beam_refusal(
+                "span_1 and span_2 must be positive", subject=subject, source=_LAYOUT_SOURCE
+            )
     moment = -(w1 * l1**3 + w2 * l2**3) / (8.0 * (l1 + l2))
     return Quantity(magnitude=moment, unit="kN*m")
 
@@ -1463,25 +1790,37 @@ def shear_flow(
     """
     _require(shear_force, "[force]", "shear_force")
     if not isinstance(first_moment_of_area, Quantity):
-        raise ValueError(
-            f"first_moment_of_area must be a [length]**3 quantity; got {first_moment_of_area!r}"
+        raise _beam_refusal(
+            f"first_moment_of_area must be a [length]**3 quantity; got {first_moment_of_area!r}",
+            subject="first_moment_of_area",
+            source=_SECTION_SOURCE,
         )
     if not first_moment_of_area.has_dimension("[length]**3"):
-        raise ValueError(
+        raise _beam_refusal(
             f"first_moment_of_area must be a [length]**3 quantity; got "
-            f"{first_moment_of_area.dimensionality} ({first_moment_of_area})"
+            f"{first_moment_of_area.dimensionality} ({first_moment_of_area})",
+            subject="first_moment_of_area",
+            source=_SECTION_SOURCE,
         )
     if not isinstance(second_moment_of_area, Quantity):
-        raise ValueError(
-            f"second_moment_of_area must be a [length]**4 quantity; got {second_moment_of_area!r}"
+        raise _beam_refusal(
+            f"second_moment_of_area must be a [length]**4 quantity; got {second_moment_of_area!r}",
+            subject="second_moment_of_area",
+            source=_SECTION_SOURCE,
         )
     if not second_moment_of_area.has_dimension("[length]**4"):
-        raise ValueError(
+        raise _beam_refusal(
             f"second_moment_of_area must be a [length]**4 quantity; got "
-            f"{second_moment_of_area.dimensionality} ({second_moment_of_area})"
+            f"{second_moment_of_area.dimensionality} ({second_moment_of_area})",
+            subject="second_moment_of_area",
+            source=_SECTION_SOURCE,
         )
     if second_moment_of_area.to("mm**4").magnitude <= 0:
-        raise ValueError(f"second_moment_of_area must be positive; got {second_moment_of_area}")
+        raise _beam_refusal(
+            f"second_moment_of_area must be positive; got {second_moment_of_area}",
+            subject="second_moment_of_area",
+            source=_SECTION_SOURCE,
+        )
     q = shear_force.pint * first_moment_of_area.pint / second_moment_of_area.pint
     return _as_quantity(q, "N/mm")
 
@@ -1502,14 +1841,24 @@ def fastener_spacing_for_shear_flow(
     """
     _require(fastener_capacity, "[force]", "fastener_capacity")
     if not isinstance(shear_flow, Quantity):
-        raise ValueError(f"shear_flow must be a [force] / [length] quantity; got {shear_flow!r}")
+        raise _beam_refusal(
+            f"shear_flow must be a [force] / [length] quantity; got {shear_flow!r}",
+            subject="shear_flow",
+            source=_LOAD_SOURCE,
+        )
     if not shear_flow.has_dimension("[force] / [length]"):
-        raise ValueError(
+        raise _beam_refusal(
             f"shear_flow must be a [force]/[length] quantity; got "
-            f"{shear_flow.dimensionality} ({shear_flow})"
+            f"{shear_flow.dimensionality} ({shear_flow})",
+            subject="shear_flow",
+            source=_LOAD_SOURCE,
         )
     if shear_flow.to("N/mm").magnitude <= 0:
-        raise ValueError(f"shear_flow must be positive; got {shear_flow}")
+        raise _beam_refusal(
+            f"shear_flow must be positive; got {shear_flow}",
+            subject="shear_flow",
+            source=_LOAD_SOURCE,
+        )
     spacing = fastener_capacity.pint / shear_flow.pint
     return _as_quantity(spacing, "mm")
 
@@ -1588,9 +1937,13 @@ def span_deflection_limit(*, span: Quantity, ratio: float) -> Quantity:
     _require(span, "[length]", "span")
     length = span.to("mm").magnitude
     if length <= 0:
-        raise ValueError(f"span must be positive; got {span}")
+        raise _beam_refusal(
+            f"span must be positive; got {span}", subject="span", source=_LAYOUT_SOURCE
+        )
     if ratio <= 0:
-        raise ValueError(f"ratio must be positive; got {ratio}")
+        raise _beam_refusal(
+            f"ratio must be positive; got {ratio}", subject="ratio", source=_CRITERION_SOURCE
+        )
     return Quantity(magnitude=length / ratio, unit="mm")
 
 
@@ -1666,17 +2019,21 @@ class BeamBendingResult(RevalidatedModel):
         with nothing behind it and no word about why.
         """
         if (self.deflection_formula is None) != (not self.deflection_inputs):
-            raise ValueError(
+            raise _beam_refusal(
                 "a deflection formula and the symbols it names travel together; got "
                 f"formula={self.deflection_formula!r} with "
-                f"{len(self.deflection_inputs)} declared symbol(s)"
+                f"{len(self.deflection_inputs)} declared symbol(s)",
+                subject="deflection_formula and deflection_inputs",
+                source=_DERIVATION_SOURCE,
             )
         if (self.deflection_formula is None) == (self.deflection_underived is None):
-            raise ValueError(
+            raise _beam_refusal(
                 "a load case states its deflection formula or states why it has none, "
                 "never both and never neither; got "
                 f"formula={self.deflection_formula!r}, "
-                f"underived={self.deflection_underived!r}"
+                f"underived={self.deflection_underived!r}",
+                subject="deflection_formula and deflection_underived",
+                source=_DERIVATION_SOURCE,
             )
         return self
 
@@ -1800,9 +2157,11 @@ def cantilever_offset_load(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude <= length_p.magnitude:
-        raise ValueError(
+        raise _beam_refusal(
             f"load_position must lie on the beam (0, {length}], measured from the "
-            f"fixed end; got {load_position}"
+            f"fixed end; got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -1909,8 +2268,10 @@ def cantilever_partial_uniform_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -1978,8 +2339,10 @@ def cantilever_center_patch_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2204,9 +2567,11 @@ def cantilever_offset_moment(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude <= length_p.magnitude:
-        raise ValueError(
+        raise _beam_refusal(
             f"load_position must lie on the beam (0, {length}], measured from the "
-            f"fixed end; got {load_position}"
+            f"fixed end; got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2311,8 +2676,10 @@ def simply_supported_offset_load(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude < length_p.magnitude:
-        raise ValueError(
-            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        raise _beam_refusal(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2378,8 +2745,10 @@ def simply_supported_symmetric_point_loads(
     length_p = length.pint
     offset = load_offset.pint.to(length_p.units)
     if not 0 < offset.magnitude <= length_p.magnitude / 2:
-        raise ValueError(
-            f"load_offset must lie within the half-span (0, {length} / 2]; got {load_offset}"
+        raise _beam_refusal(
+            f"load_offset must lie within the half-span (0, {length} / 2]; got {load_offset}",
+            subject="load_offset and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2488,8 +2857,10 @@ def simply_supported_partial_uniform_load(
     loaded = loaded_length.pint.to(length_p.units)
     alpha = loaded.magnitude / length_p.magnitude  # a/L
     if not 0 < alpha <= 1:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2497,12 +2868,14 @@ def simply_supported_partial_uniform_load(
 
     reaction = w * loaded * (2 * length_p - loaded) / (2 * length_p)
     if distributed_load.magnitude == 0:
-        raise ValueError(
+        raise _beam_refusal(
             "distributed_load is zero: the peak moment of a partial uniform load is "
             "located by R/w, which has no location on an unloaded span. An unloaded bay "
             "in a pattern-loading sweep is a span with nothing to evaluate, not a span "
             "at zero stress — every other load case in this module returns zeros for it, "
-            "and this one divided by zero instead."
+            "and this one divided by zero instead.",
+            subject="distributed_load",
+            source=_LOAD_SOURCE,
         )
     moment = reaction**2 / (2 * w)
     stress = moment * c / inertia
@@ -2583,8 +2956,10 @@ def simply_supported_center_patch_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2777,8 +3152,10 @@ def simply_supported_offset_moment(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude < length_p.magnitude:
-        raise ValueError(
-            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        raise _beam_refusal(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -2902,9 +3279,11 @@ def fixed_pinned_offset_load(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude < length_p.magnitude:
-        raise ValueError(
+        raise _beam_refusal(
             f"load_position must lie strictly inside the span (0, {length}), measured "
-            f"from the propped end; got {load_position}"
+            f"from the propped end; got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -3040,8 +3419,10 @@ def fixed_pinned_partial_uniform_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -3122,8 +3503,10 @@ def fixed_pinned_center_patch_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -3405,7 +3788,11 @@ def overhang_tip_load(
     span = back_span.pint
     c_len = overhang.pint.to(span.units)
     if c_len.magnitude <= 0 or span.magnitude <= 0:
-        raise ValueError(f"back_span ({back_span}) and overhang ({overhang}) must be positive")
+        raise _beam_refusal(
+            f"back_span ({back_span}) and overhang ({overhang}) must be positive",
+            subject="back_span and overhang",
+            source=_LAYOUT_SOURCE,
+        )
     inertia = second_moment.pint
     c = extreme_fibre.pint
     e = elastic_modulus.pint
@@ -3479,7 +3866,11 @@ def overhang_uniform_load(
     span = back_span.pint
     c_len = overhang.pint.to(span.units)
     if c_len.magnitude <= 0 or span.magnitude <= 0:
-        raise ValueError(f"back_span ({back_span}) and overhang ({overhang}) must be positive")
+        raise _beam_refusal(
+            f"back_span ({back_span}) and overhang ({overhang}) must be positive",
+            subject="back_span and overhang",
+            source=_LAYOUT_SOURCE,
+        )
     inertia = second_moment.pint
     c = extreme_fibre.pint
     e = elastic_modulus.pint
@@ -3602,8 +3993,10 @@ def fixed_fixed_offset_load(
     length_p = length.pint
     position = load_position.pint.to(length_p.units)
     if not 0 < position.magnitude < length_p.magnitude:
-        raise ValueError(
-            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        raise _beam_refusal(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -3727,8 +4120,10 @@ def fixed_fixed_partial_uniform_load(
     loaded = loaded_length.pint.to(length_p.units)
     alpha = loaded.magnitude / length_p.magnitude  # a/L
     if not 0 < alpha <= 1:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint
@@ -3809,8 +4204,10 @@ def fixed_fixed_center_patch_load(
     length_p = length.pint
     loaded = loaded_length.pint.to(length_p.units)
     if not 0 < loaded.magnitude <= length_p.magnitude:
-        raise ValueError(
-            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        raise _beam_refusal(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}",
+            subject="loaded_length and length",
+            source=_LOAD_SOURCE,
         )
     inertia = second_moment.pint
     c = extreme_fibre.pint

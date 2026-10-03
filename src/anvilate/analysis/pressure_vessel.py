@@ -23,11 +23,89 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import Provenance, RevalidatedModel
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Direction, Need, RepairHint, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
 from ._flags import require_flag
 from .stress import von_mises_principal
+
+_DESIGN_SOURCE = "the vessel's design basis (design pressure, temperature, and loads)"
+_GEOMETRY_SOURCE = "the vessel or piping drawing (diameters, walls, and nozzles)"
+_MATERIAL_SOURCE = "the material's datasheet or mill test certificate"
+_CODE_SOURCE = "the cited ASME VIII or B31.3 clause and its tables"
+_ALLOWABLE_SOURCE = "the ASME II-D or B31.3 allowable-stress table row"
+
+
+class _PressureVesselInputError(RefusalError, ValueError):
+    """A pressure-vessel input that cannot be used without correction."""
+
+
+def _pressure_vessel_refusal(
+    message: str, *, subject: str, source: str
+) -> _PressureVesselInputError:
+    return _PressureVesselInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _pressure_vessel_input_source(name: str) -> str:
+    if name in {
+        "closed_ends",
+        "corrosion_allowance",
+        "design_pressure",
+        "design_temperature",
+        "in_plane_moment",
+        "mechanical_allowance",
+        "moments",
+        "name",
+        "operating_bolt_load",
+        "out_of_plane_moment",
+        "pressure",
+        "required_safety_factor",
+        "seating_bolt_load",
+        "torsional_moment",
+    }:
+        return _DESIGN_SOURCE
+    if name in {
+        "branch_pressure_design_thickness",
+        "coefficient_y",
+        "header_pressure_design_thickness",
+        "in_plane_sif",
+        "joint_efficiency",
+        "missing",
+        "nozzle_required_thickness",
+        "out_of_plane_sif",
+        "pressure_design_thickness",
+        "quality_factor",
+        "reinforcement",
+        "required",
+        "run_pressure_design_thickness",
+        "shell_required_thickness",
+        "strength_reduction_factor",
+        "stress",
+        "stress_range_factor",
+    }:
+        return _CODE_SOURCE
+    if name in {"elastic_modulus", "mill_tolerance_fraction", "poisson"}:
+        return _MATERIAL_SOURCE
+    if name in {
+        "allowable",
+        "allowable_stress",
+        "cold_allowable",
+        "hot_allowable",
+        "material",
+        "operating_allowable",
+        "seating_allowable",
+        "source",
+        "temperature",
+        "tolerance",
+        "value",
+    }:
+        return _ALLOWABLE_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 # What a refusal here was waiting on, for the report in `anvilate.needs`. Three of the screens
 # take a computed accounting rather than raw dimensions, so the need names the function that
@@ -109,10 +187,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _pressure_vessel_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_pressure_vessel_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _pressure_vessel_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_pressure_vessel_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -168,12 +252,14 @@ def _check_thin_wall_scope(radius_mm: float, thickness_mm: float, label: str) ->
     """Refuse an r/t below the scope of the thin-wall membrane forms."""
     ratio = radius_mm / thickness_mm
     if ratio < _THIN_WALL_RATIO_FLOOR:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"{label} gives r/t = {ratio:.4g}, below the r/t >= {_THIN_WALL_RATIO_FLOOR:g} "
             f"scope of the thin-wall membrane forms. The membrane stress is the large-r/t "
             f"limit of Lame and it understates the bore stress here (23% low at r/t = 2, and "
             f"the Tresca value 44% low). Use thick_wall_cylinder, which takes the same "
-            f"arguments and is exact."
+            f"arguments and is exact.",
+            subject="radius and wall_thickness",
+            source=_CODE_SOURCE,
         )
 
 
@@ -195,13 +281,19 @@ def thin_wall_cylinder(
     _require(radius, "[length]", "radius")
     _require(wall_thickness, "[length]", "wall_thickness")
     if wall_thickness.to("mm").magnitude <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _pressure_vessel_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     if pressure.magnitude <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"pressure must be positive; got {pressure}. A negative (external) pressure "
             f"returns a NEGATIVE membrane stress here, which is not the limit state: a "
             f"shell under external pressure fails by buckling, and the membrane formula "
-            f"says nothing about it. Every other function in this module refuses it."
+            f"says nothing about it. Every other function in this module refuses it.",
+            subject="pressure",
+            source=_DESIGN_SOURCE,
         )
 
     p = pressure.pint
@@ -245,10 +337,18 @@ def thin_wall_cylinder_diametral_growth(
     stress = thin_wall_cylinder(pressure=pressure, radius=radius, wall_thickness=wall_thickness)
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _pressure_vessel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _pressure_vessel_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     hoop = stress.hoop_stress.to("MPa").magnitude
     longitudinal = stress.longitudinal_stress.to("MPa").magnitude
     diameter = 2.0 * radius.to("mm").magnitude
@@ -284,20 +384,32 @@ def thin_wall_thickness_for_pressure(
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _pressure_vessel_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_DESIGN_SOURCE,
+        )
     if allowable_stress.to("MPa").magnitude <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _pressure_vessel_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_ALLOWABLE_SOURCE,
+        )
     # An external (negative gauge) pressure is not a membrane-tension problem at all — the
     # shell is governed by buckling, which this module does not screen — and the formula
     # obligingly returned a negative thickness for it. The sibling ASME sizer in this module
     # already guards both, so this matches it rather than inventing a new refusal.
     if pressure.to("MPa").magnitude <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"pressure must be a positive internal gauge pressure; got {pressure}. External "
-            f"pressure is a buckling problem (ASME UG-28), not a membrane one"
+            f"pressure is a buckling problem (ASME UG-28), not a membrane one",
+            subject="pressure",
+            source=_DESIGN_SOURCE,
         )
     if radius.to("mm").magnitude <= 0:
-        raise ValueError(f"radius must be positive; got {radius}")
+        raise _pressure_vessel_refusal(
+            f"radius must be positive; got {radius}", subject="radius", source=_GEOMETRY_SOURCE
+        )
     thickness = required_safety_factor * pressure.pint * radius.pint / allowable_stress.pint
     sized = _as_quantity(thickness, "mm")
     _check_thin_wall_scope(
@@ -330,17 +442,28 @@ def asme_cylinder_thickness(
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     p = pressure.to("MPa").magnitude
     r = radius.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if p <= 0 or r <= 0 or s <= 0:
-        raise ValueError("pressure, radius, and allowable_stress must be positive")
+    for subject, magnitude in (("pressure", p), ("radius", r), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, radius, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     denominator = s * joint_efficiency - 0.6 * p
     if denominator <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"S·E ({s * joint_efficiency:.4g} MPa) must exceed 0.6·P "
-            f"({0.6 * p:.4g} MPa); the pressure is too high for a thin-wall design"
+            f"({0.6 * p:.4g} MPa); the pressure is too high for a thin-wall design",
+            subject="pressure, allowable_stress, and joint_efficiency",
+            source=_ALLOWABLE_SOURCE,
         )
     return Quantity(magnitude=p * r / denominator, unit="mm")
 
@@ -365,12 +488,21 @@ def asme_cylinder_mawp(
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     t = thickness.to("mm").magnitude
     r = radius.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if t <= 0 or r <= 0 or s <= 0:
-        raise ValueError("thickness, radius, and allowable_stress must be positive")
+    for subject, magnitude in (("thickness", t), ("radius", r), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "thickness, radius, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     return Quantity(magnitude=s * joint_efficiency * t / (r + 0.6 * t), unit="MPa")
 
 
@@ -446,15 +578,27 @@ def _asme_head_thickness(
     _require(length, "[length]", "length")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     p = pressure.to("MPa").magnitude
     length_mm = length.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
     if p <= 0 or length_mm <= 0 or s <= 0:
-        raise ValueError("pressure, the geometry, and allowable_stress must be positive")
+        raise _pressure_vessel_refusal(
+            "pressure, the geometry, and allowable_stress must be positive",
+            subject="pressure, diameter, crown_radius, and allowable_stress",
+            source=_GEOMETRY_SOURCE,
+        )
     denominator = denom_leading * s * joint_efficiency - denom_factor * p
     if denominator <= 0:
-        raise ValueError("S·E is too low for the pressure (the head denominator is non-positive)")
+        raise _pressure_vessel_refusal(
+            "S·E is too low for the pressure (the head denominator is non-positive)",
+            subject="pressure, allowable_stress, and joint_efficiency",
+            source=_ALLOWABLE_SOURCE,
+        )
     return Quantity(magnitude=coefficient * p * length_mm / denominator, unit="mm")
 
 
@@ -525,12 +669,20 @@ def _asme_head_mawp(
     _require(length, "[length]", "length")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     t = thickness.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
     if t <= 0 or length_mm <= 0 or s <= 0:
-        raise ValueError("thickness, the geometry, and allowable_stress must be positive")
+        raise _pressure_vessel_refusal(
+            "thickness, the geometry, and allowable_stress must be positive",
+            subject="thickness, diameter, crown_radius, and allowable_stress",
+            source=_GEOMETRY_SOURCE,
+        )
     numerator = numer_leading * s * joint_efficiency * t
     denominator = length_coefficient * length_mm + denom_factor * t
     return Quantity(magnitude=numerator / denominator, unit="MPa")
@@ -557,17 +709,28 @@ def asme_spherical_shell_thickness(
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     p = pressure.to("MPa").magnitude
     r = radius.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if p <= 0 or r <= 0 or s <= 0:
-        raise ValueError("pressure, radius, and allowable_stress must be positive")
+    for subject, magnitude in (("pressure", p), ("radius", r), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, radius, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     denominator = 2.0 * s * joint_efficiency - 0.2 * p
     if denominator <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"2·S·E ({2 * s * joint_efficiency:.4g} MPa) must exceed 0.2·P "
-            f"({0.2 * p:.4g} MPa); the pressure is too high for a thin-wall sphere"
+            f"({0.2 * p:.4g} MPa); the pressure is too high for a thin-wall sphere",
+            subject="pressure, allowable_stress, and joint_efficiency",
+            source=_ALLOWABLE_SOURCE,
         )
     return Quantity(magnitude=p * r / denominator, unit="mm")
 
@@ -591,12 +754,21 @@ def asme_spherical_shell_mawp(
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     t = thickness.to("mm").magnitude
     r = radius.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if t <= 0 or r <= 0 or s <= 0:
-        raise ValueError("thickness, radius, and allowable_stress must be positive")
+    for subject, magnitude in (("thickness", t), ("radius", r), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "thickness, radius, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     return Quantity(magnitude=2.0 * s * joint_efficiency * t / (r + 0.2 * t), unit="MPa")
 
 
@@ -625,18 +797,33 @@ def asme_conical_head_thickness(
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 <= half_apex_angle_deg < 90:
-        raise ValueError(f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}")
+        raise _pressure_vessel_refusal(
+            f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}",
+            subject="half_apex_angle_deg",
+            source=_GEOMETRY_SOURCE,
+        )
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     p = pressure.to("MPa").magnitude
     d = diameter.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if p <= 0 or d <= 0 or s <= 0:
-        raise ValueError("pressure, diameter, and allowable_stress must be positive")
+    for subject, magnitude in (("pressure", p), ("diameter", d), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, diameter, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     denominator = s * joint_efficiency - 0.6 * p
     if denominator <= 0:
-        raise ValueError(
-            f"S·E ({s * joint_efficiency:.4g} MPa) must exceed 0.6·P ({0.6 * p:.4g} MPa)"
+        raise _pressure_vessel_refusal(
+            f"S·E ({s * joint_efficiency:.4g} MPa) must exceed 0.6·P ({0.6 * p:.4g} MPa)",
+            subject="pressure, allowable_stress, and joint_efficiency",
+            source=_ALLOWABLE_SOURCE,
         )
     return Quantity(
         magnitude=p * d / (2.0 * cos(radians(half_apex_angle_deg)) * denominator), unit="mm"
@@ -664,14 +851,27 @@ def asme_conical_head_mawp(
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 <= half_apex_angle_deg < 90:
-        raise ValueError(f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}")
+        raise _pressure_vessel_refusal(
+            f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}",
+            subject="half_apex_angle_deg",
+            source=_GEOMETRY_SOURCE,
+        )
     if not 0 < joint_efficiency <= 1:
-        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+        raise _pressure_vessel_refusal(
+            f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}",
+            subject="joint_efficiency",
+            source=_CODE_SOURCE,
+        )
     t = thickness.to("mm").magnitude
     d = diameter.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if t <= 0 or d <= 0 or s <= 0:
-        raise ValueError("thickness, diameter, and allowable_stress must be positive")
+    for subject, magnitude in (("thickness", t), ("diameter", d), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "thickness, diameter, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     cos_alpha = cos(radians(half_apex_angle_deg))
     numerator = 2.0 * cos_alpha * s * joint_efficiency * t
     return Quantity(magnitude=numerator / (d + 1.2 * cos_alpha * t), unit="MPa")
@@ -712,12 +912,21 @@ def asme_b313_pipe_wall_thickness(
     _require(outside_diameter, "[length]", "outside_diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < quality_factor <= 1:
-        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+        raise _pressure_vessel_refusal(
+            f"quality_factor must lie in (0, 1]; got {quality_factor}",
+            subject="quality_factor",
+            source=_CODE_SOURCE,
+        )
     p = pressure.to("MPa").magnitude
     d = outside_diameter.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if p <= 0 or d <= 0 or s <= 0:
-        raise ValueError("pressure, outside_diameter, and allowable_stress must be positive")
+    for subject, magnitude in (("pressure", p), ("outside_diameter", d), ("allowable_stress", s)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, outside_diameter, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     thickness = p * d / (2.0 * (s * quality_factor + p * coefficient_y))
     _check_b313_thin_wall(thickness, d, "the thickness this pressure requires")
     return Quantity(magnitude=thickness, unit="mm")
@@ -735,12 +944,14 @@ def _check_b313_thin_wall(thickness_mm: float, diameter_mm: float, label: str) -
     """Refuse a t/D past the ASME B31.3 304.1.2 scope of the straight-pipe formula."""
     ratio = thickness_mm / diameter_mm
     if ratio >= _B313_THICKNESS_RATIO_LIMIT:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"{label} gives t/D = {ratio:.4g}, at or past the t < D/6 = "
             f"{_B313_THICKNESS_RATIO_LIMIT:.4g} that ASME B31.3 304.1.2 scopes this "
             f"formula to. Past it the straight-pipe form runs UNconservative against the "
             f"thick-wall (Lame) requirement — 14% short at t/D = 0.32 — so B31.3 304.1.2(b) "
-            f"requires a thick-wall analysis instead."
+            f"requires a thick-wall analysis instead.",
+            subject="wall_thickness and outside_diameter",
+            source=_CODE_SOURCE,
         )
 
 
@@ -766,16 +977,31 @@ def asme_b313_pipe_pressure(
     _require(outside_diameter, "[length]", "outside_diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if not 0 < quality_factor <= 1:
-        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+        raise _pressure_vessel_refusal(
+            f"quality_factor must lie in (0, 1]; got {quality_factor}",
+            subject="quality_factor",
+            source=_CODE_SOURCE,
+        )
     t = wall_thickness.to("mm").magnitude
     d = outside_diameter.to("mm").magnitude
     s = allowable_stress.to("MPa").magnitude
-    if t <= 0 or d <= 0 or s <= 0:
-        raise ValueError("wall_thickness, outside_diameter, and allowable_stress must be positive")
+    for subject, magnitude in (
+        ("wall_thickness", t),
+        ("outside_diameter", d),
+        ("allowable_stress", s),
+    ):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "wall_thickness, outside_diameter, and allowable_stress must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     denominator = d - 2.0 * coefficient_y * t
     if denominator <= 0:
-        raise ValueError(
-            f"outside_diameter ({d:.4g} mm) must exceed 2·Y·t ({2.0 * coefficient_y * t:.4g} mm)"
+        raise _pressure_vessel_refusal(
+            f"outside_diameter ({d:.4g} mm) must exceed 2·Y·t ({2.0 * coefficient_y * t:.4g} mm)",
+            subject="outside_diameter, wall_thickness, and coefficient_y",
+            source=_GEOMETRY_SOURCE,
         )
     _check_b313_thin_wall(t, d, "wall_thickness")
     return Quantity(magnitude=2.0 * t * s * quality_factor / denominator, unit="MPa")
@@ -802,14 +1028,18 @@ def asme_b313_minimum_ordered_wall(
     _require(pressure_design_thickness, "[length]", "pressure_design_thickness")
     _require(mechanical_allowance, "[length]", "mechanical_allowance")
     if not 0 <= mill_tolerance_fraction < 1:
-        raise ValueError(
-            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}"
+        raise _pressure_vessel_refusal(
+            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}",
+            subject="mill_tolerance_fraction",
+            source=_MATERIAL_SOURCE,
         )
     t = pressure_design_thickness.to("mm").magnitude
     c = mechanical_allowance.to("mm").magnitude
     if t <= 0 or c < 0:
-        raise ValueError(
-            "pressure_design_thickness must be positive and mechanical_allowance non-negative"
+        raise _pressure_vessel_refusal(
+            "pressure_design_thickness must be positive and mechanical_allowance non-negative",
+            subject="pressure_design_thickness",
+            source=_CODE_SOURCE,
         )
     return Quantity(magnitude=(t + c) / (1.0 - mill_tolerance_fraction), unit="mm")
 
@@ -841,20 +1071,33 @@ def asme_b313_branch_required_reinforcement_area(
     _require(branch_wall, "[length]", "branch_wall")
     _require(mechanical_allowance, "[length]", "mechanical_allowance")
     if not 0 < branch_angle_deg <= 90:
-        raise ValueError(f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}")
+        raise _pressure_vessel_refusal(
+            f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}",
+            subject="branch_angle_deg",
+            source=_GEOMETRY_SOURCE,
+        )
     th = header_pressure_design_thickness.to("mm").magnitude
     db = branch_outside_diameter.to("mm").magnitude
     tb = branch_wall.to("mm").magnitude
     c = mechanical_allowance.to("mm").magnitude
     if th <= 0 or db <= 0 or tb <= 0 or c < 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             "the header thickness, branch diameter, and branch wall must be positive and "
-            "the mechanical allowance non-negative"
+            "the mechanical allowance non-negative",
+            subject=(
+                "header_pressure_design_thickness, branch_outside_diameter, branch_wall, and "
+                "mechanical_allowance"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
     sin_beta = sin(radians(branch_angle_deg))
     d1 = (db - 2.0 * (tb - c)) / sin_beta
     if d1 <= 0:
-        raise ValueError("the branch wall consumes the whole opening; check the inputs")
+        raise _pressure_vessel_refusal(
+            "the branch wall consumes the whole opening; check the inputs",
+            subject="branch_outside_diameter, branch_wall, and mechanical_allowance",
+            source=_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=th * d1 * (2.0 - sin_beta), unit="mm**2")
 
 
@@ -960,7 +1203,11 @@ def asme_b313_branch_reinforcement(
     ):
         _require(value, "[length]", name)
     if not 0 < branch_angle_deg <= 90:
-        raise ValueError(f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}")
+        raise _pressure_vessel_refusal(
+            f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}",
+            subject="branch_angle_deg",
+            source=_GEOMETRY_SOURCE,
+        )
 
     dh = run_outside_diameter.to("mm").magnitude
     th_actual = run_wall.to("mm").magnitude
@@ -977,28 +1224,45 @@ def asme_b313_branch_reinforcement(
     a4 = 0.0 if added_area is None else added_area.to("mm**2").magnitude
 
     if min(dh, th_actual, th, db, tb_actual, tb) <= 0 or c < 0 or tr < 0 or a4 < 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             "every diameter and thickness must be positive, and the mechanical "
-            "allowance, pad thickness and added area non-negative"
+            "allowance, pad thickness and added area non-negative",
+            subject=(
+                "run_outside_diameter, run_wall, run_pressure_design_thickness, "
+                "branch_outside_diameter, branch_wall, branch_pressure_design_thickness, "
+                "mechanical_allowance, pad_thickness, and added_area"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
     if db > dh:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"the branch ({branch_outside_diameter}) is larger than the run "
             f"({run_outside_diameter}); §304.3.3's area replacement is written for a "
             "branch in a run, and a larger branch is a reducing tee or a header "
-            "transition rather than a reinforced opening"
+            "transition rather than a reinforced opening",
+            subject="branch_outside_diameter and run_outside_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     if th_actual - th - c < 0 or tb_actual - tb - c < 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             "a pipe whose wall is below its own pressure design thickness plus allowance "
             "has no excess to credit and is not adequate for the pressure in the first "
-            "place; screen the straight-pipe wall before the branch"
+            "place; screen the straight-pipe wall before the branch",
+            subject=(
+                "run_wall, run_pressure_design_thickness, branch_wall, "
+                "branch_pressure_design_thickness, and mechanical_allowance"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
 
     sin_beta = sin(radians(branch_angle_deg))
     d1 = (db - 2.0 * (tb_actual - c)) / sin_beta
     if d1 <= 0:
-        raise ValueError("the branch wall consumes the whole opening; check the inputs")
+        raise _pressure_vessel_refusal(
+            "the branch wall consumes the whole opening; check the inputs",
+            subject="branch_outside_diameter, branch_wall, and mechanical_allowance",
+            source=_GEOMETRY_SOURCE,
+        )
 
     # d2 is the greater of the two, capped at the run's outside diameter: a zone wider
     # than the pipe it sits on is credit taken from metal that is not there.
@@ -1055,7 +1319,11 @@ def asme_b313_branch_reinforcement_scorecard(
     design thickness was never computed has not been screened, and ``missing`` says so.
     """
     if reinforcement is not None and not isinstance(reinforcement, BranchReinforcement):
-        raise ValueError(f"reinforcement must be a BranchReinforcement; got {reinforcement!r}")
+        raise _pressure_vessel_refusal(
+            f"reinforcement must be a BranchReinforcement; got {reinforcement!r}",
+            subject="reinforcement",
+            source=_CODE_SOURCE,
+        )
     if reinforcement is None:
         detail = "not evaluated"
         detail += (
@@ -1161,15 +1429,22 @@ def asme_b313_allowable_displacement_stress_range(
     # 138/130 MPa pair returns 615 MPa where the ceiling is 205. Every other dimensionless
     # factor in this module is bounded; this one was not.
     if not 0 < stress_range_factor <= 1.0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"stress_range_factor must be in (0, 1]; got {stress_range_factor}. B31.3 "
             f"Table 302.3.5 caps f at 1.0 (7,000 equivalent cycles or fewer) and it "
-            f"falls above that — a value over 1 inflates the allowable"
+            f"falls above that — a value over 1 inflates the allowable",
+            subject="stress_range_factor",
+            source=_CODE_SOURCE,
         )
     sc = cold_allowable.to("MPa").magnitude
     sh = hot_allowable.to("MPa").magnitude
-    if sc <= 0 or sh <= 0:
-        raise ValueError("cold_allowable and hot_allowable must be positive")
+    for subject, magnitude in (("cold_allowable", sc), ("hot_allowable", sh)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "cold_allowable and hot_allowable must be positive",
+                subject=subject,
+                source=_ALLOWABLE_SOURCE,
+            )
     return Quantity(magnitude=stress_range_factor * (1.25 * sc + 0.25 * sh), unit="MPa")
 
 
@@ -1200,8 +1475,13 @@ def asme_b313_bend_stress_intensification(
     t = wall_thickness.to("mm").magnitude
     r1 = bend_radius.to("mm").magnitude
     r2 = mean_radius.to("mm").magnitude
-    if t <= 0 or r1 <= 0 or r2 <= 0:
-        raise ValueError("wall_thickness, bend_radius, and mean_radius must be positive")
+    for subject, magnitude in (("wall_thickness", t), ("bend_radius", r1), ("mean_radius", r2)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "wall_thickness, bend_radius, and mean_radius must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     h = t * r1 / r2**2
     in_plane = max(0.9 / h ** (2.0 / 3.0), 1.0)
     out_of_plane = max(0.75 / h ** (2.0 / 3.0), 1.0)
@@ -1234,17 +1514,35 @@ def asme_b313_displacement_stress(
     _require(out_of_plane_moment, "[force] * [length]", "out_of_plane_moment")
     _require(torsional_moment, "[force] * [length]", "torsional_moment")
     if not isinstance(section_modulus, Quantity):
-        raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}")
+        raise _pressure_vessel_refusal(
+            f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}",
+            subject="section_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     if not section_modulus.has_dimension("[length]**3"):
-        raise ValueError("section_modulus must be a [length]**3 quantity")
+        raise _pressure_vessel_refusal(
+            "section_modulus must be a [length]**3 quantity",
+            subject="section_modulus",
+            source=_GEOMETRY_SOURCE,
+        )
     mi = in_plane_moment.to("N*mm").magnitude
     mo = out_of_plane_moment.to("N*mm").magnitude
     mt = torsional_moment.to("N*mm").magnitude
     z = section_modulus.to("mm**3").magnitude
     if z <= 0:
-        raise ValueError("section_modulus must be positive")
-    if in_plane_sif < 1.0 or out_of_plane_sif < 1.0:
-        raise ValueError("stress-intensification factors must be at least 1.0")
+        raise _pressure_vessel_refusal(
+            "section_modulus must be positive", subject="section_modulus", source=_GEOMETRY_SOURCE
+        )
+    for subject, magnitude in (
+        ("in_plane_sif", in_plane_sif),
+        ("out_of_plane_sif", out_of_plane_sif),
+    ):
+        if magnitude < 1.0:
+            raise _pressure_vessel_refusal(
+                "stress-intensification factors must be at least 1.0",
+                subject=subject,
+                source=_CODE_SOURCE,
+            )
     s_b = ((in_plane_sif * mi) ** 2 + (out_of_plane_sif * mo) ** 2) ** 0.5 / z
     s_t = mt / (2.0 * z)
     s_e = (s_b**2 + 4.0 * s_t**2) ** 0.5
@@ -1345,8 +1643,13 @@ def thick_wall_cylinder(
     p = pressure.to("MPa").magnitude
     ri = radius.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
-    if p <= 0 or ri <= 0 or t <= 0:
-        raise ValueError("pressure, radius, and wall_thickness must be positive")
+    for subject, magnitude in (("pressure", p), ("radius", ri), ("wall_thickness", t)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, radius, and wall_thickness must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     ro = ri + t
     denom = ro**2 - ri**2
     longitudinal = p * ri**2 / denom if closed_ends else 0.0
@@ -1394,11 +1697,20 @@ def thick_wall_cylinder_stress_at_radius(
     ri = inner_radius.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
     r = radius.to("mm").magnitude
-    if p <= 0 or ri <= 0 or t <= 0:
-        raise ValueError("pressure, inner_radius, and wall_thickness must be positive")
+    for subject, magnitude in (("pressure", p), ("inner_radius", ri), ("wall_thickness", t)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, inner_radius, and wall_thickness must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     ro = ri + t
     if not ri <= r <= ro:
-        raise ValueError(f"radius must lie within the wall [{ri}, {ro}] mm (bore to OD); got {r}")
+        raise _pressure_vessel_refusal(
+            f"radius must lie within the wall [{ri}, {ro}] mm (bore to OD); got {r}",
+            subject="radius",
+            source=_GEOMETRY_SOURCE,
+        )
     denom = ro**2 - ri**2
     coefficient = p * ri**2 / denom
     longitudinal = coefficient if closed_ends else 0.0
@@ -1426,10 +1738,16 @@ def thin_wall_sphere_stress(
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
     if radius.magnitude <= 0:
-        raise ValueError(f"radius must be positive; got {radius}")
+        raise _pressure_vessel_refusal(
+            f"radius must be positive; got {radius}", subject="radius", source=_GEOMETRY_SOURCE
+        )
     _require(wall_thickness, "[length]", "wall_thickness")
     if wall_thickness.to("mm").magnitude <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _pressure_vessel_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     stress = pressure.pint * radius.pint / (2 * wall_thickness.pint)
     return _as_quantity(stress, "MPa")
 
@@ -1462,10 +1780,18 @@ def thin_wall_sphere_diametral_growth(
     )
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _pressure_vessel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _pressure_vessel_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     sigma = stress.to("MPa").magnitude
     diameter = 2.0 * radius.to("mm").magnitude
     return Quantity(magnitude=diameter * sigma * (1.0 - poisson) / e, unit="mm")
@@ -1531,8 +1857,13 @@ def thick_wall_sphere(
     p = pressure.to("MPa").magnitude
     ri = radius.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
-    if p <= 0 or ri <= 0 or t <= 0:
-        raise ValueError("pressure, radius, and wall_thickness must be positive")
+    for subject, magnitude in (("pressure", p), ("radius", ri), ("wall_thickness", t)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "pressure, radius, and wall_thickness must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     ro = ri + t
     denom = ro**3 - ri**3
     return ThickWallSphereStress(
@@ -1554,11 +1885,13 @@ def _check_shell_buckling_scope(radius_mm: float, thickness_mm: float, what: str
     """Refuse an r/t below the thin-shell scope of the classical buckling formulas."""
     ratio = radius_mm / thickness_mm
     if ratio < _SHELL_BUCKLING_RATIO_FLOOR:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"r/t = {ratio:.4g} is below the r/t >= {_SHELL_BUCKLING_RATIO_FLOOR:g} thin-shell "
             f"scope of the classical {what} formula, which has no upper bound outside it and "
             f"returns critical values many times the material's yield. A wall this thick does "
-            f"not fail by shell buckling; screen it as a thick cylinder instead."
+            f"not fail by shell buckling; screen it as a thick cylinder instead.",
+            subject="mean_radius and wall_thickness",
+            source=_GEOMETRY_SOURCE,
         )
 
 
@@ -1590,14 +1923,26 @@ def cylinder_external_pressure_buckling(
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _pressure_vessel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     t = wall_thickness.to("mm").magnitude
     r = mean_radius.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _pressure_vessel_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _pressure_vessel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     _check_shell_buckling_scope(r, t, "cylinder external-pressure buckling")
     p_cr = e * t**3 / (4.0 * r**3 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")
@@ -1631,14 +1976,26 @@ def sphere_external_pressure_buckling(
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _pressure_vessel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     t = wall_thickness.to("mm").magnitude
     r = mean_radius.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _pressure_vessel_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _pressure_vessel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     _check_shell_buckling_scope(r, t, "sphere external-pressure buckling")
     p_cr = 2.0 * e * (t / r) ** 2 / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")
@@ -1670,14 +2027,26 @@ def cylinder_axial_buckling_stress(
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _pressure_vessel_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     t = wall_thickness.to("mm").magnitude
     r = mean_radius.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+        raise _pressure_vessel_refusal(
+            f"wall_thickness must be positive; got {wall_thickness}",
+            subject="wall_thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+        raise _pressure_vessel_refusal(
+            f"mean_radius must be positive; got {mean_radius}",
+            subject="mean_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     _check_shell_buckling_scope(r, t, "cylinder axial buckling")
     sigma_cr = e * (t / r) / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=sigma_cr, unit="MPa")
@@ -1713,17 +2082,35 @@ class AllowableStress(RevalidatedModel):
     @model_validator(mode="after")
     def _well_formed(self) -> AllowableStress:
         if not self.value.has_dimension("[pressure]"):
-            raise ValueError(f"value must be a [pressure] quantity; got {self.value}")
+            raise _pressure_vessel_refusal(
+                f"value must be a [pressure] quantity; got {self.value}",
+                subject="value",
+                source=_ALLOWABLE_SOURCE,
+            )
         if self.value.to("MPa").magnitude <= 0:
-            raise ValueError(f"value must be positive; got {self.value}")
+            raise _pressure_vessel_refusal(
+                f"value must be positive; got {self.value}",
+                subject="value",
+                source=_ALLOWABLE_SOURCE,
+            )
         if not self.temperature.has_dimension("[temperature]"):
-            raise ValueError(
-                f"temperature must be a [temperature] quantity; got {self.temperature}"
+            raise _pressure_vessel_refusal(
+                f"temperature must be a [temperature] quantity; got {self.temperature}",
+                subject="temperature",
+                source=_ALLOWABLE_SOURCE,
             )
         if not self.material.strip():
-            raise ValueError("material must name the material the allowable belongs to")
+            raise _pressure_vessel_refusal(
+                "material must name the material the allowable belongs to",
+                subject="material",
+                source=_ALLOWABLE_SOURCE,
+            )
         if not self.source.strip():
-            raise ValueError("source must record where the allowable was read from")
+            raise _pressure_vessel_refusal(
+                "source must record where the allowable was read from",
+                subject="source",
+                source=_ALLOWABLE_SOURCE,
+            )
         return self
 
     def is_valid_at(
@@ -1739,12 +2126,16 @@ class AllowableStress(RevalidatedModel):
         it fails too and the caller is told to read the right row.
         """
         if not isinstance(design_temperature, Quantity):
-            raise ValueError(
-                f"design_temperature must be a [temperature] quantity; got {design_temperature!r}"
+            raise _pressure_vessel_refusal(
+                f"design_temperature must be a [temperature] quantity; got {design_temperature!r}",
+                subject="design_temperature",
+                source=_DESIGN_SOURCE,
             )
         if not design_temperature.has_dimension("[temperature]"):
-            raise ValueError(
-                f"design_temperature must be a [temperature] quantity; got {design_temperature}"
+            raise _pressure_vessel_refusal(
+                f"design_temperature must be a [temperature] quantity; got {design_temperature}",
+                subject="design_temperature",
+                source=_DESIGN_SOURCE,
             )
         if tolerance is None:
             band = _ALLOWABLE_TEMPERATURE_BAND_K
@@ -1758,9 +2149,17 @@ class AllowableStress(RevalidatedModel):
             # [temperature] quantity", it got `AttributeError: 'float' object has no
             # attribute 'unit'` off the guard that was checking it.
             if not isinstance(tolerance, Quantity):
-                raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance!r}")
+                raise _pressure_vessel_refusal(
+                    f"tolerance must be a [temperature] quantity; got {tolerance!r}",
+                    subject="tolerance",
+                    source=_ALLOWABLE_SOURCE,
+                )
             if not tolerance.has_dimension("[temperature]"):
-                raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance}")
+                raise _pressure_vessel_refusal(
+                    f"tolerance must be a [temperature] quantity; got {tolerance}",
+                    subject="tolerance",
+                    source=_ALLOWABLE_SOURCE,
+                )
             # This checked the unit's *spelling* -- "degree_Celsius", "degree_Fahrenheit",
             # "deg" -- and pint renders those units as "°C" and "°F", which contain none of
             # the three. The guard had never fired, and the failure it was written to
@@ -1774,7 +2173,11 @@ class AllowableStress(RevalidatedModel):
             # every offset scale however it is written.
             band = temperature_difference_kelvin(tolerance, name="tolerance")
             if band < 0:
-                raise ValueError(f"tolerance must not be negative; got {tolerance}")
+                raise _pressure_vessel_refusal(
+                    f"tolerance must not be negative; got {tolerance}",
+                    subject="tolerance",
+                    source=_ALLOWABLE_SOURCE,
+                )
         read_at = self.temperature.to("K").magnitude
         design = design_temperature.to("K").magnitude
         return design <= read_at <= design + band
@@ -1827,7 +2230,11 @@ def asme_b313_pressure_scorecard(
     pressure-carrying wall left to rate, which is not the same as a rating of zero.
     """
     if allowable is not None and not isinstance(allowable, AllowableStress):
-        raise ValueError(f"allowable must be an AllowableStress; got {allowable!r}")
+        raise _pressure_vessel_refusal(
+            f"allowable must be an AllowableStress; got {allowable!r}",
+            subject="allowable",
+            source=_ALLOWABLE_SOURCE,
+        )
     if allowable is None:
         return ScorecardEntry(
             name=name,
@@ -1850,8 +2257,10 @@ def asme_b313_pressure_scorecard(
     _require(design_pressure, "[pressure]", "design_pressure")
     _require(nominal_wall, "[length]", "nominal_wall")
     if not 0.0 <= mill_tolerance_fraction < 1.0:
-        raise ValueError(
-            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}"
+        raise _pressure_vessel_refusal(
+            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}",
+            subject="mill_tolerance_fraction",
+            source=_MATERIAL_SOURCE,
         )
     available = nominal_wall.to("mm").magnitude * (1.0 - mill_tolerance_fraction)
     if corrosion_allowance is not None:
@@ -2081,15 +2490,26 @@ def asme_b313_miter_bend_pressure(
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
     if not 0 < quality_factor <= 1:
-        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+        raise _pressure_vessel_refusal(
+            f"quality_factor must lie in (0, 1]; got {quality_factor}",
+            subject="quality_factor",
+            source=_CODE_SOURCE,
+        )
     s = allowable_stress.to("MPa").magnitude
     t = wall_thickness.to("mm").magnitude
     r2 = mean_radius.to("mm").magnitude
-    if s <= 0 or t <= 0 or r2 <= 0:
-        raise ValueError("allowable_stress, wall_thickness, and mean_radius must be positive")
+    for subject, magnitude in (("allowable_stress", s), ("wall_thickness", t), ("mean_radius", r2)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "allowable_stress, wall_thickness, and mean_radius must be positive",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     if not 0 < miter_angle < 90:
-        raise ValueError(
-            f"miter_angle is the cut angle in degrees and must lie in (0, 90); got {miter_angle}"
+        raise _pressure_vessel_refusal(
+            f"miter_angle is the cut angle in degrees and must lie in (0, 90); got {miter_angle}",
+            subject="miter_angle",
+            source=_GEOMETRY_SOURCE,
         )
     base = s * quality_factor * t / r2
     tan_theta = tan(radians(miter_angle))
@@ -2104,17 +2524,21 @@ def asme_b313_miter_bend_pressure(
 
     _require(effective_bend_radius, "[length]", "effective_bend_radius")
     if miter_angle > _MITER_ANGLE_SPLIT_DEG:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"a multiple miter bend is scoped by ASME B31.3 §304.2.3 to a cut angle of "
             f"{_MITER_ANGLE_SPLIT_DEG}° or less; got {miter_angle}°. Past it the code gives no "
-            f"multiple-miter rating — screen each cut as a single miter, or use a formed elbow."
+            f"multiple-miter rating — screen each cut as a single miter, or use a formed elbow.",
+            subject="miter_angle",
+            source=_CODE_SOURCE,
         )
     r1 = effective_bend_radius.to("mm").magnitude
     if r1 <= r2:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"effective_bend_radius ({effective_bend_radius}) must exceed the mean radius "
             f"({mean_radius}): at or below it the bend closes on itself and §304.2.3's "
-            f"(R₁ − r₂)/(R₁ − 0.5·r₂) term is not positive"
+            f"(R₁ − r₂)/(R₁ − 0.5·r₂) term is not positive",
+            subject="effective_bend_radius and mean_radius",
+            source=_GEOMETRY_SOURCE,
         )
     tight = base * (r1 - r2) / (r1 - 0.5 * r2)
     return Quantity(magnitude=min(shallow, tight), unit="MPa")
@@ -2230,10 +2654,12 @@ def asme_ug37_nozzle_reinforcement(
     ):
         _require(value, "[length]", name)
     if not 0 < strength_reduction_factor <= 1.0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"strength_reduction_factor f_r must lie in (0, 1]; got "
             f"{strength_reduction_factor}. It is the nozzle's allowable stress over the "
-            f"shell's, and UG-37 caps it at 1 — a stronger nozzle earns no bonus."
+            f"shell's, and UG-37 caps it at 1 — a stronger nozzle earns no bonus.",
+            subject="strength_reduction_factor",
+            source=_CODE_SOURCE,
         )
     c = corrosion_allowance.to("mm").magnitude
     t = shell_thickness.to("mm").magnitude - c
@@ -2241,27 +2667,42 @@ def asme_ug37_nozzle_reinforcement(
     tn = nozzle_thickness.to("mm").magnitude - c
     trn = nozzle_required_thickness.to("mm").magnitude
     weld = weld_leg.to("mm").magnitude
-    if c < 0 or weld < 0:
-        raise ValueError("corrosion_allowance and weld_leg must be non-negative")
+    for subject, magnitude in (("corrosion_allowance", c), ("weld_leg", weld)):
+        if magnitude < 0:
+            raise _pressure_vessel_refusal(
+                "corrosion_allowance and weld_leg must be non-negative",
+                subject=subject,
+                source=_pressure_vessel_input_source(subject),
+            )
     if t <= 0 or tn <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"the corrosion allowance ({corrosion_allowance}) consumes the whole shell or "
-            f"nozzle wall; there is nothing left to reinforce with"
+            f"nozzle wall; there is nothing left to reinforce with",
+            subject="corrosion_allowance, shell_thickness, and nozzle_thickness",
+            source=_DESIGN_SOURCE,
         )
     if tr <= 0 or trn < 0:
-        raise ValueError("shell_required_thickness must be positive and the nozzle's non-negative")
+        raise _pressure_vessel_refusal(
+            "shell_required_thickness must be positive and the nozzle's non-negative",
+            subject="shell_required_thickness",
+            source=_CODE_SOURCE,
+        )
     # The finished opening in the corroded condition: the neck's bore, both walls gone.
     d = nozzle_outside_diameter.to("mm").magnitude - 2.0 * tn
     if d <= 0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"the nozzle wall consumes the whole opening (bore {d:.4g} mm); check "
-            f"nozzle_outside_diameter against nozzle_thickness"
+            f"nozzle_outside_diameter against nozzle_thickness",
+            subject="nozzle_outside_diameter, nozzle_thickness, and corrosion_allowance",
+            source=_GEOMETRY_SOURCE,
         )
     if t < tr:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"the corroded shell ({t:.4g} mm) is thinner than pressure requires "
             f"({tr:.4g} mm), so the shell fails before the opening is reached — there is "
-            f"no reinforcement question to answer yet"
+            f"no reinforcement question to answer yet",
+            subject="shell_thickness, corrosion_allowance, and shell_required_thickness",
+            source=_GEOMETRY_SOURCE,
         )
 
     # Fig. UG-37.1 in full: the required area carries a second term for the nozzle wall
@@ -2305,7 +2746,11 @@ def asme_ug37_reinforcement_scorecard(
     thickness was never computed has not been screened, and ``missing`` says so.
     """
     if reinforcement is not None and not isinstance(reinforcement, NozzleReinforcement):
-        raise ValueError(f"reinforcement must be a NozzleReinforcement; got {reinforcement!r}")
+        raise _pressure_vessel_refusal(
+            f"reinforcement must be a NozzleReinforcement; got {reinforcement!r}",
+            subject="reinforcement",
+            source=_CODE_SOURCE,
+        )
     if reinforcement is None:
         detail = "not evaluated"
         if missing.strip():
@@ -2429,12 +2874,19 @@ def asme_appendix_2_gasket_geometry(
     _require(outside_diameter, "[length]", "outside_diameter")
     n = contact_width.to("mm").magnitude
     od = outside_diameter.to("mm").magnitude
-    if n <= 0 or od <= 0:
-        raise ValueError("contact_width and outside_diameter must be positive")
+    for subject, magnitude in (("contact_width", n), ("outside_diameter", od)):
+        if magnitude <= 0:
+            raise _pressure_vessel_refusal(
+                "contact_width and outside_diameter must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if n >= od / 2.0:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"a contact width of {contact_width} leaves no bore inside an outside "
-            f"diameter of {outside_diameter}; check they are not swapped"
+            f"diameter of {outside_diameter}; check they are not swapped",
+            subject="contact_width and outside_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     b0 = n / 2.0
     if b0 <= _APPENDIX_2_WIDTH_LIMIT_MM:
@@ -2481,14 +2933,22 @@ def asme_appendix_2_required_bolt_area(
     ):
         _require(value, "[force]", name)
         if value.magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _pressure_vessel_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_pressure_vessel_input_source(name),
+            )
     for value, name in (
         (operating_allowable, "operating_allowable"),
         (seating_allowable, "seating_allowable"),
     ):
         _require(value, "[pressure]", name)
         if value.magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _pressure_vessel_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_pressure_vessel_input_source(name),
+            )
     operating = operating_bolt_load.to("N").magnitude / operating_allowable.to("MPa").magnitude
     seating = seating_bolt_load.to("N").magnitude / seating_allowable.to("MPa").magnitude
     return Quantity(magnitude=max(operating, seating), unit="mm**2")
@@ -2558,11 +3018,17 @@ def asme_appendix_2_shape_factors(
     a = outside_diameter.to("mm").magnitude
     b = inside_diameter.to("mm").magnitude
     if b <= 0:
-        raise ValueError(f"inside_diameter must be positive; got {inside_diameter}")
+        raise _pressure_vessel_refusal(
+            f"inside_diameter must be positive; got {inside_diameter}",
+            subject="inside_diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     if a <= b:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"outside_diameter {outside_diameter} must exceed inside_diameter "
-            f"{inside_diameter}; K = A/B must be greater than 1"
+            f"{inside_diameter}; K = A/B must be greater than 1",
+            subject="outside_diameter and inside_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     k = a / b
     k2 = k * k
@@ -2650,7 +3116,9 @@ def asme_appendix_2_flange_moments(
     """
     _require(pressure, "[pressure]", "pressure")
     if pressure.magnitude <= 0:
-        raise ValueError(f"pressure must be positive; got {pressure}")
+        raise _pressure_vessel_refusal(
+            f"pressure must be positive; got {pressure}", subject="pressure", source=_DESIGN_SOURCE
+        )
     lengths = {}
     for value, name in (
         (inside_diameter, "inside_diameter"),
@@ -2660,7 +3128,11 @@ def asme_appendix_2_flange_moments(
         _require(value, "[length]", name)
         magnitude = value.to("mm").magnitude
         if magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _pressure_vessel_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_pressure_vessel_input_source(name),
+            )
         lengths[name] = magnitude
     for value, name in (
         (operating_bolt_load, "operating_bolt_load"),
@@ -2668,14 +3140,20 @@ def asme_appendix_2_flange_moments(
     ):
         _require(value, "[force]", name)
         if value.magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _pressure_vessel_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_pressure_vessel_input_source(name),
+            )
     b = lengths["inside_diameter"]
     c = lengths["bolt_circle_diameter"]
     g = lengths["gasket_diameter"]
     if not b < g < c:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"the diameters must nest as bore < gasket reaction < bolt circle; got "
-            f"B={inside_diameter}, G={gasket_diameter}, C={bolt_circle_diameter}"
+            f"B={inside_diameter}, G={gasket_diameter}, C={bolt_circle_diameter}",
+            subject="inside_diameter, gasket_diameter, and bolt_circle_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     p = pressure.to("MPa").magnitude
     w_m1 = operating_bolt_load.to("N").magnitude
@@ -2683,10 +3161,12 @@ def asme_appendix_2_flange_moments(
     h_d = 0.785 * b * b * p
     h_total = 0.785 * g * g * p
     if w_m1 <= h_total:
-        raise ValueError(
+        raise _pressure_vessel_refusal(
             f"operating_bolt_load {operating_bolt_load} does not exceed the hydrostatic "
             f"end force {h_total:.4g} N, so no gasket load survives pressurisation; it "
-            f"should be W_m1 from gasket_operating_load, which includes that end force"
+            f"should be W_m1 from gasket_operating_load, which includes that end force",
+            subject="operating_bolt_load, pressure, and gasket_diameter",
+            source=_DESIGN_SOURCE,
         )
     h_t = h_total - h_d
     h_g = w_m1 - h_total
@@ -2828,14 +3308,22 @@ def asme_appendix_2_ring_flange_stress(
     _require(thickness, "[length]", "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _pressure_vessel_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_GEOMETRY_SOURCE,
+        )
     for value, name in (
         (operating_allowable, "operating_allowable"),
         (seating_allowable, "seating_allowable"),
     ):
         _require(value, "[pressure]", name)
         if value.magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _pressure_vessel_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_pressure_vessel_input_source(name),
+            )
     factors = asme_appendix_2_shape_factors(
         outside_diameter=outside_diameter, inside_diameter=inside_diameter
     )
@@ -2886,7 +3374,11 @@ def asme_appendix_2_flange_stress_scorecard(
     rather than leaving a reader to read the blank as a pass.
     """
     if stress is not None and not isinstance(stress, LooseRingFlangeStress):
-        raise ValueError(f"stress must be a LooseRingFlangeStress; got {stress!r}")
+        raise _pressure_vessel_refusal(
+            f"stress must be a LooseRingFlangeStress; got {stress!r}",
+            subject="stress",
+            source=_CODE_SOURCE,
+        )
     if stress is None:
         detail = "not evaluated"
         if missing.strip():

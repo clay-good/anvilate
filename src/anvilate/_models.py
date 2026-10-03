@@ -212,6 +212,36 @@ def rebuilt_quantities(value: Any) -> Any:
     return rebuilt
 
 
+def _sequence_refusal(message: str, *, named: str, kind: type) -> ValueError:
+    """A structured refusal for a sequence argument, built where it is raised.
+
+    `refusal` imports this module, so the error class is made on first use rather than at
+    import; it is still a `RefusalError` and still a `ValueError`.
+    """
+    from .refusal import RefusalError, Remedy
+
+    global _SequenceInputError
+    if _SequenceInputError is None:
+        _SequenceInputError = type(
+            "_SequenceInputError",
+            (RefusalError, ValueError),
+            {"__doc__": "A sequence argument that cannot be read without correction."},
+        )
+    return _SequenceInputError(
+        message,
+        remedies=(
+            Remedy(
+                action="replace",
+                subject=named,
+                source=f"a list or tuple of {kind.__name__}, one entry per item",
+            ),
+        ),
+    )
+
+
+_SequenceInputError: type | None = None
+
+
 def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
     """``items`` as a tuple, refusing anything in it that is not a ``kind``.
 
@@ -237,19 +267,23 @@ def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
         # Iterating a mapping yields its KEYS, so a mapping arrives as a tuple of strings and
         # `{"ASCE 7": "2022"}` was read as one reference called "ASCE 7". The same shape as
         # the string below: iterable, and iterating it means something else.
-        raise ValueError(
+        raise _sequence_refusal(
             f"{named} is a sequence of {kind.__name__} and a mapping is not one — iterating "
-            f"it yields its keys, so {sorted(items)!r} is what would be read"
+            f"it yields its keys, so {sorted(items)!r} is what would be read",
+            named=named,
+            kind=kind,
         )
     if isinstance(items, (str, bytes)):
         # A string IS iterable, over its characters, and that is the version of this mistake
         # that answers instead of raising: `design_basis_scorecard(references="ASCE 7-22")`
         # reported `9 of 9 references` — one per character — as a considered NOT_EVALUATED
         # verdict on the layer that decides whether a bundle's citations are consistent.
-        raise ValueError(
+        raise _sequence_refusal(
             f"{named} is a sequence of {kind.__name__} and a string is not one — it is a "
             f"sequence of its own characters, so {items!r} would be read as "
-            f"{len(items)} of them. Pass a list or a tuple, even for a single item"
+            f"{len(items)} of them. Pass a list or a tuple, even for a single item",
+            named=named,
+            kind=kind,
         )
     given = tuple(items) if isinstance(items, Iterable) else (items,)
     for item in given:
@@ -264,8 +298,10 @@ def each_one(items: Any, kind: type[_T], *, named: str) -> tuple[_T, ...]:
                 if isinstance(items, BaseModel)
                 else ""
             )
-            raise ValueError(
-                f"{named} is a sequence of {kind.__name__}; got {type(item).__name__} in it.{why}"
+            raise _sequence_refusal(
+                f"{named} is a sequence of {kind.__name__}; got {type(item).__name__} in it.{why}",
+                named=named,
+                kind=kind,
             )
     return given  # type: ignore[return-value]
 

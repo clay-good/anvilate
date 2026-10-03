@@ -27,8 +27,86 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._flags import require_flag
+
+_WIND_SOURCE = "the ASCE 7 wind design basis (basic wind speed map, exposure, and factors)"
+_SEISMIC_SOURCE = "the site's ASCE 7 seismic design parameters and structural system table"
+_STRUCTURE_SOURCE = "the structural drawings and seismic weight takeoff"
+_ANALYSIS_SOURCE = "the structural analysis model's story forces, periods, and drifts"
+_SNOW_SOURCE = "the ASCE 7 snow design basis (ground snow load map and factors)"
+_GRAVITY_SOURCE = "the ASCE 7 live load table and the roof drainage design"
+
+
+class _BuildingLoadsInputError(RefusalError, ValueError):
+    """A building design-load input that cannot be used without correction."""
+
+
+def _building_loads_refusal(message: str, *, subject: str, source: str) -> _BuildingLoadsInputError:
+    return _BuildingLoadsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _building_loads_input_source(name: str) -> str:
+    if name in {
+        "basic_wind_speed",
+        "directionality_factor",
+        "exposure_coefficient",
+        "external_pressure_coefficient",
+        "ground_elevation_factor",
+        "gust_effect_factor",
+        "internal_pressure_coefficient",
+        "pressure_coefficient",
+        "topographic_factor",
+        "velocity_pressure",
+    }:
+        return _WIND_SOURCE
+    if name in {
+        "building_dimension",
+        "building_height",
+        "dead_load_effect",
+        "diaphragm_weight",
+        "seismic_weight",
+        "story_gravity_load",
+        "story_height",
+        "story_heights",
+        "story_weights",
+        "story_weights_above",
+        "supports_multiple_floors",
+        "tributary_area",
+        "upwind_fetch",
+    }:
+        return _STRUCTURE_SOURCE
+    if name in {
+        "amplification_factor",
+        "average_displacement",
+        "base_shear",
+        "counteracting",
+        "demand_capacity_ratio",
+        "design_story_drift",
+        "elastic_story_drift",
+        "fundamental_period",
+        "horizontal_effect",
+        "maximum_displacement",
+        "story_forces_above",
+        "story_shear",
+    }:
+        return _ANALYSIS_SOURCE
+    if name in {
+        "exposure_factor",
+        "flat_roof_snow_load",
+        "ground_snow_load",
+        "slope_factor",
+        "thermal_factor",
+    }:
+        return _SNOW_SOURCE
+    if name in {"hydraulic_head", "live_load_element_factor", "static_head", "unreduced_live_load"}:
+        return _GRAVITY_SOURCE
+    return _SEISMIC_SOURCE
+
 
 __all__ = [
     "wind_velocity_pressure",
@@ -85,7 +163,9 @@ def wind_velocity_pressure(
     _check(basic_wind_speed, "[length]/[time]", "basic_wind_speed")
     v = basic_wind_speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("basic_wind_speed must be positive")
+        raise _building_loads_refusal(
+            "basic_wind_speed must be positive", subject="basic_wind_speed", source=_WIND_SOURCE
+        )
     for name, value in (
         ("exposure_coefficient", exposure_coefficient),
         ("topographic_factor", topographic_factor),
@@ -93,7 +173,11 @@ def wind_velocity_pressure(
         ("ground_elevation_factor", ground_elevation_factor),
     ):
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _building_loads_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_building_loads_input_source(name),
+            )
     qz = (
         _VELOCITY_PRESSURE_CONSTANT
         * exposure_coefficient
@@ -122,9 +206,15 @@ def wind_design_pressure(
     _check(velocity_pressure, "[pressure]", "velocity_pressure")
     qz = velocity_pressure.to("Pa").magnitude
     if qz <= 0:
-        raise ValueError("velocity_pressure must be positive")
+        raise _building_loads_refusal(
+            "velocity_pressure must be positive", subject="velocity_pressure", source=_WIND_SOURCE
+        )
     if gust_effect_factor <= 0:
-        raise ValueError(f"gust_effect_factor must be positive; got {gust_effect_factor}")
+        raise _building_loads_refusal(
+            f"gust_effect_factor must be positive; got {gust_effect_factor}",
+            subject="gust_effect_factor",
+            source=_WIND_SOURCE,
+        )
     return Quantity(magnitude=qz * gust_effect_factor * pressure_coefficient, unit="Pa")
 
 
@@ -149,7 +239,9 @@ def components_cladding_net_pressure(
     _check(velocity_pressure, "[pressure]", "velocity_pressure")
     qh = velocity_pressure.to("Pa").magnitude
     if qh <= 0:
-        raise ValueError("velocity_pressure must be positive")
+        raise _building_loads_refusal(
+            "velocity_pressure must be positive", subject="velocity_pressure", source=_WIND_SOURCE
+        )
     net = qh * (external_pressure_coefficient - internal_pressure_coefficient)
     return Quantity(magnitude=net, unit="Pa")
 
@@ -191,11 +283,23 @@ def seismic_response_coefficient(
     Returns the dimensionless Cs.
     """
     if design_spectral_acceleration <= 0:
-        raise ValueError("design_spectral_acceleration must be positive")
+        raise _building_loads_refusal(
+            "design_spectral_acceleration must be positive",
+            subject="design_spectral_acceleration",
+            source=_SEISMIC_SOURCE,
+        )
     if response_modification_factor <= 0:
-        raise ValueError("response_modification_factor must be positive")
+        raise _building_loads_refusal(
+            "response_modification_factor must be positive",
+            subject="response_modification_factor",
+            source=_SEISMIC_SOURCE,
+        )
     if importance_factor <= 0:
-        raise ValueError("importance_factor must be positive")
+        raise _building_loads_refusal(
+            "importance_factor must be positive",
+            subject="importance_factor",
+            source=_SEISMIC_SOURCE,
+        )
     base = design_spectral_acceleration * importance_factor / response_modification_factor
     floor = max(
         _SEISMIC_CS_FLOOR_COEFFICIENT * design_spectral_acceleration * importance_factor,
@@ -223,16 +327,24 @@ def approximate_fundamental_period(
     _check(building_height, "[length]", "building_height")
     hn = building_height.to("m").magnitude
     if hn <= 0:
-        raise ValueError("building_height must be positive")
+        raise _building_loads_refusal(
+            "building_height must be positive", subject="building_height", source=_STRUCTURE_SOURCE
+        )
     # A NaN passes both comparisons below, and `hn ** nan` is 1.0 when hn is 1.0 — so a
     # missing exponent came back as a one-second fundamental period, which is a plausible
     # building and feeds the seismic response coefficient.
     require_finite(period_coefficient, name="period_coefficient")
     require_finite(height_exponent, name="height_exponent")
     if period_coefficient <= 0:
-        raise ValueError("period_coefficient must be positive")
+        raise _building_loads_refusal(
+            "period_coefficient must be positive",
+            subject="period_coefficient",
+            source=_SEISMIC_SOURCE,
+        )
     if height_exponent <= 0:
-        raise ValueError("height_exponent must be positive")
+        raise _building_loads_refusal(
+            "height_exponent must be positive", subject="height_exponent", source=_SEISMIC_SOURCE
+        )
     return Quantity(magnitude=period_coefficient * hn**height_exponent, unit="s")
 
 
@@ -257,13 +369,29 @@ def seismic_response_coefficient_upper_limit(
     _check(fundamental_period, "[time]", "fundamental_period")
     t = fundamental_period.to("s").magnitude
     if design_spectral_acceleration_1s <= 0:
-        raise ValueError("design_spectral_acceleration_1s must be positive")
+        raise _building_loads_refusal(
+            "design_spectral_acceleration_1s must be positive",
+            subject="design_spectral_acceleration_1s",
+            source=_SEISMIC_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("fundamental_period must be positive")
+        raise _building_loads_refusal(
+            "fundamental_period must be positive",
+            subject="fundamental_period",
+            source=_ANALYSIS_SOURCE,
+        )
     if response_modification_factor <= 0:
-        raise ValueError("response_modification_factor must be positive")
+        raise _building_loads_refusal(
+            "response_modification_factor must be positive",
+            subject="response_modification_factor",
+            source=_SEISMIC_SOURCE,
+        )
     if importance_factor <= 0:
-        raise ValueError("importance_factor must be positive")
+        raise _building_loads_refusal(
+            "importance_factor must be positive",
+            subject="importance_factor",
+            source=_SEISMIC_SOURCE,
+        )
     return design_spectral_acceleration_1s * importance_factor / (t * response_modification_factor)
 
 
@@ -282,9 +410,15 @@ def seismic_base_shear(
     _check(seismic_weight, "[force]", "seismic_weight")
     w = seismic_weight.to("kN").magnitude
     if w <= 0:
-        raise ValueError("seismic_weight must be positive")
+        raise _building_loads_refusal(
+            "seismic_weight must be positive", subject="seismic_weight", source=_STRUCTURE_SOURCE
+        )
     if response_coefficient <= 0:
-        raise ValueError(f"response_coefficient must be positive; got {response_coefficient}")
+        raise _building_loads_refusal(
+            f"response_coefficient must be positive; got {response_coefficient}",
+            subject="response_coefficient",
+            source=_SEISMIC_SOURCE,
+        )
     return Quantity(magnitude=w * response_coefficient, unit="kN")
 
 
@@ -310,13 +444,27 @@ def seismic_vertical_force_distribution(
     _check(base_shear, "[force]", "base_shear")
     v = base_shear.to("kN").magnitude
     if v <= 0:
-        raise ValueError("base_shear must be positive")
+        raise _building_loads_refusal(
+            "base_shear must be positive", subject="base_shear", source=_ANALYSIS_SOURCE
+        )
     if len(story_weights) != len(story_heights):
-        raise ValueError("story_weights and story_heights must have the same length")
+        raise _building_loads_refusal(
+            "story_weights and story_heights must have the same length",
+            subject="story_weights and story_heights",
+            source=_STRUCTURE_SOURCE,
+        )
     if len(story_weights) == 0:
-        raise ValueError("at least one story is required")
+        raise _building_loads_refusal(
+            "at least one story is required",
+            subject="story_weights and story_heights",
+            source=_STRUCTURE_SOURCE,
+        )
     if distribution_exponent <= 0:
-        raise ValueError("distribution_exponent must be positive")
+        raise _building_loads_refusal(
+            "distribution_exponent must be positive",
+            subject="distribution_exponent",
+            source=_SEISMIC_SOURCE,
+        )
     products = []
     for i, (w, h) in enumerate(zip(story_weights, story_heights, strict=True)):
         _check(w, "[force]", f"story_weights[{i}]")
@@ -324,7 +472,11 @@ def seismic_vertical_force_distribution(
         wm = w.to("kN").magnitude
         hm = h.to("m").magnitude
         if wm <= 0 or hm <= 0:
-            raise ValueError("every story weight and height must be positive")
+            raise _building_loads_refusal(
+                "every story weight and height must be positive",
+                subject="story_weights and story_heights",
+                source=_STRUCTURE_SOURCE,
+            )
         products.append(wm * hm**distribution_exponent)
     total = sum(products)
     return tuple(Quantity(magnitude=v * p / total, unit="kN") for p in products)
@@ -358,8 +510,10 @@ def seismic_diaphragm_force(
     sw = story_weights_above.to("kN").magnitude
     wpx = diaphragm_weight.to("kN").magnitude
     if sf < 0 or sw <= 0 or wpx <= 0:
-        raise ValueError(
-            "story_weights_above and diaphragm_weight must be positive, story_forces_above ≥ 0"
+        raise _building_loads_refusal(
+            "story_weights_above and diaphragm_weight must be positive, story_forces_above ≥ 0",
+            subject="story_forces_above, story_weights_above, and diaphragm_weight",
+            source=_STRUCTURE_SOURCE,
         )
     # `min(max(proportional, lower), upper)` collapses to the proportional value when either
     # bound is NaN, so a non-finite SDS or Ie deleted BOTH the §12.10.1.1 floor and the cap
@@ -367,9 +521,17 @@ def seismic_diaphragm_force(
     require_finite(design_spectral_acceleration, name="design_spectral_acceleration")
     require_finite(importance_factor, name="importance_factor")
     if design_spectral_acceleration <= 0:
-        raise ValueError("design_spectral_acceleration must be positive")
+        raise _building_loads_refusal(
+            "design_spectral_acceleration must be positive",
+            subject="design_spectral_acceleration",
+            source=_SEISMIC_SOURCE,
+        )
     if importance_factor <= 0:
-        raise ValueError("importance_factor must be positive")
+        raise _building_loads_refusal(
+            "importance_factor must be positive",
+            subject="importance_factor",
+            source=_SEISMIC_SOURCE,
+        )
     proportional = sf / sw * wpx
     lower = 0.2 * design_spectral_acceleration * importance_factor * wpx
     upper = 0.4 * design_spectral_acceleration * importance_factor * wpx
@@ -394,10 +556,19 @@ def seismic_torsional_amplification_factor(
     _check(average_displacement, "[length]", "average_displacement")
     dmax = maximum_displacement.to("mm").magnitude
     davg = average_displacement.to("mm").magnitude
-    if dmax <= 0 or davg <= 0:
-        raise ValueError("maximum_displacement and average_displacement must be positive")
+    for subject, magnitude in (("maximum_displacement", dmax), ("average_displacement", davg)):
+        if magnitude <= 0:
+            raise _building_loads_refusal(
+                "maximum_displacement and average_displacement must be positive",
+                subject=subject,
+                source=_ANALYSIS_SOURCE,
+            )
     if dmax < davg:
-        raise ValueError("maximum_displacement cannot be less than the average")
+        raise _building_loads_refusal(
+            "maximum_displacement cannot be less than the average",
+            subject="maximum_displacement and average_displacement",
+            source=_ANALYSIS_SOURCE,
+        )
     return min(max((dmax / (1.2 * davg)) ** 2, 1.0), 3.0)
 
 
@@ -422,12 +593,25 @@ def seismic_accidental_torsional_moment(
     _check(building_dimension, "[length]", "building_dimension")
     vx = story_shear.to("kN").magnitude
     length = building_dimension.to("m").magnitude
-    if vx <= 0 or length <= 0:
-        raise ValueError("story_shear and building_dimension must be positive")
+    for subject, magnitude in (("story_shear", vx), ("building_dimension", length)):
+        if magnitude <= 0:
+            raise _building_loads_refusal(
+                "story_shear and building_dimension must be positive",
+                subject=subject,
+                source=_building_loads_input_source(subject),
+            )
     if eccentricity_ratio <= 0:
-        raise ValueError("eccentricity_ratio must be positive")
+        raise _building_loads_refusal(
+            "eccentricity_ratio must be positive",
+            subject="eccentricity_ratio",
+            source=_SEISMIC_SOURCE,
+        )
     if amplification_factor < 1.0:
-        raise ValueError("amplification_factor must be at least 1.0")
+        raise _building_loads_refusal(
+            "amplification_factor must be at least 1.0",
+            subject="amplification_factor",
+            source=_ANALYSIS_SOURCE,
+        )
     return Quantity(magnitude=vx * eccentricity_ratio * length * amplification_factor, unit="kN*m")
 
 
@@ -450,11 +634,23 @@ def seismic_design_story_drift(
     _check(elastic_story_drift, "[length]", "elastic_story_drift")
     dxe = elastic_story_drift.to("mm").magnitude
     if dxe < 0:
-        raise ValueError("elastic_story_drift must be non-negative")
+        raise _building_loads_refusal(
+            "elastic_story_drift must be non-negative",
+            subject="elastic_story_drift",
+            source=_ANALYSIS_SOURCE,
+        )
     if deflection_amplification_factor <= 0:
-        raise ValueError("deflection_amplification_factor must be positive")
+        raise _building_loads_refusal(
+            "deflection_amplification_factor must be positive",
+            subject="deflection_amplification_factor",
+            source=_SEISMIC_SOURCE,
+        )
     if importance_factor <= 0:
-        raise ValueError("importance_factor must be positive")
+        raise _building_loads_refusal(
+            "importance_factor must be positive",
+            subject="importance_factor",
+            source=_SEISMIC_SOURCE,
+        )
     return Quantity(magnitude=deflection_amplification_factor * dxe / importance_factor, unit="mm")
 
 
@@ -474,9 +670,15 @@ def allowable_story_drift(
     _check(story_height, "[length]", "story_height")
     h = story_height.to("mm").magnitude
     if h <= 0:
-        raise ValueError("story_height must be positive")
+        raise _building_loads_refusal(
+            "story_height must be positive", subject="story_height", source=_STRUCTURE_SOURCE
+        )
     if drift_limit_ratio <= 0:
-        raise ValueError("drift_limit_ratio must be positive")
+        raise _building_loads_refusal(
+            "drift_limit_ratio must be positive",
+            subject="drift_limit_ratio",
+            source=_SEISMIC_SOURCE,
+        )
     return Quantity(magnitude=drift_limit_ratio * h, unit="mm")
 
 
@@ -508,12 +710,29 @@ def seismic_stability_coefficient(
     drift = design_story_drift.to("m").magnitude
     vx = story_shear.to("kN").magnitude
     h = story_height.to("m").magnitude
-    if px <= 0 or vx <= 0 or h <= 0:
-        raise ValueError("story_gravity_load, story_shear, and story_height must be positive")
+    for subject, magnitude in (
+        ("story_gravity_load", px),
+        ("story_shear", vx),
+        ("story_height", h),
+    ):
+        if magnitude <= 0:
+            raise _building_loads_refusal(
+                "story_gravity_load, story_shear, and story_height must be positive",
+                subject=subject,
+                source=_building_loads_input_source(subject),
+            )
     if drift < 0:
-        raise ValueError("design_story_drift must be non-negative")
+        raise _building_loads_refusal(
+            "design_story_drift must be non-negative",
+            subject="design_story_drift",
+            source=_ANALYSIS_SOURCE,
+        )
     if deflection_amplification_factor <= 0:
-        raise ValueError("deflection_amplification_factor must be positive")
+        raise _building_loads_refusal(
+            "deflection_amplification_factor must be positive",
+            subject="deflection_amplification_factor",
+            source=_SEISMIC_SOURCE,
+        )
     return px * drift / (vx * h * deflection_amplification_factor)
 
 
@@ -531,9 +750,17 @@ def seismic_stability_coefficient_limit(
     :func:`seismic_stability_coefficient` against this. Returns the dimensionless θ_max.
     """
     if deflection_amplification_factor <= 0:
-        raise ValueError("deflection_amplification_factor must be positive")
+        raise _building_loads_refusal(
+            "deflection_amplification_factor must be positive",
+            subject="deflection_amplification_factor",
+            source=_SEISMIC_SOURCE,
+        )
     if not 0 < demand_capacity_ratio <= 1.0:
-        raise ValueError("demand_capacity_ratio must be in (0, 1]")
+        raise _building_loads_refusal(
+            "demand_capacity_ratio must be in (0, 1]",
+            subject="demand_capacity_ratio",
+            source=_ANALYSIS_SOURCE,
+        )
     return min(0.5 / (demand_capacity_ratio * deflection_amplification_factor), 0.25)
 
 
@@ -563,26 +790,49 @@ def seismic_load_effect(
         source="the signed load-combination case under ASCE 7",
     )
     if not isinstance(horizontal_effect, Quantity):
-        raise ValueError("horizontal_effect must be a Quantity load effect")
+        raise _building_loads_refusal(
+            "horizontal_effect must be a Quantity load effect",
+            subject="horizontal_effect",
+            source=_ANALYSIS_SOURCE,
+        )
     # The same check for the other one. Without it the `.has_dimension` below reached into
     # whatever was passed and came back `AttributeError`, which tells a caller nothing about
     # their input and reads like a bug in this library.
     if not isinstance(dead_load_effect, Quantity):
-        raise ValueError("dead_load_effect must be a Quantity load effect")
+        raise _building_loads_refusal(
+            "dead_load_effect must be a Quantity load effect",
+            subject="dead_load_effect",
+            source=_STRUCTURE_SOURCE,
+        )
     if not dead_load_effect.has_dimension(horizontal_effect.dimensionality):
-        raise ValueError(
+        raise _building_loads_refusal(
             "dead_load_effect must share the horizontal effect's dimensionality "
-            f"({horizontal_effect.dimensionality}); got {dead_load_effect.dimensionality}"
+            f"({horizontal_effect.dimensionality}); got {dead_load_effect.dimensionality}",
+            subject="horizontal_effect and dead_load_effect",
+            source=_ANALYSIS_SOURCE,
         )
     unit = horizontal_effect.unit
     qe = horizontal_effect.to(unit).magnitude
     d = dead_load_effect.to(unit).magnitude
-    if qe < 0 or d < 0:
-        raise ValueError("horizontal_effect and dead_load_effect must be non-negative")
+    for subject, magnitude in (("horizontal_effect", qe), ("dead_load_effect", d)):
+        if magnitude < 0:
+            raise _building_loads_refusal(
+                "horizontal_effect and dead_load_effect must be non-negative",
+                subject=subject,
+                source=_building_loads_input_source(subject),
+            )
     if design_spectral_acceleration <= 0:
-        raise ValueError("design_spectral_acceleration must be positive")
+        raise _building_loads_refusal(
+            "design_spectral_acceleration must be positive",
+            subject="design_spectral_acceleration",
+            source=_SEISMIC_SOURCE,
+        )
     if redundancy_factor <= 0:
-        raise ValueError("redundancy_factor must be positive")
+        raise _building_loads_refusal(
+            "redundancy_factor must be positive",
+            subject="redundancy_factor",
+            source=_SEISMIC_SOURCE,
+        )
     vertical = 0.2 * design_spectral_acceleration * d
     horizontal = redundancy_factor * qe
     e = horizontal - vertical if counteracting else horizontal + vertical
@@ -608,14 +858,20 @@ def flat_roof_snow_load(
     _check(ground_snow_load, "[pressure]", "ground_snow_load")
     pg = ground_snow_load.to("kPa").magnitude
     if pg <= 0:
-        raise ValueError("ground_snow_load must be positive")
+        raise _building_loads_refusal(
+            "ground_snow_load must be positive", subject="ground_snow_load", source=_SNOW_SOURCE
+        )
     for name, value in (
         ("exposure_factor", exposure_factor),
         ("thermal_factor", thermal_factor),
         ("importance_factor", importance_factor),
     ):
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _building_loads_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_building_loads_input_source(name),
+            )
     pf = _FLAT_ROOF_SNOW_CONSTANT * exposure_factor * thermal_factor * importance_factor * pg
     return Quantity(magnitude=pf, unit="kPa")
 
@@ -635,9 +891,17 @@ def sloped_roof_snow_load(
     _check(flat_roof_snow_load, "[pressure]", "flat_roof_snow_load")
     pf = flat_roof_snow_load.to("kPa").magnitude
     if pf <= 0:
-        raise ValueError("flat_roof_snow_load must be positive")
+        raise _building_loads_refusal(
+            "flat_roof_snow_load must be positive",
+            subject="flat_roof_snow_load",
+            source=_SNOW_SOURCE,
+        )
     if not 0 <= slope_factor <= 1:
-        raise ValueError(f"slope_factor must lie in [0, 1]; got {slope_factor}")
+        raise _building_loads_refusal(
+            f"slope_factor must lie in [0, 1]; got {slope_factor}",
+            subject="slope_factor",
+            source=_SNOW_SOURCE,
+        )
     return Quantity(magnitude=slope_factor * pf, unit="kPa")
 
 
@@ -652,7 +916,9 @@ def snow_density(*, ground_snow_load: Quantity) -> Quantity:
     _check(ground_snow_load, "[pressure]", "ground_snow_load")
     pg = ground_snow_load.to("kPa").magnitude
     if pg <= 0:
-        raise ValueError("ground_snow_load must be positive")
+        raise _building_loads_refusal(
+            "ground_snow_load must be positive", subject="ground_snow_load", source=_SNOW_SOURCE
+        )
     return Quantity(magnitude=min(0.426 * pg + 2.2, 4.7), unit="kN/m**3")
 
 
@@ -676,8 +942,13 @@ def leeward_snow_drift_height(
     _check(ground_snow_load, "[pressure]", "ground_snow_load")
     lu = upwind_fetch.to("m").magnitude
     pg = ground_snow_load.to("kPa").magnitude
-    if lu <= 0 or pg <= 0:
-        raise ValueError("upwind_fetch and ground_snow_load must be positive")
+    for subject, magnitude in (("upwind_fetch", lu), ("ground_snow_load", pg)):
+        if magnitude <= 0:
+            raise _building_loads_refusal(
+                "upwind_fetch and ground_snow_load must be positive",
+                subject=subject,
+                source=_building_loads_input_source(subject),
+            )
     hd = 0.416 * lu ** (1.0 / 3.0) * (pg + 0.479) ** 0.25 - 0.457
     return Quantity(magnitude=max(hd, 0.0), unit="m")
 
@@ -708,10 +979,19 @@ def reduced_live_load(
     _check(tributary_area, "[area]", "tributary_area")
     l0 = unreduced_live_load.to("kPa").magnitude
     at = tributary_area.to("m**2").magnitude
-    if l0 <= 0 or at <= 0:
-        raise ValueError("unreduced_live_load and tributary_area must be positive")
+    for subject, magnitude in (("unreduced_live_load", l0), ("tributary_area", at)):
+        if magnitude <= 0:
+            raise _building_loads_refusal(
+                "unreduced_live_load and tributary_area must be positive",
+                subject=subject,
+                source=_building_loads_input_source(subject),
+            )
     if live_load_element_factor <= 0:
-        raise ValueError("live_load_element_factor must be positive")
+        raise _building_loads_refusal(
+            "live_load_element_factor must be positive",
+            subject="live_load_element_factor",
+            source=_GRAVITY_SOURCE,
+        )
     influence = live_load_element_factor * at
     if influence < _LIVE_LOAD_REDUCTION_THRESHOLD:
         return Quantity(magnitude=l0, unit="kPa")
@@ -735,17 +1015,28 @@ def rain_load(*, static_head: Quantity, hydraulic_head: Quantity) -> Quantity:
     _check(hydraulic_head, "[length]", "hydraulic_head")
     ds = static_head.to("mm").magnitude
     dh = hydraulic_head.to("mm").magnitude
-    if ds < 0 or dh < 0:
-        raise ValueError("static_head and hydraulic_head must be non-negative")
+    for subject, magnitude in (("static_head", ds), ("hydraulic_head", dh)):
+        if magnitude < 0:
+            raise _building_loads_refusal(
+                "static_head and hydraulic_head must be non-negative",
+                subject=subject,
+                source=_GRAVITY_SOURCE,
+            )
     return Quantity(magnitude=_RAIN_LOAD_CONSTANT * (ds + dh), unit="kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _building_loads_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_building_loads_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _building_loads_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_building_loads_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

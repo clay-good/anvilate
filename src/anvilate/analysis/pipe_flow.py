@@ -27,8 +27,59 @@ from __future__ import annotations
 
 from math import log10, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_PIPE_SOURCE = "the piping isometric and pipe specification (size, schedule, material)"
+_FLUID_SOURCE = "the fluid property table at the operating temperature"
+_OPERATING_SOURCE = "the operating case flow rate, velocity, and pressures"
+_LOSS_SOURCE = "the cited friction and loss-coefficient tables (Moody chart, Crane TP-410)"
+
+
+class _PipeFlowInputError(RefusalError, ValueError):
+    """A pipe-flow input that cannot be used without correction."""
+
+
+def _pipe_flow_refusal(message: str, *, subject: str, source: str) -> _PipeFlowInputError:
+    return _PipeFlowInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _pipe_flow_input_source(name: str) -> str:
+    if name in {
+        "flow_rate",
+        "frequency",
+        "head_loss",
+        "local_pressure",
+        "pressure_drop",
+        "reynolds",
+        "velocity",
+        "velocity_change",
+        "wave_speed",
+    }:
+        return _OPERATING_SOURCE
+    if name in {
+        "density",
+        "fluid_bulk_modulus",
+        "fluid_density",
+        "kinematic_viscosity",
+        "prandtl",
+        "vapor_pressure",
+        "viscosity",
+    }:
+        return _FLUID_SOURCE
+    if name in {
+        "friction_factor",
+        "loss_coefficient",
+        "relative_roughness",
+        "roughness_coefficient",
+    }:
+        return _LOSS_SOURCE
+    return _PIPE_SOURCE
+
 
 __all__ = [
     "cavitation_number",
@@ -88,7 +139,11 @@ def reynolds_number(
     d = diameter.to("m").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if v <= 0 or d <= 0 or nu <= 0:
-        raise ValueError("velocity, diameter, and kinematic_viscosity must be positive")
+        raise _pipe_flow_refusal(
+            "velocity, diameter, and kinematic_viscosity must be positive",
+            subject="velocity, diameter, and kinematic_viscosity",
+            source=_OPERATING_SOURCE,
+        )
     return v * d / nu
 
 
@@ -112,11 +167,17 @@ def dean_number(
     _check(tube_diameter, "[length]", "tube_diameter")
     _check(coil_diameter, "[length]", "coil_diameter")
     if reynolds <= 0:
-        raise ValueError("reynolds must be positive")
+        raise _pipe_flow_refusal(
+            "reynolds must be positive", subject="reynolds", source=_OPERATING_SOURCE
+        )
     d = tube_diameter.to("m").magnitude
     big_d = coil_diameter.to("m").magnitude
     if d <= 0 or big_d <= 0:
-        raise ValueError("tube_diameter and coil_diameter must be positive")
+        raise _pipe_flow_refusal(
+            "tube_diameter and coil_diameter must be positive",
+            subject="tube_diameter and coil_diameter",
+            source=_PIPE_SOURCE,
+        )
     return reynolds * (d / big_d) ** 0.5
 
 
@@ -141,9 +202,13 @@ def wall_shear_stress(*, friction_factor: float, density: Quantity, velocity: Qu
     rho = density.to("kg/m**3").magnitude
     v = velocity.to("m/s").magnitude
     if friction_factor <= 0:
-        raise ValueError("friction_factor must be positive")
+        raise _pipe_flow_refusal(
+            "friction_factor must be positive", subject="friction_factor", source=_LOSS_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _pipe_flow_refusal(
+            "density must be positive", subject="density", source=_FLUID_SOURCE
+        )
     return Quantity(magnitude=friction_factor * rho * v * v / 8.0, unit="Pa")
 
 
@@ -173,11 +238,17 @@ def womersley_number(
     f = count_rate_per_second(frequency, name="frequency")
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _pipe_flow_refusal("radius must be positive", subject="radius", source=_PIPE_SOURCE)
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _pipe_flow_refusal(
+            "frequency must be positive", subject="frequency", source=_OPERATING_SOURCE
+        )
     if nu <= 0:
-        raise ValueError("kinematic_viscosity must be positive")
+        raise _pipe_flow_refusal(
+            "kinematic_viscosity must be positive",
+            subject="kinematic_viscosity",
+            source=_FLUID_SOURCE,
+        )
     return r * sqrt(2.0 * pi * f / nu)
 
 
@@ -194,13 +265,19 @@ def laminar_hydrodynamic_entry_length(*, reynolds: float, diameter: Quantity) ->
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude
     if reynolds <= 0:
-        raise ValueError("reynolds must be positive")
+        raise _pipe_flow_refusal(
+            "reynolds must be positive", subject="reynolds", source=_OPERATING_SOURCE
+        )
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _pipe_flow_refusal(
+            "diameter must be positive", subject="diameter", source=_PIPE_SOURCE
+        )
     if reynolds > _LAMINAR_LIMIT:
-        raise ValueError(
+        raise _pipe_flow_refusal(
             f"the laminar entry-length form applies for Re <= {_LAMINAR_LIMIT}; "
-            "use turbulent_entry_length for turbulent flow"
+            "use turbulent_entry_length for turbulent flow",
+            subject="reynolds",
+            source=_OPERATING_SOURCE,
         )
     return Quantity(magnitude=0.05 * reynolds * d, unit="m")
 
@@ -220,15 +297,23 @@ def laminar_thermal_entry_length(
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude
     if reynolds <= 0:
-        raise ValueError("reynolds must be positive")
+        raise _pipe_flow_refusal(
+            "reynolds must be positive", subject="reynolds", source=_OPERATING_SOURCE
+        )
     if prandtl <= 0:
-        raise ValueError("prandtl must be positive")
+        raise _pipe_flow_refusal(
+            "prandtl must be positive", subject="prandtl", source=_FLUID_SOURCE
+        )
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _pipe_flow_refusal(
+            "diameter must be positive", subject="diameter", source=_PIPE_SOURCE
+        )
     if reynolds > _LAMINAR_LIMIT:
-        raise ValueError(
+        raise _pipe_flow_refusal(
             f"the laminar entry-length form applies for Re <= {_LAMINAR_LIMIT}; "
-            "use turbulent_entry_length for turbulent flow"
+            "use turbulent_entry_length for turbulent flow",
+            subject="reynolds",
+            source=_OPERATING_SOURCE,
         )
     return Quantity(magnitude=0.05 * reynolds * prandtl * d, unit="m")
 
@@ -255,15 +340,21 @@ def graetz_number(
     _check(diameter, "[length]", "diameter")
     _check(length, "[length]", "length")
     if reynolds <= 0:
-        raise ValueError("reynolds must be positive")
+        raise _pipe_flow_refusal(
+            "reynolds must be positive", subject="reynolds", source=_OPERATING_SOURCE
+        )
     if prandtl <= 0:
-        raise ValueError("prandtl must be positive")
+        raise _pipe_flow_refusal(
+            "prandtl must be positive", subject="prandtl", source=_FLUID_SOURCE
+        )
     d = diameter.to("m").magnitude
     ell = length.to("m").magnitude
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _pipe_flow_refusal(
+            "diameter must be positive", subject="diameter", source=_PIPE_SOURCE
+        )
     if ell <= 0:
-        raise ValueError("length must be positive")
+        raise _pipe_flow_refusal("length must be positive", subject="length", source=_PIPE_SOURCE)
     return (d / ell) * reynolds * prandtl
 
 
@@ -282,7 +373,9 @@ def turbulent_entry_length(*, diameter: Quantity) -> Quantity:
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _pipe_flow_refusal(
+            "diameter must be positive", subject="diameter", source=_PIPE_SOURCE
+        )
     return Quantity(magnitude=10.0 * d, unit="m")
 
 
@@ -301,9 +394,17 @@ def darcy_friction_factor(*, reynolds: float, relative_roughness: float = 0.0) -
     # 64/Re and the caller never learned their model held a NaN.
     require_finite(relative_roughness, name="relative_roughness")
     if reynolds <= 0:
-        raise ValueError(f"reynolds must be positive; got {reynolds}")
+        raise _pipe_flow_refusal(
+            f"reynolds must be positive; got {reynolds}",
+            subject="reynolds",
+            source=_OPERATING_SOURCE,
+        )
     if relative_roughness < 0:
-        raise ValueError(f"relative_roughness must be non-negative; got {relative_roughness}")
+        raise _pipe_flow_refusal(
+            f"relative_roughness must be non-negative; got {relative_roughness}",
+            subject="relative_roughness",
+            source=_LOSS_SOURCE,
+        )
     if reynolds <= _LAMINAR_LIMIT:
         return 64.0 / reynolds
     denom = log10(relative_roughness / 3.7 + 5.74 / reynolds**0.9)
@@ -331,9 +432,15 @@ def darcy_weisbach_head_loss(
     d = diameter.to("m").magnitude
     v = velocity.to("m/s").magnitude
     if friction_factor <= 0:
-        raise ValueError("friction_factor must be positive")
+        raise _pipe_flow_refusal(
+            "friction_factor must be positive", subject="friction_factor", source=_LOSS_SOURCE
+        )
     if lo <= 0 or d <= 0 or v <= 0:
-        raise ValueError("length, diameter, and velocity must be positive")
+        raise _pipe_flow_refusal(
+            "length, diameter, and velocity must be positive",
+            subject="length, diameter, and velocity",
+            source=_PIPE_SOURCE,
+        )
     h_f = friction_factor * (lo / d) * v**2 / (2.0 * _GRAVITY)
     return Quantity(magnitude=h_f, unit="m")
 
@@ -350,9 +457,13 @@ def minor_loss_head(*, loss_coefficient: float, velocity: Quantity) -> Quantity:
     _check(velocity, "[length]/[time]", "velocity")
     v = velocity.to("m/s").magnitude
     if loss_coefficient < 0:
-        raise ValueError("loss_coefficient must be non-negative")
+        raise _pipe_flow_refusal(
+            "loss_coefficient must be non-negative", subject="loss_coefficient", source=_LOSS_SOURCE
+        )
     if v <= 0:
-        raise ValueError("velocity must be positive")
+        raise _pipe_flow_refusal(
+            "velocity must be positive", subject="velocity", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=loss_coefficient * v**2 / (2.0 * _GRAVITY), unit="m")
 
 
@@ -369,7 +480,11 @@ def pipe_pressure_drop(*, head_loss: Quantity, density: Quantity) -> Quantity:
     h = head_loss.to("m").magnitude
     rho = density.to("kg/m**3").magnitude
     if h < 0 or rho <= 0:
-        raise ValueError("head_loss must be non-negative and density positive")
+        raise _pipe_flow_refusal(
+            "head_loss must be non-negative and density positive",
+            subject="head_loss and density",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=rho * _GRAVITY * h / 1000.0, unit="kPa")
 
 
@@ -397,9 +512,17 @@ def hazen_williams_head_loss(
     d = pipe_diameter.to("m").magnitude
     lo = length.to("m").magnitude
     if q <= 0 or d <= 0 or lo <= 0:
-        raise ValueError("flow_rate, pipe_diameter, and length must be positive")
+        raise _pipe_flow_refusal(
+            "flow_rate, pipe_diameter, and length must be positive",
+            subject="flow_rate, pipe_diameter, and length",
+            source=_PIPE_SOURCE,
+        )
     if roughness_coefficient <= 0:
-        raise ValueError("roughness_coefficient must be positive")
+        raise _pipe_flow_refusal(
+            "roughness_coefficient must be positive",
+            subject="roughness_coefficient",
+            source=_LOSS_SOURCE,
+        )
     h_f = (
         _HW_CONSTANT
         * lo
@@ -430,9 +553,17 @@ def hazen_williams_flow_capacity(
     d = pipe_diameter.to("m").magnitude
     lo = length.to("m").magnitude
     if h_f <= 0 or d <= 0 or lo <= 0:
-        raise ValueError("head_loss, pipe_diameter, and length must be positive")
+        raise _pipe_flow_refusal(
+            "head_loss, pipe_diameter, and length must be positive",
+            subject="head_loss, pipe_diameter, and length",
+            source=_PIPE_SOURCE,
+        )
     if roughness_coefficient <= 0:
-        raise ValueError("roughness_coefficient must be positive")
+        raise _pipe_flow_refusal(
+            "roughness_coefficient must be positive",
+            subject="roughness_coefficient",
+            source=_LOSS_SOURCE,
+        )
     numerator = h_f * roughness_coefficient**_HW_FLOW_EXPONENT * d**_HW_DIAMETER_EXPONENT
     q = (numerator / (_HW_CONSTANT * lo)) ** (1.0 / _HW_FLOW_EXPONENT)
     return Quantity(magnitude=q, unit="m**3/s")
@@ -453,7 +584,11 @@ def hydraulic_diameter(*, flow_area: Quantity, wetted_perimeter: Quantity) -> Qu
     a = flow_area.to("m**2").magnitude
     p = wetted_perimeter.to("m").magnitude
     if a <= 0 or p <= 0:
-        raise ValueError("flow_area and wetted_perimeter must be positive")
+        raise _pipe_flow_refusal(
+            "flow_area and wetted_perimeter must be positive",
+            subject="flow_area and wetted_perimeter",
+            source=_PIPE_SOURCE,
+        )
     return Quantity(magnitude=4.0 * a / p, unit="m")
 
 
@@ -487,7 +622,14 @@ def pressure_wave_speed(
     t = wall_thickness.to("m").magnitude
     e = wall_elastic_modulus.to("Pa").magnitude
     if k <= 0 or rho <= 0 or d <= 0 or t <= 0 or e <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _pipe_flow_refusal(
+            "all inputs must be positive",
+            subject=(
+                "fluid_bulk_modulus, fluid_density, pipe_diameter, wall_thickness, and "
+                "wall_elastic_modulus"
+            ),
+            source=_PIPE_SOURCE,
+        )
     a = sqrt((k / rho) / (1.0 + (k * d) / (e * t)))
     return Quantity(magnitude=a, unit="m/s")
 
@@ -515,9 +657,17 @@ def joukowsky_surge_pressure(
     a = wave_speed.to("m/s").magnitude
     dv = velocity_change.to("m/s").magnitude
     if rho <= 0 or a <= 0:
-        raise ValueError("density and wave_speed must be positive")
+        raise _pipe_flow_refusal(
+            "density and wave_speed must be positive",
+            subject="density and wave_speed",
+            source=_OPERATING_SOURCE,
+        )
     if dv < 0:
-        raise ValueError("velocity_change must be non-negative")
+        raise _pipe_flow_refusal(
+            "velocity_change must be non-negative",
+            subject="velocity_change",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=rho * a * dv / 1000.0, unit="kPa")
 
 
@@ -536,7 +686,11 @@ def surge_wave_period(*, pipe_length: Quantity, wave_speed: Quantity) -> Quantit
     lo = pipe_length.to("m").magnitude
     a = wave_speed.to("m/s").magnitude
     if lo <= 0 or a <= 0:
-        raise ValueError("pipe_length and wave_speed must be positive")
+        raise _pipe_flow_refusal(
+            "pipe_length and wave_speed must be positive",
+            subject="pipe_length and wave_speed",
+            source=_PIPE_SOURCE,
+        )
     return Quantity(magnitude=2.0 * lo / a, unit="s")
 
 
@@ -565,13 +719,19 @@ def cavitation_number(
     rho = density.to("kg/m**3").magnitude
     v = velocity.to("m/s").magnitude
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _pipe_flow_refusal(
+            "density must be positive", subject="density", source=_FLUID_SOURCE
+        )
     if v <= 0:
-        raise ValueError("velocity must be positive")
+        raise _pipe_flow_refusal(
+            "velocity must be positive", subject="velocity", source=_OPERATING_SOURCE
+        )
     p = local_pressure.to("Pa").magnitude
     p_v = vapor_pressure.to("Pa").magnitude
     if p_v < 0:
-        raise ValueError("vapor_pressure must be non-negative")
+        raise _pipe_flow_refusal(
+            "vapor_pressure must be non-negative", subject="vapor_pressure", source=_FLUID_SOURCE
+        )
     return (p - p_v) / (0.5 * rho * v**2)
 
 
@@ -595,11 +755,13 @@ def hagen_poiseuille_flow_rate(
     mu = viscosity.to("Pa*s").magnitude
     length_m = length.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _pipe_flow_refusal("radius must be positive", subject="radius", source=_PIPE_SOURCE)
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _pipe_flow_refusal(
+            "viscosity must be positive", subject="viscosity", source=_FLUID_SOURCE
+        )
     if length_m <= 0:
-        raise ValueError("length must be positive")
+        raise _pipe_flow_refusal("length must be positive", subject="length", source=_PIPE_SOURCE)
     return Quantity(magnitude=pi * dp * r**4 / (8.0 * mu * length_m), unit="m**3/s")
 
 
@@ -623,13 +785,17 @@ def hagen_poiseuille_pressure_drop(
     mu = viscosity.to("Pa*s").magnitude
     length_m = length.to("m").magnitude
     if q < 0:
-        raise ValueError("flow_rate must be non-negative")
+        raise _pipe_flow_refusal(
+            "flow_rate must be non-negative", subject="flow_rate", source=_OPERATING_SOURCE
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _pipe_flow_refusal("radius must be positive", subject="radius", source=_PIPE_SOURCE)
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _pipe_flow_refusal(
+            "viscosity must be positive", subject="viscosity", source=_FLUID_SOURCE
+        )
     if length_m <= 0:
-        raise ValueError("length must be positive")
+        raise _pipe_flow_refusal("length must be positive", subject="length", source=_PIPE_SOURCE)
     return Quantity(magnitude=8.0 * mu * length_m * q / (pi * r**4), unit="Pa")
 
 
@@ -653,22 +819,34 @@ def hagen_poiseuille_radius_for_flow(
     mu = viscosity.to("Pa*s").magnitude
     length_m = length.to("m").magnitude
     if q <= 0:
-        raise ValueError("flow_rate must be positive")
+        raise _pipe_flow_refusal(
+            "flow_rate must be positive", subject="flow_rate", source=_OPERATING_SOURCE
+        )
     if dp <= 0:
-        raise ValueError("pressure_drop must be positive")
+        raise _pipe_flow_refusal(
+            "pressure_drop must be positive", subject="pressure_drop", source=_OPERATING_SOURCE
+        )
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _pipe_flow_refusal(
+            "viscosity must be positive", subject="viscosity", source=_FLUID_SOURCE
+        )
     if length_m <= 0:
-        raise ValueError("length must be positive")
+        raise _pipe_flow_refusal("length must be positive", subject="length", source=_PIPE_SOURCE)
     return Quantity(magnitude=(8.0 * mu * length_m * q / (pi * dp)) ** 0.25, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _pipe_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_pipe_flow_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _pipe_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_pipe_flow_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -18,14 +18,20 @@ _ROOT = Path(__file__).parents[1]
 _LEDGER = _ROOT / "docs/api/raised-refusals-without-remedies.txt"
 
 
+def _is_value_error(node: ast.AST | None) -> bool:
+    return isinstance(node, ast.Name) and node.id == "ValueError"
+
+
 def _bare_value_errors() -> Counter[str]:
     counts: Counter[str] = Counter()
     for path in sorted((_ROOT / "src/anvilate").rglob("*.py")):
+        # A refusal can be built in one place and raised in another (`raise self._x(...)`
+        # where `_x` returns the error), so every construction counts, not only the ones
+        # written directly after `raise`; a bare `raise ValueError` counts too.
         for node in ast.walk(parsed_source(path)):
-            if not isinstance(node, ast.Raise) or node.exc is None:
-                continue
-            raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
-            if isinstance(raised, ast.Name) and raised.id == "ValueError":
+            built = isinstance(node, ast.Call) and _is_value_error(node.func)
+            bare = isinstance(node, ast.Raise) and _is_value_error(node.exc)
+            if built or bare:
                 counts[path.relative_to(_ROOT).as_posix()] += 1
     return counts
 
@@ -44,7 +50,9 @@ def _ledger() -> Counter[str]:
 def test_the_ledger_matches_the_bare_refusals_in_the_source() -> None:
     found = _bare_value_errors()
     # The floor goes first: a census that matched nothing would agree with an empty ledger.
-    assert sum(found.values()) > 1_000
+    # refusal.py's two refusals guard the construction of a remedy and can never carry one,
+    # so a census that stops seeing them has stopped seeing anything.
+    assert found["src/anvilate/refusal.py"] == 2
     recorded = _ledger()
     grew = {p: (recorded[p], n) for p, n in found.items() if n > recorded[p]}
     assert not grew, (

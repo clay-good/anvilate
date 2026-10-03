@@ -436,6 +436,10 @@ def test_every_literal_remedy_subject_names_a_public_parameter():
                     for field in node.body
                     if isinstance(field, ast.AnnAssign) and isinstance(field.target, ast.Name)
                 }
+                for method in node.body:
+                    if isinstance(method, ast.FunctionDef) and not method.name.startswith("_"):
+                        arguments = method.args
+                        public |= {a.arg for a in arguments.args + arguments.kwonlyargs}
         for node in ast.walk(tree):
             if not (
                 isinstance(node, ast.keyword)

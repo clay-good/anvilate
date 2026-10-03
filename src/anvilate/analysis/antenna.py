@@ -24,7 +24,35 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ANTENNA_SOURCE = "the antenna manufacturer's datasheet (gain, aperture, efficiency)"
+_RADIO_SOURCE = "the radio's datasheet (transmit power and receiver sensitivity)"
+_LINK_SOURCE = "the link's site survey (path distance and obstruction points)"
+_BAND_SOURCE = "the operating frequency from the link's frequency plan"
+
+
+class _AntennaInputError(RefusalError, ValueError):
+    """An antenna input that cannot be used without correction."""
+
+
+def _antenna_refusal(message: str, *, subject: str, source: str) -> _AntennaInputError:
+    return _AntennaInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _antenna_input_source(name: str) -> str:
+    if name in {"distance", "distance_to_far_end", "distance_to_near_end", "zone"}:
+        return _LINK_SOURCE
+    if name == "wavelength":
+        return _BAND_SOURCE
+    if name in {"receiver_sensitivity", "transmit_power"}:
+        return _RADIO_SOURCE
+    return _ANTENNA_SOURCE
+
 
 _PARABOLIC_BEAMWIDTH_CONSTANT = 70.0  # deg, θ ≈ k·λ/D for a typical parabolic dish taper
 
@@ -56,9 +84,11 @@ def free_space_path_loss(*, distance: Quantity, wavelength: Quantity) -> float:
     d = distance.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if d <= 0:
-        raise ValueError("distance must be positive")
+        raise _antenna_refusal("distance must be positive", subject="distance", source=_LINK_SOURCE)
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     return (4.0 * pi * d / lam) ** 2
 
 
@@ -84,15 +114,23 @@ def received_power(
     d = distance.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if p_t < 0:
-        raise ValueError("transmit_power must be non-negative")
+        raise _antenna_refusal(
+            "transmit_power must be non-negative", subject="transmit_power", source=_RADIO_SOURCE
+        )
     if transmit_gain <= 0:
-        raise ValueError("transmit_gain must be positive")
+        raise _antenna_refusal(
+            "transmit_gain must be positive", subject="transmit_gain", source=_ANTENNA_SOURCE
+        )
     if receive_gain <= 0:
-        raise ValueError("receive_gain must be positive")
+        raise _antenna_refusal(
+            "receive_gain must be positive", subject="receive_gain", source=_ANTENNA_SOURCE
+        )
     if d <= 0:
-        raise ValueError("distance must be positive")
+        raise _antenna_refusal("distance must be positive", subject="distance", source=_LINK_SOURCE)
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     p_r = p_t * transmit_gain * receive_gain * (lam / (4.0 * pi * d)) ** 2
     return Quantity(magnitude=p_r, unit="W")
 
@@ -120,15 +158,27 @@ def max_line_of_sight_range(
     p_min = receiver_sensitivity.to("W").magnitude
     lam = wavelength.to("m").magnitude
     if p_t <= 0:
-        raise ValueError("transmit_power must be positive")
+        raise _antenna_refusal(
+            "transmit_power must be positive", subject="transmit_power", source=_RADIO_SOURCE
+        )
     if transmit_gain <= 0:
-        raise ValueError("transmit_gain must be positive")
+        raise _antenna_refusal(
+            "transmit_gain must be positive", subject="transmit_gain", source=_ANTENNA_SOURCE
+        )
     if receive_gain <= 0:
-        raise ValueError("receive_gain must be positive")
+        raise _antenna_refusal(
+            "receive_gain must be positive", subject="receive_gain", source=_ANTENNA_SOURCE
+        )
     if p_min <= 0:
-        raise ValueError("receiver_sensitivity must be positive")
+        raise _antenna_refusal(
+            "receiver_sensitivity must be positive",
+            subject="receiver_sensitivity",
+            source=_RADIO_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     d = (lam / (4.0 * pi)) * sqrt(p_t * transmit_gain * receive_gain / p_min)
     return Quantity(magnitude=d, unit="m")
 
@@ -157,11 +207,20 @@ def fresnel_zone_radius(
     d1 = distance_to_near_end.to("m").magnitude
     d2 = distance_to_far_end.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
-    if d1 <= 0 or d2 <= 0:
-        raise ValueError("distance_to_near_end and distance_to_far_end must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
+    for subject, magnitude in (("distance_to_near_end", d1), ("distance_to_far_end", d2)):
+        if magnitude <= 0:
+            raise _antenna_refusal(
+                "distance_to_near_end and distance_to_far_end must be positive",
+                subject=subject,
+                source=_LINK_SOURCE,
+            )
     if zone < 1:
-        raise ValueError("zone must be a positive integer")
+        raise _antenna_refusal(
+            "zone must be a positive integer", subject="zone", source=_LINK_SOURCE
+        )
     return Quantity(magnitude=sqrt(zone * lam * d1 * d2 / (d1 + d2)), unit="m")
 
 
@@ -181,11 +240,17 @@ def aperture_antenna_gain(
     a = aperture_area.to("m**2").magnitude
     lam = wavelength.to("m").magnitude
     if a <= 0:
-        raise ValueError("aperture_area must be positive")
+        raise _antenna_refusal(
+            "aperture_area must be positive", subject="aperture_area", source=_ANTENNA_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError("efficiency must be in (0, 1]")
+        raise _antenna_refusal(
+            "efficiency must be in (0, 1]", subject="efficiency", source=_ANTENNA_SOURCE
+        )
     return efficiency * 4.0 * pi * a / (lam * lam)
 
 
@@ -202,9 +267,13 @@ def parabolic_beamwidth(*, diameter: Quantity, wavelength: Quantity) -> float:
     d = diameter.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _antenna_refusal(
+            "diameter must be positive", subject="diameter", source=_ANTENNA_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     return _PARABOLIC_BEAMWIDTH_CONSTANT * lam / d
 
 
@@ -221,11 +290,15 @@ def dish_diameter_for_gain(
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if gain <= 0:
-        raise ValueError("gain must be positive")
+        raise _antenna_refusal("gain must be positive", subject="gain", source=_ANTENNA_SOURCE)
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError("efficiency must be in (0, 1]")
+        raise _antenna_refusal(
+            "efficiency must be in (0, 1]", subject="efficiency", source=_ANTENNA_SOURCE
+        )
     return Quantity(magnitude=(lam / pi) * sqrt(gain / efficiency), unit="m")
 
 
@@ -241,9 +314,11 @@ def effective_aperture(*, gain: float, wavelength: Quantity) -> Quantity:
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if gain <= 0:
-        raise ValueError("gain must be positive")
+        raise _antenna_refusal("gain must be positive", subject="gain", source=_ANTENNA_SOURCE)
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     return Quantity(magnitude=gain * lam * lam / (4.0 * pi), unit="m**2")
 
 
@@ -263,16 +338,22 @@ def aperture_efficiency(*, gain: float, physical_area: Quantity, wavelength: Qua
     a_phys = physical_area.to("m**2").magnitude
     lam = wavelength.to("m").magnitude
     if gain <= 0:
-        raise ValueError("gain must be positive")
+        raise _antenna_refusal("gain must be positive", subject="gain", source=_ANTENNA_SOURCE)
     if a_phys <= 0:
-        raise ValueError("physical_area must be positive")
+        raise _antenna_refusal(
+            "physical_area must be positive", subject="physical_area", source=_ANTENNA_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     eta = gain * lam * lam / (4.0 * pi * a_phys)
     if eta > 1.0:
-        raise ValueError(
+        raise _antenna_refusal(
             "computed aperture efficiency exceeds 1 (effective area cannot exceed the physical "
-            "area — check the gain, area, and wavelength)"
+            "area — check the gain, area, and wavelength)",
+            subject="gain, physical_area, and wavelength",
+            source=_ANTENNA_SOURCE,
         )
     return eta
 
@@ -294,18 +375,22 @@ def radiation_resistance_short_dipole(*, length: Quantity, wavelength: Quantity)
     ell = length.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if ell <= 0:
-        raise ValueError("length must be positive")
+        raise _antenna_refusal("length must be positive", subject="length", source=_ANTENNA_SOURCE)
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _antenna_refusal(
+            "wavelength must be positive", subject="wavelength", source=_BAND_SOURCE
+        )
     # The docstring's own limit, enforced: the short-dipole form assumes a uniform current and
     # runs away as L approaches lambda. At L = lambda it returned 790 ohm, and the same
     # paragraph names the half-wave dipole's ~73 ohm as "outside this short-dipole form".
     ratio = ell / lam
     if ratio > 0.1:
-        raise ValueError(
+        raise _antenna_refusal(
             f"length/wavelength = {ratio:.4f} is past the short-dipole limit of about 0.1, "
             f"where R_r = 80*pi^2*(L/lambda)^2 stops describing the antenna (it would return "
-            f"{80.0 * pi**2 * ratio**2:.1f} ohm against a half-wave dipole's ~73 ohm)."
+            f"{80.0 * pi**2 * ratio**2:.1f} ohm against a half-wave dipole's ~73 ohm).",
+            subject="length and wavelength",
+            source=_ANTENNA_SOURCE,
         )
     return Quantity(magnitude=80.0 * pi**2 * ratio**2, unit="ohm")
 
@@ -337,18 +422,32 @@ def antenna_far_field_distance(*, aperture_diameter: Quantity, wavelength: Quant
     d = aperture_diameter.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if d <= 0:
-        raise ValueError(f"aperture_diameter must be positive; got {aperture_diameter}")
+        raise _antenna_refusal(
+            f"aperture_diameter must be positive; got {aperture_diameter}",
+            subject="aperture_diameter",
+            source=_ANTENNA_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError(f"wavelength must be positive; got {wavelength}")
+        raise _antenna_refusal(
+            f"wavelength must be positive; got {wavelength}",
+            subject="wavelength",
+            source=_BAND_SOURCE,
+        )
     return Quantity(magnitude=2.0 * d * d / lam, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _antenna_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_antenna_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _antenna_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_antenna_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

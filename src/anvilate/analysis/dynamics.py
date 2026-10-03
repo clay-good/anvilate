@@ -29,6 +29,7 @@ from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
     Comparison,
@@ -42,6 +43,54 @@ from ..scorecard import (
 from ..units import Quantity, decimals_distinguishing, require_finite, spoken
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
+
+_STRUCTURE_SOURCE = "the structure's drawing and mass/stiffness takeoff"
+_MATERIAL_SOURCE = "the material datasheet's elastic modulus, density, and Poisson ratio"
+_DAMPING_SOURCE = "the measured decay or half-power test record, or a cited damping table"
+_EXCITATION_SOURCE = "the operating case's forcing frequency, speed, and shock pulse"
+_CRITERION_SOURCE = "the design basis's isolation, acceleration, and frequency limits"
+_ROTOR_SOURCE = "the rotor drawing and the ISO 21940-11 balance-grade record"
+
+
+class _DynamicsInputError(RefusalError, ValueError):
+    """A structural-dynamics input that cannot be used without correction."""
+
+
+def _dynamics_refusal(message: str, *, subject: str, source: str) -> _DynamicsInputError:
+    return _DynamicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _dynamics_input_source(name: str) -> str:
+    if name in {"elastic_modulus", "poisson_ratio"}:
+        return _MATERIAL_SOURCE
+    if name in {"damping_ratio", "half_power_bandwidth", "log_decrement", "resonant_frequency"}:
+        return _DAMPING_SOURCE
+    if name in {
+        "constant_force",
+        "forcing_frequency",
+        "frequency_ratio",
+        "peak_acceleration",
+        "pulse_duration",
+        "rotational_speed",
+        "torque",
+    }:
+        return _EXCITATION_SOURCE
+    if name in {
+        "allowable_acceleration",
+        "min_frequency",
+        "name",
+        "required_transmissibility",
+        "target_transmissibility",
+        "transmissibility",
+    }:
+        return _CRITERION_SOURCE
+    if name in {"balance_grade", "correction_radius", "eccentricity", "unbalance_mass"}:
+        return _ROTOR_SOURCE
+    return _STRUCTURE_SOURCE
+
 
 __all__ = [
     "STANDARD_GRAVITY",
@@ -121,10 +170,16 @@ _LAMBDA_SQ_FIXED_PINNED = 15.4182057170
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _dynamics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_dynamics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _dynamics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_dynamics_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -144,8 +199,11 @@ def natural_frequency(*, stiffness: Quantity, mass: Quantity) -> Quantity:
     _require(mass, "[mass]", "mass")
     k = stiffness.to("N/m").magnitude
     m = mass.to("kg").magnitude
-    if k <= 0 or m <= 0:
-        raise ValueError("stiffness and mass must be positive")
+    for subject, magnitude in (("stiffness", k), ("mass", m)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "stiffness and mass must be positive", subject=subject, source=_STRUCTURE_SOURCE
+            )
     return Quantity(magnitude=sqrt(k / m) / (2 * pi), unit="Hz")
 
 
@@ -165,7 +223,11 @@ def natural_frequency_from_deflection(
     delta = static_deflection.to("m").magnitude
     g = gravity.to("m/s**2").magnitude
     if delta <= 0:
-        raise ValueError(f"static_deflection must be positive; got {static_deflection}")
+        raise _dynamics_refusal(
+            f"static_deflection must be positive; got {static_deflection}",
+            subject="static_deflection",
+            source=_STRUCTURE_SOURCE,
+        )
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
 
 
@@ -197,16 +259,29 @@ def cantilever_tip_mass_frequency(
     i = second_moment.to("mm**4").magnitude
     ell = length.to("mm").magnitude
     m_tip = tip_mass.to("kg").magnitude
-    if e <= 0 or i <= 0 or ell <= 0:
-        raise ValueError("elastic_modulus, second_moment, and length must be positive")
+    for subject, magnitude in (("elastic_modulus", e), ("second_moment", i), ("length", ell)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "elastic_modulus, second_moment, and length must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     if m_tip <= 0:
-        raise ValueError(f"tip_mass must be positive; got {tip_mass}")
+        raise _dynamics_refusal(
+            f"tip_mass must be positive; got {tip_mass}",
+            subject="tip_mass",
+            source=_STRUCTURE_SOURCE,
+        )
     m_beam = 0.0
     if beam_mass is not None:
         _require(beam_mass, "[mass]", "beam_mass")
         m_beam = beam_mass.to("kg").magnitude
         if m_beam < 0:
-            raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
+            raise _dynamics_refusal(
+                f"beam_mass must be non-negative; got {beam_mass}",
+                subject="beam_mass",
+                source=_STRUCTURE_SOURCE,
+            )
     stiffness = 3.0 * e * i / ell**3  # N/mm
     stiffness_si = stiffness * 1000.0  # N/m
     m_eff = m_tip + (33.0 / 140.0) * m_beam
@@ -242,16 +317,29 @@ def simply_supported_center_mass_frequency(
     i = second_moment.to("mm**4").magnitude
     ell = length.to("mm").magnitude
     m_center = center_mass.to("kg").magnitude
-    if e <= 0 or i <= 0 or ell <= 0:
-        raise ValueError("elastic_modulus, second_moment, and length must be positive")
+    for subject, magnitude in (("elastic_modulus", e), ("second_moment", i), ("length", ell)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "elastic_modulus, second_moment, and length must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     if m_center <= 0:
-        raise ValueError(f"center_mass must be positive; got {center_mass}")
+        raise _dynamics_refusal(
+            f"center_mass must be positive; got {center_mass}",
+            subject="center_mass",
+            source=_STRUCTURE_SOURCE,
+        )
     m_beam = 0.0
     if beam_mass is not None:
         _require(beam_mass, "[mass]", "beam_mass")
         m_beam = beam_mass.to("kg").magnitude
         if m_beam < 0:
-            raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
+            raise _dynamics_refusal(
+                f"beam_mass must be non-negative; got {beam_mass}",
+                subject="beam_mass",
+                source=_STRUCTURE_SOURCE,
+            )
     stiffness_si = 48.0 * e * i / ell**3 * 1000.0  # N/m
     m_eff = m_center + (17.0 / 35.0) * m_beam
     return Quantity(magnitude=sqrt(stiffness_si / m_eff) / (2 * pi), unit="Hz")
@@ -286,16 +374,29 @@ def fixed_fixed_center_mass_frequency(
     i = second_moment.to("mm**4").magnitude
     ell = length.to("mm").magnitude
     m_center = center_mass.to("kg").magnitude
-    if e <= 0 or i <= 0 or ell <= 0:
-        raise ValueError("elastic_modulus, second_moment, and length must be positive")
+    for subject, magnitude in (("elastic_modulus", e), ("second_moment", i), ("length", ell)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "elastic_modulus, second_moment, and length must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     if m_center <= 0:
-        raise ValueError(f"center_mass must be positive; got {center_mass}")
+        raise _dynamics_refusal(
+            f"center_mass must be positive; got {center_mass}",
+            subject="center_mass",
+            source=_STRUCTURE_SOURCE,
+        )
     m_beam = 0.0
     if beam_mass is not None:
         _require(beam_mass, "[mass]", "beam_mass")
         m_beam = beam_mass.to("kg").magnitude
         if m_beam < 0:
-            raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
+            raise _dynamics_refusal(
+                f"beam_mass must be non-negative; got {beam_mass}",
+                subject="beam_mass",
+                source=_STRUCTURE_SOURCE,
+            )
     stiffness_si = 192.0 * e * i / ell**3 * 1000.0  # N/m
     m_eff = m_center + (13.0 / 35.0) * m_beam
     return Quantity(magnitude=sqrt(stiffness_si / m_eff) / (2 * pi), unit="Hz")
@@ -325,23 +426,37 @@ def string_natural_frequency(
     require_finite(mode, name="mode")
     n = int(mode)
     if n != mode or n <= 0:
-        raise ValueError(f"mode must be a positive whole number; got {mode}")
+        raise _dynamics_refusal(
+            f"mode must be a positive whole number; got {mode}",
+            subject="mode",
+            source=_STRUCTURE_SOURCE,
+        )
     t = tension.to("N").magnitude
     ell = length.to("m").magnitude
     mu = mass_per_length.to("kg/m").magnitude
     if t <= 0:
-        raise ValueError(f"tension must be positive; got {tension}")
+        raise _dynamics_refusal(
+            f"tension must be positive; got {tension}", subject="tension", source=_STRUCTURE_SOURCE
+        )
     if ell <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _dynamics_refusal(
+            f"length must be positive; got {length}", subject="length", source=_STRUCTURE_SOURCE
+        )
     if mu <= 0:
-        raise ValueError(f"mass_per_length must be positive; got {mass_per_length}")
+        raise _dynamics_refusal(
+            f"mass_per_length must be positive; got {mass_per_length}",
+            subject="mass_per_length",
+            source=_STRUCTURE_SOURCE,
+        )
     return Quantity(magnitude=n / (2.0 * ell) * sqrt(t / mu), unit="Hz")
 
 
 def _check_damping_ratio(damping_ratio: float) -> float:
     if not 0 <= damping_ratio < 1:
-        raise ValueError(
-            f"damping_ratio must lie in [0, 1) (an underdamped system); got {damping_ratio}"
+        raise _dynamics_refusal(
+            f"damping_ratio must lie in [0, 1) (an underdamped system); got {damping_ratio}",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
         )
     return damping_ratio
 
@@ -360,8 +475,11 @@ def critical_damping_coefficient(*, stiffness: Quantity, mass: Quantity) -> Quan
     _require(mass, "[mass]", "mass")
     k = stiffness.to("N/m").magnitude
     m = mass.to("kg").magnitude
-    if k <= 0 or m <= 0:
-        raise ValueError("stiffness and mass must be positive")
+    for subject, magnitude in (("stiffness", k), ("mass", m)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "stiffness and mass must be positive", subject=subject, source=_STRUCTURE_SOURCE
+            )
     return Quantity(magnitude=2.0 * sqrt(k * m), unit="N*s/m")
 
 
@@ -379,7 +497,11 @@ def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: floa
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
-        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        raise _dynamics_refusal(
+            f"natural_frequency must be positive; got {natural_frequency}",
+            subject="natural_frequency",
+            source=_STRUCTURE_SOURCE,
+        )
     return Quantity(magnitude=fn * sqrt(1.0 - zeta**2), unit="Hz")
 
 
@@ -393,7 +515,11 @@ def step_response_percent_overshoot(*, damping_ratio: float) -> float:
     """
     zeta = _check_damping_ratio(damping_ratio)
     if zeta == 0.0:
-        raise ValueError("damping_ratio must be positive for a finite overshoot")
+        raise _dynamics_refusal(
+            "damping_ratio must be positive for a finite overshoot",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
+        )
     return 100.0 * exp(-zeta * pi / sqrt(1.0 - zeta**2))
 
 
@@ -409,9 +535,17 @@ def step_response_settling_time(*, natural_frequency: Quantity, damping_ratio: f
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
-        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        raise _dynamics_refusal(
+            f"natural_frequency must be positive; got {natural_frequency}",
+            subject="natural_frequency",
+            source=_STRUCTURE_SOURCE,
+        )
     if zeta == 0.0:
-        raise ValueError("damping_ratio must be positive for a finite settling time")
+        raise _dynamics_refusal(
+            "damping_ratio must be positive for a finite settling time",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
+        )
     omega_n = 2.0 * pi * fn
     return Quantity(magnitude=4.0 / (zeta * omega_n), unit="s")
 
@@ -427,7 +561,11 @@ def step_response_peak_time(*, natural_frequency: Quantity, damping_ratio: float
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
-        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        raise _dynamics_refusal(
+            f"natural_frequency must be positive; got {natural_frequency}",
+            subject="natural_frequency",
+            source=_STRUCTURE_SOURCE,
+        )
     omega_n = 2.0 * pi * fn
     return Quantity(magnitude=pi / (omega_n * sqrt(1.0 - zeta**2)), unit="s")
 
@@ -457,7 +595,11 @@ def damping_ratio_from_log_decrement(*, log_decrement: float) -> float:
     ``log_decrement`` must be non-negative. Returns the dimensionless damping ratio in [0, 1).
     """
     if log_decrement < 0:
-        raise ValueError(f"log_decrement must be non-negative; got {log_decrement}")
+        raise _dynamics_refusal(
+            f"log_decrement must be non-negative; got {log_decrement}",
+            subject="log_decrement",
+            source=_DAMPING_SOURCE,
+        )
     return log_decrement / sqrt(4.0 * pi**2 + log_decrement**2)
 
 
@@ -474,7 +616,11 @@ def quality_factor(*, damping_ratio: float) -> float:
     """
     zeta = _check_damping_ratio(damping_ratio)
     if zeta <= 0:
-        raise ValueError(f"damping_ratio must be positive for a finite Q; got {zeta}")
+        raise _dynamics_refusal(
+            f"damping_ratio must be positive for a finite Q; got {zeta}",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
+        )
     return 1.0 / (2.0 * zeta)
 
 
@@ -495,9 +641,17 @@ def quality_factor_from_half_power_bandwidth(
     f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     delta_f = count_rate_per_second(half_power_bandwidth, name="half_power_bandwidth")
     if f_n <= 0:
-        raise ValueError("resonant_frequency must be positive")
+        raise _dynamics_refusal(
+            "resonant_frequency must be positive",
+            subject="resonant_frequency",
+            source=_DAMPING_SOURCE,
+        )
     if delta_f <= 0:
-        raise ValueError("half_power_bandwidth must be positive")
+        raise _dynamics_refusal(
+            "half_power_bandwidth must be positive",
+            subject="half_power_bandwidth",
+            source=_DAMPING_SOURCE,
+        )
     return f_n / delta_f
 
 
@@ -523,20 +677,30 @@ def damping_ratio_from_half_power_bandwidth(
     f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     delta_f = count_rate_per_second(half_power_bandwidth, name="half_power_bandwidth")
     if f_n <= 0:
-        raise ValueError("resonant_frequency must be positive")
+        raise _dynamics_refusal(
+            "resonant_frequency must be positive",
+            subject="resonant_frequency",
+            source=_DAMPING_SOURCE,
+        )
     if delta_f <= 0:
-        raise ValueError("half_power_bandwidth must be positive")
+        raise _dynamics_refusal(
+            "half_power_bandwidth must be positive",
+            subject="half_power_bandwidth",
+            source=_DAMPING_SOURCE,
+        )
     zeta = delta_f / (2.0 * f_n)
     # This function PRODUCES a damping ratio that the rest of the module then consumes through
     # _check_damping_ratio, which requires an underdamped [0, 1). Unguarded it could hand back
     # zeta = 5.0 -- a bandwidth wider than the resonance it is measuring, which every sibling
     # refuses. The half-power approximation itself only holds for zeta <~ 0.1.
     if zeta >= 1.0:
-        raise ValueError(
+        raise _dynamics_refusal(
             f"half_power_bandwidth {half_power_bandwidth} against resonant_frequency "
             f"{resonant_frequency} gives a damping ratio of {zeta:.4f}, not the underdamped "
             f"[0, 1) the rest of this module accepts. The half-power method assumes a lightly "
-            f"damped peak (zeta <~ 0.1); check that the bandwidth is the -3 dB width."
+            f"damped peak (zeta <~ 0.1); check that the bandwidth is the -3 dB width.",
+            subject="resonant_frequency and half_power_bandwidth",
+            source=_DAMPING_SOURCE,
         )
     # And the approximation's OWN limit, which the docstring states and nothing enforced.
     # Δf/(2·f_n) is only the damping ratio while ζ is small: the exact half-power points sit
@@ -546,12 +710,14 @@ def damping_ratio_from_half_power_bandwidth(
     # ζ ≈ 0.3827 the lower half-power point does not exist at all, so no measurement can
     # produce such a width.
     if zeta > _HALF_POWER_DAMPING_LIMIT:
-        raise ValueError(
+        raise _dynamics_refusal(
             f"the half-power width gives zeta = {zeta:.4f}, past the zeta <= "
             f"{_HALF_POWER_DAMPING_LIMIT:g} the approximation Δf/(2·f_n) holds for. Above it "
             f"the estimate runs high — and an overstated damping understates the resonant "
             f"response every consumer of it computes. Fit the exact half-power points, or "
-            f"measure the damping another way (log decrement, free decay)."
+            f"measure the damping another way (log decrement, free decay).",
+            subject="resonant_frequency and half_power_bandwidth",
+            source=_DAMPING_SOURCE,
         )
     return zeta
 
@@ -570,11 +736,13 @@ def _steady_state_denominator(frequency_ratio: float, damping_ratio: float, form
     r = frequency_ratio
     denominator = (1.0 - r**2) ** 2 + (2.0 * damping_ratio * r) ** 2
     if denominator == 0.0:
-        raise ValueError(
+        raise _dynamics_refusal(
             f"{formula} is unbounded at undamped resonance (frequency_ratio = "
             f"{frequency_ratio}, damping_ratio = {damping_ratio}): with no damping the "
             f"amplitude grows without limit and there is no steady-state response to "
-            f"report. Supply the real damping ratio, however small."
+            f"report. Supply the real damping ratio, however small.",
+            subject="frequency_ratio and damping_ratio",
+            source=_DAMPING_SOURCE,
         )
     return sqrt(denominator)
 
@@ -596,7 +764,11 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     """
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
-        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+        raise _dynamics_refusal(
+            f"frequency_ratio must be non-negative; got {frequency_ratio}",
+            subject="frequency_ratio",
+            source=_EXCITATION_SOURCE,
+        )
     r = frequency_ratio
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
     return numerator / _steady_state_denominator(r, zeta, "transmissibility")
@@ -621,8 +793,10 @@ def isolation_scorecard(
     must be in (0, 1).
     """
     if not 0 < required_transmissibility < 1:
-        raise ValueError(
-            f"required_transmissibility must be in (0, 1); got {required_transmissibility}"
+        raise _dynamics_refusal(
+            f"required_transmissibility must be in (0, 1); got {required_transmissibility}",
+            subject="required_transmissibility",
+            source=_CRITERION_SOURCE,
         )
     # Undamped resonance is the very error this screen exists to catch, so it is reported
     # as the worst possible verdict rather than raised: a mount at r = 1 with no damping
@@ -712,11 +886,17 @@ def isolator_frequency_ratio_for_transmissibility(
     require_finite(transmissibility, name="transmissibility")
     require_finite(damping_ratio, name="damping_ratio")
     if not 0 < transmissibility < 1:
-        raise ValueError(
-            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}"
+        raise _dynamics_refusal(
+            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}",
+            subject="transmissibility",
+            source=_CRITERION_SOURCE,
         )
     if not 0 <= damping_ratio < 1:
-        raise ValueError(f"damping_ratio must be in [0, 1); got {damping_ratio}")
+        raise _dynamics_refusal(
+            f"damping_ratio must be in [0, 1); got {damping_ratio}",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
+        )
     a = (2.0 * damping_ratio) ** 2
     squared = transmissibility**2
     linear = squared * (a - 2.0) - a
@@ -737,21 +917,31 @@ def isolator_natural_frequency_for_transmissibility(
     (0, 1); f_n always comes out below f/√2, the onset of isolation. Returns f_n in hertz.
     """
     if not isinstance(forcing_frequency, Quantity):
-        raise ValueError(
-            f"forcing_frequency must be a [frequency] quantity; got {forcing_frequency!r}"
+        raise _dynamics_refusal(
+            f"forcing_frequency must be a [frequency] quantity; got {forcing_frequency!r}",
+            subject="forcing_frequency",
+            source=_EXCITATION_SOURCE,
         )
     if not forcing_frequency.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _dynamics_refusal(
             f"forcing_frequency must be a [frequency] quantity; got "
-            f"{forcing_frequency.dimensionality} ({forcing_frequency})"
+            f"{forcing_frequency.dimensionality} ({forcing_frequency})",
+            subject="forcing_frequency",
+            source=_EXCITATION_SOURCE,
         )
     if not 0 < transmissibility < 1:
-        raise ValueError(
-            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}"
+        raise _dynamics_refusal(
+            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}",
+            subject="transmissibility",
+            source=_CRITERION_SOURCE,
         )
     f = count_rate_per_second(forcing_frequency, name="forcing_frequency")
     if f <= 0:
-        raise ValueError(f"forcing_frequency must be positive; got {forcing_frequency}")
+        raise _dynamics_refusal(
+            f"forcing_frequency must be positive; got {forcing_frequency}",
+            subject="forcing_frequency",
+            source=_EXCITATION_SOURCE,
+        )
     ratio = sqrt(1.0 + 1.0 / transmissibility)
     return Quantity(magnitude=f / ratio, unit="Hz")
 
@@ -775,10 +965,16 @@ def isolator_static_deflection_for_transmissibility(
         forcing_frequency=forcing_frequency, transmissibility=transmissibility
     )
     if not isinstance(gravity, Quantity):
-        raise ValueError(f"gravity must be a [acceleration] quantity; got {gravity!r}")
+        raise _dynamics_refusal(
+            f"gravity must be a [acceleration] quantity; got {gravity!r}",
+            subject="gravity",
+            source=_STRUCTURE_SOURCE,
+        )
     if not gravity.has_dimension("[acceleration]"):
-        raise ValueError(
-            f"gravity must be an [acceleration] quantity; got {gravity.dimensionality} ({gravity})"
+        raise _dynamics_refusal(
+            f"gravity must be an [acceleration] quantity; got {gravity.dimensionality} ({gravity})",
+            subject="gravity",
+            source=_STRUCTURE_SOURCE,
         )
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     g = gravity.to("m/s**2").magnitude
@@ -846,8 +1042,10 @@ def isolator_selection_scorecard(
     _require(selected_static_deflection, "[length]", "selected_static_deflection")
     delta = selected_static_deflection.to("mm").magnitude
     if delta <= 0:
-        raise ValueError(
-            f"selected_static_deflection must be positive; got {selected_static_deflection}"
+        raise _dynamics_refusal(
+            f"selected_static_deflection must be positive; got {selected_static_deflection}",
+            subject="selected_static_deflection",
+            source=_STRUCTURE_SOURCE,
         )
     required = isolator_static_deflection_for_transmissibility(
         forcing_frequency=forcing_frequency,
@@ -939,9 +1137,17 @@ def _shock_pulse_ratio(pulse_duration: Quantity, natural_frequency: Quantity) ->
     # 2π between it and an angular rate is the trap this helper exists to close.
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if tau <= 0:
-        raise ValueError(f"pulse_duration must be positive; got {pulse_duration}")
+        raise _dynamics_refusal(
+            f"pulse_duration must be positive; got {pulse_duration}",
+            subject="pulse_duration",
+            source=_EXCITATION_SOURCE,
+        )
     if fn <= 0:
-        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        raise _dynamics_refusal(
+            f"natural_frequency must be positive; got {natural_frequency}",
+            subject="natural_frequency",
+            source=_STRUCTURE_SOURCE,
+        )
     return tau * fn
 
 
@@ -1032,7 +1238,11 @@ def half_sine_shock_scorecard(
     a0 = abs(peak_acceleration.to("m/s**2").magnitude)
     allowable = allowable_acceleration.to("m/s**2").magnitude
     if allowable <= 0:
-        raise ValueError(f"allowable_acceleration must be positive; got {allowable_acceleration}")
+        raise _dynamics_refusal(
+            f"allowable_acceleration must be positive; got {allowable_acceleration}",
+            subject="allowable_acceleration",
+            source=_CRITERION_SOURCE,
+        )
     amplification = half_sine_shock_amplification(
         pulse_duration=pulse_duration, natural_frequency=natural_frequency
     )
@@ -1133,7 +1343,11 @@ def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float
     """
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
-        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+        raise _dynamics_refusal(
+            f"frequency_ratio must be non-negative; got {frequency_ratio}",
+            subject="frequency_ratio",
+            source=_EXCITATION_SOURCE,
+        )
     r = frequency_ratio
     return 1.0 / _steady_state_denominator(r, zeta, "dynamic_magnification_factor")
 
@@ -1154,7 +1368,11 @@ def resonance_phase_angle(*, frequency_ratio: float, damping_ratio: float) -> fl
     """
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
-        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+        raise _dynamics_refusal(
+            f"frequency_ratio must be non-negative; got {frequency_ratio}",
+            subject="frequency_ratio",
+            source=_EXCITATION_SOURCE,
+        )
     r = frequency_ratio
     return degrees(atan2(2.0 * zeta * r, 1.0 - r**2))
 
@@ -1180,7 +1398,11 @@ def base_excitation_relative_transmissibility(
     """
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
-        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+        raise _dynamics_refusal(
+            f"frequency_ratio must be non-negative; got {frequency_ratio}",
+            subject="frequency_ratio",
+            source=_EXCITATION_SOURCE,
+        )
     r = frequency_ratio
     return r**2 / _steady_state_denominator(r, zeta, "base_excitation_relative_transmissibility")
 
@@ -1211,12 +1433,25 @@ def floor_vibration_peak_acceleration_ratio(
     w = effective_panel_weight.to("kN").magnitude
     p0 = constant_force.to("kN").magnitude
     if fn <= 0:
-        raise ValueError("fundamental_frequency must be positive")
-    if w <= 0 or p0 <= 0:
-        raise ValueError("effective_panel_weight and constant_force must be positive")
+        raise _dynamics_refusal(
+            "fundamental_frequency must be positive",
+            subject="fundamental_frequency",
+            source=_STRUCTURE_SOURCE,
+        )
+    for subject, magnitude in (("effective_panel_weight", w), ("constant_force", p0)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "effective_panel_weight and constant_force must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     beta = _check_damping_ratio(damping_ratio)
     if beta <= 0:
-        raise ValueError("damping_ratio must be positive (an undamped floor never settles)")
+        raise _dynamics_refusal(
+            "damping_ratio must be positive (an undamped floor never settles)",
+            subject="damping_ratio",
+            source=_DAMPING_SOURCE,
+        )
     return p0 * exp(-0.35 * fn) / (beta * w)
 
 
@@ -1234,7 +1469,9 @@ def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRA
     ell = length.to("m").magnitude
     g = gravity.to("m/s**2").magnitude
     if ell <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _dynamics_refusal(
+            f"length must be positive; got {length}", subject="length", source=_STRUCTURE_SOURCE
+        )
     return Quantity(magnitude=2.0 * pi * sqrt(ell / g), unit="s")
 
 
@@ -1263,7 +1500,11 @@ def physical_pendulum_period(
     d = pivot_distance.to("m").magnitude
     g = gravity.to("m/s**2").magnitude
     if min(inertia, m, d) <= 0:
-        raise ValueError("moment_of_inertia, mass, and pivot_distance must be positive")
+        raise _dynamics_refusal(
+            "moment_of_inertia, mass, and pivot_distance must be positive",
+            subject="moment_of_inertia, mass, and pivot_distance",
+            source=_STRUCTURE_SOURCE,
+        )
     return Quantity(magnitude=2.0 * pi * sqrt(inertia / (m * g * d)), unit="s")
 
 
@@ -1284,9 +1525,13 @@ def conical_pendulum_period(
     ell = string_length.to("m").magnitude
     g = gravity.to("m/s**2").magnitude
     if ell <= 0:
-        raise ValueError("string_length must be positive")
+        raise _dynamics_refusal(
+            "string_length must be positive", subject="string_length", source=_STRUCTURE_SOURCE
+        )
     if not 0.0 <= half_angle < 90.0:
-        raise ValueError("half_angle must be in [0, 90) degrees")
+        raise _dynamics_refusal(
+            "half_angle must be in [0, 90) degrees", subject="half_angle", source=_STRUCTURE_SOURCE
+        )
     return Quantity(magnitude=2.0 * pi * sqrt(ell * cos(radians(half_angle)) / g), unit="s")
 
 
@@ -1308,16 +1553,24 @@ def conical_pendulum_speed(
     ell = string_length.to("m").magnitude
     g = gravity.to("m/s**2").magnitude
     if ell <= 0:
-        raise ValueError("string_length must be positive")
+        raise _dynamics_refusal(
+            "string_length must be positive", subject="string_length", source=_STRUCTURE_SOURCE
+        )
     if not 0.0 <= half_angle < 90.0:
-        raise ValueError("half_angle must be in [0, 90) degrees")
+        raise _dynamics_refusal(
+            "half_angle must be in [0, 90) degrees", subject="half_angle", source=_STRUCTURE_SOURCE
+        )
     theta = radians(half_angle)
     return Quantity(magnitude=sqrt(g * ell * sin(theta) * tan(theta)), unit="m/s")
 
 
 def _check_mass_ratio(mass_ratio: float) -> float:
     if mass_ratio <= 0:
-        raise ValueError(f"mass_ratio must be positive; got {mass_ratio}")
+        raise _dynamics_refusal(
+            f"mass_ratio must be positive; got {mass_ratio}",
+            subject="mass_ratio",
+            source=_STRUCTURE_SOURCE,
+        )
     return mass_ratio
 
 
@@ -1366,18 +1619,28 @@ def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Q
     Returns the combined frequency in hertz; it always falls below the lowest fᵢ.
     """
     if not isinstance(individual_frequencies, Sequence):
-        raise ValueError(
+        raise _dynamics_refusal(
             f"individual_frequencies must be a sequence, not a single value; "
-            f"got {individual_frequencies!r}"
+            f"got {individual_frequencies!r}",
+            subject="individual_frequencies",
+            source=_STRUCTURE_SOURCE,
         )
     if not individual_frequencies:
-        raise ValueError("individual_frequencies must be a non-empty list")
+        raise _dynamics_refusal(
+            "individual_frequencies must be a non-empty list",
+            subject="individual_frequencies",
+            source=_STRUCTURE_SOURCE,
+        )
     inverse_squares = 0.0
     for i, freq in enumerate(individual_frequencies):
         _require(freq, "[frequency]", f"individual_frequencies[{i}]")
         f = count_rate_per_second(freq, name=f"individual_frequencies[{i}]")
         if f <= 0:
-            raise ValueError(f"each individual frequency must be positive; got {freq}")
+            raise _dynamics_refusal(
+                f"each individual frequency must be positive; got {freq}",
+                subject="individual_frequencies",
+                source=_STRUCTURE_SOURCE,
+            )
         inverse_squares += 1.0 / f**2
     return Quantity(magnitude=1.0 / sqrt(inverse_squares), unit="Hz")
 
@@ -1398,8 +1661,18 @@ def _beam_fundamental(
     length_m = length.to("m").magnitude
     inertia = second_moment.to("m**4").magnitude
     e = elastic_modulus.to("Pa").magnitude
-    if m <= 0 or length_m <= 0 or inertia <= 0 or e <= 0:
-        raise ValueError("mass_per_length, length, second_moment, and E must be positive")
+    for subject, magnitude in (
+        ("mass_per_length", m),
+        ("length", length_m),
+        ("second_moment", inertia),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "mass_per_length, length, second_moment, and E must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     return Quantity(
         magnitude=lambda_sq * sqrt(e * inertia / (m * length_m**4)) / (2 * pi), unit="Hz"
     )
@@ -1583,12 +1856,21 @@ def _plate_mass_and_rigidity(
     _require(thickness, "[length]", "thickness")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 < poisson_ratio < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _dynamics_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     mu = mass_per_area.to("kg/m**2").magnitude
     t = thickness.to("m").magnitude
     e = elastic_modulus.to("Pa").magnitude
-    if mu <= 0 or t <= 0 or e <= 0:
-        raise ValueError("mass_per_area, thickness, and E must be positive")
+    for subject, magnitude in (("mass_per_area", mu), ("thickness", t), ("elastic_modulus", e)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "mass_per_area, thickness, and E must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     return mu, e * t**3 / (12 * (1 - poisson_ratio**2))
 
 
@@ -1598,8 +1880,11 @@ def _rect_plate_sides(length: Quantity, width: Quantity) -> tuple[float, float]:
     _require(width, "[length]", "width")
     a = length.to("m").magnitude
     b = width.to("m").magnitude
-    if a <= 0 or b <= 0:
-        raise ValueError("length and width must be positive")
+    for subject, magnitude in (("length", a), ("width", b)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "length and width must be positive", subject=subject, source=_STRUCTURE_SOURCE
+            )
     return (a, b) if a >= b else (b, a)
 
 
@@ -1712,7 +1997,11 @@ def _positive_radius(diameter: Quantity) -> float:
     _require(diameter, "[length]", "diameter")
     radius = diameter.to("m").magnitude / 2
     if radius <= 0:
-        raise ValueError(f"diameter must be positive; got {diameter}")
+        raise _dynamics_refusal(
+            f"diameter must be positive; got {diameter}",
+            subject="diameter",
+            source=_STRUCTURE_SOURCE,
+        )
     return radius
 
 
@@ -1790,7 +2079,11 @@ def _interpolated_gamma(table: tuple[tuple[float, float], ...], ratio: float) ->
     for (r_lo, g_lo), (r_hi, g_hi) in zip(table, table[1:], strict=False):
         if ratio <= r_hi:
             return g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
-    raise ValueError(f"the ratio {ratio:.3f} is past the end of the eigenvalue table")
+    raise _dynamics_refusal(
+        f"the ratio {ratio:.3f} is past the end of the eigenvalue table",
+        subject="length and width",
+        source=_STRUCTURE_SOURCE,
+    )
 
 
 def _clamped_plate_gamma(length: Quantity, width: Quantity) -> float:
@@ -1815,9 +2108,11 @@ def _annular_hole_ratio(diameter: Quantity, hole_diameter: Quantity) -> float:
     _require(hole_diameter, "[length]", "hole_diameter")
     ratio = (hole_diameter.to("m").magnitude / 2) / radius
     if not 0 < ratio <= _ANNULAR_PLATE_GAMMA_SS[-1][0]:
-        raise ValueError(
+        raise _dynamics_refusal(
             f"the hole ratio {ratio:.2f} must lie in (0, {_ANNULAR_PLATE_GAMMA_SS[-1][0]}] — "
-            "the encoded eigenvalue range"
+            "the encoded eigenvalue range",
+            subject="diameter and hole_diameter",
+            source=_STRUCTURE_SOURCE,
         )
     return ratio
 
@@ -2048,7 +2343,11 @@ def angular_acceleration_from_torque(*, torque: Quantity, moment_of_inertia: Qua
     t = torque.to("N*m").magnitude
     i = moment_of_inertia.to("kg*m**2").magnitude
     if i <= 0:
-        raise ValueError(f"moment_of_inertia must be positive; got {moment_of_inertia}")
+        raise _dynamics_refusal(
+            f"moment_of_inertia must be positive; got {moment_of_inertia}",
+            subject="moment_of_inertia",
+            source=_STRUCTURE_SOURCE,
+        )
     return Quantity(magnitude=t / i, unit="rad/s**2")
 
 
@@ -2063,8 +2362,11 @@ def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quant
     _require(diameter, "[length]", "diameter")
     m = mass.to("kg").magnitude
     d = diameter.to("m").magnitude
-    if m <= 0 or d <= 0:
-        raise ValueError("mass and diameter must be positive")
+    for subject, magnitude in (("mass", m), ("diameter", d)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "mass and diameter must be positive", subject=subject, source=_STRUCTURE_SOURCE
+            )
     return Quantity(magnitude=m * d**2 / 8, unit="kg*m**2")
 
 
@@ -2089,11 +2391,17 @@ def parallel_axis_mass_moment(
     m = mass.to("kg").magnitude
     d = axis_distance.to("m").magnitude
     if i_cm < 0:
-        raise ValueError("centroidal_moment must be non-negative")
+        raise _dynamics_refusal(
+            "centroidal_moment must be non-negative",
+            subject="centroidal_moment",
+            source=_STRUCTURE_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _dynamics_refusal("mass must be positive", subject="mass", source=_STRUCTURE_SOURCE)
     if d < 0:
-        raise ValueError("axis_distance must be non-negative")
+        raise _dynamics_refusal(
+            "axis_distance must be non-negative", subject="axis_distance", source=_STRUCTURE_SOURCE
+        )
     return Quantity(magnitude=i_cm + m * d**2, unit="kg*m**2")
 
 
@@ -2119,11 +2427,15 @@ def annular_disc_polar_mass_moment(
     do = outer_diameter.to("m").magnitude
     di = inner_diameter.to("m").magnitude
     if m <= 0:
-        raise ValueError(f"mass must be positive; got {mass}")
+        raise _dynamics_refusal(
+            f"mass must be positive; got {mass}", subject="mass", source=_STRUCTURE_SOURCE
+        )
     if not 0 <= di < do:
-        raise ValueError(
+        raise _dynamics_refusal(
             f"inner_diameter ({inner_diameter}) must be non-negative and below "
-            f"outer_diameter ({outer_diameter})"
+            f"outer_diameter ({outer_diameter})",
+            subject="inner_diameter and outer_diameter",
+            source=_STRUCTURE_SOURCE,
         )
     return Quantity(magnitude=m * (do**2 + di**2) / 8, unit="kg*m**2")
 
@@ -2146,8 +2458,13 @@ def torsional_natural_frequency(
     _require(polar_mass_moment, "[mass] * [length]**2", "polar_mass_moment")
     k = torsional_stiffness.to("N*m").magnitude
     inertia = polar_mass_moment.to("kg*m**2").magnitude
-    if k <= 0 or inertia <= 0:
-        raise ValueError("torsional_stiffness and polar_mass_moment must be positive")
+    for subject, magnitude in (("torsional_stiffness", k), ("polar_mass_moment", inertia)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "torsional_stiffness and polar_mass_moment must be positive",
+                subject=subject,
+                source=_STRUCTURE_SOURCE,
+            )
     return Quantity(magnitude=sqrt(k / inertia) / (2 * pi), unit="Hz")
 
 
@@ -2178,8 +2495,17 @@ def two_rotor_torsional_natural_frequency(
     k = torsional_stiffness.to("N*m").magnitude
     i1 = polar_mass_moment_1.to("kg*m**2").magnitude
     i2 = polar_mass_moment_2.to("kg*m**2").magnitude
-    if k <= 0 or i1 <= 0 or i2 <= 0:
-        raise ValueError("torsional_stiffness and both polar mass moments must be positive")
+    for subject, magnitude in (
+        ("torsional_stiffness", k),
+        ("polar_mass_moment_1", i1),
+        ("polar_mass_moment_2", i2),
+    ):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "torsional_stiffness and both polar mass moments must be positive",
+                subject=subject,
+                source=_STRUCTURE_SOURCE,
+            )
     reduced = i1 * i2 / (i1 + i2)
     return Quantity(magnitude=sqrt(k / reduced) / (2 * pi), unit="Hz")
 
@@ -2199,8 +2525,13 @@ def spring_surge_frequency(*, spring_rate: Quantity, spring_mass: Quantity) -> Q
     _require(spring_mass, "[mass]", "spring_mass")
     k = spring_rate.to("N/m").magnitude
     m = spring_mass.to("kg").magnitude
-    if k <= 0 or m <= 0:
-        raise ValueError("spring_rate and spring_mass must be positive")
+    for subject, magnitude in (("spring_rate", k), ("spring_mass", m)):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "spring_rate and spring_mass must be positive",
+                subject=subject,
+                source=_STRUCTURE_SOURCE,
+            )
     return Quantity(magnitude=sqrt(k / m) / 2, unit="Hz")
 
 
@@ -2222,8 +2553,17 @@ def rotating_unbalance_force(
     m = unbalance_mass.to("kg").magnitude
     e = eccentricity.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
-    if m <= 0 or e <= 0 or omega <= 0:
-        raise ValueError("unbalance_mass, eccentricity, and rotational_speed must be positive")
+    for subject, magnitude in (
+        ("unbalance_mass", m),
+        ("eccentricity", e),
+        ("rotational_speed", omega),
+    ):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "unbalance_mass, eccentricity, and rotational_speed must be positive",
+                subject=subject,
+                source=_dynamics_input_source(subject),
+            )
     return Quantity(magnitude=m * e * omega**2, unit="N")
 
 
@@ -2246,8 +2586,17 @@ def balance_correction_mass(
     m = unbalance_mass.to("kg").magnitude
     e = eccentricity.to("m").magnitude
     r = correction_radius.to("m").magnitude
-    if m <= 0 or e <= 0 or r <= 0:
-        raise ValueError("unbalance_mass, eccentricity, and correction_radius must be positive")
+    for subject, magnitude in (
+        ("unbalance_mass", m),
+        ("eccentricity", e),
+        ("correction_radius", r),
+    ):
+        if magnitude <= 0:
+            raise _dynamics_refusal(
+                "unbalance_mass, eccentricity, and correction_radius must be positive",
+                subject=subject,
+                source=_ROTOR_SOURCE,
+            )
     return Quantity(magnitude=m * e / r, unit="kg").to("g")
 
 
@@ -2267,11 +2616,19 @@ def balance_quality_permissible_eccentricity(
     in micrometres.
     """
     if balance_grade <= 0:
-        raise ValueError(f"balance_grade must be positive; got {balance_grade}")
+        raise _dynamics_refusal(
+            f"balance_grade must be positive; got {balance_grade}",
+            subject="balance_grade",
+            source=_ROTOR_SOURCE,
+        )
     _require(rotational_speed, "[frequency]", "rotational_speed")
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if omega <= 0:
-        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+        raise _dynamics_refusal(
+            f"rotational_speed must be positive; got {rotational_speed}",
+            subject="rotational_speed",
+            source=_EXCITATION_SOURCE,
+        )
     # G is in mm/s; e_per = G/omega in mm, converted to micrometres.
     return Quantity(magnitude=balance_grade / omega, unit="mm").to("um")
 

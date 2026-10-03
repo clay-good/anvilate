@@ -16,8 +16,24 @@ from typing import Annotated
 from pydantic import ConfigDict
 
 from .._models import Named, RevalidatedModel, _near_identifiers, parse_yaml
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
+
+_ELASTIC_SOURCE = "the material certificate or cited elastic constants (Poisson ratio below 0.5)"
+_DATA_FILE_SOURCE = "the bundled materials data files, each material id defined once"
+
+
+class _MaterialRecordError(RefusalError, ValueError):
+    """A material record that cannot be used without correction."""
+
+
+def _materials_refusal(message: str, *, subject: str, source: str) -> _MaterialRecordError:
+    return _MaterialRecordError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "PropertyCitation",
@@ -112,9 +128,11 @@ class Material(_Base):
         """
         nu = self.poisson_ratio.value
         if nu >= 0.5:
-            raise ValueError(
+            raise _materials_refusal(
                 f"bulk modulus is undefined for Poisson ratio >= 0.5 (incompressible); "
-                f"got {nu} for {self.id}"
+                f"got {nu} for {self.id}",
+                subject="poisson_ratio",
+                source=_ELASTIC_SOURCE,
             )
         k = self.elastic_modulus.quantity.pint / (3 * (1 - 2 * nu))
         return Quantity(magnitude=float(k.to("GPa").magnitude), unit="GPa")
@@ -232,6 +250,10 @@ def default_materials_db() -> MaterialsDatabase:
         records = _load_records(text, bundled=True)
         clash = sorted(set(records) & set(materials))
         if clash:  # pragma: no cover - a data defect, caught by the test that loads both
-            raise ValueError(f"{name} redefines bundled material(s) {clash}")
+            raise _materials_refusal(
+                f"{name} redefines bundled material(s) {clash}",
+                subject="_BUNDLED_FILES",
+                source=_DATA_FILE_SOURCE,
+            )
         materials.update(records)
     return MaterialsDatabase(materials)

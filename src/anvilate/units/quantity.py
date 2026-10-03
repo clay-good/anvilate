@@ -450,17 +450,23 @@ class Quantity(RevalidatedModel):
     # to refuse is what lets the refusal say what happened; it can regress nothing, because
     # every one of these raised before.
 
-    def _unsupported(self, operation: str, other: object) -> ValueError:
+    def _unsupported(self, operation: str, other: object) -> UnitError:
         if isinstance(other, Quantity):
-            return ValueError(
+            return UnitError(
                 f"{operation} is not defined between two quantities ({self} and {other}); "
                 f"convert both to one unit and compare the magnitudes, which is where the "
-                f"unit you are comparing in gets written down"
+                f"unit you are comparing in gets written down",
+                action="replace",
+                subject=f"{self} and {other}",
+                source="both quantities converted to one unit, compared by magnitude",
             )
-        return ValueError(
+        return UnitError(
             f"{operation} is not defined between a quantity ({self}) and {other!r}. A "
             f"parameter taking a plain number — a ratio, a count, an angle in degrees — was "
-            f"given a Quantity; pass {self.magnitude:g} if that is the number you meant"
+            f"given a Quantity; pass {self.magnitude:g} if that is the number you meant",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __lt__(self, other: object) -> bool:
@@ -499,23 +505,32 @@ class Quantity(RevalidatedModel):
     __rtruediv__ = __truediv__
 
     def __abs__(self) -> Quantity:
-        raise ValueError(
+        raise UnitError(
             f"abs() is not defined on a quantity ({self}); a parameter taking a plain "
             f"number was given one. Pass {abs(self.magnitude):g}, or "
-            f"abs(q.to(unit).magnitude) where the unit matters"
+            f"abs(q.to(unit).magnitude) where the unit matters",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __int__(self) -> int:
-        raise ValueError(
+        raise UnitError(
             f"int() is not defined on a quantity ({self}); a parameter taking a count was "
-            f"given one. A count has no unit — pass {int(self.magnitude)}"
+            f"given one. A count has no unit — pass {int(self.magnitude)}",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __float__(self) -> float:
-        raise ValueError(
+        raise UnitError(
             f"float() is not defined on a quantity ({self}); a parameter taking a plain "
             f"number was given one. Pass {self.magnitude:g}, or q.to(unit).magnitude where "
-            f"the unit matters"
+            f"the unit matters",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     # The four operators above were the ones a caller reaches for first, and stopping
@@ -531,18 +546,24 @@ class Quantity(RevalidatedModel):
     # were.
 
     def __neg__(self) -> Quantity:
-        raise ValueError(
+        raise UnitError(
             f"unary - is not defined on a quantity ({self}); a parameter taking a plain "
             f"number was given one. Pass Quantity(magnitude={-self.magnitude:g}, "
             f"unit={self.unit!r}) for the negated quantity, or -q.to(unit).magnitude "
-            f"where a plain number is what is wanted"
+            f"where a plain number is what is wanted",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __pos__(self) -> Quantity:
-        raise ValueError(
+        raise UnitError(
             f"unary + is not defined on a quantity ({self}); it does nothing to a number "
             f"and the same is true here, so it is refused rather than answered — pass the "
-            f"quantity itself"
+            f"quantity itself",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __pow__(self, other: object) -> Quantity:
@@ -565,12 +586,15 @@ class Quantity(RevalidatedModel):
 
     __rdivmod__ = __divmod__
 
-    def _no_rounding(self, operation: str) -> ValueError:
-        return ValueError(
+    def _no_rounding(self, operation: str) -> UnitError:
+        return UnitError(
             f"{operation} is not defined on a quantity ({self}); rounding a magnitude "
             f"without saying which unit it is in is how a value gets rounded in metres and "
             f"read in millimetres. Write {operation}(q.to(unit).magnitude) and wrap the "
-            f"result, or leave the rounding to the rendering"
+            f"result, or leave the rounding to the rendering",
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
     def __round__(self, ndigits: int | None = None) -> Quantity:
@@ -596,11 +620,14 @@ class Quantity(RevalidatedModel):
         """
         if format_spec == "":
             return str(self)
-        raise ValueError(
+        raise UnitError(
             f"a format spec ({format_spec!r}) is not defined on a quantity ({self}); it "
             f"describes a number and this is a number with a unit. Write "
             f'f"{{q.to(unit).magnitude:{format_spec}}} unit" to control the figure, or '
-            f'f"{{q}}" for this library\'s own rendering ({self})'
+            f'f"{{q}}" for this library\'s own rendering ({self})',
+            action="replace",
+            subject=str(self),
+            source="the plain number (the magnitude in the documented unit) the parameter takes",
         )
 
 
@@ -621,11 +648,14 @@ def require_finite(value: Quantity | float, *, name: str) -> float:
     """
     magnitude = value.magnitude if isinstance(value, Quantity) else float(value)
     if not isfinite(magnitude):
-        raise ValueError(
+        raise UnitError(
             f"{name} must be a finite quantity; got {value}. A non-finite value passes "
             f"every `<= 0` guard (all comparisons with NaN are False) and is then silently "
             f"dropped by the max()/min() that picks the governing case, which turns an "
-            f"unknown into a smaller, greener answer"
+            f"unknown into a smaller, greener answer",
+            action="replace",
+            subject=name,
+            source="a finite measured or specified value for the input",
         )
     return magnitude
 

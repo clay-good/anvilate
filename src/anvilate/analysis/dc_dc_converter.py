@@ -20,8 +20,41 @@ buck/boost conversion ratios, ripple and continuous-conduction boundary relation
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_OPERATING_SOURCE = "the converter's input and output voltage specification at the operating point"
+_LOAD_SOURCE = "the load current from the power budget at the operating point"
+_CONTROLLER_SOURCE = "the PWM controller datasheet (switching frequency and duty cycle)"
+_INDUCTOR_SOURCE = "the inductor manufacturer's datasheet inductance"
+_CAPACITOR_SOURCE = "the output capacitor manufacturer's datasheet capacitance"
+
+
+class _DcDcConverterInputError(RefusalError, ValueError):
+    """A DC-DC converter input that cannot be used without correction."""
+
+
+def _dc_dc_converter_refusal(
+    message: str, *, subject: str, source: str
+) -> _DcDcConverterInputError:
+    return _DcDcConverterInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _dc_dc_converter_input_source(name: str) -> str:
+    if name in {"duty_cycle", "switching_frequency"}:
+        return _CONTROLLER_SOURCE
+    if name in {"inductance", "inductor_ripple_current", "ripple_current"}:
+        return _INDUCTOR_SOURCE
+    if name == "load_current":
+        return _LOAD_SOURCE
+    if name == "output_capacitance":
+        return _CAPACITOR_SOURCE
+    return _OPERATING_SOURCE
+
 
 __all__ = [
     "boost_duty_cycle_for_output",
@@ -48,7 +81,9 @@ def buck_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quanti
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
-        raise ValueError("duty_cycle must be in (0, 1)")
+        raise _dc_dc_converter_refusal(
+            "duty_cycle must be in (0, 1)", subject="duty_cycle", source=_CONTROLLER_SOURCE
+        )
     return Quantity(magnitude=duty_cycle * v_in, unit="V")
 
 
@@ -66,11 +101,19 @@ def buck_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage: Quant
     v_in = input_voltage.to("V").magnitude
     v_out = output_voltage.to("V").magnitude
     if v_in <= 0:
-        raise ValueError("input_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "input_voltage must be positive", subject="input_voltage", source=_OPERATING_SOURCE
+        )
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_OPERATING_SOURCE
+        )
     if v_out >= v_in:
-        raise ValueError("output_voltage must be below input_voltage (a buck only steps down)")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be below input_voltage (a buck only steps down)",
+            subject="input_voltage and output_voltage",
+            source=_OPERATING_SOURCE,
+        )
     return v_out / v_in
 
 
@@ -85,7 +128,9 @@ def boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quant
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
-        raise ValueError("duty_cycle must be in (0, 1)")
+        raise _dc_dc_converter_refusal(
+            "duty_cycle must be in (0, 1)", subject="duty_cycle", source=_CONTROLLER_SOURCE
+        )
     return Quantity(magnitude=v_in / (1.0 - duty_cycle), unit="V")
 
 
@@ -103,11 +148,19 @@ def boost_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage: Quan
     v_in = input_voltage.to("V").magnitude
     v_out = output_voltage.to("V").magnitude
     if v_in <= 0:
-        raise ValueError("input_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "input_voltage must be positive", subject="input_voltage", source=_OPERATING_SOURCE
+        )
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_OPERATING_SOURCE
+        )
     if v_out <= v_in:
-        raise ValueError("output_voltage must exceed input_voltage (a boost only steps up)")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must exceed input_voltage (a boost only steps up)",
+            subject="input_voltage and output_voltage",
+            source=_OPERATING_SOURCE,
+        )
     return 1.0 - v_in / v_out
 
 
@@ -122,7 +175,9 @@ def buck_boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> 
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
-        raise ValueError("duty_cycle must be in (0, 1)")
+        raise _dc_dc_converter_refusal(
+            "duty_cycle must be in (0, 1)", subject="duty_cycle", source=_CONTROLLER_SOURCE
+        )
     return Quantity(magnitude=v_in * duty_cycle / (1.0 - duty_cycle), unit="V")
 
 
@@ -141,9 +196,13 @@ def buck_boost_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage:
     v_in = input_voltage.to("V").magnitude
     v_out = output_voltage.to("V").magnitude
     if v_in <= 0:
-        raise ValueError("input_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "input_voltage must be positive", subject="input_voltage", source=_OPERATING_SOURCE
+        )
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_OPERATING_SOURCE
+        )
     return v_out / (v_in + v_out)
 
 
@@ -173,15 +232,25 @@ def buck_inductor_ripple_current(
     ind = inductance.to("H").magnitude
     f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if v_in <= 0:
-        raise ValueError("input_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "input_voltage must be positive", subject="input_voltage", source=_OPERATING_SOURCE
+        )
     if not 0.0 < v_out <= v_in:
-        raise ValueError(
-            "output_voltage must be positive and at most input_voltage (a buck steps down)"
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be positive and at most input_voltage (a buck steps down)",
+            subject="input_voltage and output_voltage",
+            source=_OPERATING_SOURCE,
         )
     if ind <= 0:
-        raise ValueError("inductance must be positive")
+        raise _dc_dc_converter_refusal(
+            "inductance must be positive", subject="inductance", source=_INDUCTOR_SOURCE
+        )
     if f_s <= 0:
-        raise ValueError("switching_frequency must be positive")
+        raise _dc_dc_converter_refusal(
+            "switching_frequency must be positive",
+            subject="switching_frequency",
+            source=_CONTROLLER_SOURCE,
+        )
     ripple = (v_in - v_out) * v_out / (v_in * ind * f_s)
     return Quantity(magnitude=ripple, unit="A")
 
@@ -206,9 +275,13 @@ def buck_inductor_peak_current(
     i_load = load_current.to("A").magnitude
     d_il = ripple_current.to("A").magnitude
     if i_load < 0:
-        raise ValueError("load_current must be non-negative")
+        raise _dc_dc_converter_refusal(
+            "load_current must be non-negative", subject="load_current", source=_LOAD_SOURCE
+        )
     if d_il < 0:
-        raise ValueError("ripple_current must be non-negative")
+        raise _dc_dc_converter_refusal(
+            "ripple_current must be non-negative", subject="ripple_current", source=_INDUCTOR_SOURCE
+        )
     return Quantity(magnitude=i_load + d_il / 2.0, unit="A")
 
 
@@ -234,11 +307,23 @@ def buck_output_voltage_ripple(
     cap = output_capacitance.to("F").magnitude
     f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if d_il < 0:
-        raise ValueError("inductor_ripple_current must be non-negative")
+        raise _dc_dc_converter_refusal(
+            "inductor_ripple_current must be non-negative",
+            subject="inductor_ripple_current",
+            source=_INDUCTOR_SOURCE,
+        )
     if cap <= 0:
-        raise ValueError("output_capacitance must be positive")
+        raise _dc_dc_converter_refusal(
+            "output_capacitance must be positive",
+            subject="output_capacitance",
+            source=_CAPACITOR_SOURCE,
+        )
     if f_s <= 0:
-        raise ValueError("switching_frequency must be positive")
+        raise _dc_dc_converter_refusal(
+            "switching_frequency must be positive",
+            subject="switching_frequency",
+            source=_CONTROLLER_SOURCE,
+        )
     return Quantity(magnitude=d_il / (8.0 * cap * f_s), unit="V")
 
 
@@ -265,22 +350,38 @@ def buck_minimum_inductance_for_ccm(
     i_out = load_current.to("A").magnitude
     f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if not 0.0 < duty_cycle < 1.0:
-        raise ValueError("duty_cycle must be in (0, 1)")
+        raise _dc_dc_converter_refusal(
+            "duty_cycle must be in (0, 1)", subject="duty_cycle", source=_CONTROLLER_SOURCE
+        )
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _dc_dc_converter_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_OPERATING_SOURCE
+        )
     if i_out <= 0:
-        raise ValueError("load_current must be positive")
+        raise _dc_dc_converter_refusal(
+            "load_current must be positive", subject="load_current", source=_LOAD_SOURCE
+        )
     if f_s <= 0:
-        raise ValueError("switching_frequency must be positive")
+        raise _dc_dc_converter_refusal(
+            "switching_frequency must be positive",
+            subject="switching_frequency",
+            source=_CONTROLLER_SOURCE,
+        )
     return Quantity(magnitude=(1.0 - duty_cycle) * v_out / (2.0 * i_out * f_s), unit="H")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _dc_dc_converter_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_dc_dc_converter_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _dc_dc_converter_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_dc_dc_converter_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

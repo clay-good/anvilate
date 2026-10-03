@@ -23,10 +23,151 @@ from math import erf, exp, log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Direction, Need, RepairHint, ScorecardEntry, ValueSource
 from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.temperature import temperature_difference_kelvin
 from ._flags import require_flag
+
+_MATERIAL_SOURCE = "the material datasheet or cited property table at the service temperature"
+_GEOMETRY_SOURCE = "the part or assembly drawing dimensions"
+_FLUID_SOURCE = "the fluid property table at the film temperature"
+_OPERATING_SOURCE = "the heat loads and temperatures from the thermal operating case"
+_CONVECTION_SOURCE = "the convection coefficient from the cited correlation or test record"
+_EXCHANGER_SOURCE = "the heat exchanger datasheet (duty, U-values, and stream temperatures)"
+
+
+class _ThermalInputError(RefusalError, ValueError):
+    """A thermal-analysis input that cannot be used without correction."""
+
+
+def _thermal_refusal(message: str, *, subject: str, source: str) -> _ThermalInputError:
+    return _ThermalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _thermal_input_source(name: str) -> str:
+    if name in {
+        "area",
+        "area_1",
+        "area_2",
+        "assembly_clearance",
+        "base_cross_section_area",
+        "characteristic_length",
+        "constant_wall_temperature",
+        "cross_section_area",
+        "crossed_string_1",
+        "crossed_string_2",
+        "depth",
+        "diameter",
+        "diametral_interference",
+        "end_condition_factor",
+        "expansion_to_absorb",
+        "fin_count",
+        "fin_surface_area",
+        "hot_surface_facing_up",
+        "inner_radius",
+        "interface_diameter",
+        "length",
+        "number_of_shields",
+        "outer_radius",
+        "perimeter",
+        "pipe_outside_diameter",
+        "plate_height",
+        "plate_length",
+        "slenderness_ratio",
+        "source_radius",
+        "surface_1_width",
+        "surface_area",
+        "thickness",
+        "thickness_1",
+        "thickness_2",
+        "uncrossed_string_1",
+        "uncrossed_string_2",
+        "unfinned_base_area",
+        "view_factor",
+        "view_factor_1_to_2",
+        "volume",
+        "wall_thickness",
+    }:
+        return _GEOMETRY_SOURCE
+    if name in {
+        "dynamic_viscosity",
+        "grashof_number",
+        "kinematic_viscosity",
+        "prandtl_number",
+        "surface_tension_temperature_gradient",
+    }:
+        return _FLUID_SOURCE
+    if name in {
+        "allowable_temperature_rise",
+        "coefficient_of_performance",
+        "cooling_degree_days",
+        "fluid_velocity",
+        "heat_loss_coefficient",
+        "heating",
+        "heating_degree_days",
+        "initial_excess_temperature",
+        "internal_thermal_resistance",
+        "name",
+        "peak_wavelength",
+        "power",
+        "required",
+        "resistance",
+        "resistances",
+        "solar_flux",
+        "surface_step_change",
+        "surface_temperature",
+        "surface_temperature_difference",
+        "surroundings_temperature",
+        "system_efficiency",
+        "target_excess_temperature",
+        "target_resistance",
+        "temperature",
+        "temperature_1",
+        "temperature_2",
+        "temperature_change",
+        "temperature_difference",
+        "thermal_resistance",
+        "time",
+        "time_constant",
+        "velocity",
+    }:
+        return _OPERATING_SOURCE
+    if name in {
+        "fin_efficiency",
+        "heat_transfer_coefficient",
+        "inside_coefficient",
+        "outside_coefficient",
+    }:
+        return _CONVECTION_SOURCE
+    if name in {
+        "capacity_ratio",
+        "clean_coefficient",
+        "cold_inlet_temperature",
+        "cold_outlet_temperature",
+        "delta_t_1",
+        "delta_t_2",
+        "duty",
+        "effectiveness",
+        "hot_inlet_temperature",
+        "hot_outlet_temperature",
+        "inside_fouling_factor",
+        "log_mean_temperature_difference",
+        "min_heat_capacity_rate",
+        "minimum_capacity_inlet_temperature",
+        "minimum_capacity_outlet_temperature",
+        "ntu",
+        "opposite_inlet_temperature",
+        "outside_fouling_factor",
+        "overall_coefficient",
+        "service_coefficient",
+    }:
+        return _EXCHANGER_SOURCE
+    return _MATERIAL_SOURCE
+
 
 __all__ = [
     "confined_liquid_thermal_pressure",
@@ -123,10 +264,16 @@ _STANDARD_GRAVITY = 9.80665  # m/s², for the buoyancy-driven Rayleigh number
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _thermal_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_thermal_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _thermal_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_thermal_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -153,30 +300,43 @@ def confined_liquid_thermal_pressure(
     compliance relieves some of it. Returns the pressure rise in MPa.
     """
     if not isinstance(volumetric_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"volumetric_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {volumetric_expansion_coefficient!r}"
+            f"got {volumetric_expansion_coefficient!r}",
+            subject="volumetric_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not volumetric_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "volumetric_expansion_coefficient must have units of 1/temperature; got "
-            f"{volumetric_expansion_coefficient.dimensionality}"
+            f"{volumetric_expansion_coefficient.dimensionality}",
+            subject="volumetric_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     _require(bulk_modulus, "[pressure]", "bulk_modulus")
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     beta = volumetric_expansion_coefficient.to("1/K").magnitude
     k = bulk_modulus.to("Pa").magnitude
     dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
-    if beta <= 0 or k <= 0:
-        raise ValueError("volumetric_expansion_coefficient and bulk_modulus must be positive")
+    for subject, magnitude in (("volumetric_expansion_coefficient", beta), ("bulk_modulus", k)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "volumetric_expansion_coefficient and bulk_modulus must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     return Quantity(magnitude=beta * k * dt / 1.0e6, unit="MPa")
 
 
@@ -194,29 +354,43 @@ def constrained_thermal_stress(
     stress a member develops when it is prevented from expanding or contracting.
     """
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
@@ -248,32 +422,50 @@ def thermal_shock_stress(
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _thermal_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
@@ -304,30 +496,53 @@ def thermal_shock_temperature_limit(
     """
     _require(fracture_strength, "[pressure]", "fracture_strength")
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _thermal_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     sf = fracture_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     if sf <= 0:
-        raise ValueError(f"fracture_strength must be positive; got {fracture_strength}")
-    if e <= 0 or alpha <= 0:
-        raise ValueError("elastic_modulus and thermal_expansion_coefficient must be positive")
+        raise _thermal_refusal(
+            f"fracture_strength must be positive; got {fracture_strength}",
+            subject="fracture_strength",
+            source=_MATERIAL_SOURCE,
+        )
+    for subject, magnitude in (("elastic_modulus", e), ("thermal_expansion_coefficient", alpha)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "elastic_modulus and thermal_expansion_coefficient must be positive",
+                subject=subject,
+                source=_MATERIAL_SOURCE,
+            )
     return Quantity(magnitude=sf * (1.0 - poisson) / (e * alpha), unit="K")
 
 
@@ -355,32 +570,50 @@ def triaxial_constrained_thermal_stress(
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _thermal_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
@@ -415,33 +648,51 @@ def through_wall_gradient_thermal_stress(
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
     if not isinstance(elastic_modulus, Quantity):
-        raise ValueError(f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}")
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if not elastic_modulus.has_dimension("[pressure]"):
-        raise ValueError(
-            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        raise _thermal_refusal(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(temperature_difference, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_difference must be a [temperature] quantity; "
-            f"got {temperature_difference!r}"
+            f"got {temperature_difference!r}",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_difference.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_difference must be a temperature difference; got "
-            f"{temperature_difference.dimensionality}"
+            f"{temperature_difference.dimensionality}",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
         )
     if not 0 <= poisson < 0.5:
-        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+        raise _thermal_refusal(
+            f"poisson must lie in [0, 0.5); got {poisson}",
+            subject="poisson",
+            source=_MATERIAL_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
@@ -464,31 +715,49 @@ def free_thermal_expansion(
     be positive; ``temperature_change`` is a difference (K or delta_degC).
     """
     if not isinstance(length, Quantity):
-        raise ValueError(f"length must be a [length] quantity; got {length!r}")
+        raise _thermal_refusal(
+            f"length must be a [length] quantity; got {length!r}",
+            subject="length",
+            source=_GEOMETRY_SOURCE,
+        )
     if not length.has_dimension("[length]"):
-        raise ValueError(f"length must be a [length] quantity; got {length.dimensionality}")
+        raise _thermal_refusal(
+            f"length must be a [length] quantity; got {length.dimensionality}",
+            subject="length",
+            source=_GEOMETRY_SOURCE,
+        )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     size = length.to("mm").magnitude
     if size <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _thermal_refusal(
+            f"length must be positive; got {length}", subject="length", source=_GEOMETRY_SOURCE
+        )
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     return Quantity(magnitude=alpha * size * delta_t, unit="mm")
@@ -520,12 +789,23 @@ def guided_cantilever_leg_length(
     d = pipe_outside_diameter.to("m").magnitude
     delta = expansion_to_absorb.to("m").magnitude
     s_a = allowable_stress.to("Pa").magnitude
-    if e <= 0 or d <= 0:
-        raise ValueError("elastic_modulus and pipe_outside_diameter must be positive")
+    for subject, magnitude in (("elastic_modulus", e), ("pipe_outside_diameter", d)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "elastic_modulus and pipe_outside_diameter must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     if delta < 0:
-        raise ValueError("expansion_to_absorb must be non-negative")
+        raise _thermal_refusal(
+            "expansion_to_absorb must be non-negative",
+            subject="expansion_to_absorb",
+            source=_GEOMETRY_SOURCE,
+        )
     if s_a <= 0:
-        raise ValueError("allowable_stress must be positive")
+        raise _thermal_refusal(
+            "allowable_stress must be positive", subject="allowable_stress", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=sqrt(3.0 * e * d * delta / s_a), unit="m")
 
 
@@ -548,52 +828,81 @@ def shrink_fit_assembly_temperature(
     must be positive, the clearance non-negative.
     """
     if not isinstance(interface_diameter, Quantity):
-        raise ValueError(
-            f"interface_diameter must be a [length] quantity; got {interface_diameter!r}"
+        raise _thermal_refusal(
+            f"interface_diameter must be a [length] quantity; got {interface_diameter!r}",
+            subject="interface_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     if not interface_diameter.has_dimension("[length]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"interface_diameter must be a [length] quantity; got "
-            f"{interface_diameter.dimensionality}"
+            f"{interface_diameter.dimensionality}",
+            subject="interface_diameter",
+            source=_GEOMETRY_SOURCE,
         )
     if not isinstance(diametral_interference, Quantity):
-        raise ValueError(
-            f"diametral_interference must be a [length] quantity; got {diametral_interference!r}"
+        raise _thermal_refusal(
+            f"diametral_interference must be a [length] quantity; got {diametral_interference!r}",
+            subject="diametral_interference",
+            source=_GEOMETRY_SOURCE,
         )
     if not diametral_interference.has_dimension("[length]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"diametral_interference must be a [length] quantity; got "
-            f"{diametral_interference.dimensionality}"
+            f"{diametral_interference.dimensionality}",
+            subject="diametral_interference",
+            source=_GEOMETRY_SOURCE,
         )
     if not isinstance(assembly_clearance, Quantity):
-        raise ValueError(
-            f"assembly_clearance must be a [length] quantity; got {assembly_clearance!r}"
+        raise _thermal_refusal(
+            f"assembly_clearance must be a [length] quantity; got {assembly_clearance!r}",
+            subject="assembly_clearance",
+            source=_GEOMETRY_SOURCE,
         )
     if not assembly_clearance.has_dimension("[length]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"assembly_clearance must be a [length] quantity; got "
-            f"{assembly_clearance.dimensionality}"
+            f"{assembly_clearance.dimensionality}",
+            subject="assembly_clearance",
+            source=_GEOMETRY_SOURCE,
         )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     d = interface_diameter.to("mm").magnitude
     delta = diametral_interference.to("mm").magnitude
     clearance = assembly_clearance.to("mm").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    if d <= 0 or alpha <= 0:
-        raise ValueError("interface_diameter and the expansion coefficient must be positive")
+    for subject, magnitude in (("interface_diameter", d), ("thermal_expansion_coefficient", alpha)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "interface_diameter and the expansion coefficient must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     if delta <= 0:
-        raise ValueError(f"diametral_interference must be positive; got {diametral_interference}")
+        raise _thermal_refusal(
+            f"diametral_interference must be positive; got {diametral_interference}",
+            subject="diametral_interference",
+            source=_GEOMETRY_SOURCE,
+        )
     if clearance < 0:
-        raise ValueError(f"assembly_clearance must be non-negative; got {assembly_clearance}")
+        raise _thermal_refusal(
+            f"assembly_clearance must be non-negative; got {assembly_clearance}",
+            subject="assembly_clearance",
+            source=_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=(delta + clearance) / (alpha * d), unit="K")
 
 
@@ -656,7 +965,11 @@ def differential_thermal_stress(
     ea1 = elastic_modulus_1.to("MPa").magnitude * area_1.to("mm**2").magnitude  # N
     ea2 = elastic_modulus_2.to("MPa").magnitude * area_2.to("mm**2").magnitude  # N
     if ea1 <= 0 or ea2 <= 0:
-        raise ValueError("elastic moduli and areas must be positive")
+        raise _thermal_refusal(
+            "elastic moduli and areas must be positive",
+            subject="elastic_modulus_1, area_1, elastic_modulus_2, and area_2",
+            source=_MATERIAL_SOURCE,
+        )
     force = (a1 - a2) * delta_t / (1.0 / ea1 + 1.0 / ea2)  # N
     return DifferentialThermalStress(
         constraint_force=Quantity(magnitude=abs(force), unit="N"),
@@ -685,23 +998,37 @@ def thermal_buckling_temperature_rise(
     positive. Returns the critical temperature rise as a temperature difference (K).
     """
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+        raise _thermal_refusal(
+            f"slenderness_ratio must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_GEOMETRY_SOURCE,
+        )
     if end_condition_factor <= 0:
-        raise ValueError(f"end_condition_factor must be positive; got {end_condition_factor}")
+        raise _thermal_refusal(
+            f"end_condition_factor must be positive; got {end_condition_factor}",
+            subject="end_condition_factor",
+            source=_GEOMETRY_SOURCE,
+        )
     if not isinstance(thermal_expansion_coefficient, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_expansion_coefficient must be a 1 / [temperature] quantity; "
-            f"got {thermal_expansion_coefficient!r}"
+            f"got {thermal_expansion_coefficient!r}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             "thermal_expansion_coefficient must have units of 1/temperature; got "
-            f"{thermal_expansion_coefficient.dimensionality}"
+            f"{thermal_expansion_coefficient.dimensionality}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     if alpha <= 0:
-        raise ValueError(
-            f"thermal_expansion_coefficient must be positive; got {thermal_expansion_coefficient}"
+        raise _thermal_refusal(
+            f"thermal_expansion_coefficient must be positive; got {thermal_expansion_coefficient}",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
         )
     effective_slenderness = end_condition_factor * slenderness_ratio
     delta_t = pi**2 / (effective_slenderness**2 * alpha)
@@ -713,10 +1040,16 @@ def _bimetal_layer_check(
 ) -> tuple[float, float, float]:
     """Validate one bimetal layer -> (alpha 1/K, E MPa, t mm), all positive."""
     if not isinstance(alpha, Quantity):
-        raise ValueError(f"alpha_{layer} must be a 1 / [temperature] quantity; got {alpha!r}")
+        raise _thermal_refusal(
+            f"alpha_{layer} must be a 1 / [temperature] quantity; got {alpha!r}",
+            subject="alpha_1 and alpha_2",
+            source=_MATERIAL_SOURCE,
+        )
     if not alpha.has_dimension("1 / [temperature]"):
-        raise ValueError(
-            f"alpha_{layer} must have units of 1/temperature; got {alpha.dimensionality}"
+        raise _thermal_refusal(
+            f"alpha_{layer} must have units of 1/temperature; got {alpha.dimensionality}",
+            subject="alpha_1 and alpha_2",
+            source=_MATERIAL_SOURCE,
         )
     _require(elastic_modulus, "[pressure]", f"elastic_modulus_{layer}")
     _require(thickness, "[length]", f"thickness_{layer}")
@@ -724,7 +1057,11 @@ def _bimetal_layer_check(
     e = elastic_modulus.to("MPa").magnitude
     t = thickness.to("mm").magnitude
     if e <= 0 or t <= 0:
-        raise ValueError(f"elastic_modulus_{layer} and thickness_{layer} must be positive")
+        raise _thermal_refusal(
+            f"elastic_modulus_{layer} and thickness_{layer} must be positive",
+            subject="elastic_modulus_1, thickness_1, elastic_modulus_2, and thickness_2",
+            source=_MATERIAL_SOURCE,
+        )
     return a, e, t
 
 
@@ -759,13 +1096,17 @@ def bimetallic_strip_curvature(
     a1, e1, t1 = _bimetal_layer_check(alpha_1, elastic_modulus_1, thickness_1, 1)
     a2, e2, t2 = _bimetal_layer_check(alpha_2, elastic_modulus_2, thickness_2, 2)
     if not isinstance(temperature_change, Quantity):
-        raise ValueError(
-            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}"
+        raise _thermal_refusal(
+            f"temperature_change must be a [temperature] quantity; got {temperature_change!r}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     if not temperature_change.has_dimension("[temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"temperature_change must be a temperature difference; got "
-            f"{temperature_change.dimensionality}"
+            f"{temperature_change.dimensionality}",
+            subject="temperature_change",
+            source=_OPERATING_SOURCE,
         )
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     m = t1 / t2
@@ -804,7 +1145,9 @@ def bimetallic_strip_tip_deflection(
     _require(length, "[length]", "length")
     ell = length.to("mm").magnitude
     if ell <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _thermal_refusal(
+            f"length must be positive; got {length}", subject="length", source=_GEOMETRY_SOURCE
+        )
     curvature = (
         bimetallic_strip_curvature(
             alpha_1=alpha_1,
@@ -851,8 +1194,13 @@ def conduction_thermal_resistance(
     length_m = thickness.to("m").magnitude
     area_m2 = area.to("m**2").magnitude
     k = conductivity.to("W/(m*K)").magnitude
-    if length_m <= 0 or area_m2 <= 0 or k <= 0:
-        raise ValueError("thickness, area, and conductivity must be positive")
+    for subject, magnitude in (("thickness", length_m), ("area", area_m2), ("conductivity", k)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "thickness, area, and conductivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=length_m / (k * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
 
 
@@ -880,10 +1228,17 @@ def cylindrical_conduction_resistance(
     r2 = outer_radius.to("m").magnitude
     length_m = length.to("m").magnitude
     k = conductivity.to("W/(m*K)").magnitude
-    if r1 <= 0 or length_m <= 0 or k <= 0:
-        raise ValueError("inner_radius, length, and conductivity must be positive")
+    for subject, magnitude in (("inner_radius", r1), ("length", length_m), ("conductivity", k)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "inner_radius, length, and conductivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     if r2 <= r1:
-        raise ValueError("outer_radius must exceed inner_radius")
+        raise _thermal_refusal(
+            "outer_radius must exceed inner_radius", subject="outer_radius", source=_GEOMETRY_SOURCE
+        )
     return Quantity(
         magnitude=log(r2 / r1) / (2.0 * pi * k * length_m), unit=_THERMAL_RESISTANCE_UNIT
     )
@@ -912,8 +1267,13 @@ def critical_insulation_radius(
     )
     k = conductivity.to("W/(m*K)").magnitude
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
-    if k <= 0 or h <= 0:
-        raise ValueError("conductivity and heat_transfer_coefficient must be positive")
+    for subject, magnitude in (("conductivity", k), ("heat_transfer_coefficient", h)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "conductivity and heat_transfer_coefficient must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=k / h, unit="m")
 
 
@@ -938,8 +1298,13 @@ def convection_thermal_resistance(
     )
     area_m2 = area.to("m**2").magnitude
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
-    if area_m2 <= 0 or h <= 0:
-        raise ValueError("area and heat_transfer_coefficient must be positive")
+    for subject, magnitude in (("area", area_m2), ("heat_transfer_coefficient", h)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "area and heat_transfer_coefficient must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=1.0 / (h * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
 
 
@@ -962,11 +1327,23 @@ def degree_day_heating_energy(
     _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
     _require(heating_degree_days, "[temperature] * [time]", "heating_degree_days")
     if heat_loss_coefficient.to("W/K").magnitude <= 0:
-        raise ValueError("heat_loss_coefficient must be positive")
+        raise _thermal_refusal(
+            "heat_loss_coefficient must be positive",
+            subject="heat_loss_coefficient",
+            source=_OPERATING_SOURCE,
+        )
     if heating_degree_days.to("K*day").magnitude < 0:
-        raise ValueError("heating_degree_days must be non-negative")
+        raise _thermal_refusal(
+            "heating_degree_days must be non-negative",
+            subject="heating_degree_days",
+            source=_OPERATING_SOURCE,
+        )
     if system_efficiency <= 0:
-        raise ValueError("system_efficiency must be positive")
+        raise _thermal_refusal(
+            "system_efficiency must be positive",
+            subject="system_efficiency",
+            source=_OPERATING_SOURCE,
+        )
     energy = heat_loss_coefficient.pint * heating_degree_days.pint / system_efficiency
     return Quantity(magnitude=float(energy.to("kWh").magnitude), unit="kWh")
 
@@ -989,11 +1366,23 @@ def degree_day_cooling_energy(
     _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
     _require(cooling_degree_days, "[temperature] * [time]", "cooling_degree_days")
     if heat_loss_coefficient.to("W/K").magnitude <= 0:
-        raise ValueError("heat_loss_coefficient must be positive")
+        raise _thermal_refusal(
+            "heat_loss_coefficient must be positive",
+            subject="heat_loss_coefficient",
+            source=_OPERATING_SOURCE,
+        )
     if cooling_degree_days.to("K*day").magnitude < 0:
-        raise ValueError("cooling_degree_days must be non-negative")
+        raise _thermal_refusal(
+            "cooling_degree_days must be non-negative",
+            subject="cooling_degree_days",
+            source=_OPERATING_SOURCE,
+        )
     if coefficient_of_performance <= 0:
-        raise ValueError("coefficient_of_performance must be positive")
+        raise _thermal_refusal(
+            "coefficient_of_performance must be positive",
+            subject="coefficient_of_performance",
+            source=_OPERATING_SOURCE,
+        )
     energy = heat_loss_coefficient.pint * cooling_degree_days.pint / coefficient_of_performance
     return Quantity(magnitude=float(energy.to("kWh").magnitude), unit="kWh")
 
@@ -1006,7 +1395,11 @@ def series_thermal_resistance(*resistances: Quantity) -> Quantity:
     resistance; each is a ``[temperature]/[power]`` quantity.
     """
     if not resistances:
-        raise ValueError("series_thermal_resistance needs at least one resistance")
+        raise _thermal_refusal(
+            "series_thermal_resistance needs at least one resistance",
+            subject="resistances",
+            source=_OPERATING_SOURCE,
+        )
     total = 0.0
     for r in resistances:
         _require(r, "[temperature] / [power]", "resistance")
@@ -1023,13 +1416,21 @@ def parallel_thermal_resistance(*resistances: Quantity) -> Quantity:
     ``[temperature]/[power]`` quantity.
     """
     if not resistances:
-        raise ValueError("parallel_thermal_resistance needs at least one resistance")
+        raise _thermal_refusal(
+            "parallel_thermal_resistance needs at least one resistance",
+            subject="resistances",
+            source=_OPERATING_SOURCE,
+        )
     conductance = 0.0
     for r in resistances:
         _require(r, "[temperature] / [power]", "resistance")
         magnitude = r.to(_THERMAL_RESISTANCE_UNIT).magnitude
         if magnitude <= 0:
-            raise ValueError(f"each resistance must be positive; got {r}")
+            raise _thermal_refusal(
+                f"each resistance must be positive; got {r}",
+                subject="resistances",
+                source=_OPERATING_SOURCE,
+            )
         conductance += 1.0 / magnitude
     return Quantity(magnitude=1.0 / conductance, unit=_THERMAL_RESISTANCE_UNIT)
 
@@ -1047,8 +1448,13 @@ def temperature_rise(*, power: Quantity, thermal_resistance: Quantity) -> Quanti
     _require(thermal_resistance, "[temperature] / [power]", "thermal_resistance")
     q = power.to("W").magnitude
     r = thermal_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
-    if q < 0 or r < 0:
-        raise ValueError("power and thermal_resistance must be non-negative")
+    for subject, magnitude in (("power", q), ("thermal_resistance", r)):
+        if magnitude < 0:
+            raise _thermal_refusal(
+                "power and thermal_resistance must be non-negative",
+                subject=subject,
+                source=_OPERATING_SOURCE,
+            )
     return Quantity(magnitude=q * r, unit="K")
 
 
@@ -1076,9 +1482,13 @@ def heatsink_thermal_resistance_required(
         allowable_temperature_rise, name="allowable_temperature_rise"
     )
     if q <= 0:
-        raise ValueError("power must be positive")
+        raise _thermal_refusal("power must be positive", subject="power", source=_OPERATING_SOURCE)
     if delta_t <= 0:
-        raise ValueError("allowable_temperature_rise must be positive")
+        raise _thermal_refusal(
+            "allowable_temperature_rise must be positive",
+            subject="allowable_temperature_rise",
+            source=_OPERATING_SOURCE,
+        )
     theta_int = 0.0
     if internal_thermal_resistance is not None:
         _require(
@@ -1086,14 +1496,20 @@ def heatsink_thermal_resistance_required(
         )
         theta_int = internal_thermal_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
         if theta_int < 0:
-            raise ValueError("internal_thermal_resistance must be non-negative")
+            raise _thermal_refusal(
+                "internal_thermal_resistance must be non-negative",
+                subject="internal_thermal_resistance",
+                source=_OPERATING_SOURCE,
+            )
     theta_total_max = delta_t / q
     theta_sa = theta_total_max - theta_int
     if theta_sa <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "the internal thermal resistance alone exceeds the junction budget "
             f"(ΔT/Q = {theta_total_max:.3g} K/W ≤ internal {theta_int:.3g} K/W); "
-            "no heatsink can keep the junction in limit — reduce the power or raise the budget"
+            "no heatsink can keep the junction in limit — reduce the power or raise the budget",
+            subject="power, allowable_temperature_rise, and internal_thermal_resistance",
+            source=_OPERATING_SOURCE,
         )
     return Quantity(magnitude=theta_sa, unit=_THERMAL_RESISTANCE_UNIT)
 
@@ -1132,7 +1548,13 @@ def fin_efficiency(
     a_c = cross_section_area.to("m**2").magnitude
     length_m = length.to("m").magnitude
     if min(h, p, k, a_c, length_m) <= 0:
-        raise ValueError("all fin parameters must be positive")
+        raise _thermal_refusal(
+            "all fin parameters must be positive",
+            subject=(
+                "heat_transfer_coefficient, perimeter, conductivity, cross_section_area, and length"
+            ),
+            source=_GEOMETRY_SOURCE,
+        )
     m = sqrt(h * p / (k * a_c))
     ml = m * length_m
     return tanh(ml) / ml
@@ -1158,9 +1580,18 @@ def fin_effectiveness(
     a_f = fin_surface_area.to("m**2").magnitude
     a_c = base_cross_section_area.to("m**2").magnitude
     if not 0.0 < fin_efficiency <= 1.0:
-        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
-    if a_f <= 0 or a_c <= 0:
-        raise ValueError("fin_surface_area and base_cross_section_area must be positive")
+        raise _thermal_refusal(
+            f"fin_efficiency must be in (0, 1]; got {fin_efficiency}",
+            subject="fin_efficiency",
+            source=_CONVECTION_SOURCE,
+        )
+    for subject, magnitude in (("fin_surface_area", a_f), ("base_cross_section_area", a_c)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "fin_surface_area and base_cross_section_area must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     return fin_efficiency * a_f / a_c
 
 
@@ -1187,9 +1618,18 @@ def fin_thermal_resistance(
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     a_f = fin_surface_area.to("m**2").magnitude
     if not 0.0 < fin_efficiency <= 1.0:
-        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
-    if h <= 0 or a_f <= 0:
-        raise ValueError("heat_transfer_coefficient and fin_surface_area must be positive")
+        raise _thermal_refusal(
+            f"fin_efficiency must be in (0, 1]; got {fin_efficiency}",
+            subject="fin_efficiency",
+            source=_CONVECTION_SOURCE,
+        )
+    for subject, magnitude in (("heat_transfer_coefficient", h), ("fin_surface_area", a_f)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "heat_transfer_coefficient and fin_surface_area must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=1.0 / (fin_efficiency * h * a_f), unit="K/W")
 
 
@@ -1233,8 +1673,10 @@ def junction_temperature_scorecard(
         allowable_temperature_rise, name="allowable_temperature_rise"
     )
     if allowable <= 0:
-        raise ValueError(
-            f"allowable_temperature_rise must be positive; got {allowable_temperature_rise}"
+        raise _thermal_refusal(
+            f"allowable_temperature_rise must be positive; got {allowable_temperature_rise}",
+            subject="allowable_temperature_rise",
+            source=_OPERATING_SOURCE,
         )
     rise = temperature_rise(power=power, thermal_resistance=thermal_resistance).to("K").magnitude
     # A zero rise means zero dissipated power (or zero resistance): there was no thermal
@@ -1309,8 +1751,13 @@ def laminar_tube_convection_coefficient(
     _require(diameter, "[length]", "diameter")
     k = thermal_conductivity.to("W/(m*K)").magnitude
     d = diameter.to("m").magnitude
-    if k <= 0 or d <= 0:
-        raise ValueError("thermal_conductivity and diameter must be positive")
+    for subject, magnitude in (("thermal_conductivity", k), ("diameter", d)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "thermal_conductivity and diameter must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     nusselt = 3.66 if constant_wall_temperature else 4.36
     return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
 
@@ -1352,9 +1799,14 @@ def dittus_boelter_convection_coefficient(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if min(v, d, k, nu) <= 0 or prandtl_number <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
-            "prandtl_number must be positive"
+            "prandtl_number must be positive",
+            subject=(
+                "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
+                "prandtl_number"
+            ),
+            source=_FLUID_SOURCE,
         )
     reynolds = v * d / nu
     if reynolds < 1.0e4:
@@ -1396,12 +1848,18 @@ def flat_plate_forced_convection_coefficient(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if min(v, length_m, k, nu) <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity "
-            "must be positive"
+            "must be positive",
+            subject="fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity",
+            source=_FLUID_SOURCE,
         )
     if prandtl_number <= 0:
-        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+        raise _thermal_refusal(
+            f"prandtl_number must be positive; got {prandtl_number}",
+            subject="prandtl_number",
+            source=_FLUID_SOURCE,
+        )
     reynolds = v * length_m / nu
     if reynolds > _FLAT_PLATE_LAMINAR_RE:
         return None  # turbulent: out of the laminar correlation's validity range
@@ -1436,12 +1894,18 @@ def flat_plate_turbulent_convection_coefficient(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if min(v, length_m, k, nu) <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity "
-            "must be positive"
+            "must be positive",
+            subject="fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity",
+            source=_FLUID_SOURCE,
         )
     if prandtl_number <= 0:
-        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+        raise _thermal_refusal(
+            f"prandtl_number must be positive; got {prandtl_number}",
+            subject="prandtl_number",
+            source=_FLUID_SOURCE,
+        )
     reynolds = v * length_m / nu
     if reynolds < _FLAT_PLATE_LAMINAR_RE or reynolds > 1.0e7:
         return None  # laminar below, or out of the turbulent correlation's range above
@@ -1480,9 +1944,14 @@ def cylinder_crossflow_convection_coefficient(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if min(v, d, k, nu) <= 0 or prandtl_number <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
-            "prandtl_number must be positive"
+            "prandtl_number must be positive",
+            subject=(
+                "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
+                "prandtl_number"
+            ),
+            source=_FLUID_SOURCE,
         )
     reynolds = v * d / nu
     if reynolds * prandtl_number < 0.2:
@@ -1523,11 +1992,17 @@ def sphere_crossflow_convection_coefficient(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if v < 0:
-        raise ValueError("fluid_velocity must be non-negative")
+        raise _thermal_refusal(
+            "fluid_velocity must be non-negative",
+            subject="fluid_velocity",
+            source=_OPERATING_SOURCE,
+        )
     if min(d, k, nu) <= 0 or prandtl_number <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "diameter, thermal_conductivity, kinematic_viscosity, and prandtl_number must be "
-            "positive"
+            "positive",
+            subject="diameter, thermal_conductivity, kinematic_viscosity, and prandtl_number",
+            source=_FLUID_SOURCE,
         )
     reynolds = v * d / nu
     if reynolds > 76000.0:
@@ -1562,9 +2037,17 @@ def grashof_number(
     length = characteristic_length.to("m").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _thermal_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if nu <= 0:
-        raise ValueError("kinematic_viscosity must be positive")
+        raise _thermal_refusal(
+            "kinematic_viscosity must be positive",
+            subject="kinematic_viscosity",
+            source=_FLUID_SOURCE,
+        )
     return _STANDARD_GRAVITY * beta * dt * length**3 / nu**2
 
 
@@ -1578,9 +2061,13 @@ def rayleigh_number(*, grashof_number: float, prandtl_number: float) -> float:
     dimensionless Rayleigh number.
     """
     if grashof_number < 0:
-        raise ValueError("grashof_number must be non-negative")
+        raise _thermal_refusal(
+            "grashof_number must be non-negative", subject="grashof_number", source=_FLUID_SOURCE
+        )
     if prandtl_number <= 0:
-        raise ValueError("prandtl_number must be positive")
+        raise _thermal_refusal(
+            "prandtl_number must be positive", subject="prandtl_number", source=_FLUID_SOURCE
+        )
     return grashof_number * prandtl_number
 
 
@@ -1614,9 +2101,15 @@ def richardson_number(
     length = characteristic_length.to("m").magnitude
     v = velocity.to("m/s").magnitude
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _thermal_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if v <= 0:
-        raise ValueError("velocity must be positive")
+        raise _thermal_refusal(
+            "velocity must be positive", subject="velocity", source=_OPERATING_SOURCE
+        )
     return _STANDARD_GRAVITY * beta * dt * length / v**2
 
 
@@ -1657,11 +2150,21 @@ def marangoni_number(
     mu = dynamic_viscosity.to("Pa*s").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _thermal_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
+        raise _thermal_refusal(
+            "dynamic_viscosity must be positive", subject="dynamic_viscosity", source=_FLUID_SOURCE
+        )
     if alpha <= 0:
-        raise ValueError("thermal_diffusivity must be positive")
+        raise _thermal_refusal(
+            "thermal_diffusivity must be positive",
+            subject="thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
+        )
     return dsigma_dt * dt * length / (mu * alpha)
 
 
@@ -1703,12 +2206,21 @@ def vertical_plate_natural_convection_coefficient(
     nu = kinematic_viscosity.to("m**2/s").magnitude
     beta = thermal_expansion_coefficient.to("1/K").magnitude
     if min(dt, length_m, k, nu, beta) <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "surface_temperature_difference, plate_height, thermal_conductivity, "
-            "kinematic_viscosity, and thermal_expansion_coefficient must be positive"
+            "kinematic_viscosity, and thermal_expansion_coefficient must be positive",
+            subject=(
+                "surface_temperature_difference, plate_height, thermal_conductivity, "
+                "kinematic_viscosity, and thermal_expansion_coefficient"
+            ),
+            source=_FLUID_SOURCE,
         )
     if prandtl_number <= 0:
-        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+        raise _thermal_refusal(
+            f"prandtl_number must be positive; got {prandtl_number}",
+            subject="prandtl_number",
+            source=_FLUID_SOURCE,
+        )
     rayleigh = _STANDARD_GRAVITY * beta * dt * length_m**3 * prandtl_number / nu**2
     nusselt = (
         0.825
@@ -1761,12 +2273,21 @@ def horizontal_cylinder_natural_convection_coefficient(
     nu = kinematic_viscosity.to("m**2/s").magnitude
     beta = thermal_expansion_coefficient.to("1/K").magnitude
     if min(dt, d, k, nu, beta) <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "surface_temperature_difference, diameter, thermal_conductivity, "
-            "kinematic_viscosity, and thermal_expansion_coefficient must be positive"
+            "kinematic_viscosity, and thermal_expansion_coefficient must be positive",
+            subject=(
+                "surface_temperature_difference, diameter, thermal_conductivity, "
+                "kinematic_viscosity, and thermal_expansion_coefficient"
+            ),
+            source=_FLUID_SOURCE,
         )
     if prandtl_number <= 0:
-        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+        raise _thermal_refusal(
+            f"prandtl_number must be positive; got {prandtl_number}",
+            subject="prandtl_number",
+            source=_FLUID_SOURCE,
+        )
     rayleigh = _STANDARD_GRAVITY * beta * dt * d**3 * prandtl_number / nu**2
     # Churchill-Chu is stated valid to Ra_D ~ 1e12 and this was the one natural-convection
     # function in the module that named a ceiling and then ignored it. Past it the returned
@@ -1827,12 +2348,21 @@ def horizontal_plate_natural_convection_coefficient(
     nu = kinematic_viscosity.to("m**2/s").magnitude
     beta = thermal_expansion_coefficient.to("1/K").magnitude
     if min(dt, length_m, k, nu, beta) <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "surface_temperature_difference, characteristic_length, thermal_conductivity, "
-            "kinematic_viscosity, and thermal_expansion_coefficient must be positive"
+            "kinematic_viscosity, and thermal_expansion_coefficient must be positive",
+            subject=(
+                "surface_temperature_difference, characteristic_length, thermal_conductivity, "
+                "kinematic_viscosity, and thermal_expansion_coefficient"
+            ),
+            source=_FLUID_SOURCE,
         )
     if prandtl_number <= 0:
-        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+        raise _thermal_refusal(
+            f"prandtl_number must be positive; got {prandtl_number}",
+            subject="prandtl_number",
+            source=_FLUID_SOURCE,
+        )
     rayleigh = _STANDARD_GRAVITY * beta * dt * length_m**3 * prandtl_number / nu**2
     if not hot_surface_facing_up:
         nusselt = 0.27 * rayleigh**0.25
@@ -1863,8 +2393,13 @@ def circular_source_spreading_resistance(
     _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
     a = source_radius.to("m").magnitude
     k = conductivity.to("W/(m*K)").magnitude
-    if a <= 0 or k <= 0:
-        raise ValueError("source_radius and conductivity must be positive")
+    for subject, magnitude in (("source_radius", a), ("conductivity", k)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "source_radius and conductivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=1.0 / (4.0 * k * a), unit=_THERMAL_RESISTANCE_UNIT)
 
 
@@ -1903,21 +2438,31 @@ def fin_array_thermal_resistance(
     _require(fin_surface_area, "[area]", "fin_surface_area")
     _require(unfinned_base_area, "[area]", "unfinned_base_area")
     if not 0 < fin_efficiency <= 1:
-        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+        raise _thermal_refusal(
+            f"fin_efficiency must be in (0, 1]; got {fin_efficiency}",
+            subject="fin_efficiency",
+            source=_CONVECTION_SOURCE,
+        )
     count = require_finite(fin_count, name="fin_count")
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     a_f = fin_surface_area.to("m**2").magnitude
     a_base = unfinned_base_area.to("m**2").magnitude
     if count < 0 or h <= 0 or a_f <= 0 or a_base < 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "fin_count and unfinned_base_area must be non-negative, and "
-            "heat_transfer_coefficient and fin_surface_area positive"
+            "heat_transfer_coefficient and fin_surface_area positive",
+            subject=(
+                "fin_count, unfinned_base_area, heat_transfer_coefficient, and fin_surface_area"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
     area = fin_efficiency * count * a_f + a_base
     if area <= 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "a fin array with no fins and no exposed base has no surface to carry heat "
-            "through; its resistance is not a large number, it is undefined"
+            "through; its resistance is not a large number, it is undefined",
+            subject="fin_count and unfinned_base_area",
+            source=_GEOMETRY_SOURCE,
         )
     return Quantity(magnitude=1.0 / (h * area), unit=_THERMAL_RESISTANCE_UNIT)
 
@@ -1954,15 +2499,24 @@ def fin_array_count_for_resistance(
     _require(fin_surface_area, "[area]", "fin_surface_area")
     _require(unfinned_base_area, "[area]", "unfinned_base_area")
     if not 0 < fin_efficiency <= 1:
-        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+        raise _thermal_refusal(
+            f"fin_efficiency must be in (0, 1]; got {fin_efficiency}",
+            subject="fin_efficiency",
+            source=_CONVECTION_SOURCE,
+        )
     r = target_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     a_f = fin_surface_area.to("m**2").magnitude
     a_base = unfinned_base_area.to("m**2").magnitude
     if r <= 0 or h <= 0 or a_f <= 0 or a_base < 0:
-        raise ValueError(
+        raise _thermal_refusal(
             "target_resistance, heat_transfer_coefficient, and fin_surface_area must be "
-            "positive, and unfinned_base_area non-negative"
+            "positive, and unfinned_base_area non-negative",
+            subject=(
+                "target_resistance, heat_transfer_coefficient, fin_surface_area, and "
+                "unfinned_base_area"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
     count = (1.0 / (h * r) - a_base) / (fin_efficiency * a_f)
     return max(count, 0.0)
@@ -1995,10 +2549,21 @@ def overall_heat_transfer_coefficient(
     ho = outside_coefficient.to("W/(m**2*K)").magnitude
     t = wall_thickness.to("m").magnitude
     k = wall_conductivity.to("W/(m*K)").magnitude
-    if hi <= 0 or ho <= 0 or k <= 0:
-        raise ValueError("film coefficients and wall_conductivity must be positive")
+    for subject, magnitude in (
+        ("inside_coefficient", hi),
+        ("outside_coefficient", ho),
+        ("wall_conductivity", k),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "film coefficients and wall_conductivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     if t < 0:
-        raise ValueError("wall_thickness must be non-negative")
+        raise _thermal_refusal(
+            "wall_thickness must be non-negative", subject="wall_thickness", source=_GEOMETRY_SOURCE
+        )
     rfi = 0.0
     if inside_fouling_factor is not None:
         _require(
@@ -2014,7 +2579,11 @@ def overall_heat_transfer_coefficient(
         )
         rfo = outside_fouling_factor.to("m**2*K/W").magnitude
     if rfi < 0 or rfo < 0:
-        raise ValueError("fouling factors must be non-negative")
+        raise _thermal_refusal(
+            "fouling factors must be non-negative",
+            subject="inside_fouling_factor and outside_fouling_factor",
+            source=_EXCHANGER_SOURCE,
+        )
     resistance = 1.0 / hi + rfi + t / k + rfo + 1.0 / ho
     return Quantity(magnitude=1.0 / resistance, unit="W/(m**2*K)")
 
@@ -2036,11 +2605,18 @@ def fouling_factor_from_coefficients(
     _require(service_coefficient, "[power] / [length]**2 / [temperature]", "service_coefficient")
     uc = clean_coefficient.to("W/(m**2*K)").magnitude
     us = service_coefficient.to("W/(m**2*K)").magnitude
-    if uc <= 0 or us <= 0:
-        raise ValueError("clean_coefficient and service_coefficient must be positive")
+    for subject, magnitude in (("clean_coefficient", uc), ("service_coefficient", us)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "clean_coefficient and service_coefficient must be positive",
+                subject=subject,
+                source=_EXCHANGER_SOURCE,
+            )
     if us > uc:
-        raise ValueError(
-            "service_coefficient cannot exceed clean_coefficient (fouling adds resistance)"
+        raise _thermal_refusal(
+            "service_coefficient cannot exceed clean_coefficient (fouling adds resistance)",
+            subject="service_coefficient and clean_coefficient",
+            source=_EXCHANGER_SOURCE,
         )
     return Quantity(magnitude=1.0 / us - 1.0 / uc, unit="m**2*K/W")
 
@@ -2062,10 +2638,19 @@ def cleanliness_factor(
     _require(clean_coefficient, "[power] / [length]**2 / [temperature]", "clean_coefficient")
     us = service_coefficient.to("W/(m**2*K)").magnitude
     uc = clean_coefficient.to("W/(m**2*K)").magnitude
-    if us <= 0 or uc <= 0:
-        raise ValueError("service_coefficient and clean_coefficient must be positive")
+    for subject, magnitude in (("service_coefficient", us), ("clean_coefficient", uc)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "service_coefficient and clean_coefficient must be positive",
+                subject=subject,
+                source=_EXCHANGER_SOURCE,
+            )
     if us > uc:
-        raise ValueError("service_coefficient cannot exceed clean_coefficient")
+        raise _thermal_refusal(
+            "service_coefficient cannot exceed clean_coefficient",
+            subject="service_coefficient and clean_coefficient",
+            source=_EXCHANGER_SOURCE,
+        )
     return us / uc
 
 
@@ -2109,16 +2694,30 @@ def shell_and_tube_lmtd_correction_factor(
     t_cold_in = cold_inlet_temperature.to("K").magnitude
     t_cold_out = cold_outlet_temperature.to("K").magnitude
     if t_hot_in <= t_cold_in:
-        raise ValueError(
+        raise _thermal_refusal(
             f"hot_inlet_temperature must exceed cold_inlet_temperature; got "
-            f"{hot_inlet_temperature} against {cold_inlet_temperature}"
+            f"{hot_inlet_temperature} against {cold_inlet_temperature}",
+            subject="hot_inlet_temperature and cold_inlet_temperature",
+            source=_EXCHANGER_SOURCE,
         )
     if t_hot_out > t_hot_in:
-        raise ValueError("the hot stream must cool: hot_outlet cannot exceed hot_inlet")
+        raise _thermal_refusal(
+            "the hot stream must cool: hot_outlet cannot exceed hot_inlet",
+            subject="hot_inlet_temperature and hot_outlet_temperature",
+            source=_EXCHANGER_SOURCE,
+        )
     if t_cold_out < t_cold_in:
-        raise ValueError("the cold stream must warm: cold_outlet cannot be below cold_inlet")
+        raise _thermal_refusal(
+            "the cold stream must warm: cold_outlet cannot be below cold_inlet",
+            subject="cold_inlet_temperature and cold_outlet_temperature",
+            source=_EXCHANGER_SOURCE,
+        )
     if t_cold_out == t_cold_in:
-        raise ValueError("cold_outlet_temperature must exceed cold_inlet_temperature")
+        raise _thermal_refusal(
+            "cold_outlet_temperature must exceed cold_inlet_temperature",
+            subject="cold_inlet_temperature and cold_outlet_temperature",
+            source=_EXCHANGER_SOURCE,
+        )
     r = (t_hot_in - t_hot_out) / (t_cold_out - t_cold_in)
     p_eff = (t_cold_out - t_cold_in) / (t_hot_in - t_cold_in)
     s = sqrt(r * r + 1.0)
@@ -2132,24 +2731,36 @@ def shell_and_tube_lmtd_correction_factor(
         # engineer types with round numbers. Only the numerator was guarded, so that one
         # point divided by zero while 1 K either side of it raised a clean message.
         if abs(1.0 - p_eff * r) < 1.0e-12:
-            raise ValueError(
+            raise _thermal_refusal(
                 "the hot outlet reaches the cold inlet (a zero temperature approach), "
-                "which needs infinite area: no correction factor exists there"
+                "which needs infinite area: no correction factor exists there",
+                subject="hot_outlet_temperature and cold_inlet_temperature",
+                source=_EXCHANGER_SOURCE,
             )
         inner = (1.0 - p_eff) / (1.0 - p_eff * r)
         if inner <= 0.0:
-            raise ValueError(
+            raise _thermal_refusal(
                 "these terminal temperatures are unreachable by a 1-shell-pass exchanger at any "
                 "area (the correction factor's logarithm has no real value there). Use more shell "
-                "passes or a different configuration."
+                "passes or a different configuration.",
+                subject=(
+                    "hot_inlet_temperature, hot_outlet_temperature, cold_inlet_temperature, and "
+                    "cold_outlet_temperature"
+                ),
+                source=_EXCHANGER_SOURCE,
             )
         numerator = (s / (r - 1.0)) * log(inner)
     denominator_upper = 2.0 / p_eff - 1.0 - r + s
     denominator_lower = 2.0 / p_eff - 1.0 - r - s
     if denominator_lower <= 0.0 or denominator_upper <= 0.0:
-        raise ValueError(
+        raise _thermal_refusal(
             "these terminal temperatures are unreachable by a 1-shell-pass exchanger at any area "
-            "(a temperature cross). Use more shell passes or a different configuration."
+            "(a temperature cross). Use more shell passes or a different configuration.",
+            subject=(
+                "hot_inlet_temperature, hot_outlet_temperature, cold_inlet_temperature, and "
+                "cold_outlet_temperature"
+            ),
+            source=_EXCHANGER_SOURCE,
         )
     return numerator / log(denominator_upper / denominator_lower)
 
@@ -2173,8 +2784,13 @@ def log_mean_temperature_difference(
     _require(delta_t_2, "[temperature]", "delta_t_2")
     dt1 = temperature_difference_kelvin(delta_t_1, name="delta_t_1")
     dt2 = temperature_difference_kelvin(delta_t_2, name="delta_t_2")
-    if dt1 <= 0 or dt2 <= 0:
-        raise ValueError("delta_t_1 and delta_t_2 must be positive temperature differences")
+    for subject, magnitude in (("delta_t_1", dt1), ("delta_t_2", dt2)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "delta_t_1 and delta_t_2 must be positive temperature differences",
+                subject=subject,
+                source=_EXCHANGER_SOURCE,
+            )
     if dt1 == dt2:
         return Quantity(magnitude=dt1, unit="K")
     return Quantity(magnitude=(dt1 - dt2) / log(dt1 / dt2), unit="K")
@@ -2202,8 +2818,17 @@ def heat_exchanger_area_for_duty(
     lmtd = temperature_difference_kelvin(
         log_mean_temperature_difference, name="log_mean_temperature_difference"
     )
-    if q <= 0 or u <= 0 or lmtd <= 0:
-        raise ValueError("duty, overall_coefficient, and the LMTD must be positive")
+    for subject, magnitude in (
+        ("duty", q),
+        ("overall_coefficient", u),
+        ("log_mean_temperature_difference", lmtd),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "duty, overall_coefficient, and the LMTD must be positive",
+                subject=subject,
+                source=_EXCHANGER_SOURCE,
+            )
     return Quantity(magnitude=q / (u * lmtd), unit="m**2")
 
 
@@ -2227,8 +2852,17 @@ def heat_exchanger_duty(
     lmtd = temperature_difference_kelvin(
         log_mean_temperature_difference, name="log_mean_temperature_difference"
     )
-    if u <= 0 or a <= 0 or lmtd <= 0:
-        raise ValueError("overall_coefficient, area, and the LMTD must be positive")
+    for subject, magnitude in (
+        ("overall_coefficient", u),
+        ("area", a),
+        ("log_mean_temperature_difference", lmtd),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "overall_coefficient, area, and the LMTD must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=u * a * lmtd, unit="W")
 
 
@@ -2252,8 +2886,17 @@ def heat_exchanger_ntu(
     u = overall_coefficient.to("W/(m**2*K)").magnitude
     a = area.to("m**2").magnitude
     c_min = min_heat_capacity_rate.to("W/K").magnitude
-    if u <= 0 or a <= 0 or c_min <= 0:
-        raise ValueError("overall_coefficient, area, and min_heat_capacity_rate must be positive")
+    for subject, magnitude in (
+        ("overall_coefficient", u),
+        ("area", a),
+        ("min_heat_capacity_rate", c_min),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "overall_coefficient, area, and min_heat_capacity_rate must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return u * a / c_min
 
 
@@ -2287,8 +2930,10 @@ def heat_exchanger_effectiveness_from_temperatures(
     t_other = opposite_inlet_temperature.to("K").magnitude
     max_difference = t_other - t_in
     if max_difference == 0:
-        raise ValueError(
-            "the two inlet temperatures are equal, so no heat can transfer (undefined ε)"
+        raise _thermal_refusal(
+            "the two inlet temperatures are equal, so no heat can transfer (undefined ε)",
+            subject="minimum_capacity_inlet_temperature and opposite_inlet_temperature",
+            source=_EXCHANGER_SOURCE,
         )
     # Signed, not absolute, on both halves. ε = q/q_max against q_max = C_min·(T_other,in − T_in)
     # is a second-law bound, so the honest value lies in [0, 1]. Taking the numerator's magnitude
@@ -2299,16 +2944,26 @@ def heat_exchanger_effectiveness_from_temperatures(
     # and both are refused here rather than left for a downstream ε-NTU inverse to reject.
     effectiveness = (t_out - t_in) / max_difference
     if effectiveness < 0.0:
-        raise ValueError(
+        raise _thermal_refusal(
             f"the C_min stream leaves at {t_out:g} K, moving AWAY from the opposite inlet at "
             f"{t_other:g} K rather than toward it (it entered at {t_in:g} K); heat cannot flow "
-            "that way, so check which stream is which and the sign of the measurement"
+            "that way, so check which stream is which and the sign of the measurement",
+            subject=(
+                "minimum_capacity_inlet_temperature, minimum_capacity_outlet_temperature, and "
+                "opposite_inlet_temperature"
+            ),
+            source=_EXCHANGER_SOURCE,
         )
     if effectiveness > 1.0:
-        raise ValueError(
+        raise _thermal_refusal(
             f"effectiveness came to {effectiveness:g}, above the second-law maximum of 1: the "
             f"C_min outlet ({t_out:g} K) has passed the opposite inlet ({t_other:g} K), which no "
-            "heat exchanger can do; check the measured temperatures"
+            "heat exchanger can do; check the measured temperatures",
+            subject=(
+                "minimum_capacity_inlet_temperature, minimum_capacity_outlet_temperature, and "
+                "opposite_inlet_temperature"
+            ),
+            source=_EXCHANGER_SOURCE,
         )
     return effectiveness
 
@@ -2328,9 +2983,15 @@ def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     non-negative and ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
     """
     if ntu < 0:
-        raise ValueError(f"ntu must be non-negative; got {ntu}")
+        raise _thermal_refusal(
+            f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     if capacity_ratio == 1:
         return ntu / (1.0 + ntu)
     exponent = exp(-ntu * (1.0 - capacity_ratio))
@@ -2349,9 +3010,15 @@ def parallel_flow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     ``ntu`` non-negative, ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
     """
     if ntu < 0:
-        raise ValueError(f"ntu must be non-negative; got {ntu}")
+        raise _thermal_refusal(
+            f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     return (1.0 - exp(-ntu * (1.0 + capacity_ratio))) / (1.0 + capacity_ratio)
 
 
@@ -2371,9 +3038,15 @@ def crossflow_both_unmixed_effectiveness(*, ntu: float, capacity_ratio: float) -
     Returns ε in [0, 1].
     """
     if ntu < 0:
-        raise ValueError(f"ntu must be non-negative; got {ntu}")
+        raise _thermal_refusal(
+            f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     if capacity_ratio == 0 or ntu == 0:
         return 1.0 - exp(-ntu)
     return 1.0 - exp((1.0 / capacity_ratio) * ntu**0.22 * (exp(-capacity_ratio * ntu**0.78) - 1.0))
@@ -2394,9 +3067,17 @@ def counterflow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: f
     Returns the required (dimensionless) NTU.
     """
     if not 0 < effectiveness < 1:
-        raise ValueError(f"effectiveness must be in (0, 1); got {effectiveness}")
+        raise _thermal_refusal(
+            f"effectiveness must be in (0, 1); got {effectiveness}",
+            subject="effectiveness",
+            source=_EXCHANGER_SOURCE,
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     if capacity_ratio == 1:
         return effectiveness / (1.0 - effectiveness)
     if capacity_ratio == 0:
@@ -2416,12 +3097,18 @@ def parallel_flow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio:
     ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
     """
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     ceiling = 1.0 / (1.0 + capacity_ratio)
     if not 0 < effectiveness < ceiling:
-        raise ValueError(
+        raise _thermal_refusal(
             f"effectiveness must be in (0, {ceiling:.4g}) — parallel flow cannot exceed "
-            f"1/(1+C_r); got {effectiveness}"
+            f"1/(1+C_r); got {effectiveness}",
+            subject="effectiveness",
+            source=_EXCHANGER_SOURCE,
         )
     return -log(1.0 - effectiveness * (1.0 + capacity_ratio)) / (1.0 + capacity_ratio)
 
@@ -2441,9 +3128,15 @@ def shell_and_tube_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     arrangement. ``ntu`` non-negative. Returns ε in [0, 1].
     """
     if ntu < 0:
-        raise ValueError(f"ntu must be non-negative; got {ntu}")
+        raise _thermal_refusal(
+            f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     if ntu == 0:
         return 0.0
     root = sqrt(1.0 + capacity_ratio**2)
@@ -2465,13 +3158,19 @@ def shell_and_tube_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio
     ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
     """
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     root = sqrt(1.0 + capacity_ratio**2)
     ceiling = 2.0 / ((1.0 + capacity_ratio) + root)
     if not 0 < effectiveness < ceiling:
-        raise ValueError(
+        raise _thermal_refusal(
             f"effectiveness must be in (0, {ceiling:.4g}) — one shell pass cannot exceed "
-            f"2/[(1+C_r)+√(1+C_r²)]; got {effectiveness}"
+            f"2/[(1+C_r)+√(1+C_r²)]; got {effectiveness}",
+            subject="effectiveness",
+            source=_EXCHANGER_SOURCE,
         )
     e_param = (2.0 / effectiveness - (1.0 + capacity_ratio)) / root
     return -log((e_param - 1.0) / (e_param + 1.0)) / root
@@ -2492,9 +3191,15 @@ def crossflow_cmax_mixed_effectiveness(*, ntu: float, capacity_ratio: float) -> 
     ε in [0, 1].
     """
     if ntu < 0:
-        raise ValueError(f"ntu must be non-negative; got {ntu}")
+        raise _thermal_refusal(
+            f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
+        )
     if not 0 <= capacity_ratio <= 1:
-        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+        raise _thermal_refusal(
+            f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
+            subject="capacity_ratio",
+            source=_EXCHANGER_SOURCE,
+        )
     if capacity_ratio == 0:
         return 1.0 - exp(-ntu)
     return (1.0 / capacity_ratio) * (1.0 - exp(-capacity_ratio * (1.0 - exp(-ntu))))
@@ -2526,8 +3231,17 @@ def biot_number(
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     lc = characteristic_length.to("m").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
-    if h <= 0 or lc <= 0 or k <= 0:
-        raise ValueError("all inputs must be positive")
+    for subject, magnitude in (
+        ("heat_transfer_coefficient", h),
+        ("characteristic_length", lc),
+        ("thermal_conductivity", k),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "all inputs must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return h * lc / k
 
 
@@ -2553,11 +3267,19 @@ def thermal_diffusivity(
     rho = density.to("kg/m**3").magnitude
     cp = specific_heat.to("J/(kg*K)").magnitude
     if k <= 0:
-        raise ValueError("thermal_conductivity must be positive")
+        raise _thermal_refusal(
+            "thermal_conductivity must be positive",
+            subject="thermal_conductivity",
+            source=_MATERIAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _thermal_refusal(
+            "density must be positive", subject="density", source=_MATERIAL_SOURCE
+        )
     if cp <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _thermal_refusal(
+            "specific_heat must be positive", subject="specific_heat", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=k / (rho * cp), unit="m**2/s")
 
 
@@ -2585,9 +3307,15 @@ def fourier_number(
     t = time.to("s").magnitude
     length = characteristic_length.to("m").magnitude
     if alpha <= 0 or length <= 0:
-        raise ValueError("thermal_diffusivity and characteristic_length must be positive")
+        raise _thermal_refusal(
+            "thermal_diffusivity and characteristic_length must be positive",
+            subject="thermal_diffusivity and characteristic_length",
+            source=_MATERIAL_SOURCE,
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _thermal_refusal(
+            "time must be non-negative", subject="time", source=_OPERATING_SOURCE
+        )
     return alpha * t / length**2
 
 
@@ -2614,9 +3342,15 @@ def peclet_number(
     length = characteristic_length.to("m").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
     if length <= 0 or alpha <= 0:
-        raise ValueError("characteristic_length and thermal_diffusivity must be positive")
+        raise _thermal_refusal(
+            "characteristic_length and thermal_diffusivity must be positive",
+            subject="characteristic_length and thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _thermal_refusal(
+            "velocity must be non-negative", subject="velocity", source=_OPERATING_SOURCE
+        )
     return v * length / alpha
 
 
@@ -2649,13 +3383,25 @@ def brinkman_number(
     k = thermal_conductivity.to("W/(m*K)").magnitude
     delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
+        raise _thermal_refusal(
+            "dynamic_viscosity must be positive", subject="dynamic_viscosity", source=_FLUID_SOURCE
+        )
     if k <= 0:
-        raise ValueError("thermal_conductivity must be positive")
+        raise _thermal_refusal(
+            "thermal_conductivity must be positive",
+            subject="thermal_conductivity",
+            source=_MATERIAL_SOURCE,
+        )
     if delta_t <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _thermal_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _thermal_refusal(
+            "velocity must be non-negative", subject="velocity", source=_OPERATING_SOURCE
+        )
     return mu * v**2 / (k * delta_t)
 
 
@@ -2692,7 +3438,11 @@ def lumped_capacitance_time_constant(
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     a = surface_area.to("m**2").magnitude
     if min(rho, v, cp, h, a) <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _thermal_refusal(
+            "all inputs must be positive",
+            subject="density, volume, specific_heat, heat_transfer_coefficient, and surface_area",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=rho * v * cp / (h * a), unit="s")
 
 
@@ -2721,10 +3471,23 @@ def lumped_capacitance_cooling_time(
         target_excess_temperature, name="target_excess_temperature"
     )
     tau = time_constant.to("s").magnitude
-    if theta_0 <= 0 or theta <= 0 or tau <= 0:
-        raise ValueError("the excess temperatures and time constant must be positive")
+    for subject, magnitude in (
+        ("initial_excess_temperature", theta_0),
+        ("target_excess_temperature", theta),
+        ("time_constant", tau),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "the excess temperatures and time constant must be positive",
+                subject=subject,
+                source=_OPERATING_SOURCE,
+            )
     if theta >= theta_0:
-        raise ValueError("target_excess_temperature must be below initial_excess_temperature")
+        raise _thermal_refusal(
+            "target_excess_temperature must be below initial_excess_temperature",
+            subject="target_excess_temperature",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=tau * log(theta_0 / theta), unit="s")
 
 
@@ -2754,11 +3517,19 @@ def lumped_capacitance_excess_temperature(
     t = time.to("s").magnitude
     tau = time_constant.to("s").magnitude
     if theta_0 <= 0:
-        raise ValueError("initial_excess_temperature must be positive")
+        raise _thermal_refusal(
+            "initial_excess_temperature must be positive",
+            subject="initial_excess_temperature",
+            source=_OPERATING_SOURCE,
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _thermal_refusal(
+            "time must be non-negative", subject="time", source=_OPERATING_SOURCE
+        )
     if tau <= 0:
-        raise ValueError("time_constant must be positive")
+        raise _thermal_refusal(
+            "time_constant must be positive", subject="time_constant", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=theta_0 * exp(-t / tau), unit="K")
 
 
@@ -2786,23 +3557,34 @@ def semi_infinite_solid_temperature_rise(
     _require(depth, "[length]", "depth")
     _require(time, "[time]", "time")
     if not isinstance(thermal_diffusivity, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_diffusivity must be a [length]**2 / [time] quantity; "
-            f"got {thermal_diffusivity!r}"
+            f"got {thermal_diffusivity!r}",
+            subject="thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
-            f"{thermal_diffusivity.dimensionality}"
+            f"{thermal_diffusivity.dimensionality}",
+            subject="thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
         )
     delta_ts = temperature_difference_kelvin(surface_step_change, name="surface_step_change")
     x = depth.to("m").magnitude
     t = time.to("s").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
     if x < 0:
-        raise ValueError(f"depth must be non-negative; got {depth}")
-    if t <= 0 or alpha <= 0:
-        raise ValueError("time and thermal_diffusivity must be positive")
+        raise _thermal_refusal(
+            f"depth must be non-negative; got {depth}", subject="depth", source=_GEOMETRY_SOURCE
+        )
+    for subject, magnitude in (("time", t), ("thermal_diffusivity", alpha)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "time and thermal_diffusivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     eta = x / (2.0 * sqrt(alpha * t))
     return Quantity(magnitude=delta_ts * (1.0 - erf(eta)), unit="K")
 
@@ -2827,31 +3609,48 @@ def semi_infinite_solid_surface_flux(
     _require(surface_step_change, "[temperature]", "surface_step_change")
     _require(time, "[time]", "time")
     if not isinstance(thermal_conductivity, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_conductivity must be a [power] / [length] / [temperature] quantity; "
-            f"got {thermal_conductivity!r}"
+            f"got {thermal_conductivity!r}",
+            subject="thermal_conductivity",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_conductivity.has_dimension("[power] / [length] / [temperature]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_conductivity must be a [power]/[length]/[temperature] quantity; got "
-            f"{thermal_conductivity.dimensionality}"
+            f"{thermal_conductivity.dimensionality}",
+            subject="thermal_conductivity",
+            source=_MATERIAL_SOURCE,
         )
     if not isinstance(thermal_diffusivity, Quantity):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_diffusivity must be a [length]**2 / [time] quantity; "
-            f"got {thermal_diffusivity!r}"
+            f"got {thermal_diffusivity!r}",
+            subject="thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
         )
     if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
-        raise ValueError(
+        raise _thermal_refusal(
             f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
-            f"{thermal_diffusivity.dimensionality}"
+            f"{thermal_diffusivity.dimensionality}",
+            subject="thermal_diffusivity",
+            source=_MATERIAL_SOURCE,
         )
     delta_ts = abs(temperature_difference_kelvin(surface_step_change, name="surface_step_change"))
     t = time.to("s").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
-    if t <= 0 or k <= 0 or alpha <= 0:
-        raise ValueError("time, thermal_conductivity, and thermal_diffusivity must be positive")
+    for subject, magnitude in (
+        ("time", t),
+        ("thermal_conductivity", k),
+        ("thermal_diffusivity", alpha),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "time, thermal_conductivity, and thermal_diffusivity must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=k * delta_ts / sqrt(pi * alpha * t), unit="W/m**2")
 
 
@@ -2873,15 +3672,28 @@ def radiation_heat_transfer(
     surface. Returns the net radiant power in W.
     """
     if not 0 <= emissivity <= 1:
-        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+        raise _thermal_refusal(
+            f"emissivity must lie in [0, 1]; got {emissivity}",
+            subject="emissivity",
+            source=_MATERIAL_SOURCE,
+        )
     _require(area, "[area]", "area")
     _require(surface_temperature, "[temperature]", "surface_temperature")
     _require(surroundings_temperature, "[temperature]", "surroundings_temperature")
     a = area.to("m**2").magnitude
     ts = surface_temperature.to("K").magnitude
     tsur = surroundings_temperature.to("K").magnitude
-    if a <= 0 or ts <= 0 or tsur <= 0:
-        raise ValueError("area and the absolute temperatures must be positive")
+    for subject, magnitude in (
+        ("area", a),
+        ("surface_temperature", ts),
+        ("surroundings_temperature", tsur),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "area and the absolute temperatures must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     return Quantity(magnitude=emissivity * _STEFAN_BOLTZMANN * a * (ts**4 - tsur**4), unit="W")
 
 
@@ -2912,11 +3724,23 @@ def radiation_two_surface_exchange(
     result is heat leaving surface 1. Returns the net radiant power in W.
     """
     if not 0 < emissivity_1 <= 1:
-        raise ValueError(f"emissivity_1 must lie in (0, 1]; got {emissivity_1}")
+        raise _thermal_refusal(
+            f"emissivity_1 must lie in (0, 1]; got {emissivity_1}",
+            subject="emissivity_1",
+            source=_MATERIAL_SOURCE,
+        )
     if not 0 < emissivity_2 <= 1:
-        raise ValueError(f"emissivity_2 must lie in (0, 1]; got {emissivity_2}")
+        raise _thermal_refusal(
+            f"emissivity_2 must lie in (0, 1]; got {emissivity_2}",
+            subject="emissivity_2",
+            source=_MATERIAL_SOURCE,
+        )
     if not 0 < view_factor <= 1:
-        raise ValueError(f"view_factor must lie in (0, 1]; got {view_factor}")
+        raise _thermal_refusal(
+            f"view_factor must lie in (0, 1]; got {view_factor}",
+            subject="view_factor",
+            source=_GEOMETRY_SOURCE,
+        )
     _require(area_1, "[area]", "area_1")
     _require(area_2, "[area]", "area_2")
     _require(temperature_1, "[temperature]", "temperature_1")
@@ -2925,8 +3749,18 @@ def radiation_two_surface_exchange(
     a2 = area_2.to("m**2").magnitude
     t1 = temperature_1.to("K").magnitude
     t2 = temperature_2.to("K").magnitude
-    if a1 <= 0 or a2 <= 0 or t1 <= 0 or t2 <= 0:
-        raise ValueError("areas and the absolute temperatures must be positive")
+    for subject, magnitude in (
+        ("area_1", a1),
+        ("area_2", a2),
+        ("temperature_1", t1),
+        ("temperature_2", t2),
+    ):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "areas and the absolute temperatures must be positive",
+                subject=subject,
+                source=_thermal_input_source(subject),
+            )
     resistance = (1 - emissivity_1) / (emissivity_1 * a1) + 1 / (a1 * view_factor)
     resistance += (1 - emissivity_2) / (emissivity_2 * a2)
     return Quantity(magnitude=_STEFAN_BOLTZMANN * (t1**4 - t2**4) / resistance, unit="W")
@@ -2949,13 +3783,22 @@ def radiation_heat_transfer_coefficient(
     W/(m²·K).
     """
     if not 0 <= emissivity <= 1:
-        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+        raise _thermal_refusal(
+            f"emissivity must lie in [0, 1]; got {emissivity}",
+            subject="emissivity",
+            source=_MATERIAL_SOURCE,
+        )
     _require(surface_temperature, "[temperature]", "surface_temperature")
     _require(surroundings_temperature, "[temperature]", "surroundings_temperature")
     ts = surface_temperature.to("K").magnitude
     tsur = surroundings_temperature.to("K").magnitude
-    if ts <= 0 or tsur <= 0:
-        raise ValueError("the absolute temperatures must be positive")
+    for subject, magnitude in (("surface_temperature", ts), ("surroundings_temperature", tsur)):
+        if magnitude <= 0:
+            raise _thermal_refusal(
+                "the absolute temperatures must be positive",
+                subject=subject,
+                source=_OPERATING_SOURCE,
+            )
     hr = emissivity * _STEFAN_BOLTZMANN * (ts**2 + tsur**2) * (ts + tsur)
     return Quantity(magnitude=hr, unit="W/(m**2*K)")
 
@@ -2973,7 +3816,11 @@ def wien_peak_wavelength(*, temperature: Quantity) -> Quantity:
     _require(temperature, "[temperature]", "temperature")
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute)")
+        raise _thermal_refusal(
+            "temperature must be positive (absolute)",
+            subject="temperature",
+            source=_OPERATING_SOURCE,
+        )
     return Quantity(magnitude=_WIEN_DISPLACEMENT / t, unit="m")
 
 
@@ -2988,7 +3835,9 @@ def wien_temperature_from_peak(*, peak_wavelength: Quantity) -> Quantity:
     _require(peak_wavelength, "[length]", "peak_wavelength")
     lam = peak_wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("peak_wavelength must be positive")
+        raise _thermal_refusal(
+            "peak_wavelength must be positive", subject="peak_wavelength", source=_OPERATING_SOURCE
+        )
     return Quantity(magnitude=_WIEN_DISPLACEMENT / lam, unit="K")
 
 
@@ -3011,11 +3860,17 @@ def planetary_equilibrium_temperature(
     _require(solar_flux, "[power]/[area]", "solar_flux")
     s = solar_flux.to("W/m**2").magnitude
     if s <= 0:
-        raise ValueError("solar_flux must be positive")
+        raise _thermal_refusal(
+            "solar_flux must be positive", subject="solar_flux", source=_OPERATING_SOURCE
+        )
     if not 0.0 <= albedo < 1.0:
-        raise ValueError("albedo must lie in [0, 1)")
+        raise _thermal_refusal(
+            "albedo must lie in [0, 1)", subject="albedo", source=_MATERIAL_SOURCE
+        )
     if not 0.0 < emissivity <= 1.0:
-        raise ValueError("emissivity must lie in (0, 1]")
+        raise _thermal_refusal(
+            "emissivity must lie in (0, 1]", subject="emissivity", source=_MATERIAL_SOURCE
+        )
     t = (s * (1.0 - albedo) / (4.0 * emissivity * _STEFAN_BOLTZMANN)) ** 0.25
     return Quantity(magnitude=t, unit="K")
 
@@ -3049,13 +3904,26 @@ def crossed_strings_view_factor(
     u2 = uncrossed_string_2.to("m").magnitude
     w1 = surface_1_width.to("m").magnitude
     if w1 <= 0:
-        raise ValueError("surface_1_width must be positive")
+        raise _thermal_refusal(
+            "surface_1_width must be positive", subject="surface_1_width", source=_GEOMETRY_SOURCE
+        )
     if min(c1, c2, u1, u2) < 0:
-        raise ValueError("string lengths must be non-negative")
+        raise _thermal_refusal(
+            "string lengths must be non-negative",
+            subject=(
+                "crossed_string_1, crossed_string_2, uncrossed_string_1, and uncrossed_string_2"
+            ),
+            source=_GEOMETRY_SOURCE,
+        )
     f12 = (c1 + c2 - u1 - u2) / (2.0 * w1)
     if not 0.0 <= f12 <= 1.0:
-        raise ValueError(
-            f"computed view factor {f12:.4f} is outside [0, 1]; check the string assignments"
+        raise _thermal_refusal(
+            f"computed view factor {f12:.4f} is outside [0, 1]; check the string assignments",
+            subject=(
+                "crossed_string_1, crossed_string_2, uncrossed_string_1, uncrossed_string_2, and "
+                "surface_1_width"
+            ),
+            source=_GEOMETRY_SOURCE,
         )
     return f12
 
@@ -3076,11 +3944,15 @@ def view_factor_reciprocity(
     a1 = area_1.to("m**2").magnitude
     a2 = area_2.to("m**2").magnitude
     if a1 <= 0:
-        raise ValueError("area_1 must be positive")
+        raise _thermal_refusal("area_1 must be positive", subject="area_1", source=_GEOMETRY_SOURCE)
     if a2 <= 0:
-        raise ValueError("area_2 must be positive")
+        raise _thermal_refusal("area_2 must be positive", subject="area_2", source=_GEOMETRY_SOURCE)
     if not 0.0 <= view_factor_1_to_2 <= 1.0:
-        raise ValueError("view_factor_1_to_2 must be in [0, 1]")
+        raise _thermal_refusal(
+            "view_factor_1_to_2 must be in [0, 1]",
+            subject="view_factor_1_to_2",
+            source=_GEOMETRY_SOURCE,
+        )
     return a1 * view_factor_1_to_2 / a2
 
 
@@ -3095,5 +3967,9 @@ def radiation_shield_reduction_factor(*, number_of_shields: int) -> float:
     trend. Returns the reduction factor (dimensionless, 0 to 1).
     """
     if not isinstance(number_of_shields, int) or number_of_shields < 0:
-        raise ValueError("number_of_shields must be a non-negative integer")
+        raise _thermal_refusal(
+            "number_of_shields must be a non-negative integer",
+            subject="number_of_shields",
+            source=_GEOMETRY_SOURCE,
+        )
     return 1.0 / (number_of_shields + 1)

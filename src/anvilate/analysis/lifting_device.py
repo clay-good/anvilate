@@ -41,8 +41,39 @@ from pydantic import BaseModel, ConfigDict
 
 from .._models import Named, RevalidatedModel
 from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from ..refusal import RefusalError, Remedy
 from ..scorecard import AppliedFactor, CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity, require_finite
+
+_MATERIAL_SOURCE = "the material certificate or specification's minimum strengths"
+_STRESS_SOURCE = "the lifter's stress calculation at the design load"
+_DESIGN_BASIS_SOURCE = "the lifter's design basis (BTH-1 category, service class, and load cycles)"
+_DRAWING_SOURCE = "the lifter's fabrication drawing (plate width, hole, and thickness)"
+_RATING_SOURCE = "the lifter's nameplate rated load and its weighed or calculated self-weight"
+
+
+class _LiftingDeviceInputError(RefusalError, ValueError):
+    """An ASME BTH-1 lifting-device input that cannot be used without correction."""
+
+
+def _lifting_device_refusal(message: str, *, subject: str, source: str) -> _LiftingDeviceInputError:
+    return _LiftingDeviceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _lifting_device_input_source(name: str) -> str:
+    if name in {"allowable", "allowables", "ultimate_strength", "yield_strength"}:
+        return _MATERIAL_SOURCE
+    if name in {"limit_state", "load", "members", "stress", "stress_range"}:
+        return _STRESS_SOURCE
+    if name in {"hole_diameter", "name", "pin_plates", "plate", "thickness", "width"}:
+        return _DRAWING_SOURCE
+    if name in {"rated_load", "self_weight"}:
+        return _RATING_SOURCE
+    return _DESIGN_BASIS_SOURCE
+
 
 __all__ = [
     "DesignCategory",
@@ -146,7 +177,11 @@ def service_class_for_cycles(load_cycles: int) -> ServiceClass:
     # caller could not rely on at all.
     require_finite(load_cycles, name="load_cycles")
     if load_cycles < 0:
-        raise ValueError(f"load_cycles must be non-negative; got {load_cycles}")
+        raise _lifting_device_refusal(
+            f"load_cycles must be non-negative; got {load_cycles}",
+            subject="load_cycles",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     for service in ServiceClass:
         low, high = service.cycle_range
         if load_cycles >= low and (high is None or load_cycles <= high):
@@ -219,17 +254,31 @@ def bth1_allowable_stresses(
         (ultimate_strength, "ultimate_strength"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+            raise _lifting_device_refusal(
+                f"{name} must be a [pressure] quantity; got {value!r}",
+                subject=name,
+                source=_lifting_device_input_source(name),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value}")
+            raise _lifting_device_refusal(
+                f"{name} must be a [pressure] quantity; got {value}",
+                subject=name,
+                source=_lifting_device_input_source(name),
+            )
         if value.magnitude <= 0:
-            raise ValueError(f"{name} must be positive; got {value}")
+            raise _lifting_device_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_lifting_device_input_source(name),
+            )
     sy = yield_strength.to("MPa").magnitude
     su = ultimate_strength.to("MPa").magnitude
     if su < sy:
-        raise ValueError(
+        raise _lifting_device_refusal(
             f"ultimate_strength ({ultimate_strength}) is below yield_strength "
-            f"({yield_strength}); check they are not swapped"
+            f"({yield_strength}); check they are not swapped",
+            subject="yield_strength and ultimate_strength",
+            source=_MATERIAL_SOURCE,
         )
     nd = category.design_factor
     return BTH1Allowables(
@@ -273,13 +322,25 @@ def bth1_member_scorecard(
     """
     for value, label in ((stress, "stress"), (allowable, "allowable")):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
+            raise _lifting_device_refusal(
+                f"{label} must be a [pressure] quantity; got {value!r}",
+                subject=label,
+                source=_lifting_device_input_source(label),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
+            raise _lifting_device_refusal(
+                f"{label} must be a [pressure] quantity; got {value}",
+                subject=label,
+                source=_lifting_device_input_source(label),
+            )
     applied = abs(stress.to("MPa").magnitude)
     limit = allowable.to("MPa").magnitude
     if limit <= 0:
-        raise ValueError(f"allowable must be positive; got {allowable}")
+        raise _lifting_device_refusal(
+            f"allowable must be positive; got {allowable}",
+            subject="allowable",
+            source=_MATERIAL_SOURCE,
+        )
     # Zero applied stress is a check with nothing to evaluate, not one that passed.
     computed = None if applied == 0 else limit / applied
     entry = ScorecardEntry.from_safety_factor(
@@ -399,7 +460,11 @@ def bth1_fatigue_scorecard(
     is the caller's, like every other allowable here.
     """
     if not isinstance(service_class, ServiceClass):
-        raise ValueError(f"service_class must be a ServiceClass; got {service_class!r}")
+        raise _lifting_device_refusal(
+            f"service_class must be a ServiceClass; got {service_class!r}",
+            subject="service_class",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     if not service_class.fatigue_required:
         low, high = service_class.cycle_range
         return ScorecardEntry(
@@ -446,13 +511,25 @@ def bth1_fatigue_scorecard(
         (allowable_stress_range, "allowable_stress_range"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value!r}")
+            raise _lifting_device_refusal(
+                f"{label} must be a [pressure] quantity; got {value!r}",
+                subject=label,
+                source=_lifting_device_input_source(label),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
+            raise _lifting_device_refusal(
+                f"{label} must be a [pressure] quantity; got {value}",
+                subject=label,
+                source=_lifting_device_input_source(label),
+            )
     applied = abs(stress_range.to("MPa").magnitude)
     limit = allowable_stress_range.to("MPa").magnitude
     if limit <= 0:
-        raise ValueError(f"allowable_stress_range must be positive; got {allowable_stress_range}")
+        raise _lifting_device_refusal(
+            f"allowable_stress_range must be positive; got {allowable_stress_range}",
+            subject="allowable_stress_range",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     computed = None if applied == 0 else limit / applied
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
     detail = (
@@ -605,9 +682,17 @@ class LifterDevice(RevalidatedModel):
 def bth1_allowable_for(allowables: BTH1Allowables, limit_state: BTH1LimitState) -> Quantity:
     """The one of the five ASME BTH-1 allowables that ``limit_state`` names."""
     if not isinstance(allowables, BTH1Allowables):
-        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
+        raise _lifting_device_refusal(
+            f"allowables must be a BTH1Allowables; got {allowables!r}",
+            subject="allowables",
+            source=_MATERIAL_SOURCE,
+        )
     if not isinstance(limit_state, BTH1LimitState):
-        raise ValueError(f"limit_state must be a BTH1LimitState; got {limit_state!r}")
+        raise _lifting_device_refusal(
+            f"limit_state must be a BTH1LimitState; got {limit_state!r}",
+            subject="limit_state",
+            source=_STRESS_SOURCE,
+        )
     return {
         BTH1LimitState.TENSION_GROSS: allowables.tension_gross,
         BTH1LimitState.TENSION_NET: allowables.tension_net,
@@ -637,9 +722,17 @@ def bth1_pin_plate_scorecard(
     Returns the two entries in that order.
     """
     if not isinstance(plate, LifterPinPlate):
-        raise ValueError(f"plate must be a LifterPinPlate; got {plate!r}")
+        raise _lifting_device_refusal(
+            f"plate must be a LifterPinPlate; got {plate!r}",
+            subject="plate",
+            source=_DRAWING_SOURCE,
+        )
     if not isinstance(allowables, BTH1Allowables):
-        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
+        raise _lifting_device_refusal(
+            f"allowables must be a BTH1Allowables; got {allowables!r}",
+            subject="allowables",
+            source=_MATERIAL_SOURCE,
+        )
     width = plate.width.to("mm").magnitude
     hole = plate.hole_diameter.to("mm").magnitude
     thickness = plate.thickness.to("mm").magnitude
@@ -649,14 +742,24 @@ def bth1_pin_plate_scorecard(
         (thickness, "thickness"),
     ):
         if value <= 0:
-            raise ValueError(f"{plate.name}: {name} must be positive; got {value} mm")
+            raise _lifting_device_refusal(
+                f"{plate.name}: {name} must be positive; got {value} mm",
+                subject="plate",
+                source=_DRAWING_SOURCE,
+            )
     if hole >= width:
-        raise ValueError(
+        raise _lifting_device_refusal(
             f"{plate.name}: hole_diameter ({plate.hole_diameter}) must be below the "
-            f"plate width ({plate.width}); check they are not swapped"
+            f"plate width ({plate.width}); check they are not swapped",
+            subject="plate",
+            source=_DRAWING_SOURCE,
         )
     if not plate.load.has_dimension("[force]"):
-        raise ValueError(f"{plate.name}: load must be a [force] quantity; got {plate.load}")
+        raise _lifting_device_refusal(
+            f"{plate.name}: load must be a [force] quantity; got {plate.load}",
+            subject="plate",
+            source=_STRESS_SOURCE,
+        )
     force = abs(plate.load.to("N").magnitude)
     net_tension = Quantity(magnitude=force / ((width - hole) * thickness), unit="MPa")
     bearing = Quantity(magnitude=force / (hole * thickness), unit="MPa")
@@ -709,14 +812,24 @@ def screen_lifter_device(
     them up.
     """
     if not isinstance(device, LifterDevice):
-        raise ValueError(f"device must be a LifterDevice; got {device!r}")
+        raise _lifting_device_refusal(
+            f"device must be a LifterDevice; got {device!r}",
+            subject="device",
+            source=_DESIGN_BASIS_SOURCE,
+        )
     if not isinstance(allowables, BTH1Allowables):
-        raise ValueError(f"allowables must be a BTH1Allowables; got {allowables!r}")
+        raise _lifting_device_refusal(
+            f"allowables must be a BTH1Allowables; got {allowables!r}",
+            subject="allowables",
+            source=_MATERIAL_SOURCE,
+        )
     if allowables.category is not device.category:
-        raise ValueError(
+        raise _lifting_device_refusal(
             f"the allowables were built for Category {allowables.category.value} but "
             f"{device.name} declares Category {device.category.value}; every margin "
-            f"would be computed at the wrong design factor"
+            f"would be computed at the wrong design factor",
+            subject="allowables and device",
+            source=_DESIGN_BASIS_SOURCE,
         )
     if not members and not pin_plates:
         # The identification entry is context, not a computed check, and Class 0 fatigue
@@ -724,10 +837,12 @@ def screen_lifter_device(
         # rolled up as a PASSING scorecard with two entries and nothing screened. That is
         # the empty-card silent green `Scorecard` guards against, reached by walking in
         # through the side door.
-        raise ValueError(
+        raise _lifting_device_refusal(
             f"{device.name}: no members and no pin plates were given, so nothing would be "
             f"screened — and the identification and fatigue entries alone roll up as a "
-            f"PASS. Supply the stresses to check, or do not call this a screen"
+            f"PASS. Supply the stresses to check, or do not call this a screen",
+            subject="members and pin_plates",
+            source=_STRESS_SOURCE,
         )
     rated = device.rated_load.to("kN").magnitude
     weight = device.self_weight.to("kN").magnitude

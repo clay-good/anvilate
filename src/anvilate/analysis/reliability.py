@@ -24,7 +24,38 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import comb, exp, gamma, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LIFE_DATA_SOURCE = "the Weibull fit to the component's life test or field failure record"
+_MISSION_SOURCE = "the mission profile's operating time and reliability target"
+_MAINTENANCE_SOURCE = "the maintenance record (mean time between failures and to repair)"
+_ARCHITECTURE_SOURCE = "the system reliability block diagram"
+_RATE_SOURCE = "the component failure rates from the cited reliability handbook"
+
+
+class _ReliabilityInputError(RefusalError, ValueError):
+    """A reliability input that cannot be used without correction."""
+
+
+def _reliability_refusal(message: str, *, subject: str, source: str) -> _ReliabilityInputError:
+    return _ReliabilityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _reliability_input_source(name: str) -> str:
+    if name in {"reliability", "time"}:
+        return _MISSION_SOURCE
+    if name in {"characteristic_life", "shape"}:
+        return _LIFE_DATA_SOURCE
+    if name in {"mtbf", "mttr"}:
+        return _MAINTENANCE_SOURCE
+    if name in {"failure_rate", "failure_rates"}:
+        return _RATE_SOURCE
+    return _ARCHITECTURE_SOURCE
+
 
 __all__ = [
     "k_out_of_n_reliability",
@@ -57,11 +88,19 @@ def weibull_reliability(*, time: Quantity, characteristic_life: Quantity, shape:
     t = time.to("s").magnitude
     eta = characteristic_life.to("s").magnitude
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _reliability_refusal(
+            "time must be non-negative", subject="time", source=_MISSION_SOURCE
+        )
     if eta <= 0:
-        raise ValueError("characteristic_life must be positive")
+        raise _reliability_refusal(
+            "characteristic_life must be positive",
+            subject="characteristic_life",
+            source=_LIFE_DATA_SOURCE,
+        )
     if shape <= 0:
-        raise ValueError("shape must be positive")
+        raise _reliability_refusal(
+            "shape must be positive", subject="shape", source=_LIFE_DATA_SOURCE
+        )
     return exp(-((t / eta) ** shape))
 
 
@@ -85,11 +124,21 @@ def weibull_life_for_reliability(
     _check(characteristic_life, "[time]", "characteristic_life")
     eta = characteristic_life.to("s").magnitude
     if not 0.0 < reliability < 1.0:
-        raise ValueError(f"reliability must be strictly between 0 and 1; got {reliability}")
+        raise _reliability_refusal(
+            f"reliability must be strictly between 0 and 1; got {reliability}",
+            subject="reliability",
+            source=_MISSION_SOURCE,
+        )
     if eta <= 0:
-        raise ValueError("characteristic_life must be positive")
+        raise _reliability_refusal(
+            "characteristic_life must be positive",
+            subject="characteristic_life",
+            source=_LIFE_DATA_SOURCE,
+        )
     if shape <= 0:
-        raise ValueError("shape must be positive")
+        raise _reliability_refusal(
+            "shape must be positive", subject="shape", source=_LIFE_DATA_SOURCE
+        )
     return Quantity(magnitude=eta * (-log(reliability)) ** (1.0 / shape), unit="s")
 
 
@@ -110,13 +159,25 @@ def weibull_hazard_rate(*, time: Quantity, characteristic_life: Quantity, shape:
     t = time.to("s").magnitude
     eta = characteristic_life.to("s").magnitude
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _reliability_refusal(
+            "time must be non-negative", subject="time", source=_MISSION_SOURCE
+        )
     if eta <= 0:
-        raise ValueError("characteristic_life must be positive")
+        raise _reliability_refusal(
+            "characteristic_life must be positive",
+            subject="characteristic_life",
+            source=_LIFE_DATA_SOURCE,
+        )
     if shape <= 0:
-        raise ValueError("shape must be positive")
+        raise _reliability_refusal(
+            "shape must be positive", subject="shape", source=_LIFE_DATA_SOURCE
+        )
     if t == 0.0 and shape < 1.0:
-        raise ValueError("hazard rate diverges at t = 0 for shape < 1")
+        raise _reliability_refusal(
+            "hazard rate diverges at t = 0 for shape < 1",
+            subject="time and shape",
+            source=_MISSION_SOURCE,
+        )
     h = (shape / eta) * (t / eta) ** (shape - 1.0)
     return Quantity(magnitude=h, unit="1/s")
 
@@ -132,9 +193,15 @@ def weibull_mean_life(*, characteristic_life: Quantity, shape: float) -> Quantit
     _check(characteristic_life, "[time]", "characteristic_life")
     eta = characteristic_life.to("s").magnitude
     if eta <= 0:
-        raise ValueError("characteristic_life must be positive")
+        raise _reliability_refusal(
+            "characteristic_life must be positive",
+            subject="characteristic_life",
+            source=_LIFE_DATA_SOURCE,
+        )
     if shape <= 0:
-        raise ValueError("shape must be positive")
+        raise _reliability_refusal(
+            "shape must be positive", subject="shape", source=_LIFE_DATA_SOURCE
+        )
     return Quantity(magnitude=eta * gamma(1.0 + 1.0 / shape), unit="s")
 
 
@@ -152,9 +219,13 @@ def steady_state_availability(*, mtbf: Quantity, mttr: Quantity) -> float:
     up = mtbf.to("s").magnitude
     down = mttr.to("s").magnitude
     if up <= 0:
-        raise ValueError("mtbf must be positive")
+        raise _reliability_refusal(
+            "mtbf must be positive", subject="mtbf", source=_MAINTENANCE_SOURCE
+        )
     if down < 0:
-        raise ValueError("mttr must be non-negative")
+        raise _reliability_refusal(
+            "mttr must be non-negative", subject="mttr", source=_MAINTENANCE_SOURCE
+        )
     return up / (up + down)
 
 
@@ -168,16 +239,26 @@ def series_system_reliability(*, component_reliabilities: Sequence[float]) -> fl
     Returns the system reliability (0 to 1) as a plain float.
     """
     if not isinstance(component_reliabilities, Sequence):
-        raise ValueError(
+        raise _reliability_refusal(
             f"component_reliabilities must be a sequence, not a single value; "
-            f"got {component_reliabilities!r}"
+            f"got {component_reliabilities!r}",
+            subject="component_reliabilities",
+            source=_ARCHITECTURE_SOURCE,
         )
     if len(component_reliabilities) == 0:
-        raise ValueError("component_reliabilities must contain at least one component")
+        raise _reliability_refusal(
+            "component_reliabilities must contain at least one component",
+            subject="component_reliabilities",
+            source=_ARCHITECTURE_SOURCE,
+        )
     product = 1.0
     for r in component_reliabilities:
         if not 0.0 <= r <= 1.0:
-            raise ValueError(f"each reliability must be in [0, 1]; got {r}")
+            raise _reliability_refusal(
+                f"each reliability must be in [0, 1]; got {r}",
+                subject="component_reliabilities",
+                source=_ARCHITECTURE_SOURCE,
+            )
         product *= r
     return product
 
@@ -193,16 +274,26 @@ def parallel_system_reliability(*, component_reliabilities: Sequence[float]) -> 
     reliability (0 to 1) as a plain float.
     """
     if not isinstance(component_reliabilities, Sequence):
-        raise ValueError(
+        raise _reliability_refusal(
             f"component_reliabilities must be a sequence, not a single value; "
-            f"got {component_reliabilities!r}"
+            f"got {component_reliabilities!r}",
+            subject="component_reliabilities",
+            source=_ARCHITECTURE_SOURCE,
         )
     if len(component_reliabilities) == 0:
-        raise ValueError("component_reliabilities must contain at least one component")
+        raise _reliability_refusal(
+            "component_reliabilities must contain at least one component",
+            subject="component_reliabilities",
+            source=_ARCHITECTURE_SOURCE,
+        )
     failure_product = 1.0
     for r in component_reliabilities:
         if not 0.0 <= r <= 1.0:
-            raise ValueError(f"each reliability must be in [0, 1]; got {r}")
+            raise _reliability_refusal(
+                f"each reliability must be in [0, 1]; got {r}",
+                subject="component_reliabilities",
+                source=_ARCHITECTURE_SOURCE,
+            )
         failure_product *= 1.0 - r
     return 1.0 - failure_product
 
@@ -223,13 +314,29 @@ def k_out_of_n_reliability(
     require_finite(component_reliability, name="component_reliability")
     require_finite(total_units, name="total_units")
     if not 0.0 <= component_reliability <= 1.0:
-        raise ValueError(f"component_reliability must be in [0, 1]; got {component_reliability}")
+        raise _reliability_refusal(
+            f"component_reliability must be in [0, 1]; got {component_reliability}",
+            subject="component_reliability",
+            source=_ARCHITECTURE_SOURCE,
+        )
     if not isinstance(total_units, int) or total_units < 1:
-        raise ValueError(f"total_units must be a positive integer; got {total_units!r}")
+        raise _reliability_refusal(
+            f"total_units must be a positive integer; got {total_units!r}",
+            subject="total_units",
+            source=_ARCHITECTURE_SOURCE,
+        )
     if not isinstance(required_units, int) or required_units < 1:
-        raise ValueError(f"required_units must be a positive integer; got {required_units!r}")
+        raise _reliability_refusal(
+            f"required_units must be a positive integer; got {required_units!r}",
+            subject="required_units",
+            source=_ARCHITECTURE_SOURCE,
+        )
     if required_units > total_units:
-        raise ValueError("required_units must not exceed total_units")
+        raise _reliability_refusal(
+            "required_units must not exceed total_units",
+            subject="total_units and required_units",
+            source=_ARCHITECTURE_SOURCE,
+        )
     r = component_reliability
     return sum(
         comb(total_units, i) * r**i * (1.0 - r) ** (total_units - i)
@@ -258,13 +365,21 @@ def parallel_system_mtbf(*, failure_rate: Quantity, unit_count: int) -> Quantity
     _check(failure_rate, "1/[time]", "failure_rate")
     rate = failure_rate.to("1/hour").magnitude
     if rate <= 0:
-        raise ValueError(f"failure_rate must be positive; got {failure_rate}")
+        raise _reliability_refusal(
+            f"failure_rate must be positive; got {failure_rate}",
+            subject="failure_rate",
+            source=_RATE_SOURCE,
+        )
     # A NaN passes the comparison below and then reaches `range()`, which answers
     # `TypeError` — Python's complaint that an int is not an int, rather than this
     # function's own refusal, which is right there and says what it wants.
     require_finite(unit_count, name="unit_count")
     if unit_count < 1:
-        raise ValueError(f"unit_count must be at least 1; got {unit_count}")
+        raise _reliability_refusal(
+            f"unit_count must be at least 1; got {unit_count}",
+            subject="unit_count",
+            source=_ARCHITECTURE_SOURCE,
+        )
     harmonic = sum(1.0 / k for k in range(1, unit_count + 1))
     return Quantity(magnitude=harmonic / rate, unit="hour")
 
@@ -280,29 +395,49 @@ def series_system_mtbf(*, failure_rates: Sequence[Quantity]) -> Quantity:
     Returns the MTBF as a time.
     """
     if not isinstance(failure_rates, Sequence):
-        raise ValueError(
-            f"failure_rates must be a sequence, not a single value; got {failure_rates!r}"
+        raise _reliability_refusal(
+            f"failure_rates must be a sequence, not a single value; got {failure_rates!r}",
+            subject="failure_rates",
+            source=_RATE_SOURCE,
         )
     if len(failure_rates) == 0:
-        raise ValueError("failure_rates must contain at least one component")
+        raise _reliability_refusal(
+            "failure_rates must contain at least one component",
+            subject="failure_rates",
+            source=_RATE_SOURCE,
+        )
     total_rate = 0.0
     for rate in failure_rates:
         _check(rate, "1/[time]", "failure_rates entry")
         value = rate.to("1/s").magnitude
         if value < 0:
-            raise ValueError("each failure rate must be non-negative")
+            raise _reliability_refusal(
+                "each failure rate must be non-negative",
+                subject="failure_rates",
+                source=_RATE_SOURCE,
+            )
         total_rate += value
     if total_rate <= 0:
-        raise ValueError("at least one failure rate must be positive")
+        raise _reliability_refusal(
+            "at least one failure rate must be positive",
+            subject="failure_rates",
+            source=_RATE_SOURCE,
+        )
     return Quantity(magnitude=1.0 / total_rate, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _reliability_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_reliability_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _reliability_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_reliability_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -43,8 +43,50 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import StatableModel, cited, each_one, parse_json
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from ..units import Quantity
+
+_BOM_SOURCE = "the part's bill of materials and drawing mass"
+_PROCESS_SOURCE = "the manufacturing route's material yield record"
+_EPD_SOURCE = "the product's openEPD environmental product declaration"
+_FACTOR_SOURCE = "the cited EN 15978 carbon factor dataset"
+_BUDGET_SOURCE = "the project's embodied-carbon budget in the design basis"
+
+
+class _EmbodiedCarbonInputError(RefusalError, ValueError):
+    """An embodied-carbon input that cannot be used without correction."""
+
+
+def _embodied_carbon_refusal(
+    message: str, *, subject: str, source: str
+) -> _EmbodiedCarbonInputError:
+    return _EmbodiedCarbonInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _embodied_carbon_input_source(name: str) -> str:
+    if name in {"finished_mass", "label", "mass", "name"}:
+        return _BOM_SOURCE
+    if name == "yield_fraction":
+        return _PROCESS_SOURCE
+    if name in {
+        "band_high",
+        "band_low",
+        "contributions",
+        "estimate",
+        "factor",
+        "generic",
+        "missing",
+        "value",
+    }:
+        return _FACTOR_SOURCE
+    if name == "budget":
+        return _BUDGET_SOURCE
+    return _EPD_SOURCE
+
 
 __all__ = [
     "ModuleScope",
@@ -126,18 +168,26 @@ class CarbonFactor(StatableModel):
     @model_validator(mode="after")
     def _well_formed(self) -> CarbonFactor:
         if not isfinite(self.value) or self.value <= 0:
-            raise ValueError(
+            raise _embodied_carbon_refusal(
                 f"value must be a positive, finite kgCO2e/kg; got {self.value}. A NaN "
                 f"slips past `value <= 0` — the comparison is False for it — and a NaN "
-                f"factor produces a NaN total that prints as 'nan kgCO2e (nan-nan)'."
+                f"factor produces a NaN total that prints as 'nan kgCO2e (nan-nan)'.",
+                subject="value",
+                source=_FACTOR_SOURCE,
             )
         for bound, bound_name in ((self.band_low, "band_low"), (self.band_high, "band_high")):
             if not isfinite(bound):
-                raise ValueError(f"{bound_name} must be finite; got {bound}")
+                raise _embodied_carbon_refusal(
+                    f"{bound_name} must be finite; got {bound}",
+                    subject=bound_name,
+                    source=_embodied_carbon_input_source(bound_name),
+                )
         if not 0 < self.band_low <= 1.0 <= self.band_high:
-            raise ValueError(
+            raise _embodied_carbon_refusal(
                 f"band_low must be in (0, 1] and band_high at least 1.0, as multipliers "
-                f"on value; got {self.band_low} and {self.band_high}"
+                f"on value; got {self.band_low} and {self.band_high}",
+                subject="band_low",
+                source=_FACTOR_SOURCE,
             )
         return self
 
@@ -210,15 +260,29 @@ def material_loss_mass(*, finished_mass: Quantity, yield_fraction: float) -> Qua
     at full factor is the conservative reading, and it is the one to state.
     """
     if not isinstance(finished_mass, Quantity):
-        raise ValueError(f"finished_mass must be a [mass] quantity; got {finished_mass!r}")
+        raise _embodied_carbon_refusal(
+            f"finished_mass must be a [mass] quantity; got {finished_mass!r}",
+            subject="finished_mass",
+            source=_BOM_SOURCE,
+        )
     if not finished_mass.has_dimension("[mass]"):
-        raise ValueError(f"finished_mass must be a [mass] quantity; got {finished_mass}")
+        raise _embodied_carbon_refusal(
+            f"finished_mass must be a [mass] quantity; got {finished_mass}",
+            subject="finished_mass",
+            source=_BOM_SOURCE,
+        )
     if not isfinite(finished_mass.magnitude) or finished_mass.magnitude <= 0:
-        raise ValueError(f"finished_mass must be a positive, finite quantity; got {finished_mass}")
+        raise _embodied_carbon_refusal(
+            f"finished_mass must be a positive, finite quantity; got {finished_mass}",
+            subject="finished_mass",
+            source=_BOM_SOURCE,
+        )
     if not 0 < yield_fraction <= 1.0:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"yield_fraction is finished mass over input mass and must lie in (0, 1]; "
-            f"got {yield_fraction}"
+            f"got {yield_fraction}",
+            subject="yield_fraction",
+            source=_PROCESS_SOURCE,
         )
     finished = finished_mass.to("kg").magnitude
     return Quantity(magnitude=finished * (1.0 / yield_fraction - 1.0), unit="kg")
@@ -235,13 +299,19 @@ def carbon_contribution(
     — the most flattering possible error, in the one direction nobody checks.
     """
     if not isinstance(mass, Quantity):
-        raise ValueError(f"mass must be a [mass] quantity; got {mass!r}")
+        raise _embodied_carbon_refusal(
+            f"mass must be a [mass] quantity; got {mass!r}", subject="mass", source=_BOM_SOURCE
+        )
     if not mass.has_dimension("[mass]"):
-        raise ValueError(f"mass must be a [mass] quantity; got {mass}")
+        raise _embodied_carbon_refusal(
+            f"mass must be a [mass] quantity; got {mass}", subject="mass", source=_BOM_SOURCE
+        )
     if not isfinite(mass.magnitude) or mass.magnitude < 0:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"mass must be a finite, non-negative quantity; got {mass}. A NaN passes "
-            f"`< 0` and carries all the way to a NaN total."
+            f"`< 0` and carries all the way to a NaN total.",
+            subject="mass",
+            source=_BOM_SOURCE,
         )
     if factor is None:
         return None
@@ -272,22 +342,28 @@ def embodied_carbon_estimate(
     """
     contributions = each_one(contributions, CarbonContribution, named="contributions")
     if not isinstance(contributions, Sequence):
-        raise ValueError(
-            f"contributions must be a sequence, not a single value; got {contributions!r}"
+        raise _embodied_carbon_refusal(
+            f"contributions must be a sequence, not a single value; got {contributions!r}",
+            subject="contributions",
+            source=_FACTOR_SOURCE,
         )
     items = tuple(contributions)
     if not items:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             "an estimate needs at least one contribution; a total over nothing is not "
-            "zero embodied carbon, it is an estimate that was not made"
+            "zero embodied carbon, it is an estimate that was not made",
+            subject="contributions",
+            source=_FACTOR_SOURCE,
         )
     scopes = {c.factor.scope for c in items}
     if len(scopes) > 1:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             "the contributions are quoted over different EN 15978 module scopes ("
             + ", ".join(sorted(s.value for s in scopes))
             + "), and their sum would not be an estimate of anything. Re-source the "
-            "factors onto one scope."
+            "factors onto one scope.",
+            subject="contributions",
+            source=_FACTOR_SOURCE,
         )
     total = sum(c.emissions.to("kg").magnitude for c in items)
     low = sum(c.low.to("kg").magnitude for c in items)
@@ -352,7 +428,11 @@ def embodied_carbon_scorecard(
     number in front of the reader.
     """
     if estimate is not None and not isinstance(estimate, EmbodiedCarbonEstimate):
-        raise ValueError(f"estimate must be an EmbodiedCarbonEstimate; got {estimate!r}")
+        raise _embodied_carbon_refusal(
+            f"estimate must be an EmbodiedCarbonEstimate; got {estimate!r}",
+            subject="estimate",
+            source=_FACTOR_SOURCE,
+        )
     if estimate is None:
         detail = "not evaluated"
         detail += (
@@ -387,12 +467,22 @@ def embodied_carbon_scorecard(
             needs=(_NEEDS_A_CARBON_BUDGET,),
         )
     if not isinstance(budget, Quantity):
-        raise ValueError(f"budget must be a [mass] quantity; got {budget!r}")
+        raise _embodied_carbon_refusal(
+            f"budget must be a [mass] quantity; got {budget!r}",
+            subject="budget",
+            source=_BUDGET_SOURCE,
+        )
     if not budget.has_dimension("[mass]"):
-        raise ValueError(f"budget must be a [mass] quantity of CO2e; got {budget}")
+        raise _embodied_carbon_refusal(
+            f"budget must be a [mass] quantity of CO2e; got {budget}",
+            subject="budget",
+            source=_BUDGET_SOURCE,
+        )
     allowed = budget.to("kg").magnitude
     if allowed <= 0:
-        raise ValueError(f"budget must be positive; got {budget}")
+        raise _embodied_carbon_refusal(
+            f"budget must be positive; got {budget}", subject="budget", source=_BUDGET_SOURCE
+        )
     computed = None if total == 0 else allowed / total
     entry = ScorecardEntry.from_safety_factor(
         name,
@@ -463,7 +553,11 @@ def _openepd_mass_in_kg(amount: object, where: str) -> float | None:
     if isinstance(qty, bool) or not isinstance(qty, int | float) or not isinstance(unit, str):
         return None
     if not isfinite(qty):
-        raise ValueError(f"the declaration's {where} must be a finite quantity; got {amount}")
+        raise _embodied_carbon_refusal(
+            f"the declaration's {where} must be a finite quantity; got {amount}",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     try:
         quantity = Quantity(magnitude=float(qty), unit=unit)
     except (ValueError, TypeError):
@@ -472,7 +566,11 @@ def _openepd_mass_in_kg(amount: object, where: str) -> float | None:
         return None
     kilograms = quantity.to("kg").magnitude
     if not isfinite(kilograms) or kilograms <= 0:
-        raise ValueError(f"the declaration's {where} must be a positive mass; got {amount}")
+        raise _embodied_carbon_refusal(
+            f"the declaration's {where} must be a positive mass; got {amount}",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     return kilograms
 
 
@@ -504,65 +602,99 @@ def carbon_factor_from_openepd(
     refused too.
     """
     if not isinstance(document, str):
-        raise ValueError(f"document must be the declaration's JSON text; got {document!r}")
+        raise _embodied_carbon_refusal(
+            f"document must be the declaration's JSON text; got {document!r}",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     if not isinstance(material, str) or not material.strip():
-        raise ValueError(f"material must name the material the factor is for; got {material!r}")
+        raise _embodied_carbon_refusal(
+            f"material must name the material the factor is for; got {material!r}",
+            subject="material",
+            source=_EPD_SOURCE,
+        )
     if as_of is not None and (not isinstance(as_of, str) or not _ISO_DATE.match(as_of)):
-        raise ValueError(f"as_of must be an ISO date such as 2026-09-24; got {as_of!r}")
+        raise _embodied_carbon_refusal(
+            f"as_of must be an ISO date such as 2026-09-24; got {as_of!r}",
+            subject="as_of",
+            source=_EPD_SOURCE,
+        )
     try:
         epd = parse_json(document)
     except json.JSONDecodeError as error:
-        raise ValueError(
-            f"the document is not JSON ({error}); pass the openEPD file's text"
+        raise _embodied_carbon_refusal(
+            f"the document is not JSON ({error}); pass the openEPD file's text",
+            subject="document",
+            source=_EPD_SOURCE,
         ) from error
     if not isinstance(epd, dict):
-        raise ValueError("an openEPD document is a JSON object; this one is not")
+        raise _embodied_carbon_refusal(
+            "an openEPD document is a JSON object; this one is not",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     doctype = epd.get("doctype")
     if not isinstance(doctype, str) or doctype.lower() != "openepd":
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"the document's doctype is {doctype!r}, not 'openEPD'; an industry-wide or "
-            "generic estimate is not a product declaration, so pass the product's own EPD"
+            "generic estimate is not a product declaration, so pass the product's own EPD",
+            subject="document",
+            source=_EPD_SOURCE,
         )
     identity = epd.get("id") if isinstance(epd.get("id"), str) else ""
     name = next((epd[key] for key in ("product_name", "name") if isinstance(epd.get(key), str)), "")
     if not identity.strip() and not name.strip():
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             "the declaration names neither an id nor a product, so a factor read from it could "
-            "not say where it came from; use the document as its program operator publishes it"
+            "not say where it came from; use the document as its program operator publishes it",
+            subject="document",
+            source=_EPD_SOURCE,
         )
 
     impacts = epd.get("impacts")
     if not isinstance(impacts, dict) or not impacts:
-        raise ValueError("the declaration states no impacts, so there is no GWP to read")
+        raise _embodied_carbon_refusal(
+            "the declaration states no impacts, so there is no GWP to read",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     with_gwp = sorted(
         key for key, value in impacts.items() if isinstance(value, dict) and "gwp" in value
     )
     if method is None:
         if len(with_gwp) != 1:
-            raise ValueError(
+            raise _embodied_carbon_refusal(
                 f"the declaration states GWP under {len(with_gwp)} impact methods "
                 f"({', '.join(with_gwp) or 'none'}); pass `method` naming the one to read, "
-                "since they are different characterizations of the same product"
+                "since they are different characterizations of the same product",
+                subject="document and method",
+                source=_EPD_SOURCE,
             )
         method = with_gwp[0]
     if method not in with_gwp:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"the declaration states no GWP under {method!r}; it states it under "
-            f"{', '.join(with_gwp) or 'no method'}"
+            f"{', '.join(with_gwp) or 'no method'}",
+            subject="document and method",
+            source=_EPD_SOURCE,
         )
     a1_a3 = (
         impacts[method]["gwp"].get("A1A2A3") if isinstance(impacts[method]["gwp"], dict) else None
     )
     if not isinstance(a1_a3, dict):
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"the declaration states no A1A2A3 (cradle-to-gate) GWP under {method}; a factor "
             "for other modules is not an A1-A3 factor, and summing modules is the declaration's "
-            "own job"
+            "own job",
+            subject="document and method",
+            source=_EPD_SOURCE,
         )
     mean, unit, rsd = a1_a3.get("mean"), a1_a3.get("unit"), a1_a3.get("rsd")
     if unit != _OPENEPD_GWP_UNIT:
-        raise ValueError(
-            f"the A1A2A3 GWP is stated in {unit!r}; openEPD states GWP in {_OPENEPD_GWP_UNIT}"
+        raise _embodied_carbon_refusal(
+            f"the A1A2A3 GWP is stated in {unit!r}; openEPD states GWP in {_OPENEPD_GWP_UNIT}",
+            subject="document",
+            source=_EPD_SOURCE,
         )
     if (
         isinstance(mean, bool)
@@ -570,28 +702,40 @@ def carbon_factor_from_openepd(
         or not isfinite(mean)
         or mean <= 0
     ):
-        raise ValueError(f"the A1A2A3 GWP mean must be a positive number; got {mean!r}")
+        raise _embodied_carbon_refusal(
+            f"the A1A2A3 GWP mean must be a positive number; got {mean!r}",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
     if rsd is not None and (
         isinstance(rsd, bool) or not isinstance(rsd, int | float) or not 0 < rsd < 1
     ):
-        raise ValueError(f"the A1A2A3 GWP rsd must lie in (0, 1); got {rsd!r}")
+        raise _embodied_carbon_refusal(
+            f"the A1A2A3 GWP rsd must lie in (0, 1); got {rsd!r}",
+            subject="document",
+            source=_EPD_SOURCE,
+        )
 
     per_unit = _openepd_mass_in_kg(epd.get("declared_unit"), "declared unit")
     if per_unit is None:
         per_unit = _openepd_mass_in_kg(epd.get("kg_per_declared_unit"), "kg_per_declared_unit")
     if per_unit is None:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"the declared unit is {epd.get('declared_unit')!r}, which is not a mass, and the "
             "declaration states no kg_per_declared_unit; a kgCO2e/kg factor needs the mass of "
-            "one declared unit"
+            "one declared unit",
+            subject="document",
+            source=_EPD_SOURCE,
         )
 
     valid_until = epd.get("valid_until")
     if as_of is not None and isinstance(valid_until, str) and _ISO_DATE.match(valid_until):
         if valid_until[:10] < as_of[:10]:
-            raise ValueError(
+            raise _embodied_carbon_refusal(
                 f"the declaration was valid until {valid_until[:10]}, before {as_of[:10]}; "
-                "use the program operator's current version"
+                "use the program operator's current version",
+                subject="document and as_of",
+                source=_EPD_SOURCE,
             )
 
     manufacturer = epd.get("manufacturer")
@@ -636,19 +780,27 @@ def with_declared_factors(
     if not isinstance(generic, dict) or not all(
         isinstance(factor, CarbonFactor) for factor in generic.values()
     ):
-        raise ValueError(f"generic must map a material to its CarbonFactor; got {generic!r}")
+        raise _embodied_carbon_refusal(
+            f"generic must map a material to its CarbonFactor; got {generic!r}",
+            subject="generic",
+            source=_FACTOR_SOURCE,
+        )
     declared = each_one(declared, CarbonFactor, named="declared")
     materials = [factor.material for factor in declared]
     doubled = sorted({material for material in materials if materials.count(material) > 1})
     if doubled:
-        raise ValueError(
+        raise _embodied_carbon_refusal(
             f"two declarations are bound to {', '.join(doubled)}; bind the one for the product "
-            "the part is made from"
+            "the part is made from",
+            subject="declared",
+            source=_EPD_SOURCE,
         )
     for factor in declared:
         if not factor.dataset_id and not factor.source.startswith("openEPD"):
-            raise ValueError(
+            raise _embodied_carbon_refusal(
                 f"the factor for {factor.material} names no declaration (no dataset_id); "
-                "bind a factor read from its EPD, so the binding can say which one"
+                "bind a factor read from its EPD, so the binding can say which one",
+                subject="declared",
+                source=_EPD_SOURCE,
             )
     return {**generic, **{factor.material: factor for factor in declared}}

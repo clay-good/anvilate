@@ -19,7 +19,73 @@ from __future__ import annotations
 from enum import StrEnum
 from math import cos, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SECTION_SOURCE = "the member's section-property table (A, I, S, J, r)"
+_MATERIAL_SOURCE = "the steel's specified grade or mill certificate (F_y, E, G)"
+_LAYOUT_SOURCE = "the framing drawing (member length, bracing, and end restraint)"
+_LOAD_SOURCE = "the member's factored demands from the structural analysis"
+_CODE_SOURCE = "the governing design code's factors and limits (e.g. AISC 360)"
+
+
+class _ColumnInputError(RefusalError, ValueError):
+    """A column-buckling input that cannot be used without correction."""
+
+
+def _column_refusal(message: str, *, subject: str, source: str) -> _ColumnInputError:
+    return _ColumnInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _column_input_source(name: str) -> str:
+    if name in {"crushing_stress", "elastic_modulus", "shear_modulus", "yield_strength"}:
+        return _MATERIAL_SOURCE
+    if name in {
+        "eccentricity",
+        "effective_length",
+        "effective_length_factor",
+        "elastic_buckling_load",
+        "euler_stress",
+        "g_bottom",
+        "g_top",
+        "length",
+        "slenderness_ratio",
+        "story_elastic_buckling_strength",
+        "unbraced_length",
+    }:
+        return _LAYOUT_SOURCE
+    if name in {
+        "axial_demand",
+        "design_load",
+        "load",
+        "major_moment_demand",
+        "minor_moment_demand",
+        "moment_gradient_coefficient",
+        "moment_gradient_factor",
+        "required_axial_strength",
+        "story_axial_load",
+    }:
+        return _LOAD_SOURCE
+    if name in {
+        "axial_capacity",
+        "flange_buckling_coefficient",
+        "imperfection_factor",
+        "inelastic_limit",
+        "load_factor",
+        "major_moment_capacity",
+        "minor_moment_capacity",
+        "noncompact_limit",
+        "plastic_limit",
+        "rankine_constant",
+        "required_safety_factor",
+        "section_coefficient",
+    }:
+        return _CODE_SOURCE
+    return _SECTION_SOURCE
+
 
 __all__ = [
     "ColumnEnd",
@@ -71,10 +137,16 @@ class ColumnEnd(StrEnum):
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _column_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_column_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _column_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_column_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -102,12 +174,22 @@ def euler_buckling_load(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(second_moment, "[length]**4", "second_moment")
     if second_moment.magnitude <= 0:
-        raise ValueError(f"second_moment must be positive; got {second_moment}")
+        raise _column_refusal(
+            f"second_moment must be positive; got {second_moment}",
+            subject="second_moment",
+            source=_SECTION_SOURCE,
+        )
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _column_refusal(
+            f"length must be positive; got {length}", subject="length", source=_LAYOUT_SOURCE
+        )
     if effective_length_factor <= 0:
-        raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+        raise _column_refusal(
+            f"effective_length_factor must be positive; got {effective_length_factor}",
+            subject="effective_length_factor",
+            source=_LAYOUT_SOURCE,
+        )
 
     e = elastic_modulus.pint
     inertia = second_moment.pint
@@ -143,19 +225,31 @@ def euler_second_moment_for_load(
     _require(design_load, "[force]", "design_load")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _column_refusal(
+            f"length must be positive; got {length}", subject="length", source=_LAYOUT_SOURCE
+        )
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _column_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_CODE_SOURCE,
+        )
     if effective_length_factor <= 0:
-        raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+        raise _column_refusal(
+            f"effective_length_factor must be positive; got {effective_length_factor}",
+            subject="effective_length_factor",
+            source=_LAYOUT_SOURCE,
+        )
     if design_load.to("N").magnitude <= 0:
-        raise ValueError(
+        raise _column_refusal(
             f"design_load must be positive to size a strut; got {design_load}. A "
             f"sign-reversed load returned a NEGATIVE required second moment, which "
             f"euler_buckling_load then accepts and turns into a negative buckling load — "
             f"two public calls and no exception. The sibling inverse "
-            f"axial.required_axial_area takes the magnitude for exactly this reason."
+            f"axial.required_axial_area takes the magnitude for exactly this reason.",
+            subject="design_load",
+            source=_LOAD_SOURCE,
         )
     effective_length = effective_length_factor * length.pint
     inertia = (
@@ -199,7 +293,11 @@ def slenderness_ratio(*, effective_length: Quantity, radius_of_gyration: Quantit
         (radius_of_gyration, "radius_of_gyration"),
     ):
         if value.to("mm").magnitude <= 0:
-            raise ValueError(f"{name} must be a positive length; got {value}")
+            raise _column_refusal(
+                f"{name} must be a positive length; got {value}",
+                subject=name,
+                source=_column_input_source(name),
+            )
     return effective_length.to("mm").magnitude / radius_of_gyration.to("mm").magnitude
 
 
@@ -211,7 +309,11 @@ def euler_critical_stress(*, elastic_modulus: Quantity, slenderness_ratio: float
     """
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+        raise _column_refusal(
+            f"slenderness_ratio must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_LAYOUT_SOURCE,
+        )
     sigma = pi**2 * elastic_modulus.pint / slenderness_ratio**2
     converted = sigma.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
@@ -242,8 +344,13 @@ def aisc_flexural_buckling_stress(
     _require(euler_stress, "[pressure]", "euler_stress")
     fy = yield_strength.to("MPa").magnitude
     fe = euler_stress.to("MPa").magnitude
-    if fy <= 0 or fe <= 0:
-        raise ValueError("yield_strength and euler_stress must be positive")
+    for subject, magnitude in (("yield_strength", fy), ("euler_stress", fe)):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "yield_strength and euler_stress must be positive",
+                subject=subject,
+                source=_column_input_source(subject),
+            )
     if fy / fe <= 2.25:
         fcr = 0.658 ** (fy / fe) * fy
     else:
@@ -274,8 +381,15 @@ def aisc_plastic_bracing_limit(
     ry = minor_radius_of_gyration.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
-    if ry <= 0 or fy <= 0 or e <= 0:
-        raise ValueError("all inputs must be positive")
+    for subject, magnitude in (
+        ("minor_radius_of_gyration", ry),
+        ("yield_strength", fy),
+        ("elastic_modulus", e),
+    ):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "all inputs must be positive", subject=subject, source=_column_input_source(subject)
+            )
     return Quantity(magnitude=1.76 * ry * sqrt(e / fy), unit="mm")
 
 
@@ -297,24 +411,43 @@ def aisc_effective_radius_of_gyration(
     section geometry into the L_r brace-spacing limit. Returns r_ts in mm.
     """
     if not isinstance(minor_second_moment, Quantity):
-        raise ValueError(
-            f"minor_second_moment must be a [length]**4 quantity; got {minor_second_moment!r}"
+        raise _column_refusal(
+            f"minor_second_moment must be a [length]**4 quantity; got {minor_second_moment!r}",
+            subject="minor_second_moment",
+            source=_SECTION_SOURCE,
         )
     if not minor_second_moment.has_dimension("[length]**4"):
-        raise ValueError("minor_second_moment must be a [length]**4 quantity")
+        raise _column_refusal(
+            "minor_second_moment must be a [length]**4 quantity",
+            subject="minor_second_moment",
+            source=_SECTION_SOURCE,
+        )
     if not isinstance(elastic_section_modulus, Quantity):
-        raise ValueError(
+        raise _column_refusal(
             f"elastic_section_modulus must be a [length]**3 quantity; "
-            f"got {elastic_section_modulus!r}"
+            f"got {elastic_section_modulus!r}",
+            subject="elastic_section_modulus",
+            source=_SECTION_SOURCE,
         )
     if not elastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+        raise _column_refusal(
+            "elastic_section_modulus must be a [length]**3 quantity",
+            subject="elastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
     iy = minor_second_moment.to("mm**4").magnitude
     sx = elastic_section_modulus.to("mm**3").magnitude
     ho = flange_centroid_distance.to("mm").magnitude
-    if iy <= 0 or sx <= 0 or ho <= 0:
-        raise ValueError("all inputs must be positive")
+    for subject, magnitude in (
+        ("minor_second_moment", iy),
+        ("elastic_section_modulus", sx),
+        ("flange_centroid_distance", ho),
+    ):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "all inputs must be positive", subject=subject, source=_SECTION_SOURCE
+            )
     return Quantity(magnitude=sqrt(iy * ho / (2.0 * sx)), unit="mm")
 
 
@@ -356,9 +489,20 @@ def aisc_inelastic_ltb_limit(
     fy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(rts, j, sx, ho, fy, e) <= 0:
-        raise ValueError("all inputs must be positive")
+        raise _column_refusal(
+            "all inputs must be positive",
+            subject=(
+                "effective_radius_of_gyration, torsion_constant, elastic_section_modulus, "
+                "flange_centroid_distance, yield_strength, and elastic_modulus"
+            ),
+            source=_SECTION_SOURCE,
+        )
     if section_coefficient <= 0:
-        raise ValueError(f"section_coefficient must be positive; got {section_coefficient}")
+        raise _column_refusal(
+            f"section_coefficient must be positive; got {section_coefficient}",
+            subject="section_coefficient",
+            source=_CODE_SOURCE,
+        )
     term = j * section_coefficient / (sx * ho)
     f_ratio = 0.7 * fy / e
     l_r = 1.95 * rts * (1.0 / f_ratio) * sqrt(term + sqrt(term**2 + 6.76 * f_ratio**2))
@@ -396,18 +540,30 @@ def aisc_elastic_ltb_stress(
     _require(unbraced_length, "[length]", "unbraced_length")
     _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
     if not isinstance(torsion_constant, Quantity):
-        raise ValueError(
-            f"torsion_constant must be a [length]**4 quantity; got {torsion_constant!r}"
+        raise _column_refusal(
+            f"torsion_constant must be a [length]**4 quantity; got {torsion_constant!r}",
+            subject="torsion_constant",
+            source=_SECTION_SOURCE,
         )
     if not torsion_constant.has_dimension("[length]**4"):
-        raise ValueError("torsion_constant must be a [length]**4 quantity")
+        raise _column_refusal(
+            "torsion_constant must be a [length]**4 quantity",
+            subject="torsion_constant",
+            source=_SECTION_SOURCE,
+        )
     if not isinstance(elastic_section_modulus, Quantity):
-        raise ValueError(
+        raise _column_refusal(
             f"elastic_section_modulus must be a [length]**3 quantity; "
-            f"got {elastic_section_modulus!r}"
+            f"got {elastic_section_modulus!r}",
+            subject="elastic_section_modulus",
+            source=_SECTION_SOURCE,
         )
     if not elastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+        raise _column_refusal(
+            "elastic_section_modulus must be a [length]**3 quantity",
+            subject="elastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     lb = unbraced_length.to("mm").magnitude
@@ -417,14 +573,29 @@ def aisc_elastic_ltb_stress(
     ho = flange_centroid_distance.to("mm").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if min(lb, rts, j, sx, ho, e) <= 0:
-        raise ValueError("all quantity inputs must be positive")
+        raise _column_refusal(
+            "all quantity inputs must be positive",
+            subject=(
+                "unbraced_length, effective_radius_of_gyration, torsion_constant, "
+                "elastic_section_modulus, flange_centroid_distance, and elastic_modulus"
+            ),
+            source=_SECTION_SOURCE,
+        )
     # A NaN passes the comparison below and is then eaten by the min() that caps the
     # interpolated moment at M_p, so the answer comes back finite, small and complete.
     require_finite(moment_gradient_factor, name="moment_gradient_factor")
     if moment_gradient_factor <= 0:
-        raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
+        raise _column_refusal(
+            f"moment_gradient_factor must be positive; got {moment_gradient_factor}",
+            subject="moment_gradient_factor",
+            source=_LOAD_SOURCE,
+        )
     if section_coefficient <= 0:
-        raise ValueError(f"section_coefficient must be positive; got {section_coefficient}")
+        raise _column_refusal(
+            f"section_coefficient must be positive; got {section_coefficient}",
+            subject="section_coefficient",
+            source=_CODE_SOURCE,
+        )
     slenderness = lb / rts
     term = j * section_coefficient / (sx * ho)
     f_cr = (
@@ -472,21 +643,42 @@ def aisc_inelastic_ltb_moment(
     lb = unbraced_length.to("mm").magnitude
     lp = plastic_limit.to("mm").magnitude
     lr = inelastic_limit.to("mm").magnitude
-    if mp <= 0 or mr <= 0 or lb <= 0 or lp <= 0 or lr <= 0:
-        raise ValueError("the moments and lengths must be positive")
+    for subject, magnitude in (
+        ("plastic_moment", mp),
+        ("residual_yield_moment", mr),
+        ("unbraced_length", lb),
+        ("plastic_limit", lp),
+        ("inelastic_limit", lr),
+    ):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "the moments and lengths must be positive",
+                subject=subject,
+                source=_column_input_source(subject),
+            )
     # A NaN passes the comparison below and is then eaten by the min() that caps the
     # interpolated moment at M_p, so the answer comes back finite, small and complete.
     require_finite(moment_gradient_factor, name="moment_gradient_factor")
     if moment_gradient_factor <= 0:
-        raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
+        raise _column_refusal(
+            f"moment_gradient_factor must be positive; got {moment_gradient_factor}",
+            subject="moment_gradient_factor",
+            source=_LOAD_SOURCE,
+        )
     if lr <= lp:
-        raise ValueError("inelastic_limit L_r must exceed plastic_limit L_p")
+        raise _column_refusal(
+            "inelastic_limit L_r must exceed plastic_limit L_p",
+            subject="plastic_limit and inelastic_limit",
+            source=_CODE_SOURCE,
+        )
     if lb <= lp:
         return Quantity(magnitude=mp, unit="kN*m")
     if lb > lr:
-        raise ValueError(
+        raise _column_refusal(
             "unbraced_length exceeds L_r — elastic LTB governs; use "
-            "lateral_torsional_buckling_moment"
+            "lateral_torsional_buckling_moment",
+            subject="unbraced_length and inelastic_limit",
+            source=_LAYOUT_SOURCE,
         )
     mn = moment_gradient_factor * (mp - (mp - mr) * (lb - lp) / (lr - lp))
     return Quantity(magnitude=min(mn, mp), unit="kN*m")
@@ -519,18 +711,33 @@ def aisc_flange_local_buckling_moment(
     _require(residual_yield_moment, "[force] * [length]", "residual_yield_moment")
     mp = plastic_moment.to("kN*m").magnitude
     mr = residual_yield_moment.to("kN*m").magnitude
-    if mp <= 0 or mr <= 0:
-        raise ValueError("plastic_moment and residual_yield_moment must be positive")
+    for subject, magnitude in (("plastic_moment", mp), ("residual_yield_moment", mr)):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "plastic_moment and residual_yield_moment must be positive",
+                subject=subject,
+                source=_SECTION_SOURCE,
+            )
     if flange_slenderness < 0:
-        raise ValueError("flange_slenderness must be non-negative")
+        raise _column_refusal(
+            "flange_slenderness must be non-negative",
+            subject="flange_slenderness",
+            source=_SECTION_SOURCE,
+        )
     if not 0 < plastic_limit < noncompact_limit:
-        raise ValueError("require 0 < plastic_limit < noncompact_limit")
+        raise _column_refusal(
+            "require 0 < plastic_limit < noncompact_limit",
+            subject="plastic_limit and noncompact_limit",
+            source=_CODE_SOURCE,
+        )
     if flange_slenderness <= plastic_limit:
         return Quantity(magnitude=mp, unit="kN*m")
     if flange_slenderness > noncompact_limit:
-        raise ValueError(
+        raise _column_refusal(
             "flange is slender (λ > λ_rf) — flange buckles elastically; use "
-            "aisc_slender_flange_moment"
+            "aisc_slender_flange_moment",
+            subject="flange_slenderness and noncompact_limit",
+            source=_SECTION_SOURCE,
         )
     mn = mp - (mp - mr) * (flange_slenderness - plastic_limit) / (noncompact_limit - plastic_limit)
     return Quantity(magnitude=mn, unit="kN*m")
@@ -556,14 +763,28 @@ def aisc_slender_flange_moment(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
     if elastic_section_modulus.magnitude <= 0:
-        raise ValueError(f"elastic_section_modulus must be positive; got {elastic_section_modulus}")
+        raise _column_refusal(
+            f"elastic_section_modulus must be positive; got {elastic_section_modulus}",
+            subject="elastic_section_modulus",
+            source=_SECTION_SOURCE,
+        )
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError("elastic_modulus must be positive")
+        raise _column_refusal(
+            "elastic_modulus must be positive", subject="elastic_modulus", source=_MATERIAL_SOURCE
+        )
     if flange_slenderness <= 0:
-        raise ValueError("flange_slenderness must be positive")
+        raise _column_refusal(
+            "flange_slenderness must be positive",
+            subject="flange_slenderness",
+            source=_SECTION_SOURCE,
+        )
     if not 0.35 <= flange_buckling_coefficient <= 0.76:
-        raise ValueError("flange_buckling_coefficient k_c must be in [0.35, 0.76]")
+        raise _column_refusal(
+            "flange_buckling_coefficient k_c must be in [0.35, 0.76]",
+            subject="flange_buckling_coefficient",
+            source=_CODE_SOURCE,
+        )
     mn = 0.9 * elastic_modulus.pint * flange_buckling_coefficient * elastic_section_modulus.pint
     mn = mn / flange_slenderness**2
     return Quantity(magnitude=float(mn.to("kN*m").magnitude), unit="kN*m")
@@ -581,7 +802,11 @@ def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantit
     sy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     if sy <= 0:
-        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+        raise _column_refusal(
+            f"yield_strength must be positive; got {yield_strength}",
+            subject="yield_strength",
+            source=_MATERIAL_SOURCE,
+        )
     return pi * (2 * e / sy) ** 0.5
 
 
@@ -602,7 +827,11 @@ def johnson_critical_stress(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+        raise _column_refusal(
+            f"slenderness_ratio must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_LAYOUT_SOURCE,
+        )
     sy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     sigma = sy * (1 - sy * slenderness_ratio**2 / (4 * pi**2 * e))
@@ -610,10 +839,12 @@ def johnson_critical_stress(
     # returning a NEGATIVE critical stress -- a column that must be pulled to make it buckle.
     # The module's other branch-seam functions already refuse their far side; this one did not.
     if sigma <= 0.0:
-        raise ValueError(
+        raise _column_refusal(
             f"slenderness_ratio {slenderness_ratio} puts the Johnson parabola below zero "
             f"(sigma_cr = {sigma:.4g} MPa), far past the transition slenderness where it is "
-            f"tangent to the Euler curve. Use euler_critical_stress for a column this slender."
+            f"tangent to the Euler curve. Use euler_critical_stress for a column this slender.",
+            subject="slenderness_ratio, yield_strength, and elastic_modulus",
+            source=_LAYOUT_SOURCE,
         )
     return Quantity(magnitude=sigma, unit="MPa")
 
@@ -649,7 +880,11 @@ def secant_column_max_stress(
     _require(length, "[length]", "length")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if effective_length_factor <= 0:
-        raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+        raise _column_refusal(
+            f"effective_length_factor must be positive; got {effective_length_factor}",
+            subject="effective_length_factor",
+            source=_LAYOUT_SOURCE,
+        )
     p = load.to("N").magnitude
     e_ecc = eccentricity.to("m").magnitude
     a = area.to("m**2").magnitude
@@ -658,14 +893,23 @@ def secant_column_max_stress(
     modulus = elastic_modulus.to("Pa").magnitude
     kl = effective_length_factor * length.to("m").magnitude
     if min(p, e_ecc, a, inertia, c, kl, modulus) <= 0:
-        raise ValueError("every secant-formula input must be positive")
+        raise _column_refusal(
+            "every secant-formula input must be positive",
+            subject=(
+                "load, eccentricity, area, second_moment, extreme_fiber, length, "
+                "effective_length_factor, and elastic_modulus"
+            ),
+            source=_SECTION_SOURCE,
+        )
 
     p_euler = pi**2 * modulus * inertia / kl**2
     if p >= p_euler:
-        raise ValueError(
+        raise _column_refusal(
             f"load ({load}) is at or beyond the Euler critical load "
             f"({p_euler / 1000:.2f} kN for this effective length) — the secant "
-            "amplification diverges; treat this as a buckling failure, not a stress"
+            "amplification diverges; treat this as a buckling failure, not a stress",
+            subject="load, second_moment, length, effective_length_factor, and elastic_modulus",
+            source=_LOAD_SOURCE,
         )
     r_sq = inertia / a
     secant = 1 / cos(kl / 2 * sqrt(p / (modulus * inertia)))
@@ -701,9 +945,17 @@ def perry_robertson_stress(
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
-        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+        raise _column_refusal(
+            f"slenderness_ratio must be positive; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_LAYOUT_SOURCE,
+        )
     if imperfection_factor < 0:
-        raise ValueError(f"imperfection_factor must be non-negative; got {imperfection_factor}")
+        raise _column_refusal(
+            f"imperfection_factor must be non-negative; got {imperfection_factor}",
+            subject="imperfection_factor",
+            source=_CODE_SOURCE,
+        )
     sy = yield_strength.to("MPa").magnitude
     se = pi**2 * elastic_modulus.to("MPa").magnitude / slenderness_ratio**2
     b = sy + (imperfection_factor + 1.0) * se
@@ -744,7 +996,14 @@ def lateral_torsional_buckling_moment(
     e = elastic_modulus.to("MPa").magnitude
     g = shear_modulus.to("MPa").magnitude
     if min(length, iy, j, e, g) <= 0:
-        raise ValueError("every lateral-torsional-buckling input must be positive")
+        raise _column_refusal(
+            "every lateral-torsional-buckling input must be positive",
+            subject=(
+                "unbraced_length, weak_axis_second_moment, torsion_constant, elastic_modulus, and"
+                " shear_modulus"
+            ),
+            source=_SECTION_SOURCE,
+        )
     m_cr_n_mm = pi / length * sqrt(e * iy * g * j)  # N*mm
     return Quantity(magnitude=m_cr_n_mm / 1000.0, unit="N*m")
 
@@ -771,12 +1030,24 @@ def rankine_gordon_stress(
     """
     _require(crushing_stress, "[pressure]", "crushing_stress")
     if slenderness_ratio < 0:
-        raise ValueError(f"slenderness_ratio must be non-negative; got {slenderness_ratio}")
+        raise _column_refusal(
+            f"slenderness_ratio must be non-negative; got {slenderness_ratio}",
+            subject="slenderness_ratio",
+            source=_LAYOUT_SOURCE,
+        )
     if rankine_constant <= 0:
-        raise ValueError(f"rankine_constant must be positive; got {rankine_constant}")
+        raise _column_refusal(
+            f"rankine_constant must be positive; got {rankine_constant}",
+            subject="rankine_constant",
+            source=_CODE_SOURCE,
+        )
     sc = crushing_stress.to("MPa").magnitude
     if sc <= 0:
-        raise ValueError(f"crushing_stress must be positive; got {crushing_stress}")
+        raise _column_refusal(
+            f"crushing_stress must be positive; got {crushing_stress}",
+            subject="crushing_stress",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=sc / (1.0 + rankine_constant * slenderness_ratio**2), unit="MPa")
 
 
@@ -812,24 +1083,46 @@ def aisc_beam_column_interaction(
     _require(major_moment_capacity, "[force] * [length]", "major_moment_capacity")
     pc = axial_capacity.to("kN").magnitude
     mcx = major_moment_capacity.to("kN*m").magnitude
-    if pc <= 0 or mcx <= 0:
-        raise ValueError("axial_capacity and major_moment_capacity must be positive")
+    for subject, magnitude in (("axial_capacity", pc), ("major_moment_capacity", mcx)):
+        if magnitude <= 0:
+            raise _column_refusal(
+                "axial_capacity and major_moment_capacity must be positive",
+                subject=subject,
+                source=_CODE_SOURCE,
+            )
     pr = axial_demand.to("kN").magnitude
     mrx = major_moment_demand.to("kN*m").magnitude
-    if pr < 0 or mrx < 0:
-        raise ValueError("axial_demand and major_moment_demand must be non-negative")
+    for subject, magnitude in (("axial_demand", pr), ("major_moment_demand", mrx)):
+        if magnitude < 0:
+            raise _column_refusal(
+                "axial_demand and major_moment_demand must be non-negative",
+                subject=subject,
+                source=_LOAD_SOURCE,
+            )
     bending_ratio = mrx / mcx
     if minor_moment_demand is not None:
         _require(minor_moment_demand, "[force] * [length]", "minor_moment_demand")
         if minor_moment_capacity is None:
-            raise ValueError("minor_moment_capacity is required when minor_moment_demand is given")
+            raise _column_refusal(
+                "minor_moment_capacity is required when minor_moment_demand is given",
+                subject="minor_moment_capacity",
+                source=_CODE_SOURCE,
+            )
         _require(minor_moment_capacity, "[force] * [length]", "minor_moment_capacity")
         mcy = minor_moment_capacity.to("kN*m").magnitude
         mry = minor_moment_demand.to("kN*m").magnitude
         if mcy <= 0:
-            raise ValueError("minor_moment_capacity must be positive")
+            raise _column_refusal(
+                "minor_moment_capacity must be positive",
+                subject="minor_moment_capacity",
+                source=_CODE_SOURCE,
+            )
         if mry < 0:
-            raise ValueError("minor_moment_demand must be non-negative")
+            raise _column_refusal(
+                "minor_moment_demand must be non-negative",
+                subject="minor_moment_demand",
+                source=_LOAD_SOURCE,
+            )
         bending_ratio += mry / mcy
     axial_ratio = pr / pc
     if axial_ratio >= 0.2:
@@ -851,8 +1144,11 @@ def aisc_effective_length_factor_braced(*, g_top: float, g_bottom: float) -> flo
     always ≤ 1 for a braced frame, so bracing always helps. Feed K·L to the slenderness and
     buckling checks. Returns the dimensionless K.
     """
-    if g_top < 0 or g_bottom < 0:
-        raise ValueError("g_top and g_bottom must be non-negative")
+    for subject, magnitude in (("g_top", g_top), ("g_bottom", g_bottom)):
+        if magnitude < 0:
+            raise _column_refusal(
+                "g_top and g_bottom must be non-negative", subject=subject, source=_LAYOUT_SOURCE
+            )
     a, b = g_top, g_bottom
     return (3.0 * a * b + 1.4 * (a + b) + 0.64) / (3.0 * a * b + 2.0 * (a + b) + 1.28)
 
@@ -870,8 +1166,11 @@ def aisc_effective_length_factor_sway(*, g_top: float, g_bottom: float) -> float
     (a sway frame on pinned columns is a mechanism). The large K is why an unbraced frame's
     columns govern — bracing or a moment frame is what tames it. Returns the dimensionless K.
     """
-    if g_top < 0 or g_bottom < 0:
-        raise ValueError("g_top and g_bottom must be non-negative")
+    for subject, magnitude in (("g_top", g_top), ("g_bottom", g_bottom)):
+        if magnitude < 0:
+            raise _column_refusal(
+                "g_top and g_bottom must be non-negative", subject=subject, source=_LAYOUT_SOURCE
+            )
     a, b = g_top, g_bottom
     return ((1.6 * a * b + 4.0 * (a + b) + 7.5) / (a + b + 7.5)) ** 0.5
 
@@ -900,18 +1199,30 @@ def aisc_moment_amplifier_b1(
     pr = required_axial_strength.to("kN").magnitude
     pe1 = elastic_buckling_load.to("kN").magnitude
     if pr < 0:
-        raise ValueError(
-            f"required_axial_strength must be non-negative; got {required_axial_strength}"
+        raise _column_refusal(
+            f"required_axial_strength must be non-negative; got {required_axial_strength}",
+            subject="required_axial_strength",
+            source=_LOAD_SOURCE,
         )
     if pe1 <= 0:
-        raise ValueError(f"elastic_buckling_load must be positive; got {elastic_buckling_load}")
+        raise _column_refusal(
+            f"elastic_buckling_load must be positive; got {elastic_buckling_load}",
+            subject="elastic_buckling_load",
+            source=_LAYOUT_SOURCE,
+        )
     if load_factor <= 0:
-        raise ValueError(f"load_factor must be positive; got {load_factor}")
+        raise _column_refusal(
+            f"load_factor must be positive; got {load_factor}",
+            subject="load_factor",
+            source=_CODE_SOURCE,
+        )
     denominator = 1.0 - load_factor * pr / pe1
     if denominator <= 0:
-        raise ValueError(
+        raise _column_refusal(
             "alpha*P_r has reached the elastic buckling load P_e1 — the member is "
-            "unstable in-plane; increase the section or reduce the load"
+            "unstable in-plane; increase the section or reduce the load",
+            subject="required_axial_strength, elastic_buckling_load, and load_factor",
+            source=_LOAD_SOURCE,
         )
     return max(moment_gradient_coefficient / denominator, 1.0)
 
@@ -939,18 +1250,30 @@ def aisc_moment_amplifier_b2(
     p_story = story_axial_load.to("kN").magnitude
     p_e = story_elastic_buckling_strength.to("kN").magnitude
     if p_story < 0:
-        raise ValueError(f"story_axial_load must be non-negative; got {story_axial_load}")
+        raise _column_refusal(
+            f"story_axial_load must be non-negative; got {story_axial_load}",
+            subject="story_axial_load",
+            source=_LOAD_SOURCE,
+        )
     if p_e <= 0:
-        raise ValueError(
+        raise _column_refusal(
             "story_elastic_buckling_strength must be positive; got "
-            f"{story_elastic_buckling_strength}"
+            f"{story_elastic_buckling_strength}",
+            subject="story_elastic_buckling_strength",
+            source=_LAYOUT_SOURCE,
         )
     if load_factor <= 0:
-        raise ValueError(f"load_factor must be positive; got {load_factor}")
+        raise _column_refusal(
+            f"load_factor must be positive; got {load_factor}",
+            subject="load_factor",
+            source=_CODE_SOURCE,
+        )
     denominator = 1.0 - load_factor * p_story / p_e
     if denominator <= 0:
-        raise ValueError(
+        raise _column_refusal(
             "alpha*ΣP_r has reached the story buckling strength — the frame is unstable "
-            "in sidesway; stiffen or brace it"
+            "in sidesway; stiffen or brace it",
+            subject="story_axial_load, story_elastic_buckling_strength, and load_factor",
+            source=_LOAD_SOURCE,
         )
     return max(1.0 / denominator, 1.0)

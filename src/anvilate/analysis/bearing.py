@@ -24,8 +24,47 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_minute, revolutions_per_second
+
+_CATALOG_SOURCE = "the bearing manufacturer's catalog (load ratings, X and Y factors)"
+_DUTY_SOURCE = "the shaft load analysis's duty cycle (bearing loads and speeds)"
+_GEOMETRY_SOURCE = "the bearing manufacturer's internal geometry data"
+_LIFE_SOURCE = "the design specification's required life and reliability (ISO 281)"
+
+
+class _BearingInputError(RefusalError, ValueError):
+    """A rolling-bearing input that cannot be used without correction."""
+
+
+def _bearing_refusal(message: str, *, subject: str, source: str) -> _BearingInputError:
+    return _BearingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _bearing_input_source(name: str) -> str:
+    if name in {
+        "axial_factor",
+        "dynamic_load_rating",
+        "life_exponent",
+        "radial_factor",
+        "static_load_rating",
+    }:
+        return _CATALOG_SOURCE
+    if name in {
+        "contact_angle",
+        "number_of_rolling_elements",
+        "pitch_diameter",
+        "rolling_element_diameter",
+    }:
+        return _GEOMETRY_SOURCE
+    if name in {"reliability", "required_life_millions", "weibull_slope"}:
+        return _LIFE_SOURCE
+    return _DUTY_SOURCE
+
 
 # ISO 281 life exponents: the load-life power law L10 = (C/P)^p.
 BALL_BEARING_LIFE_EXPONENT = 3.0
@@ -79,38 +118,68 @@ def bearing_cubic_mean_load(
     """
     require_finite(life_exponent, name="life_exponent")
     if not isinstance(duty_cycle, Sequence):
-        raise ValueError(f"duty_cycle must be a sequence, not a single value; got {duty_cycle!r}")
+        raise _bearing_refusal(
+            f"duty_cycle must be a sequence, not a single value; got {duty_cycle!r}",
+            subject="duty_cycle",
+            source=_DUTY_SOURCE,
+        )
     if len(duty_cycle) == 0:
-        raise ValueError("duty_cycle must contain at least one block")
+        raise _bearing_refusal(
+            "duty_cycle must contain at least one block", subject="duty_cycle", source=_DUTY_SOURCE
+        )
     if life_exponent <= 0:
-        raise ValueError(f"life_exponent must be positive; got {life_exponent}")
+        raise _bearing_refusal(
+            f"life_exponent must be positive; got {life_exponent}",
+            subject="life_exponent",
+            source=_CATALOG_SOURCE,
+        )
     total_fraction = 0.0
     accumulated = 0.0
     for index, block in enumerate(duty_cycle):
         if not isinstance(block, Sequence) or len(block) != 2:
-            raise ValueError(
-                f"duty_cycle[{index}] must be a (time fraction, load) pair; got {block!r}"
+            raise _bearing_refusal(
+                f"duty_cycle[{index}] must be a (time fraction, load) pair; got {block!r}",
+                subject="duty_cycle",
+                source=_DUTY_SOURCE,
             )
         fraction, load = block
         _require(load, "[force]", "duty_cycle load")
         newtons = load.to("N").magnitude
         if fraction < 0:
-            raise ValueError(f"duty_cycle time fractions must be non-negative; got {fraction}")
+            raise _bearing_refusal(
+                f"duty_cycle time fractions must be non-negative; got {fraction}",
+                subject="duty_cycle",
+                source=_DUTY_SOURCE,
+            )
         if newtons < 0:
-            raise ValueError(f"duty_cycle loads must be non-negative; got {load}")
+            raise _bearing_refusal(
+                f"duty_cycle loads must be non-negative; got {load}",
+                subject="duty_cycle",
+                source=_DUTY_SOURCE,
+            )
         total_fraction += fraction
         accumulated += fraction * newtons**life_exponent
     if abs(total_fraction - 1.0) > 1.0e-9:
-        raise ValueError(f"duty_cycle time fractions must sum to 1; they sum to {total_fraction}")
+        raise _bearing_refusal(
+            f"duty_cycle time fractions must sum to 1; they sum to {total_fraction}",
+            subject="duty_cycle",
+            source=_DUTY_SOURCE,
+        )
     return Quantity(magnitude=accumulated ** (1.0 / life_exponent), unit="N")
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _bearing_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_bearing_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _bearing_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_bearing_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -136,15 +205,36 @@ def _defect_frequency_inputs(
     d = rolling_element_diameter.to("mm").magnitude
     pd = pitch_diameter.to("mm").magnitude
     if fr < 0:
-        raise ValueError("rotational_frequency must be non-negative")
+        raise _bearing_refusal(
+            "rotational_frequency must be non-negative",
+            subject="rotational_frequency",
+            source=_DUTY_SOURCE,
+        )
     if number_of_rolling_elements < 1:
-        raise ValueError("number_of_rolling_elements must be at least 1")
-    if d <= 0 or pd <= 0:
-        raise ValueError("rolling_element_diameter and pitch_diameter must be positive")
+        raise _bearing_refusal(
+            "number_of_rolling_elements must be at least 1",
+            subject="number_of_rolling_elements",
+            source=_GEOMETRY_SOURCE,
+        )
+    for subject, magnitude in (("rolling_element_diameter", d), ("pitch_diameter", pd)):
+        if magnitude <= 0:
+            raise _bearing_refusal(
+                "rolling_element_diameter and pitch_diameter must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if d >= pd:
-        raise ValueError("rolling_element_diameter must be smaller than pitch_diameter")
+        raise _bearing_refusal(
+            "rolling_element_diameter must be smaller than pitch_diameter",
+            subject="rolling_element_diameter and pitch_diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     if not -90.0 < contact_angle < 90.0:
-        raise ValueError(f"contact_angle must be in (-90, 90) degrees; got {contact_angle}")
+        raise _bearing_refusal(
+            f"contact_angle must be in (-90, 90) degrees; got {contact_angle}",
+            subject="contact_angle",
+            source=_GEOMETRY_SOURCE,
+        )
     return fr, number_of_rolling_elements, (d / pd) * cos(radians(contact_angle))
 
 
@@ -174,11 +264,23 @@ def bearing_basic_rating_life(
     c = dynamic_load_rating.to("N").magnitude
     p = equivalent_load.to("N").magnitude
     if c <= 0:
-        raise ValueError(f"dynamic_load_rating must be positive; got {dynamic_load_rating}")
+        raise _bearing_refusal(
+            f"dynamic_load_rating must be positive; got {dynamic_load_rating}",
+            subject="dynamic_load_rating",
+            source=_CATALOG_SOURCE,
+        )
     if p <= 0:
-        raise ValueError(f"equivalent_load must be positive; got {equivalent_load}")
+        raise _bearing_refusal(
+            f"equivalent_load must be positive; got {equivalent_load}",
+            subject="equivalent_load",
+            source=_DUTY_SOURCE,
+        )
     if life_exponent <= 0:
-        raise ValueError(f"life_exponent must be positive; got {life_exponent}")
+        raise _bearing_refusal(
+            f"life_exponent must be positive; got {life_exponent}",
+            subject="life_exponent",
+            source=_CATALOG_SOURCE,
+        )
     return (c / p) ** life_exponent
 
 
@@ -205,11 +307,23 @@ def bearing_rating_for_life(
     require_finite(life_exponent, name="life_exponent")
     p_load = equivalent_load.to("N").magnitude
     if p_load <= 0:
-        raise ValueError(f"equivalent_load must be positive; got {equivalent_load}")
+        raise _bearing_refusal(
+            f"equivalent_load must be positive; got {equivalent_load}",
+            subject="equivalent_load",
+            source=_DUTY_SOURCE,
+        )
     if required_life_millions <= 0:
-        raise ValueError(f"required_life_millions must be positive; got {required_life_millions}")
+        raise _bearing_refusal(
+            f"required_life_millions must be positive; got {required_life_millions}",
+            subject="required_life_millions",
+            source=_LIFE_SOURCE,
+        )
     if life_exponent <= 0:
-        raise ValueError(f"life_exponent must be positive; got {life_exponent}")
+        raise _bearing_refusal(
+            f"life_exponent must be positive; got {life_exponent}",
+            subject="life_exponent",
+            source=_CATALOG_SOURCE,
+        )
     return Quantity(magnitude=p_load * required_life_millions ** (1.0 / life_exponent), unit="N")
 
 
@@ -236,7 +350,9 @@ def bearing_life_hours(
     _require(speed, "[frequency]", "speed")
     rpm = revolutions_per_minute(speed, name="speed")
     if rpm <= 0:
-        raise ValueError(f"speed must be positive; got {speed}")
+        raise _bearing_refusal(
+            f"speed must be positive; got {speed}", subject="speed", source=_DUTY_SOURCE
+        )
     hours = life_mrev * 1.0e6 / (60.0 * rpm)
     return Quantity(magnitude=hours, unit="hour")
 
@@ -261,9 +377,17 @@ def bearing_static_safety_factor(
     c0 = static_load_rating.to("N").magnitude
     p0 = equivalent_static_load.to("N").magnitude
     if c0 <= 0:
-        raise ValueError(f"static_load_rating must be positive; got {static_load_rating}")
+        raise _bearing_refusal(
+            f"static_load_rating must be positive; got {static_load_rating}",
+            subject="static_load_rating",
+            source=_CATALOG_SOURCE,
+        )
     if p0 <= 0:
-        raise ValueError(f"equivalent_static_load must be positive; got {equivalent_static_load}")
+        raise _bearing_refusal(
+            f"equivalent_static_load must be positive; got {equivalent_static_load}",
+            subject="equivalent_static_load",
+            source=_DUTY_SOURCE,
+        )
     return c0 / p0
 
 
@@ -291,12 +415,21 @@ def bearing_equivalent_dynamic_load(
     _require(axial_load, "[force]", "axial_load")
     fr = radial_load.to("N").magnitude
     fa = axial_load.to("N").magnitude
-    if fr < 0 or fa < 0:
-        raise ValueError("radial_load and axial_load must be non-negative")
+    for subject, magnitude in (("radial_load", fr), ("axial_load", fa)):
+        if magnitude < 0:
+            raise _bearing_refusal(
+                "radial_load and axial_load must be non-negative",
+                subject=subject,
+                source=_DUTY_SOURCE,
+            )
     if radial_factor <= 0:
-        raise ValueError("radial_factor must be positive")
+        raise _bearing_refusal(
+            "radial_factor must be positive", subject="radial_factor", source=_CATALOG_SOURCE
+        )
     if axial_factor < 0:
-        raise ValueError("axial_factor must be non-negative")
+        raise _bearing_refusal(
+            "axial_factor must be non-negative", subject="axial_factor", source=_CATALOG_SOURCE
+        )
     return Quantity(magnitude=radial_factor * fr + axial_factor * fa, unit="N")
 
 
@@ -324,15 +457,25 @@ def bearing_equivalent_static_load(
     _require(axial_load, "[force]", "axial_load")
     fr = radial_load.to("N").magnitude
     fa = axial_load.to("N").magnitude
-    if fr < 0 or fa < 0:
-        raise ValueError("radial_load and axial_load must be non-negative")
+    for subject, magnitude in (("radial_load", fr), ("axial_load", fa)):
+        if magnitude < 0:
+            raise _bearing_refusal(
+                "radial_load and axial_load must be non-negative",
+                subject=subject,
+                source=_DUTY_SOURCE,
+            )
     # `max(fr, X*fr + Y*fa)` drops the combined term when either factor is NaN, so the
     # equivalent load came back as the bare radial load: 1000 N where the answer is 3100 N,
     # a 3.1x understated demand and therefore a 3.1x overstated static capacity ratio.
     require_finite(radial_factor, name="radial_factor")
     require_finite(axial_factor, name="axial_factor")
-    if radial_factor <= 0 or axial_factor <= 0:
-        raise ValueError("radial_factor and axial_factor must be positive")
+    for subject, magnitude in (("radial_factor", radial_factor), ("axial_factor", axial_factor)):
+        if magnitude <= 0:
+            raise _bearing_refusal(
+                "radial_factor and axial_factor must be positive",
+                subject=subject,
+                source=_CATALOG_SOURCE,
+            )
     return Quantity(magnitude=max(fr, radial_factor * fr + axial_factor * fa), unit="N")
 
 
@@ -355,9 +498,17 @@ def bearing_reliability_life_factor(
     require_finite(reliability, name="reliability")
     require_finite(weibull_slope, name="weibull_slope")
     if not 0.0 < reliability < 1.0:
-        raise ValueError(f"reliability must lie in (0, 1); got {reliability}")
+        raise _bearing_refusal(
+            f"reliability must lie in (0, 1); got {reliability}",
+            subject="reliability",
+            source=_LIFE_SOURCE,
+        )
     if weibull_slope <= 0:
-        raise ValueError(f"weibull_slope must be positive; got {weibull_slope}")
+        raise _bearing_refusal(
+            f"weibull_slope must be positive; got {weibull_slope}",
+            subject="weibull_slope",
+            source=_LIFE_SOURCE,
+        )
     return (log(1.0 / reliability) / log(1.0 / 0.90)) ** (1.0 / weibull_slope)
 
 

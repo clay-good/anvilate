@@ -30,7 +30,40 @@ from __future__ import annotations
 
 from math import exp, log, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_COMBUSTION_SOURCE = "the propellant's thermochemical equilibrium analysis at the chamber state"
+_ENGINE_SOURCE = "the engine design basis (chamber pressure, mass flow, thrust)"
+_NOZZLE_SOURCE = "the nozzle contour drawing (throat and exit areas, exit pressure)"
+_MISSION_SOURCE = "the vehicle's mass budget and mission delta-v requirement"
+_AMBIENT_SOURCE = "the ambient pressure at the operating altitude from the flight profile"
+
+
+class _RocketPropulsionInputError(RefusalError, ValueError):
+    """A rocket-propulsion input that cannot be used without correction."""
+
+
+def _rocket_propulsion_refusal(
+    message: str, *, subject: str, source: str
+) -> _RocketPropulsionInputError:
+    return _RocketPropulsionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rocket_propulsion_input_source(name: str) -> str:
+    if name in {"chamber_temperature", "heat_capacity_ratio", "specific_gas_constant"}:
+        return _COMBUSTION_SOURCE
+    if name in {"exit_area", "exit_pressure", "throat_area"}:
+        return _NOZZLE_SOURCE
+    if name == "ambient_pressure":
+        return _AMBIENT_SOURCE
+    if name in {"delta_v", "final_mass", "initial_mass"}:
+        return _MISSION_SOURCE
+    return _ENGINE_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -73,17 +106,37 @@ def rocket_exhaust_velocity(
     p_e = exit_pressure.to("Pa").magnitude
     r = specific_gas_constant.to("J/(kg*K)").magnitude
     if t_c <= 0:
-        raise ValueError("chamber_temperature must be positive")
+        raise _rocket_propulsion_refusal(
+            "chamber_temperature must be positive",
+            subject="chamber_temperature",
+            source=_COMBUSTION_SOURCE,
+        )
     if p_c <= 0:
-        raise ValueError("chamber_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "chamber_pressure must be positive", subject="chamber_pressure", source=_ENGINE_SOURCE
+        )
     if p_e <= 0:
-        raise ValueError("exit_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "exit_pressure must be positive", subject="exit_pressure", source=_NOZZLE_SOURCE
+        )
     if p_e >= p_c:
-        raise ValueError("exit_pressure must be less than chamber_pressure (the nozzle expands)")
+        raise _rocket_propulsion_refusal(
+            "exit_pressure must be less than chamber_pressure (the nozzle expands)",
+            subject="chamber_pressure and exit_pressure",
+            source=_NOZZLE_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("specific_gas_constant must be positive")
+        raise _rocket_propulsion_refusal(
+            "specific_gas_constant must be positive",
+            subject="specific_gas_constant",
+            source=_COMBUSTION_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _rocket_propulsion_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_COMBUSTION_SOURCE,
+        )
     g = heat_capacity_ratio
     v_e = sqrt(2.0 * g / (g - 1.0) * r * t_c * (1.0 - (p_e / p_c) ** ((g - 1.0) / g)))
     return Quantity(magnitude=v_e, unit="m/s")
@@ -121,13 +174,24 @@ def nozzle_expansion_ratio(
     p_e = exit_pressure.to("Pa").magnitude
     g = heat_capacity_ratio
     if g <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {g}")
-    if p_c <= 0 or p_e <= 0:
-        raise ValueError("chamber_pressure and exit_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            f"heat_capacity_ratio must exceed 1; got {g}",
+            subject="heat_capacity_ratio",
+            source=_COMBUSTION_SOURCE,
+        )
+    for subject, magnitude in (("chamber_pressure", p_c), ("exit_pressure", p_e)):
+        if magnitude <= 0:
+            raise _rocket_propulsion_refusal(
+                "chamber_pressure and exit_pressure must be positive",
+                subject=subject,
+                source=_rocket_propulsion_input_source(subject),
+            )
     if p_e >= p_c:
-        raise ValueError(
+        raise _rocket_propulsion_refusal(
             f"exit_pressure must be below chamber_pressure for the nozzle to expand; "
-            f"got {exit_pressure} against {chamber_pressure}"
+            f"got {exit_pressure} against {chamber_pressure}",
+            subject="chamber_pressure and exit_pressure",
+            source=_NOZZLE_SOURCE,
         )
     ratio = p_e / p_c
     # Below the critical pressure ratio the flow chokes and the bell runs supersonic, which is the
@@ -138,11 +202,13 @@ def nozzle_expansion_ratio(
     # subsonic branch is refused rather than returned.
     critical_ratio = (2.0 / (g + 1.0)) ** (g / (g - 1.0))
     if ratio >= critical_ratio:
-        raise ValueError(
+        raise _rocket_propulsion_refusal(
             f"exit_pressure must be below the critical ratio {critical_ratio:.5f} of the chamber "
             f"pressure ({critical_ratio * p_c / 1e6:.4f} MPa here) for the nozzle to run "
             f"supersonic; got {exit_pressure}, a pressure ratio of {ratio:.5f}, which puts the "
-            f"flow on the subsonic branch where the area ratio describes a diffuser."
+            f"flow on the subsonic branch where the area ratio describes a diffuser.",
+            subject="chamber_pressure, exit_pressure, and heat_capacity_ratio",
+            source=_NOZZLE_SOURCE,
         )
     denominator = (
         ((g + 1.0) / 2.0) ** (1.0 / (g - 1.0))
@@ -179,15 +245,27 @@ def rocket_thrust(
     p_a = ambient_pressure.to("Pa").magnitude
     a_e = exit_area.to("m**2").magnitude
     if m_dot <= 0:
-        raise ValueError("mass_flow_rate must be positive")
+        raise _rocket_propulsion_refusal(
+            "mass_flow_rate must be positive", subject="mass_flow_rate", source=_ENGINE_SOURCE
+        )
     if v_e <= 0:
-        raise ValueError("exhaust_velocity must be positive")
+        raise _rocket_propulsion_refusal(
+            "exhaust_velocity must be positive", subject="exhaust_velocity", source=_ENGINE_SOURCE
+        )
     if p_e <= 0:
-        raise ValueError("exit_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "exit_pressure must be positive", subject="exit_pressure", source=_NOZZLE_SOURCE
+        )
     if p_a < 0:
-        raise ValueError("ambient_pressure must be non-negative")
+        raise _rocket_propulsion_refusal(
+            "ambient_pressure must be non-negative",
+            subject="ambient_pressure",
+            source=_AMBIENT_SOURCE,
+        )
     if a_e <= 0:
-        raise ValueError("exit_area must be positive")
+        raise _rocket_propulsion_refusal(
+            "exit_area must be positive", subject="exit_area", source=_NOZZLE_SOURCE
+        )
     f = m_dot * v_e + (p_e - p_a) * a_e
     return Quantity(magnitude=f / 1000.0, unit="kN")
 
@@ -206,9 +284,13 @@ def rocket_specific_impulse(*, thrust: Quantity, mass_flow_rate: Quantity) -> Qu
     f = thrust.to("N").magnitude
     m_dot = mass_flow_rate.to("kg/s").magnitude
     if f <= 0:
-        raise ValueError("thrust must be positive")
+        raise _rocket_propulsion_refusal(
+            "thrust must be positive", subject="thrust", source=_ENGINE_SOURCE
+        )
     if m_dot <= 0:
-        raise ValueError("mass_flow_rate must be positive")
+        raise _rocket_propulsion_refusal(
+            "mass_flow_rate must be positive", subject="mass_flow_rate", source=_ENGINE_SOURCE
+        )
     return Quantity(magnitude=f / (m_dot * STANDARD_GRAVITY_M_PER_S2), unit="s")
 
 
@@ -231,13 +313,23 @@ def rocket_delta_v(
     m0 = initial_mass.to("kg").magnitude
     mf = final_mass.to("kg").magnitude
     if isp <= 0:
-        raise ValueError("specific_impulse must be positive")
+        raise _rocket_propulsion_refusal(
+            "specific_impulse must be positive", subject="specific_impulse", source=_ENGINE_SOURCE
+        )
     if m0 <= 0:
-        raise ValueError("initial_mass must be positive")
+        raise _rocket_propulsion_refusal(
+            "initial_mass must be positive", subject="initial_mass", source=_MISSION_SOURCE
+        )
     if mf <= 0:
-        raise ValueError("final_mass must be positive")
+        raise _rocket_propulsion_refusal(
+            "final_mass must be positive", subject="final_mass", source=_MISSION_SOURCE
+        )
     if mf >= m0:
-        raise ValueError("final_mass must be less than initial_mass (propellant is burnt)")
+        raise _rocket_propulsion_refusal(
+            "final_mass must be less than initial_mass (propellant is burnt)",
+            subject="initial_mass and final_mass",
+            source=_MISSION_SOURCE,
+        )
     return Quantity(magnitude=isp * STANDARD_GRAVITY_M_PER_S2 * log(m0 / mf), unit="m/s")
 
 
@@ -256,9 +348,13 @@ def rocket_propellant_mass_fraction(*, delta_v: Quantity, specific_impulse: Quan
     dv = delta_v.to("m/s").magnitude
     isp = specific_impulse.to("s").magnitude
     if dv <= 0:
-        raise ValueError("delta_v must be positive")
+        raise _rocket_propulsion_refusal(
+            "delta_v must be positive", subject="delta_v", source=_MISSION_SOURCE
+        )
     if isp <= 0:
-        raise ValueError("specific_impulse must be positive")
+        raise _rocket_propulsion_refusal(
+            "specific_impulse must be positive", subject="specific_impulse", source=_ENGINE_SOURCE
+        )
     return 1.0 - exp(-dv / (isp * STANDARD_GRAVITY_M_PER_S2))
 
 
@@ -279,11 +375,17 @@ def characteristic_velocity(
     a_t = throat_area.to("m**2").magnitude
     mdot = mass_flow_rate.to("kg/s").magnitude
     if p_c <= 0:
-        raise ValueError("chamber_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "chamber_pressure must be positive", subject="chamber_pressure", source=_ENGINE_SOURCE
+        )
     if a_t <= 0:
-        raise ValueError("throat_area must be positive")
+        raise _rocket_propulsion_refusal(
+            "throat_area must be positive", subject="throat_area", source=_NOZZLE_SOURCE
+        )
     if mdot <= 0:
-        raise ValueError("mass_flow_rate must be positive")
+        raise _rocket_propulsion_refusal(
+            "mass_flow_rate must be positive", subject="mass_flow_rate", source=_ENGINE_SOURCE
+        )
     return Quantity(magnitude=p_c * a_t / mdot, unit="m/s")
 
 
@@ -304,11 +406,17 @@ def thrust_coefficient(
     p_c = chamber_pressure.to("Pa").magnitude
     a_t = throat_area.to("m**2").magnitude
     if f <= 0:
-        raise ValueError("thrust must be positive")
+        raise _rocket_propulsion_refusal(
+            "thrust must be positive", subject="thrust", source=_ENGINE_SOURCE
+        )
     if p_c <= 0:
-        raise ValueError("chamber_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "chamber_pressure must be positive", subject="chamber_pressure", source=_ENGINE_SOURCE
+        )
     if a_t <= 0:
-        raise ValueError("throat_area must be positive")
+        raise _rocket_propulsion_refusal(
+            "throat_area must be positive", subject="throat_area", source=_NOZZLE_SOURCE
+        )
     return f / (p_c * a_t)
 
 
@@ -326,20 +434,34 @@ def thrust_from_coefficient(
     p_c = chamber_pressure.to("Pa").magnitude
     a_t = throat_area.to("m**2").magnitude
     if thrust_coefficient <= 0:
-        raise ValueError("thrust_coefficient must be positive")
+        raise _rocket_propulsion_refusal(
+            "thrust_coefficient must be positive",
+            subject="thrust_coefficient",
+            source=_ENGINE_SOURCE,
+        )
     if p_c <= 0:
-        raise ValueError("chamber_pressure must be positive")
+        raise _rocket_propulsion_refusal(
+            "chamber_pressure must be positive", subject="chamber_pressure", source=_ENGINE_SOURCE
+        )
     if a_t <= 0:
-        raise ValueError("throat_area must be positive")
+        raise _rocket_propulsion_refusal(
+            "throat_area must be positive", subject="throat_area", source=_NOZZLE_SOURCE
+        )
     return Quantity(magnitude=thrust_coefficient * p_c * a_t, unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rocket_propulsion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rocket_propulsion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rocket_propulsion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rocket_propulsion_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -23,7 +23,37 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import require_finite
+
+_RATE_SOURCE = "the organization's discount rate and analysis period policy"
+_CASH_FLOW_SOURCE = "the project's cash-flow forecast in the business case"
+_COST_SOURCE = "the vendor quotation and capital cost estimate"
+_ASSET_SOURCE = "the asset register's depreciation schedule (life, salvage, method)"
+
+
+class _EngineeringEconomicsInputError(RefusalError, ValueError):
+    """An engineering-economics input that cannot be used without correction."""
+
+
+def _engineering_economics_refusal(
+    message: str, *, subject: str, source: str
+) -> _EngineeringEconomicsInputError:
+    return _EngineeringEconomicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _engineering_economics_input_source(name: str) -> str:
+    if name in {"periods", "rate"}:
+        return _RATE_SOURCE
+    if name in {"initial_cost", "present_value_costs", "principal"}:
+        return _COST_SOURCE
+    if name in {"factor", "period", "salvage_value", "useful_life"}:
+        return _ASSET_SOURCE
+    return _CASH_FLOW_SOURCE
+
 
 __all__ = [
     "annuity_future_value",
@@ -50,9 +80,13 @@ def present_value(*, future_value: float, rate: float, periods: float) -> float:
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     if periods < 0:
-        raise ValueError("periods must be non-negative")
+        raise _engineering_economics_refusal(
+            "periods must be non-negative", subject="periods", source=_RATE_SOURCE
+        )
     return future_value / (1.0 + rate) ** periods
 
 
@@ -65,9 +99,13 @@ def future_value(*, present_value: float, rate: float, periods: float) -> float:
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     if periods < 0:
-        raise ValueError("periods must be non-negative")
+        raise _engineering_economics_refusal(
+            "periods must be non-negative", subject="periods", source=_RATE_SOURCE
+        )
     return present_value * (1.0 + rate) ** periods
 
 
@@ -82,9 +120,13 @@ def annuity_present_value(*, payment: float, rate: float, periods: float) -> flo
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     if periods < 0:
-        raise ValueError("periods must be non-negative")
+        raise _engineering_economics_refusal(
+            "periods must be non-negative", subject="periods", source=_RATE_SOURCE
+        )
     if rate == 0.0:
         return payment * periods
     return payment * (1.0 - (1.0 + rate) ** (-periods)) / rate
@@ -101,9 +143,13 @@ def annuity_future_value(*, payment: float, rate: float, periods: float) -> floa
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     if periods < 0:
-        raise ValueError("periods must be non-negative")
+        raise _engineering_economics_refusal(
+            "periods must be non-negative", subject="periods", source=_RATE_SOURCE
+        )
     if rate == 0.0:
         return payment * periods
     return payment * ((1.0 + rate) ** periods - 1.0) / rate
@@ -120,9 +166,13 @@ def loan_payment(*, principal: float, rate: float, periods: float) -> float:
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     if periods <= 0:
-        raise ValueError("periods must be positive")
+        raise _engineering_economics_refusal(
+            "periods must be positive", subject="periods", source=_RATE_SOURCE
+        )
     if rate == 0.0:
         return principal / periods
     factor = rate * (1.0 + rate) ** periods / ((1.0 + rate) ** periods - 1.0)
@@ -138,9 +188,15 @@ def simple_payback_period(*, initial_cost: float, annual_cash_flow: float) -> fl
     Returns the payback period in the same time unit as the cash-flow period, as a plain float.
     """
     if initial_cost < 0:
-        raise ValueError("initial_cost must be non-negative")
+        raise _engineering_economics_refusal(
+            "initial_cost must be non-negative", subject="initial_cost", source=_COST_SOURCE
+        )
     if annual_cash_flow <= 0:
-        raise ValueError("annual_cash_flow must be positive")
+        raise _engineering_economics_refusal(
+            "annual_cash_flow must be positive",
+            subject="annual_cash_flow",
+            source=_CASH_FLOW_SOURCE,
+        )
     return initial_cost / annual_cash_flow
 
 
@@ -153,11 +209,21 @@ def net_present_value(*, cash_flows: Sequence[float], rate: float) -> float:
     discount rate — the standard accept/reject test. Returns the NPV as a plain float.
     """
     if not isinstance(cash_flows, Sequence):
-        raise ValueError(f"cash_flows must be a sequence, not a single value; got {cash_flows!r}")
+        raise _engineering_economics_refusal(
+            f"cash_flows must be a sequence, not a single value; got {cash_flows!r}",
+            subject="cash_flows",
+            source=_CASH_FLOW_SOURCE,
+        )
     if len(cash_flows) == 0:
-        raise ValueError("cash_flows must contain at least one period")
+        raise _engineering_economics_refusal(
+            "cash_flows must contain at least one period",
+            subject="cash_flows",
+            source=_CASH_FLOW_SOURCE,
+        )
     if rate <= -1.0:
-        raise ValueError("rate must be greater than -1")
+        raise _engineering_economics_refusal(
+            "rate must be greater than -1", subject="rate", source=_RATE_SOURCE
+        )
     return sum(cf / (1.0 + rate) ** t for t, cf in enumerate(cash_flows))
 
 
@@ -170,9 +236,17 @@ def benefit_cost_ratio(*, present_value_benefits: float, present_value_costs: fl
     Returns the ratio as a plain float.
     """
     if present_value_costs <= 0:
-        raise ValueError("present_value_costs must be positive")
+        raise _engineering_economics_refusal(
+            "present_value_costs must be positive",
+            subject="present_value_costs",
+            source=_COST_SOURCE,
+        )
     if present_value_benefits < 0:
-        raise ValueError("present_value_benefits must be non-negative")
+        raise _engineering_economics_refusal(
+            "present_value_benefits must be non-negative",
+            subject="present_value_benefits",
+            source=_CASH_FLOW_SOURCE,
+        )
     return present_value_benefits / present_value_costs
 
 
@@ -187,15 +261,26 @@ def straight_line_depreciation(
     depreciation as a plain float.
     """
     if useful_life <= 0:
-        raise ValueError("useful_life must be positive")
+        raise _engineering_economics_refusal(
+            "useful_life must be positive", subject="useful_life", source=_ASSET_SOURCE
+        )
     # Every comparison with NaN is False, so a NaN cost passes both of these and the
     # min()/max() clamp on book value below then drops it, returning a charge of zero.
     require_finite(initial_cost, name="initial_cost")
     require_finite(salvage_value, name="salvage_value")
-    if initial_cost < 0 or salvage_value < 0:
-        raise ValueError("costs must be non-negative")
+    for subject, magnitude in (("initial_cost", initial_cost), ("salvage_value", salvage_value)):
+        if magnitude < 0:
+            raise _engineering_economics_refusal(
+                "costs must be non-negative",
+                subject=subject,
+                source=_engineering_economics_input_source(subject),
+            )
     if salvage_value > initial_cost:
-        raise ValueError("salvage_value must not exceed initial_cost")
+        raise _engineering_economics_refusal(
+            "salvage_value must not exceed initial_cost",
+            subject="initial_cost and salvage_value",
+            source=_ASSET_SOURCE,
+        )
     return (initial_cost - salvage_value) / useful_life
 
 
@@ -219,17 +304,29 @@ def discounted_payback_period(
     a plain float.
     """
     if initial_cost <= 0:
-        raise ValueError("initial_cost must be positive")
+        raise _engineering_economics_refusal(
+            "initial_cost must be positive", subject="initial_cost", source=_COST_SOURCE
+        )
     if annual_cash_flow <= 0:
-        raise ValueError("annual_cash_flow must be positive")
+        raise _engineering_economics_refusal(
+            "annual_cash_flow must be positive",
+            subject="annual_cash_flow",
+            source=_CASH_FLOW_SOURCE,
+        )
     if rate <= -1.0:
-        raise ValueError("rate must exceed -1 (a decimal per period, not a percent)")
+        raise _engineering_economics_refusal(
+            "rate must exceed -1 (a decimal per period, not a percent)",
+            subject="rate",
+            source=_RATE_SOURCE,
+        )
     if rate == 0.0:
         return initial_cost / annual_cash_flow
     if initial_cost * rate >= annual_cash_flow:
-        raise ValueError(
+        raise _engineering_economics_refusal(
             f"the project never pays back: the annual cash flow {annual_cash_flow} does not cover "
-            f"the interest {initial_cost * rate} on the initial cost at a rate of {rate}"
+            f"the interest {initial_cost * rate} on the initial cost at a rate of {rate}",
+            subject="initial_cost, annual_cash_flow, and rate",
+            source=_CASH_FLOW_SOURCE,
         )
     return -log(1.0 - initial_cost * rate / annual_cash_flow) / log(1.0 + rate)
 
@@ -263,24 +360,41 @@ def declining_balance_depreciation(
     require_finite(useful_life, name="useful_life")
     require_finite(period, name="period")
     if useful_life <= 0:
-        raise ValueError("useful_life must be positive")
+        raise _engineering_economics_refusal(
+            "useful_life must be positive", subject="useful_life", source=_ASSET_SOURCE
+        )
     # Every comparison with NaN is False, so a NaN cost passes both of these and the
     # min()/max() clamp on book value below then drops it, returning a charge of zero.
     require_finite(initial_cost, name="initial_cost")
     require_finite(salvage_value, name="salvage_value")
-    if initial_cost < 0 or salvage_value < 0:
-        raise ValueError("costs must be non-negative")
+    for subject, magnitude in (("initial_cost", initial_cost), ("salvage_value", salvage_value)):
+        if magnitude < 0:
+            raise _engineering_economics_refusal(
+                "costs must be non-negative",
+                subject=subject,
+                source=_engineering_economics_input_source(subject),
+            )
     if salvage_value > initial_cost:
-        raise ValueError("salvage_value must not exceed initial_cost")
+        raise _engineering_economics_refusal(
+            "salvage_value must not exceed initial_cost",
+            subject="initial_cost and salvage_value",
+            source=_ASSET_SOURCE,
+        )
     if period < 1:
-        raise ValueError("period must be a positive 1-indexed period")
+        raise _engineering_economics_refusal(
+            "period must be a positive 1-indexed period", subject="period", source=_ASSET_SOURCE
+        )
     if factor <= 0:
-        raise ValueError("factor must be positive")
+        raise _engineering_economics_refusal(
+            "factor must be positive", subject="factor", source=_ASSET_SOURCE
+        )
     rate = factor / useful_life
     if rate >= 1.0:
-        raise ValueError(
+        raise _engineering_economics_refusal(
             f"factor/useful_life must be below 1: a rate of {rate} writes the asset off entirely "
-            "in the first period"
+            "in the first period",
+            subject="factor and useful_life",
+            source=_ASSET_SOURCE,
         )
     opening_book_value = initial_cost * (1.0 - rate) ** (period - 1)
     return min(opening_book_value * rate, max(0.0, opening_book_value - salvage_value))

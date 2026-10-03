@@ -31,7 +31,42 @@ from __future__ import annotations
 
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_TEST_SOURCE = "the machine's performance test record (inlet and outlet temperatures)"
+_DESIGN_SOURCE = "the stage design point (pressure ratio and efficiency)"
+_GAS_SOURCE = "the working gas's property table at the stage temperature"
+_CYCLE_SOURCE = "the cycle analysis state points (isentropic outlet temperature)"
+
+
+class _IsentropicEfficiencyInputError(RefusalError, ValueError):
+    """An isentropic-efficiency input that cannot be used without correction."""
+
+
+def _isentropic_efficiency_refusal(
+    message: str, *, subject: str, source: str
+) -> _IsentropicEfficiencyInputError:
+    return _IsentropicEfficiencyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _isentropic_efficiency_input_source(name: str) -> str:
+    if name == "isentropic_outlet_temperature":
+        return _CYCLE_SOURCE
+    if name in {
+        "expansion_ratio",
+        "isentropic_efficiency",
+        "polytropic_efficiency",
+        "pressure_ratio",
+    }:
+        return _DESIGN_SOURCE
+    if name == "heat_capacity_ratio":
+        return _GAS_SOURCE
+    return _TEST_SOURCE
+
 
 __all__ = [
     "compressor_isentropic_efficiency",
@@ -67,22 +102,41 @@ def compressor_isentropic_efficiency(
     t1 = inlet_temperature.to("K").magnitude
     t2s = isentropic_outlet_temperature.to("K").magnitude
     t2a = actual_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2s <= 0 or t2a <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (
+        ("inlet_temperature", t1),
+        ("isentropic_outlet_temperature", t2s),
+        ("actual_outlet_temperature", t2a),
+    ):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_isentropic_efficiency_input_source(subject),
+            )
     if t2s < t1:
-        raise ValueError("isentropic_outlet_temperature must be at least inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "isentropic_outlet_temperature must be at least inlet_temperature",
+            subject="inlet_temperature and isentropic_outlet_temperature",
+            source=_CYCLE_SOURCE,
+        )
     if t2a <= t1:
-        raise ValueError("actual_outlet_temperature must exceed inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "actual_outlet_temperature must exceed inlet_temperature",
+            subject="inlet_temperature and actual_outlet_temperature",
+            source=_TEST_SOURCE,
+        )
     # A real compressor delivers the gas HOTTER than the ideal one, so T2a >= T2s and
     # eta_c <= 1 — which this function's own docstring states and never checked, while its
     # sibling `turbine_isentropic_efficiency` refuses the mirror case by name. Swapping the
     # two outlet arguments is the obvious slip and it returned 15.0, then 1.5e6.
     if t2a < t2s:
-        raise ValueError(
+        raise _isentropic_efficiency_refusal(
             f"actual_outlet_temperature ({t2a:.4g} K) is below isentropic_outlet_temperature "
             f"({t2s:.4g} K), giving an isentropic efficiency of {(t2s - t1) / (t2a - t1):.4g}. "
             f"A real compressor delivers the gas hotter than the ideal one, so eta_c <= 1 — "
-            f"check whether the two outlet temperatures are the right way round"
+            f"check whether the two outlet temperatures are the right way round",
+            subject="isentropic_outlet_temperature and actual_outlet_temperature",
+            source=_TEST_SOURCE,
         )
     return (t2s - t1) / (t2a - t1)
 
@@ -108,8 +162,17 @@ def turbine_isentropic_efficiency(
     t1 = inlet_temperature.to("K").magnitude
     t2a = actual_outlet_temperature.to("K").magnitude
     t2s = isentropic_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2a <= 0 or t2s <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (
+        ("inlet_temperature", t1),
+        ("actual_outlet_temperature", t2a),
+        ("isentropic_outlet_temperature", t2s),
+    ):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_isentropic_efficiency_input_source(subject),
+            )
     # The compressor sibling guards its DENOMINATOR strictly and its numerator loosely;
     # this guarded the mirror image, leaving (T₁ − T₂ₛ) — its own denominator — free to
     # reach zero. T₂ₛ = T₁ was a bare ZeroDivisionError, and T₂ₛ a ten-thousandth of a
@@ -117,21 +180,31 @@ def turbine_isentropic_efficiency(
     # that says η_t ≤ 1. Guard the denominator, and then honour the ceiling the same way
     # `heat_exchanger_effectiveness_from_temperatures` already does.
     if t2s >= t1:
-        raise ValueError(
+        raise _isentropic_efficiency_refusal(
             f"isentropic_outlet_temperature ({isentropic_outlet_temperature}) must be "
             f"below inlet_temperature ({inlet_temperature}): an ideal expansion that "
             f"drops no temperature does no work, and there is no efficiency to take a "
-            f"ratio against."
+            f"ratio against.",
+            subject="inlet_temperature and isentropic_outlet_temperature",
+            source=_CYCLE_SOURCE,
         )
     if t2a >= t1:
-        raise ValueError("actual_outlet_temperature must be below inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "actual_outlet_temperature must be below inlet_temperature",
+            subject="inlet_temperature and actual_outlet_temperature",
+            source=_TEST_SOURCE,
+        )
     efficiency = (t1 - t2a) / (t1 - t2s)
     if efficiency > 1.0:
-        raise ValueError(
+        raise _isentropic_efficiency_refusal(
             f"the temperatures give an isentropic efficiency of {efficiency:.4g}: the "
             f"actual outlet ({actual_outlet_temperature}) is BELOW the isentropic one "
             f"({isentropic_outlet_temperature}), so the turbine extracted more work than "
-            f"the reversible ideal. Check which outlet is which."
+            f"the reversible ideal. Check which outlet is which.",
+            subject=(
+                "inlet_temperature, actual_outlet_temperature, and isentropic_outlet_temperature"
+            ),
+            source=_TEST_SOURCE,
         )
     return efficiency
 
@@ -155,12 +228,25 @@ def compressor_actual_discharge_temperature(
     _check(isentropic_outlet_temperature, "[temperature]", "isentropic_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     t2s = isentropic_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2s <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("inlet_temperature", t1), ("isentropic_outlet_temperature", t2s)):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_isentropic_efficiency_input_source(subject),
+            )
     if t2s < t1:
-        raise ValueError("isentropic_outlet_temperature must be at least inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "isentropic_outlet_temperature must be at least inlet_temperature",
+            subject="inlet_temperature and isentropic_outlet_temperature",
+            source=_CYCLE_SOURCE,
+        )
     if not 0.0 < isentropic_efficiency <= 1.0:
-        raise ValueError(f"isentropic_efficiency must be in (0, 1]; got {isentropic_efficiency}")
+        raise _isentropic_efficiency_refusal(
+            f"isentropic_efficiency must be in (0, 1]; got {isentropic_efficiency}",
+            subject="isentropic_efficiency",
+            source=_DESIGN_SOURCE,
+        )
     t2a = t1 + (t2s - t1) / isentropic_efficiency
     return Quantity(magnitude=t2a, unit="K")
 
@@ -189,11 +275,23 @@ def isentropic_expansion_temperature(
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     if t1 <= 0:
-        raise ValueError("inlet_temperature must be positive (absolute)")
+        raise _isentropic_efficiency_refusal(
+            "inlet_temperature must be positive (absolute)",
+            subject="inlet_temperature",
+            source=_TEST_SOURCE,
+        )
     if expansion_ratio <= 1.0:
-        raise ValueError(f"expansion_ratio must exceed 1 (expansion); got {expansion_ratio}")
+        raise _isentropic_efficiency_refusal(
+            f"expansion_ratio must exceed 1 (expansion); got {expansion_ratio}",
+            subject="expansion_ratio",
+            source=_DESIGN_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+        raise _isentropic_efficiency_refusal(
+            f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
+            subject="heat_capacity_ratio",
+            source=_GAS_SOURCE,
+        )
     exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return Quantity(magnitude=t1 * expansion_ratio ** (-exponent), unit="K")
 
@@ -220,12 +318,25 @@ def turbine_actual_discharge_temperature(
     _check(isentropic_outlet_temperature, "[temperature]", "isentropic_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     t2s = isentropic_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2s <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("inlet_temperature", t1), ("isentropic_outlet_temperature", t2s)):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_isentropic_efficiency_input_source(subject),
+            )
     if t2s > t1:
-        raise ValueError("isentropic_outlet_temperature must not exceed inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "isentropic_outlet_temperature must not exceed inlet_temperature",
+            subject="inlet_temperature and isentropic_outlet_temperature",
+            source=_CYCLE_SOURCE,
+        )
     if not 0.0 < isentropic_efficiency <= 1.0:
-        raise ValueError(f"isentropic_efficiency must be in (0, 1]; got {isentropic_efficiency}")
+        raise _isentropic_efficiency_refusal(
+            f"isentropic_efficiency must be in (0, 1]; got {isentropic_efficiency}",
+            subject="isentropic_efficiency",
+            source=_DESIGN_SOURCE,
+        )
     return Quantity(magnitude=t1 - isentropic_efficiency * (t1 - t2s), unit="K")
 
 
@@ -249,14 +360,27 @@ def compressor_polytropic_efficiency(
     _check(actual_outlet_temperature, "[temperature]", "actual_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     t2a = actual_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2a <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("inlet_temperature", t1), ("actual_outlet_temperature", t2a)):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_TEST_SOURCE,
+            )
     if t2a <= t1:
-        raise ValueError("actual_outlet_temperature must exceed inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "actual_outlet_temperature must exceed inlet_temperature",
+            subject="inlet_temperature and actual_outlet_temperature",
+            source=_TEST_SOURCE,
+        )
     if pressure_ratio <= 1.0:
-        raise ValueError("pressure_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "pressure_ratio must exceed 1", subject="pressure_ratio", source=_DESIGN_SOURCE
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError("heat_capacity_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "heat_capacity_ratio must exceed 1", subject="heat_capacity_ratio", source=_GAS_SOURCE
+        )
     exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return exponent * log(pressure_ratio) / log(t2a / t1)
 
@@ -285,14 +409,27 @@ def turbine_polytropic_efficiency(
     _check(actual_outlet_temperature, "[temperature]", "actual_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
     t2a = actual_outlet_temperature.to("K").magnitude
-    if t1 <= 0 or t2a <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("inlet_temperature", t1), ("actual_outlet_temperature", t2a)):
+        if magnitude <= 0:
+            raise _isentropic_efficiency_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_TEST_SOURCE,
+            )
     if t2a >= t1:
-        raise ValueError("actual_outlet_temperature must be below inlet_temperature")
+        raise _isentropic_efficiency_refusal(
+            "actual_outlet_temperature must be below inlet_temperature",
+            subject="inlet_temperature and actual_outlet_temperature",
+            source=_TEST_SOURCE,
+        )
     if expansion_ratio <= 1.0:
-        raise ValueError("expansion_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "expansion_ratio must exceed 1", subject="expansion_ratio", source=_DESIGN_SOURCE
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError("heat_capacity_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "heat_capacity_ratio must exceed 1", subject="heat_capacity_ratio", source=_GAS_SOURCE
+        )
     exponent = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return log(t1 / t2a) / (exponent * log(expansion_ratio))
 
@@ -315,11 +452,19 @@ def compressor_isentropic_from_polytropic(
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     require_finite(polytropic_efficiency, name="polytropic_efficiency")
     if pressure_ratio <= 1.0:
-        raise ValueError("pressure_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "pressure_ratio must exceed 1", subject="pressure_ratio", source=_DESIGN_SOURCE
+        )
     if not 0.0 < polytropic_efficiency <= 1.0:
-        raise ValueError(f"polytropic_efficiency must be in (0, 1]; got {polytropic_efficiency}")
+        raise _isentropic_efficiency_refusal(
+            f"polytropic_efficiency must be in (0, 1]; got {polytropic_efficiency}",
+            subject="polytropic_efficiency",
+            source=_DESIGN_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError("heat_capacity_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "heat_capacity_ratio must exceed 1", subject="heat_capacity_ratio", source=_GAS_SOURCE
+        )
     x = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return (pressure_ratio**x - 1.0) / (pressure_ratio ** (x / polytropic_efficiency) - 1.0)
 
@@ -342,21 +487,35 @@ def turbine_isentropic_from_polytropic(
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     require_finite(polytropic_efficiency, name="polytropic_efficiency")
     if pressure_ratio <= 1.0:
-        raise ValueError("pressure_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "pressure_ratio must exceed 1", subject="pressure_ratio", source=_DESIGN_SOURCE
+        )
     if not 0.0 < polytropic_efficiency <= 1.0:
-        raise ValueError(f"polytropic_efficiency must be in (0, 1]; got {polytropic_efficiency}")
+        raise _isentropic_efficiency_refusal(
+            f"polytropic_efficiency must be in (0, 1]; got {polytropic_efficiency}",
+            subject="polytropic_efficiency",
+            source=_DESIGN_SOURCE,
+        )
     if heat_capacity_ratio <= 1.0:
-        raise ValueError("heat_capacity_ratio must exceed 1")
+        raise _isentropic_efficiency_refusal(
+            "heat_capacity_ratio must exceed 1", subject="heat_capacity_ratio", source=_GAS_SOURCE
+        )
     x = (heat_capacity_ratio - 1.0) / heat_capacity_ratio
     return (1.0 - pressure_ratio ** (-x * polytropic_efficiency)) / (1.0 - pressure_ratio ** (-x))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _isentropic_efficiency_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_isentropic_efficiency_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _isentropic_efficiency_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_isentropic_efficiency_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

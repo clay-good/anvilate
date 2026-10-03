@@ -23,7 +23,35 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .._models import RevalidatedModel
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DRAWING_SOURCE = "the member drawing or the rolled-profile table (EN 10365, AISC Manual)"
+_LOAD_SOURCE = "the bending moment from the structural analysis load case"
+_MATERIAL_SOURCE = "the material certificate or design code allowable stress and modulus"
+_CRITERIA_SOURCE = "the project design basis required safety factor"
+
+
+class _SectionInputError(RefusalError, ValueError):
+    """A cross-section input that cannot be used without correction."""
+
+
+def _section_refusal(message: str, *, subject: str, source: str) -> _SectionInputError:
+    return _SectionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _section_input_source(name: str) -> str:
+    if name in {"bending_moment", "moment"}:
+        return _LOAD_SOURCE
+    if name in {"allowable_stress", "bottom_modulus", "top_modulus"}:
+        return _MATERIAL_SOURCE
+    if name == "required_safety_factor":
+        return _CRITERIA_SOURCE
+    return _DRAWING_SOURCE
+
 
 __all__ = [
     "CrossSection",
@@ -49,20 +77,36 @@ def bending_stress(*, moment: Quantity, section_modulus: Quantity) -> Quantity:
     stress in MPa.
     """
     if not isinstance(moment, Quantity):
-        raise ValueError(f"moment must be a [force] * [length] quantity; got {moment!r}")
+        raise _section_refusal(
+            f"moment must be a [force] * [length] quantity; got {moment!r}",
+            subject="moment",
+            source=_LOAD_SOURCE,
+        )
     if not moment.has_dimension("[force] * [length]"):
-        raise ValueError(
-            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
+        raise _section_refusal(
+            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})",
+            subject="moment",
+            source=_LOAD_SOURCE,
         )
     if not isinstance(section_modulus, Quantity):
-        raise ValueError(f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}")
+        raise _section_refusal(
+            f"section_modulus must be a [length]**3 quantity; got {section_modulus!r}",
+            subject="section_modulus",
+            source=_DRAWING_SOURCE,
+        )
     if not section_modulus.has_dimension("[length]**3"):
-        raise ValueError(
+        raise _section_refusal(
             f"section_modulus must be a [length]**3 quantity; got "
-            f"{section_modulus.dimensionality} ({section_modulus})"
+            f"{section_modulus.dimensionality} ({section_modulus})",
+            subject="section_modulus",
+            source=_DRAWING_SOURCE,
         )
     if section_modulus.to("mm**3").magnitude <= 0:
-        raise ValueError(f"section_modulus must be positive; got {section_modulus}")
+        raise _section_refusal(
+            f"section_modulus must be positive; got {section_modulus}",
+            subject="section_modulus",
+            source=_DRAWING_SOURCE,
+        )
     stress = moment.pint / section_modulus.pint
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
@@ -84,19 +128,33 @@ def _require_length(
     which is measured from an origin and is signed.
     """
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _section_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_section_input_source(name),
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+        raise _section_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality}",
+            subject=name,
+            source=_section_input_source(name),
+        )
     require_finite(value, name=name)
     magnitude = value.to("mm").magnitude
     if sign == "positive" and magnitude <= 0:
-        raise ValueError(
+        raise _section_refusal(
             f"{name} must be positive; got {value}. A section dimension of zero or "
             "below is not a smaller section — it inverts the area and second moment it "
-            "computes, and a negative second moment clears every deflection limit"
+            "computes, and a negative second moment clears every deflection limit",
+            subject=name,
+            source=_section_input_source(name),
         )
     if sign == "non_negative" and magnitude < 0:
-        raise ValueError(f"{name} must be zero or positive; got {value}")
+        raise _section_refusal(
+            f"{name} must be zero or positive; got {value}",
+            subject=name,
+            source=_section_input_source(name),
+        )
     return magnitude
 
 
@@ -124,27 +182,43 @@ def required_section_modulus(
     positive.
     """
     if not isinstance(bending_moment, Quantity):
-        raise ValueError(
-            f"bending_moment must be a [force] * [length] quantity; got {bending_moment!r}"
+        raise _section_refusal(
+            f"bending_moment must be a [force] * [length] quantity; got {bending_moment!r}",
+            subject="bending_moment",
+            source=_LOAD_SOURCE,
         )
     if not bending_moment.has_dimension("[force] * [length]"):
-        raise ValueError(
+        raise _section_refusal(
             f"bending_moment must be a [force]*[length] quantity; got "
-            f"{bending_moment.dimensionality} ({bending_moment})"
+            f"{bending_moment.dimensionality} ({bending_moment})",
+            subject="bending_moment",
+            source=_LOAD_SOURCE,
         )
     if not isinstance(allowable_stress, Quantity):
-        raise ValueError(
-            f"allowable_stress must be a [pressure] quantity; got {allowable_stress!r}"
+        raise _section_refusal(
+            f"allowable_stress must be a [pressure] quantity; got {allowable_stress!r}",
+            subject="allowable_stress",
+            source=_MATERIAL_SOURCE,
         )
     if not allowable_stress.has_dimension("[pressure]"):
-        raise ValueError(
+        raise _section_refusal(
             f"allowable_stress must be a [pressure] quantity; got "
-            f"{allowable_stress.dimensionality} ({allowable_stress})"
+            f"{allowable_stress.dimensionality} ({allowable_stress})",
+            subject="allowable_stress",
+            source=_MATERIAL_SOURCE,
         )
     if required_safety_factor <= 0:
-        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+        raise _section_refusal(
+            f"required_safety_factor must be positive; got {required_safety_factor}",
+            subject="required_safety_factor",
+            source=_CRITERIA_SOURCE,
+        )
     if allowable_stress.to("MPa").magnitude <= 0:
-        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+        raise _section_refusal(
+            f"allowable_stress must be positive; got {allowable_stress}",
+            subject="allowable_stress",
+            source=_MATERIAL_SOURCE,
+        )
     # Without abs() a routine hogging moment (a cantilever root, a continuous beam over a
     # support) sized the beam at a NEGATIVE section modulus, which this module's own
     # bending_stress then refuses.
@@ -194,13 +268,23 @@ class CrossSection(RevalidatedModel):
                 # area or extreme fibre divided straight into a stress and ended a column
                 # screen with ZeroDivisionError. A section has no zero dimension.
                 if value.magnitude <= 0:
-                    raise ValueError(f"{name} must be greater than zero; got {value}")
+                    raise _section_refusal(
+                        f"{name} must be greater than zero; got {value}",
+                        subject=name,
+                        source=_section_input_source(name),
+                    )
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
-            raise ValueError(f"shear_form_factor must be finite; got {self.shear_form_factor}")
+            raise _section_refusal(
+                f"shear_form_factor must be finite; got {self.shear_form_factor}",
+                subject="shear_form_factor",
+                source=_DRAWING_SOURCE,
+            )
         if self.shear_form_factor is not None and not self.shear_form_factor > 0:
-            raise ValueError(
+            raise _section_refusal(
                 f"shear_form_factor must be positive; got {self.shear_form_factor}. It is the "
-                "peak transverse shear over the average, which a section cannot make zero"
+                "peak transverse shear over the average, which a section cannot make zero",
+                subject="shear_form_factor",
+                source=_DRAWING_SOURCE,
             )
         return self
 
@@ -270,9 +354,11 @@ class CrossSection(RevalidatedModel):
         do = _require_length(outer_diameter, "outer_diameter")
         di = _require_length(inner_diameter, "inner_diameter")
         if not 0 <= di < do:
-            raise ValueError(
+            raise _section_refusal(
                 f"inner_diameter ({inner_diameter}) must be non-negative and below "
-                f"outer_diameter ({outer_diameter})"
+                f"outer_diameter ({outer_diameter})",
+                subject="inner_diameter and outer_diameter",
+                source=_DRAWING_SOURCE,
             )
         i = Quantity(magnitude=pi * (do**4 - di**4) / 64, unit="mm**4")
         return cls(
@@ -295,9 +381,11 @@ class CrossSection(RevalidatedModel):
         h = _require_length(height, "height")
         t = _require_length(wall_thickness, "wall_thickness")
         if not 0 < 2 * t < min(b, h):
-            raise ValueError(
+            raise _section_refusal(
                 f"wall_thickness ({wall_thickness}) must be positive and below half "
-                f"the smaller outside dimension ({width} x {height})"
+                f"the smaller outside dimension ({width} x {height})",
+                subject="wall_thickness, width, and height",
+                source=_DRAWING_SOURCE,
             )
         bi, hi = b - 2 * t, h - 2 * t
         area = b * h - bi * hi
@@ -329,14 +417,18 @@ class CrossSection(RevalidatedModel):
         tf = _require_length(flange_thickness, "flange_thickness")
         tw = _require_length(web_thickness, "web_thickness")
         if not 0 < 2 * tf < h:
-            raise ValueError(
+            raise _section_refusal(
                 f"flange_thickness ({flange_thickness}) must be positive and below "
-                f"half the depth ({depth})"
+                f"half the depth ({depth})",
+                subject="flange_thickness and depth",
+                source=_DRAWING_SOURCE,
             )
         if not 0 < tw <= bf:
-            raise ValueError(
+            raise _section_refusal(
                 f"web_thickness ({web_thickness}) must be positive and at most the "
-                f"flange_width ({flange_width})"
+                f"flange_width ({flange_width})",
+                subject="web_thickness and flange_width",
+                source=_DRAWING_SOURCE,
             )
         hw = h - 2 * tf  # clear web height between the flanges
         area = 2 * bf * tf + hw * tw
@@ -385,9 +477,11 @@ class CrossSection(RevalidatedModel):
         r = _require_length(root_radius, "root_radius", sign="non_negative")
         bf = _require_length(flange_width, "flange_width")
         if 2 * r > bf - tw or 2 * (tf + r) > h:
-            raise ValueError(
+            raise _section_refusal(
                 f"root_radius ({root_radius}) does not fit the section: two fillets need "
-                f"2·r of the flange outstand ({bf - tw:g} mm) and of the clear web height"
+                f"2·r of the flange outstand ({bf - tw:g} mm) and of the clear web height",
+                subject="root_radius, depth, flange_width, flange_thickness, and web_thickness",
+                source=_DRAWING_SOURCE,
             )
         fillet = (1 - pi / 4) * r * r
         e = r * (10 - 3 * pi) / (12 - 3 * pi)
@@ -459,10 +553,16 @@ def composite_beam_bending_stresses(
     stresses.
     """
     if not isinstance(moment, Quantity):
-        raise ValueError(f"moment must be a [force] * [length] quantity; got {moment!r}")
+        raise _section_refusal(
+            f"moment must be a [force] * [length] quantity; got {moment!r}",
+            subject="moment",
+            source=_LOAD_SOURCE,
+        )
     if not moment.has_dimension("[force] * [length]"):
-        raise ValueError(
-            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
+        raise _section_refusal(
+            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})",
+            subject="moment",
+            source=_LOAD_SOURCE,
         )
     for value, name in (
         (bottom_width, "bottom_width"),
@@ -471,14 +571,30 @@ def composite_beam_bending_stresses(
         (top_height, "top_height"),
     ):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+            raise _section_refusal(
+                f"{name} must be a [length] quantity; got {value!r}",
+                subject=name,
+                source=_section_input_source(name),
+            )
         if not value.has_dimension("[length]"):
-            raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+            raise _section_refusal(
+                f"{name} must be a [length] quantity; got {value.dimensionality}",
+                subject=name,
+                source=_section_input_source(name),
+            )
     for value, name in ((bottom_modulus, "bottom_modulus"), (top_modulus, "top_modulus")):
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value!r}")
+            raise _section_refusal(
+                f"{name} must be a [pressure] quantity; got {value!r}",
+                subject=name,
+                source=_section_input_source(name),
+            )
         if not value.has_dimension("[pressure]"):
-            raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
+            raise _section_refusal(
+                f"{name} must be a [pressure] quantity; got {value.dimensionality}",
+                subject=name,
+                source=_section_input_source(name),
+            )
     m = moment.to("N*mm").magnitude
     b1 = bottom_width.to("mm").magnitude
     h1 = bottom_height.to("mm").magnitude
@@ -487,7 +603,14 @@ def composite_beam_bending_stresses(
     e1 = bottom_modulus.to("MPa").magnitude
     e2 = top_modulus.to("MPa").magnitude
     if min(b1, h1, b2, h2, e1, e2) <= 0:
-        raise ValueError("all widths, heights, and moduli must be positive")
+        raise _section_refusal(
+            "all widths, heights, and moduli must be positive",
+            subject=(
+                "bottom_width, bottom_height, bottom_modulus, top_width, top_height, and "
+                "top_modulus"
+            ),
+            source=_DRAWING_SOURCE,
+        )
     n = e2 / e1
     a1 = b1 * h1
     a2 = b2 * h2
@@ -526,7 +649,11 @@ def channel_shear_center(*, flange_width: Quantity, web_height: Quantity) -> Qua
     b = _require_length(flange_width, "flange_width")
     h = _require_length(web_height, "web_height")
     if b <= 0 or h <= 0:
-        raise ValueError("flange_width and web_height must be positive")
+        raise _section_refusal(
+            "flange_width and web_height must be positive",
+            subject="flange_width and web_height",
+            source=_DRAWING_SOURCE,
+        )
     return _mm(3.0 * b**2 / (h + 6.0 * b))
 
 
@@ -547,20 +674,32 @@ def warping_constant_doubly_symmetric(
     wide-flange section warps far more stiffly than a shallow one. Returns C_w as a length⁶ value.
     """
     if not isinstance(weak_axis_moment_of_inertia, Quantity):
-        raise ValueError(
+        raise _section_refusal(
             f"weak_axis_moment_of_inertia must be a [length]**4 quantity; "
-            f"got {weak_axis_moment_of_inertia!r}"
+            f"got {weak_axis_moment_of_inertia!r}",
+            subject="weak_axis_moment_of_inertia",
+            source=_DRAWING_SOURCE,
         )
     if not weak_axis_moment_of_inertia.has_dimension("[length]**4"):
-        raise ValueError(
+        raise _section_refusal(
             f"weak_axis_moment_of_inertia must be a [length]**4 quantity; got "
-            f"{weak_axis_moment_of_inertia.dimensionality}"
+            f"{weak_axis_moment_of_inertia.dimensionality}",
+            subject="weak_axis_moment_of_inertia",
+            source=_DRAWING_SOURCE,
         )
     h = _require_length(flange_centroid_distance, "flange_centroid_distance")
     if weak_axis_moment_of_inertia.to("mm**4").magnitude <= 0:
-        raise ValueError("weak_axis_moment_of_inertia must be positive")
+        raise _section_refusal(
+            "weak_axis_moment_of_inertia must be positive",
+            subject="weak_axis_moment_of_inertia",
+            source=_DRAWING_SOURCE,
+        )
     if h <= 0:
-        raise ValueError("flange_centroid_distance must be positive")
+        raise _section_refusal(
+            "flange_centroid_distance must be positive",
+            subject="flange_centroid_distance",
+            source=_DRAWING_SOURCE,
+        )
     cw = weak_axis_moment_of_inertia.pint * flange_centroid_distance.pint**2 / 4.0
     return Quantity(magnitude=float(cw.to("mm**6").magnitude), unit="mm**6")
 
@@ -612,21 +751,33 @@ def compound_section_properties(
     :class:`CompoundSection`.
     """
     if not isinstance(rectangles, Sequence):
-        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
+        raise _section_refusal(
+            f"rectangles must be a sequence, not a single value; got {rectangles!r}",
+            subject="rectangles",
+            source=_DRAWING_SOURCE,
+        )
     if not rectangles:
-        raise ValueError("rectangles must be a non-empty sequence")
+        raise _section_refusal(
+            "rectangles must be a non-empty sequence", subject="rectangles", source=_DRAWING_SOURCE
+        )
     parts = []
     for i, rect in enumerate(rectangles):
         if not isinstance(rect, Sequence) or len(rect) != 3:
-            raise ValueError(
-                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}"
+            raise _section_refusal(
+                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}",
+                subject="rectangles",
+                source=_DRAWING_SOURCE,
             )
         width, height, centroid = rect
         b = _require_length(width, f"rectangles[{i}].width")
         h = _require_length(height, f"rectangles[{i}].height")
         y = _require_length(centroid, f"rectangles[{i}].centroid", sign="any")
         if b <= 0 or h <= 0:
-            raise ValueError(f"rectangles[{i}] width and height must be positive")
+            raise _section_refusal(
+                f"rectangles[{i}] width and height must be positive",
+                subject="rectangles",
+                source=_DRAWING_SOURCE,
+            )
         parts.append((b, h, y))
     total_area = sum(b * h for b, h, _ in parts)
     centroid = sum(b * h * y for b, h, y in parts) / total_area
@@ -659,20 +810,32 @@ def compound_plastic_section_modulus(
     unsymmetric one it shifts to equalize the areas. Returns Z in mm³ (multiply by F_y for M_p).
     """
     if not isinstance(rectangles, Sequence):
-        raise ValueError(f"rectangles must be a sequence, not a single value; got {rectangles!r}")
+        raise _section_refusal(
+            f"rectangles must be a sequence, not a single value; got {rectangles!r}",
+            subject="rectangles",
+            source=_DRAWING_SOURCE,
+        )
     if not rectangles:
-        raise ValueError("rectangles must be a non-empty sequence")
+        raise _section_refusal(
+            "rectangles must be a non-empty sequence", subject="rectangles", source=_DRAWING_SOURCE
+        )
     parts = []
     for i, rect in enumerate(rectangles):
         if not isinstance(rect, Sequence) or len(rect) != 3:
-            raise ValueError(
-                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}"
+            raise _section_refusal(
+                f"rectangles[{i}] must be a (width, height, centroid) triple; got {rect!r}",
+                subject="rectangles",
+                source=_DRAWING_SOURCE,
             )
         b = _require_length(rect[0], f"rectangles[{i}].width")
         h = _require_length(rect[1], f"rectangles[{i}].height")
         y = _require_length(rect[2], f"rectangles[{i}].centroid", sign="any")
         if b <= 0 or h <= 0:
-            raise ValueError(f"rectangles[{i}] width and height must be positive")
+            raise _section_refusal(
+                f"rectangles[{i}] width and height must be positive",
+                subject="rectangles",
+                source=_DRAWING_SOURCE,
+            )
         parts.append((b, h, y))
     total_area = sum(b * h for b, h, _ in parts)
     half_area = total_area / 2.0

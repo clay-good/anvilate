@@ -39,6 +39,147 @@ from .power_screw import power_screw_is_self_locking
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
 from .thermal import temperature_rise
 
+_OPTICAL_SOURCE = "the optical prescription and the glass catalog datasheet"
+_DRAWING_SOURCE = "the opto-mechanical assembly drawing (cell, mount, and seal gland)"
+_MATERIAL_SOURCE = "the mount, cell, or seal material's datasheet"
+_ENVIRONMENT_SOURCE = "the environmental specification (thermal, vibration, shock, pressure)"
+_REQUIREMENT_SOURCE = "the system requirements specification and its error budgets"
+_TEST_SOURCE = "the test report or published record the figure was read from"
+
+
+class _OptomechanicsInputError(RefusalError, ValueError):
+    """An opto-mechanical input that cannot be used without correction."""
+
+
+def _optomechanics_refusal(message: str, *, subject: str, source: str) -> _OptomechanicsInputError:
+    return _OptomechanicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _optomechanics_input_source(name: str) -> str:
+    if name in {
+        "abbe_number",
+        "beam",
+        "clear_aperture",
+        "contributors",
+        "cte",
+        "deformations",
+        "density",
+        "dn_dt",
+        "effective_focal_length",
+        "entrance_diameter",
+        "f_number",
+        "first_path",
+        "focal_length",
+        "focal_shift",
+        "glass_cte",
+        "glass_modulus",
+        "glass_poisson",
+        "half_angle",
+        "image_distance",
+        "reason",
+        "reflective",
+        "refractive_index",
+        "rms",
+        "rms_wavefront_error",
+        "rule",
+        "second_path",
+        "station",
+        "stations",
+        "stress_optic_coefficient",
+        "surface",
+        "tag",
+        "tool",
+        "tool_version",
+        "wavelength",
+    }:
+        return _OPTICAL_SOURCE
+    if name in {
+        "cell_cte",
+        "elastic_modulus",
+        "elastomer_cte",
+        "gland_cte",
+        "housing_cte",
+        "mount_modulus",
+        "mount_poisson",
+        "poisson_ratio",
+        "treatment",
+    }:
+        return _MATERIAL_SOURCE
+    if name in {
+        "acceleration",
+        "assembly_temperature",
+        "axis",
+        "cold",
+        "cold_change",
+        "coldest",
+        "coldest_surface_temperature",
+        "differential",
+        "dwell",
+        "fill_pressure",
+        "fill_relative_humidity",
+        "fill_temperature",
+        "hot",
+        "hot_change",
+        "hottest",
+        "input_asd",
+        "internal_dew_point",
+        "inward",
+        "irradiance",
+        "kind",
+        "natural_frequency",
+        "outward",
+        "particle_size",
+        "peak_acceleration",
+        "pulse_duration",
+        "quality_factor",
+        "relative_humidity",
+        "shape",
+        "stress",
+        "temperature_change",
+        "time_constant",
+        "vibration",
+    }:
+        return _ENVIRONMENT_SOURCE
+    if name in {
+        "allowable_tensile_stress",
+        "allowance",
+        "allowed_line_of_sight",
+        "allowed_rise",
+        "assembly_iso_class",
+        "basis",
+        "condensable_limit",
+        "cycles",
+        "implies_iso_class",
+        "iso_class",
+        "level",
+        "max_preload",
+        "mitigation",
+        "name",
+        "requirement",
+        "strehl_threshold",
+        "surfaces",
+        "total_mass_loss_limit",
+    }:
+        return _REQUIREMENT_SOURCE
+    if name in {
+        "condensable",
+        "high",
+        "low",
+        "material",
+        "materials",
+        "source",
+        "test_method",
+        "text",
+        "total_mass_loss",
+        "value",
+    }:
+        return _TEST_SOURCE
+    return _DRAWING_SOURCE
+
+
 if TYPE_CHECKING:
     from ..spec import Keepout
 
@@ -298,9 +439,15 @@ def depth_of_focus(*, wavelength: Quantity, f_number: float) -> Quantity:
     lam = wavelength.to("m").magnitude
     n = require_finite(f_number, name="f_number")
     if lam <= 0:
-        raise ValueError(f"wavelength must be positive; got {wavelength}")
+        raise _optomechanics_refusal(
+            f"wavelength must be positive; got {wavelength}",
+            subject="wavelength",
+            source=_OPTICAL_SOURCE,
+        )
     if n <= 0:
-        raise ValueError(f"f_number must be positive; got {f_number}")
+        raise _optomechanics_refusal(
+            f"f_number must be positive; got {f_number}", subject="f_number", source=_OPTICAL_SOURCE
+        )
     return Quantity(magnitude=2.0 * lam * n * n * 1e6, unit="µm")
 
 
@@ -327,10 +474,16 @@ def thermal_focal_shift(
     f = focal_length.to("m").magnitude
     n = require_finite(refractive_index, name="refractive_index")
     if f <= 0:
-        raise ValueError(f"focal_length must be positive; got {focal_length}")
+        raise _optomechanics_refusal(
+            f"focal_length must be positive; got {focal_length}",
+            subject="focal_length",
+            source=_OPTICAL_SOURCE,
+        )
     if n <= 1:
-        raise ValueError(
-            f"refractive_index must exceed 1 for a lens in air to focus at all; got {n}"
+        raise _optomechanics_refusal(
+            f"refractive_index must exceed 1 for a lens in air to focus at all; got {n}",
+            subject="refractive_index",
+            source=_OPTICAL_SOURCE,
         )
     constant = glass_cte.to("1/K").magnitude - dn_dt.to("1/K").magnitude / (n - 1)
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
@@ -359,7 +512,11 @@ def athermal_defocus(
     _check(temperature_change, "[temperature]", "temperature_change")
     length = housing_length.to("m").magnitude
     if length <= 0:
-        raise ValueError(f"housing_length must be positive; got {housing_length}")
+        raise _optomechanics_refusal(
+            f"housing_length must be positive; got {housing_length}",
+            subject="housing_length",
+            source=_DRAWING_SOURCE,
+        )
     delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     growth = housing_cte.to("1/K").magnitude * length * delta_t
     return Quantity(magnitude=(focal_shift.to("m").magnitude - growth) * 1e6, unit="µm")
@@ -478,13 +635,23 @@ def miles_random_vibration_grms(
     quality = require_finite(quality_factor, name="quality_factor")
     asd = input_asd.to("1/Hz").magnitude
     if fn <= 0:
-        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+        raise _optomechanics_refusal(
+            f"natural_frequency must be positive; got {natural_frequency}",
+            subject="natural_frequency",
+            source=_ENVIRONMENT_SOURCE,
+        )
     if quality <= 0.5:
-        raise ValueError(
-            f"quality_factor must exceed 0.5 for a mode that resonates at all; got {quality}"
+        raise _optomechanics_refusal(
+            f"quality_factor must exceed 0.5 for a mode that resonates at all; got {quality}",
+            subject="quality_factor",
+            source=_ENVIRONMENT_SOURCE,
         )
     if asd <= 0:
-        raise ValueError(f"input_asd must be positive (g²/Hz); got {input_asd}")
+        raise _optomechanics_refusal(
+            f"input_asd must be positive (g²/Hz); got {input_asd}",
+            subject="input_asd",
+            source=_ENVIRONMENT_SOURCE,
+        )
     return sqrt(pi / 2 * fn * quality * asd)
 
 
@@ -501,9 +668,15 @@ def retention_preload(*, mass: Quantity, acceleration: float) -> Quantity:
     m = mass.to("kg").magnitude
     a = require_finite(acceleration, name="acceleration")
     if m <= 0:
-        raise ValueError(f"mass must be positive; got {mass}")
+        raise _optomechanics_refusal(
+            f"mass must be positive; got {mass}", subject="mass", source=_DRAWING_SOURCE
+        )
     if a <= 0:
-        raise ValueError(f"acceleration must be positive, in g; got {acceleration}")
+        raise _optomechanics_refusal(
+            f"acceleration must be positive, in g; got {acceleration}",
+            subject="acceleration",
+            source=_ENVIRONMENT_SOURCE,
+        )
     return Quantity(magnitude=m * a * _STANDARD_GRAVITY, unit="N")
 
 
@@ -523,7 +696,11 @@ def stress_birefringence_retardance(
     _check(path_length, "[length]", "path_length")
     t = path_length.to("m").magnitude
     if t <= 0:
-        raise ValueError(f"path_length must be positive; got {path_length}")
+        raise _optomechanics_refusal(
+            f"path_length must be positive; got {path_length}",
+            subject="path_length",
+            source=_DRAWING_SOURCE,
+        )
     opd = stress_optic_coefficient.to("1/Pa").magnitude * stress.to("Pa").magnitude * t
     return Quantity(magnitude=opd * 1e9, unit="nm")
 
@@ -541,9 +718,17 @@ def marechal_strehl_ratio(*, rms_wavefront_error: Quantity, wavelength: Quantity
     sigma = rms_wavefront_error.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if sigma < 0:
-        raise ValueError(f"rms_wavefront_error cannot be negative; got {rms_wavefront_error}")
+        raise _optomechanics_refusal(
+            f"rms_wavefront_error cannot be negative; got {rms_wavefront_error}",
+            subject="rms_wavefront_error",
+            source=_OPTICAL_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError(f"wavelength must be positive; got {wavelength}")
+        raise _optomechanics_refusal(
+            f"wavelength must be positive; got {wavelength}",
+            subject="wavelength",
+            source=_OPTICAL_SOURCE,
+        )
     return exp(-((2 * pi * sigma / lam) ** 2))
 
 
@@ -567,24 +752,36 @@ def wavefront_budget_scorecard(
     """
     threshold = require_finite(strehl_threshold, name="strehl_threshold")
     if not 0 < threshold < 1:
-        raise ValueError(
-            f"strehl_threshold must lie strictly between 0 and 1; got {strehl_threshold}"
+        raise _optomechanics_refusal(
+            f"strehl_threshold must lie strictly between 0 and 1; got {strehl_threshold}",
+            subject="strehl_threshold",
+            source=_REQUIREMENT_SOURCE,
         )
     if not contributors:
-        raise ValueError(
+        raise _optomechanics_refusal(
             "a wavefront budget needs at least one contributor; a total of none is a zero "
-            "error, and a budget that passes on nothing has not been written"
+            "error, and a budget that passes on nothing has not been written",
+            subject="contributors",
+            source=_REQUIREMENT_SOURCE,
         )
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("nm").magnitude
     if lam <= 0:
-        raise ValueError(f"wavelength must be positive; got {wavelength}")
+        raise _optomechanics_refusal(
+            f"wavelength must be positive; got {wavelength}",
+            subject="wavelength",
+            source=_OPTICAL_SOURCE,
+        )
     terms = []
     for label, error in contributors.items():
         _check(error, "[length]", f"contributor '{label}'")
         value = error.to("nm").magnitude
         if value < 0:
-            raise ValueError(f"contributor '{label}' is a negative RMS error: {error}")
+            raise _optomechanics_refusal(
+                f"contributor '{label}' is a negative RMS error: {error}",
+                subject="contributors",
+                source=_OPTICAL_SOURCE,
+            )
         terms.append(value)
     total = sqrt(sum(value * value for value in terms))
     # The RMS error at which the declared Strehl is exactly met, from S = exp(−(2πσ/λ)²).
@@ -651,7 +848,11 @@ def internal_condensation_scorecard(
     _check(coldest_surface_temperature, "[temperature]", "coldest_surface_temperature")
     surface = coldest_surface_temperature.to("K").magnitude
     if surface <= 0:
-        raise ValueError("coldest_surface_temperature must be above absolute zero")
+        raise _optomechanics_refusal(
+            "coldest_surface_temperature must be above absolute zero",
+            subject="coldest_surface_temperature",
+            source=_ENVIRONMENT_SOURCE,
+        )
     if internal_dew_point is not None:
         _check(internal_dew_point, "[temperature]", "internal_dew_point")
         dew = internal_dew_point.to("K").magnitude
@@ -659,8 +860,10 @@ def internal_condensation_scorecard(
     elif fill_temperature is not None and fill_relative_humidity is not None:
         humidity = require_finite(fill_relative_humidity, name="fill_relative_humidity")
         if not 0 < fill_relative_humidity <= 1:
-            raise ValueError(
-                f"fill_relative_humidity is a fraction in (0, 1]; got {fill_relative_humidity}"
+            raise _optomechanics_refusal(
+                f"fill_relative_humidity is a fraction in (0, 1]; got {fill_relative_humidity}",
+                subject="fill_relative_humidity",
+                source=_ENVIRONMENT_SOURCE,
             )
         vapour = saturation_vapor_pressure(temperature=fill_temperature).to("Pa").magnitude
         dew = (
@@ -727,9 +930,15 @@ def mount_decenter(*, mass: Quantity, acceleration: float, radial_stiffness: Qua
     a = require_finite(acceleration, name="acceleration")
     k = radial_stiffness.to("N/m").magnitude
     if m <= 0:
-        raise ValueError(f"mass must be positive; got {mass}")
+        raise _optomechanics_refusal(
+            f"mass must be positive; got {mass}", subject="mass", source=_DRAWING_SOURCE
+        )
     if k <= 0:
-        raise ValueError(f"radial_stiffness must be positive; got {radial_stiffness}")
+        raise _optomechanics_refusal(
+            f"radial_stiffness must be positive; got {radial_stiffness}",
+            subject="radial_stiffness",
+            source=_DRAWING_SOURCE,
+        )
     return Quantity(magnitude=m * a * _STANDARD_GRAVITY / k * 1e6, unit="µm")
 
 
@@ -745,7 +954,11 @@ def decenter_line_of_sight(*, decenter: Quantity, focal_length: Quantity) -> Qua
     _check(focal_length, "[length]", "focal_length")
     f = focal_length.to("m").magnitude
     if f <= 0:
-        raise ValueError(f"focal_length must be positive; got {focal_length}")
+        raise _optomechanics_refusal(
+            f"focal_length must be positive; got {focal_length}",
+            subject="focal_length",
+            source=_OPTICAL_SOURCE,
+        )
     return Quantity(magnitude=decenter.to("m").magnitude / f * 1e6, unit="µrad")
 
 
@@ -765,12 +978,24 @@ def _plate_normal_shift(thickness: Quantity, refractive_index: float, tilt: Quan
     _check(thickness, "[length]", "thickness")
     t = thickness.to("m").magnitude
     if t <= 0:
-        raise ValueError(f"thickness must be positive; got {thickness}")
+        raise _optomechanics_refusal(
+            f"thickness must be positive; got {thickness}",
+            subject="thickness",
+            source=_DRAWING_SOURCE,
+        )
     if not (isfinite(refractive_index) and refractive_index >= 1.0):
-        raise ValueError(f"refractive_index must be at least 1; got {refractive_index}")
+        raise _optomechanics_refusal(
+            f"refractive_index must be at least 1; got {refractive_index}",
+            subject="refractive_index",
+            source=_OPTICAL_SOURCE,
+        )
     theta = _radians(tilt, "tilt")
     if not abs(theta) < pi / 2:
-        raise ValueError(f"tilt must be less than 90° from the plate normal; got {tilt}")
+        raise _optomechanics_refusal(
+            f"tilt must be less than 90° from the plate normal; got {tilt}",
+            subject="tilt",
+            source=_DRAWING_SOURCE,
+        )
     return t * (1.0 - cos(theta) / sqrt(refractive_index**2 - sin(theta) ** 2))
 
 
@@ -849,15 +1074,21 @@ class ThermalCondition(StatableModel):
         _check(self.temperature_change, "[temperature]", "temperature_change")
         if self.kind is ThermalConditionKind.TRANSIENT:
             if self.dwell is None or self.time_constant is None:
-                raise ValueError(
+                raise _optomechanics_refusal(
                     "a transient condition needs its dwell and the assembly's time constant; "
-                    "without them nothing says whether it reaches equilibrium"
+                    "without them nothing says whether it reaches equilibrium",
+                    subject="dwell and time_constant",
+                    source=_ENVIRONMENT_SOURCE,
                 )
         for value, name in ((self.dwell, "dwell"), (self.time_constant, "time_constant")):
             if value is not None:
                 _check(value, "[time]", name)
                 if value.to("s").magnitude <= 0:
-                    raise ValueError(f"{name} must be positive; got {value}")
+                    raise _optomechanics_refusal(
+                        f"{name} must be positive; got {value}",
+                        subject=name,
+                        source=_optomechanics_input_source(name),
+                    )
         return self
 
     @property
@@ -929,7 +1160,11 @@ def dynamic_clearance_scorecard(
     _check(natural_frequency, "[frequency]", "natural_frequency")
     a0 = require_finite(peak_acceleration, name="peak_acceleration")
     if a0 <= 0:
-        raise ValueError(f"peak_acceleration must be positive, in g; got {peak_acceleration}")
+        raise _optomechanics_refusal(
+            f"peak_acceleration must be positive, in g; got {peak_acceleration}",
+            subject="peak_acceleration",
+            source=_ENVIRONMENT_SOURCE,
+        )
     amplification = half_sine_shock_amplification(
         pulse_duration=pulse_duration, natural_frequency=natural_frequency
     )
@@ -946,7 +1181,9 @@ def dynamic_clearance_scorecard(
         )
     _check(gap, "[length]", "gap")
     if gap.to("m").magnitude <= 0:
-        raise ValueError(f"gap must be positive; got {gap}")
+        raise _optomechanics_refusal(
+            f"gap must be positive; got {gap}", subject="gap", source=_DRAWING_SOURCE
+        )
     omega = 2 * pi * natural_frequency.to("Hz").magnitude
     displacement = amplification * a0 * _STANDARD_GRAVITY / omega**2
     comparison = Comparison(
@@ -1033,13 +1270,19 @@ def athermal_bond_thickness(
         _check(value, "1 / [temperature]", name)
     diameter = glass_diameter.to("mm").magnitude
     if diameter <= 0:
-        raise ValueError(f"glass_diameter must be positive; got {glass_diameter}")
+        raise _optomechanics_refusal(
+            f"glass_diameter must be positive; got {glass_diameter}",
+            subject="glass_diameter",
+            source=_DRAWING_SOURCE,
+        )
     a_g, a_m, a_e = (v.to("1/K").magnitude for v in (glass_cte, cell_cte, elastomer_cte))
     if not a_e > a_m > a_g:
-        raise ValueError(
+        raise _optomechanics_refusal(
             "an athermal bond needs α_e > α_M > α_G — an elastomer that out-expands the cell, "
             f"in a cell that out-expands the glass; got α_e = {elastomer_cte}, "
-            f"α_M = {cell_cte}, α_G = {glass_cte}, which has no positive thickness"
+            f"α_M = {cell_cte}, α_G = {glass_cte}, which has no positive thickness",
+            subject="elastomer_cte, cell_cte, and glass_cte",
+            source=_MATERIAL_SOURCE,
         )
     return Quantity(magnitude=diameter / 2 * (a_m - a_g) / (a_e - a_m), unit="mm")
 
@@ -1203,7 +1446,11 @@ class RangedProperty(StatableModel):
         _check(self.high, "[temperature]", "high")
         require_finite(self.value, name="value")
         if not self.low.to("K").magnitude < self.high.to("K").magnitude:
-            raise ValueError(f"a valid range runs low to high; got {self.low} to {self.high}")
+            raise _optomechanics_refusal(
+                f"a valid range runs low to high; got {self.low} to {self.high}",
+                subject="low and high",
+                source=_TEST_SOURCE,
+            )
         return self
 
     def covers(self, low: Quantity, high: Quantity) -> bool:
@@ -1244,9 +1491,17 @@ class OpticalMaterial(StatableModel):
     @model_validator(mode="after")
     def _a_glass(self) -> OpticalMaterial:
         if not self.refractive_index > 1:
-            raise ValueError(f"{self.name}: refractive_index must exceed 1")
+            raise _optomechanics_refusal(
+                f"{self.name}: refractive_index must exceed 1",
+                subject="refractive_index",
+                source=_OPTICAL_SOURCE,
+            )
         if not self.cte:
-            raise ValueError(f"{self.name}: a glass record needs at least one stated CTE range")
+            raise _optomechanics_refusal(
+                f"{self.name}: a glass record needs at least one stated CTE range",
+                subject="cte",
+                source=_OPTICAL_SOURCE,
+            )
         for ranged in self.cte:
             _check(ranged.value, "1 / [temperature]", "cte")
         return self
@@ -1362,13 +1617,19 @@ def boresight_scorecard(
         )
     assert first_path is not None and second_path is not None
     if rule is CombinationRule.HYBRID:
-        raise ValueError(
+        raise _optomechanics_refusal(
             "a boresight takes worst_case or rss; hybrid needs correlation groups this screen "
-            "does not carry"
+            "does not carry",
+            subject="rule",
+            source=_REQUIREMENT_SOURCE,
         )
     limit = _radians(allowance, "allowance") * 1e6
     if limit <= 0:
-        raise ValueError(f"allowance must be positive; got {allowance}")
+        raise _optomechanics_refusal(
+            f"allowance must be positive; got {allowance}",
+            subject="allowance",
+            source=_REQUIREMENT_SOURCE,
+        )
     first = {
         label: _radians(v, f"'{label}' on the first path") * 1e6 for label, v in first_path.items()
     }
@@ -1446,18 +1707,28 @@ def enclosure_rise_scorecard(
     sealed volume does not shed heat by assumption.
     """
     if not dissipations:
-        raise ValueError(
-            "declare at least one dissipating source; an enclosure with none has no rise to screen"
+        raise _optomechanics_refusal(
+            "declare at least one dissipating source; an enclosure with none has no rise to screen",
+            subject="dissipations",
+            source=_DRAWING_SOURCE,
         )
     _check(allowed_rise, "[temperature]", "allowed_rise")
     allowed = temperature_difference_kelvin(allowed_rise, name="allowed_rise")
     if allowed <= 0:
-        raise ValueError(f"allowed_rise must be positive; got {allowed_rise}")
+        raise _optomechanics_refusal(
+            f"allowed_rise must be positive; got {allowed_rise}",
+            subject="allowed_rise",
+            source=_REQUIREMENT_SOURCE,
+        )
     watts = 0.0
     for label, power in dissipations.items():
         _check(power, "[power]", f"dissipation '{label}'")
         if power.to("W").magnitude < 0:
-            raise ValueError(f"dissipation '{label}' cannot be negative: {power}")
+            raise _optomechanics_refusal(
+                f"dissipation '{label}' cannot be negative: {power}",
+                subject="dissipations",
+                source=_DRAWING_SOURCE,
+            )
         watts += power.to("W").magnitude
     sources = ", ".join(f"{label} {power}" for label, power in dissipations.items())
     if thermal_resistance is None:
@@ -1547,13 +1818,23 @@ class ShockEnvironment(StatableModel):
         _check(self.pulse_duration, "[time]", "pulse_duration")
         require_finite(self.peak_acceleration, name="peak_acceleration")
         if self.peak_acceleration <= 0:
-            raise ValueError(
-                f"peak_acceleration must be positive, in g; got {self.peak_acceleration}"
+            raise _optomechanics_refusal(
+                f"peak_acceleration must be positive, in g; got {self.peak_acceleration}",
+                subject="peak_acceleration",
+                source=_ENVIRONMENT_SOURCE,
             )
         if self.pulse_duration.to("s").magnitude <= 0:
-            raise ValueError(f"pulse_duration must be positive; got {self.pulse_duration}")
+            raise _optomechanics_refusal(
+                f"pulse_duration must be positive; got {self.pulse_duration}",
+                subject="pulse_duration",
+                source=_ENVIRONMENT_SOURCE,
+            )
         if self.cycles < 1:
-            raise ValueError(f"a shock environment applies at least once; got {self.cycles}")
+            raise _optomechanics_refusal(
+                f"a shock environment applies at least once; got {self.cycles}",
+                subject="cycles",
+                source=_ENVIRONMENT_SOURCE,
+            )
         return self
 
     def _pulse(self, t: float, duration: float) -> float:
@@ -1579,10 +1860,18 @@ class ShockEnvironment(StatableModel):
         _check(natural_frequency, "[frequency]", "natural_frequency")
         quality = require_finite(quality_factor, name="quality_factor")
         if quality <= 0.5:
-            raise ValueError(f"quality_factor must exceed 0.5 to resonate at all; got {quality}")
+            raise _optomechanics_refusal(
+                f"quality_factor must exceed 0.5 to resonate at all; got {quality}",
+                subject="quality_factor",
+                source=_ENVIRONMENT_SOURCE,
+            )
         fn = natural_frequency.to("Hz").magnitude
         if fn <= 0:
-            raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+            raise _optomechanics_refusal(
+                f"natural_frequency must be positive; got {natural_frequency}",
+                subject="natural_frequency",
+                source=_ENVIRONMENT_SOURCE,
+            )
         omega, zeta = 2 * pi * fn, 1 / (2 * quality)
         duration = self.pulse_duration.to("s").magnitude
         period = 1 / fn
@@ -1641,14 +1930,24 @@ class SurfaceDeformation(StatableModel):
     def _a_surface(self) -> SurfaceDeformation:
         _check(self.rms, "[length]", "rms")
         if self.rms.to("m").magnitude < 0:
-            raise ValueError(f"an RMS deformation cannot be negative; got {self.rms}")
+            raise _optomechanics_refusal(
+                f"an RMS deformation cannot be negative; got {self.rms}",
+                subject="rms",
+                source=_OPTICAL_SOURCE,
+            )
         if not self.reflective:
             if self.refractive_index is None:
-                raise ValueError(
-                    f"'{self.surface}' refracts, so its wavefront error needs the index across it"
+                raise _optomechanics_refusal(
+                    f"'{self.surface}' refracts, so its wavefront error needs the index across it",
+                    subject="refractive_index",
+                    source=_OPTICAL_SOURCE,
                 )
             if require_finite(self.refractive_index, name="refractive_index") <= 1:
-                raise ValueError(f"'{self.surface}': refractive_index must exceed 1")
+                raise _optomechanics_refusal(
+                    f"'{self.surface}': refractive_index must exceed 1",
+                    subject="refractive_index",
+                    source=_OPTICAL_SOURCE,
+                )
         return self
 
     def wavefront_rms(self) -> Quantity:
@@ -1803,9 +2102,17 @@ def preload_temperature_scorecard(
     limit = max_preload.to("N").magnitude
     for value, label in ((p0, "preload"), (k, "axial_stiffness"), (t, "edge_thickness")):
         if value <= 0:
-            raise ValueError(f"{label} must be positive; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} must be positive; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     if limit <= p0:
-        raise ValueError(f"max_preload must exceed the assembled preload; got {max_preload}")
+        raise _optomechanics_refusal(
+            f"max_preload must exceed the assembled preload; got {max_preload}",
+            subject="max_preload",
+            source=_REQUIREMENT_SOURCE,
+        )
     mismatch = cell_cte.to("1/K").magnitude - glass_cte.to("1/K").magnitude
     at: dict[str, float] = {}
     for label, change in (("cold", cold_change), ("hot", hot_change)):
@@ -1885,19 +2192,29 @@ def glass_contact_stress_scorecard(
     nu_m = require_finite(mount_poisson, name="mount_poisson")
     for nu, label in ((nu_g, "glass_poisson"), (nu_m, "mount_poisson")):
         if not 0 <= nu < 0.5:
-            raise ValueError(f"{label} must lie in [0, 0.5); got {nu}")
+            raise _optomechanics_refusal(
+                f"{label} must lie in [0, 0.5); got {nu}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     force = preload.to("N").magnitude
     diameter = contact_diameter.to("m").magnitude
     allowable = (
         allowable_tensile_stress.to("Pa").magnitude if allowable_tensile_stress is not None else 1.0
     )
     if force <= 0 or diameter <= 0 or allowable <= 0:
-        raise ValueError("preload, contact_diameter and the allowable must all be positive")
+        raise _optomechanics_refusal(
+            "preload, contact_diameter and the allowable must all be positive",
+            subject="preload, contact_diameter, and allowable_tensile_stress",
+            source=_DRAWING_SOURCE,
+        )
     curvature = 1 / glass_radius.to("m").magnitude + 1 / mount_radius.to("m").magnitude
     if curvature <= 0:
-        raise ValueError(
+        raise _optomechanics_refusal(
             "the mount's concave profile is flatter than the glass it holds: the two do not "
-            "meet in a line contact this relation describes"
+            "meet in a line contact this relation describes",
+            subject="glass_radius and mount_radius",
+            source=_DRAWING_SOURCE,
         )
     modulus = 1 / (
         (1 - nu_g**2) / glass_modulus.to("Pa").magnitude
@@ -1995,15 +2312,31 @@ def seal_breathing_scorecard(
         _check(value, "[temperature]", label)
         kelvin = value.to("K").magnitude
         if kelvin <= 0:
-            raise ValueError(f"{label} must be above absolute zero; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} must be above absolute zero; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
         temperatures[label] = kelvin
     p_fill = fill_pressure.to("kPa").magnitude
     if p_fill <= 0:
-        raise ValueError(f"fill_pressure must be positive; got {fill_pressure}")
+        raise _optomechanics_refusal(
+            f"fill_pressure must be positive; got {fill_pressure}",
+            subject="fill_pressure",
+            source=_ENVIRONMENT_SOURCE,
+        )
     if temperatures["hot"] <= temperatures["cold"]:
-        raise ValueError(f"hot must exceed cold; got hot {hot} and cold {cold}")
+        raise _optomechanics_refusal(
+            f"hot must exceed cold; got hot {hot} and cold {cold}",
+            subject="hot",
+            source=_ENVIRONMENT_SOURCE,
+        )
     if isinstance(cycles, bool) or not isinstance(cycles, int) or cycles < 1:
-        raise ValueError(f"cycles must be a whole number of at least 1; got {cycles!r}")
+        raise _optomechanics_refusal(
+            f"cycles must be a whole number of at least 1; got {cycles!r}",
+            subject="cycles",
+            source=_REQUIREMENT_SOURCE,
+        )
     t_fill, t_cold, t_hot = (
         temperatures["fill_temperature"],
         temperatures["cold"],
@@ -2101,7 +2434,11 @@ def window_pressure_opd(
     _check(thickness, "[length]", "thickness")
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     if not (isfinite(refractive_index) and refractive_index > 1.0):
-        raise ValueError(f"refractive_index must exceed 1; got {refractive_index}")
+        raise _optomechanics_refusal(
+            f"refractive_index must exceed 1; got {refractive_index}",
+            subject="refractive_index",
+            source=_OPTICAL_SOURCE,
+        )
     d = diameter.to("m").magnitude
     t = thickness.to("m").magnitude
     e = elastic_modulus.to("Pa").magnitude
@@ -2111,7 +2448,11 @@ def window_pressure_opd(
         ("elastic_modulus", e, elastic_modulus),
     ):
         if value <= 0:
-            raise ValueError(f"{label} must be positive; got {given}")
+            raise _optomechanics_refusal(
+                f"{label} must be positive; got {given}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     dp = differential.to("Pa").magnitude
     opd = 0.00889 * (refractive_index - 1.0) * dp**2 * d**6 / (e**2 * t**5)
     return Quantity(magnitude=opd * 1e9, unit="nm")
@@ -2144,9 +2485,17 @@ def window_pressure_focus_shift(
     _check(image_distance, "[length]", "image_distance")
     distance = image_distance.to("m").magnitude
     if not distance > 0:
-        raise ValueError(f"image_distance must be positive; got {image_distance}")
+        raise _optomechanics_refusal(
+            f"image_distance must be positive; got {image_distance}",
+            subject="image_distance",
+            source=_OPTICAL_SOURCE,
+        )
     if not (isfinite(refractive_index) and refractive_index > 1.0):
-        raise ValueError(f"refractive_index must exceed 1; got {refractive_index}")
+        raise _optomechanics_refusal(
+            f"refractive_index must exceed 1; got {refractive_index}",
+            subject="refractive_index",
+            source=_OPTICAL_SOURCE,
+        )
     _check(differential, "[pressure]", "differential")
     plate = simply_supported_circular_plate_uniform_load(
         pressure=Quantity(magnitude=abs(differential.to("Pa").magnitude), unit="Pa"),
@@ -2156,10 +2505,12 @@ def window_pressure_focus_shift(
         poisson_ratio=poisson_ratio,
     )
     if plate.small_deflection_ratio > 0.5:
-        raise ValueError(
+        raise _optomechanics_refusal(
             f"the window bows {plate.max_deflection.to('mm').magnitude:.3g} mm, more than "
             f"half its thickness {thickness}, where thin-plate theory no longer holds; "
-            "declare a thicker window or screen the bow with a large-deflection analysis"
+            "declare a thicker window or screen the bow with a large-deflection analysis",
+            subject="thickness, diameter, and differential",
+            source=_DRAWING_SOURCE,
         )
     t = thickness.to("m").magnitude
     sigma = plate.max_bending_stress.to("Pa").magnitude
@@ -2208,14 +2559,20 @@ def window_pressure_budget_contributors(
         if value is not None
     }
     if not declared:
-        raise ValueError(
+        raise _optomechanics_refusal(
             f"'{name}' enters the budgets through the differential that bows it; declare "
-            "outward (altitude, warm) or inward (immersion, cold)"
+            "outward (altitude, warm) or inward (immersion, cold)",
+            subject="outward and inward",
+            source=_ENVIRONMENT_SOURCE,
         )
     for label, value in declared.items():
         _check(value, "[pressure]", label)
         if value.to("Pa").magnitude < 0:
-            raise ValueError(f"{label} is a magnitude and cannot be negative; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} is a magnitude and cannot be negative; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     governing = max(declared, key=lambda label: declared[label].to("Pa").magnitude)
     differential = declared[governing]
     condition = f"{name} ({governing} {differential.to('kPa').magnitude:.1f} kPa)"
@@ -2272,9 +2629,17 @@ def pressure_window_scorecard(
     ):
         _check(value, dimension, label)
         if value.magnitude <= 0:
-            raise ValueError(f"{label} must be positive; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} must be positive; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     if not 0 < require_finite(poisson_ratio, name="poisson_ratio") < 0.5:
-        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+        raise _optomechanics_refusal(
+            f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}",
+            subject="poisson_ratio",
+            source=_MATERIAL_SOURCE,
+        )
     allowable = allowable_tensile_stress.to("MPa").magnitude
     declared = {
         label: value
@@ -2298,7 +2663,11 @@ def pressure_window_scorecard(
     for label, value in declared.items():
         _check(value, "[pressure]", label)
         if value.magnitude < 0:
-            raise ValueError(f"{label} is a magnitude and cannot be negative; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} is a magnitude and cannot be negative; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
         results[label] = simply_supported_circular_plate_uniform_load(
             pressure=value,
             diameter=diameter,
@@ -2346,9 +2715,17 @@ def pressure_window_scorecard(
 def _records(value: object, kind: type, label: str) -> tuple:
     """``value`` as a tuple of ``kind`` records, or a refusal naming ``label``."""
     if not isinstance(value, tuple | list) or not all(isinstance(v, kind) for v in value):
-        raise ValueError(f"{label} must be a tuple of {kind.__name__} records; got {value!r}")
+        raise _optomechanics_refusal(
+            f"{label} must be a tuple of {kind.__name__} records; got {value!r}",
+            subject=label,
+            source=_optomechanics_input_source(label),
+        )
     if not value:
-        raise ValueError(f"{label} is empty; declare at least one {kind.__name__}")
+        raise _optomechanics_refusal(
+            f"{label} is empty; declare at least one {kind.__name__}",
+            subject=label,
+            source=_optomechanics_input_source(label),
+        )
     return tuple(value)
 
 
@@ -2381,7 +2758,11 @@ class HarnessCrossing(StatableModel):
                 continue
             _check(value, dimension, label)
             if value.magnitude < 0:
-                raise ValueError(f"'{self.harness}': {label} cannot be negative; got {value}")
+                raise _optomechanics_refusal(
+                    f"'{self.harness}': {label} cannot be negative; got {value}",
+                    subject="stiffness, routing_offset, and lever_arm",
+                    source=_DRAWING_SOURCE,
+                )
         return self
 
     def missing(self) -> tuple[str, ...]:
@@ -2421,12 +2802,24 @@ def harness_load_scorecard(
     _check(focal_length, "[length]", "focal_length")
     k_mount = mount_stiffness.to("N/m").magnitude
     if k_mount <= 0:
-        raise ValueError(f"mount_stiffness must be positive; got {mount_stiffness}")
+        raise _optomechanics_refusal(
+            f"mount_stiffness must be positive; got {mount_stiffness}",
+            subject="mount_stiffness",
+            source=_DRAWING_SOURCE,
+        )
     if focal_length.to("m").magnitude <= 0:
-        raise ValueError(f"focal_length must be positive; got {focal_length}")
+        raise _optomechanics_refusal(
+            f"focal_length must be positive; got {focal_length}",
+            subject="focal_length",
+            source=_OPTICAL_SOURCE,
+        )
     allowed = _radians(allowed_line_of_sight, "allowed_line_of_sight") * 1e6
     if allowed <= 0:
-        raise ValueError(f"allowed_line_of_sight must be positive; got {allowed_line_of_sight}")
+        raise _optomechanics_refusal(
+            f"allowed_line_of_sight must be positive; got {allowed_line_of_sight}",
+            subject="allowed_line_of_sight",
+            source=_REQUIREMENT_SOURCE,
+        )
     crossings = _records(crossings, HarnessCrossing, "crossings")
     unstated = [
         f"{crossing.harness} ({' and '.join(crossing.missing())})"
@@ -2507,11 +2900,17 @@ def cycling_retention_scorecard(
     """
     for label, text in (("requirement", requirement), ("test_method", test_method)):
         if not isinstance(text, str) or not text.strip():
-            raise ValueError(f"{label} must name something; got {text!r}")
+            raise _optomechanics_refusal(
+                f"{label} must name something; got {text!r}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     if isinstance(cycles, bool) or not isinstance(cycles, int) or cycles < 2:
-        raise ValueError(
+        raise _optomechanics_refusal(
             f"cycles must be a whole number of at least 2 for a retention-after-cycling "
-            f"requirement; got {cycles!r}"
+            f"requirement; got {cycles!r}",
+            subject="cycles",
+            source=_REQUIREMENT_SOURCE,
         )
     return ScorecardEntry(
         name=name,
@@ -2565,20 +2964,28 @@ class SurfaceLimits(StatableModel):
                 _check(value, "[temperature]", label)
         if self.coldest is not None and self.hottest is not None:
             if self.hottest.to("K").magnitude <= self.coldest.to("K").magnitude:
-                raise ValueError(
+                raise _optomechanics_refusal(
                     f"'{self.surface}': hottest must exceed coldest; got {self.hottest} and "
-                    f"{self.coldest}"
+                    f"{self.coldest}",
+                    subject="hottest and coldest",
+                    source=_TEST_SOURCE,
                 )
         if self.relative_humidity is not None:
             humidity = require_finite(self.relative_humidity, name="relative_humidity")
             if not 0 < humidity <= 1:
-                raise ValueError(
-                    f"'{self.surface}': relative_humidity must lie in (0, 1]; got {humidity}"
+                raise _optomechanics_refusal(
+                    f"'{self.surface}': relative_humidity must lie in (0, 1]; got {humidity}",
+                    subject="relative_humidity",
+                    source=_TEST_SOURCE,
                 )
         if self.irradiance is not None:
             _check(self.irradiance, "[power] / [area]", "irradiance")
             if self.irradiance.magnitude <= 0:
-                raise ValueError(f"'{self.surface}': irradiance must be positive")
+                raise _optomechanics_refusal(
+                    f"'{self.surface}': irradiance must be positive",
+                    subject="irradiance",
+                    source=_TEST_SOURCE,
+                )
         return self
 
 
@@ -2604,11 +3011,19 @@ def surface_limits_scorecard(
     _check(cold, "[temperature]", "cold")
     _check(hot, "[temperature]", "hot")
     if hot.to("K").magnitude <= cold.to("K").magnitude:
-        raise ValueError(f"hot must exceed cold; got hot {hot} and cold {cold}")
+        raise _optomechanics_refusal(
+            f"hot must exceed cold; got hot {hot} and cold {cold}",
+            subject="hot",
+            source=_ENVIRONMENT_SOURCE,
+        )
     if relative_humidity is not None:
         require_finite(relative_humidity, name="relative_humidity")
         if not 0 <= relative_humidity <= 1:
-            raise ValueError(f"relative_humidity must lie in [0, 1]; got {relative_humidity}")
+            raise _optomechanics_refusal(
+                f"relative_humidity must lie in [0, 1]; got {relative_humidity}",
+                subject="relative_humidity",
+                source=_ENVIRONMENT_SOURCE,
+            )
     if irradiance is not None:
         _check(irradiance, "[power] / [area]", "irradiance")
     surfaces = _records(surfaces, SurfaceLimits, "surfaces")
@@ -2718,20 +3133,26 @@ class OutgassingRecord(StatableModel):
                 continue
             require_finite(value, name=label)
             if not 0 <= value <= 1:
-                raise ValueError(
-                    f"'{self.material}': {label} is a mass fraction in [0, 1]; got {value}"
+                raise _optomechanics_refusal(
+                    f"'{self.material}': {label} is a mass fraction in [0, 1]; got {value}",
+                    subject="total_mass_loss and condensable",
+                    source=_TEST_SOURCE,
                 )
         if (self.total_mass_loss is None) != (self.condensable is None):
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"'{self.material}': a test reports total mass loss and condensable material "
-                "together; state both or neither"
+                "together; state both or neither",
+                subject="total_mass_loss and condensable",
+                source=_TEST_SOURCE,
             )
         if self.total_mass_loss is not None and not (
             self.test_method and self.test_method.strip() and self.source and self.source.strip()
         ):
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"'{self.material}': outgassing figures need the test_method and source they "
-                "came from"
+                "came from",
+                subject="test_method and source",
+                source=_TEST_SOURCE,
             )
         return self
 
@@ -2759,7 +3180,11 @@ def outgassing_census_scorecard(
     ):
         require_finite(value, name=label)
         if not 0 < value <= 1:
-            raise ValueError(f"{label} is a mass fraction in (0, 1]; got {value}")
+            raise _optomechanics_refusal(
+                f"{label} is a mass fraction in (0, 1]; got {value}",
+                subject=label,
+                source=_optomechanics_input_source(label),
+            )
     materials = _records(materials, OutgassingRecord, "materials")
     exceeded: list[str] = []
     unstated: list[str] = []
@@ -2827,11 +3252,19 @@ def iso_cleanroom_concentration(*, iso_class: float, particle_size: Quantity) ->
     """
     require_finite(iso_class, name="iso_class")
     if not 1 <= iso_class <= 9:
-        raise ValueError(f"iso_class must lie in [1, 9]; got {iso_class}")
+        raise _optomechanics_refusal(
+            f"iso_class must lie in [1, 9]; got {iso_class}",
+            subject="iso_class",
+            source=_REQUIREMENT_SOURCE,
+        )
     _check(particle_size, "[length]", "particle_size")
     size = particle_size.to("µm").magnitude
     if not 0.1 <= size <= 5:
-        raise ValueError(f"particle_size must lie in [0.1, 5] µm; got {particle_size}")
+        raise _optomechanics_refusal(
+            f"particle_size must lie in [0.1, 5] µm; got {particle_size}",
+            subject="particle_size",
+            source=_ENVIRONMENT_SOURCE,
+        )
     return 10**iso_class * (0.1 / size) ** 2.08
 
 
@@ -2860,7 +3293,11 @@ class CleanlinessRequirement(StatableModel):
     def _a_class(self) -> CleanlinessRequirement:
         require_finite(self.implies_iso_class, name="implies_iso_class")
         if not 1 <= self.implies_iso_class <= 9:
-            raise ValueError(f"implies_iso_class must lie in [1, 9]; got {self.implies_iso_class}")
+            raise _optomechanics_refusal(
+                f"implies_iso_class must lie in [1, 9]; got {self.implies_iso_class}",
+                subject="implies_iso_class",
+                source=_REQUIREMENT_SOURCE,
+            )
         return self
 
 
@@ -2880,7 +3317,11 @@ def cleanliness_scorecard(
     build environment is found at assembly.
     """
     if not isinstance(requirement, CleanlinessRequirement):
-        raise ValueError(f"requirement must be a CleanlinessRequirement; got {requirement!r}")
+        raise _optomechanics_refusal(
+            f"requirement must be a CleanlinessRequirement; got {requirement!r}",
+            subject="requirement",
+            source=_REQUIREMENT_SOURCE,
+        )
     needed = requirement.implies_iso_class
     half_micron = Quantity(magnitude=0.5, unit="µm")
     limit = _three_figures(iso_cleanroom_concentration(iso_class=needed, particle_size=half_micron))
@@ -2898,7 +3339,11 @@ def cleanliness_scorecard(
         )
     require_finite(assembly_iso_class, name="assembly_iso_class")
     if not 1 <= assembly_iso_class <= 9:
-        raise ValueError(f"assembly_iso_class must lie in [1, 9]; got {assembly_iso_class}")
+        raise _optomechanics_refusal(
+            f"assembly_iso_class must lie in [1, 9]; got {assembly_iso_class}",
+            subject="assembly_iso_class",
+            source=_REQUIREMENT_SOURCE,
+        )
     room = iso_cleanroom_concentration(iso_class=assembly_iso_class, particle_size=half_micron)
     achieved = assembly_iso_class <= needed
     return ScorecardEntry(
@@ -2956,10 +3401,18 @@ class AdjustmentMechanism(StatableModel):
             if value is None:
                 continue
             if not isinstance(value, Quantity):
-                raise ValueError(f"'{self.mechanism}': {label} must be a quantity; got {value!r}")
+                raise _optomechanics_refusal(
+                    f"'{self.mechanism}': {label} must be a quantity; got {value!r}",
+                    subject="resolution, hysteresis, travel, screw_mean_diameter, and screw_lead",
+                    source=_DRAWING_SOURCE,
+                )
             require_finite(value, name=label)
             if value.magnitude < 0 or (value.magnitude == 0 and label != "hysteresis"):
-                raise ValueError(f"'{self.mechanism}': {label} must be positive; got {value}")
+                raise _optomechanics_refusal(
+                    f"'{self.mechanism}': {label} must be positive; got {value}",
+                    subject="resolution, hysteresis, travel, screw_mean_diameter, and screw_lead",
+                    source=_DRAWING_SOURCE,
+                )
         for label, value in (
             ("screw_mean_diameter", self.screw_mean_diameter),
             ("screw_lead", self.screw_lead),
@@ -2968,7 +3421,11 @@ class AdjustmentMechanism(StatableModel):
                 _check(value, "[length]", label)
         if self.friction_coefficient is not None:
             if require_finite(self.friction_coefficient, name="friction_coefficient") < 0:
-                raise ValueError(f"'{self.mechanism}': friction_coefficient cannot be negative")
+                raise _optomechanics_refusal(
+                    f"'{self.mechanism}': friction_coefficient cannot be negative",
+                    subject="friction_coefficient",
+                    source=_MATERIAL_SOURCE,
+                )
         return self
 
     def missing_for_holding(self) -> tuple[str, ...]:
@@ -2990,9 +3447,11 @@ def _in_unit(value: Quantity, unit: str, label: str, mechanism: object) -> float
     try:
         return value.to(unit).magnitude
     except Exception as mismatch:  # noqa: BLE001 - pint's DimensionalityError is a TypeError
-        raise ValueError(
+        raise _optomechanics_refusal(
             f"'{mechanism}': {label} {value} is not in the same kind of unit as the "
-            f"correction ({unit})"
+            f"correction ({unit})",
+            subject="required_correction and mechanism",
+            source=_DRAWING_SOURCE,
         ) from mismatch
 
 
@@ -3019,12 +3478,24 @@ def adjustment_scorecard(
     (:func:`adjustment_budget_contributors`).
     """
     if not isinstance(mechanism, AdjustmentMechanism):
-        raise ValueError(f"mechanism must be an AdjustmentMechanism; got {mechanism!r}")
+        raise _optomechanics_refusal(
+            f"mechanism must be an AdjustmentMechanism; got {mechanism!r}",
+            subject="mechanism",
+            source=_DRAWING_SOURCE,
+        )
     if not isinstance(required_correction, Quantity):
-        raise ValueError(f"required_correction must be a quantity; got {required_correction!r}")
+        raise _optomechanics_refusal(
+            f"required_correction must be a quantity; got {required_correction!r}",
+            subject="required_correction",
+            source=_DRAWING_SOURCE,
+        )
     require_finite(required_correction, name="required_correction")
     if not isinstance(vibration, bool):
-        raise ValueError(f"vibration must be True or False; got {vibration!r}")
+        raise _optomechanics_refusal(
+            f"vibration must be True or False; got {vibration!r}",
+            subject="vibration",
+            source=_ENVIRONMENT_SOURCE,
+        )
     unit = str(required_correction.unit)
     needed = abs(required_correction.magnitude)
     missing = [
@@ -3110,9 +3581,11 @@ def adjustment_budget_contributors(
     contributors: dict[str, Quantity] = {}
     for mechanism in mechanisms:
         if mechanism.resolution is None or mechanism.hysteresis is None:
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"'{mechanism.mechanism}' enters the budget by its resolution and hysteresis; "
-                "declare both"
+                "declare both",
+                subject="mechanisms",
+                source=_DRAWING_SOURCE,
             )
         unit = str(mechanism.resolution.unit)
         hysteresis = _in_unit(mechanism.hysteresis, unit, "hysteresis", mechanism.mechanism)
@@ -3135,7 +3608,11 @@ def _sellmeier_formula_2(coefficients: list[float], wavelength_um: float) -> flo
         b, c = coefficients[index], coefficients[index + 1]
         square += b * wavelength_um**2 / (wavelength_um**2 - c)
     if not square > 1:
-        raise ValueError(f"the dispersion formula gives n² = {square:.4f} at {wavelength_um} µm")
+        raise _optomechanics_refusal(
+            f"the dispersion formula gives n² = {square:.4f} at {wavelength_um} µm",
+            subject="text",
+            source=_TEST_SOURCE,
+        )
     return sqrt(square)
 
 
@@ -3152,18 +3629,34 @@ def optical_material_from_refractiveindex(text: str, *, name: str, source: str) 
     states, and density in kg/m³. Nothing the page does not state is filled in.
     """
     if not isinstance(text, str) or not text.strip():
-        raise ValueError("text must be the YAML of a refractiveindex.info page")
+        raise _optomechanics_refusal(
+            "text must be the YAML of a refractiveindex.info page",
+            subject="text",
+            source=_TEST_SOURCE,
+        )
     if not isinstance(source, str) or not source.strip():
-        raise ValueError("source must say where the page came from")
+        raise _optomechanics_refusal(
+            "source must say where the page came from", subject="source", source=_TEST_SOURCE
+        )
     try:
         page = parse_yaml(text)
     except yaml.YAMLError as broken:
-        raise ValueError(f"'{name}': the page is not readable YAML: {broken}") from broken
+        raise _optomechanics_refusal(
+            f"'{name}': the page is not readable YAML: {broken}",
+            subject="text",
+            source=_TEST_SOURCE,
+        ) from broken
     if not isinstance(page, dict):
-        raise ValueError(f"'{name}': the page is not a refractiveindex.info record")
+        raise _optomechanics_refusal(
+            f"'{name}': the page is not a refractiveindex.info record",
+            subject="text",
+            source=_TEST_SOURCE,
+        )
     properties = page.get("PROPERTIES") or {}
     if not isinstance(properties, dict):
-        raise ValueError(f"'{name}': PROPERTIES is not a mapping")
+        raise _optomechanics_refusal(
+            f"'{name}': PROPERTIES is not a mapping", subject="text", source=_TEST_SOURCE
+        )
     formula = None
     for block in page.get("DATA") or ():
         if isinstance(block, dict) and block.get("type") == "formula 2":
@@ -3171,19 +3664,25 @@ def optical_material_from_refractiveindex(text: str, *, name: str, source: str) 
                 coefficients = [float(value) for value in str(block["coefficients"]).split()]
                 low, high = (float(value) for value in str(block["wavelength_range"]).split())
             except (KeyError, ValueError) as broken:
-                raise ValueError(f"'{name}': a formula 2 block is malformed") from broken
+                raise _optomechanics_refusal(
+                    f"'{name}': a formula 2 block is malformed", subject="text", source=_TEST_SOURCE
+                ) from broken
             if len(coefficients) < 3 or len(coefficients) % 2 == 0:
-                raise ValueError(
-                    f"'{name}': formula 2 takes C0 then pairs of terms; got {len(coefficients)}"
+                raise _optomechanics_refusal(
+                    f"'{name}': formula 2 takes C0 then pairs of terms; got {len(coefficients)}",
+                    subject="text",
+                    source=_TEST_SOURCE,
                 )
             formula = (coefficients, low, high)
     computed = None
     if formula is not None:
         coefficients, low, high = formula
         if not (low <= _F_LINE and _C_LINE <= high):
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"'{name}': the dispersion formula is stated for {low} to {high} µm, which "
-                "does not cover the F, d and C lines"
+                "does not cover the F, d and C lines",
+                subject="text",
+                source=_TEST_SOURCE,
             )
         n_d, n_f, n_c = (
             _sellmeier_formula_2(coefficients, line) for line in (_D_LINE, _F_LINE, _C_LINE)
@@ -3192,26 +3691,40 @@ def optical_material_from_refractiveindex(text: str, *, name: str, source: str) 
     stated_nd, stated_vd = properties.get("nd"), properties.get("Vd")
     if stated_nd is not None and computed is not None:
         if abs(float(stated_nd) - computed[0]) > _ND_AGREEMENT:
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"'{name}': the page states nd {stated_nd} and its own dispersion formula "
-                f"gives {computed[0]:.5f}; a page that contradicts itself is not data"
+                f"gives {computed[0]:.5f}; a page that contradicts itself is not data",
+                subject="text",
+                source=_TEST_SOURCE,
             )
     if stated_nd is None and computed is None:
-        raise ValueError(f"'{name}': the page states neither nd nor a formula 2 dispersion")
+        raise _optomechanics_refusal(
+            f"'{name}': the page states neither nd nor a formula 2 dispersion",
+            subject="text",
+            source=_TEST_SOURCE,
+        )
     index = float(stated_nd) if stated_nd is not None else computed[0]  # type: ignore[index]
     if stated_vd is not None:
         abbe = float(stated_vd)
     elif computed is not None:
         abbe = computed[1]
     else:
-        raise ValueError(f"'{name}': the page states neither Vd nor a dispersion formula")
+        raise _optomechanics_refusal(
+            f"'{name}': the page states neither Vd nor a dispersion formula",
+            subject="text",
+            source=_TEST_SOURCE,
+        )
     cte = []
     for stated in properties.get("thermal_expansion") or ():
         try:
             low_k, high_k = (float(value) for value in str(stated["temperature_range"]).split())
             value = float(stated["value"])
         except (KeyError, TypeError, ValueError) as broken:
-            raise ValueError(f"'{name}': a thermal_expansion entry is malformed") from broken
+            raise _optomechanics_refusal(
+                f"'{name}': a thermal_expansion entry is malformed",
+                subject="text",
+                source=_TEST_SOURCE,
+            ) from broken
         cte.append(
             RangedProperty(
                 value=Quantity(magnitude=value, unit="1/K"),
@@ -3261,13 +3774,23 @@ class BeamEnvelope(StatableModel):
         _check(self.length, "[length]", "length")
         _radians(self.half_angle, "half_angle")
         if self.entrance_diameter.to("mm").magnitude <= 0 or self.length.to("mm").magnitude <= 0:
-            raise ValueError(f"beam '{self.tag}': entrance_diameter and length must be positive")
+            raise _optomechanics_refusal(
+                f"beam '{self.tag}': entrance_diameter and length must be positive",
+                subject="entrance_diameter and length",
+                source=_OPTICAL_SOURCE,
+            )
         if not abs(_radians(self.half_angle, "half_angle")) < pi / 2:
-            raise ValueError(f"beam '{self.tag}': half_angle must be less than 90°")
+            raise _optomechanics_refusal(
+                f"beam '{self.tag}': half_angle must be less than 90°",
+                subject="half_angle",
+                source=_OPTICAL_SOURCE,
+            )
         if self.footprint(self.length).magnitude <= 0:
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"beam '{self.tag}' comes to a focus inside its length; declare the two cones "
-                "either side of the focus as two envelopes"
+                "either side of the focus as two envelopes",
+                subject="entrance_diameter, half_angle, and length",
+                source=_OPTICAL_SOURCE,
             )
         return self
 
@@ -3328,7 +3851,11 @@ class ApertureStation(StatableModel):
         ):
             _check(value, "[length]", label)
             if value.magnitude < 0 or (label == "clear_aperture" and value.magnitude == 0):
-                raise ValueError(f"station '{self.station}': {label} must be positive; got {value}")
+                raise _optomechanics_refusal(
+                    f"station '{self.station}': {label} must be positive; got {value}",
+                    subject="distance, clear_aperture, and decenter",
+                    source=_DRAWING_SOURCE,
+                )
         return self
 
 
@@ -3376,13 +3903,19 @@ def obscuration_scorecard(
             needs=_needs("beam"),
         )
     if not isinstance(beam, BeamEnvelope):
-        raise ValueError(f"beam must be a BeamEnvelope or None; got {beam!r}")
+        raise _optomechanics_refusal(
+            f"beam must be a BeamEnvelope or None; got {beam!r}",
+            subject="beam",
+            source=_OPTICAL_SOURCE,
+        )
     obstructed, clearances = [], []
     for station in stations:
         if station.distance.to("mm").magnitude > beam.length.to("mm").magnitude:
-            raise ValueError(
+            raise _optomechanics_refusal(
                 f"station '{station.station}' is at {station.distance}, beyond the beam's "
-                f"{beam.length}"
+                f"{beam.length}",
+                subject="stations and beam",
+                source=_OPTICAL_SOURCE,
             )
         footprint = beam.footprint(station.distance).magnitude
         aperture = station.clear_aperture.to("mm").magnitude
@@ -3471,10 +4004,16 @@ _ANGLE_UNITS = frozenset(
 
 def _radians(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be an angle quantity; got {value!r}")
+        raise _optomechanics_refusal(
+            f"{name} must be an angle quantity; got {value!r}",
+            subject=name,
+            source=_optomechanics_input_source(name),
+        )
     if str(value.unit).strip() not in _ANGLE_UNITS:
-        raise ValueError(
-            f"{name} must be an angle — rad, mrad, µrad, deg, arcmin or arcsec; got {value}"
+        raise _optomechanics_refusal(
+            f"{name} must be an angle — rad, mrad, µrad, deg, arcmin or arcsec; got {value}",
+            subject=name,
+            source=_optomechanics_input_source(name),
         )
     require_finite(value, name=name)
     return value.to("rad").magnitude
@@ -3485,10 +4024,16 @@ _STANDARD_GRAVITY = 9.80665  # m/s², the conventional g₀ of the CGPM (1901)
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _optomechanics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_optomechanics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _optomechanics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_optomechanics_input_source(name),
         )
     require_finite(value, name=name)
 
